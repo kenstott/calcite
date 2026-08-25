@@ -1305,12 +1305,157 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: onrr_revenues
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 3
+
+  # ---------------------------------------------------------------------------
+  # VA FACILITIES - Veterans Health Administration facility roster (HIFLD)
+  # ---------------------------------------------------------------------------
+  - name: va_facilities
+    # VA's own facility-locator API (api.va.gov) requires a key with no
+    # self-service registration path; this is the keyless alternative. HIFLD
+    # (Homeland Infrastructure Foundation-Level Data) republishes the VHA
+    # facility roster as a public ArcGIS FeatureServer, confirmed live 25 Aug
+    # 2026 (1,046 features, real Last-Modified/ETag headers). NOTE: the
+    # FeatureServer is hosted under an individual ArcGIS account, not an
+    # official HIFLD/VA org account — a common re-mirror pattern for public-
+    # domain federal data on ArcGIS Hub, but less durable than a first-party
+    # source; re-verify this URL if the layer ever 404s.
+    freshness:
+      type: last_modified
+    pattern: "type=va_facilities/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Veterans Health Administration facility roster — VA medical centers
+      (VAMC), community-based outpatient clinics (CBOC), Vet Centers (VCTR),
+      VA nursing homes (VANH), and residential rehabilitation treatment
+      programs (RRTP), geocoded. One row per facility (1,046 confirmed live).
+      Answers "nearest VA facility to a given location" directly via
+      latitude/longitude — the corpus previously had no way to do this,
+      only a rurality proxy via census.acs_veterans joined to
+      health.ahrf_physician_supply's RUCC. Joins to geo.counties via
+      county_fips and geo.states via state_abbr. Source: HIFLD Veterans
+      Health Administration Medical Facilities ArcGIS FeatureServer.
+
+    dimensions:
+      type:
+        - va_facilities
+
+    columns:
+      - name: station_number
+        type: string
+        nullable: false
+        comment: VA station number (PK)
+      - name: facility_name
+        type: string
+        nullable: true
+        comment: Facility name
+      - name: street_address
+        type: string
+        nullable: true
+        comment: Street address (line 1)
+      - name: street_address2
+        type: string
+        nullable: true
+        comment: Street address line 2 (suite/building), when present
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - <<: *state_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-character USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: zip
+        type: string
+        nullable: true
+        comment: ZIP code
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name, as published by HIFLD
+      - <<: *county_fips_column
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Facility latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Facility longitude
+      - name: facility_type
+        type: string
+        nullable: true
+        comment: >
+          HIFLD's primary-service classification (PRIM_SVC): VAMC (medical
+          center), CBOC (community-based outpatient clinic), VCTR (Vet
+          Center), VANH (VA nursing home), RRTP (residential rehabilitation
+          treatment program), or IOC (independent/other outpatient clinic —
+          HIFLD's own category; does not always align with the source's
+          per-type Y/N flags, e.g. a facility marked RRTP=YES can still carry
+          PRIM_SVC=IOC as its primary classification). Use this column, not a
+          derived flag, to classify a facility.
+      - name: naics_code
+        type: string
+        nullable: true
+        comment: NAICS industry code
+      - name: naics_description
+        type: string
+        nullable: true
+        comment: NAICS industry description
+      - name: visn
+        type: string
+        nullable: true
+        comment: Veterans Integrated Service Network number
+      - name: congressional_district
+        type: string
+        nullable: true
+        comment: 115th Congress congressional district code (e.g. 'CD115_AZ_0404')
+      - name: phone
+        type: string
+        nullable: true
+        comment: Facility phone number
+
+    source:
+      type: http
+      url: "https://services2.arcgis.com/PYn6bWCjT6bhw1z3/arcgis/rest/services/HIFLD_Veterans_Health_Administration_Medical_Facilities/FeatureServer/0/query?where=1%3D1&outFields=NAME,ADDRESS,ADDRESS2,CITY,STATE,ZIP,COUNTY,FIPS,LATITUDE,LONGITUDE,NAICSCODE,NAICSDESCR,VISN,STA_NO,PHONE,CD115,PRIM_SVC&returnGeometry=false&f=json&resultRecordCount=2000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.VaFacilitiesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=va_facilities/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: va_facilities
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        # Must stay >= 2 -- see the nps_units comment above on why a small
+        # reference table pins this below the default.
+        compactionMinFiles: 5
+        overwritePartitions: true
 
 # ============================================================================
 # CONSTRAINTS
@@ -1428,6 +1573,18 @@ constraints:
   onrr_revenues:
     primaryKey: [fiscal_year, county_fips, land_class, commodity, revenue_type, product]
     foreignKeys:
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  va_facilities:
+    primaryKey: [station_number]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
       - columns: [county_fips]
         targetSchema: geo
         targetTable: counties

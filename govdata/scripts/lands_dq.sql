@@ -2,7 +2,8 @@
 -- U.S. Federal Lands Data Quality Checks
 -- Schema: lands
 -- Tables: national_forests, timber_sales, forest_inventory, forest_metrics,
---         nps_units, nps_visitation, blm_field_offices, onrr_revenues
+--         nps_units, nps_visitation, blm_field_offices, onrr_revenues,
+--         va_facilities
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns 'type' and 'year'.
 -- NOTE: forest_inventory FIA API requires per-state EVALID; T1/T2 set to warn
@@ -599,6 +600,107 @@ SELECT 'lands', 'onrr_revenues', 'T7_county_fips_format',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/onrr_revenues', allow_moved_paths := true)
       WHERE county_fips IS NOT NULL
         AND NOT REGEXP_MATCHES(county_fips, '^\d{5}$'));
+
+-- T8: no duplication on the declared primary key (fiscal_year x county_fips x land_class x
+-- commodity x revenue_type x product) -- guards the missing overwritePartitions bug: without it,
+-- every successful re-ingest of this full-history bulk CSV appended a second copy on top of the
+-- existing one instead of replacing it (found live: exact 6x duplication, $18.1B real FY2023
+-- royalties read back as $71B).
+INSERT INTO dq_results
+SELECT 'lands', 'onrr_revenues', 'T8_no_pk_duplication',
+  CASE WHEN total_rows = distinct_pk_rows THEN 'pass' ELSE 'fail' END,
+  total_rows, distinct_pk_rows,
+  'total_rows must equal distinct_pk_rows (fiscal_year,county_fips,land_class,commodity,revenue_type,product) -- otherwise the bulk CSV is being appended, not replaced'
+FROM (
+  SELECT COUNT(*) AS total_rows,
+         COUNT(DISTINCT (fiscal_year, county_fips, land_class, commodity, revenue_type, product)) AS distinct_pk_rows
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/onrr_revenues', allow_moved_paths := true)
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: va_facilities  (HIFLD ArcGIS FeatureServer, static reference)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'va_facilities', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true));
+
+-- T2: row_count (confirmed live 25 Aug 2026: 1,046 VHA facilities)
+INSERT INTO dq_results
+SELECT 'lands', 'va_facilities', 'T2_row_count',
+  CASE WHEN n >= 900 THEN 'pass' ELSE 'fail' END,
+  n, 900, 'Expected at least 900 VHA facilities nationwide'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'lands', 'va_facilities', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'lands', 'va_facilities', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls (station_number NOT NULL)
+INSERT INTO dq_results
+SELECT 'lands', 'va_facilities', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL station_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true)
+      WHERE station_number IS NULL);
+
+-- T7: lat/long within physical bounds, and county_fips is 5-digit when present
+INSERT INTO dq_results
+SELECT 'lands', 'va_facilities', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0,
+  'latitude/longitude out of [-90,90]/[-180,180] range, or county_fips not 5 digits'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true)
+      WHERE (latitude IS NOT NULL AND (latitude < -90 OR latitude > 90))
+         OR (longitude IS NOT NULL AND (longitude < -180 OR longitude > 180))
+         OR (county_fips IS NOT NULL AND NOT REGEXP_MATCHES(county_fips, '^\d{5}$')));
+
+-- T8: no duplication on the declared primary key (station_number) -- guards the same
+-- missing-overwritePartitions class of bug documented on onrr_revenues above.
+INSERT INTO dq_results
+SELECT 'lands', 'va_facilities', 'T8_no_pk_duplication',
+  CASE WHEN total_rows = distinct_pk_rows THEN 'pass' ELSE 'fail' END,
+  total_rows, distinct_pk_rows,
+  'total_rows must equal distinct_pk_rows (station_number) -- otherwise the feature layer is being appended, not replaced'
+FROM (
+  SELECT COUNT(*) AS total_rows,
+         COUNT(DISTINCT station_number) AS distinct_pk_rows
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/va_facilities', allow_moved_paths := true)
+);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: forest_metrics

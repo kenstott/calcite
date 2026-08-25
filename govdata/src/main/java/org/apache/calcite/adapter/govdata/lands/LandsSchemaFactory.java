@@ -40,6 +40,7 @@ import java.util.Set;
  *   <li>{@code nps_visitation} — NPS IRMA monthly visitation stats; partitioned by visit_year</li>
  *   <li>{@code blm_field_offices} — BLM administrative unit boundaries (~150 offices); static reference</li>
  *   <li>{@code onrr_revenues} — ONRR federal/tribal mineral royalties; partitioned by revenue_year</li>
+ *   <li>{@code va_facilities} — HIFLD VHA facility roster (~1,046 facilities), geocoded; static reference</li>
  * </ul>
  *
  * <p>Cross-schema value:
@@ -85,6 +86,9 @@ public class LandsSchemaFactory implements GovDataSubSchemaFactory {
   private static final Set<String> ONRR_TABLES =
       new HashSet<>(Collections.singletonList("onrr_revenues"));
 
+  private static final Set<String> HIFLD_TABLES =
+      new HashSet<>(Collections.singletonList("va_facilities"));
+
   @Override public String getSchemaResourceName() {
     return "/lands/lands-schema.yaml";
   }
@@ -112,6 +116,10 @@ public class LandsSchemaFactory implements GovDataSubSchemaFactory {
 
     for (String tableName : ONRR_TABLES) {
       builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "onrr", enabledSources));
+    }
+
+    for (String tableName : HIFLD_TABLES) {
+      builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "hifld", enabledSources));
     }
 
     LOGGER.debug("Configured hooks for LANDS schema: enabledSources={}",
