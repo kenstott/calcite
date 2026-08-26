@@ -6098,7 +6098,12 @@ partitionedTables:
       world-total and trade-bloc/continental aggregate rows in the same response, with
       no discriminator of its own — filter geo_level = 'country' before summing
       value_usd, or the total silently multiplies by every bloc/continent a country
-      also belongs to (plus the world total).
+      also belongs to (plus the world total). No quantity column: Census's QTY_1_MO/
+      UNIT_QY1 fields are unpopulated (always "0"/"-") at COMM_LVL=HS6, confirmed live
+      across all 364,588 rows of a full month — quantity is only standardized at the
+      HS10 grain, which this table doesn't fetch. trade_by_state's QTY_1_MO IS
+      populated (state-level statehs endpoint reports it differently); use that table
+      for quantity.
 
     dimensions:
       type:
@@ -6170,23 +6175,13 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."ALL_VAL_MO" AS BIGINT)'
         comment: Total export value for the month (USD)
-      - name: quantity
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."QTY_1_MO" AS DOUBLE)'
-        comment: Quantity shipped in the first unit of measure
-      - name: quantity_unit
-        type: string
-        nullable: true
-        expression: 'src."UNIT_QY1"'
-        comment: Unit of measure for quantity
 
     source:
       type: http
       # The /hs timeseries returns 204 (empty) for a time=YYYY-MM predicate; it requires
       # discrete YEAR= and MONTH= predicates (verified live 2026-07-08: YEAR/MONTH -> 200
       # with ~321k HS-6 rows/month, time= -> 204).
-      url: "https://api.census.gov/data/timeseries/intltrade/exports/hs?get=CTY_CODE,CTY_NAME,E_COMMODITY,ALL_VAL_MO,QTY_1_MO,UNIT_QY1&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/timeseries/intltrade/exports/hs?get=CTY_CODE,CTY_NAME,E_COMMODITY,ALL_VAL_MO&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
       method: GET
       # Serial fetch: each monthly response is large (~321k HS-6 rows).
       # CensusResponseTransformer streams the 2-D table so a single month no
@@ -6250,7 +6245,12 @@ partitionedTables:
       world-total and trade-bloc/continental aggregate rows in the same response, with
       no discriminator of its own — filter geo_level = 'country' before summing
       value_usd, or the total silently multiplies by every bloc/continent a country
-      also belongs to (plus the world total).
+      also belongs to (plus the world total). No quantity column: Census's GEN_QY1_MO/
+      UNIT_QY1 fields are unpopulated (always "0"/"-") at COMM_LVL=HS6, confirmed live
+      across all 239,647 rows of a full month — quantity is only standardized at the
+      HS10 grain, which this table doesn't fetch. trade_by_state's QTY_1_MO IS
+      populated (state-level statehs endpoint reports it differently); use that table
+      for quantity.
 
     dimensions:
       type:
@@ -6322,22 +6322,12 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."GEN_CIF_MO" AS BIGINT)'
         comment: Cost, insurance, and freight charges for the month (USD)
-      - name: quantity
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."GEN_QY1_MO" AS DOUBLE)'
-        comment: Quantity imported in the first unit of measure
-      - name: quantity_unit
-        type: string
-        nullable: true
-        expression: 'src."UNIT_QY1"'
-        comment: Unit of measure for quantity
 
     source:
       type: http
       # /hs requires discrete YEAR=/MONTH= predicates (time=YYYY-MM returns 204). Verified
       # live 2026-07-08: YEAR/MONTH -> 200 with ~213k HS-6 rows/month including GEN_CIF_MO.
-      url: "https://api.census.gov/data/timeseries/intltrade/imports/hs?get=CTY_CODE,CTY_NAME,I_COMMODITY,GEN_VAL_MO,GEN_CIF_MO,GEN_QY1_MO,UNIT_QY1&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/timeseries/intltrade/imports/hs?get=CTY_CODE,CTY_NAME,I_COMMODITY,GEN_VAL_MO,GEN_CIF_MO&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
       method: GET
       # Serial fetch: each monthly response is large (~213k HS-6 rows).
       # CensusResponseTransformer streams the 2-D table so a single month no

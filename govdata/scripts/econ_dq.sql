@@ -422,9 +422,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'trade_exports', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports', allow_moved_paths := true))
-WHERE null_percentage = 100.0
-  -- quantity/quantity_unit are legitimately absent for value-only HS-6 commodities
-  AND column_name NOT IN ('quantity', 'quantity_unit');
+WHERE null_percentage = 100.0;
 
 -- trade_imports
 INSERT INTO dq_results
@@ -432,8 +430,8 @@ SELECT 'econ', 'trade_imports', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports', allow_moved_paths := true))
 WHERE null_percentage = 100.0
-  -- quantity/quantity_unit/cif_charges are legitimately absent for many HS-6 import lines
-  AND column_name NOT IN ('quantity', 'quantity_unit', 'cif_charges');
+  -- cif_charges is legitimately absent for many HS-6 import lines
+  AND column_name NOT IN ('cif_charges');
 
 -- labor_productivity
 INSERT INTO dq_results
@@ -744,8 +742,8 @@ SELECT 'econ', 'trade_exports', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
-  -- type='trade'/direction='exports' are constant by design; quantity_unit is often one unit in a bounded sample
-  AND column_name NOT IN ('type', 'direction', 'quantity_unit');
+  -- type='trade'/direction='exports' are constant by design
+  AND column_name NOT IN ('type', 'direction');
 
 -- trade_imports
 INSERT INTO dq_results
@@ -753,8 +751,8 @@ SELECT 'econ', 'trade_imports', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
-  -- type='trade'/direction='imports' are constant by design; quantity_unit is often one unit in a bounded sample
-  AND column_name NOT IN ('type', 'direction', 'quantity_unit');
+  -- type='trade'/direction='imports' are constant by design
+  AND column_name NOT IN ('type', 'direction');
 
 -- labor_productivity
 INSERT INTO dq_results
