@@ -446,8 +446,18 @@ public class McpServer {
                 default:
                     return errorResponse(id, -32601, "Method not found: " + method);
             }
-        } catch (Exception e) {
-            log.println("[askamerica-mcp] Handler error: " + e.getMessage());
+        } catch (Throwable e) {
+            // Deliberately Throwable, not Exception: a Calcite planner AssertionError (or any
+            // other Error) previously slipped past this catch entirely. Because dispatch() runs
+            // inside WORKERS.execute(() -> respond(out, dispatch(...))), an uncaught Throwable
+            // killed the worker thread before respond() was ever called — the caller's request id
+            // never got a reply, so the client just blocked until its OWN timeout fired (measured:
+            // a 600s hang, and the same crash re-triggered on every retry since it's the query
+            // shape that's fatal, not transient load). Catching it here restores the one property
+            // an MCP client depends on: every request with an id gets a response, fast, even when
+            // the tool call underneath broke in a way nothing anticipated.
+            log.println("[askamerica-mcp] Handler error: " + e.getClass().getName() + ": "
+                + e.getMessage());
             Throwable cause = e.getCause();
             while (cause != null) {
                 log.println("[askamerica-mcp]   caused by: " + cause.getMessage());
@@ -491,93 +501,107 @@ public class McpServer {
         body.set("capabilities", capabilities);
         body.set("serverInfo", serverInfo);
         body.put("instructions",
-            "Query US government data using PostgreSQL-compatible SQL. "
-            + "Schemas: sec (SEC filings/XBRL), geo (TIGER/FIPS), "
-            + "econ (BLS/BEA), census (ACS), crime (FBI UCR), "
-            + "weather (NOAA GHCND), fec (campaign finance), "
-            + "ref (THE JOIN LAYER — see below — plus NAICS/SIC/calendar lookups), "
-            + "fedregister, officials (Congress.gov members/nominations, FJC judges), "
-            + "cyber_vuln (NVD CVEs), cyber_threat (CISA KEV), "
-            + "energy (EIA), health (CDC/CMS), edu (NCES), econ_reference, "
-            + "patents (USPTO), lands (federal lands), disasters (FEMA/NOAA/WFIGS), "
-            + "housing (FHFA/Census permits/HUD), "
-            + "cftc (swaps/derivatives), ag (USDA agriculture), "
-            + "transport (NHTSA/BTS/FAA/FTA/FHWA), environment (EPA/USGS), "
-            + "fiscal (IRS SOI / USAspending / SBA / SSA). "
-            + "RESEARCH FIRST, DATA SECOND, in order — measured: connector callers cite ~1/3 as "
-            + "many external sources as callers without it, and lose questions to them as a "
-            + "result; a warehouse in front of you displaces the reading you'd otherwise do. "
-            + "(1) READ THE LITERATURE FIRST — news, research, prior work on the question as "
-            + "posed, not a citation hunt but learning the subject well enough to recognize a "
-            + "good answer. Extract three things, kept separate: FACTS (established figures + "
-            + "vintages), METHODOLOGY (what design identifies the effect, why that one), "
-            + "METRICS (how the field actually operationalises the quantity — denominator, "
-            + "normalisation, unit; the commonest way a clean answer answers the wrong question "
-            + "is the wrong metric). Be adversarial toward what you read — a finding is a CLAIM "
-            + "this corpus can test: what window, what unit, what denominator, does it hold on "
-            + "data the authors never saw. A claim that fails to replicate is one of the most "
-            + "valuable results you can produce. This costs more than going straight to SQL; "
-            + "spend it — the measured failure mode here is not slow answers, it is fast "
-            + "confident ones built on a table that did not measure what was asked. "
-            + "(2) BRING IN THE WAREHOUSE, ADDITIVELY — never just relay what you read. "
+            "Query US government data using PostgreSQL-compatible SQL.\n\n"
+            + "SCHEMAS: sec (SEC filings/XBRL), geo (TIGER/FIPS), econ (BLS/BEA), census (ACS), "
+            + "crime (FBI UCR), weather (NOAA GHCND), fec (campaign finance), ref (THE JOIN "
+            + "LAYER — see below — plus NAICS/SIC/calendar lookups), fedregister, officials "
+            + "(Congress.gov members/nominations, FJC judges), cyber_vuln (NVD CVEs), "
+            + "cyber_threat (CISA KEV), energy (EIA), health (CDC/CMS), edu (NCES), "
+            + "econ_reference, patents (USPTO), lands (federal lands), disasters (FEMA/NOAA/"
+            + "WFIGS), housing (FHFA/Census permits/HUD), cftc (swaps/derivatives), ag (USDA "
+            + "agriculture), transport (NHTSA/BTS/FAA/FTA/FHWA), environment (EPA/USGS), fiscal "
+            + "(IRS SOI / USAspending / SBA / SSA).\n\n"
+
+            + "## WORKFLOW — RESEARCH FIRST, DATA SECOND, IN ORDER\n\n"
+            + "Measured, most recently in a 25-run reaudit: the average answer still cites only "
+            + "~3.5 distinct external sources against a ~10 target, and connector callers as a "
+            + "group cite far fewer sources than callers without this corpus and lose questions "
+            + "to them as a result — a warehouse in front of you displaces the reading you'd "
+            + "otherwise do. **Treat any answer citing fewer than 5 distinct sources on a "
+            + "question with a real-world antecedent (news coverage, published research, a "
+            + "government report) as a signal you stopped searching too early, not as "
+            + "adequate.**\n\n"
+            + "1. **Read the literature first, and keep reading.** News, research, prior work "
+            + "on the question as posed — not a citation hunt but learning the subject well "
+            + "enough to recognize a good answer, and it is where the sources your final report "
+            + "will actually cite come from; a thin literature pass produces a thin report no "
+            + "matter how much SQL follows it. Run at least 2-3 searches from genuinely "
+            + "different angles before step 2: the question directly, the methodology/metric it "
+            + "needs, and a search for disagreement or a contrarian finding — one source found "
+            + "on the first search is a start, not a finish. Count DISTINCT organizations/"
+            + "authors, not distinct pages: three articles restating the same underlying report "
+            + "are one source, not three. Extract three things, kept separate: FACTS "
+            + "(established figures + vintages), METHODOLOGY (what design identifies the "
+            + "effect, why that one), METRICS (how the field actually operationalises the "
+            + "quantity — the commonest way a clean answer answers the wrong question is the "
+            + "wrong metric). Be adversarial toward what you read — a finding is a CLAIM this "
+            + "corpus can test: what window, what unit, what denominator, does it hold on data "
+            + "the authors never saw. A claim that fails to replicate is one of the most "
+            + "valuable results you can produce. **A broken or blocked table is a reason to "
+            + "lean HARDER on this pass, not lighter** — if the warehouse can't answer it, the "
+            + "literature still can, and a schema defect should never be the reason a delivered "
+            + "report ends up thin on sources.\n"
+            + "2. **Bring in the warehouse, additively — never just relay what you read.** "
             + "ARBITRATE: where studies disagree, let the data settle it (a window/unit/"
-            + "denominator you can vary directly). PROVE: recompute a published figure; "
+            + "denominator you can vary directly). PROVE: recompute a published figure — "
             + "matching validates, missing is a finding. EXTEND: run the design on data the "
             + "authors never saw, or at finer grain. IMPROVE: a better metric/denominator/"
             + "control the original lacked. RESEARCH FURTHER: answer what the literature left "
             + "open. In all five, replace a cited figure with a computed one wherever you can — "
-            + "reproducible from the call log beats quoted. "
-            + "(3) MISSING VARIABLE? Go back to the literature FOR IT — policy indices, "
+            + "reproducible from the call log beats quoted.\n"
+            + "3. **Missing variable? Go back to the literature FOR IT.** Policy indices, "
             + "hand-coded classifications, crosswalks are routinely published. The nearest "
             + "column is not a substitute; using it quietly answers a different question (a "
             + "political-lean score for a policy's strictness measures the confound, not the "
-            + "policy). "
-            + "(4) ESTIMATE IN THE ENGINE — push aggregation/statistics into SQL or the stats "
+            + "policy).\n"
+            + "4. **Estimate in the engine.** Push aggregation/statistics into SQL or the stats "
             + "tools; rate counts before comparing places or years; report n with any "
-            + "coefficient. "
-            + "(5) VERIFY BEFORE YOU BELIEVE IT — reproduce a known estimate where the window "
+            + "coefficient.\n"
+            + "5. **Verify before you believe it.** Reproduce a known estimate where the window "
             + "allows (validates your implementation; a mismatch means something's wrong before "
             + "you publish, not after), confirm with a second independent measure, and ask what "
             + "would have to be true for the result to be an artefact, then test that. Where "
             + "this corpus reaches back far enough, replicate the paper's ORIGINAL window "
             + "first, then report both windows/estimates — a study's findings are a hypothesis "
             + "to test, never a conclusion to relay, and re-running its design on a newer "
-            + "window is a genuinely new result a literature search alone can't produce. "
-            + "(6) SAY WHAT YOU ADDED — which numbers you computed vs. passed through. Relaying "
-            + "published findings only is what a caller without this data could have done; "
-            + "querying tables on a question the world already studied, with nothing checked "
-            + "against it, is worse — uninformed. Say plainly when the literature already "
-            + "answers it and this corpus adds nothing — that is a finding, not a failure. "
-            + "MECHANICS. Call list_tables(schema) before querying. Add FETCH FIRST N ROWS ONLY "
-            + "when exploring; omit the limit for analytical/aggregation queries so all "
-            + "matching rows process (client-side cap: default 500, max 5000). "
-            + "VIEW JOIN PUSHDOWN: a normalized VIEW over a much larger base table (e.g. "
+            + "window is a genuinely new result a literature search alone can't produce. ALWAYS "
+            + "check a genuinely new computed finding against step 1's reading before "
+            + "presenting it — a result that quietly contradicts established research is not "
+            + "itself a finding until you know whether it should. This check does not have to "
+            + "survive into the final report: cite only what's actually relevant to what you "
+            + "found, not everything step 1 turned up.\n"
+            + "6. **Say what you added.** Which numbers you computed vs. passed through. "
+            + "Relaying published findings only is what a caller without this data could have "
+            + "done; querying tables on a question the world already studied, with nothing "
+            + "checked against it, is worse — uninformed. Say plainly when the literature "
+            + "already answers it and this corpus adds nothing — that is a finding, not a "
+            + "failure.\n\n"
+
+            + "## QUERY MECHANICS\n\n"
+            + "- Call list_tables(schema) before querying. Add FETCH FIRST N ROWS ONLY when "
+            + "exploring; omit the limit for analytical/aggregation queries so all matching "
+            + "rows process (client-side cap: default 500, max 5000).\n"
+            + "- **VIEW JOIN PUSHDOWN.** A normalized VIEW over a much larger base table (e.g. "
             + "sec.financial_facts = financial_line_items LEFT JOIN filing_contexts) may not "
             + "push your filter through the join before it scans — the symptom is a query that "
-            + "never returns or is far slower than its filter implies, not an error. If a "
-            + "filtered view query is slow or hangs: reissue the filter directly against the "
-            + "view's base table (describe_table on it), add any further scoping key (filing/"
-            + "accession id, period, document id) to narrow to one record first, then bring in "
-            + "the joined columns via your own JOIN or by moving the filter inside the view's "
-            + "query. Generalizes beyond SEC: any '<entity>_facts'/'<entity>_summary' VIEW built "
-            + "from a JOIN is a candidate, and DISTINCT or an unfiltered aggregate over one is "
-            + "the riskiest shape — no predicate for the planner to push down. "
-            + "DIMENSIONAL SUB-CATEGORY BREAKDOWNS (loan class, segment, geography, product "
-            + "line) are usually a JOIN, not a column — a source reporting one consolidated "
-            + "total plus sub-category rows typically keys the breakdown through a context/"
-            + "dimension table (e.g. sec.filing_contexts.segment holds XBRL Axis=Member pairs "
-            + "joining to sec.financial_line_items on cik/accession_number/context_ref="
-            + "context_id). Filter the dimension table's descriptive column with ILIKE for the "
-            + "category name, read off the matching id(s), then join back. A missing 'concept' "
-            + "name does not mean the data is absent — check for a dimensional breakdown of a "
-            + "broader concept first. "
-            + "STATISTICS RUN IN SQL, not by hand: corr(y,x)/covar_pop/covar_samp; "
-            + "regr_slope/intercept/r2/count/avgx/avgy/sxy(y,x); median/quantile_cont/"
-            + "quantile_disc/mode/stddev_samp/var_samp; skewness/kurtosis/mad; lag()/lead() for "
-            + "cross-correlation. Include COUNT(*) AS n with any corr/regr — correlation is not "
-            + "causation. fetch_aligned_series aligns series on a shared date grain/FIPS key; "
-            + "resolve_geo maps place names to FIPS before joining. "
-            + "THE `ref` SCHEMA IS THE JOIN LAYER — where this server's hardest questions "
+            + "never returns or is far slower than its filter implies, not an error. Fix: "
+            + "reissue the filter directly against the view's base table (describe_table on "
+            + "it), add any further scoping key (filing/accession id, period, document id) to "
+            + "narrow to one record first, then bring in the joined columns via your own JOIN "
+            + "or by moving the filter inside the view's query. Generalizes beyond SEC: any "
+            + "'<entity>_facts'/'<entity>_summary' VIEW built from a JOIN is a candidate, and "
+            + "DISTINCT or an unfiltered aggregate over one is the riskiest shape — no "
+            + "predicate for the planner to push down.\n"
+            + "- **DIMENSIONAL SUB-CATEGORY BREAKDOWNS** (loan class, segment, geography, "
+            + "product line) are usually a JOIN, not a column — a source reporting one "
+            + "consolidated total plus sub-category rows typically keys the breakdown through "
+            + "a context/dimension table (e.g. sec.filing_contexts.segment holds XBRL "
+            + "Axis=Member pairs joining to sec.financial_line_items on cik/accession_number/"
+            + "context_ref=context_id). Filter the dimension table's descriptive column with "
+            + "ILIKE for the category name, read off the matching id(s), then join back. A "
+            + "missing 'concept' name does not mean the data is absent — check for a "
+            + "dimensional breakdown of a broader concept first.\n"
+            + "- **THE `ref` SCHEMA IS THE JOIN LAYER** — where this server's hardest questions "
             + "('these firms, across those two sources') get answered exactly instead of "
             + "fuzzily. ref.canonical_org_entity: one row per real-world organisation, nullable "
             + "FK per source (sec_cik, patents_assignee_id, fec_committee_id, eia_utility_id, "
@@ -590,66 +614,128 @@ public class McpServer {
             + "source_table, stringified_fk). Check whether ref already carries the key BEFORE "
             + "matching by name — resolve_entity/resolve_geo are heuristics for when a PERSON "
             + "handed you a name; reaching for the more visible tool over an exact join is the "
-            + "commonest way a precise question goes fuzzy. "
-            + "BEYOND ONE PREDICTOR — corr()/regr_*() only handle one. For multiple predictors, "
-            + "an instrumented/endogenous relationship, a treatment-vs-control comparison, or a "
-            + "real significance test: ols_regression (multivariate OLS, coefficients/SEs/p/"
-            + "R²); iv_2sls (2SLS with corrected SEs, not the upward-biased ones a naive "
-            + "two-OLS-call gives); diff_in_diff (treatment*post interaction, parallel-trends "
-            + "caveat); hypothesis_test (t_test/anova/chi_square/ks_test); panel_fixed_effects "
-            + "(two-way entity+time FE for panel data — controls both fixed state traits AND "
-            + "per-year national shocks, which diff_in_diff's dummies can't do past two "
-            + "periods); robust_regression (heteroskedasticity/cluster-robust SEs, for "
-            + "non-independent observations e.g. repeated state-years). Each runs the FULL "
-            + "result set through real matrix algebra (Apache Commons Math), not the row-capped "
-            + "query() path. For nonlinear/interaction effects or ML-based causal estimation: "
-            + "flexible_regression (RF/GBM — in-sample fit + importance, NOT a held-out "
-            + "substitute), feature_importance (usage-based ranking, not causal), double_ml_ate "
-            + "(Double/Debiased ML ATE — valid with flexible nuisance models but still ASSUMES "
-            + "unconfoundedness like any observational estimate; prefer iv_2sls when a real "
-            + "instrument exists). These three run on Smile, separate from the Commons Math "
-            + "tools above. diff_in_diff assumes parallel pre-trends and can't test them "
-            + "(collapses the pre-period to one indicator); event_study estimates a coefficient "
-            + "per period and tests whether pre-treatment ones are jointly zero — run it "
-            + "alongside any diff_in_diff, report the pre-trend p-value with the effect, and "
-            + "note it also flags staggered adoption, which biases two-way FE itself. "
-            + "NEVER compare raw counts across places or years — use per_capita (joins Census "
-            + "population at the matching geography/year, returns the denominator used); "
-            + "California exceeding Wyoming on any count is a population statement until it's "
-            + "rated. "
-            + "Before reporting ANY regression result as a finding, run sensitivity_analysis "
-            + "with the same SQL and a jurisdiction group_col — it leaves out one jurisdiction "
-            + "at a time and reports whether a single unit carries the effect, flips its sign, "
-            + "or crosses p=0.05. A coefficient that has not been leave-one-out tested is not a "
-            + "finding. "
-            + "This is a versioned snapshot, not a live feed. describe_table reports a table's "
-            + "DECLARED coverage window — an empty result outside it means the period is not "
-            + "published yet, not zero; say so rather than substituting an outside figure "
-            + "(suggest_external_sources lists keyless endpoints for genuine gaps). "
-            + "data_coverage(schema, table) reports what is ACTUALLY loaded — years, row "
-            + "counts, interior gaps — call it before describing a trend or asserting no-data, "
+            + "commonest way a precise question goes fuzzy.\n\n"
+
+            + "## STATISTICS — WHICH TOOL FOR WHICH JOB\n\n"
+            + "Run statistics in SQL, not by hand: corr(y,x)/covar_pop/covar_samp; "
+            + "regr_slope/intercept/r2/count/avgx/avgy/sxy(y,x); median/quantile_cont/"
+            + "quantile_disc/mode/stddev_samp/var_samp; skewness/kurtosis/mad; lag()/lead() for "
+            + "cross-correlation. Include COUNT(*) AS n with any corr/regr — correlation is not "
+            + "causation. fetch_aligned_series aligns series on a shared date grain/FIPS key; "
+            + "resolve_geo maps place names to FIPS before joining.\n\n"
+            + "**Beyond one predictor** — corr()/regr_*() only handle one. For multiple "
+            + "predictors, an instrumented/endogenous relationship, a treatment-vs-control "
+            + "comparison, or a real significance test:\n"
+            + "- ols_regression — multivariate OLS, coefficients/SEs/p/R².\n"
+            + "- iv_2sls — 2SLS with corrected SEs (not the upward-biased ones a naive "
+            + "two-OLS-call gives).\n"
+            + "- diff_in_diff — treatment×post interaction; assumes parallel pre-trends and "
+            + "can't test them (collapses the pre-period to one indicator).\n"
+            + "- hypothesis_test — t_test/anova/chi_square/ks_test.\n"
+            + "- panel_fixed_effects — two-way entity+time FE for panel data; controls both "
+            + "fixed state traits AND per-year national shocks, which diff_in_diff's dummies "
+            + "can't do past two periods.\n"
+            + "- robust_regression — heteroskedasticity/cluster-robust SEs, for "
+            + "non-independent observations (e.g. repeated state-years).\n"
+            + "- event_study — a coefficient per period, tests whether pre-treatment ones are "
+            + "jointly zero. Run it alongside any diff_in_diff, report the pre-trend p-value "
+            + "with the effect — it also flags staggered adoption, which biases two-way FE "
+            + "itself.\n\n"
+            + "Each of the above runs the FULL result set through real matrix algebra (Apache "
+            + "Commons Math), not the row-capped query() path. For nonlinear/interaction "
+            + "effects or ML-based causal estimation: flexible_regression (RF/GBM — in-sample "
+            + "fit + importance, NOT a held-out substitute), feature_importance (usage-based "
+            + "ranking, not causal), double_ml_ate (Double/Debiased ML ATE — valid with "
+            + "flexible nuisance models but still ASSUMES unconfoundedness like any "
+            + "observational estimate; prefer iv_2sls when a real instrument exists). These "
+            + "three run on Smile, separate from the Commons Math tools above. (All of these "
+            + "compute FROM the warehouse and are additive to workflow steps 2/4 above — never "
+            + "a substitute for the literature pass in step 1.)\n\n"
+            + "**Candidate predictors, assumptions, and decompositions:**\n"
+            + "- correlation_matrix — pairwise correlations + VIF. Run BEFORE treating several "
+            + "candidate predictors as independent evidence, or before combining them into one "
+            + "variable; a high VIF means one is largely redundant with the others even when no "
+            + "PAIRWISE correlation looks high.\n"
+            + "- quantile_binning_test — quantile-bin dose-response/monotonicity check. Use "
+            + "when the question is 'does more X mean more Y' and a linear corr() looks weak or "
+            + "ambiguous, since a real threshold or plateau effect understates a linear r.\n"
+            + "- subgroup_contribution — each group's share of a total, and the total excluding "
+            + "it. Run before generalizing an aggregate finding to the whole group it's filed "
+            + "under, in case one subgroup is carrying most of it.\n"
+            + "- gini_coefficient — concentration of an amount across ALL units, not just "
+            + "top-N. Run when asked how concentrated something is or whether concentration is "
+            + "rising, since flat top-N shares can hide a rising gini if new entrants aren't "
+            + "absorbing share evenly.\n"
+            + "- partial_correlation — x,y correlation after netting out controls, reported "
+            + "alongside the zero-order correlation. Use when the question is specifically "
+            + "whether a relationship SURVIVES controlling for Z, not just its effect size.\n"
+            + "- scenario_sweep — reruns a query across a swept assumption value. Use when a "
+            + "conclusion rests on one fixed benchmark/rate/constant, to check whether the "
+            + "conclusion, not just the magnitude, is assumption-dependent before reporting it "
+            + "as unconditional.\n\n"
+
+            + "## STANDING STATISTICAL PRACTICE\n\n"
+            + "- **A 'premium'/'gap' claim (group X gets N-times group Y) computed as a raw "
+            + "ratio of two group means is confounded by everything else that differs between "
+            + "the groups.** Run ols_regression with the grouping as an indicator, or "
+            + "diff_in_diff if there's a before/after, for a modeled comparison before "
+            + "reporting a bare multiplier.\n"
+            + "- **NEVER compare raw counts across places or years.** Use per_capita (joins "
+            + "Census population at the matching geography/year, returns the denominator used) "
+            + "— California exceeding Wyoming on any count is a population statement until "
+            + "it's rated.\n"
+            + "- **A coefficient that has not been leave-one-out tested is not a finding.** "
+            + "Before reporting ANY regression result, run sensitivity_analysis with the same "
+            + "SQL and a jurisdiction group_col — it leaves out one jurisdiction at a time and "
+            + "reports whether a single unit carries the effect, flips its sign, or crosses "
+            + "p=0.05.\n"
+            + "- **NEVER compare dollar figures across years without adjust_inflation** "
+            + "(deflates to real dollars against the server's own BLS CPI-U vintage in "
+            + "econ.inflation_metrics, single-amount or whole-result-set, reports the index "
+            + "used per year — never deflate by hand from a remembered CPI figure, and a "
+            + "nominal multi-year comparison is not growth). This adjusts for TIME only, not "
+            + "PLACE — comparing states, not just years, needs a second step; call find_recipe "
+            + "for ANY multi-step comparison (places, rates, multi-year averages/trends, causal "
+            + "claims, attributing a trend to a named cause without testing the leading "
+            + "alternative explanation, a table whose construction basis — inventor vs. "
+            + "assignee, self-report vs. administrative — you have not verified) — call it "
+            + "BEFORE deciding you're already certain of the method, not only once you notice "
+            + "you're not; feeling certain is the exact state every cataloged recipe was written "
+            + "from. Cheap, catalog grows, an empty result means uncovered, not 'plan is fine'.\n\n"
+
+            + "## COVERAGE, VERSIONING, AND GAPS\n\n"
+            + "- **This is a versioned snapshot, not a live feed.** describe_table reports a "
+            + "table's DECLARED coverage window — an empty result outside it means the period "
+            + "is not published yet, not zero; say so rather than substituting an outside "
+            + "figure (suggest_external_sources lists keyless endpoints for genuine gaps).\n"
+            + "- **A confirmed missing table is a redirect, not a stop condition.** After "
+            + "logging the gap via report_issue, build the best PARTIAL answer from the "
+            + "nearest proxy or coarser table available and flag the substitution — 'this "
+            + "cannot be answered' is a worse answer than a flagged partial one whenever ANY "
+            + "related table exists.\n"
+            + "- **data_coverage(schema, table) reports what is ACTUALLY loaded** — years, row "
+            + "counts, interior gaps. Call it before describing a trend or asserting no-data, "
             + "since an unloaded year and a genuinely empty one look identical in a query "
-            + "result. "
-            + "officials.state_political_index's composite score is SPI (State Political Index) "
-            + "in anything you write — NEVER call it CPI, which means Consumer Price Index "
-            + "everywhere else in this corpus (see adjust_inflation below) and would silently "
-            + "conflate a political-lean score with an inflation deflator in the same answer. "
-            + "NEVER compare dollar figures across years without adjust_inflation (deflates to "
-            + "real dollars against the server's own BLS CPI-U vintage in econ.inflation_metrics, "
-            + "single-amount or whole-result-set, reports the index used per year — never "
-            + "deflate by hand from a remembered CPI figure, and a nominal multi-year "
-            + "comparison is not growth). NOTE: this adjusts for TIME only, not PLACE — "
-            + "comparing states, not just years, needs a second step; call find_recipe before "
-            + "any multi-step comparison you are not already certain of (places, rates, causal "
-            + "claims) — cheap, catalog grows, an empty result means uncovered, not 'plan is "
-            + "fine'. "
-            + "render_chart draws a line/bar/pie/scatter/bubble image from data already "
+            + "result.\n"
+            + "- **A shorter-than-asked window is a flag to cross-validate, not just disclose.** "
+            + "If data_coverage shows the corpus covers less than the question's literal span "
+            + "(e.g. 16 of 20 requested years), don't silently answer the narrower window — "
+            + "check whether an independent secondary source covering the missing years agrees "
+            + "qualitatively with what the loaded window shows, and say so; a corroborated "
+            + "shorter window is a stronger answer than a bare 'data starts in X' caveat.\n"
+            + "- **officials.state_political_index's composite score is SPI** (State Political "
+            + "Index) in anything you write — NEVER call it CPI, which means Consumer Price "
+            + "Index everywhere else in this corpus and would silently conflate a political-"
+            + "lean score with an inflation deflator in the same answer.\n\n"
+
+            + "## VISUALS AND DELIVERY\n\n"
+            + "- render_chart draws a line/bar/pie/scatter/bubble image from data already "
             + "fetched — use it instead of hand-building a chart. line/bar/pie take "
             + "categories+series, treating null as a gap not a false zero; scatter/bubble take "
             + "points with true numeric x/y (+size for bubble) and no category axis, so omit "
-            + "rather than null a point. "
-            + QuestionGuidance.RUBRIC
-            + " Every analytical result carries a second content block: a structured "
+            + "rather than null a point.\n"
+            + "- " + QuestionGuidance.RUBRIC + "\n"
+            + "- Every analytical result carries a second content block: a structured "
             + "'diagnostics' envelope — typed warnings (small_n, low_coverage, row_fanout, "
             + "grain_mismatch, vintage_misalignment, broken_field, uncontrolled_confound, "
             + "collinear_controls) each with severity info/caution/high, plus grain, "
@@ -657,15 +743,39 @@ public class McpServer {
             + "answering and let it set how hard you hedge — a 'high' warning generally means "
             + "re-query, not caveat; no warnings is not a clean bill of health, only that no "
             + "listed defect was detected. critique_query runs the same form-level checks on "
-            + "SQL before you run it. "
-            + "DELIVERY IS REQUIRED, NOT OPTIONAL. Call publish_report before finishing any "
-            + "question worth more than a sentence — it is the deliverable, not a nice-to-have; "
-            + "a chart plus prose the reader has to reassemble is not an acceptable substitute. "
-            + "When the answer holds more than one figure worth showing, call compose_dashboard "
-            + "first and pass its panels through publish_report's dashboard argument so board "
-            + "and narrative compose in one page — this beats prose or a bare chart for "
-            + "multi-variate answers. A single figure with nothing to compare still needs "
-            + "publish_report for its narrative, sourcing and caveats.");
+            + "SQL before you run it.\n"
+            + "- **BEFORE CALLING publish_report — three checks, all required:**\n"
+            + "  1. Count your distinct external sources on any question with a real-world "
+            + "antecedent. Fewer than 3-5 is a stop signal, not a publishable state — go back "
+            + "to workflow step 1 and search from an angle you haven't tried yet, rather than "
+            + "publishing a thin report on schedule.\n"
+            + "  2. Re-read the original question (and visuals_guidance if given) clause by "
+            + "clause and pass that checklist as question_coverage — required, not "
+            + "boilerplate. This catches the failure mode where a well-executed answer quietly "
+            + "targets an easier adjacent question (rural-vs-urban instead of funded-vs-"
+            + "unfunded; a component computed but never combined into the ranked index "
+            + "actually asked for) rather than the one asked; any clause you mark unaddressed "
+            + "is disclosed to the reader in the report itself, not just noted internally.\n"
+            + "  3. Re-read the question a second time for any SPECIFIC method it names — a "
+            + "denominator, a pairing or design, a required per-source attribution — and "
+            + "check what you actually did against it word for word, not against something "
+            + "merely similar. This is a different failure than an uncovered clause: every "
+            + "clause can be technically addressed while still using the wrong instrument — a "
+            + "self-reported survey rate where the question calls for an eligible-population "
+            + "denominator, a state-level panel where it specifies paired adjacent counties, a "
+            + "headline figure spliced from two studies and cited under one source instead of "
+            + "attributing each number to its own. If the answer reports that a ranking or "
+            + "comparison holds, this check includes testing whether the GAP driving it — not "
+            + "just each side's own point estimate — survives its own uncertainty.\n"
+            + "- **DELIVERY IS REQUIRED, NOT OPTIONAL.** Call publish_report before finishing "
+            + "any question worth more than a sentence — it is the deliverable, not a "
+            + "nice-to-have; a chart plus prose the reader has to reassemble is not an "
+            + "acceptable substitute. When the answer holds more than one figure worth "
+            + "showing, call compose_dashboard first and pass its panels through "
+            + "publish_report's dashboard argument so board and narrative compose in one page "
+            + "— this beats prose or a bare chart for multi-variate answers. A single figure "
+            + "with nothing to compare still needs publish_report for its narrative, sourcing "
+            + "and caveats.");
         return result(id, body);
     }
 
@@ -923,12 +1033,18 @@ public class McpServer {
             + "event scores as highly as one saying it DID, because the difference is modality, "
             + "not topic. Read the returned text and decide; do not treat a high score as "
             + "evidence the thing happened.\n\n"
-            + "RECOMMENDED PATTERN — semantic recall, literal exclusion: ask for more chunks than "
-            + "you need (a high k), then filter the returned text yourself for hedging language "
-            + "('may', 'could', 'in the event of', 'risk of', 'if we were to') to separate actual "
-            + "occurrence from mere risk-factor boilerplate. semantic_search is the wide net for "
-            + "meaning; a literal string exclusion on its own output is the precision pass — do "
-            + "not expect the embedding score alone to make that distinction.",
+            + "RECOMMENDED PATTERN — semantic recall, literal exclusion, EVERY schema this covers: "
+            + "ask for more chunks than you need (a high k), then filter the returned text "
+            + "yourself for the false-positive shape specific to what you searched — the wide net "
+            + "of meaning always needs a second, literal pass, and what you are filtering FOR "
+            + "changes by domain: in sec, hedging language ('may', 'could', 'in the event of', "
+            + "'risk of', 'if we were to') separates actual occurrence from risk-factor "
+            + "boilerplate; in fedregister, check rule_type and effective_date — a PRORULE or "
+            + "NOTICE that merely discusses a topic scores the same as a RULE that actually "
+            + "regulates it; in cyber_threat, an ATT&CK technique's abstract description of a "
+            + "method scores the same as a real IOC/incident referencing it — distinguish "
+            + "attack_techniques hits (methodology, not an event) from ioc_urls/actual indicator "
+            + "hits. Do not expect the embedding score alone to make any of these distinctions.",
             schema(semProps, new String[]{"query"})));
 
         ObjectNode relProps = MAPPER.createObjectNode();
@@ -1379,6 +1495,140 @@ public class McpServer {
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(dmlProps, new String[]{"sql", "outcome", "treatment", "controls"})));
 
+        ObjectNode corrMatrixProps = MAPPER.createObjectNode();
+        corrMatrixProps.set("sql", prop("string",
+            "SQL SELECT returning the columns to compare, one row per observation."));
+        ObjectNode corrColumnsProp = MAPPER.createObjectNode();
+        corrColumnsProp.put("type", "array");
+        corrColumnsProp.put("description",
+            "Column names to correlate against each other (3+ recommended — with only 2, use "
+            + "hypothesis_test or query()'s corr() instead). All must be numeric.");
+        corrMatrixProps.set("columns", corrColumnsProp);
+        tools.add(
+            tool("correlation_matrix",
+            "Pairwise Pearson correlations across 2+ columns AT ONCE, plus each column's "
+            + "variance inflation factor (VIF) — how much of that column is a linear "
+            + "combination of the OTHERS in the list, not just how it pairs with any one of "
+            + "them. Two predictors can look weakly related bivariate and still be almost "
+            + "redundant once every other candidate is in play; a regression or "
+            + "sensitivity_analysis result built on predictors with VIF > 10 is not the "
+            + "independent evidence it looks like. Run this BEFORE ols_regression /  "
+            + "panel_fixed_effects whenever you're choosing among several correlated "
+            + "candidate predictors (e.g. density vs. urban_share vs. region), not after.",
+            schema(corrMatrixProps, new String[]{"sql", "columns"})));
+
+        ObjectNode qbtProps = MAPPER.createObjectNode();
+        qbtProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome and predictor columns, one row per observation."));
+        qbtProps.set("outcome", prop("string", "Column name of the outcome (y)."));
+        qbtProps.set("predictor", prop("string",
+            "Column name of the continuous variable to bin into quantile groups (x)."));
+        qbtProps.set("bins", prop("integer",
+            "Number of equal-count quantile bins (default 5 — a quintile split). At least 3 "
+            + "required; needs at least 2 observations per bin."));
+        tools.add(
+            tool("quantile_binning_test",
+            "Bins a continuous predictor into equal-count quantile groups (default quintiles) "
+            + "and tests whether the mean outcome trends monotonically across them — a "
+            + "dose-response / trend test a single linear corr() or ols_regression coefficient "
+            + "can't run: a real relationship can be non-monotonic (a threshold, a U-shape, a "
+            + "plateau) and still show a middling linear r, or hide a genuine monotonic-but-"
+            + "nonlinear pattern behind a small one. Reports each bin's mean outcome and the "
+            + "trend's slope and p-value across bins, plus whether the bin means are "
+            + "consistently increasing or decreasing.",
+            schema(qbtProps, new String[]{"sql", "outcome", "predictor"})));
+
+        ObjectNode subgroupProps = MAPPER.createObjectNode();
+        subgroupProps.set("sql", prop("string",
+            "SQL SELECT returning the value and group columns, one row per observation."));
+        subgroupProps.set("value_col", prop("string",
+            "Numeric column to sum and attribute across groups."));
+        subgroupProps.set("group_col", prop("string",
+            "Categorical column whose distinct values define the subgroups (e.g. agency, "
+            + "state, sector)."));
+        tools.add(
+            tool("subgroup_contribution",
+            "Each distinct group's share of a value_col total, AND what the total would be "
+            + "with that group excluded — 'how much of the total does group G account for' as "
+            + "a single call, instead of a full-sample SUM, a per-group SUM, and a manual "
+            + "subtraction. Use this to check whether an aggregate finding (a national rate, a "
+            + "department-wide count) is actually broad-based or is being driven by one "
+            + "dominant subgroup (e.g. one agency accounting for the bulk of an agency-level "
+            + "total) before reporting the aggregate as representative.",
+            schema(subgroupProps, new String[]{"sql", "value_col", "group_col"})));
+
+        ObjectNode giniProps = MAPPER.createObjectNode();
+        giniProps.set("sql", prop("string",
+            "SQL SELECT returning one row per unit (institution, firm, household) with its "
+            + "nonnegative amount column."));
+        giniProps.set("value_col", prop("string",
+            "Numeric, nonnegative column holding each unit's amount (funding, income, share "
+            + "count) to measure concentration over."));
+        tools.add(
+            tool("gini_coefficient",
+            "Gini coefficient (0 = perfectly even, 1 = one unit holds everything) and Lorenz "
+            + "curve for a distribution of amounts across units — quantifies HOW concentrated a "
+            + "total is at every point in the distribution, not just at the top-N cut points "
+            + "subgroup_contribution reports. Use when a question asks whether concentration "
+            + "is rising/falling/how concentrated something is, or when top-N shares alone "
+            + "(e.g. 'top 10 institutions' share') need a single summary number comparable "
+            + "across two periods or populations of different size.",
+            schema(giniProps, new String[]{"sql", "value_col"})));
+
+        ObjectNode partialCorrProps = MAPPER.createObjectNode();
+        partialCorrProps.set("sql", prop("string",
+            "SQL SELECT returning the x, y, and control columns, one row per observation."));
+        partialCorrProps.set("x", prop("string", "Column name of the first variable."));
+        partialCorrProps.set("y", prop("string", "Column name of the second variable."));
+        ObjectNode partialControlsProp = MAPPER.createObjectNode();
+        partialControlsProp.put("type", "array");
+        partialControlsProp.put("description",
+            "Column names to hold fixed while correlating x and y. Omit (empty array) for the "
+            + "plain, unconditional Pearson correlation.");
+        partialCorrProps.set("controls", partialControlsProp);
+        tools.add(
+            tool("partial_correlation",
+            "Correlation between x and y after regressing each on a set of controls first — "
+            + "the correlation that would remain with the controls held fixed, reported as one "
+            + "legible number alongside the plain (zero-order) correlation for comparison. "
+            + "Answers 'does this relationship survive controlling for Z' directly, where "
+            + "ols_regression answers it only indirectly, as one coefficient buried inside a "
+            + "multi-term fit the caller has to interpret themselves. Use ols_regression "
+            + "instead when you need the actual effect SIZE (units of y per unit of x), not "
+            + "just whether the association survives.",
+            schema(partialCorrProps, new String[]{"sql", "x", "y"})));
+
+        ObjectNode sweepProps = MAPPER.createObjectNode();
+        sweepProps.set("sql", prop("string",
+            "SQL SELECT template containing the literal placeholder " + SCENARIO_PLACEHOLDER
+            + " exactly where the swept assumption belongs, e.g. "
+            + "\"SELECT miles_per_year * " + SCENARIO_PLACEHOLDER + " AS annual_cost FROM ...\". "
+            + "The placeholder is substituted with each value in param_values as a numeric "
+            + "literal and the resulting SQL is run once per value."));
+        ObjectNode sweepValuesProp = MAPPER.createObjectNode();
+        sweepValuesProp.put("type", "array");
+        sweepValuesProp.put("description",
+            "Numeric assumption values to sweep through (e.g. multiple plausible gasoline "
+            + "prices, discount rates, or benchmark constants). At least 1 required.");
+        sweepProps.set("param_values", sweepValuesProp);
+        sweepProps.set("value_col", prop("string",
+            "Column to aggregate from each run's result set."));
+        sweepProps.set("agg", prop("string",
+            "'avg' (default), 'sum', 'count', 'min', or 'max' — how to reduce value_col to one "
+            + "number per scenario."));
+        tools.add(
+            tool("scenario_sweep",
+            "Reruns the same query once per value of a swept assumption and reports how the "
+            + "aggregate result moves across the whole range, instead of at one fixed point — "
+            + "closes the gap a single-assumption analysis leaves open: a conclusion that only "
+            + "held for ONE benchmark price/rate/constant is a much weaker claim than one "
+            + "checked across the plausible range, and 'EVs beat gas at $3.50/gal' can quietly "
+            + "reverse at $2.80 or $4.20 without ever being tested. Reports the min and max "
+            + "aggregate and which parameter value produced each, plus whether the aggregate "
+            + "ever changes sign across the sweep (a true reversal, not just a change in "
+            + "magnitude).",
+            schema(sweepProps, new String[]{"sql", "param_values", "value_col"})));
+
         ObjectNode chartProps = MAPPER.createObjectNode();
         chartProps.set(
             "chart_type", prop("string",
@@ -1528,12 +1778,34 @@ public class McpServer {
             + "panels, footnote, byline). The board is composed and inlined at the top of the "
             + "report, so one call produces the whole deliverable.");
         pubProps.set("dashboard", dashProp);
+        ObjectNode coverageProp = MAPPER.createObjectNode();
+        coverageProp.put("type", "object");
+        coverageProp.put("description",
+            "Explicit checklist proving this report answers the question actually asked, not a "
+            + "nearby easier one — the two recurring failure modes this exists to catch "
+            + "(quietly substituting an adjacent question; dropping a clause the question or "
+            + "its visuals_guidance asked for) are exactly the ones a caller does not notice it "
+            + "did, so restating each requirement and checking it off is the check itself, not "
+            + "a formality on top of one already done in your head. Shape: {\"question\": "
+            + "\"<the exact question text you were asked>\", \"clauses\": [{\"clause\": \"<one "
+            + "distinct requirement — a sub-question, a requested breakdown or grain, a "
+            + "visuals_guidance element>\", \"addressed\": true|false, \"note\": \"<required "
+            + "when addressed is false: what you delivered instead and why the gap exists>\"}]}. "
+            + "Every clause marked false is rendered into the published report under its own "
+            + "heading, so an honest partial answer is disclosed to the READER, not just "
+            + "recorded internally — this does not block publishing an incomplete answer, it "
+            + "makes the incompleteness visible rather than assumed away.");
+        pubProps.set("question_coverage", coverageProp);
         ObjectNode sourcesProp = MAPPER.createObjectNode();
         sourcesProp.put("type", "array");
         sourcesProp.put("description",
             "Citations: [{\"label\":\"Census ACS 1-year B19013\", \"url\":\"https://...\", "
             + "\"note\":\"2024 vintage\"}]. Include the AskAmerica tables you queried as well "
-            + "as web sources — a reader cannot check a number whose origin is not named.");
+            + "as web sources — a reader cannot check a number whose origin is not named. "
+            + "For an AskAmerica-table citation, also include \"sql\": the exact query() call "
+            + "that produced the cited figure — it renders as a collapsed 'Show SQL' toggle "
+            + "the reader can expand, so a claim traced to this connector is independently "
+            + "checkable, not just named. Omit sql for web sources.");
         pubProps.set("sources", sourcesProp);
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
@@ -1552,6 +1824,14 @@ public class McpServer {
             + "Filters apply ON SCREEN ONLY. A printout is always the complete table regardless "
             + "of which toggles are set, so the paper version cannot silently disagree with the "
             + "n in its own prose."));
+        if (EVAL_MODE) {
+            pubProps.set(
+                "run_subpath", prop("string",
+                "Identifies this run as 'q<N>/<persona>/<yyyy-mm-dd>' — copy this exactly from "
+                + "your prompt's delivery instructions. When set, the rendered HTML page is also "
+                + "saved to that run's directory as report.html, since the "
+                + "http://127.0.0.1/... link above does not survive past this session."));
+        }
         tools.add(
             tool("publish_report",
             "Publish a complete answer — narrative, dashboard and citations — as one "
@@ -1560,8 +1840,11 @@ public class McpServer {
             + "the caveats and the sourcing in one page they can open, save, print or send, "
             + "instead of a chart plus prose they have to reassemble. Pass the dashboard "
             + "argument to compose and inline the board in the same call. Costs about twenty "
-            + "tokens to return, because what comes back is a link rather than the page.",
-            schema(pubProps, new String[]{"title"})));
+            + "tokens to return, because what comes back is a link rather than the page. "
+            + "REQUIRES question_coverage — see its own description; this is not optional "
+            + "boilerplate, it is the mechanism that catches a report quietly answering an "
+            + "easier adjacent question instead of the one asked.",
+            schema(pubProps, new String[]{"title", "question_coverage"})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
@@ -1607,12 +1890,14 @@ public class McpServer {
             "Look up a worked analysis pattern before running one of the multi-step "
             + "comparisons this corpus makes easy to get subtly wrong — the exact tool "
             + "sequence, the formula, and the plausible-but-wrong shortcut a real run has "
-            + "already been caught taking. Call this whenever a question compares a figure "
-            + "across a dimension the plain arithmetic doesn't obviously handle (places, not "
-            + "just time; rates, not just counts; a claim, not just a lookup) and you are not "
-            + "already certain of the correct multi-step method. Costs nothing to call and an "
-            + "empty result teaches you the catalog hasn't covered this yet, not that your plan "
-            + "is fine.",
+            + "already been caught taking. Call this for ANY question that averages or trends "
+            + "a rate over multiple years, compares a figure across places, computes a "
+            + "share/ratio/index, or attributes a trend to a named cause — before you decide "
+            + "you're already certain of the method, not only after you notice you aren't. "
+            + "Feeling certain is exactly the state every recipe in this catalog was written "
+            + "from — each one records a run that also felt confident right up until the check "
+            + "caught it. Costs nothing to call and an empty result teaches you the catalog "
+            + "hasn't covered this yet, not that your plan is fine.",
             schema(recipeProps, new String[]{})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
@@ -1651,6 +1936,27 @@ public class McpServer {
             + "to the live connection — no reconnect needed — and persists for connections "
             + "opened after this call too.",
             schema(memoryLimitProps, new String[]{"limit"})));
+
+        if (EVAL_MODE) {
+            // Never registered for a real user — see EVAL_MODE and deliverReport() above.
+            ObjectNode deliverProps = MAPPER.createObjectNode();
+            deliverProps.set(
+                "run_subpath",
+                prop("string",
+                "Identifies this run as 'q<N>/<persona>/<yyyy-mm-dd>', e.g. "
+                + "'q1/askamerica/2026-08-25' — copy this exactly from your prompt's "
+                + "delivery instructions. Must match that shape or the call is rejected."));
+            deliverProps.set(
+                "markdown",
+                prop("string", "Your complete final answer, in full — the same content you "
+                + "would otherwise write to a file."));
+            tools.add(
+                tool("deliver_report",
+                "Save your final answer when you have no filesystem tool of your own. Call this "
+                + "once, when you are completely done, instead of writing a file. Also saves the "
+                + "most recent chart you produced in this session, if any.",
+                schema(deliverProps, new String[]{"run_subpath", "markdown"})));
+        }
 
         TOOL_DEFS = tools;
         return tools;
@@ -1898,6 +2204,19 @@ public class McpServer {
                     text = reportIssue(subject, issueBody);
                     break;
                 }
+                case "deliver_report": {
+                    // Not advertised in toolDefs() outside eval mode (see EVAL_MODE), but guard
+                    // the dispatch too — a real user's client never sends this name, but nothing
+                    // stops one from guessing it, and it must behave exactly as unadvertised.
+                    if (!EVAL_MODE) {
+                        return errorResponse(id, -32602, "Unknown tool: " + name);
+                    }
+                    String runSubpath = args.path("run_subpath").asText();
+                    String markdown = args.path("markdown").asText();
+                    log.println("[askamerica-mcp] tool=deliver_report run_subpath=" + runSubpath);
+                    text = deliverReport(runSubpath, markdown);
+                    break;
+                }
                 case "suggest_external_sources": {
                     String topic = args.path("topic").asText("");
                     int lim = args.has("limit")
@@ -1908,6 +2227,8 @@ public class McpServer {
                     break;
                 }
                 case "find_recipe": {
+                    // "query" is aliased to "topic" in ARG_ALIASES (applied before this ever
+                    // runs) — see the comment there for why it can't be handled here instead.
                     String topic = args.path("topic").asText("");
                     int lim = args.has("limit")
                         ? Math.min(Math.max(1, args.get("limit").asInt()), 20)
@@ -2235,6 +2556,73 @@ public class McpServer {
                     diagnostics = r.diagnostics;
                     break;
                 }
+                case "correlation_matrix": {
+                    String sql = args.path("sql").asText();
+                    List<String> columns = textArray(args.path("columns"));
+                    log.println("[askamerica-mcp] tool=correlation_matrix columns=" + columns);
+                    StatsOutput r = correlationMatrixTool(sql, columns);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "quantile_binning_test": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    String predictor = args.path("predictor").asText();
+                    Integer bins = args.has("bins") && !args.get("bins").isNull()
+                        ? Integer.valueOf(args.get("bins").asInt()) : null;
+                    log.println("[askamerica-mcp] tool=quantile_binning_test outcome=" + outcome
+                        + " predictor=" + predictor);
+                    StatsOutput r = quantileBinningTestTool(sql, outcome, predictor, bins);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "subgroup_contribution": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String groupCol = args.path("group_col").asText();
+                    log.println("[askamerica-mcp] tool=subgroup_contribution value_col="
+                        + valueCol + " group_col=" + groupCol);
+                    StatsOutput r = subgroupContributionTool(sql, valueCol, groupCol);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "gini_coefficient": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    log.println("[askamerica-mcp] tool=gini_coefficient value_col=" + valueCol);
+                    StatsOutput r = giniCoefficientTool(sql, valueCol);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "partial_correlation": {
+                    String sql = args.path("sql").asText();
+                    String x = args.path("x").asText();
+                    String y = args.path("y").asText();
+                    List<String> controls = textArray(args.path("controls"));
+                    log.println("[askamerica-mcp] tool=partial_correlation x=" + x + " y=" + y
+                        + " controls=" + controls);
+                    StatsOutput r = partialCorrelationTool(sql, x, y, controls);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "scenario_sweep": {
+                    String sql = args.path("sql").asText();
+                    List<Double> paramValues = doubleArray(args.path("param_values"));
+                    String valueCol = args.path("value_col").asText();
+                    String agg = args.has("agg") && !args.get("agg").isNull()
+                        ? args.get("agg").asText() : null;
+                    log.println("[askamerica-mcp] tool=scenario_sweep value_col=" + valueCol
+                        + " n_scenarios=" + paramValues.size());
+                    StatsOutput r = scenarioSweepTool(sql, paramValues, valueCol, agg);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
                 case "double_ml_ate": {
                     String sql = args.path("sql").asText();
                     String outcome = args.path("outcome").asText();
@@ -2260,11 +2648,86 @@ public class McpServer {
                         secs.add(new ReportPage.Section(
                             sec.path("heading").asText(null), sec.path("html").asText("")));
                     }
+                    // question_coverage is required so an easier adjacent question never gets
+                    // silently substituted for the one asked: every clause the caller lists
+                    // must be checked off, and any left unaddressed must say why — that note
+                    // then gets rendered into the published page itself, below, so the gap is
+                    // disclosed to the reader rather than only recorded internally.
+                    JsonNode coverage = args.path("question_coverage");
+                    if (coverage.isArray()) {
+                        // A caller repeatedly rewording the question TEXT can never fix this —
+                        // the actual problem is the top-level SHAPE. Observed in the wild:
+                        // question_coverage sent as an array of one object per clause (each
+                        // with its own "question"/"clause" and "status"/"addressed"), rather
+                        // than the required single object. Naming the shape mismatch directly,
+                        // rather than repeating the generic "must restate the question" message,
+                        // is what actually gets a caller unstuck instead of retrying variations
+                        // of the same wrong structure.
+                        throw new IllegalArgumentException(
+                            "question_coverage must be a single JSON OBJECT — {\"question\": "
+                            + "\"<the question>\", \"clauses\": [...]}} — not an array. Got an "
+                            + "array of " + coverage.size() + " item(s); each per-clause entry "
+                            + "belongs inside the 'clauses' array of that one object, not as a "
+                            + "separate top-level element.");
+                    }
+                    if (!coverage.isObject()) {
+                        throw new IllegalArgumentException(
+                            "question_coverage must be a JSON object: {\"question\": \"<the "
+                            + "exact question this report answers>\", \"clauses\": [...]}");
+                    }
+                    if (coverage.path("question").asText("").trim().isEmpty()) {
+                        throw new IllegalArgumentException(
+                            "question_coverage.question must restate the exact question this "
+                            + "report answers");
+                    }
+                    JsonNode clausesNode = coverage.path("clauses");
+                    if (!clausesNode.isArray() || clausesNode.isEmpty()) {
+                        throw new IllegalArgumentException(
+                            "question_coverage.clauses must list at least one distinct "
+                            + "requirement from the question — a sub-question, a requested "
+                            + "breakdown or grain, a visuals_guidance element");
+                    }
+                    java.util.List<String[]> coverageGaps = new java.util.ArrayList<>();
+                    for (JsonNode cl : clausesNode) {
+                        String clauseText = cl.path("clause").asText("").trim();
+                        if (clauseText.isEmpty()) {
+                            throw new IllegalArgumentException(
+                                "each question_coverage clause needs non-empty 'clause' text");
+                        }
+                        if (!cl.has("addressed") || !cl.get("addressed").isBoolean()) {
+                            throw new IllegalArgumentException(
+                                "question_coverage clause '" + clauseText + "' needs a boolean "
+                                + "'addressed'");
+                        }
+                        if (!cl.get("addressed").asBoolean()) {
+                            String note = cl.path("note").asText("").trim();
+                            if (note.isEmpty()) {
+                                throw new IllegalArgumentException(
+                                    "question_coverage clause '" + clauseText + "' is marked "
+                                    + "addressed=false but has no 'note' — an unaddressed "
+                                    + "clause must say what was delivered instead and why, not "
+                                    + "just be flagged");
+                            }
+                            coverageGaps.add(new String[]{clauseText, note});
+                        }
+                    }
+                    if (!coverageGaps.isEmpty()) {
+                        StringBuilder gapHtml = new StringBuilder("<ul>");
+                        for (String[] g : coverageGaps) {
+                            gapHtml.append("<li><strong>").append(ReportPage.esc(g[0]))
+                                .append("</strong>: ").append(ReportPage.esc(g[1]))
+                                .append("</li>");
+                        }
+                        gapHtml.append("</ul>");
+                        secs.add(new ReportPage.Section(
+                            "What This Report Does Not Answer", gapHtml.toString()));
+                    }
                     java.util.List<ReportPage.Source> srcs = new java.util.ArrayList<>();
                     for (JsonNode src : args.path("sources")) {
                         srcs.add(new ReportPage.Source(src.path("label").asText(null),
                             src.path("url").asText(null),
-                            src.has("note") ? src.get("note").asText(null) : null));
+                            src.has("note") ? src.get("note").asText(null) : null,
+                            src.has("sql") ? src.get("sql").asText(null) : null));
                     }
                     String boardSvg = null;
                     String boardSvgUrl = null;
@@ -2310,6 +2773,19 @@ public class McpServer {
                         srcs,
                         args.has("footnote") ? args.get("footnote").asText(null) : null,
                         args.has("byline") ? args.get("byline").asText(null) : null, flts);
+                    String evalReportNote = "";
+                    if (EVAL_MODE && args.has("run_subpath")) {
+                        // The http://127.0.0.1/... link below is only reachable while this
+                        // process is alive, which for a comparative-eval run is exactly the
+                        // lifetime of one subagent call — dead before the harness could ever
+                        // fetch it. Saving the same bytes here is the only way this run's actual
+                        // published page survives past this tool call.
+                        java.io.File evalDir = resolveEvalRunDir(args.path("run_subpath").asText());
+                        java.io.File reportHtml = new java.io.File(evalDir, "report.html");
+                        java.nio.file.Files.write(reportHtml.toPath(),
+                            html.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        evalReportNote = " Saved to " + reportHtml + ".";
+                    }
                     String url = ArtifactServer.publish(
                         html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         "text/html; charset=utf-8", "html");
@@ -2330,7 +2806,8 @@ public class McpServer {
                         + "the whole answer in one page: " + secs.size() + " section(s), "
                         + srcs.size() + " citation(s)"
                         + (boardSvg == null ? "" : ", dashboard inlined")
-                        + ". It is self-contained and local to this machine.";
+                        + ". It is self-contained and local to this machine."
+                        + evalReportNote;
                     // Every report's first section is required to be the summary (see this
                     // tool's own "sections" schema). Order is: the dashboard image (already
                     // first automatically whenever chartPng is set, below), then this summary,
@@ -2574,6 +3051,9 @@ public class McpServer {
             t.start();
         }
 
+        if (chartPng != null && EVAL_MODE) {
+            LAST_CHART_PNG = chartPng;
+        }
         ArrayNode content = MAPPER.createArrayNode();
         if (chartPng != null) {
             ObjectNode imageBlock = MAPPER.createObjectNode();
@@ -3457,6 +3937,75 @@ public class McpServer {
     private static final ThreadLocal<String> LAST_REPAIR_NOTICE = new ThreadLocal<>();
 
     /**
+     * Eval-only delivery channel for a client with no filesystem of its own.
+     *
+     * <p>The comparative-eval harness's askamerica-desktop subagent is deliberately Write-less —
+     * it must faithfully model real Claude Desktop having no filesystem, the same restriction
+     * every real user of this connector has. That leaves it no way to save its final answer or
+     * any chart it produced, both of which used to be lost to a loopback URL the persona is
+     * correctly instructed never to fetch. {@code deliver_report} exists only to give that one
+     * harness a real save path, without adding a general-purpose arbitrary-file-write tool to the
+     * product: it never takes a path from the caller, only a bounded {@code run_subpath} matching
+     * {@link #RUN_SUBPATH_PATTERN}, resolved against {@link #EVAL_BASE_DIR} — a constant this
+     * process was started with, not something a model turn can influence. A real user's client
+     * never sets {@code ASKAMERICA_EVAL_MODE}, so this tool never appears for them.
+     */
+    private static final boolean EVAL_MODE = "1".equals(System.getenv("ASKAMERICA_EVAL_MODE"));
+
+    private static final String EVAL_BASE_DIR = System.getenv("ASKAMERICA_EVAL_BASE_DIR") != null
+        ? System.getenv("ASKAMERICA_EVAL_BASE_DIR")
+        : "/Volumes/main/Users/kennethstott/IdeaProjects/calcite/comparative-test-results";
+
+    private static final java.util.regex.Pattern RUN_SUBPATH_PATTERN =
+        java.util.regex.Pattern.compile("^q[0-9]+/[a-z]+/[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+
+    /**
+     * The most recent chart PNG this process rendered, if any — {@code deliver_report} saves it
+     * alongside the text. One MCP server process serves exactly one comparative-eval run (the
+     * subagent's inline {@code mcpServers} entry connects on start, disconnects on finish — see
+     * {@code askamerica-desktop.md}), so "most recent in this process" and "this run's chart" are
+     * the same thing; there is no cross-run leakage to guard against.
+     */
+    private static volatile byte[] LAST_CHART_PNG;
+
+    /**
+     * Writes a comparative-eval answer (and, if any, the last chart this process rendered) to
+     * disk on behalf of a caller with no filesystem tool of its own. See {@link #EVAL_MODE}.
+     *
+     * @throws IllegalArgumentException if run_subpath doesn't match {@link #RUN_SUBPATH_PATTERN}
+     *     — this is the only thing standing between this tool and an arbitrary-file-write
+     *     primitive, so it is checked before anything else here.
+     */
+    private static java.io.File resolveEvalRunDir(String runSubpath) throws java.io.IOException {
+        if (runSubpath == null || !RUN_SUBPATH_PATTERN.matcher(runSubpath).matches()) {
+            throw new IllegalArgumentException(
+                "run_subpath must look like 'q<N>/<persona>/<yyyy-mm-dd>' (e.g. "
+                + "'q1/askamerica/2026-08-25') — got " + runSubpath);
+        }
+        java.io.File dir = new java.io.File(EVAL_BASE_DIR, runSubpath);
+        if (!dir.mkdirs() && !dir.isDirectory()) {
+            throw new java.io.IOException("could not create directory: " + dir);
+        }
+        return dir;
+    }
+
+    private static String deliverReport(String runSubpath, String markdown) throws Exception {
+        java.io.File dir = resolveEvalRunDir(runSubpath);
+        java.io.File agentMd = new java.io.File(dir, "agent.md");
+        java.nio.file.Files.write(agentMd.toPath(),
+            markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        String chartNote = "";
+        byte[] chart = LAST_CHART_PNG;
+        if (chart != null) {
+            java.io.File dashboardPng = new java.io.File(dir, "dashboard.png");
+            java.nio.file.Files.write(dashboardPng.toPath(), chart);
+            chartNote = " and " + dashboardPng;
+        }
+        return "Saved " + agentMd + chartNote + ".";
+    }
+
+    /**
      * Runs caller-supplied SQL, quoting reserved-word column names if that is what broke it.
      *
      * <p>This is the single place caller SQL reaches the database, and the repair has to live
@@ -3698,9 +4247,26 @@ public class McpServer {
     }
 
     /** Reads one dashboard panel out of its JSON, chart or stat tile. */
+    /** Chart-flavor values a caller sometimes puts in a panel's {@code type} field, meaning
+     *  {@code chart_type} instead — {@code type} selects "chart" vs "stat"; {@code chart_type}
+     *  selects the chart's flavor. Confusing the two previously fell through to a server-side
+     *  NullPointerException (the panel's kind matched neither branch, so it skipped chart-scene
+     *  layout but still tried to render one) instead of a clear, actionable error. */
+    private static final java.util.Set<String> CHART_TYPE_VALUES = new java.util.HashSet<>(
+        java.util.Arrays.asList("line", "bar", "pie", "scatter", "bubble"));
+
     private static DashboardLayout.Panel readPanel(JsonNode pn) {
         DashboardLayout.Panel p = new DashboardLayout.Panel();
         p.kind = pn.path("type").asText("chart");
+        if (!"chart".equals(p.kind) && !"stat".equals(p.kind)) {
+            String hint = CHART_TYPE_VALUES.contains(p.kind)
+                ? " — did you mean chart_type: \"" + p.kind + "\"? 'type' selects the panel "
+                    + "kind ('chart' or 'stat'); 'chart_type' selects the chart's flavor "
+                    + "(line/bar/pie/scatter/bubble)."
+                : " — must be 'chart' or 'stat'.";
+            throw new IllegalArgumentException(
+                "panel 'type' \"" + p.kind + "\" is not recognized" + hint);
+        }
         p.span = pn.has("span") ? Math.max(1, pn.get("span").asInt()) : 1;
         p.caption = pn.has("caption") && !pn.get("caption").isNull()
             ? pn.get("caption").asText() : null;
@@ -5846,6 +6412,16 @@ public class McpServer {
         return out;
     }
 
+    private static List<Double> doubleArray(JsonNode node) {
+        List<Double> out = new ArrayList<>();
+        if (node != null && node.isArray()) {
+            for (JsonNode n : node) {
+                out.add(Double.valueOf(n.asDouble()));
+            }
+        }
+        return out;
+    }
+
     // ─── Regression / hypothesis-test tools (StatsEngine) ────────────────────────
 
     static StatsOutput olsRegressionTool(String sql, String outcome, List<String> predictors)
@@ -6164,6 +6740,142 @@ public class McpServer {
             outcome, predictors.toArray(new String[0]), resolvedMethod);
         ObjectNode out = result.toJson(MAPPER);
         return statsResult(out, sql, predictors, ex);
+    }
+
+    private static StatsOutput correlationMatrixTool(String sql, List<String> columns)
+            throws Exception {
+        if (columns.size() < 2) {
+            throw new IllegalArgumentException("correlation_matrix needs at least 2 columns");
+        }
+        Connection c = getCatalogConnection();
+        String[] cols = columns.toArray(new String[0]);
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols);
+        double[][] data = ex.columnsFor(cols);
+        StatsEngine.CorrelationMatrixResult result = StatsEngine.correlationMatrix(data, cols);
+        ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, columns, ex);
+    }
+
+    private static StatsOutput quantileBinningTestTool(String sql, String outcome,
+            String predictor, Integer bins) throws Exception {
+        int resolvedBins = bins != null ? bins.intValue() : 5;
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql,
+            new String[]{outcome, predictor});
+        double[] y = ex.column(outcome);
+        double[] x = ex.column(predictor);
+        StatsEngine.QuantileBinningResult result =
+            StatsEngine.quantileBinningTest(y, x, resolvedBins);
+        ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, java.util.Collections.singletonList(predictor), ex);
+    }
+
+    private static StatsOutput subgroupContributionTool(String sql, String valueCol,
+            String groupCol) throws Exception {
+        Connection c = getCatalogConnection();
+        StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(c, sql,
+            new String[]{valueCol}, new String[]{groupCol});
+        double[] value = ex.column(valueCol);
+        String[] group = ex.labelColumn(groupCol);
+        StatsEngine.SubgroupContributionResult result =
+            StatsEngine.subgroupContribution(value, group);
+        ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, java.util.Collections.<String>emptyList(), ex);
+    }
+
+    private static StatsOutput giniCoefficientTool(String sql, String valueCol) throws Exception {
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, new String[]{valueCol});
+        double[] value = ex.column(valueCol);
+        StatsEngine.GiniResult result = StatsEngine.giniCoefficient(value);
+        ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, java.util.Collections.<String>emptyList(), ex);
+    }
+
+    private static StatsOutput partialCorrelationTool(String sql, String x, String y,
+            List<String> controls) throws Exception {
+        List<String> cols = new ArrayList<>();
+        cols.add(x);
+        cols.add(y);
+        cols.addAll(controls);
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols.toArray(new String[0]));
+        double[] xCol = ex.column(x);
+        double[] yCol = ex.column(y);
+        double[][] ctrl = ex.columnsFor(controls.toArray(new String[0]));
+        StatsEngine.PartialCorrelationResult result = StatsEngine.partialCorrelation(xCol, yCol,
+            ctrl, controls.toArray(new String[0]));
+        ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, controls, ex);
+    }
+
+    /** {@code scenario_sweep}'s literal substitution marker — kept as a constant so the tool
+     *  description and the validation error name the exact same token. */
+    private static final String SCENARIO_PLACEHOLDER = "{{param}}";
+
+    /**
+     * Reruns {@code sqlTemplate} once per value in {@code paramValues}, substituting each value
+     * for {@link #SCENARIO_PLACEHOLDER} as a numeric SQL literal, and aggregates {@code
+     * valueCol} from each run — how a conclusion built on one fixed assumption (a benchmark
+     * price, a discount rate) moves across a plausible range of that assumption, instead of
+     * being reported at a single point.
+     */
+    private static StatsOutput scenarioSweepTool(String sqlTemplate, List<Double> paramValues,
+            String valueCol, String agg) throws Exception {
+        if (sqlTemplate == null || !sqlTemplate.contains(SCENARIO_PLACEHOLDER)) {
+            throw new IllegalArgumentException("sql must contain the literal placeholder "
+                + SCENARIO_PLACEHOLDER + " exactly where the swept parameter value belongs");
+        }
+        if (paramValues.isEmpty()) {
+            throw new IllegalArgumentException("param_values must have at least 1 value");
+        }
+        String aggFn = agg == null || agg.isEmpty() ? "avg" : agg;
+        Connection c = getCatalogConnection();
+        ArrayNode scenarios = MAPPER.createArrayNode();
+        double minAgg = Double.POSITIVE_INFINITY;
+        double maxAgg = Double.NEGATIVE_INFINITY;
+        Double minParam = null;
+        Double maxParam = null;
+        int totalRows = 0;
+        int totalDropped = 0;
+        for (Double v : paramValues) {
+            String sql = sqlTemplate.replace(SCENARIO_PLACEHOLDER, String.valueOf(v));
+            StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql,
+                new String[]{valueCol});
+            double result = StatsEngine.aggregate(ex.column(0), aggFn);
+            ObjectNode s = MAPPER.createObjectNode();
+            s.put("param_value", v);
+            s.put("aggregate", result);
+            s.put("n", ex.n());
+            scenarios.add(s);
+            totalRows += ex.totalRows;
+            totalDropped += ex.droppedForNull;
+            if (result < minAgg) {
+                minAgg = result;
+                minParam = v;
+            }
+            if (result > maxAgg) {
+                maxAgg = result;
+                maxParam = v;
+            }
+        }
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("agg", aggFn);
+        out.set("scenarios", scenarios);
+        out.put("min_aggregate", minAgg);
+        out.put("min_at_param", minParam);
+        out.put("max_aggregate", maxAgg);
+        out.put("max_at_param", maxParam);
+        out.put("range", maxAgg - minAgg);
+        out.put("conclusion_stable", Math.signum(minAgg) == Math.signum(maxAgg));
+        out.put("note", "conclusion_stable is true only when the aggregate never changes sign "
+            + "across the sweep — a true reversal, not just a change in magnitude. A stable "
+            + "sign with a wide range can still mean the finding's strength is sensitive to "
+            + "the assumption; read range and the two extremes, not conclusion_stable alone.");
+        out.put("rows_returned_by_sql", totalRows);
+        out.put("rows_dropped_for_null", totalDropped);
+        return new StatsOutput(out.toString(), diagnoseStats(sqlTemplate,
+            java.util.Collections.<String>emptyList(), null, paramValues.size(), totalRows, totalDropped));
     }
 
     private static StatsOutput featureImportanceTool(String sql, String outcome,
@@ -6901,6 +7613,17 @@ public class McpServer {
         search.put("q", "query");
         search.put("search", "query");
         m.put("search_catalog", java.util.Collections.unmodifiableMap(search));
+        // Same slip, different tool: this exact query-vs-topic miss recurred across three
+        // independent eval runs even after the case-handler was taught to tolerate it —
+        // because validateArgs()/checkArgs() rejects the unknown key before dispatch ever
+        // reaches the handler. The alias has to live here, at the same point search_catalog's
+        // does, or it never fires.
+        java.util.Map<String, String> recipe = new java.util.LinkedHashMap<>();
+        recipe.put("query", "topic");
+        recipe.put("question", "topic");
+        recipe.put("keyword", "topic");
+        recipe.put("search", "topic");
+        m.put("find_recipe", java.util.Collections.unmodifiableMap(recipe));
         ARG_ALIASES = java.util.Collections.unmodifiableMap(m);
     }
 

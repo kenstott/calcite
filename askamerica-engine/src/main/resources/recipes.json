@@ -1,12 +1,12 @@
 {
   "_comment": [
     "Worked analysis patterns, surfaced on demand by the MCP tool find_recipe rather than",
-    "carried in full in the top-level instructions — the instructions carry only a short",
+    "carried in full in the top-level instructions \u2014 the instructions carry only a short",
     "trigger index naming when a recipe exists, so the context cost of a growing catalog",
     "is paid only by callers who actually need one, not by every connection.",
     "",
     "Add a recipe whenever a defect is traced to a caller doing something plausible but",
-    "wrong that the instructions never actually taught — that is the bar, not 'this is a",
+    "wrong that the instructions never actually taught \u2014 that is the bar, not 'this is a",
     "commonly asked question'. Keep 'triggers' as the literal words/phrases a caller doing",
     "this analysis would actually type or think, not abstract category names."
   ],
@@ -14,11 +14,396 @@
     {
       "id": "cost-of-living-adjusted-comparison",
       "title": "Comparing a dollar figure across STATES, not just across years",
-      "triggers": ["cost of living", "cost-of-living", "regional price parity", "rpp",
-                   "real income by state", "adjusted for cost of living", "purchasing power",
-                   "state to state comparison", "compare states real dollars",
-                   "does the lead survive", "state cost of living adjustment"],
-      "body": "adjust_inflation deflates against ONE national CPI series — it removes economy-wide inflation over TIME, but every state is still assumed to face the same prices. That is correct for comparing one place across years; it is NOT a cost-of-living adjustment, because it does not account for a dollar buying more in Mississippi than in California in the same year.\n\nA genuine state-to-state real-income or real-growth comparison needs a SECOND, independent step: divide by each state's own value in econ.regional_price_parities (BEA RPP, all-items, US=100 baseline) for that year. The two adjustments answer different questions and neither substitutes for the other:\n\n  1. adjust_inflation(nominal, year) -> real national dollars (removes time-inflation only)\n  2. real_national_dollars / (regional_price_parities.value / 100) -> real, cost-of-living-adjusted dollars (removes the cross-state price-level gap too)\n\nSkip step 2 and a result that says 'adjusted for cost of living' has actually only done step 1 - a national-inflation adjustment wearing a cost-of-living label. This is not a hypothetical: measured directly in this harness, an analysis that applied RPP alone (skipping adjust_inflation) reported a state's growth lead as 'surviving the cost-of-living check' when two independent analyses that applied BOTH steps found the same lead did NOT survive - same RPP table, different arithmetic, opposite conclusion.\n\nDo both steps, in that order, whenever the question compares places, not just times. Name which state(s) the ranking is sensitive to if the two adjustments move the answer versus a national-inflation-only adjustment - that sensitivity is itself part of the answer, not a footnote."
+      "triggers": [
+        "cost of living",
+        "cost-of-living",
+        "regional price parity",
+        "rpp",
+        "real income by state",
+        "adjusted for cost of living",
+        "purchasing power",
+        "state to state comparison",
+        "compare states real dollars",
+        "does the lead survive",
+        "state cost of living adjustment"
+      ],
+      "body": "adjust_inflation deflates against ONE national CPI series \u2014 it removes economy-wide inflation over TIME, but every state is still assumed to face the same prices. That is correct for comparing one place across years; it is NOT a cost-of-living adjustment, because it does not account for a dollar buying more in Mississippi than in California in the same year.\n\nA genuine state-to-state real-income or real-growth comparison needs a SECOND, independent step: divide by each state's own value in econ.regional_price_parities (BEA RPP, all-items, US=100 baseline) for that year. The two adjustments answer different questions and neither substitutes for the other:\n\n  1. adjust_inflation(nominal, year) -> real national dollars (removes time-inflation only)\n  2. real_national_dollars / (regional_price_parities.value / 100) -> real, cost-of-living-adjusted dollars (removes the cross-state price-level gap too)\n\nSkip step 2 and a result that says 'adjusted for cost of living' has actually only done step 1 - a national-inflation adjustment wearing a cost-of-living label. This is not a hypothetical: measured directly in this harness, an analysis that applied RPP alone (skipping adjust_inflation) reported a state's growth lead as 'surviving the cost-of-living check' when two independent analyses that applied BOTH steps found the same lead did NOT survive - same RPP table, different arithmetic, opposite conclusion.\n\nDo both steps, in that order, whenever the question compares places, not just times. Name which state(s) the ranking is sensitive to if the two adjustments move the answer versus a national-inflation-only adjustment - that sensitivity is itself part of the answer, not a footnote."
+    },
+    {
+      "id": "classify-by-ambiguous-or-time-varying-category",
+      "title": "Grouping states/entities by a category with more than one reasonable definition, or that can CHANGE during the analysis window",
+      "triggers": [
+        "party control",
+        "political party classification",
+        "represented by",
+        "which party controls",
+        "state changed hands",
+        "swing state",
+        "swing states",
+        "trifecta",
+        "governor party",
+        "classify states by",
+        "grouping by category over time",
+        "category changed during the window",
+        "current representation",
+        "party affiliation over a decade",
+        "delegation party",
+        "which classification to use"
+      ],
+      "body": "Two separate, compounding traps live here, and a caller usually only guards against one of them.\n\nTRAP 1 - the definition itself is ambiguous. 'Represented by Republicans' could mean presidential vote, governor's party, legislative trifecta, or congressional delegation, and these disagree on real states (Michigan/Pennsylvania/Wisconsin/Arizona/Nevada/Georgia split their governor and 2024-presidential labels). Picking one without checking whether the conclusion survives a different reasonable definition is a hidden researcher-degree-of-freedom - it makes the choice of definition invisible, when it was actually doing some of the analytical work. FIX: run the comparison under at least two independent definitions and report whether the result agrees. In this harness, cross-checking 'current governor party' against '2024 presidential winner' surfaced the same modest, non-significant gap under both - real corroboration, not just one number dressed up as settled.\n\nTRAP 2 - a classification is not fixed for the length of a multi-year window; some states flip during it. CHECK FIRST whether officials.state_political_index (SPI) already carries a year dimension in the loaded schema (describe_table it - the table has been extended to compute the score per year rather than only a single current-Congress snapshot). If it has a year column, query it for each year in your window directly - that is the correct fix, not a workaround. Only fall back to hand-building a multi-snapshot classification (take snapshots at the window's start AND end from a source that is NOT already time-varying, e.g. electoral_college_votes; classify a unit into a stable category only if it held that category at every snapshot; give every unit that changed its OWN separate 'Swing'/'Transitional' bucket rather than forcing it into either stable group, and report that bucket's own result - it is not noise to discard) if describe_table shows SPI is still single-snapshot in the version you are running against. Measured directly in this harness, before a by-year SPI was available: classifying states by whether the same party won their electoral votes at both a window's opening and closing elections showed the 'Swing' bucket grew fastest of the three groups - a finding a single-snapshot classification hides entirely, and exactly the kind of result a by-year SPI query should now surface without the manual workaround.\n\nBoth traps generalize past partisan control to any question grouping states/entities by a status that can be defined more than one way or can change mid-window: regulatory regime, union representation, right-to-work status, sanctuary-city designation, and similar. Whichever way you classify, correlating the outcome against SPI's continuous -100..+100 score directly is a good check alongside a categorical split - a weak or null correlation there confirms a categorical near-tie isn't an artifact of where a group boundary was drawn."
+    },
+    {
+      "id": "crime-series-reporting-coverage-instability",
+      "title": "Averaging or trending crime.cde_offenses across a multi-year window",
+      "triggers": [
+        "violent crime rate",
+        "crime rate by state",
+        "crime rate over time",
+        "FBI UCR",
+        "NIBRS",
+        "SRS to NIBRS",
+        "crime trend",
+        "multi-year crime average",
+        "10-year crime average",
+        "reporting agency",
+        "population coverage",
+        "cde_offenses",
+        "crime data by year"
+      ],
+      "body": "crime.cde_offenses carries population_coverage_pct (percentage of the state's population covered by agencies that actually reported that month) precisely because the underlying FBI collection is not one consistent series across a long window. The FBI phased agencies off the legacy Summary Reporting System (SRS) onto NIBRS-only reporting between roughly 2018 and 2021, and a number of large agencies - including some in populous states - had periods of non-reporting during the transition. Averaging or summing offense_rate across years that straddle this transition without checking coverage risks treating a reporting-coverage artifact as a real crime-rate change: a state's apparent multi-year rate can shift because fewer agencies reported, not because violence changed.\n\nBefore trusting a multi-year average or trend built from cde_offenses: query population_coverage_pct per state per year in the window and flag any year where it drops materially relative to its neighbors for that state - that year's rate is not on the same footing as the others and either needs a caveat or should be reported separately rather than blended into one average. This is a warehouse-native check (no external research needed): the column already carries exactly the signal that makes the SRS-to-NIBRS transition visible.\n\nMeasured directly in this harness: an unaided persona researching this same transition from published literature flagged it as a real caveat on a 2018-2024 multi-year crime-rate average; the askamerica-connector run answering the same question in the same session used a 2019-2025 sum across cde_offenses without checking population_coverage_pct at all - the connector had the exact field needed to verify this and did not use it. Generalizes beyond crime: any agency-reported (not survey-sampled) series that depends on many independent reporters is vulnerable to the same coverage-drift trap whenever its collection method or covered-agency set changed within the window - check for a coverage/reporting-completeness column before averaging across a long span, not just a coverage-window column."
+    },
+    {
+      "id": "pick-the-grain-the-question-actually-asks-for",
+      "title": "Choosing among sibling tables that cover the same subject at different geographic or entity grains",
+      "triggers": [
+        "adjacent county",
+        "border county",
+        "county pair",
+        "county-level",
+        "which grain",
+        "state vs county",
+        "county employment",
+        "QCEW",
+        "county wages",
+        "metro vs state",
+        "wrong grain",
+        "too coarse",
+        "smallest unit available",
+        "finer grain"
+      ],
+      "body": "This corpus commonly loads the SAME underlying series at multiple grains as separate sibling tables - e.g. econ carries state_wages, metro_wages, county_wages AND county_qcew side by side, all from BLS QCEW. search_catalog returns all of them for a generic keyword search, ranked by textual relevance to the keyword, NOT by which grain the question actually needs - so the first or most obviously-named match is very often the wrong one when the question specifies (or implies) a finer unit than state.\n\nMeasured directly in this harness: a question explicitly requiring adjacent cross-state COUNTY pairs was answered with a state-level two-way-fixed-effects panel instead. search_catalog's own results for the query used ('minimum wage') already listed county_qcew and county_wages by name, multiple times, alongside state_wages - the finer-grain tables were surfaced and simply not opened. The state-level analysis was statistically well-executed (event study, pre-trend test, sensitivity check) but answered a coarser question than the one asked, because nobody checked whether a same-subject table existed at the grain the question actually specified.\n\nFIX: when a question names or implies a specific unit (county, metro, congressional district, adjacent/bordering, establishment-level) - scan the FULL list search_catalog returns for a sibling table at that grain before settling on the first keyword match. Prefer the named grain even when it costs more query/join effort than the coarser table sitting right next to it in the results; a well-executed analysis at the wrong grain still doesn't answer the question."
+    },
+    {
+      "id": "voter-turnout-denominator-must-be-vep",
+      "title": "Voter turnout: use VEP (voting-eligible population), not CPS self-report or citizen-voting-age population",
+      "triggers": [
+        "voter turnout",
+        "election turnout",
+        "voting eligible population",
+        "VEP",
+        "voter ID",
+        "voter id laws",
+        "turnout rate",
+        "CPS voting supplement",
+        "voting and registration supplement",
+        "presidential turnout",
+        "citizen voting-age population",
+        "CVAP turnout"
+      ],
+      "body": "Three different populations get called \"turnout\" and they give materially different numbers for the same state/year: (1) Census CPS Voting and Registration Supplement's SELF-REPORTED turnout among the citizen voting-age population - known to systematically OVER-report relative to actual counted votes (social-desirability bias in the survey); (2) citizen voting-age population (CVAP) itself as a denominator, which is not the same universe as VEP; (3) voting-eligible population (VEP, the McDonald/US Elections Project standard) = voting-age population adjusted to EXCLUDE ineligible felons and non-citizens and INCLUDE eligible overseas citizens - this is the standard denominator political scientists and the literature (Cantoni & Pons; Grimmer & Yoder) actually use.\n\nMeasured directly in this harness: a question asking for the turnout gap between strict-photo-ID and non-ID states was answered using census.cps_voting_supplement (self-reported CVAP turnout) as the denominator, producing a 2.5-point gap. Two independently-run unaided arms on the same question instead paired real vote totals (officials.presidential_election_results, FEC-sourced) with a VEP-style population denominator (University of Florida Election Lab / McDonald's dataset) and found a materially smaller 0.6-2.0 point gap, not statistically significant. The connector's own search_catalog call for 'election' had already surfaced officials.presidential_election_results in the same session - the correct raw ingredient was sitting in the search results and was never followed up on because a plausible-looking CPS table was opened first and never questioned.\n\nFIX: for any voter-turnout question, do not default to the first table with 'voting' or 'turnout' in its name or description. Check whether the table's denominator is genuinely VEP - if it is a CPS self-report series or a raw voting-age/citizen-voting-age count, that is the wrong substitution even though it looks like a natural fit and the numbers look plausible. Prefer pairing real vote totals (e.g. officials.presidential_election_results or equivalent FEC/certified-results tables) with a VEP-style population figure over relying on a self-reported survey turnout rate."
+    },
+    {
+      "id": "correlated-predictors-need-a-vif-check",
+      "title": "Multiple candidate predictors that could explain the same outcome - check they aren't just proxies for each other",
+      "triggers": [
+        "multicollinearity",
+        "correlated predictors",
+        "which variable actually matters",
+        "density vs urban share",
+        "confounded predictors",
+        "redundant predictors",
+        "controlling for region",
+        "several plausible explanations",
+        "which factor explains",
+        "vif",
+        "variance inflation factor"
+      ],
+      "body": "When a question offers several plausible drivers of the same outcome (density, urban_share, and region for a policy outcome; coal share and gas share for an electricity-price outcome), the plausible-but-wrong shortcut is to run each one through ols_regression or corr() separately and report whichever comes back with the strongest coefficient or correlation - treating each candidate as independent evidence. They usually are not independent: urban areas ARE dense, coal-heavy grids ARE often the same grids with cheap gas, so a predictor's coefficient can be large purely because it is standing in for a correlated partner, not because it has its own effect.\n\nMeasured directly in this harness: on a question with three candidate lenses (density, urban_share, region), the strongest-scoring run never checked whether the three were substitutes for each other before reporting the winning lens as the explanation. A separate question building a combined 'coal+gas' predictor never decomposed it into its components (coal r=0.85, gas r=-0.20 against the outcome in that run) - the combined variable's coefficient was reported as if it reflected one mechanism, when it was averaging two opposite-signed ones.\n\nFIX: before treating multiple candidate predictors as separate evidence, or before building a combined variable out of several raw ones, run correlation_matrix over all the candidates together. A high pairwise correlation is a partial warning; a high VIF (>10, or >5 worth flagging) is the real one - it means a predictor's variance is almost entirely explained by the OTHERS in the set, not just by any one of them, which corr() checked pairwise won't show. Report the VIF alongside any regression that used these predictors, and decompose a combined variable into its parts with correlation_matrix or ols_regression before ascribing an effect to the combination."
+    },
+    {
+      "id": "dose-response-not-just-linear-correlation",
+      "title": "A relationship can be real and monotonic without being linear - test the shape, not just the slope",
+      "triggers": [
+        "dose response",
+        "dose-response",
+        "monotonic",
+        "threshold effect",
+        "does more X mean more Q",
+        "nonlinear relationship",
+        "quintile analysis",
+        "diminishing returns",
+        "u-shaped",
+        "reverse causality check"
+      ],
+      "body": "corr() and ols_regression's coefficient both summarize a relationship as a single straight line. That line can look weak or ambiguous (a middling r, a marginally significant coefficient) even when the underlying relationship is genuinely there but not linear - a threshold below which nothing happens, a plateau at the high end, or a pattern that only shows up when the predictor is grouped into ranges. The plausible-but-wrong shortcut is to conclude 'no clear relationship' from a middling linear correlation without checking whether the outcome actually moves consistently as the predictor increases.\n\nMeasured directly in this harness: on a question relating a continuous predictor to an outcome, the run that won reported both a reverse-causality check (swapping which variable was treated as outcome vs. predictor) and a quintile-binned dose-response test showing the outcome trending consistently across bins - richer evidence than a single linear correlation, and evidence a plain corr() call cannot produce.\n\nFIX: when a linear correlation comes back weak, ambiguous, or when the question specifically asks whether more of something consistently means more of the outcome (a dose-response framing), run quantile_binning_test instead of stopping at corr(). It bins the predictor into quantile groups (quintiles by default) and reports each bin's mean outcome plus whether the trend across bins is monotonic and statistically significant - this can be a real, reportable finding even when the observation-level linear r looks unimpressive, and its absence (a non-monotonic, bin-to-bin-inconsistent pattern) is itself worth reporting rather than assumed away."
+    },
+    {
+      "id": "share-of-total-driven-by-one-subgroup",
+      "title": "An aggregate finding may be one subgroup wearing a group-level label - quantify the share before generalizing",
+      "triggers": [
+        "share of total",
+        "driven by one agency",
+        "biggest contributor",
+        "which state accounts for most of",
+        "decompose total by group",
+        "concentration",
+        "outsized share",
+        "dominant subgroup",
+        "accounts for what percent"
+      ],
+      "body": "A total broken out by subgroup (an agency-level rule count, a sector-level emissions total, a state-level spending figure) is often reported and discussed as if it reflects the group broadly - 'DOT issued more rules than any other department' - when in practice one subgroup can be carrying nearly the whole total. Eyeballing a GROUP BY ... ORDER BY result for the largest row answers 'which subgroup is biggest' but not 'how much of the total is this subgroup alone', which is the number that actually supports or undercuts a claim about the group as a whole.\n\nMeasured directly in this harness: a question about a department-level rule count needed the specific finding that one sub-agency (FAA) accounted for 91% of its parent department's total - a number that required a manual SUM, a per-group SUM, and a subtraction to produce, and the run that won had to hand-compute it because no tool did it directly.\n\nFIX: whenever a group-level total is being generalized to the group ('this department is unusually active', 'this sector drives the trend'), run subgroup_contribution on the underlying value/group columns before making the claim. It reports each subgroup's share of the total AND what the total would be with that subgroup excluded in one call - if one subgroup's share is large, the finding belongs to that subgroup specifically, not to the group-level label it's filed under."
+    },
+    {
+      "id": "single-benchmark-assumption-not-tested",
+      "title": "A conclusion built on one fixed assumption (a price, a rate, a benchmark constant) needs to be checked across the plausible range",
+      "triggers": [
+        "sensitivity to assumption",
+        "gas price benchmark",
+        "discount rate sensitivity",
+        "does the conclusion hold across assumptions",
+        "one scenario only",
+        "benchmark constant",
+        "assumption-dependent",
+        "breakeven point",
+        "cost comparison assumption",
+        "conversion factor",
+        "kW per port",
+        "power rating assumption",
+        "unit conversion assumption",
+        "capacity assumption",
+        "watts per unit"
+      ],
+      "body": "A comparison that depends on an assumed constant - a gasoline price used to compute a comparison's cost side, a discount rate used to compound a multi-year figure, a conversion factor - is often computed at exactly one value of that constant and reported as if the conclusion were unconditional. The plausible-but-wrong shortcut is picking one reasonable-looking value (a current spot price, a round discount rate) and treating whatever comes out as THE answer, without checking whether a different but equally defensible value would change it.\n\nMeasured directly in this harness: on a question comparing electric-vehicle to gasoline-vehicle costs, the run that won tested multiple plausible gasoline-price benchmarks and found the EV lost the comparison in 9 states at one benchmark that a single-benchmark analysis never surfaced - the run that used only one gasoline price missed this entirely, not because its arithmetic was wrong, but because it never tested whether the conclusion was assumption-dependent.\n\nFIX: when a computed conclusion rests on one fixed assumption a caller chose (rather than a value read directly from data), run scenario_sweep across a plausible range of that assumption instead of computing it once. It reruns the same query once per swept value and reports the aggregate's min, max, and whether it ever changes sign across the range - report the range alongside the point estimate, and flag explicitly if the conclusion (not just the magnitude) is sensitive to the assumption."
+    },
+    {
+      "id": "does-relationship-survive-controlling-for",
+      "title": "A regression coefficient that stays 'significant' after adding one control may still be explained away by controlling harder",
+      "triggers": [
+        "survive controlling for",
+        "partial correlation",
+        "controlling for confound",
+        "still correlated after controlling",
+        "does the relationship hold up",
+        "residual effect",
+        "explained away",
+        "spurious relationship"
+      ],
+      "body": "Adding one control variable to ols_regression and checking whether the coefficient of interest is still statistically significant is a real check, but a coefficient that survives ONE added control can still be substantially explained by it - 'still significant' and 'collapses to near zero' are both possible outcomes of controlling, and a p<0.05 residual coefficient can hide a relationship that is mostly, not entirely, explained by the control.\n\nMeasured directly in this harness: on a question testing whether a bivariate relationship held up under a control, the run that used ols_regression with the control added left a residual significant coefficient and reported the relationship as holding; a more thorough run instead showed the relationship collapsing to a near-zero, non-significant partial correlation once the same control was properly netted out - same control variable, different depth of adjustment, opposite headline conclusion.\n\nFIX: when the question is specifically 'does this relationship survive controlling for Z' rather than 'what is the effect size of X on Y holding Z fixed', run partial_correlation instead of reading the coefficient off an ols_regression call. It reports the correlation between x and y AFTER regressing each on the controls, alongside the plain zero-order correlation for comparison - the gap between the two numbers, not just whether the partial one crosses p=0.05, is the finding a caller should report."
+    },
+    {
+      "id": "test-the-competing-explanation-not-just-the-implied-one",
+      "title": "A question that names one likely cause still needs the leading alternative explanation tested, not assumed away",
+      "triggers": [
+        "what's driving",
+        "what caused",
+        "attribute the change to",
+        "population growth driver",
+        "migration vs natural change",
+        "which factor explains the trend",
+        "domestic vs international",
+        "is it really X causing this"
+      ],
+      "body": "A question that names or implies a likely cause ('is migration driving this county's growth') is easy to answer by confirming that cause is present and stopping - the number moved, the named factor was also moving, so the named factor gets the credit. That skips the check that actually establishes causation over correlation: is the COMPETING explanation weaker, or was it never tested at all? A trend can have more than one plausible driver (domestic migration vs. international migration; supply vs. demand; a policy change vs. a pre-existing trend), and reporting the one the question happened to name without comparing it against the alternative is confirmation, not analysis.\n\nMeasured directly in this harness: on a question about what was driving a county's population growth, the run that used a two-point stock comparison (population level at two ACS vintages) reported migration generally as the driver and never decomposed it further. A more thorough run built a full annual panel AND directly tested domestic migration against international migration as competing drivers, finding domestic migration far more strongly correlated with the growth (r=0.95) than international migration (r=0.13) - a materially more specific and better-supported finding that the two-point comparison never had the resolution to produce.\n\nFIX: when a question implies or names a likely cause, identify the leading alternative explanation before concluding - use correlation_matrix or ols_regression to compare the named factor against its alternative(s) directly, on a full time panel rather than a two-point before/after snapshot wherever the data supports one. Report which explanation is better supported AND by how much, not just that the named one is 'also present'."
+    },
+    {
+      "id": "patent-table-inventor-vs-assignee-basis-must-be-verified",
+      "title": "A state/county patent-activity table can be inventor-based or assignee-based - verify which, don't infer it from an outlier state",
+      "triggers": [
+        "patents by state",
+        "patents by county",
+        "patent activity",
+        "innovation by state",
+        "inventor location",
+        "assignee location",
+        "where patents are filed",
+        "patent_activity_by_county"
+      ],
+      "body": "Patent-count tables by geography are built on one of two different bases that answer different questions: INVENTOR-based (credits the patent to where the actual inventor(s) live/work - a genuine measure of where innovation happens) or ASSIGNEE-based (credits the patent to the company that owns the IP, i.e. corporate HQ or a subsidiary's registered address - a measure of corporate ownership, not innovation activity). The two produce very different geographic pictures: Delaware, Nevada, and DC are classic assignee-basis distortions, since many companies incorporate or register IP-holding subsidiaries there regardless of where any inventing happened.\n\nMeasured directly in this harness: on a question built specifically around this distinction, one run inferred that patents.patent_activity_by_county was assignee-based FROM Delaware's outlier behavior in the query results, rather than checking the table's actual documented construction - treating an observed pattern as proof of a mechanism instead of verifying the mechanism directly. A more thorough run instead sourced a table explicitly documented as inventor-residence-based (USPTO PTMT via FRED) and got a materially different geographic answer.\n\nFIX: before answering any state/county patent-activity question, call describe_table (or read the table's catalog description) to determine whether the table is inventor-based or assignee-based - do not infer this from which states look like outliers in the results, since an outlier is consistent with either basis for different reasons. If Delaware, Nevada, or DC rank unusually high, treat that as a prompt to verify the table's basis explicitly, not as confirmation of one."
+    },
+    {
+      "id": "combine-components-into-a-ranked-composite-index",
+      "title": "The question asks for a ranked exposure/risk/vulnerability score built from two or more separately computed components - combine them, don't just report each one",
+      "triggers": [
+        "exposure index",
+        "composite index",
+        "combine volume and severity",
+        "ranked exposure",
+        "risk score",
+        "vulnerability index",
+        "weighted index",
+        "exposure score",
+        "biggest exposure",
+        "which state is most exposed",
+        "normalize and combine"
+      ],
+      "body": "A question asking which unit (state, county, sector) is 'most exposed' or 'most at risk' along two or more named dimensions (e.g. volume of activity AND severity of disruption) is asking for ONE combined ranking, not two separate tables. The plausible-but-wrong shortcut is computing each component well - a real volume figure from one table, a real severity figure from another - and reporting both side by side, leaving the reader to eyeball which units rank high on both. That answers 'what are the components' but not the question actually asked, which is the RANK.\n\nMeasured directly in this harness: on a question asking which states face the biggest grain-export exposure to a shipping chokepoint, one run computed a genuine primary volume figure (state export tonnage and water-dependent share, from Commodity Flow Survey microdata) - a real, novel data point - but never combined it with a severity measure into the ranked exposure score the visual guidance asked for. A different run explicitly built a two-component composite (a volume score plus a 0-10 severity score) and ranked units on the combined figure, and was judged the more complete answer specifically because it produced the requested STRUCTURE, not just correct component data.\n\nFIX: once each component is computed per unit, normalize each onto a common 0-1 scale before combining - raw units rarely share a scale (bushels vs. a 0-10 severity rating) and combining un-normalized values lets whichever component has the larger raw range dominate the score regardless of its actual importance. Use MIN-MAX scaling per column ((value - min) / (max - min)) via plain SQL window functions, combine with an equal weighting unless the question implies otherwise, and rank on the combined score - report each component's normalized value alongside the combined rank so a reader can see which dimension is driving which unit's position."
+    },
+    {
+      "id": "condition-trend-decompose-by-entity-and-quantify-funding-lag",
+      "title": "A national condition-migration trend (Good/Fair/Poor, or similar) that decelerates but doesn't reverse needs a state/entity breakdown and a quantified funding-lag figure, not just the national aggregate",
+      "triggers": [
+        "condition trend deceleration",
+        "good fair poor migration",
+        "why didn't it accelerate",
+        "state divergence",
+        "infrastructure condition trend",
+        "funding lag",
+        "obligated but not spent",
+        "bridge condition",
+        "backlog quantified",
+        "condition improved but slower"
+      ],
+      "body": "A national multi-point condition-migration series (share of units moving from Poor to Fair to Good over several snapshots) that shows deceleration rather than reversal is easy to report at the national level and stop - 'the improvement continued but slowed'. That is correct but thin: the question is usually really asking WHY it slowed, and the national aggregate alone answers only THAT it slowed.\n\nMeasured directly in this harness: on a question about why a national infrastructure-condition improvement decelerated, one run independently reproduced the same multi-point national series another run used (strong corroboration on the numbers) but reported a thinner treatment - it named the Good/Fair/Poor migration pattern and a brief funding note, without breaking the migration out by state to find which states were diverging from the national pattern, and without quantifying the specific funding-obligation gap. The more complete run added the state-level divergence AND a specific obligated-vs-spent dollar figure for the relevant funding program (a precise fraction of the total appropriation actually obligated to date) - the deceleration story became 'X states are stalling because Y, and only Z of the total funding has actually been obligated' rather than 'the national rate slowed'.\n\nFIX: once a national condition-migration deceleration is established from a multi-point series, do two more things before calling the analysis complete: (1) break the same migration out by state/entity and name which units diverge from the national pattern (accelerating or stalling against it), and (2) if funding availability is part of the causal story, quantify the specific obligated-vs-authorized or spent-vs-appropriated gap for the funding program in question as a real number, not a qualitative 'funding takes time to reach construction' statement."
+    },
+    {
+      "id": "verify-the-population-before-answering-the-famous-subset",
+      "title": "A question naming a category by year/event ('the banks that failed in 2023', 'the hurricanes that hit Florida last year') can silently mean a smaller famous subset instead of the true full population - check the count before answering",
+      "triggers": [
+        "banks that failed",
+        "companies that went bankrupt",
+        "how many failed in",
+        "the disasters that hit",
+        "recalled in",
+        "closures in",
+        "how did the X that Y differ",
+        "compared to the ones that survived",
+        "full list of",
+        "which ones failed"
+      ],
+      "body": "A question about 'the Xs that Y'd in [time period]' - banks that failed in a given year, companies that went bankrupt, storms that made landfall, products that were recalled - is easy to answer with only the well-known, headline-generating cases, because those are what search results and public memory surface first. The plausible-but-wrong shortcut is treating the famous subset as if it were the whole population without checking, especially when the famous cases share an obvious common story (a bank run, a supply-chain failure) that makes for a clean, complete-feeling answer on its own.\n\nMeasured directly in this harness: on a question asking how 2023's failed banks differed from survivors beforehand, three of four independently-run arms answered exclusively for the three famous large failures (SVB, Signature Bank, First Republic) without checking whether that was the complete list. Only one run verified the actual population against the FDIC's own Failed Bank List and found FIVE 2023 failures, not three - two additional small banks (one felled by alleged CEO fraud, one by concentrated single-industry loan losses) with causes entirely unrelated to the uninsured-deposit/duration-mismatch story that explained the famous three. A question phrased generically ('the banks that failed') that gets answered only for the famous subset is answering a different, narrower, easier question than the one asked - the same failure mode as this harness's answers_the_question rubric dimension names directly.\n\nFIX: before answering a 'the Xs that Y'd in [period]' question, verify the actual count against an authoritative source (the primary regulator's own published list via describe_table/search_catalog if it exists in the corpus, or the regulator's own web list rather than a search-summary count) - do not assume a web-search or memory-recalled count is complete, and do not assume the famous cases ARE the full list just because they dominate coverage. If the full population differs materially from the well-known cases, say so explicitly and give the less-famous entries their own accounting rather than silently dropping them - which outliers exist, and why they don't fit the main story, can itself be part of the answer."
+    },
+    {
+      "id": "decompose-the-spread-directly-before-reframing-it",
+      "title": "A question asking 'how much of [a spread/gap/change] happened in period A vs. period B' needs a direct decomposition of that spread - not a substitution of a more popular narrative framing (political, demographic) for it",
+      "triggers": [
+        "how much of the spread",
+        "how much of the gap",
+        "before vs after",
+        "which period drove more of the",
+        "variance decomposition",
+        "how much came before",
+        "red state blue state",
+        "did the gap widen or narrow"
+      ],
+      "body": "A question that literally asks 'how much of [a measured spread/gap/change] is attributable to period A vs. period B' has a direct, computable answer - a variance decomposition, or a before/after comparison of a dispersion statistic like the coefficient of variation - that doesn't require picking a cause first. The plausible-but-wrong shortcut is reaching immediately for whatever narrative framing the published literature on the topic already emphasizes (e.g. a political red-state/blue-state story) and answering THAT instead, because the framing is compelling and well-sourced - without ever computing the literal decomposition the question asked for.\n\nMeasured directly in this harness: on a question asking how much of the state-to-state spread in COVID death rates came before vaccines vs. after, three of four independently-run arms (including the connector-equipped one) spent most of their analytical effort on a red-state/blue-state comparison - a real, well-supported secondary finding, but an answer to a different question ('did political lean predict who got worse'), not the one literally asked. Only one run computed a direct variance decomposition of each state's cumulative rate into pre-vaccine-era variance, post-vaccine-era variance, and a covariance term from states swapping rank between eras (~55%/22%/22% in that case, with a near-zero pre/post rank correlation showing almost no state was bad in both eras) - a clean, literal answer to 'how much of the spread' that required no political classification at all. The connector-equipped run DID compute a legitimate partial answer (a before/after comparison of the coefficient of variation) but still treated the political angle as the main analysis rather than leading with the direct decomposition.\n\nFIX: when a question asks how much of a measured spread/gap/change happened in one period vs. another, compute a direct decomposition first - a variance decomposition across periods, or a CV/range comparison before vs. after the dividing point - and report that as the primary answer. A popular narrative framing the literature already emphasizes (political, demographic, geographic) is a legitimate and often valuable SECOND layer, but present it as a separate, clearly-labeled analysis, not a substitute for the literal decomposition asked for."
+    },
+    {
+      "id": "fitted-lag-not-summed-pipeline-stages",
+      "title": "A question asking for a specific empirical lead/lag time between two series needs a fitted correlation or a direct computation - not a summed physical-pipeline estimate (transit time + processing time + ...)",
+      "triggers": [
+        "how long does it take for",
+        "lead time",
+        "lag between",
+        "how many months ahead",
+        "leading indicator",
+        "how far in advance",
+        "port to shelf",
+        "by how long"
+      ],
+      "body": "A question asking 'by how long does X lead Y' (port import volumes leading retail inventory, rig counts leading production, a leading economic indicator leading its target) is easy to answer by summing the physical stages of the pipeline between the two events - transit time, processing time, handoff delays - and reporting the total as the 'lead time'. That is a plausible engineering estimate, but it is not the same thing as the MEASURED lag between the two actual data series, and the two can diverge substantially, because the summed-stages estimate misses real-world friction (order-placement lead time before the physical pipeline even starts, inventory buffer policy, replenishment cadence) that only shows up in the measured relationship.\n\nMeasured directly in this harness: on a question asking how long port import volumes lead retail inventory build-ups, two of three unaided/partially-aided arms (plus the connector-equipped one) reached for a summed-stages estimate (ocean transit + customs + inland trucking, totaling 4-10 weeks) and never found the directly-on-point peer-reviewed study - one of those arms explicitly searched for a fitted lag study and reported, wrongly, that none exists. The two arms that DID find it (one via literature search, one by independently computing its own cross-correlation directly against real FRED data) converged on the same measured answer: 3-4 months - roughly twice the summed-stages estimate. The connector-equipped run's summed-stages figure was a reasonable engineering approximation but materially understated the real, measured relationship.\n\nFIX: when a question asks for a specific measured lead/lag time between two economic or physical series (not 'how does the process work' but 'how long, measured'), search specifically for a fitted correlation/lag study (academic, Fed/agency research) OR compute the lag directly yourself if both series are available (a lagged correlation or cross-correlation across a range of lags, checking which lag maximizes the relationship) before settling for a summed-stages estimate. If only a summed-stages estimate is achievable, say so explicitly and flag that it is an engineering approximation that may differ from the true measured lag, rather than presenting it as if it were the fitted answer."
+    },
+    {
+      "id": "deflate-multi-year-dollar-comparisons",
+      "title": "A multi-year or multi-decade dollar-denominated federal figure (grant size, budget, spending) needs a price deflator applied before its trend is reported as the headline finding",
+      "triggers": [
+        "grants getting bigger",
+        "award size",
+        "how much has spending grown",
+        "budget over the last",
+        "in real terms",
+        "adjusted for inflation",
+        "nominal vs real",
+        "size distribution"
+      ],
+      "body": "A question comparing a dollar-denominated federal figure across a span of multiple years - a decade or more especially - is easy to answer with the nominal dollar trend, because that is what's directly in the source data and it always shows a bigger number in the later year. The plausible-but-wrong shortcut is reporting that nominal growth as the headline finding without checking how much of it is just price inflation.\n\nMeasured directly in this harness: on a question asking whether federal research grants are getting bigger or more numerous, three of four independently-run arms reported nominal award-size growth (roughly +43% to +143% over the multi-decade window) as the headline trend. Only one run deflated the same NIH series using NIH's own BRDPI (Biomedical Research and Development Price Index, a sector-specific deflator, not general CPI) and found the real growth was only +2.2% over the same span, with the constant-dollar figure actually peaking around 2003-2005 and declining since - an order-of-magnitude difference in the conclusion depending on whether inflation is removed.\n\nFIX: when comparing a dollar-denominated federal figure across a span of multiple years, check for and apply the relevant price deflator before reporting the trend as the headline finding. A sector-specific deflator (e.g. NIH's own BRDPI for biomedical research, not general CPI) is preferable when the agency publishes one, since research costs (personnel, equipment, clinical trials) can inflate faster or slower than consumer prices. Report both the nominal and real figures when space allows - the gap between them is itself informative about how much of an apparent trend is real change versus price inflation."
+    },
+    {
+      "id": "unfetchable-source-is-unverifiable",
+      "title": "A headline statistic from a domain you don't recognize as an established outlet, that itself returns an error on direct fetch, should be treated as unverifiable rather than cited as fact",
+      "triggers": [
+        "according to",
+        "reports that",
+        "found that",
+        "study shows",
+        "cited a figure",
+        "sponsor compliance",
+        "unrecognized source"
+      ],
+      "body": "A search result surfacing a precise, headline-ready statistic from an unfamiliar domain is easy to cite directly, because the number looks authoritative and answers the question cleanly. The plausible-but-wrong shortcut is trusting the search snippet's framing without checking whether the source itself is retrievable or credible.\n\nMeasured directly in this harness: on a question about clinical-trial results-reporting rates by sponsor, three of four arms independently encountered the same specific source (a sponsor-compliance figure from a domain that returned HTTP 403 on direct fetch and reads as AI-generated/non-peer-reviewed). Two arms explicitly flagged and excluded it from their headline figures; one arm used its numbers as a primary cited figure without the same scrutiny.\n\nFIX: when a search result surfaces a headline statistic from a domain you don't recognize as an established outlet, and the page itself returns an HTTP error (403, paywall, bot-block) on direct fetch, treat the figure as unverifiable rather than citing it as fact - even if the search snippet or summary looked authoritative. Prefer using it only where an independent, verifiable source (peer-reviewed literature, a primary regulatory release) corroborates the same number. A precise-looking percentage from an unfetchable source is not more trustworthy for being precise."
+    },
+    {
+      "id": "compute-original-correlation-on-contested-topics",
+      "title": "On a contested or controversial-topic question with a pullable primary dataset, compute at least one original correlation against the current full population before finalizing an answer built from published regression literature",
+      "triggers": [
+        "contested",
+        "controversial",
+        "does X track Y",
+        "how much does",
+        "correlate with",
+        "linked to",
+        "associated with"
+      ],
+      "body": "A contested-topic question with a body of published regression/comparative-tier literature is easy to answer by synthesizing that literature, because the studies already report clean, dramatic-sounding effect sizes. The plausible-but-wrong shortcut is trusting those figures at face value without checking whether they hold up against the raw, current, full population - published studies often report ADJUSTED or CONDITIONAL effects (controlling for confounds, using older or narrower cohorts) that can read as far more dramatic than the unconditional relationship in today's full dataset.\n\nMeasured directly in this harness: on a contested question asking how much nursing-home inspection problems track understaffing, three of four arms synthesized published literature reporting strong, dramatic-sounding relationships without any arm computing an original correlation against the full current population to check whether those figures hold up at raw scale. The one arm that did - downloading CMS's own current full provider-level dataset (14,683 facilities) and computing Pearson r directly - found a real but weak relationship (r=-0.20, ~4% of variance), roughly half what the literature's framing implied, and weaker still once ownership was controlled.\n\nFIX: when a contested or controversial-topic question has both a body of published regression/comparative-tier literature and a primary dataset that is realistically pullable in one session, compute at least one original correlation or comparison against the current full population before finalizing the answer - even a simple, unadjusted statistic. It serves as a reality check against literature figures that may be conditional on controls, cohort-specific, or from an older vintage, and the size of any gap between the literature's framing and the raw current relationship is itself often the most newsworthy finding for this kind of accountability question."
+    },
+    {
+      "id": "live-api-pull-when-headline-figure-is-stale",
+      "title": "When a widely-cited government statistic has a known 'as of' date that predates the question, pull the source agency's own current API directly and construct an explicitly bounded corroborating estimate rather than reporting the stale figure as current",
+      "triggers": [
+        "how concentrated",
+        "current as of",
+        "latest available",
+        "most recent data",
+        "frozen at",
+        "outdated figure",
+        "stale statistic"
+      ],
+      "body": "A widely-cited government or NGO statistic often carries a fixed 'as of' date from whenever the underlying study or report was published, and it is easy to keep citing that same figure verbatim on a later question, because it is well-sourced and already has the right shape for the answer. The plausible-but-wrong shortcut is either reporting the stale figure as if it were still current, or refusing to update it at all because a fresher primary computation feels out of scope.\n\nMeasured directly in this harness: on a question asking how concentrated federal flood claims are in repeatedly-flooded properties, the headline literature figure was frozen at a December 2021 snapshot. The most rigorous arm instead ran a live query against the source agency's own current API on the day of the question, returning an exact, reconciled current count and constructing its own explicitly bounded, clearly-labeled corroborating estimate rather than either extreme. This is the second time in this session an arm has done exactly this kind of live-primary-source verification against a stale secondary figure (cf. the NSF HERD reconciliation check), which is why it is now a named recipe rather than a one-off observation.\n\nFIX: when a widely-cited statistic in the literature carries a known 'as of' date that predates the question, check whether the source agency's own API or data portal can be queried live. If so, pull it directly and construct an explicitly bounded, clearly-labeled corroborating estimate rather than either reporting the stale figure as current or declining to update it. Label the live figure and the literature figure distinctly so the reader can see which is which and why they may differ."
+    },
+    {
+      "id": "assignment-change-natural-experiment",
+      "title": "A question asking whether gaining some status or position CAUSES an outcome, when units that have the status differ systematically from units that don't",
+      "triggers": [
+        "does gaining a seat cause",
+        "committee assignment",
+        "after joining the committee",
+        "before and after the designation",
+        "does becoming X cause Y",
+        "selection into a status",
+        "alignment is not influence",
+        "natural experiment",
+        "designation effect",
+        "exogenous assignment",
+        "gained jurisdiction",
+        "lost the designation"
+      ],
+      "body": "A question of the shape 'does holding position/status X cause outcome Y' cannot be answered by comparing units that currently have X against units that don't - powerful legislators sit on major committees AND attract more money for reasons that have nothing to do with the committee; systemically-important banks get both a SIFI label and more regulatory attention because they were already large. A cross-sectional comparison bakes in that selection and reports it as an effect of X itself, which is exactly the confound the question is usually built to test for.\n\nThe fix is a within-unit design, not a bigger control set: find units whose status CHANGED during the observed window (gained or lost X for reasons that are at least plausibly unrelated to Y - a chamber-control flip reshuffling committee ratios, a term-limited chair rotating off, a seniority-queue vacancy fill, a size threshold crossed by an unrelated event), then compare each such unit's own outcome before vs. after the change against a matched control group of similar units (same party, similar seniority/size/sector) whose status did NOT change over the same window. Run this as panel_fixed_effects or diff_in_diff with the status as the treatment indicator, entity and time both absorbed as fixed effects - not a single cross-sectional regression with status as one more covariate. Then run event_study on the same panel and check the PRE-treatment period coefficients are jointly not significantly different from zero before trusting the post-treatment ones: if the outcome was already trending differently for soon-to-be-treated units before the status change actually happened, that is selection revealing itself, not the treatment effect, and no amount of control-variable-adding fixes it.\n\nMeasured directly in this harness: on a question asking whether industries concentrate contributions on legislators sitting on the committee that regulates them, an arm working from a public-data connector could not build this design end-to-end in one session (no committee-assignment history table was available) but independently proposed the exact identification strategy - a committee-reassignment natural experiment with member-level before/after comparison against same-seniority controls - as the design that WOULD separate 'contributions follow jurisdiction' from 'jurisdiction follows prior alignment'. A companion arm working from published literature found that this design had already been run: Fouirnaies & Hall (2018, AJPS) use exactly this within-legislator committee-assignment-change design across 99 state legislative chambers and find a real premium (~32% average) for industries under a committee's jurisdiction once the seat change itself is the identifying event - while their own built-in placebo test (donors from industries with NO jurisdictional relationship to the committee) shows no comparable jump, confirming the design actually isolates the targeted effect rather than a generic 'new committee seat, more money of all kinds' story.\n\nFIX: whenever a question asks about the causal effect of gaining or holding a status/position/designation, first check whether ANY units changed status during the covered window. If none did, say so plainly and fall back to a cross-sectional comparison labeled as correlational, not causal. If some did, build the within-unit before/after panel against matched non-changing controls, run panel_fixed_effects/diff_in_diff for the effect and event_study for the pre-trend check, and report the pre-trend result alongside the effect size - a significant post-period effect with a clean (non-significant) pre-trend is real evidence; either result without the pre-trend check reported is not. Generalizes past committee assignments to any status-gain-or-loss question: SIFI/systemically-important designation, Opportunity Zone status, rural-hospital or critical-access designation, right-to-work adoption, a firm crossing a regulatory size threshold, a county gaining or losing a disaster declaration."
+    },
+    {
+      "id": "sec-filing-contexts-mixed-instant-duration-sort",
+      "title": "Sorting or filtering sec.filing_contexts by period_instant to find the MOST RECENT context silently drops or buries every duration-type context",
+      "triggers": [
+        "most recent filing context",
+        "latest 10-Q context",
+        "order by period_instant",
+        "context_id most recent",
+        "segment context latest",
+        "has the data stopped",
+        "loaded data stops at",
+        "XBRL context recency",
+        "filing_contexts ORDER BY",
+        "latest accession for cik"
+      ],
+      "body": "sec.filing_contexts carries BOTH point-in-time (instant, e.g. a balance-sheet date) and duration (a reporting period, e.g. a quarter) contexts in the same table, and only ONE of period_instant / (period_start, period_end) is ever populated per row depending on which kind of fact the context describes - a duration context's period_instant is NULL. Most dimensional segment breakdowns (a loan-class disclosure, a business-segment table, anything reported 'for the three months ended') are DURATION contexts, not instant ones. Sorting or filtering the table by period_instant alone to find 'the most recent' row for a filer/segment therefore treats every duration-context row as having no date at all - and DuckDB sorts NULL first on DESC, so an ORDER BY period_instant DESC LIMIT-style query surfaces old rows (or nothing useful) while the actual newest filing's duration contexts sit invisibly at the bottom, with no error and no empty result to signal the mistake.\n\nMeasured directly in this harness: an askamerica arm joined filing_contexts to a company's CommercialRealEstatePortfolioSegmentMember dimension with ORDER BY period_instant DESC and concluded the loaded segment data 'stops at fiscal year-end 2019', falling back to an external press-release figure instead of computing the company's own current-quarter ratio from the corpus. The connector in fact held the identical current-year 10-Q the external figure came from - an instant-type context for that same segment WAS present at the correct date, but it never surfaced because the query's sort silently buried every duration-type context (the segment's actual quarterly disclosures) beneath it. The gap was not in the data; it was in the query shape.\n\nFIX: never sort or filter a mixed instant/duration context set by period_instant alone. Use COALESCE(period_instant, period_end) as the recency key, or filter on period_end specifically when the target concept is known to be a duration fact (most segment/dimensional breakdowns are). Before concluding a filer's or segment's data 'stops' at some date, run an unordered MAX(accession_number) (or MAX(filing_date)) check for that cik/segment first - a sort-order artifact produces a false 'stops early' conclusion with no error, while a real coverage gap will still show the same stale max under the unordered check."
     }
   ]
 }

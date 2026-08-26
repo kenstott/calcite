@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -558,5 +559,196 @@ class StatsEngineTest {
         ObjectNode out = StatsEngine.hypothesisTest(MAPPER, "ks_test", groups, null, null);
         assertTrue(out.get("p_value").asDouble() < 0.001,
             "two clearly different distributions must be significant: " + out);
+    }
+
+    // ─── correlationMatrix / VIF ────────────────────────────────────────────────
+
+    @Test void correlationMatrixRecoversPerfectCorrelation() {
+        int n = 30;
+        double[][] data = new double[n][2];
+        Random rnd = new Random(3);
+        for (int i = 0; i < n; i++) {
+            double x = rnd.nextDouble() * 10;
+            data[i][0] = x;
+            data[i][1] = 2 * x; // exact linear function of column 0
+        }
+        StatsEngine.CorrelationMatrixResult result =
+            StatsEngine.correlationMatrix(data, new String[]{"a", "b"});
+        assertEquals(1.0, result.r[0][1], EPS, "exact linear relationship -> r = 1");
+    }
+
+    @Test void correlationMatrixFlagsHighVifForRedundantColumn() {
+        // c is an exact linear combination of a and b -> VIF for c should be effectively
+        // infinite (R^2 of the auxiliary regression == 1).
+        int n = 30;
+        double[][] data = new double[n][3];
+        Random rnd = new Random(4);
+        for (int i = 0; i < n; i++) {
+            double a = rnd.nextDouble() * 10;
+            double b = rnd.nextDouble() * 10;
+            data[i][0] = a;
+            data[i][1] = b;
+            data[i][2] = a + b;
+        }
+        StatsEngine.CorrelationMatrixResult result =
+            StatsEngine.correlationMatrix(data, new String[]{"a", "b", "c"});
+        assertTrue(result.vif[2] > 100,
+            "c = a + b exactly -> VIF for c must be huge: " + result.vif[2]);
+    }
+
+    @Test void correlationMatrixGivesLowVifForIndependentColumns() {
+        int n = 200;
+        double[][] data = new double[n][2];
+        Random rnd = new Random(5);
+        for (int i = 0; i < n; i++) {
+            data[i][0] = rnd.nextGaussian();
+            data[i][1] = rnd.nextGaussian(); // independent of column 0
+        }
+        StatsEngine.CorrelationMatrixResult result =
+            StatsEngine.correlationMatrix(data, new String[]{"a", "b"});
+        assertTrue(result.vif[0] < 2.0 && result.vif[1] < 2.0,
+            "independent columns should have VIF near 1: " + Arrays.toString(result.vif));
+    }
+
+    // ─── quantileBinningTest ────────────────────────────────────────────────────
+
+    @Test void quantileBinningTestDetectsMonotonicIncreasingTrend() {
+        int n = 100;
+        double[] outcome = new double[n];
+        double[] predictor = new double[n];
+        for (int i = 0; i < n; i++) {
+            predictor[i] = i;
+            outcome[i] = i * 2; // strictly increasing with predictor
+        }
+        StatsEngine.QuantileBinningResult result =
+            StatsEngine.quantileBinningTest(outcome, predictor, 5);
+        assertTrue(result.monotonic, "strictly increasing relationship must be monotonic");
+        assertTrue(result.increasing, "trend direction must be increasing");
+        assertTrue(result.trendPValue < 0.05,
+            "obvious linear trend across bins must be significant: " + result.trendPValue);
+    }
+
+    @Test void quantileBinningTestDoesNotFlagFlatRelationshipAsMonotonic() {
+        int n = 100;
+        double[] outcome = new double[n];
+        double[] predictor = new double[n];
+        Random rnd = new Random(9);
+        for (int i = 0; i < n; i++) {
+            predictor[i] = i;
+            outcome[i] = 5 + rnd.nextGaussian() * 0.01; // essentially constant, no trend
+        }
+        StatsEngine.QuantileBinningResult result =
+            StatsEngine.quantileBinningTest(outcome, predictor, 5);
+        assertTrue(result.trendPValue > 0.05,
+            "flat relationship must not show a significant trend: " + result.trendPValue);
+    }
+
+    // ─── subgroupContribution ───────────────────────────────────────────────────
+
+    @Test void subgroupContributionComputesSharesAndExclusions() {
+        double[] value = {10, 20, 30, 40};
+        String[] group = {"x", "x", "y", "y"};
+        StatsEngine.SubgroupContributionResult result =
+            StatsEngine.subgroupContribution(value, group);
+        assertEquals(100.0, result.total, EPS);
+        assertEquals(2, result.groups.size());
+        for (StatsEngine.Subgroup g : result.groups) {
+            if ("x".equals(g.label)) {
+                assertEquals(30.0, g.sum, EPS);
+                assertEquals(0.3, g.share, EPS);
+                assertEquals(70.0, g.totalExcluding, EPS);
+            } else {
+                assertEquals(70.0, g.sum, EPS);
+                assertEquals(0.7, g.share, EPS);
+                assertEquals(30.0, g.totalExcluding, EPS);
+            }
+        }
+    }
+
+    // ─── giniCoefficient ────────────────────────────────────────────────────────
+
+    @Test void giniCoefficientIsZeroForPerfectEquality() {
+        double[] value = {5, 5, 5, 5};
+        StatsEngine.GiniResult result = StatsEngine.giniCoefficient(value);
+        assertEquals(0.0, result.gini, EPS);
+    }
+
+    @Test void giniCoefficientMatchesHandComputedValue() {
+        double[] value = {1, 2, 3, 4};
+        StatsEngine.GiniResult result = StatsEngine.giniCoefficient(value);
+        assertEquals(0.25, result.gini, EPS);
+    }
+
+    @Test void giniCoefficientApproachesOneUnderExtremeConcentration() {
+        double[] value = {0, 0, 0, 100};
+        StatsEngine.GiniResult result = StatsEngine.giniCoefficient(value);
+        assertEquals(0.75, result.gini, EPS, "one unit holding the entire total of n=4 gives "
+            + "gini = (n-1)/n = 0.75");
+    }
+
+    @Test void giniCoefficientRejectsNegativeValues() {
+        assertThrows(IllegalArgumentException.class,
+            () -> StatsEngine.giniCoefficient(new double[]{1, -2, 3}));
+    }
+
+    @Test void giniCoefficientRejectsFewerThanTwoObservations() {
+        assertThrows(IllegalArgumentException.class,
+            () -> StatsEngine.giniCoefficient(new double[]{1}));
+    }
+
+    @Test void giniCoefficientRejectsAllZeroValues() {
+        assertThrows(IllegalArgumentException.class,
+            () -> StatsEngine.giniCoefficient(new double[]{0, 0, 0}));
+    }
+
+    // ─── partialCorrelation ─────────────────────────────────────────────────────
+
+    @Test void partialCorrelationMatchesZeroOrderWithNoControls() {
+        int n = 50;
+        double[] x = new double[n];
+        double[] y = new double[n];
+        Random rnd = new Random(11);
+        for (int i = 0; i < n; i++) {
+            x[i] = rnd.nextDouble() * 10;
+            y[i] = 3 * x[i] + rnd.nextGaussian();
+        }
+        StatsEngine.PartialCorrelationResult result =
+            StatsEngine.partialCorrelation(x, y, new double[n][0], new String[0]);
+        assertEquals(result.zeroOrderCorrelation, result.r, EPS,
+            "with no controls, partial correlation must equal the zero-order correlation");
+    }
+
+    @Test void partialCorrelationDropsToNearZeroWhenControlExplainsBothVariables() {
+        // z drives both x and y; once z is controlled for, x and y should show no relationship.
+        int n = 200;
+        double[] x = new double[n];
+        double[] y = new double[n];
+        double[][] z = new double[n][1];
+        Random rnd = new Random(13);
+        for (int i = 0; i < n; i++) {
+            double zi = rnd.nextDouble() * 10;
+            z[i][0] = zi;
+            x[i] = 2 * zi + rnd.nextGaussian() * 0.1;
+            y[i] = 5 * zi + rnd.nextGaussian() * 0.1;
+        }
+        StatsEngine.PartialCorrelationResult result =
+            StatsEngine.partialCorrelation(x, y, z, new String[]{"z"});
+        assertTrue(result.zeroOrderCorrelation > 0.9,
+            "x and y should look strongly correlated before controlling for z: "
+                + result.zeroOrderCorrelation);
+        assertTrue(Math.abs(result.r) < 0.3,
+            "partial correlation should collapse toward 0 once the common driver z is "
+                + "controlled for: " + result.r);
+    }
+
+    // ─── aggregate (scenario_sweep helper) ──────────────────────────────────────
+
+    @Test void aggregateComputesEachSupportedFunction() {
+        double[] col = {1, 2, 3, 4};
+        assertEquals(10.0, StatsEngine.aggregate(col, "sum"), EPS);
+        assertEquals(2.5, StatsEngine.aggregate(col, "avg"), EPS);
+        assertEquals(4.0, StatsEngine.aggregate(col, "count"), EPS);
+        assertEquals(1.0, StatsEngine.aggregate(col, "min"), EPS);
+        assertEquals(4.0, StatsEngine.aggregate(col, "max"), EPS);
     }
 }

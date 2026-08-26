@@ -73,11 +73,17 @@ final class ReportPage {
         final String label;
         final String url;
         final String note;
+        final String sql;
 
         Source(String label, String url, String note) {
+            this(label, url, note, null);
+        }
+
+        Source(String label, String url, String note, String sql) {
             this.label = label;
             this.url = url;
             this.note = note;
+            this.sql = sql;
         }
     }
 
@@ -211,6 +217,11 @@ final class ReportPage {
                 }
                 if (src.note != null && !src.note.isEmpty()) {
                     sb.append(" <span class=\"note\">— ").append(esc(src.note)).append("</span>");
+                }
+                if (src.sql != null && !src.sql.isEmpty()) {
+                    sb.append("<details class=\"sqltoggle\"><summary>Show SQL</summary>")
+                        .append("<pre><code>").append(esc(src.sql)).append("</code></pre>")
+                        .append("</details>");
                 }
                 sb.append("</li>\n");
             }
@@ -744,6 +755,15 @@ final class ReportPage {
             + ".sources ol{padding-left:1.2rem;font-size:.92rem}\n"
             + ".sources li{margin:.3rem 0}\n"
             + ".note{color:var(--muted)}\n"
+            + ".sqltoggle{display:inline-block;margin-left:.4rem}\n"
+            + ".sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;"
+            + "color:var(--link)}\n"
+            + ".sqltoggle summary:hover{text-decoration:underline}\n"
+            + ".sqltoggle[open] summary{margin-bottom:.4rem}\n"
+            + ".sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;"
+            + "background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;"
+            + "font-size:.82rem;white-space:pre-wrap;word-break:break-word}\n"
+            + ".sqltoggle pre code{background:none;padding:0}\n"
             + "footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);"
             + "font-size:.85rem;color:var(--muted)}\n"
             + ".footnote{font-style:italic}\n"
