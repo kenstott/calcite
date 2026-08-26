@@ -242,13 +242,40 @@ final class ChartLayout {
         return Math.max(9, Math.min(TITLE_SIZE, size));
     }
 
+    /**
+     * The title text to actually draw, ellipsised if shrinking to {@link #fittedTitleSize} still
+     * does not make it fit.
+     *
+     * <p>{@code fittedTitleSize} only ever shrinks the font — down to a 9px floor — with no
+     * fallback once that floor is reached, which is exactly the failure its own javadoc describes:
+     * a title centred on a panel narrower than the text needs clips at BOTH ends ("10-year nominal
+     * dollar rise, top 8 states" arrived as "0-year nominal dollar rise, top 8 states (2014-2024").
+     * Truncating with a trailing ellipsis at the already-chosen size — the same fallback the board
+     * header and axis titles already have — keeps the readable start of the string intact instead.
+     */
+    private static String fittedTitleText(String title, double width, int size) {
+        if (title == null || title.isEmpty() || width <= 0) {
+            return title;
+        }
+        double maxWidth = width - 12;
+        if (ChartScene.textWidth(title, size, true) <= maxWidth) {
+            return title;
+        }
+        String t = title;
+        while (t.length() > 1 && ChartScene.textWidth(t + "…", size, true) > maxWidth) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t + "…";
+    }
+
     static ChartScene pieChart(String title, List<String> categories,
             List<Double> values, int width, int height) {
         ChartScene scene = new ChartScene(width, height, BACKGROUND);
         double top = title == null || title.isEmpty() ? 16 : 44;
         if (title != null && !title.isEmpty()) {
-            scene.add(new Label(width / 2.0, 26, title, INK, fittedTitleSize(title, width),
-                Anchor.MIDDLE, 0, true).at("chart-title").styled("title"));
+            int titleSize = fittedTitleSize(title, width);
+            scene.add(new Label(width / 2.0, 26, fittedTitleText(title, width, titleSize), INK,
+                titleSize, Anchor.MIDDLE, 0, true).at("chart-title").styled("title"));
         }
         double total = 0;
         for (Double v : values) {
@@ -412,8 +439,9 @@ final class ChartLayout {
             double left, double top, double plotW, double plotH, int width, int height,
             Ticks ticks, int legendHeight) {
         if (title != null && !title.isEmpty()) {
-            scene.add(new Label(width / 2.0, 26, title, INK, fittedTitleSize(title, width),
-                Anchor.MIDDLE, 0, true).at("chart-title").styled("title"));
+            int titleSize = fittedTitleSize(title, width);
+            scene.add(new Label(width / 2.0, 26, fittedTitleText(title, width, titleSize), INK,
+                titleSize, Anchor.MIDDLE, 0, true).at("chart-title").styled("title"));
         }
         Group grid = new Group().at("gridlines");
         for (int i = 0; i < ticks.values.size(); i++) {

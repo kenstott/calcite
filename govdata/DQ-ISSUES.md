@@ -254,3 +254,320 @@ Ooma uses a third pattern: all linkbase arcs (`calculationLink`, `presentationLi
 
 **Revised assessment**: FALSE POSITIVE. NCES `COUNTYCD` is the full 5-digit state+county FIPS code stored as an integer (e.g., `6037` for California/LA = FIPS `06037`). `String.format("%05d", fipsInt)` correctly restores the leading zero. The transformer is correct as written.
 
+
+---
+
+## DQ-015 — `ref` has no multi-hop ownership view; the obvious query silently answers a different question
+
+**Table**: `ref.gleif_relationships` (recommendation: add a `ref.gleif_ownership_ancestry` view)
+**Severity**: Medium — no data is wrong, but the correct answer is unreachable in practice
+**Scope**: 126,025 `IS_DIRECTLY_CONSOLIDATED_BY` edges; all ownership-structure questions
+**Discovered**: 2026-08-21
+
+**Symptom**: There is no way to ask "how deep does this ownership chain go" or "give me everything
+under ultimate parent X" without hand-writing a recursive CTE. Callers instead reach for
+`IS_ULTIMATELY_CONSOLIDATED_BY`, which is a single-hop shortcut, and get a **wrong answer with no
+error**: it reports depth 1 for entities that are several layers down.
+
+Concretely, walking direct-parent edges puts HSBC USA four layers below HSBC Holdings plc — US bank
+→ HSBC North America Holdings (US) → HSBC Overseas Holdings (UK) → HSBC Holdings plc — while the
+ultimate-parent edge reports a single hop. The intermediate holding companies are invisible.
+
+**Impact**: An analyst question that should be a census becomes an anecdote. `entity_relationships`
+takes ~212s for ONE entity, so a bank-ownership analysis came back covering 16 hand-picked firms
+rather than the population, explicitly for cost reasons. This is also why no public source states a
+depth distribution for US bank ownership, and why the OFR's own graph-theoretic study
+(Flood, Kenett, Lumsdaine & Simon 2017) reported entity COUNTS instead — the naive query answers a
+different question, and the correct one is expensive to assemble.
+
+Edge-type counts, for context:
+
+```
+IS_FUND-MANAGED_BY              148,578
+IS_ULTIMATELY_CONSOLIDATED_BY   132,198   <- single-hop shortcut
+IS_DIRECTLY_CONSOLIDATED_BY     126,025   <- the real chain
+IS_SUBFUND_OF                    72,697
+IS_INTERNATIONAL_BRANCH_OF        1,939
+IS_FEEDER_TO                      1,387
+```
+
+**Fix needed**: a `ref.gleif_ownership_ancestry` view, one row per (entity, ancestor). Tested
+against the live corpus:
+
+```
+116,978 ancestry rows | 89,392 entities | max depth 9 | ~15s for the whole forest
+```
+
+```sql
+WITH RECURSIVE edges AS (
+  SELECT start_node_id AS child_lei, end_node_id AS parent_lei
+  FROM gleif_relationships
+  WHERE relationship_type = 'IS_DIRECTLY_CONSOLIDATED_BY'
+    AND relationship_status = 'ACTIVE'
+    AND registration_status = 'PUBLISHED'
+    AND start_node_id IS NOT NULL AND end_node_id IS NOT NULL
+),
+walk AS (
+  SELECT child_lei AS lei,
+         parent_lei AS immediate_parent_lei,
+         parent_lei AS ancestor_lei,
+         1 AS depth,
+         CAST(child_lei AS VARCHAR) || '>' || CAST(parent_lei AS VARCHAR) AS path
+  FROM edges
+  UNION ALL
+  SELECT w.lei, w.immediate_parent_lei, e.parent_lei, w.depth + 1,
+         w.path || '>' || CAST(e.parent_lei AS VARCHAR)
+  FROM walk w
+  JOIN edges e ON e.child_lei = w.ancestor_lei
+  WHERE w.depth < 20
+    AND POSITION(CAST(e.parent_lei AS VARCHAR) IN w.path) = 0
+)
+SELECT w.lei, w.immediate_parent_lei, w.ancestor_lei, w.depth, w.path,
+       CASE WHEN top.child_lei IS NULL THEN TRUE ELSE FALSE END AS ancestor_is_ultimate
+FROM walk w
+LEFT JOIN edges top ON top.child_lei = w.ancestor_lei
+```
+
+**Three observations from testing, each of which will bite whoever implements this:**
+
+1. **THE GRAPH HAS CYCLES.** Without the `POSITION(...) = 0` path-membership guard the recursion
+   does not terminate, and — worse — the spurious rows look like genuine depth rather than an
+   error: depths 10, 11 and 12 each returned exactly 9 rows. With the guard, real max depth is 9.
+   The cycles are GLEIF data errors and are worth reporting upstream in their own right.
+
+2. **Array literals and `list_append` do not parse through this SQL layer.** Both `[child, parent]`
+   and `list_append(path, x)` fail. Hence the `'>'`-delimited VARCHAR path, which also makes the
+   cycle guard a simple `POSITION`. If an array `path` is wanted, build it in a materialisation job
+   rather than in a query the engine must parse.
+
+3. **Source from `gleif_relationships`, NOT `current_gleif_parents` — worth 4.6x.** Both produce
+   byte-identical results (116,978 rows / 89,392 entities), but the convenience view resolves legal
+   names on both endpoints, and inside a recursive CTE that join is re-evaluated at every level:
+   **68.8s versus 14.9s**. Resolve names on the OUTER query, joined once, never inside the walk.
+
+**Materialised vs view**: 15s is acceptable once, not per query. A flat physical table refreshed
+whenever `gleif_relationships` re-ingests is preferable to a live view, and flat beats a nested
+JSON tree for the queries actually asked — `depth` becomes an indexed integer, "everyone under X at
+depth <= N" is a filter and a join, and full ancestry is still available via `path` without JSON
+path operators. A nested tree only pays off if something needs to render the downward org-chart
+shape, which no observed question required.
+
+**Why this matters commercially**: every banking, insurance and corporate-strategy question that
+needs ownership structure depends on it. Those are the highest-value audiences and the ones
+currently least served.
+
+---
+
+## DQ-016 — `sec.financial_facts` filters do not push through its own JOIN — a hang, not just a slow query
+
+**Table**: `sec.financial_facts` (VIEW over `financial_line_items` LEFT JOIN `filing_contexts` JOIN
+a `concept_aliases` VALUES mapping)
+**Severity**: High — not a wrong answer, a hang: 45+ minutes at 900%+ CPU and ~9.7GB RAM, no error
+ever surfaced to the caller
+**Scope**: any query filtering `financial_facts` by `cik`/`accession_number`; the identical filter
+run directly against the base table `financial_line_items` returns instantly
+**Discovered**: 2026-08-22
+
+**Symptom**: `SELECT DISTINCT canonical_name FROM sec.financial_facts WHERE cik IN (...)` never
+returned. The server process was found still alive ~20+ minutes later, pinned at 950%+ CPU with
+181 cumulative CPU-minutes logged; killing it (`kill -9`) released free memory from ~71MB to
+~9.7GB. `EXPLAIN PLAN FOR` on the hang-triggering shape shows the entire filter+join collapsing
+into one `JdbcTableScan` — the whole view expansion is handed to DuckDB as a single opaque SQL
+statement, so the runaway work happens inside DuckDB's own engine, not Calcite's Enumerable path.
+
+**Root cause (confirmed by direct comparison, not inferred)**: filtering `financial_facts` by `cik`
+does not push the predicate down through the view's `LEFT JOIN`/`VALUES`-join into
+`financial_line_items` before that join runs — a query that reads as "filtered to one company"
+becomes a full-corpus scan-and-join. Filtering `financial_line_items` directly by the same `cik`
+(60,310 rows for the filer tested) returned instantly.
+
+**Why the query timeout didn't save it**: `ASKAMERICA_QUERY_TIMEOUT_SECONDS` (default 180s) is
+demonstrably enforced elsewhere in this codebase, but did not fire here — the hang ran at least an
+order of magnitude past the configured bound with no `queryExecutionTimeoutReached` error ever
+raised. Calcite core does carry a mechanism to propagate the outer timeout into a fully-pushed-down
+statement (`ResultSetEnumerable.setTimeout`/`setTimeoutIfPossible`), but which of its two hops
+actually failed here — timeout propagation into `DataContext.Variable.TIMEOUT`, or DuckDB's own
+cooperative cancellation being unable to interrupt a query already wedged inside one oversized
+native operator — was not conclusively isolated, to avoid re-triggering the outage with a live
+repro.
+
+**A second, related gap**: sub-category breakdowns (loan class, business segment, geography,
+product line) are not reachable as columns at all — they require joining
+`financial_line_items.context_ref = filing_contexts.context_id` and reading
+`filing_contexts.segment`, a semicolon-joined string of XBRL `Axis=Member` pairs namespaced to
+each filer's own taxonomy prefix (e.g. `fbc:CommercialRealEstateLoansMember`). Nothing in the
+original schema comments indicated this join path existed; `filing_contexts.segment`'s comment
+was a single line ("Segment dimension information (XML fragment)") giving no indication it was a
+usable, documented key.
+
+**Fixed so far**:
+- `financial_line_items`, `filing_contexts.segment`, and `financial_facts`' own comments rewritten
+  to state the scope limit, the performance divergence, and the join path explicitly (shipped).
+- `askamerica-engine`'s `McpServer.java` instructions and `query` tool description updated with a
+  generalized version of this pattern (any `<entity>_facts`-style view built from a join over a
+  much larger base table is a candidate for the same failure) (shipped).
+- A wall-clock watchdog added server-side: any statement still active at 2x its configured timeout
+  gets `Statement.cancel()`; still active at 4x, the shared connection is evicted so subsequent
+  callers get a fresh one rather than queuing behind the wedged one indefinitely (shipped, compiled
+  and regression-tested against normal queries; the escalation path itself was not live-fired
+  against a real hang, deliberately, to avoid re-triggering the outage). If the watchdog's
+  `cancel()` is what unblocks the query, the caller now gets an explicit, accurate message — real
+  elapsed time, which multiple of the timeout fired — instead of DuckDB's bare "Interrupted!" text,
+  so the calling agent can tell a timeout from a crash and decide to narrow the query rather than
+  retry the same shape blind. The remaining gap: if `cancel()` itself fails to unblock the thread
+  and only the stage-2 connection eviction eventually runs, the caller may still get no response at
+  all rather than a labeled timeout — a request-level hard deadline would close this, not attempted
+  here given the risk of restructuring `DB_LOCK`'s serialization without live-hang test coverage.
+- `sec.financial_facts_by_segment` — a convenience view unpivoting `filing_contexts.segment` into a
+  searchable `segment_members` column — drafted, tested against a real filing (see the join and
+  matching figures above), and **NOT added to the live schema**. A schema YAML edit invalidates the
+  bundled DuckDB seed and forces a full reseed, which is the data team's call to schedule, not
+  something to apply ad hoc from an investigation session — matching DQ-015's precedent. The
+  proposal also has an open correctness gap that should be resolved before it ships: a plain
+  `segment_members ILIKE '%X%'` filter returns every context that mentions the category anywhere in
+  its dimension list, including credit-quality/delinquency sub-breakdowns of the same category
+  (e.g. querying for a bank's CRE loans returned the two clean consolidated totals plus 12
+  additional rows further broken out by Pass/Substandard/Non-Accrual status) — summing
+  `value_dollars` across the returned rows without further filtering double-counts, the same trap
+  `financial_facts` itself already warns about for its own `is_consolidated_total` column.
+
+**Suggested remaining fix**: either rewrite `financial_facts`'s (and, if deployed,
+`financial_facts_by_segment`'s) SQL so the entity-key filter is applied inside a subquery on
+`financial_line_items` before the joins run (forcing the pushdown Calcite/DuckDB isn't doing on
+its own), or add an explicit single-dimension flag/column to `financial_facts_by_segment` so a
+caller can select one Axis at a time instead of ILIKE-matching across the whole concatenated
+Member list.
+
+---
+
+## DQ-017 — `fec.committees` name collides with congressional committees; description was correct, discovery wasn't
+
+**Table**: `fec.committees`
+**Severity**: Low — a metadata/discoverability improvement, not a description error
+**Scope**: any question about congressional committee membership or jurisdiction
+**Discovered**: 2026-08-22
+
+**Symptom**: no schema in the catalog covers congressional committee membership or jurisdiction
+(`officials.members` has no committee-assignment field either). A caller reaching for that data —
+e.g. "who sits on House Financial Services" — has a plausible reason to try `fec.committees`
+first, given the name, and only discovers the mismatch after reading its description or querying
+it directly.
+
+**Not a misdescription.** The table's existing comment was already accurate: "All political
+committees registered with the FEC. Includes PACs, party committees, campaign committees, and
+Super PACs." It never claimed to cover congressional committees and nothing in it was wrong. The
+actual problem is narrower: a correct, generic description does not by itself warn off a plausible
+confusion a caller is likely to walk into via the table's name — especially through keyword-based
+`search_catalog` matching, where "committee" surfaces this table as a false-positive-looking
+candidate for an unrelated question.
+
+**Found by**: arm A of the comparative-eval harness (`campaign-money-vs-committee-jurisdiction-
+alignment`, 2026-08-22), which confirmed via `list_schemas`/`list_tables`/`search_catalog` that no
+committee-assignment table exists, filed the gap via `report_issue`, and worked around it with an
+external research pass for 118th Congress committee rosters — the run's headline result was not
+degraded by this, just the effort to reach it.
+
+**Suggested fix, not applied here — for the data team to schedule**: lead `fec.committees`'
+comment with an explicit disambiguation ("NOT CONGRESSIONAL COMMITTEES"), naming the actual gap
+(no schema carries committee assignments) so a caller who lands here via the name collision is
+redirected immediately rather than after a wasted query. Comment-only change, no reseed required —
+but govdata schema/metadata edits are the data team's call, not applied unilaterally from this
+session; reported here and in the Govdata Defect Register for them to apply.
+
+**Also still open**: no congressional committee membership/jurisdiction table exists anywhere in
+the catalog. Suggest adding one (e.g. sourced from Congress.gov's committee-membership endpoint)
+to the `officials` schema.
+
+---
+
+## DQ-018 — `cftc.commodity_derivatives` hangs on a bare COUNT(*); and CFTC COT positioning is a real, missing dataset
+
+**Table**: `cftc.commodity_derivatives` (and likely its siblings — `credit_default_swaps`,
+`equity_derivatives`, `fx_derivatives`, `rate_swaps` — all filtered VIEWs over the same
+`cftc_trades` base table)
+**Severity**: Medium — a hang, not a wrong answer, but on the simplest possible query
+**Scope**: any unfiltered or lightly-filtered query against these views
+**Discovered**: 2026-08-22
+
+**Symptom**: `SELECT COUNT(*) FROM cftc.commodity_derivatives` does not return within 60s on a
+freshly-started, otherwise-idle host — reproduced directly, independent of any specific question
+or prior host state. Same failure shape as DQ-016 (`sec.financial_facts`): a VIEW's own filter
+(here, presumably a WHERE/asset-class filter selecting energy/ag/metals swaps out of all asset
+classes) appears not to push down before scanning the much larger base table (`cftc_trades`,
+individual DTCC GTR swap dissemination records — plausibly a very large table given it covers
+every reported OTC swap event across all asset classes).
+
+**Context this was found in**: arm A of the comparative-eval harness
+(`cftc-positioning-vs-physical-energy-production`, 2026-08-22) was asked to report speculative
+*futures* positioning (the CFTC Commitments of Traders concept) for energy contracts. It correctly
+judged that `cftc.commodity_derivatives` — OTC swap transaction records — was not the right table
+for that (COT positioning and OTC swap dissemination are two entirely different CFTC datasets) and
+went to CFTC's own public data directly instead, which is the right call independent of whether
+the table also hangs.
+
+**The more important finding: CFTC Commitments of Traders (COT) does not exist in this catalog at
+all**, and it should — it is the standard weekly speculative-positioning series used across
+finance/commodities questions, and confirmed independently needed twice in one day: this
+harness's own bare arm and a real Claude Desktop session (run by the user, outside this harness)
+both went straight to CFTC's public Socrata API for it, unprompted, and produced correct results.
+
+**Concrete source, verified working today**:
+- Portal: `publicreporting.cftc.gov`, Socrata API.
+- Dataset: Disaggregated Futures-Only report, resource ID `72hh-3qpy` (verify current ID before
+  building — CFTC's dataset IDs can change; `WebSearch "CFTC publicreporting.cftc.gov disaggregated
+  futures only resource id"` if in doubt).
+- Query shape: `https://publicreporting.cftc.gov/resource/72hh-3qpy.json?cftc_contract_market_code=067651&$where=report_date_as_yyyy_mm_dd>='2024-01-01'&$order=report_date_as_yyyy_mm_dd&$limit=5000`
+  (067651 = NYMEX WTI crude, 023651 = NYMEX Henry Hub natural gas — other contracts have their own
+  codes).
+- Key fields: `report_date_as_yyyy_mm_dd`, `m_money_positions_long_all` /
+  `m_money_positions_short_all` (managed-money long/short — the standard "speculative positioning"
+  proxy), `open_interest_all`. `net_managed_money = long - short`, weekly, as-of-Tuesday.
+- No API key required.
+
+**Suggested, for the data team**: (1) investigate the same filter-pushdown pattern as DQ-016 for
+`commodity_derivatives` and its sibling filtered views — likely the same root cause, possibly the
+same fix. (2) Add CFTC COT (Disaggregated Futures-Only, and possibly Legacy/Supplemental) as a new
+govdata source — it is a real, independently-confirmed gap, not a hypothetical one, and the public
+endpoint above is already verified working with no auth required.
+
+## DQ-019 — `energy.eia_electricity_generation` only 2023-2024 actually loaded despite declared 2008-2024, and `generation_year` is offset +2 from the real year
+
+**Table**: `energy.eia_electricity_generation`
+
+**Severity**: High — the table is unusable for any multi-year trend despite advertising 17 years
+of history, and the typed year column actively misleads any query that filters/groups on it.
+
+**Discovered**: 2026-08-22, via the AskAmerica comparative-eval harness
+(`renewable-share-vs-retail-electricity-prices`), arm A, using `data_coverage`/`describe_table`/
+direct `query` — not a guess, independently reproduced.
+
+**Symptom, part 1 — coverage gap**: `describe_table`/`data_coverage` declare `yearRange`
+2008-2024, but a direct row scan shows only years 2023-2024 are actually loaded (296,786 rows
+total, all in 2023-2024). `data_coverage`'s own `missing_vs_declared` lists 2008-2022 entirely
+absent.
+
+**Symptom, part 2 — `generation_year` corruption**: the partition column `year` (varchar) correctly
+holds `'2023'`/`'2024'`, but the typed `generation_year` (integer) column is offset **+2** for
+every row: 2023-partition rows carry `generation_year=2025`, 2024-partition rows carry
+`generation_year=2026`. Reproduced via:
+```sql
+SELECT year, generation_year, generation_month, COUNT(*) AS n
+FROM energy.eia_electricity_generation
+GROUP BY year, generation_year, generation_month
+ORDER BY year, generation_year, generation_month
+```
+Any query filtering or grouping on `generation_year` — the documented, typed year column — silently
+returns future, non-existent years (2025/2026) and appears empty for the real 2023/2024 data. A
+caller who trusts the typed column over the varchar partition column gets zero rows and no error,
+which reads as "no data" rather than "wrong column."
+
+**Context**: the arm correctly abandoned this table and substituted `energy.eia_state_energy_consumption`
+(EIA SEDS, confirmed fully loaded 1960-2024, no gaps) after discovering both defects, filed the
+issue in-product via `report_issue`, and delivered a complete answer from the substitute source.
+No workaround was applied to the schema/data here — report-only, per this session's scope.
+
+**Suggested, for the data team**: (1) backfill 2008-2022 to match the declared window, or correct
+the declared `yearRange` to 2023-2024 if backfill is not planned. (2) Fix the `generation_year`
+derivation in the transformer — it appears to derive from an apparent current-run-year-based offset
+rather than the year/month the row actually describes; the varchar `year` partition column has the
+correct value and can serve as the reference during the fix.

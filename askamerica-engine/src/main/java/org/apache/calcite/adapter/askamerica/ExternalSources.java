@@ -40,7 +40,7 @@ final class ExternalSources {
      * being unable to find data — it is the caller silently blending a live figure
      * with an ingested one whose vintage differs, and reporting a single number.
      */
-    private static final String CAVEAT =
+    static final String CAVEAT =
         "These are external endpoints, NOT askamerica data. They carry none of this "
         + "server's versioning, DQ checks, or reproducibility. Rules for using them: "
         + "(1) askamerica remains the primary source — reach for these only for a "
@@ -96,8 +96,13 @@ final class ExternalSources {
     /**
      * Sources ranked against a free-text topic, capped at {@code limit}. An empty
      * topic returns the full list, which is small enough to read whole.
+     *
+     * <p>Shared by the standalone {@code suggest_external_sources} tool (via {@link
+     * #suggest}, which wraps this in the full caveat) and {@code search_catalog}
+     * (which attaches these matches directly to a warehouse search so a caller sees
+     * both in one call).
      */
-    static String suggest(String topic, int limit) {
+    static ArrayNode matchesFor(String topic, int limit) {
         ArrayNode matches = MAPPER.createArrayNode();
         if (topic == null || topic.trim().isEmpty()) {
             int n = 0;
@@ -107,31 +112,35 @@ final class ExternalSources {
                 }
                 matches.add(entry(s, 0));
             }
-        } else {
-            String[] rawToks = topic.toLowerCase(Locale.ROOT).split("\\s+");
-            List<String> toks = new ArrayList<>();
-            for (String tk : rawToks) {
-                if (!tk.isEmpty() && !Catalog.STOPWORDS.contains(tk)) {
-                    toks.add(tk);
-                }
-            }
-            List<ObjectNode> hits = new ArrayList<>();
-            for (JsonNode s : root()) {
-                int score = score(toks, s);
-                if (score >= MIN_RELEVANT_SCORE) {
-                    hits.add(entry(s, score));
-                }
-            }
-            hits.sort((a, b) -> Integer.compare(b.path("score").asInt(), a.path("score").asInt()));
-            int n = 0;
-            for (ObjectNode h : hits) {
-                if (n++ >= limit) {
-                    break;
-                }
-                matches.add(h);
+            return matches;
+        }
+        String[] rawToks = topic.toLowerCase(Locale.ROOT).split("\\s+");
+        List<String> toks = new ArrayList<>();
+        for (String tk : rawToks) {
+            if (!tk.isEmpty() && !Catalog.STOPWORDS.contains(tk)) {
+                toks.add(tk);
             }
         }
+        List<ObjectNode> hits = new ArrayList<>();
+        for (JsonNode s : root()) {
+            int score = score(toks, s);
+            if (score >= MIN_RELEVANT_SCORE) {
+                hits.add(entry(s, score));
+            }
+        }
+        hits.sort((a, b) -> Integer.compare(b.path("score").asInt(), a.path("score").asInt()));
+        int n = 0;
+        for (ObjectNode h : hits) {
+            if (n++ >= limit) {
+                break;
+            }
+            matches.add(h);
+        }
+        return matches;
+    }
 
+    static String suggest(String topic, int limit) {
+        ArrayNode matches = matchesFor(topic, limit);
         ObjectNode out = MAPPER.createObjectNode();
         out.put("caveat", CAVEAT);
         out.set("sources", matches);

@@ -277,6 +277,12 @@ partitionedTables:
     pattern: "type=patent_assignees"
     partitions: *snapshot_partitions
     comment: >
+      To reach a patent assignee FROM a company rather than by name, join
+      ref.canonical_org_entity on patents_assignee_id = assignee_id — that table carries
+      one foreign key per source, so a firm's SEC CIK and its patent assignee id sit in
+      the same row and the join is exact. Matching assignee_organization as text finds
+      the wrong entities and misses subsidiaries filing under unrelated names.
+
       Faithful recreation of g_assignee_disambiguated.tsv — one row per patent-assignee
       combination (assignee_organization or first/last name, assignee_type, assignee_sequence),
       keyed by patent_id, no joins and no year. Loaded once per quarter as a full snapshot

@@ -2036,6 +2036,15 @@ partitionedTables:
   # patents_assignee_id / fmcsa_dot_number comments below).
   - name: canonical_org_entity
     comment: >
+      THE CROSS-SOURCE JOIN TABLE FOR ORGANISATIONS — a wide crosswalk you join on,
+      carrying one nullable foreign key per source alongside a _confidence sibling for
+      each. Use it to define a SET by exact predicate rather than by matching names:
+      "every firm that files with the SEC and holds patents" is
+      `WHERE sec_cik IS NOT NULL AND patents_assignee_id IS NOT NULL`, then a direct
+      join to sec.filing_metadata on cik and patents.patent_assignees on assignee_id.
+      No name matching, no match rate, no candidate review. The resolve_entity tool is
+      for the other case — a person handed you one name and you need its keys.
+
       One row per real-world org known to any org-type registry source, whether or not
       it cross-matched GLEIF/EIN — an org identified only in patents.patent_assignees
       (never resolved) still gets a row here, with lei left null. Nullable FK columns

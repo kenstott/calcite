@@ -77,6 +77,10 @@ final class QuestionDiagnostics {
      */
     private static final int SMALL_N = 60;
 
+    /** SUM/COUNT/AVG — the aggregates that double-count when levels are mixed. */
+    private static final Pattern ADDITIVE_AGG = Pattern.compile(
+        "\\b(sum|count|avg|mean|total)\\s*\\(", Pattern.CASE_INSENSITIVE);
+
     /** Fraction of nulls in a returned column at which the column is reported as unusable. */
     private static final double NULL_DOMINANT = 0.9;
 
@@ -308,6 +312,513 @@ final class QuestionDiagnostics {
         return immutable;
     }
 
+    // ── Name matching where entity resolution exists ──────────────────────────
+
+    /**
+     * Ways to match one organisation name against another. LIKE is the visible member of the
+     * family; every one of these has the same two failure modes, and the similarity functions
+     * are worse in one respect — a threshold looks principled, so the result reads as measured
+     * rather than guessed.
+     */
+    private static final String[][] NAME_MATCHERS = {
+        {"(?:NOT\\s+)?LIKE", "LIKE"},
+        {"(?:NOT\\s+)?ILIKE", "ILIKE"},
+        {"(?:NOT\\s+)?SIMILAR\\s+TO", "SIMILAR TO"},
+        {"!?~\\*?", "regex operator"},
+        {"regexp_(?:matches|full_match|extract|replace)", "regexp function"},
+        {"levenshtein|damerau_levenshtein|editdist3", "edit distance"},
+        {"jaro_similarity|jaro_winkler_similarity|jaro|jaro_winkler", "Jaro/Jaro-Winkler"},
+        {"hamming|mismatches", "Hamming distance"},
+        {"jaccard", "Jaccard similarity"},
+        {"similarity", "trigram similarity"},
+        {"(?:array_|list_)?cosine_similarity|cosine_distance", "cosine similarity"},
+        {"contains|starts_with|ends_with|strpos|instr|position", "substring test"},
+    };
+
+    private static final Pattern[] MATCHER_PATTERNS = new Pattern[NAME_MATCHERS.length];
+
+    static {
+        for (int i = 0; i < NAME_MATCHERS.length; i++) {
+            MATCHER_PATTERNS[i] = Pattern.compile(
+                "\\b" + NAME_MATCHERS[i][0] + "\\b|" + NAME_MATCHERS[i][0],
+                Pattern.CASE_INSENSITIVE);
+        }
+    }
+
+    /** Column-name fragments that mark a free-text organisation name. */
+    private static final String[] ORG_NAME_HINTS = {
+        "assignee_organization", "company_name", "legal_name", "org_name", "own_name",
+        "owner_name", "lead_sponsor", "sponsor", "carrier_name", "borrower_name",
+        "labeler_name", "recalling_firm", "firm_name", "entity_name", "registrant",
+        "manufacturer", "employer_name", "operator_name", "parent_name", "conm",
+    };
+
+    private static boolean looksLikeOrgNameColumn(String col) {
+        String c = col.toLowerCase(Locale.ROOT);
+        for (String h : ORG_NAME_HINTS) {
+            if (c.equals(h) || c.endsWith("_" + h) || c.contains(h)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Matching a company by {@code LIKE} is wrong in both directions at once, and looks right.
+     *
+     * <p>It over-matches: {@code LIKE '%CAPITAL ONE%'} pulls in "MAK Capital One L.L.C.", an
+     * unrelated fund. And it under-matches, which is the half that does the damage — a firm's
+     * filings are spread across subsidiaries whose names share no substring with the parent.
+     * ExxonMobil's patents sit under "ExxonMobil Chemical Patents Inc." and "Exxon Research and
+     * Engineering Company"; Capital One files 6,217 as "Capital One Services, LLC" and 215 as
+     * "Capital One Financial Corporation". A pattern anchored on the registrant name finds the
+     * 215 and reports it as the firm's patent output.
+     *
+     * <p>Neither failure raises an error. The query returns rows, the rows are real, and nothing
+     * indicates which ones are missing — so this warning exists to say that a resolution path is
+     * available, not that the query is malformed.
+     */
+    private static void nameMatchingWithoutResolution(String sql, ArrayNode warnings) {
+        if (sql == null) {
+            return;
+        }
+        // Find org-name columns in the statement, then read the text around each one for a
+        // matching construct. Anchoring on the column rather than the operator is what lets
+        // one pass cover infix operators (LIKE, ~) and function calls (levenshtein(...))
+        // without a separate rule for each shape.
+        List<String> hits = new ArrayList<>();
+        List<String> methods = new ArrayList<>();
+        Matcher ident = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(sql);
+        while (ident.find()) {
+            String col = ident.group();
+            if (!looksLikeOrgNameColumn(col)) {
+                continue;
+            }
+            int from = Math.max(0, ident.start() - 90);
+            int to = Math.min(sql.length(), ident.end() + 90);
+            String window = sql.substring(from, to);
+            for (int i = 0; i < MATCHER_PATTERNS.length; i++) {
+                if (MATCHER_PATTERNS[i].matcher(window).find()) {
+                    if (!hits.contains(col)) {
+                        hits.add(col);
+                    }
+                    if (!methods.contains(NAME_MATCHERS[i][1])) {
+                        methods.add(NAME_MATCHERS[i][1]);
+                    }
+                }
+            }
+        }
+        if (hits.isEmpty()) {
+            return;
+        }
+        StringBuilder note = new StringBuilder();
+        note.append("This query identifies an organisation by matching its name — ")
+            .append(String.join(", ", methods))
+            .append(" on ")
+            .append(String.join(", ", hits))
+            .append(". That is wrong in two directions at once and neither raises an error. ")
+            .append("It over-matches — a pattern on a common word pulls in unrelated entities ")
+            .append("that happen to contain it. More seriously it UNDER-matches: a firm's rows ")
+            .append("are spread across subsidiaries whose names share no substring with the ")
+            .append("parent, so the result silently omits most of the firm and still looks ")
+            .append("complete. ");
+        note.append("**FIRST: check whether you need to match names at all.** ")
+            .append("`ref.canonical_org_entity` is a wide table with one nullable foreign key ")
+            .append("per source — sec_cik, patents_assignee_id, fec_committee_id, ")
+            .append("eia_utility_id, fmcsa_dot_number, exempt_org_ein, ipeds_unitid and more, ")
+            .append("each with a _confidence sibling. If you are defining a SET rather than ")
+            .append("looking up one named company, select on those columns being non-null and ")
+            .append("join to the source tables directly — an exact join with no matching, no ")
+            .append("candidate review and no failure modes to reason about. Name matching is ")
+            .append("for when a person handed you a name. ");
+        note.append("IF YOU DO NEED TO MATCH NAMES, HOW MUCH CARE DEPENDS ON THE ROLE THE ")
+            .append("ENTITY PLAYS. ");
+        note.append("If the set of firms IS the study — you are ranking them, correlating ")
+            .append("across them, or reporting a per-firm figure — resolution is the analysis, ")
+            .append("not a lookup, and it belongs in its own step: ")
+            .append("(1) call `resolve_entity` with a `terms` ARRAY for the whole cast at once ")
+            .append("— it resolves them in a single scan and returns the inputs that matched ")
+            .append("NOTHING, which is the half you cannot otherwise see; ")
+            .append("(2) READ the candidates and reject the ones that are not your firm; ")
+            .append("(3) expand each confirmed entity with `entity_relationships` (it also ")
+            .append("takes a `leis` array) — subsidiaries rarely share a name with the parent, ")
+            .append("so this is the only step that recovers what no name match can reach; ")
+            .append("(4) pin the confirmed identifier set; ")
+            .append("(5) run the analysis joining on those identifiers, with no name matching ")
+            .append("anywhere in it; ")
+            .append("(6) sanity-check the resolved totals against a figure you already know, ")
+            .append("because expansion only reaches entities the ownership graph has edges for. ");
+        note.append("Do NOT fold resolution into the analysis query. Fused, a wrong number ")
+            .append("cannot be attributed — you cannot tell whether the analysis is wrong or ")
+            .append("whether one of forty entities was a mismatch. And filtering rows out ")
+            .append("afterwards only removes over-matches; the rows you are MISSING were never ")
+            .append("in the result to remove. ");
+        note.append("If the entity is incidental — one well-known firm used as a filter, or ")
+            .append("context around a result that does not depend on the firm set being ")
+            .append("complete — this is lighter. Resolve the one name, glance at what came ")
+            .append("back, and proceed. The full sequence is not worth it for a filter, but say ")
+            .append("in the write-up which you did, because a reader cannot tell a confirmed ")
+            .append("entity set from a convenient one by looking at the numbers. ");
+        note.append("**Resolution is a match, not a fact — read the candidates before using ")
+            .append("them.** No resolver is precise: `high` confidence means the name ")
+            .append("normalised to the same string, not that it is the organisation you meant. ")
+            .append("\"CAPITAL ONE PARTNERS\" scores an exact normalised match against ")
+            .append("\"Capital One\" and is a different company. A resolver moves the ")
+            .append("judgement from string matching to candidate review; it does not remove it. ")
+            .append("Where a name resolves to several entities, deduplicate before aggregating ")
+            .append("or those firms are counted twice.");
+        ObjectNode w = warning("name_matching_without_resolution", CAUTION, note.toString());
+        ArrayNode cols = MAPPER.createArrayNode();
+        for (String c : hits) {
+            cols.add(c);
+        }
+        w.set("columns", cols);
+        warnings.add(w);
+    }
+
+    // ── Geography level mixing ────────────────────────────────────────────────
+
+    /** Geographic identifier columns whose NULLs mean "this row is at a coarser level". */
+    private static final String[] GEO_ID_COLS = {
+        "county_fips", "county_code", "county", "county_name", "tract", "tract_fips",
+        "zcta", "zip", "zip_code", "cbsa", "cbsa_code", "place_fips", "place",
+    };
+
+    /**
+     * Some tables stack levels in one relation: a state total, then that state's counties,
+     * with the county identifier NULL on the coarser row. Both are legitimate rows, so a SUM
+     * over them counts every county twice — once alone and once inside its state — and raises
+     * no error.
+     *
+     * <p>This is a hazard in the RESULT, not necessarily a defect in the table. A table may
+     * well expose a level column to filter on — {@code census.pep_population} has a real
+     * {@code geography} partition column, and its mixed rows are correct — but a caller who
+     * did not filter still holds a result that double-counts. The warning is aimed at that
+     * result, and says how to filter rather than implying the table is broken.
+     *
+     * <p>Measured from the returned rows: a geographic identifier that is NULL in some and
+     * populated in others is the signature. A column that is NULL everywhere is simply not
+     * loaded and belongs to a different warning.
+     */
+    private static void geographyLevelMixing(String sql, ArrayNode rows, List<String> columns,
+            ArrayNode warnings) {
+        if (rows == null || rows.size() < 2) {
+            return;
+        }
+        for (String raw : columns) {
+            String c = raw.toLowerCase(Locale.ROOT);
+            boolean isGeoId = false;
+            for (String g : GEO_ID_COLS) {
+                if (c.equals(g) || c.endsWith("_" + g)) {
+                    isGeoId = true;
+                    break;
+                }
+            }
+            if (!isGeoId) {
+                continue;
+            }
+            int nulls = 0;
+            int filled = 0;
+            for (JsonNode row : rows) {
+                JsonNode v = row.get(raw);
+                if (v == null || v.isNull() || v.asText().trim().isEmpty()) {
+                    nulls++;
+                } else {
+                    filled++;
+                }
+            }
+            if (nulls == 0 || filled == 0) {
+                continue;
+            }
+            boolean additive = additiveAggregate(sql);
+            ObjectNode w = warning("geography_level_mixing", additive ? HIGH : CAUTION,
+                "This result mixes geographic levels in one column: " + raw + " is populated on "
+                + filled + " row(s) and NULL on " + nulls + ". A NULL geographic identifier "
+                + "normally means the row is a coarser total — a state row sitting beside its "
+                + "own counties — so the finer rows are counted twice, once alone and once "
+                + "inside the total. "
+                + (additive ? "This result applies an additive aggregate over those rows, so "
+                    + "the figure is inflated by the duplication and nothing errors. " : "")
+                + "Filter to one level before aggregating: " + raw + " IS NOT NULL for the "
+                + "finer grain, or " + raw + " IS NULL for the coarser one.");
+            w.put("column", raw);
+            w.put("rows_with_value", filled);
+            w.put("rows_null", nulls);
+            warnings.add(w);
+            return;
+        }
+    }
+
+    // ── Rollup contamination ──────────────────────────────────────────────────
+
+    /** Exact dimension values that denote a pre-aggregated total rather than a part. */
+    private static final Set<String> ROLLUP_EXACT = new HashSet<>(Arrays.asList(
+        "total", "totals", "all", "overall", "any", "united states", "u.s.", "us", "usa",
+        "national", "nation", "all sectors", "all industries", "all types", "all ages",
+        "all races", "both sexes", "all workers", "all items", "all other", "combined"));
+
+    /**
+     * Census divisions and regions. These are rollups of states, but unlike "All Sectors" the
+     * words are ordinary English — a column of time zones legitimately contains "Pacific" and
+     * "Mountain". They therefore count as rollups only when the same column also holds real
+     * state names, which is what makes the row a division sitting beside its own members.
+     */
+    private static final Set<String> CENSUS_ROLLUPS = new HashSet<>(Arrays.asList(
+        "new england", "middle atlantic", "east north central", "west north central",
+        "south atlantic", "east south central", "west south central", "mountain", "pacific",
+        "northeast", "midwest", "south", "west"));
+
+    private static final Set<String> STATE_NAMES = new HashSet<>(Arrays.asList(
+        "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
+        "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+        "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+        "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada",
+        "new hampshire", "new jersey", "new mexico", "new york", "north carolina",
+        "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania", "rhode island",
+        "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont",
+        "virginia", "washington", "west virginia", "wisconsin", "wyoming"));
+
+    private static boolean looksLikeRollup(String v) {
+        if (ROLLUP_EXACT.contains(v)) {
+            return true;
+        }
+        return v.startsWith("total ") || v.startsWith("all ") || v.endsWith(" total")
+            || v.endsWith(", total") || v.endsWith(" all");
+    }
+
+    private static boolean additiveAggregate(String sql) {
+        return sql != null && ADDITIVE_AGG.matcher(sql).find();
+    }
+
+    /**
+     * A tall table that keeps rollup rows in the same column as the parts they sum.
+     *
+     * <p>"All sectors" beside each sector, a United States row beside the states. Summing
+     * without filtering to one level double-counts, silently, and the inflated figure still
+     * looks plausible — this is the mechanism behind the ~26x overcount measured in
+     * {@code energy.eia_electricity_generation}.
+     *
+     * <p>Only labelled rollups are detected. Numeric sentinels (a sector code of 99 meaning
+     * "all") are indistinguishable from a real code without table metadata, so this warning
+     * does not guess at them; its silence is not a claim that none are present.
+     */
+    private static void rollupContamination(String sql, ArrayNode rows, List<String> columns,
+            ArrayNode warnings) {
+        if (rows == null || rows.size() < 2) {
+            return;
+        }
+        for (String raw : columns) {
+            List<String> rollups = new ArrayList<>();
+            int rollupRows = 0;
+            int otherRows = 0;
+            // Does this column hold real states? Only then does "Pacific" mean a census
+            // division rather than a time zone.
+            boolean hasStates = false;
+            for (JsonNode row : rows) {
+                JsonNode v = row.get(raw);
+                if (v != null && v.isTextual()
+                        && STATE_NAMES.contains(v.asText().trim().toLowerCase(Locale.ROOT))) {
+                    hasStates = true;
+                    break;
+                }
+            }
+            for (JsonNode row : rows) {
+                JsonNode v = row.get(raw);
+                if (v == null || v.isNull() || !v.isTextual()) {
+                    continue;
+                }
+                String val = v.asText().trim().toLowerCase(Locale.ROOT);
+                if (val.isEmpty()) {
+                    continue;
+                }
+                if (looksLikeRollup(val) || (hasStates && CENSUS_ROLLUPS.contains(val))) {
+                    rollupRows++;
+                    String label = v.asText().trim();
+                    if (!rollups.contains(label) && rollups.size() < 6) {
+                        rollups.add(label);
+                    }
+                } else {
+                    otherRows++;
+                }
+            }
+            if (rollupRows == 0 || otherRows == 0) {
+                continue;
+            }
+            boolean additive = additiveAggregate(sql);
+            ObjectNode w = warning("rollup_contamination", additive ? HIGH : CAUTION,
+                "Column " + raw + " holds pre-aggregated rollup rows in the same column as the "
+                + "parts they sum: " + String.join(", ", rollups) + " appears on " + rollupRows
+                + " row(s) alongside " + otherRows + " other value(s). "
+                + (additive
+                    ? "This result sums or counts across them, so every part is counted twice "
+                      + "— once alone and once inside its rollup — and no error is raised. "
+                    : "Any SUM or COUNT over these rows will count every part twice, once alone "
+                      + "and once inside its rollup. ")
+                + "Filter to a single level before aggregating: exclude the rollup values, or "
+                + "select only them if the total is what you want. Inspect the distinct values "
+                + "of " + raw + " first — SELECT DISTINCT " + raw + " — rather than assuming "
+                + "the column holds only leaves.");
+            w.put("column", raw);
+            ArrayNode found = MAPPER.createArrayNode();
+            for (String r : rollups) {
+                found.add(r);
+            }
+            w.set("rollup_values", found);
+            w.put("rollup_rows", rollupRows);
+            w.put("other_rows", otherRows);
+            warnings.add(w);
+            return;
+        }
+    }
+
+    // ── Mixed unit kinds ──────────────────────────────────────────────────────
+
+    /** FIPS code, full name and postal abbreviation for each non-state unit. */
+    private static final String[][] NON_STATE_UNITS = {
+        {"11", "district of columbia", "dc", "District of Columbia"},
+        {"72", "puerto rico", "pr", "Puerto Rico"},
+        {"60", "american samoa", "as", "American Samoa"},
+        {"66", "guam", "gu", "Guam"},
+        {"69", "northern mariana islands", "mp", "Northern Mariana Islands"},
+        {"78", "united states virgin islands", "vi", "U.S. Virgin Islands"},
+    };
+
+    /**
+     * Fifty states plus DC is not fifty-one states, and the difference is not pedantry.
+     *
+     * <p>DC is a city being compared against states. On density, land area and urbanisation it
+     * is an extreme outlier — roughly nine times the density of the next unit — so a ranking or
+     * a correlation can turn on it while looking like a statement about states. On many other
+     * measures it is unremarkable and excluding it would throw away a real observation. Which
+     * of those is true depends on the variable, so this warning reports the composition and
+     * leaves the decision where it belongs, with the caller.
+     *
+     * <p>The territories are a different case: they are almost never wanted in a state
+     * comparison and are usually present because {@code WHERE} said nothing rather than because
+     * anyone chose them.
+     *
+     * <p>Fires only when the result is actually a cross-unit statistic. Listing DC in a table of
+     * rows is not an error, and warning about it there would train the reader to skip the whole
+     * diagnostics block.
+     */
+    private static void mixedUnitKinds(String sql, ArrayNode rows, List<String> columns,
+            String grain, ArrayNode warnings) {
+        if (rows == null || rows.size() == 0) {
+            return;
+        }
+        boolean crossUnit = bivariateAssociation(sql) || anyStatAggregate(sql);
+        // Detect by VALUE, not by column name. A state identifier travels under many names
+        // across these schemas — state, state_fips, stusps, geo_name, name — and gating on a
+        // known list means the detector goes quiet on exactly the tables nobody thought of.
+        // "Puerto Rico" in a cell is the measurement; which header it sits under is not.
+        List<String> idCols = new ArrayList<>();
+        for (String raw : columns) {
+            String c = raw.toLowerCase(Locale.ROOT);
+            if (c.contains("state") || c.contains("geo") || c.contains("name")
+                    || c.contains("fips") || c.contains("area")) {
+                idCols.add(raw);
+            }
+        }
+        if (idCols.isEmpty()) {
+            return;
+        }
+        boolean dc = false;
+        List<String> territories = new ArrayList<>();
+        int matchedRows = 0;
+        // Remember which column actually carried the non-state value, so the suggested fix
+        // names this result's column rather than a plausible-looking guess.
+        String hitCol = null;
+        for (JsonNode row : rows) {
+            boolean rowIsNonState = false;
+            for (String col : idCols) {
+                JsonNode v = row.get(col);
+                if (v == null || v.isNull()) {
+                    continue;
+                }
+                String val = v.asText().trim().toLowerCase(Locale.ROOT);
+                for (String[] unit : NON_STATE_UNITS) {
+                    if (val.equals(unit[0]) || val.equals(unit[1]) || val.equals(unit[2])) {
+                        rowIsNonState = true;
+                        if (hitCol == null) {
+                            hitCol = col;
+                        }
+                        if ("11".equals(unit[0])) {
+                            dc = true;
+                        } else if (!territories.contains(unit[3])) {
+                            territories.add(unit[3]);
+                        }
+                    }
+                }
+            }
+            if (rowIsNonState) {
+                matchedRows++;
+            }
+        }
+        if (!dc && territories.isEmpty()) {
+            return;
+        }
+        // At county grain DC is one county-equivalent among 3,144 and is not an outlier of
+        // kind; warning there would be noise on every national county query.
+        if ("county".equals(grain) || "tract".equals(grain) || "zcta".equals(grain)) {
+            return;
+        }
+        int total = rows.size();
+        int states = total - matchedRows;
+        StringBuilder note = new StringBuilder();
+        String severity;
+        if (!territories.isEmpty()) {
+            severity = CAUTION;
+            note.append("This result mixes states with ")
+                .append(String.join(", ", territories))
+                .append(dc ? " and the District of Columbia" : "")
+                .append(". The territories are not states and are rarely wanted in a "
+                    + "state comparison — they are usually present because the WHERE clause "
+                    + "said nothing, not because anyone chose them. ");
+        } else {
+            severity = crossUnit ? CAUTION : INFO;
+            note.append("This result includes the District of Columbia alongside states. ");
+        }
+        if (dc) {
+            note.append("DC is a city measured against states: an extreme outlier on density, "
+                + "land area and urbanisation, and unremarkable on many other measures. Which "
+                + "it is here depends on the variable, so check whether it carries the result "
+                + "rather than assuming either way. ");
+        }
+        note.append("Composition: ").append(total).append(" units — ").append(states)
+            .append(" states");
+        if (dc) {
+            note.append(" + DC");
+        }
+        if (!territories.isEmpty()) {
+            note.append(" + ").append(territories.size()).append(" territor")
+                .append(territories.size() == 1 ? "y" : "ies");
+        }
+        note.append(". ");
+        if (crossUnit) {
+            note.append("Because this result is a statistic computed ACROSS those units, the "
+                + "composition is part of the answer: report n, and report the statistic with "
+                + "and without any unit that is not the same kind of thing as the rest. ");
+        }
+        String col = hitCol == null ? "state_fips" : hitCol;
+        note.append("To restrict to the 50 states, filter on ").append(col)
+            .append(": the territories are FIPS 60, 66, 69, 72 and 78, and DC is 11 ")
+            .append("(by name, exclude ").append(dc ? "'District of Columbia'" : "")
+            .append(dc && !territories.isEmpty() ? " and " : "")
+            .append(territories.isEmpty() ? "" : "'" + String.join("', '", territories) + "'")
+            .append(").");
+        ObjectNode w = warning("mixed_unit_kinds", severity, note.toString());
+        w.put("units_total", total);
+        w.put("states", states);
+        w.put("includes_dc", dc);
+        w.put("unit_column", col);
+        ArrayNode terr = MAPPER.createArrayNode();
+        for (String t : territories) {
+            terr.add(t);
+        }
+        w.set("territories", terr);
+        warnings.add(w);
+    }
+
     // ── Envelope assembly ─────────────────────────────────────────────────────
 
     private static ObjectNode warning(String type, String severity, String note) {
@@ -352,6 +863,10 @@ final class QuestionDiagnostics {
         brokenFields(rows, columns, warnings);
         rowFanout(conn, sql, rows, columns, warnings);
         vintageMisalignment(sql, warnings);
+        mixedUnitKinds(sql, rows, columns, grain, warnings);
+        geographyLevelMixing(sql, rows, columns, warnings);
+        rollupContamination(sql, rows, columns, warnings);
+        nameMatchingWithoutResolution(sql, warnings);
 
         ObjectNode out = envelope(warnings);
         ObjectNode diag = (ObjectNode) out.get("diagnostics");
