@@ -96,8 +96,13 @@ dimension_values:
   # OfficialsSchemaFactory.configureHooks() (Java) derives the Congress number from the
   # resolved startYear/endYear operand (N = (year-1789)/2 + 1) and sets these as system
   # properties at schema-load time, for every invocation path — not a shell/worker.sh step, so
-  # it can't be bypassed by calling this YAML a different way. The 117-119 default below only
-  # matters if startYear/endYear are themselves absent from the operand.
+  # it can't be bypassed by calling this YAML a different way. The 117-119 literal below is a
+  # secondary fallback that only matters if startYear/endYear are themselves absent from the
+  # operand — in practice GOVDATA_START_YEAR/END_YEAR are always set (same as every other
+  # schema), so the congress range actually in effect is whatever those years derive to, not
+  # this literal — e.g. GOVDATA_START_YEAR's own default (2010, same as every other
+  # schema) derives to congress 111, not 117; query members directly for the real
+  # congress range in production rather than reading 117 here as the default.
   congress_range: &congress_range
     type: range
     start: "${GOVDATA_START_CONGRESS:117}"
@@ -1219,10 +1224,14 @@ views:
       series 2026-08-23: the prior version hardcoded
       `congress = (SELECT MAX(congress) FROM members)` for House/Senate and
       always used the two most recent presidential cycles globally. Both
-      members (full historical congress coverage) and electoral_college_votes
-      (1976-2024) already carried everything needed for a real series — the
-      only change is computing every congress's index using the data available
-      AS OF that congress's start year, instead of collapsing to "now". The
+      members (bounded by its own congress_range, not full 1789-present — see
+      that table's own comment) and electoral_college_votes (1976-2024)
+      already carried everything needed for a real series over that bounded
+      range — the only change is computing every congress's index using the
+      data available AS OF that congress's start year, instead of collapsing
+      to "now". This view's own coverage is therefore no wider than members'
+      configured range: a congress older than members' floor produces no row
+      here either. The
       presidential component for congress N is resolved via
       congress_start_year = 1787 + 2*congress (inverse of
       OfficialsSchemaFactory.deriveCongressRange's N = (year-1789)/2 + 1),

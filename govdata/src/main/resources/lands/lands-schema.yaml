@@ -203,8 +203,11 @@ partitionedTables:
       forest, district, and year. Also carries cost_per_uom (USD per unit of measure)
       for harvest cost analysis. Source: EDW_TimberHarvest_01/MapServer/{layer}
       where layer is dispatched per year by UsfsTimberLayerResolver — layer 11
-      covers 2021+, layer 0 covers 2011-2020, layers 1-7 cover earlier eras
-      back to 1820. All layers publish the identical 71-field schema.
+      covers 2021+, layer 0 covers 2011-2020, and layers 1-7 could in principle
+      reach as far back as 1820, but this table is only ever fetched from
+      GOVDATA_START_YEAR forward (see observedCoverage below for the real floor
+      actually loaded) — the 1820 figure describes what the source's older layers
+      contain, not what's in this table. All layers publish the identical 71-field schema.
 
     dimensions:
       type:

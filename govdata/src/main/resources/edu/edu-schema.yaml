@@ -1208,9 +1208,9 @@ partitionedTables:
       wide columns (ctotalt, caiant, casiat, cbkaat, chispt, cnhpit, cwhitt, c2mort, cunknt,
       cnralt and per-sex _m/_w variants). cipcode is the full 6-digit dotted string
       (e.g. "52.0101"). Source: nces.ed.gov/ipeds/datacenter/data/C{effective_year}_A.zip.
-      Configured from 2010 but the source has a 3-year publication lag, so the latest
-      loaded vintage is about 3 years behind the current year (final revised files only;
-      provisional-only vintages are skipped).
+      Configured from 2010; the source has a multi-year publication lag (final revised
+      files only, provisional-only vintages are skipped) — see observedCoverage below
+      for the actual latest loaded vintage rather than assuming a fixed lag length.
 
     columns:
       - name: unitid

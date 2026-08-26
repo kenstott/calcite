@@ -199,8 +199,10 @@ partitionedTables:
     comment: >
       One row per granted patent (patent_type utility or plant by default; design patents
       excluded unless PATENTS_INCLUDE_DESIGN=true), with patent_date, patent_title, num_claims,
-      wipo_kind, and a withdrawn flag. Faithful recreation of g_patent.tsv, no joins, year-partitioned
-      by grant_year starting GOVDATA_START_YEAR (2010 by default) — narrower than the six full-dump
+      wipo_kind, and a withdrawn flag. Faithful recreation of g_patent.tsv, no joins,
+      year-partitioned by grant_year starting from GOVDATA_START_YEAR (nominally 2010, but the
+      configured/actual floor can drift — check observedCoverage below for the real minYear
+      rather than assuming it matches the default) — narrower than the six full-dump
       snapshot tables (patent_assignees, patent_inventors, patent_cpc_classes, patent_abstracts,
       patent_applications, patent_figures), which cover all patents back to 1976 with no year cutoff.
       Abstract, filing date, and figure counts live in those tables, joined on patent_id at query time.
@@ -1452,10 +1454,13 @@ views:
       econ.county_wages (average weekly wage, industry_code='10' all-industries
       total, own_code='0' all ownership) for the same county+year. Assignee
       location, not inventor location — a patent with foreign inventors but a
-      US assignee counts toward that assignee's county. patent_grants only
-      covers GOVDATA_START_YEAR+ (2010 by default); acs_education starts 2014
-      and county_wages starts 2020 by default, so years outside a source's
-      coverage window return null enrichment columns, not zero. The enrichment
+      US assignee counts toward that assignee's county. Each of the three joined
+      sources has its own coverage floor (patent_grants, census.acs_education,
+      econ.county_wages each start in a different year, and none of the three
+      defaults are reliable indicators of what's actually loaded) — check each
+      source's own observedCoverage block for its real minYear rather than
+      assuming a specific year here; years outside a source's actual coverage
+      window return null enrichment columns for that source, not zero. The enrichment
       joins compose pl.state_fips || pl.county_fips (2-digit + 3-digit,
       PatentsView's native decomposed format) into the standard 5-digit FIPS
       both census.acs_education and econ.county_wages key on.

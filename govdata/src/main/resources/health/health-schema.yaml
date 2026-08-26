@@ -1055,8 +1055,8 @@ partitionedTables:
       COVID-19 vaccination cumulative counts and population percentages (dose 1,
       primary series complete, booster, bivalent booster) at the US national level by
       report date and demographic_category (age group, race/ethnicity, or overall) —
-      no state or county breakdown. Warning: source data frozen at 2023-05-12; no
-      updates since.
+      no state or county breakdown. Warning: source data frozen at 2023-05-10; no
+      updates since (any sinceDate past that returns zero rows from CDC).
 
     columns:
       - name: date
@@ -1777,8 +1777,9 @@ partitionedTables:
       deaths and age-adjusted rate per 100,000, 2000 US standard population, 1999-2017)
       and weekly provisional data (source_type=weekly) from two Socrata vintages of the
       same "AH Weekly Death Counts by State and Select Causes" series: 3yf8-kanr
-      (2018-2019, no COVID columns) and muzy-jte6 (2020-2023, adds COVID-19 columns).
-      Weekly rows surface the all-cause weekly total for 2018-2019 and the COVID-19
+      (no COVID columns; loaded here from 2014 through 2019, not just 2018-2019 as its
+      nickname might suggest) and muzy-jte6 (2020-2023, adds COVID-19 columns). Weekly
+      rows surface the all-cause weekly total for the 3yf8-kanr years and the COVID-19
       underlying-cause count for 2020-2023; source_type distinguishes annual from
       weekly, and age_adjusted_rate is populated for annual rows only.
     columns:

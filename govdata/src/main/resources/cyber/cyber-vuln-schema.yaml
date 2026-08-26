@@ -162,8 +162,10 @@ partitionedTables:
 
     comment: >
       NVD CVE 2.0 canonical vulnerability records, one row per CVE, partitioned
-      by publication year and quarter (coverage from 1999 to present, ~347k CVEs
-      total). Stores CVSS v2 and v3.1 base scores with their vector strings,
+      by publication year and quarter. NVD's own catalog spans 1999-present
+      (~347k CVEs total), but this table's own observedCoverage below is the
+      source of truth for what's actually loaded here — check it rather than
+      assuming the two match. Stores CVSS v2 and v3.1 base scores with their vector strings,
       plus a CVSS v4.0 base score (no v4.0 vector column), vuln_status, and
       pipe-delimited CWE IDs. The canonical CVE registry — see kev_catalog for
       the smaller subset known to be actively exploited, and vulnerability_cwes
@@ -862,8 +864,10 @@ partitionedTables:
 
     comment: >
       CISA cybersecurity advisory metadata, one row per advisory (e.g.,
-      AA24-001A, ICSA-24-001-01), partitioned by year from 2017 to present and
-      refreshed weekly. Carries title, published_date, severity label,
+      AA24-001A, ICSA-24-001-01), partitioned by year. CISA's own feed goes back
+      to 2017, but this table's own observedCoverage below is the source of
+      truth for what's actually loaded here — check it rather than assuming the
+      two match. Refreshed weekly. Carries title, published_date, severity label,
       pipe-delimited CVE IDs mentioned in the advisory, and a short
       affected_systems description. Sourced from CISA's official CSAF 2.0 JSON
       feed (cisagov/CSAF GitHub repo).

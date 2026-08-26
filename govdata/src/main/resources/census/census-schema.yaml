@@ -2982,7 +2982,10 @@ partitionedTables:
       pep/population dataset (which also includes a population density column for those
       years); data years >= 2021 come from the shared latest pep/charv vintage (population
       only). The vintage column identifies which of the two source datasets produced each
-      row, so the two never double-claim a data year.
+      row, so the two never double-claim a data year. KNOWN GAP: year 2020 itself is absent
+      from production despite being within the pep/population vintage's range — see
+      observedCoverage below (contiguous: false) before assuming a query over 2019-2021 has
+      every year.
 
     dimensions:
       type:

@@ -1957,10 +1957,14 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       NTSB aviation accident & incident database — one row per aircraft involved
-      in an event (all events 1982-present), with injury severity and
-      fatal/serious/minor injury counts, aircraft damage level, FAR operating
-      part, phase-of-flight code, probable-cause narrative, and event lat/lon.
-      The download (avall.zip, ~95MB) is a single Microsoft Access database
+      in an event, with injury severity and fatal/serious/minor injury counts,
+      aircraft damage level, FAR operating part, phase-of-flight code,
+      probable-cause narrative, and event lat/lon. NTSB's own avall.zip is
+      documented as spanning 1982-present, but the actual MIN(event_year) in this
+      table should be checked directly (`SELECT MIN(event_year), MAX(event_year),
+      COUNT(*) FROM ...` — there is no observedCoverage block here since this
+      table has no year= partition to anchor one) rather than assumed from the
+      source's nominal range. The download (avall.zip, ~95MB) is a single Microsoft Access database
       (avall.mdb, ~553MB) read in-JVM with Jackcess by NtsbAviationTransformer:
       the `aircraft` table (grain ev_id + Aircraft_Key) is streamed and joined
       to `events` (ev_id) and the `narratives.narr_cause` probable-cause text.

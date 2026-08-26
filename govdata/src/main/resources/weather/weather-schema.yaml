@@ -971,7 +971,9 @@ partitionedTables:
     partitions: *drought_partitions
     comment: >
       National Drought Monitor weekly county-level drought severity from the USDM API
-      at droughtmonitor.unl.edu. Covers all US counties since 2000. Includes D0-D4
+      at droughtmonitor.unl.edu, which itself has published data since 2000 — but this
+      table's own observedCoverage below is the source of truth for what's actually
+      loaded here; check it rather than assuming a 2000 floor. Includes D0-D4
       drought category percentages (exclusive area fractions) and the Drought Severity
       and Coverage Index (DSCI, range 0-500). week_date is the Tuesday release date.
       Cross-references geo.counties via county_fips and geo.states via state_abbr.
@@ -1094,8 +1096,11 @@ partitionedTables:
     comment: >
       NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
       level. Daily smoke coverage by density category (smoke_coverage_pct,
-      heavy_smoke_pct, medium_smoke_pct, light_smoke_pct). Available
-      2005-present. Downloads daily smoke polygon shapefiles from NESDIS
+      heavy_smoke_pct, medium_smoke_pct, light_smoke_pct). NESDIS's own polygon
+      archive is available from 2005, but this table's own observedCoverage below
+      is the source of truth for what's actually loaded here — check it rather than
+      assuming a 2005 floor or full year-to-year continuity (there is currently a
+      2014 gap). Downloads daily smoke polygon shapefiles from NESDIS
       (https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/),
       performs a JTS spatial intersection against TIGER/Line county boundaries, and
       emits per-county coverage percentages. One batch per year+month; each batch

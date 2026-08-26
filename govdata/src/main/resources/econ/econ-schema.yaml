@@ -3021,9 +3021,11 @@ partitionedTables:
       hour of all persons, chained index (2017=100), seasonally adjusted, quarterly — for 6
       major-sector series: business, nonfarm business, manufacturing, manufacturing durable
       goods, manufacturing nondurable goods, and nonfinancial corporations. National grain only;
-      BLS does not publish this series by state. Verified live against api.bls.gov: coverage
-      begins 1947 for business/nonfarm business/nonfinancial corporations and 1987 for
-      manufacturing and its durable/nondurable subsectors (not a uniform 1976 start). Only the
+      BLS does not publish this series by state. api.bls.gov itself carries business/nonfarm
+      business/nonfinancial corporations back to 1947 and manufacturing (plus its durable/
+      nondurable subsectors) back to 1987 (not a uniform start) — but this table's own
+      observedCoverage below is the source of truth for what's actually loaded here, uniformly,
+      across all 6 series; check it rather than assuming it matches BLS's full range. Only the
       productivity (output-per-hour) index is loaded — BLS's companion unit-labor-cost and
       compensation series from the same PR survey (measure codes 06, 11, etc.) are not included.
       Long-format: one row per (series, period) — ALWAYS filter on series.
@@ -4253,8 +4255,11 @@ partitionedTables:
     comment: >
       State-level personal income and its components — total personal income, population, per
       capita income, wages and salaries, transfer receipts, and more — from all 12 active BEA
-      SAINC tables, annual, back to 1929, for all 50 states + DC. For county/MSA-level income
-      (and all other BEA regional topics: GDP, consumption, wages by industry), see regional_income.
+      SAINC tables, for all 50 states + DC. BEA publishes this series annually back to 1929
+      through the present; this table's own observedCoverage below is the source of truth for
+      what's actually loaded — check it rather than assuming it matches BEA's full range. For
+      county/MSA-level income (and all other BEA regional topics: GDP, consumption, wages by
+      industry), see regional_income.
 
     # Simplified dimensions - no per-API-call iteration needed
     dimensions:

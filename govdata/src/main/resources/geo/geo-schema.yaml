@@ -711,9 +711,12 @@ partitionedTables:
       checkedAt: "2026-08-26T11:20:58Z"
     comment: >
       ZIP Code Tabulation Area boundaries (ZCTA code, land/water area, WKT geometry)
-      from Census TIGER/Line shapefiles, one row per ZCTA per TIGER vintage year
-      (2010-present, no 2011 vintage published). Vintage-specific — codes and
-      boundaries shift between vintages, so this is not a stable FK target; see
+      from Census TIGER/Line shapefiles, one row per ZCTA per TIGER vintage year.
+      Currently only 2020-present is loaded in production — unlike the other TIGER
+      boundary tables in this schema, which go back to 2010 — see observedCoverage
+      below for the real range rather than assuming a 2010 floor here too.
+      Vintage-specific — codes and boundaries shift between vintages, so this is
+      not a stable FK target; see
       geo.zcta_ref for the static, non-vintaged ZCTA dimension, and
       geo.gazetteer_zctas for population, housing units, and centroid coordinates.
 
@@ -934,8 +937,9 @@ partitionedTables:
     comment: >
       Core Based Statistical Area boundaries (CBSA code, name, Metropolitan/Micropolitan
       designation via metro_micro, land/water area, WKT geometry) from Census TIGER/Line
-      shapefiles, one row per CBSA per TIGER vintage year (2010-present), national file
-      (not fanned out by state). Carries no member-county list — see
+      shapefiles, one row per CBSA per TIGER vintage year (2010-present, but not every
+      year in between — see observedCoverage below, which currently has a 2022 gap),
+      national file (not fanned out by state). Carries no member-county list — see
       geo.zip_cbsa_crosswalk to relate ZIP codes to CBSAs.
 
     columns:
@@ -1009,9 +1013,10 @@ partitionedTables:
     comment: >
       U.S. Congressional district boundaries for the House of Representatives (district
       code, parent state FIPS, district name, land/water area, WKT geometry), one row
-      per district, national file per vintage. Covers only the 2023-vintage TIGER
-      shapefile forward — unlike other TIGER boundary tables in this schema (which go
-      back to 2010), congressional_districts starts at 2023.
+      per district, national file per vintage. Unlike other TIGER boundary tables in
+      this schema (which go back to 2010), congressional_districts only covers the
+      current-cycle redistricting vintages forward — check observedCoverage below for
+      the real floor rather than assuming a specific starting vintage year.
 
     columns:
       - name: cd_fips
@@ -1433,9 +1438,12 @@ partitionedTables:
       rowCount: 5288
       checkedAt: "2026-08-26T11:21:00Z"
     comment: >
-      Census Bureau urban area boundaries. For 2020 Census, minimum threshold is 5,000
-      people or 2,000 housing units. The distinction between Urbanized Areas and Urban
-      Clusters was eliminated - all qualifying areas are now simply 'urban areas'.
+      Census Bureau urban area boundaries, one row per urban area per TIGER vintage
+      year. The 2020-Census-cycle definition (minimum threshold 5,000 people or 2,000
+      housing units; the Urbanized-Area/Urban-Cluster distinction was eliminated, all
+      qualifying areas are now simply 'urban areas') is the current methodology, but
+      "2020" here describes the definition in effect, not the vintage year loaded —
+      see observedCoverage below for which TIGER vintage years are actually present.
 
     columns:
       - name: uace
@@ -1629,8 +1637,11 @@ partitionedTables:
       checkedAt: "2026-08-26T11:21:02Z"
     comment: >
       Voting district boundaries (precincts, wards, election districts) as reported
-      by states for redistricting. Available for 2012 (2010 census vintage) and
-      2020 (2020 census vintage). Attributes are normalized to canonical form.
+      by states for redistricting. TigerDataProvider handles two distinct URL
+      patterns: 2012 (2010 census vintage boundaries) and 2020-forward (2020 census
+      vintage boundaries, same URL scheme continuing through later TIGER releases) —
+      see observedCoverage below for which years are actually loaded, since it's more
+      than just those two. Attributes are normalized to canonical form.
 
     columns:
       - name: vtd_code
@@ -2441,7 +2452,10 @@ partitionedTables:
     comment: >
       Census Bureau Gazetteer file for counties: county FIPS code, name, land/water
       area in square miles, and centroid latitude/longitude, one row per county per
-      TIGER vintage year (2010-present). Centroid and area only, no boundary polygon —
+      TIGER vintage year — currently starting 2012 in production, not 2010 like the
+      boundary tables in this schema (geo.counties etc.); see observedCoverage below
+      for the real floor rather than assuming the two match. Centroid and area only,
+      no boundary polygon —
       see geo.counties for full WKT boundary geometry.
 
     columns:
@@ -2522,7 +2536,9 @@ partitionedTables:
       Census Bureau Gazetteer file for incorporated places and CDPs: place FIPS code,
       name, place type, land/water area in square miles, centroid latitude/longitude,
       population estimate, and housing unit count, one row per place per TIGER vintage
-      year (2010-present). Unlike geo.places (boundary polygons only, no population),
+      year — currently starting 2012 in production, not 2010 like the boundary tables
+      in this schema (geo.places etc.); see observedCoverage below for the real floor
+      rather than assuming the two match. Unlike geo.places (boundary polygons only, no population),
       this table carries population and housing_units but no WKT geometry.
 
     columns:
@@ -2617,7 +2633,9 @@ partitionedTables:
     comment: >
       Census Bureau Gazetteer file for ZIP Code Tabulation Areas: ZCTA code, land/water
       area in square miles, centroid latitude/longitude, population estimate, and
-      housing unit count, one row per ZCTA per TIGER vintage year (2010-present).
+      housing unit count, one row per ZCTA per TIGER vintage year — currently starting
+      2012 in production; see observedCoverage below for the real floor rather than
+      assuming it matches the other TIGER boundary tables' 2010 start.
       Unlike geo.zctas (boundary polygons only, no population) or geo.zcta_ref (static,
       non-vintaged reference), this table carries vintage-specific population and
       housing_units.
