@@ -4818,6 +4818,20 @@ partitionedTables:
       api.census.gov and used different variable codes, PES3/PES4, for the
       same two questions, so 1994 is not in this table).
 
+      CAUTION for turnout-gap or turnout-rate comparisons across states: this
+      table is SELF-REPORTED turnout among the citizen voting-age population,
+      known to systematically OVER-REPORT relative to actual counted votes
+      (social-desirability bias) — it is NOT voting-eligible population (VEP),
+      the standard denominator the turnout literature actually uses (Cantoni
+      & Pons; McDonald/US Elections Project). For any question comparing
+      turnout RATES between groups of states (e.g. by a policy like voter-ID
+      requirements), prefer pairing real certified vote totals (e.g.
+      officials.presidential_election_results or an equivalent FEC/certified-
+      results table) with a VEP-style population denominator instead of this
+      table's self-reported rate — this table alone will overstate turnout by
+      roughly 10 points and can misstate a gap's size even when the direction
+      is right.
+
     dimensions:
       type:
         - cps

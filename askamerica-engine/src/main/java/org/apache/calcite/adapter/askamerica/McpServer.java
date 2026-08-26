@@ -918,7 +918,7 @@ public class McpServer {
             + "windows of the tables involved. Read it before answering: a 'high' warning "
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
             + "health, only that no listed defect was detected."
-            + QuestionGuidance.exemplarBlock(),
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
         ObjectNode critiqueProps = MAPPER.createObjectNode();
@@ -935,8 +935,29 @@ public class McpServer {
             + "before an expensive aggregate, or when a result looks surprising and you want "
             + "to know whether the question or the data is at fault. It reports defects it can "
             + "see; silence from it is not approval."
-            + QuestionGuidance.exemplarBlock(),
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(critiqueProps, new String[]{"sql"})));
+
+        // Eight small, self-contained tools rather than one large one or a return to the
+        // (silently unreachable) initialize.instructions banner — see QuestionGuidance.
+        // USAGE_GUIDE's class doc for the two client bugs this design works around.
+        //
+        // The GUIDE TEXT ITSELF is the tool description below, not a teaser that requires
+        // calling the tool to get. A client resends every tool's description on every
+        // request whether or not the tool is ever called — that resend is the entire
+        // mechanism this design relies on to reach the model reliably, so the payload has
+        // to live there, not behind an optional invocation. Calling the tool (handled in
+        // handleToolsCall) returns the identical text, which is only a convenience for a
+        // host that wants to re-fetch it mid-conversation, not how it primarily reaches
+        // context. Each description is kept well under the ~2048-char client truncation
+        // ceiling.
+        for (int gi = 0; gi < QuestionGuidance.USAGE_GUIDE.size(); gi++) {
+            int sectionNum = gi + 1;
+            tools.add(
+                tool("get_usage_guide_section_" + sectionNum,
+                QuestionGuidance.USAGE_GUIDE.get(gi),
+                schema(MAPPER.createObjectNode(), new String[]{})));
+        }
 
         ObjectNode resolveProps = MAPPER.createObjectNode();
         resolveProps.set("term", prop("string",
@@ -1805,7 +1826,18 @@ public class McpServer {
             + "For an AskAmerica-table citation, also include \"sql\": the exact query() call "
             + "that produced the cited figure — it renders as a collapsed 'Show SQL' toggle "
             + "the reader can expand, so a claim traced to this connector is independently "
-            + "checkable, not just named. Omit sql for web sources.");
+            + "checkable, not just named. For a figure produced by any OTHER AskAmerica tool "
+            + "call (adjust_inflation, per_capita, hypothesis_test, ols_regression, etc. — "
+            + "anything that isn't query()), do NOT cite a generic external URL for it even if "
+            + "the tool's subject has one (e.g. don't cite https://www.bls.gov/cpi/ for a "
+            + "number adjust_inflation computed) — a landing page can't be checked against the "
+            + "figure. Instead include \"tool\": the tool name, and \"params\": the exact "
+            + "arguments you called it with, as [[\"param_name\", value], ...], e.g. "
+            + "{\"label\":\"BLS CPI-U deflator, 2014→2024\", \"tool\":\"adjust_inflation\", "
+            + "\"params\":[[\"from_year\",2014],[\"to_year\",2024],[\"series\",\"CPI-U\"]]} — "
+            + "this renders the same way sql does, a collapsed toggle showing exactly what was "
+            + "asked of the connector, so the figure is independently re-derivable. Omit both "
+            + "sql and tool/params for genuine web sources.");
         pubProps.set("sources", sourcesProp);
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
@@ -2156,6 +2188,19 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=list_schemas");
                     text = listSchemas();
                     break;
+                case "get_usage_guide_section_1":
+                case "get_usage_guide_section_2":
+                case "get_usage_guide_section_3":
+                case "get_usage_guide_section_4":
+                case "get_usage_guide_section_5":
+                case "get_usage_guide_section_6":
+                case "get_usage_guide_section_7": {
+                    int sectionNum = Integer.parseInt(
+                        name.substring("get_usage_guide_section_".length()));
+                    log.println("[askamerica-mcp] tool=" + name);
+                    text = QuestionGuidance.USAGE_GUIDE.get(sectionNum - 1);
+                    break;
+                }
                 case "search_catalog": {
                     String q = args.path("query").asText();
                     int lim = args.has("limit")
@@ -2724,10 +2769,26 @@ public class McpServer {
                     }
                     java.util.List<ReportPage.Source> srcs = new java.util.ArrayList<>();
                     for (JsonNode src : args.path("sources")) {
+                        String toolName = src.has("tool") ? src.get("tool").asText(null) : null;
+                        String toolParams = null;
+                        if (toolName != null && src.has("params") && src.get("params").isArray()) {
+                            StringBuilder pb = new StringBuilder();
+                            for (JsonNode pair : src.get("params")) {
+                                if (!pair.isArray() || pair.size() < 2) {
+                                    continue;
+                                }
+                                if (pb.length() > 0) {
+                                    pb.append(", ");
+                                }
+                                pb.append(pair.get(0).asText()).append('=').append(pair.get(1));
+                            }
+                            toolParams = pb.toString();
+                        }
                         srcs.add(new ReportPage.Source(src.path("label").asText(null),
                             src.path("url").asText(null),
                             src.has("note") ? src.get("note").asText(null) : null,
-                            src.has("sql") ? src.get("sql").asText(null) : null));
+                            src.has("sql") ? src.get("sql").asText(null) : null,
+                            toolName, toolParams));
                     }
                     String boardSvg = null;
                     String boardSvgUrl = null;

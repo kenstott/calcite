@@ -74,16 +74,25 @@ final class ReportPage {
         final String url;
         final String note;
         final String sql;
+        final String tool;
+        final String toolParams;
 
         Source(String label, String url, String note) {
             this(label, url, note, null);
         }
 
         Source(String label, String url, String note, String sql) {
+            this(label, url, note, sql, null, null);
+        }
+
+        Source(String label, String url, String note, String sql, String tool,
+                String toolParams) {
             this.label = label;
             this.url = url;
             this.note = note;
             this.sql = sql;
+            this.tool = tool;
+            this.toolParams = toolParams;
         }
     }
 
@@ -222,6 +231,14 @@ final class ReportPage {
                     sb.append("<details class=\"sqltoggle\"><summary>Show SQL</summary>")
                         .append("<pre><code>").append(esc(src.sql)).append("</code></pre>")
                         .append("</details>");
+                }
+                if (src.tool != null && !src.tool.isEmpty()) {
+                    sb.append("<details class=\"sqltoggle\"><summary>Show tool call</summary>")
+                        .append("<pre><code>").append(esc(src.tool));
+                    if (src.toolParams != null && !src.toolParams.isEmpty()) {
+                        sb.append('(').append(esc(src.toolParams)).append(')');
+                    }
+                    sb.append("</code></pre></details>");
                 }
                 sb.append("</li>\n");
             }
