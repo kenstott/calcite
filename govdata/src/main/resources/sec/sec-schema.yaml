@@ -483,8 +483,25 @@ partitionedTables:
       us-gaap:Revenues) — variant concepts for the same metric are NOT consolidated here.
       Carries both the original text value and a derived value_numeric (value_numeric_method
       records direct vs. heuristic conversion), plus unit_ref_normalized for the canonical unit.
-      For canonical metric names, dollar-scaled values, and consolidated-vs-segment filtering,
-      use the financial_facts view built on top of this table.
+      For canonical metric names, dollar-scaled values, and consolidated-vs-segment filtering
+      on the ~40 common income-statement/balance-sheet concepts it recognizes (revenue, net
+      income, assets, liabilities, EPS, etc. — see financial_facts' own comment for the exact
+      list), use the financial_facts view built on top of this table. THIS TABLE, NOT
+      financial_facts, IS WHERE EVERYTHING ELSE LIVES: any concept outside that ~40-item list —
+      including every filer-specific/custom-taxonomy concept (a bank's loan-portfolio
+      breakdown, an industry-specific disclosure, anything namespaced to the filer's own ticker
+      prefix rather than us-gaap:) — is only ever queryable here, by its raw `concept` string,
+      never through financial_facts (whose concept_aliases mapping is a fixed literal list and
+      silently omits everything not on it — an empty financial_facts result for a concept means
+      "not on the alias list", not "not disclosed"; check this table before concluding a metric
+      is absent). This table is also the one to filter by cik/accession_number directly for a
+      single-filer or single-filing lookup — filtering financial_facts by cik has been observed
+      to be dramatically slower (a hang, in one case) than the identical filter run here, most
+      likely because the predicate does not push through financial_facts' LEFT JOIN to
+      filing_contexts before that join executes. For a sub-category breakdown of a concept (loan
+      class, geography, product line, business segment) rather than one consolidated total, join
+      this table's context_ref to filing_contexts.context_id (same cik + accession_number) and
+      read filing_contexts.segment for the dimension — see that column's comment.
 
     columns:
       - *cik_column
@@ -615,7 +632,20 @@ partitionedTables:
       - name: segment
         type: string
         nullable: true
-        comment: Segment dimension information (XML fragment)
+        comment: >
+          NULL for a consolidated (company-wide) fact; non-NULL for a fact broken out by a
+          sub-category. THIS IS THE JOIN PATH TO DIMENSIONAL BREAKDOWNS — loan class,
+          business segment, geography, product line. Format is a semicolon-joined list of
+          XBRL "Axis=Member" pairs, e.g.
+          "us-gaap:FinancingReceivableRecordedInvestmentByClassOfFinancingReceivableAxis=
+          fbc:CommercialRealEstateLoansMember; us-gaap:FinancingReceivablePortfolioSegmentAxis=
+          fbc:MortgageLoansHeldForInvestmentMember" — the Member after each '=' names the actual
+          sub-category and is namespaced to the FILER'S OWN taxonomy prefix (here 'fbc:'), not a
+          fixed vocabulary, so search it with ILIKE on the category name (e.g. '%CommercialRealEstate%',
+          '%Office%', '%Multifamily%') rather than an exact match. To pull the dollar value for a
+          sub-category: find its context_id here (filtering segment + cik + accession_number to
+          one filing keeps this cheap), then join financial_line_items.context_ref = context_id
+          (same cik + accession_number) and read value_numeric there for the concept you want.
       - name: scenario
         type: string
         nullable: true
@@ -1733,6 +1763,21 @@ views:
       context_refs for a (cik, canonical_name, period) multiplies the consolidated total
       by however many dimensional breakdowns the filer disclosed. Filter
       is_consolidated_total = TRUE to get the single company-wide figure per concept/period.
+      SCOPE WARNING: canonical_name only covers the ~40 concepts listed in this view's own
+      concept_aliases mapping below (revenue, net income, assets, liabilities, EPS and similar
+      common income-statement/balance-sheet lines). It does NOT and structurally CANNOT cover
+      filer-specific or industry-specific concepts (e.g. a bank's loan-portfolio breakdown by
+      class) — those rows are simply excluded by this view's inner JOIN, not filtered out by any
+      WHERE clause, so an empty or missing result here means "not one of the ~40 aliased
+      concepts", not "not disclosed". Query financial_line_items directly by its raw `concept`
+      string for anything outside that list (see that table's own comment).
+      PERFORMANCE WARNING: filtering this view by cik/accession_number has been observed to be
+      dramatically slower than the identical filter run directly against financial_line_items —
+      in one case a hang lasting 45+ minutes at 900%+ CPU versus an instant response from the
+      base table with the same predicate — most likely because the filter does not push through
+      this view's LEFT JOIN to filing_contexts before that join executes. For a single-filer or
+      single-filing lookup, prefer querying financial_line_items directly (optionally scoped to
+      one accession_number) over filtering this view.
     sql: >
       SELECT
         li.cik,

@@ -218,6 +218,21 @@ final class DashboardLayout {
     private static final int CAPTION_LEADING = 13;
     private static final int CAPTION_H = CAPTION_LINES * CAPTION_LEADING + 6;
     /** A stat tile holds a label, a number and a delta — three lines, not a chart. */
+    /**
+     * Floor on a chart row, set from what the chrome actually costs rather than picked round.
+     *
+     * <p>A category chart spends roughly 50px above the plot (title plus annotation band) and,
+     * when the x labels rotate — which they do for state names — up to 96px below for the
+     * labels, 22 for the axis title, plus legend and footnote bands. That is over 180px of
+     * fixed furniture. The previous floor of 180 therefore left a plot area at or below zero
+     * once a two-line caption took its 32px, which is why y-axis tick labels had nowhere to
+     * sit: there was no plot to hang them beside.
+     *
+     * <p>300 leaves roughly 120px of actual plot after the worst-case chrome, which is enough
+     * for four or five readable gridline labels.
+     */
+    private static final int MIN_CHART_ROW = 300;
+
     private static final int STAT_ROW_H = 108;
 
     /** One cell of the dashboard: either a laid-out chart or a stat tile. */
@@ -642,11 +657,22 @@ final class DashboardLayout {
             }
         }
         double slack = height - headerH - footH - GUTTER * (rowList.size() - 1) - fixed;
-        double chartH = flexible == 0 ? 0 : Math.max(180, slack / flexible);
+        double chartH = flexible == 0 ? 0 : Math.max(MIN_CHART_ROW, slack / flexible);
         for (int i = 0; i < rowH.length; i++) {
             if (rowH[i] == 0) {
                 rowH[i] = chartH;
             }
+        }
+        // The floor above can demand more than `height` allows. Grow the canvas rather than
+        // letting rows sum past it: the previous behaviour placed panels outside the viewBox,
+        // where they are simply not drawn, and a dashboard that silently loses its last row is
+        // worse than a taller one.
+        double needed = headerH + footH + GUTTER * (rowList.size() - 1);
+        for (double rh : rowH) {
+            needed += rh;
+        }
+        if (needed > height) {
+            height = (int) Math.ceil(needed);
         }
 
         // Panels are laid out at their placed pixel size rather than a fixed nominal size, so
@@ -849,8 +875,13 @@ final class DashboardLayout {
         }
         int statRows = (int) Math.ceil(statUnits / (double) cols);
         int chartRows = (int) Math.ceil(chartUnits / (double) cols);
+        // Chart rows are budgeted at the same floor compose() enforces. They disagreed before:
+        // this returned 320 a row while compose() would settle for 180, so a board sized here
+        // and laid out there could differ by 140px a row — and the 2000 clamp then bit at a
+        // different row count than the caller expected. compose() still grows the canvas if a
+        // row needs more, so this is a starting size, not a cap on content.
         return new int[]{Math.min(2000, 420 * cols + 40),
-            Math.min(2000, 130 + statRows * (STAT_ROW_H + GUTTER) + chartRows * 320)};
+            130 + statRows * (STAT_ROW_H + GUTTER) + chartRows * (MIN_CHART_ROW + GUTTER)};
     }
 
     static String fmt(double v) {

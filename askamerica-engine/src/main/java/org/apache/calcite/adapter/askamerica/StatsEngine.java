@@ -18,11 +18,13 @@ import org.apache.commons.math3.distribution.FDistribution;
 import org.apache.commons.math3.distribution.TDistribution;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
 import org.apache.commons.math3.stat.inference.ChiSquareTest;
 import org.apache.commons.math3.stat.inference.KolmogorovSmirnovTest;
 import org.apache.commons.math3.stat.inference.OneWayAnova;
 import org.apache.commons.math3.stat.inference.TTest;
 import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression;
+import org.apache.commons.math3.stat.regression.SimpleRegression;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -1689,6 +1691,534 @@ final class StatsEngine {
                 + "flip, no crossing of p=0.05, every group droppable, all |influence| < 1) "
                 + "— it is not a general claim that the specification is correct.");
             return out;
+        }
+    }
+
+    // ─── Correlation, decomposition, and scenario tools ─────────────────────────
+
+    /** Pairwise Pearson correlation matrix plus each column's variance inflation factor (VIF)
+     *  — how much of that column's variance is explained by the OTHER columns via OLS. VIF
+     *  answers a question the correlation matrix alone can't: a variable can be weakly
+     *  correlated with every other variable individually and still be almost entirely
+     *  redundant with the GROUP of them together. VIF > 10 is the conventional flag for
+     *  problematic multicollinearity (some texts use 5); {@link Double#POSITIVE_INFINITY}
+     *  means a column is an exact linear combination of the others. */
+    static CorrelationMatrixResult correlationMatrix(double[][] data, String[] names) {
+        int n = data.length;
+        int k = names.length;
+        if (k < 2) {
+            throw new IllegalArgumentException("correlation_matrix needs at least 2 columns");
+        }
+        if (n < k + 2) {
+            throw new IllegalArgumentException("only " + n + " complete observations for "
+                + k + " columns — need at least " + (k + 2) + " for a stable VIF");
+        }
+        PearsonsCorrelation pc = new PearsonsCorrelation(data);
+        double[][] r = pc.getCorrelationMatrix().getData();
+        double[][] pValues;
+        try {
+            pValues = pc.getCorrelationPValues().getData();
+        } catch (RuntimeException e) {
+            // The p-value's own t-distribution needs n > 2; the correlations themselves are
+            // still valid without it.
+            pValues = null;
+        }
+        double[] vif = new double[k];
+        for (int j = 0; j < k; j++) {
+            double[] y = new double[n];
+            double[][] x = new double[n][k - 1];
+            for (int row = 0; row < n; row++) {
+                y[row] = data[row][j];
+                int c = 0;
+                for (int col = 0; col < k; col++) {
+                    if (col != j) {
+                        x[row][c++] = data[row][col];
+                    }
+                }
+            }
+            OLSMultipleLinearRegression reg = new OLSMultipleLinearRegression();
+            reg.newSampleData(y, x);
+            double r2 = reg.calculateRSquared();
+            vif[j] = r2 >= 1.0 ? Double.POSITIVE_INFINITY : 1.0 / (1.0 - r2);
+        }
+        return new CorrelationMatrixResult(names, r, pValues, vif, n);
+    }
+
+    static final class CorrelationMatrixResult {
+        final String[] names;
+        final double[][] r;
+        final double[][] pValues; // nullable — see correlationMatrix()
+        final double[] vif;
+        final int n;
+
+        CorrelationMatrixResult(String[] names, double[][] r, double[][] pValues, double[] vif,
+                int n) {
+            this.names = names;
+            this.r = r;
+            this.pValues = pValues;
+            this.vif = vif;
+            this.n = n;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("n", n);
+            ArrayNode pairs = mapper.createArrayNode();
+            for (int i = 0; i < names.length; i++) {
+                for (int j = i + 1; j < names.length; j++) {
+                    ObjectNode p = mapper.createObjectNode();
+                    p.put("var_a", names[i]);
+                    p.put("var_b", names[j]);
+                    p.put("correlation", r[i][j]);
+                    if (pValues != null) {
+                        p.put("p_value", pValues[i][j]);
+                    }
+                    pairs.add(p);
+                }
+            }
+            out.set("pairwise_correlations", pairs);
+            ArrayNode vifArr = mapper.createArrayNode();
+            double maxVif = 0;
+            String worstVar = null;
+            for (int i = 0; i < names.length; i++) {
+                ObjectNode v = mapper.createObjectNode();
+                v.put("variable", names[i]);
+                v.put("vif", vif[i]);
+                vifArr.add(v);
+                if (vif[i] > maxVif) {
+                    maxVif = vif[i];
+                    worstVar = names[i];
+                }
+            }
+            out.set("variance_inflation_factors", vifArr);
+            if (worstVar != null) {
+                out.put("most_collinear_variable", worstVar);
+                out.put("max_vif", maxVif);
+                out.put("multicollinearity_flag", maxVif > 10
+                    ? "severe (VIF > 10) — treating these as independent evidence is not "
+                        + "justified; consider dropping one or combining them"
+                    : maxVif > 5 ? "moderate (VIF > 5) — worth noting" : "none");
+            }
+            return out;
+        }
+    }
+
+    /** Bins a continuous predictor into equal-count quantile groups and tests whether the mean
+     *  outcome trends monotonically across bins — the check a single linear correlation can't
+     *  make: a relationship can be non-monotonic (a threshold, a U-shape) and still show a
+     *  middling linear r, or be genuinely monotonic but nonlinear and understate one. Trend
+     *  significance comes from a simple regression of bin mean on bin rank (1..bins), the same
+     *  construction Cochran-Armitage / Cuzick-style trend tests use — it tests the BIN-LEVEL
+     *  trend, not a re-run of the underlying observation-level relationship. */
+    static QuantileBinningResult quantileBinningTest(double[] outcome, double[] predictor,
+            int bins) {
+        int n = outcome.length;
+        if (n != predictor.length) {
+            throw new IllegalArgumentException("outcome and predictor must be the same length");
+        }
+        if (bins < 3) {
+            throw new IllegalArgumentException("bins must be at least 3 to test a trend");
+        }
+        if (n < bins * 2) {
+            throw new IllegalArgumentException("only " + n + " observations for " + bins
+                + " bins — need at least " + (bins * 2) + " (2 per bin) for a stable bin mean");
+        }
+        Integer[] order = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            order[i] = i;
+        }
+        Arrays.sort(order, (a, b) -> Double.compare(predictor[a], predictor[b]));
+        List<BinStat> binStats = new ArrayList<>();
+        SimpleRegression trend = new SimpleRegression();
+        for (int b = 0; b < bins; b++) {
+            int lo = (int) Math.floor((double) b * n / bins);
+            int hi = (int) Math.floor((double) (b + 1) * n / bins);
+            double sumY = 0;
+            double sumX = 0;
+            double minX = Double.POSITIVE_INFINITY;
+            double maxX = Double.NEGATIVE_INFINITY;
+            for (int i = lo; i < hi; i++) {
+                int idx = order[i];
+                sumY += outcome[idx];
+                sumX += predictor[idx];
+                minX = Math.min(minX, predictor[idx]);
+                maxX = Math.max(maxX, predictor[idx]);
+            }
+            int count = hi - lo;
+            double meanY = sumY / count;
+            double meanX = sumX / count;
+            binStats.add(new BinStat(b + 1, count, minX, maxX, meanX, meanY));
+            trend.addData(b + 1, meanY);
+        }
+        double slope = trend.getSlope();
+        double pValue;
+        try {
+            pValue = trend.getSignificance();
+        } catch (RuntimeException e) {
+            pValue = Double.NaN;
+        }
+        boolean monotonicIncreasing = true;
+        boolean monotonicDecreasing = true;
+        for (int i = 1; i < binStats.size(); i++) {
+            if (binStats.get(i).meanOutcome < binStats.get(i - 1).meanOutcome) {
+                monotonicIncreasing = false;
+            }
+            if (binStats.get(i).meanOutcome > binStats.get(i - 1).meanOutcome) {
+                monotonicDecreasing = false;
+            }
+        }
+        return new QuantileBinningResult(binStats, slope, pValue,
+            monotonicIncreasing || monotonicDecreasing, monotonicIncreasing, n);
+    }
+
+    static final class BinStat {
+        final int bin;
+        final int n;
+        final double min;
+        final double max;
+        final double meanPredictor;
+        final double meanOutcome;
+
+        BinStat(int bin, int n, double min, double max, double meanPredictor,
+                double meanOutcome) {
+            this.bin = bin;
+            this.n = n;
+            this.min = min;
+            this.max = max;
+            this.meanPredictor = meanPredictor;
+            this.meanOutcome = meanOutcome;
+        }
+    }
+
+    static final class QuantileBinningResult {
+        final List<BinStat> bins;
+        final double trendSlope;
+        final double trendPValue;
+        final boolean monotonic;
+        final boolean increasing;
+        final int n;
+
+        QuantileBinningResult(List<BinStat> bins, double trendSlope, double trendPValue,
+                boolean monotonic, boolean increasing, int n) {
+            this.bins = bins;
+            this.trendSlope = trendSlope;
+            this.trendPValue = trendPValue;
+            this.monotonic = monotonic;
+            this.increasing = increasing;
+            this.n = n;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("n", n);
+            ArrayNode arr = mapper.createArrayNode();
+            for (BinStat b : bins) {
+                ObjectNode bn = mapper.createObjectNode();
+                bn.put("bin", b.bin);
+                bn.put("n", b.n);
+                bn.put("predictor_min", b.min);
+                bn.put("predictor_max", b.max);
+                bn.put("predictor_mean", b.meanPredictor);
+                bn.put("outcome_mean", b.meanOutcome);
+                arr.add(bn);
+            }
+            out.set("bins", arr);
+            out.put("trend_slope_per_bin", trendSlope);
+            out.put("trend_p_value", trendPValue);
+            out.put("monotonic", monotonic);
+            if (monotonic) {
+                out.put("direction", increasing ? "increasing" : "decreasing");
+            }
+            out.put("note", "trend_p_value tests whether bin means move consistently with bin "
+                + "rank (a dose-response test) — it can be significant even when 'monotonic' "
+                + "is false if only one bin breaks the pattern; read both together, not "
+                + "trend_p_value alone.");
+            return out;
+        }
+    }
+
+    /** Each distinct group's share of a total, and what the total would be with that group
+     *  removed — "how much of X does group G account for" otherwise requires a full-sample SUM
+     *  alongside a per-group SUM and a subtraction, done by hand. */
+    static SubgroupContributionResult subgroupContribution(double[] value, String[] group) {
+        int n = value.length;
+        if (n != group.length) {
+            throw new IllegalArgumentException("value and group must be the same length");
+        }
+        Map<String, double[]> agg = new LinkedHashMap<>(); // group -> {sum, count}
+        double total = 0;
+        for (int i = 0; i < n; i++) {
+            total += value[i];
+            double[] slot = agg.computeIfAbsent(group[i], g -> new double[2]);
+            slot[0] += value[i];
+            slot[1] += 1;
+        }
+        List<Subgroup> groups = new ArrayList<>();
+        for (Map.Entry<String, double[]> e : agg.entrySet()) {
+            double sum = e.getValue()[0];
+            int count = (int) e.getValue()[1];
+            groups.add(new Subgroup(e.getKey(), sum, count,
+                total == 0 ? Double.NaN : sum / total, total - sum));
+        }
+        groups.sort((a, b) -> Double.compare(b.sum, a.sum));
+        return new SubgroupContributionResult(groups, total, n);
+    }
+
+    static final class Subgroup {
+        final String label;
+        final double sum;
+        final int n;
+        final double share;
+        final double totalExcluding;
+
+        Subgroup(String label, double sum, int n, double share, double totalExcluding) {
+            this.label = label;
+            this.sum = sum;
+            this.n = n;
+            this.share = share;
+            this.totalExcluding = totalExcluding;
+        }
+    }
+
+    static final class SubgroupContributionResult {
+        final List<Subgroup> groups;
+        final double total;
+        final int n;
+
+        SubgroupContributionResult(List<Subgroup> groups, double total, int n) {
+            this.groups = groups;
+            this.total = total;
+            this.n = n;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("total", total);
+            out.put("n", n);
+            out.put("groups_found", groups.size());
+            ArrayNode arr = mapper.createArrayNode();
+            for (Subgroup g : groups) {
+                ObjectNode gn = mapper.createObjectNode();
+                gn.put("group", g.label);
+                gn.put("sum", g.sum);
+                gn.put("n", g.n);
+                gn.put("share_of_total", g.share);
+                gn.put("total_excluding_this_group", g.totalExcluding);
+                arr.add(gn);
+            }
+            out.set("groups", arr);
+            if (!groups.isEmpty()) {
+                Subgroup top = groups.get(0);
+                out.put("largest_group", top.label);
+                out.put("largest_group_share", top.share);
+            }
+            return out;
+        }
+    }
+
+    /** Gini coefficient and Lorenz curve for a distribution of nonnegative amounts (funding per
+     *  institution, income per household, market share per firm) — quantifies HOW concentrated a
+     *  total is across its units, where subgroup_contribution's top-N shares only show
+     *  concentration at the specific cut points asked for. 0 = perfectly even, 1 = one unit holds
+     *  everything. Computed via the standard rank-weighted-sum formula (equivalent to the area
+     *  between the Lorenz curve and the line of equality), which needs the full sorted
+     *  distribution rather than a handful of top-N shares. */
+    static GiniResult giniCoefficient(double[] value) {
+        int n = value.length;
+        if (n < 2) {
+            throw new IllegalArgumentException("gini_coefficient needs at least 2 observations, "
+                + "got " + n);
+        }
+        double[] sorted = value.clone();
+        Arrays.sort(sorted);
+        double total = 0;
+        for (double v : sorted) {
+            if (v < 0) {
+                throw new IllegalArgumentException("gini_coefficient requires nonnegative "
+                    + "values — a negative amount (e.g. a net loss) has no defined share of a "
+                    + "total and breaks the concentration measure; filter it out or clip to 0 "
+                    + "before calling");
+            }
+            total += v;
+        }
+        if (total == 0) {
+            throw new IllegalArgumentException("gini_coefficient: values sum to 0 — nothing to "
+                + "measure concentration over");
+        }
+        double weightedSum = 0;
+        for (int i = 0; i < n; i++) {
+            weightedSum += (i + 1) * sorted[i];
+        }
+        double gini = (2.0 * weightedSum) / (n * total) - (n + 1.0) / n;
+
+        List<double[]> lorenz = new ArrayList<>();
+        lorenz.add(new double[]{0, 0});
+        double cumValue = 0;
+        for (int i = 0; i < n; i++) {
+            cumValue += sorted[i];
+            double popShare = (i + 1.0) / n;
+            lorenz.add(new double[]{popShare, cumValue / total});
+        }
+        return new GiniResult(gini, total, n, lorenz);
+    }
+
+    static final class GiniResult {
+        final double gini;
+        final double total;
+        final int n;
+        final List<double[]> lorenzPoints;
+
+        GiniResult(double gini, double total, int n, List<double[]> lorenzPoints) {
+            this.gini = gini;
+            this.total = total;
+            this.n = n;
+            this.lorenzPoints = lorenzPoints;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("gini", gini);
+            out.put("total", total);
+            out.put("n", n);
+            String band = gini < 0.3 ? "low" : gini < 0.5 ? "moderate" : gini < 0.7 ? "high"
+                : "extreme";
+            out.put("concentration_band", band);
+            // Lorenz curve is downsampled for LLM readability — deciles plus the exact endpoints,
+            // not every one of n points, mirroring the row-capped query() convention elsewhere.
+            ArrayNode arr = mapper.createArrayNode();
+            int last = lorenzPoints.size() - 1;
+            for (int i = 0; i <= 10; i++) {
+                int idx = Math.min(last, (int) Math.round(i / 10.0 * last));
+                double[] pt = lorenzPoints.get(idx);
+                ObjectNode pn = mapper.createObjectNode();
+                pn.put("cumulative_population_share", pt[0]);
+                pn.put("cumulative_value_share", pt[1]);
+                arr.add(pn);
+            }
+            out.set("lorenz_curve_deciles", arr);
+            out.put("note", "gini is the area between the Lorenz curve and perfect equality, "
+                + "doubled — 0 means every unit holds an equal share, 1 means one unit holds the "
+                + "whole total. Compare across two periods/populations directly; a rising gini "
+                + "alongside a rising unit count means new entrants are NOT absorbing share "
+                + "evenly, even if top-N shares alone look flat.");
+            return out;
+        }
+    }
+
+    /** Pearson correlation between x and y AFTER regressing out a set of control variables from
+     *  each — the correlation that would remain if the controls were held fixed. With no
+     *  controls this is exactly the ordinary Pearson correlation and its significance test.
+     *  Answers "does this relationship survive controlling for Z" as a single legible number,
+     *  where ols_regression answers it only indirectly, as one coefficient inside a multi-term
+     *  fit the caller has to interpret themselves. */
+    static PartialCorrelationResult partialCorrelation(double[] x, double[] y,
+            double[][] controls, String[] controlNames) {
+        int n = x.length;
+        if (n != y.length) {
+            throw new IllegalArgumentException("x and y must be the same length");
+        }
+        int k = controlNames.length;
+        double[] xResid = x;
+        double[] yResid = y;
+        if (k > 0) {
+            if (n < k + 3) {
+                throw new IllegalArgumentException("only " + n + " complete observations for "
+                    + k + " controls — need at least " + (k + 3)
+                    + " to estimate a partial correlation");
+            }
+            OLSMultipleLinearRegression regX = new OLSMultipleLinearRegression();
+            regX.newSampleData(x, controls);
+            xResid = regX.estimateResiduals();
+            OLSMultipleLinearRegression regY = new OLSMultipleLinearRegression();
+            regY.newSampleData(y, controls);
+            yResid = regY.estimateResiduals();
+        } else if (n < 3) {
+            throw new IllegalArgumentException("only " + n + " complete observations — need "
+                + "at least 3 to estimate a correlation's significance");
+        }
+        double r = new PearsonsCorrelation().correlation(xResid, yResid);
+        int dof = n - 2 - k;
+        double t = r * Math.sqrt(dof / (1 - r * r));
+        double p = dof > 0
+            ? 2 * (1 - new TDistribution(dof).cumulativeProbability(Math.abs(t))) : Double.NaN;
+        double zeroOrderR = new PearsonsCorrelation().correlation(x, y);
+        return new PartialCorrelationResult(r, p, dof, n, k, zeroOrderR);
+    }
+
+    static final class PartialCorrelationResult {
+        final double r;
+        final double pValue;
+        final int dof;
+        final int n;
+        final int controlsUsed;
+        final double zeroOrderCorrelation;
+
+        PartialCorrelationResult(double r, double pValue, int dof, int n, int controlsUsed,
+                double zeroOrderCorrelation) {
+            this.r = r;
+            this.pValue = pValue;
+            this.dof = dof;
+            this.n = n;
+            this.controlsUsed = controlsUsed;
+            this.zeroOrderCorrelation = zeroOrderCorrelation;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("partial_correlation", r);
+            out.put("p_value", pValue);
+            out.put("degrees_of_freedom", dof);
+            out.put("n", n);
+            out.put("controls_used", controlsUsed);
+            out.put("zero_order_correlation", zeroOrderCorrelation);
+            if (controlsUsed > 0) {
+                out.put("note", "zero_order_correlation is the plain (unconditional) "
+                    + "correlation between x and y for comparison — the gap between it and "
+                    + "partial_correlation is how much of the raw relationship the controls "
+                    + "explain away.");
+            }
+            return out;
+        }
+    }
+
+    /** Sums/averages/counts/min/max a column — the aggregate {@code scenario_sweep} reports per
+     *  swept parameter value. */
+    static double aggregate(double[] col, String agg) {
+        if (col.length == 0) {
+            return Double.NaN;
+        }
+        switch (agg) {
+            case "sum": {
+                double s = 0;
+                for (double v : col) {
+                    s += v;
+                }
+                return s;
+            }
+            case "count":
+                return col.length;
+            case "min": {
+                double m = Double.POSITIVE_INFINITY;
+                for (double v : col) {
+                    m = Math.min(m, v);
+                }
+                return m;
+            }
+            case "max": {
+                double m = Double.NEGATIVE_INFINITY;
+                for (double v : col) {
+                    m = Math.max(m, v);
+                }
+                return m;
+            }
+            case "avg":
+            default: {
+                double s = 0;
+                for (double v : col) {
+                    s += v;
+                }
+                return s / col.length;
+            }
         }
     }
 
