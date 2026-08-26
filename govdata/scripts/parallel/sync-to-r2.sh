@@ -26,9 +26,11 @@
 # An empty slice (nothing in that window) costs zero R2 ops.
 #
 # Runs continuously (one pass every GOVDATA_R2_SYNC_INTERVAL seconds) from
-# run-scheduled.sh when PROD_* publish creds are set.
+# run-scheduled.sh when PROD_* publish creds are set, which wraps the whole script in an
+# external while-loop + sleep. --forever below does the same thing in-process, for manual
+# runs that want continuous syncing without hand-rolling that loop.
 # Can also be run manually: govdata/scripts/parallel/sync-to-r2.sh [--dry-run] [--verbose]
-#   [--schemas schema1,schema2]
+#   [--schemas schema1,schema2] [--forever]
 # --verbose (or GOVDATA_R2_SYNC_VERBOSE=1) adds rclone -v so each file transfer logs a
 # "Copied (new)"/"Copied (replaced existing)" line instead of only the --stats summary —
 # use it to see exactly which files a slice is moving.
@@ -36,7 +38,11 @@
 # resync after rewinding one schema's sentinel) instead of walking every schema in the bucket.
 # Every named schema must exist as a top-level prefix in the source bucket; an unknown name
 # fails loudly rather than silently syncing a subset (same policy as the empty-listing check
-# below). Per-schema sentinels are untouched by this flag — an unlisted schema is simply not
+# below).
+# --forever repeats the pass every GOVDATA_R2_SYNC_INTERVAL seconds (default 60) until
+# terminated, instead of exiting after one pass. A schema-listing/validation error (e.g. an
+# unknown --schemas name) still exits the whole process immediately — only a transient
+# per-pass failure (a slice error) is logged and retried on the next cycle. Per-schema sentinels are untouched by this flag — an unlisted schema is simply not
 # visited this pass, not treated as caught up.
 #
 set -euo pipefail
@@ -60,11 +66,13 @@ configure_r2_remote
 DRY_RUN=false
 VERBOSE="${GOVDATA_R2_SYNC_VERBOSE:-false}"
 SCHEMAS_FILTER=""
+FOREVER=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
     --verbose|--debug) VERBOSE=true; shift ;;
     --schemas) SCHEMAS_FILTER="$2"; shift 2 ;;
+    --forever) FOREVER=true; shift ;;
     *) log_error "sync-to-r2: unknown argument: $1"; exit 2 ;;
   esac
 done
@@ -79,7 +87,11 @@ SYNC_STAMP="${HOME}/.r2-last-sync"
 # LIST or GET on R2. --max-age selects files *younger* than the window, i.e.
 # everything written since the last sync (Iceberg is append-only, so that is
 # exactly the new snapshot files).
-_now=$(date +%s)
+# _now is recomputed inside run_pass() (not here) so each --forever cycle sees the real
+# current time. A one-shot top-level assignment would freeze the slice loop's upper bound
+# at process-start time: once a pass first catches a schema's sentinel up to that frozen
+# value, every later cycle starts with _cursor == _now already and the while loop below
+# never runs again, silently stopping new-file pickup for the rest of the process's life.
 
 # Only the parquet data bucket is published. The old S3 tracker bucket
 # (govdata-tracker-v1) is deprecated — pipeline state now lives in Postgres —
@@ -102,6 +114,16 @@ BUFFER=120                                # overlap between slices so a file wri
 # idle its backlog is picked up from exactly where it was left.
 STATE_DIR="${HOME}/.r2-sync-state"
 mkdir -p "$STATE_DIR"
+
+# The whole discovery + slice-drain body runs once per call; run_pass() re-lists schemas
+# and re-checks liveness fresh on every invocation, exactly as a new run-scheduled.sh
+# invocation of this script would. A schema-listing/validation failure below still calls
+# exit directly — it's a permanent config problem, not something a retry fixes — while the
+# per-schema slice failure at the bottom returns 1 so --forever can retry next cycle instead
+# of tearing down the process.
+run_pass() {
+
+_now=$(date +%s)
 
 # Schemas = top-level prefixes in the bucket (each schema writes under <schema>/). Fail
 # loudly on an unreadable/empty source rather than silently syncing nothing.
@@ -266,7 +288,19 @@ done
 
 if [ "$_fail" -ne 0 ]; then
   log_error "sync-to-r2: incomplete — one or more schema slices failed; they resume from their held sentinels next pass"
-  exit 1
+  return 1
 fi
 
 log_info "sync-to-r2: complete"
+}
+
+if $FOREVER; then
+  R2_SYNC_INTERVAL="${GOVDATA_R2_SYNC_INTERVAL:-60}"
+  log_info "sync-to-r2: --forever — looping every ${R2_SYNC_INTERVAL}s until terminated"
+  while true; do
+    run_pass || log_error "sync-to-r2: pass failed (will retry next cycle)"
+    sleep "$R2_SYNC_INTERVAL"
+  done
+else
+  run_pass
+fi
