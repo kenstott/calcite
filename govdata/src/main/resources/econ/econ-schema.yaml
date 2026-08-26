@@ -6093,7 +6093,12 @@ partitionedTables:
           type: string
     comment: >
       Monthly U.S. goods exports by HS-6 commodity and destination country
-      (Census International Trade timeseries, exports/hs endpoint).
+      (Census International Trade timeseries, exports/hs endpoint). Tall layout:
+      Census returns individual-country rows interleaved with its own built-in
+      world-total and trade-bloc/continental aggregate rows in the same response, with
+      no discriminator of its own — filter geo_level = 'country' before summing
+      value_usd, or the total silently multiplies by every bloc/continent a country
+      also belongs to (plus the world total).
 
     dimensions:
       type:
@@ -6130,6 +6135,26 @@ partitionedTables:
         nullable: true
         expression: 'src."CTY_NAME"'
         comment: Destination country name
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: >
+          CASE
+            WHEN src."CTY_CODE" = '-' THEN 'world'
+            WHEN src."CTY_CODE" LIKE '0%' THEN 'bloc'
+            WHEN src."CTY_CODE" LIKE '%XXX' THEN 'continent'
+            ELSE 'country'
+          END
+        comment: >
+          Row granularity, derived from Census's own CTY_CODE conventions (verified live
+          against the full 252-code domain): 'world' for CTY_CODE='-' (TOTAL FOR ALL
+          COUNTRIES), 'bloc' for the 0xxx-range trade-organization aggregates (EU, USMCA,
+          OECD, NATO, etc.), 'continent' for the NXXX regional aggregates (1XXX North
+          America, 2XXX Central America, ... 7XXX Africa), 'country' for every individual
+          country/territory row. Census returns all four granularities interleaved in one
+          response with no discriminator column of its own — summing value_usd without a
+          WHERE geo_level = 'country' filter double(-plus)-counts every shipment once per
+          bloc/continent it also belongs to, in addition to the world total.
       - name: hs6
         type: string
         nullable: true
@@ -6220,7 +6245,12 @@ partitionedTables:
           type: string
     comment: >
       Monthly U.S. goods imports by HS-6 commodity and origin country, including
-      CIF charges (Census International Trade timeseries, imports/hs endpoint).
+      CIF charges (Census International Trade timeseries, imports/hs endpoint). Tall
+      layout: Census returns individual-country rows interleaved with its own built-in
+      world-total and trade-bloc/continental aggregate rows in the same response, with
+      no discriminator of its own — filter geo_level = 'country' before summing
+      value_usd, or the total silently multiplies by every bloc/continent a country
+      also belongs to (plus the world total).
 
     dimensions:
       type:
@@ -6252,6 +6282,26 @@ partitionedTables:
         nullable: true
         expression: 'src."CTY_NAME"'
         comment: Origin country name
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: >
+          CASE
+            WHEN src."CTY_CODE" = '-' THEN 'world'
+            WHEN src."CTY_CODE" LIKE '0%' THEN 'bloc'
+            WHEN src."CTY_CODE" LIKE '%XXX' THEN 'continent'
+            ELSE 'country'
+          END
+        comment: >
+          Row granularity, derived from Census's own CTY_CODE conventions (verified live
+          against the full 252-code domain): 'world' for CTY_CODE='-' (TOTAL FOR ALL
+          COUNTRIES), 'bloc' for the 0xxx-range trade-organization aggregates (EU, USMCA,
+          OECD, NATO, etc.), 'continent' for the NXXX regional aggregates (1XXX North
+          America, 2XXX Central America, ... 7XXX Africa), 'country' for every individual
+          country/territory row. Census returns all four granularities interleaved in one
+          response with no discriminator column of its own — summing value_usd without a
+          WHERE geo_level = 'country' filter double(-plus)-counts every shipment once per
+          bloc/continent it also belongs to, in addition to the world total.
       - name: hs6
         type: string
         nullable: true
@@ -6356,7 +6406,9 @@ partitionedTables:
       Monthly U.S. goods exports by origin state, HS-6 commodity, and
       destination country (Census International Trade timeseries, statehs
       endpoint). state='-' rows are U.S. totals; country_code='-' rows are
-      all-countries totals.
+      all-countries totals. Also interleaves trade-bloc and continental
+      aggregate rows on the country axis (see geo_level) — filter
+      state != '-' AND geo_level = 'country' for true state-by-country detail.
 
     dimensions:
       type:
@@ -6394,6 +6446,26 @@ partitionedTables:
         nullable: true
         expression: 'src."CTY_NAME"'
         comment: Destination country name
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: >
+          CASE
+            WHEN src."CTY_CODE" = '-' THEN 'world'
+            WHEN src."CTY_CODE" LIKE '0%' THEN 'bloc'
+            WHEN src."CTY_CODE" LIKE '%XXX' THEN 'continent'
+            ELSE 'country'
+          END
+        comment: >
+          Row granularity, derived from Census's own CTY_CODE conventions (verified live
+          against the full 251-code domain returned by this endpoint): 'world' for
+          CTY_CODE='-' (TOTAL FOR ALL COUNTRIES), 'bloc' for the 0xxx-range
+          trade-organization aggregates (EU, USMCA, OECD, NATO, etc.), 'continent' for
+          the NXXX regional aggregates (1XXX North America, 2XXX Central America, ...
+          7XXX Africa), 'country' for every individual country/territory row. Combined
+          with the existing state='-' U.S.-total roll-up, a caller must filter both
+          state != '-' AND geo_level = 'country' to get true state-by-country detail
+          rows — summing without both filters double(-plus)-counts.
       - name: hs6
         type: string
         nullable: true

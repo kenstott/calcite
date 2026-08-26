@@ -975,6 +975,31 @@ SELECT 'econ', tbl, 'existence',
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
 
+-- trade_imports/trade_exports/trade_by_state: geo_level domain — Census interleaves
+-- world/bloc/continent aggregate rows with individual-country rows under one CTY_CODE
+-- axis with no discriminator of its own; geo_level makes the granularity explicit.
+-- Confirm the classification expression only ever produces the 4 expected values.
+INSERT INTO dq_results
+SELECT 'econ', 'trade_imports', 'geo_level_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with geo_level outside (world, bloc, continent, country)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports', allow_moved_paths := true)
+      WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'trade_exports', 'geo_level_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with geo_level outside (world, bloc, continent, country)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports', allow_moved_paths := true)
+      WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'trade_by_state', 'geo_level_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with geo_level outside (world, bloc, continent, country)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_by_state', allow_moved_paths := true)
+      WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
+
 -- ============================================================================
 -- RESULTS SUMMARY
 -- ============================================================================
