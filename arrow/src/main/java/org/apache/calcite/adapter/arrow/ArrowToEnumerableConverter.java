@@ -84,14 +84,10 @@ class ArrowToEnumerableConverter
             Expressions.constant(fieldCount));
     final Expression filters = Expressions.constant(ImmutableList.copyOf(arrowImplementor.filters));
 
-    Expression tableExpression;
-    if (table.unwrap(ArrowTable.class) != null) {
-      tableExpression = table.getExpression(ArrowTable.class);
-    } else if (table.unwrap(ParquetTable.class) != null) {
-      tableExpression = table.getExpression(ParquetTable.class);
-    } else {
+    if (table.unwrap(ArrowTable.class) == null) {
       throw new IllegalStateException("Unsupported table type: " + table.getClass().getName());
     }
+    final Expression tableExpression = table.getExpression(ArrowTable.class);
 
     final Expression enumerable =
         Expressions.call(tableExpression,
