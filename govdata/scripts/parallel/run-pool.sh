@@ -628,6 +628,19 @@ fill_pool() {
     local next_mode="${next_slot#*:}"
     local next_id="worker-${next_schema}-${next_mode}"
 
+    # Never launch two writers against the same schema+year concurrently (this run-pool.sh's
+    # own workers, or another session's force-reprocess.sh/run-pool.sh/worker-dq-run.sh) — see
+    # check_schema_year_conflict's own comment for the incident this prevents. Temporary, not a
+    # permanent failure: hold this slot and try the next queued one, retry on the next fill_pool
+    # call (mirrors the budget-exceeded skip below, but doesn't mark done/failed).
+    local next_cy_start next_cy_end _conflict_msg
+    read -r next_cy_start next_cy_end <<< "$(_year_range_from_mode "$next_mode")"
+    if ! _conflict_msg=$(check_schema_year_conflict "$PID_DIR" "$next_schema" "$next_cy_start" "$next_cy_end" 2>&1); then
+      log_info "$_conflict_msg — holding ${next_id}, will retry"
+      ((scan_idx++)) || true
+      continue
+    fi
+
     # Skip if this worker's footprint exceeds total budget — can never run on this machine
     if [ "$next_foot_mb" -gt "$budget_mb" ]; then
       log_info "SKIPPING ${next_id}: needs ${next_foot_mb}MB (heap ${next_heap_mb}MB + ${WORKER_NATIVE_MB}MB native) but budget is only ${budget_mb}MB"

@@ -1307,6 +1307,79 @@ detect_active_schemas() {
   done
 }
 
+# Usage: _year_range_from_mode <mode>  -> echoes "START END"
+# A slot's "mode" is either a bare year (2019), a year range (2023-2026), or a keyword
+# (daily/historical/current/...). Keywords can't be bounded from the string alone, so
+# they're treated as spanning years 0-9999 -- conservative on purpose, see
+# check_schema_year_conflict below.
+_year_range_from_mode() {
+  local _mode=$1
+  if [[ "$_mode" =~ ^([0-9]{4})-([0-9]{4})$ ]]; then
+    echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+  elif [[ "$_mode" =~ ^([0-9]{4})$ ]]; then
+    echo "${BASH_REMATCH[1]} ${BASH_REMATCH[1]}"
+  else
+    echo "0 9999"
+  fi
+}
+
+# Usage: check_schema_year_conflict <pid_dir> <schema> <start_year> <end_year>
+# Returns 1 (and prints a message to stderr) if a live worker registered under
+# <pid_dir> already targets the same schema with an overlapping year range; 0 otherwise.
+#
+# Exists to prevent a repeat of the 2026-08-26 incident: two independent processes
+# (a scoped force-reprocess.sh job and a separately-launched full-schema ETL run) both
+# committed overwritePartitions to econ/trade_imports for year 2023 around the same
+# time, and the table's entire Iceberg snapshot lineage was reset -- not a partition-level
+# clobber, the whole table's history back to a single fresh snapshot. Schema names never
+# contain a hyphen (see ALL_SCHEMAS in model-verify.sh), so "<schema>-<mode>" splits
+# unambiguously on the first hyphen.
+#
+# Identity: a pid file whose owning process's /proc/<pid>/cmdline contains the pid-file's
+# own path is trusted outright (run-pool.sh's launcher wrapper does this by construction).
+# A pid file lacking that proof is trusted only if a same-named ".foreground" marker sits
+# beside it -- an explicit opt-in for callers (worker-dq-run.sh) that run the guarded work
+# synchronously in their own process rather than through the detached-launcher wrapper, so
+# there's no separate child pid to embed the path into. Anything else is treated as a
+# stale/PID-reused leftover and skipped, matching detect_active_schemas' existing rule.
+check_schema_year_conflict() {
+  local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4
+  local _norm_schema="$_schema"
+  case "$_norm_schema" in sec_*|sec) _norm_schema=sec ;; esac
+  [ -d "$_pid_dir" ] || return 0
+  local _pf _id _wpid _rest _other_schema _other_mode _other_norm _o_start _o_end
+  for _pf in "$_pid_dir"/worker-*.pid; do
+    [ -e "$_pf" ] || continue
+    _id=$(basename "$_pf" .pid)
+    [ -f "$_pid_dir/${_id}.exit" ] && continue        # worker already finished
+    _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
+    { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
+    if tr '\0' ' ' < "/proc/$_wpid/cmdline" 2>/dev/null | grep -qF "$_pf"; then
+      : # confirmed via the launcher wrapper's own argv
+    elif [ -f "$_pid_dir/${_id}.foreground" ]; then
+      : # explicit synchronous-caller opt-in (worker-dq-run.sh) -- trust kill -0 alone
+    else
+      continue # can't confirm identity and not marked foreground -> stale/reused pid
+    fi
+    _rest=${_id#worker-}                              # <schema>-<mode>
+    _other_schema="${_rest%%-*}"                       # up to first hyphen
+    _other_mode="${_rest#*-}"                          # after first hyphen (may itself have hyphens)
+    read -r _o_start _o_end <<< "$(_year_range_from_mode "$_other_mode")"
+    _other_norm="$_other_schema"
+    case "$_other_norm" in sec_*|sec) _other_norm=sec ;; esac
+    [ "$_other_norm" = "$_norm_schema" ] || continue
+    if (( _o_start <= _new_end && _new_start <= _o_end )); then
+      echo "REFUSING: schema '${_schema}' years ${_new_start}-${_new_end} overlaps" \
+           "already-running worker '${_id}' (pid ${_wpid}, years ${_o_start}-${_o_end})" \
+           "-- concurrent writers to the same schema+year can corrupt Iceberg snapshot" \
+           "lineage (see the 2026-08-26 econ.trade_imports incident). Wait for it to" \
+           "finish or pick a non-overlapping year range." >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
 log_info() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }

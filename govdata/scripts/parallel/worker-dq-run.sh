@@ -100,6 +100,29 @@ DQ_SQL="$GOVDATA_ROOT/scripts/${SCHEMA}_dq.sql"
 RUN_DIR="$SCRIPT_DIR/runs/$WORKER_ID"
 mkdir -p "$RUN_DIR"
 
+# Never run concurrently with another writer against the same schema (any year) when this
+# invocation actually targets the production bucket — misconfigured/defaulted GOVDATA_DQ_BUCKET
+# is exactly the 2026-08-26 econ.trade_imports incident's risk surface (see
+# check_schema_year_conflict's comment in common.sh). Skipped entirely for a real isolated DQ
+# bucket run: it can't collide with a production writer, so there's nothing to guard against.
+# Registered as a single wide-open (0-9999) range for this whole invocation's lifetime, since
+# it runs a full daily+historical sweep, not one bounded year -- matches how run-pool.sh already
+# treats keyword modes it can't bound from the id string alone. Uses the ".foreground" opt-in
+# because this script runs its guarded work synchronously in its own process, not through
+# run-pool.sh's detached-launcher wrapper.
+if [ "$GOVDATA_DQ_BUCKET" = "govdata-parquet-v1" ]; then
+  _SCHEMA_YEAR_PID_DIR="$SCRIPT_DIR/runs/pids"
+  mkdir -p "$_SCHEMA_YEAR_PID_DIR"
+  _SCHEMA_YEAR_GUARD_ID="worker-${SCHEMA}-historical"
+  if ! _conflict_msg=$(check_schema_year_conflict "$_SCHEMA_YEAR_PID_DIR" "$SCHEMA" 0 9999 2>&1); then
+    echo "ERROR: $_conflict_msg" >&2
+    exit 1
+  fi
+  echo $$ > "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.pid"
+  touch "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.foreground"
+  trap 'rm -f "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.pid" "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.foreground"' EXIT
+fi
+
 if [ ! -f "$DQ_SQL" ]; then
   echo "ERROR: DQ script not found: $DQ_SQL" >&2
   exit 1
