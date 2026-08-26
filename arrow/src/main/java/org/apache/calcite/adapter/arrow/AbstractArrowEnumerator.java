@@ -16,16 +16,19 @@
  */
 package org.apache.calcite.adapter.arrow;
 
+import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.util.ImmutableIntList;
 import org.apache.calcite.util.Util;
 
+import org.apache.arrow.vector.TimeStampVector;
 import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.VectorUnloader;
 import org.apache.arrow.vector.ipc.ArrowFileReader;
 import org.apache.arrow.vector.ipc.message.ArrowRecordBatch;
-import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.arrow.vector.types.TimeUnit;
+import org.apache.arrow.vector.types.pojo.ArrowType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,59 +39,89 @@ import java.util.List;
  */
 abstract class AbstractArrowEnumerator implements Enumerator<Object> {
   protected final ArrowFileReader arrowFileReader;
-  protected final ParquetReader<?> parquetReader;
   protected final List<Integer> fields;
   protected final List<ValueVector> valueVectors;
   protected int currRowIndex;
   protected int rowCount;
-  protected Object[] currentItem;
 
-  AbstractArrowEnumerator(Object sourceReader, ImmutableIntList fields) {
-    this.arrowFileReader = sourceReader instanceof ArrowFileReader
-        ? (ArrowFileReader) sourceReader : null;
-    this.parquetReader = sourceReader instanceof ParquetReader
-        ? (ParquetReader) sourceReader : null;
+  AbstractArrowEnumerator(ArrowFileReader arrowFileReader, ImmutableIntList fields) {
+    this.arrowFileReader = arrowFileReader;
     this.fields = fields;
     this.valueVectors = new ArrayList<>(fields.size());
     this.currRowIndex = -1;
-    this.currentItem = null;
   }
 
   abstract void evaluateOperator(ArrowRecordBatch arrowRecordBatch);
 
   protected void loadNextArrowBatch() {
-    if (arrowFileReader != null) {
-      try {
-        // Load the next batch from the file
-        boolean hasData = arrowFileReader.loadNextBatch();
-        if (hasData) {
-          final VectorSchemaRoot vsr = arrowFileReader.getVectorSchemaRoot();
-          for (int i : fields) {
-            this.valueVectors.add(vsr.getVector(i));
-          }
-          this.rowCount = vsr.getRowCount();
-          VectorUnloader vectorUnloader = new VectorUnloader(vsr);
-          ArrowRecordBatch arrowRecordBatch = vectorUnloader.getRecordBatch();
-          evaluateOperator(arrowRecordBatch);
-        } else {
-          this.rowCount = 0;
+    try {
+      boolean hasData = arrowFileReader.loadNextBatch();
+      if (hasData) {
+        final VectorSchemaRoot vsr = arrowFileReader.getVectorSchemaRoot();
+        for (int i : fields) {
+          this.valueVectors.add(vsr.getVector(i));
         }
-      } catch (IOException e) {
-        throw Util.toUnchecked(e);
+        this.rowCount = vsr.getRowCount();
+        VectorUnloader vectorUnloader = new VectorUnloader(vsr);
+        evaluateOperator(vectorUnloader.getRecordBatch());
+      } else {
+        this.rowCount = 0;
       }
+    } catch (IOException e) {
+      throw Util.toUnchecked(e);
     }
   }
 
   @Override public Object current() {
     if (fields.size() == 1) {
-      return this.valueVectors.get(0).getObject(currRowIndex);
+      return getValue(this.valueVectors.get(0), currRowIndex);
     }
     Object[] current = new Object[valueVectors.size()];
     for (int i = 0; i < valueVectors.size(); i++) {
-      ValueVector vector = this.valueVectors.get(i);
-      current[i] = vector.getObject(currRowIndex);
+      current[i] = getValue(valueVectors.get(i), currRowIndex);
     }
     return current;
+  }
+
+  /** Extracts a value from a vector at the given index.
+   *
+   * <p>For {@link TimeStampVector}, converts the raw value to milliseconds since epoch, which
+   * is the representation Calcite's Enumerable runtime uses for TIMESTAMP. For a binary vector,
+   * wraps the raw {@code byte[]} in a {@link ByteString}, matching every other adapter. */
+  protected static Object getValue(ValueVector vector, int index) {
+    if (vector instanceof TimeStampVector) {
+      if (vector.isNull(index)) {
+        return null;
+      }
+      final TimeStampVector tsVector = (TimeStampVector) vector;
+      final long rawValue = tsVector.get(index);
+      final ArrowType.Timestamp tsType = (ArrowType.Timestamp) vector.getField().getType();
+      return toMillis(rawValue, tsType.getUnit());
+    }
+    final Object value = vector.getObject(index);
+    if (value instanceof byte[]) {
+      return new ByteString((byte[]) value);
+    }
+    return value;
+  }
+
+  /** Converts a raw timestamp value to milliseconds since epoch.
+   *
+   * <p>Lossy for {@link TimeUnit#MICROSECOND} and {@link TimeUnit#NANOSECOND}: sub-millisecond
+   * precision is truncated. */
+  private static long toMillis(long rawValue, TimeUnit unit) {
+    switch (unit) {
+    case SECOND:
+      return rawValue * 1000L;
+    case MILLISECOND:
+      return rawValue;
+    case MICROSECOND:
+      return rawValue / 1000L;
+    case NANOSECOND:
+      return rawValue / 1_000_000L;
+    default:
+      throw new IllegalArgumentException("Unsupported TimeUnit: " + unit);
+    }
   }
 
   @Override public void reset() {

@@ -97,15 +97,15 @@ public class ArrowTable extends AbstractTable
       List<String> conditions) {
     requireNonNull(fields, "fields");
 
-    // Gandiva is optional (see GandivaAvailability). Without it, serve the scan straight off the
-    // Arrow vectors and let Calcite's Enumerable convention apply filters and projections. Every
-    // reference to the Gandiva API lives in GandivaEvaluators so that this class still loads when
-    // those classes are absent — it is reached via Class.forName, which initialises it.
+    // Gandiva is optional (see GandivaAvailability). Without it, a pushed-down conjunctive
+    // filter (ArrowRules.RULES registers FILTER_SCAN unconditionally — see there for why this
+    // is safe) is evaluated in plain Java by ArrowJavaFilterEnumerator instead of Gandiva's
+    // selection-vector path; a condition-free scan reads straight off the Arrow vectors. Every
+    // reference to the Gandiva API lives in GandivaEvaluators so that this class still loads
+    // when those classes are absent — it is reached via Class.forName, which initialises it.
     if (!GandivaAvailability.isAvailable()) {
       if (!conditions.isEmpty()) {
-        throw new IllegalStateException(
-            "Arrow filter pushdown requires Gandiva, which is not available; "
-                + "ArrowRules should not have pushed " + conditions);
+        return new ArrowEnumerable(openReader(), fields, schema, conditions);
       }
       return new ArrowEnumerable(openReader(), fields, null, null);
     }

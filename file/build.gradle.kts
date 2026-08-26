@@ -25,7 +25,10 @@ plugins {
 dependencies {
     api(project(":core"))
     api(project(":linq4j"))
-    api(project(":arrow")) // Need arrow for ParquetTable
+    // Reflectively loads org.apache.calcite.adapter.arrow.ArrowTable to read a .arrow file
+    // directly (FileSchema.createArrowTable) — not for ParquetTable, which file/ never uses;
+    // it has its own independent Parquet support (adapter.file.table.*).
+    api(project(":arrow"))
     api("org.checkerframework:checker-qual")
 
     implementation("com.google.guava:guava")

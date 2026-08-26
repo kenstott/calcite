@@ -23,12 +23,6 @@ import org.apache.calcite.util.Util;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowFileReader;
 import org.apache.arrow.vector.ipc.SeekableReadChannel;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.hadoop.util.HadoopInputFile;
-import org.apache.parquet.io.InputFile;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
@@ -48,8 +42,8 @@ import java.util.function.Supplier;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Schema implementation for Apache Arrow and Parquet file sources.
- * Scans a directory for .arrow and .parquet files and exposes them as tables.
+ * Schema implementation for Apache Arrow file sources.
+ * Scans a directory for .arrow files and exposes them as tables.
  */
 class ArrowSchema extends AbstractSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(ArrowSchema.class);
@@ -83,8 +77,7 @@ class ArrowSchema extends AbstractSchema {
   }
 
   private static Map<String, Table> deduceTableMap(File baseDirectory) {
-    File[] files = baseDirectory.listFiles((dir, name) ->
-        name.endsWith(".arrow") || name.endsWith(".parquet"));
+    File[] files = baseDirectory.listFiles((dir, name) -> name.endsWith(".arrow"));
     if (files == null) {
       LOGGER.info("directory " + baseDirectory + " not found");
       return ImmutableMap.of();
@@ -93,18 +86,8 @@ class ArrowSchema extends AbstractSchema {
     final Map<String, Table> tables = new HashMap<>();
     for (File file : files) {
       final String fileName = file.getName();
-      final String tableName = trim(trim(fileName, ".arrow"), ".parquet").toUpperCase(Locale.ROOT);
-      final Table table;
-
-      if (fileName.endsWith(".arrow")) {
-        table = createArrowTable(file);
-      } else if (fileName.endsWith(".parquet")) {
-        table = createParquetTable(file);
-      } else {
-        continue;
-      }
-
-      tables.put(tableName, table);
+      final String tableName = trim(fileName, ".arrow").toUpperCase(Locale.ROOT);
+      tables.put(tableName, createArrowTable(file));
     }
 
     return ImmutableMap.copyOf(tables);
@@ -121,20 +104,6 @@ class ArrowSchema extends AbstractSchema {
       return new ArrowTable(null, arrowFileReader);
     } catch (FileNotFoundException e) {
       throw Util.toUnchecked(e);
-    }
-  }
-
-
-  @SuppressWarnings("deprecation")
-  private static Table createParquetTable(File file) {
-    try {
-      Path path = new Path(file.toString());
-      InputFile inputFile = HadoopInputFile.fromPath(path, new Configuration());
-      AvroParquetReader.Builder<GenericRecord> builder =
-          AvroParquetReader.<GenericRecord>builder(inputFile);
-      return new ParquetTable(file.getAbsolutePath(), builder, null);
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to create ParquetTable for " + file, e);
     }
   }
 }
