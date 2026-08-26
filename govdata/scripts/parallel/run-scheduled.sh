@@ -109,6 +109,7 @@ fmt_epoch() {
 ACTIVE_POOL_PID=""
 _sync_pid=""
 _catchup_pid=""
+_coverage_pid=""
 _cleanup() {
   # Tear down the active pool subtree and both R2 daemons, then release the
   # pidfile (only if it still points at us — a superseding runner may own it now).
@@ -117,11 +118,15 @@ _cleanup() {
   # The catchup daemon must come down too. It drives catchup-sync-r2.sh, which walks the
   # whole tree rather than a time slice — copy-only, but the broadest R2 writer here.
   [ -n "$_catchup_pid" ] && tree_term "$_catchup_pid"
+  # And the coverage-metadata daemon, which commits to the repo — it must never keep
+  # running (and committing) after the runner that owns it has been told to stop.
+  [ -n "$_coverage_pid" ] && tree_term "$_coverage_pid"
   # Backstop: a pass launched in the gap between the child snapshot and the parent's
   # death is reparented to init and unreachable by a PPID walk. Sweep our own sync
   # entry points by path so no R2 writer outlives the runner.
   pkill -TERM -f "$SCRIPT_DIR/sync-to-r2.sh" 2>/dev/null || true
   pkill -TERM -f "$SCRIPT_DIR/catchup-sync-r2.sh" 2>/dev/null || true
+  pkill -TERM -f "$SCRIPT_DIR/update-coverage-metadata.sh" 2>/dev/null || true
   [ "$(cat "$PID_FILE" 2>/dev/null || true)" = "$$" ] && rm -f "$PID_FILE"
 }
 _shutdown() {
@@ -374,6 +379,44 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
   _catchup_pid=$!
   log_error "INFO: R2 catchup daemon started (PID $_catchup_pid, every ${CATCHUP_INTERVAL}s; log: $CATCHUP_LOG)"
 fi
+
+# Coverage-metadata daemon: periodically re-derives each table's real year coverage from
+# production (MinIO) and writes it into that table's `observedCoverage:` block in the
+# schema YAML (see update-coverage-metadata.sh) — auto-committed, since no human is present
+# on this box to review a diff before the next cycle. Runs far less often than ETL itself;
+# coverage only moves when a schema actually lands new years, not every worker cycle.
+# Same persisted-stamp pattern as the R2 catchup daemon above, for the same reason: a
+# sleep-then-run daemon restarts its countdown on every runner restart and can starve
+# entirely if restarts happen more often than the interval.
+COVERAGE_LOG="$LOG_DIR/coverage-metadata.log"
+COVERAGE_INTERVAL="${GOVDATA_COVERAGE_INTERVAL:-86400}"
+COVERAGE_STAMP="${HOME}/.r2-sync-state/.coverage-last"
+mkdir -p "$(dirname "$COVERAGE_STAMP")"
+(
+  while true; do
+    _last=0
+    [ -f "$COVERAGE_STAMP" ] && _last=$(cat "$COVERAGE_STAMP" 2>/dev/null)
+    [[ "$_last" =~ ^[0-9]+$ ]] || _last=0
+    _wait=$(( _last + COVERAGE_INTERVAL - $(date +%s) ))
+    if [ "$_wait" -gt 0 ]; then
+      sleep "$_wait"
+      continue
+    fi
+    if [ -f "$COVERAGE_LOG" ] && [ "$(stat -c%s "$COVERAGE_LOG" 2>/dev/null || echo 0)" -gt 5242880 ]; then
+      mv -f "$COVERAGE_LOG" "$COVERAGE_LOG.1"
+    fi
+    echo "[$(ts)] coverage-metadata sweep starting" >> "$COVERAGE_LOG"
+    if "$SCRIPT_DIR/update-coverage-metadata.sh" --all-schemas >> "$COVERAGE_LOG" 2>&1; then
+      echo "[$(ts)] coverage-metadata sweep complete" >> "$COVERAGE_LOG"
+    else
+      echo "[$(ts)] coverage-metadata sweep FAILED (will retry next cycle)" >> "$COVERAGE_LOG"
+      log_error "WARNING: coverage-metadata sweep failed (will retry next cycle)"
+    fi
+    date +%s > "$COVERAGE_STAMP"
+  done
+) &
+_coverage_pid=$!
+log_error "INFO: coverage-metadata daemon started (PID $_coverage_pid, every ${COVERAGE_INTERVAL}s; log: $COVERAGE_LOG)"
 
 while true; do
   if [ "$MODE" = "daily" ]; then
