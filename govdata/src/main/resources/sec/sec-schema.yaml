@@ -1801,7 +1801,14 @@ views:
     comment: >
       Denormalised company identity: SEC filing metadata joined to GLEIF CIK-LEI
       bridge and GLEIF entity registry. One row per company — enables CIK-to-LEI
-      resolution and cross-border corporate entity analysis.
+      resolution and cross-border corporate entity analysis. gleif_cik_mapping.cik
+      is unpadded (GLEIF's own convention) while filing_metadata.cik is 10-digit
+      zero-padded (SEC's convention); the join normalizes with LPAD. GLEIF's
+      SEC-authority CIK bridge covers only entities GLEIF has registered under
+      registration_authority_id='RA000602' — a minority of SEC filers, so
+      lei/legal_name/headquarters_* are legitimately NULL for most companies
+      (confirmed: even large filers like Apple have no GLEIF LEI record under
+      this authority), not a join defect.
     sql: >
       SELECT
         fm.cik,
@@ -1818,7 +1825,7 @@ views:
         COUNT(DISTINCT fm.accession_number) AS total_filings,
         MAX(fm.filing_date)                 AS latest_filing_date
       FROM filing_metadata fm
-      LEFT JOIN "ref"."gleif_cik_mapping" gcm ON fm.cik = gcm.cik
+      LEFT JOIN "ref"."gleif_cik_mapping" gcm ON fm.cik = LPAD(gcm.cik, 10, '0')
       LEFT JOIN "ref"."gleif_entities"    ge  ON gcm.lei = ge.lei
       GROUP BY fm.cik, fm.company_name, fm.ticker, fm.sic_code,
                fm.state_of_incorporation, fm.irs_number,
