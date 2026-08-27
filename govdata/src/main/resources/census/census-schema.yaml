@@ -2764,6 +2764,276 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS HOUSING TENURE BY AGE OF HOUSEHOLDER - Owner/renter counts by age band
+  # ---------------------------------------------------------------------------
+  - name: acs_housing_tenure_by_age
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Occupied housing unit counts split by tenure (owner-occupied vs renter-occupied)
+      and age of householder, from ACS 5-year table B25007 ("Tenure by Age of
+      Householder"), at state and county levels. Age bands match B25007's published
+      structure: 15-24, 25-34, 35-44, 45-54, 55-59, 60-64, 65-74, 75-84, 85+ (nine
+      bands, identical for owners and renters). Lets a generation-cohort ownership
+      analysis be computed directly in-engine — same age band, same vintage — rather
+      than relying on third-party CPS reprocessing. A true generation-matched
+      historical series still requires stitching multiple ACS vintages across the
+      cohort's aging trajectory; this table exposes the single-vintage building
+      block.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: total_occupied
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_001E" AS BIGINT)'
+        comment: Total occupied housing units (all tenures, all ages)
+      - name: total_occupied_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for total_occupied (Census variable B25007_001M; negative sentinels normalized to null)
+      - name: owner_occupied
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_002E" AS BIGINT)'
+        comment: Owner-occupied units (all ages)
+      - name: owner_occupied_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_occupied (Census variable B25007_002M; negative sentinels normalized to null)
+      - name: owner_15_to_24
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_003E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 15 to 24 years
+      - name: owner_15_to_24_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_15_to_24 (Census variable B25007_003M; negative sentinels normalized to null)
+      - name: owner_25_to_34
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_004E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 25 to 34 years
+      - name: owner_25_to_34_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_25_to_34 (Census variable B25007_004M; negative sentinels normalized to null)
+      - name: owner_35_to_44
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_005E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 35 to 44 years
+      - name: owner_35_to_44_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_005M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_005M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_35_to_44 (Census variable B25007_005M; negative sentinels normalized to null)
+      - name: owner_45_to_54
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_006E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 45 to 54 years
+      - name: owner_45_to_54_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_45_to_54 (Census variable B25007_006M; negative sentinels normalized to null)
+      - name: owner_55_to_59
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_007E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 55 to 59 years
+      - name: owner_55_to_59_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_007M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_007M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_55_to_59 (Census variable B25007_007M; negative sentinels normalized to null)
+      - name: owner_60_to_64
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_008E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 60 to 64 years
+      - name: owner_60_to_64_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_008M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_008M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_60_to_64 (Census variable B25007_008M; negative sentinels normalized to null)
+      - name: owner_65_to_74
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_009E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 65 to 74 years
+      - name: owner_65_to_74_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_009M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_009M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_65_to_74 (Census variable B25007_009M; negative sentinels normalized to null)
+      - name: owner_75_to_84
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_010E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 75 to 84 years
+      - name: owner_75_to_84_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_75_to_84 (Census variable B25007_010M; negative sentinels normalized to null)
+      - name: owner_85_and_over
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_011E" AS BIGINT)'
+        comment: Owner-occupied units where householder is 85 years and over
+      - name: owner_85_and_over_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_011M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_011M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_85_and_over (Census variable B25007_011M; negative sentinels normalized to null)
+      - name: renter_occupied
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_012E" AS BIGINT)'
+        comment: Renter-occupied units (all ages)
+      - name: renter_occupied_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_012M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_012M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_occupied (Census variable B25007_012M; negative sentinels normalized to null)
+      - name: renter_15_to_24
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_013E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 15 to 24 years
+      - name: renter_15_to_24_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_013M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_013M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_15_to_24 (Census variable B25007_013M; negative sentinels normalized to null)
+      - name: renter_25_to_34
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_014E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 25 to 34 years
+      - name: renter_25_to_34_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_014M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_014M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_25_to_34 (Census variable B25007_014M; negative sentinels normalized to null)
+      - name: renter_35_to_44
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_015E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 35 to 44 years
+      - name: renter_35_to_44_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_015M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_015M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_35_to_44 (Census variable B25007_015M; negative sentinels normalized to null)
+      - name: renter_45_to_54
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_016E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 45 to 54 years
+      - name: renter_45_to_54_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_016M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_016M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_45_to_54 (Census variable B25007_016M; negative sentinels normalized to null)
+      - name: renter_55_to_59
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_017E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 55 to 59 years
+      - name: renter_55_to_59_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_017M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_017M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_55_to_59 (Census variable B25007_017M; negative sentinels normalized to null)
+      - name: renter_60_to_64
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_018E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 60 to 64 years
+      - name: renter_60_to_64_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_018M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_018M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_60_to_64 (Census variable B25007_018M; negative sentinels normalized to null)
+      - name: renter_65_to_74
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_019E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 65 to 74 years
+      - name: renter_65_to_74_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_019M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_019M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_65_to_74 (Census variable B25007_019M; negative sentinels normalized to null)
+      - name: renter_75_to_84
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_020E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 75 to 84 years
+      - name: renter_75_to_84_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_020M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_020M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_75_to_84 (Census variable B25007_020M; negative sentinels normalized to null)
+      - name: renter_85_and_over
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25007_021E" AS BIGINT)'
+        comment: Renter-occupied units where householder is 85 years and over
+      - name: renter_85_and_over_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25007_021M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25007_021M" AS BIGINT) END'
+        comment: 90% CI margin of error for renter_85_and_over (Census variable B25007_021M; negative sentinels normalized to null)
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B25007_001E,B25007_001M,B25007_002E,B25007_002M,B25007_003E,B25007_003M,B25007_004E,B25007_004M,B25007_005E,B25007_005M,B25007_006E,B25007_006M,B25007_007E,B25007_007M,B25007_008E,B25007_008M,B25007_009E,B25007_009M,B25007_010E,B25007_010M,B25007_011E,B25007_011M,B25007_012E,B25007_012M,B25007_013E,B25007_013M,B25007_014E,B25007_014M,B25007_015E,B25007_015M,B25007_016E,B25007_016M,B25007_017E,B25007_017M,B25007_018E,B25007_018M,B25007_019E,B25007_019M,B25007_020E,B25007_020M,B25007_021E,B25007_021M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_housing_tenure_by_age
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS INCOME DISTRIBUTION - Income brackets and Gini coefficient
   # ---------------------------------------------------------------------------
   - name: acs_income_distribution
@@ -5360,6 +5630,18 @@ constraints:
         targetColumns: [county_fips]
 
   acs_housing_tenure:
+    primaryKey: [year, geography, state, county]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_housing_tenure_by_age:
     primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
