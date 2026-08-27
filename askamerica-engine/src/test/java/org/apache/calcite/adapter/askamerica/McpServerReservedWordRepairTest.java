@@ -89,6 +89,21 @@ public class McpServerReservedWordRepairTest {
             quote("SELECT geo_name FROM t ORDER BY geo_name DESC"));
     }
 
+    @Test void leavesOverOrderByIntactEvenThoughOrderIsAlsoAColumnName() {
+        // D-016: the token right after OVER( opens a window-frame clause (PARTITION BY /
+        // ORDER BY / ROWS / RANGE) and is always a keyword there, never a column reference --
+        // but "(" alone is a legitimate identifier-position trigger everywhere else (e.g.
+        // foo(order)), so this needs one more token of lookback than the plain ORDER BY case
+        // above. Was producing RANK() OVER ("order" BY x), a parse failure, whenever the query
+        // also referenced another reserved-word column that put a candidate in scope.
+        assertTrue(CANDIDATES.contains("order"), "precondition: order is a column name here");
+        assertEquals(
+            "SELECT \"year\", RANK() OVER (ORDER BY indemnity_amount DESC) AS rnk "
+                + "FROM ag.rma_crop_insurance",
+            quote("SELECT year, RANK() OVER (ORDER BY indemnity_amount DESC) AS rnk "
+                + "FROM ag.rma_crop_insurance"));
+    }
+
     @Test void quotesAColumnUsedInAWherePredicate() {
         assertEquals(
             "SELECT \"year\", \"value\" FROM econ.inflation_metrics "

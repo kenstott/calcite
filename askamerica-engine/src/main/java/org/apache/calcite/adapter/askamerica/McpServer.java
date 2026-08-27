@@ -4357,12 +4357,24 @@ public class McpServer {
      *
      * <p>Every word actually rewritten is appended to {@code quoted}, so the caller can say
      * which words were repaired rather than silently changing someone's SQL.
+     *
+     * <p>One position needs a second exception on top of the {@link #IDENTIFIER_POSITION_TOKENS}
+     * check: the token directly after {@code OVER (} opens a window-frame clause
+     * ({@code PARTITION BY} / {@code ORDER BY} / {@code ROWS} / {@code RANGE}), and every one of
+     * those is a SQL keyword there, never a column reference &mdash; but {@code (} alone is a
+     * legitimate identifier-position trigger everywhere else (e.g. {@code foo(order)}), so the
+     * generic check can't tell the two apart from {@code prev} alone. Tracking one more token of
+     * lookback ({@code prevPrev}) so the rewrite can see "this specific {@code (} was opened by
+     * {@code OVER}" is enough: it was firing this exact word wrong for {@code RANK() OVER
+     * ("order" BY x)}, breaking every window function whenever the same query also referenced an
+     * unrelated reserved-word column elsewhere.
      */
     static String quoteBareReservedColumns(String sql, java.util.Set<String> candidates,
         java.util.List<String> quoted) {
         StringBuilder out = new StringBuilder(sql.length() + 16);
         java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
         String prev = "SELECT";
+        String prevPrev = "";
         int i = 0;
         while (i < sql.length()) {
             char c = sql.charAt(i);
@@ -4373,6 +4385,7 @@ public class McpServer {
                     break;
                 }
                 out.append(sql, i, close + 1);
+                prevPrev = prev;
                 prev = "";
                 i = close + 1;
                 continue;
@@ -4390,19 +4403,22 @@ public class McpServer {
                     k++;
                 }
                 boolean isCall = k < sql.length() && sql.charAt(k) == '(';
-                if (candidates.contains(lower) && !isCall
+                boolean opensWindowFrame = "(".equals(prev) && "OVER".equals(prevPrev);
+                if (candidates.contains(lower) && !isCall && !opensWindowFrame
                     && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
                     out.append('"').append(lower).append('"');
                     seen.add(lower);
                 } else {
                     out.append(ident);
                 }
+                prevPrev = prev;
                 prev = ident.toUpperCase(java.util.Locale.ROOT);
                 i = j;
                 continue;
             }
             out.append(c);
             if (!Character.isWhitespace(c)) {
+                prevPrev = prev;
                 prev = String.valueOf(c);
             }
             i++;
