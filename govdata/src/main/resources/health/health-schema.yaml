@@ -1879,6 +1879,12 @@ partitionedTables:
         pattern: ""
       partition:
         columns: [source_type]
+        # The fetch-routing dimension (dimensions.source_type, above) has 3 values, but
+        # CdcMortalityResponseTransformer's output column has only 2 (annual/weekly).
+        # This makes the partition value follow the row's own transformed column instead
+        # of the coarser fetch-dimension value.
+        valueSource:
+          source_type: source_type
       options:
         compression: snappy
       iceberg:
