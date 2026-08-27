@@ -2193,13 +2193,20 @@ partitionedTables:
       - name: sctg_code
         type: string
         nullable: true
-        expression: 'src."SCTG"'
-        comment: SCTG commodity code
+        # lpad (not a bare passthrough): the raw SCTG column mixes unpadded single-digit codes
+        # ("0".."9") with already-2-digit codes and "NN-NN" collapsed-group ranges — lpad only
+        # pads shorter strings, so 2-digit and 5-char range values pass through unchanged. This
+        # is what makes a plain code join to cfs_sctg_ref.sctg_code work for every non-suppressed
+        # single value (FK comment below).
+        expression: 'CASE WHEN src."SCTG" IS NULL OR src."SCTG"='''' THEN NULL ELSE lpad(src."SCTG", 2, ''0'') END'
+        comment: SCTG commodity code, zero-padded to 2 digits (FK to cfs_sctg_ref.sctg_code for single non-suppressed codes; a "NN-NN" value is a confidentiality-collapsed range with no single ref row)
       - name: mode_code
         type: string
         nullable: true
-        expression: 'src."MODE"'
-        comment: CFS transport mode code (raw; some recoded for confidentiality)
+        # Same lpad rationale as sctg_code — raw MODE mixes unpadded 1-digit codes with the
+        # already-2/3-digit codes (e.g. "101"); lpad leaves the latter untouched.
+        expression: 'CASE WHEN src."MODE" IS NULL OR src."MODE"='''' THEN NULL ELSE lpad(src."MODE", 2, ''0'') END'
+        comment: CFS transport mode code, zero-padded to 2+ digits (raw; some recoded for confidentiality; FK to cfs_mode_ref.mode_code)
       - name: shipmt_value
         type: double
         nullable: true
@@ -2278,6 +2285,119 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 3
         incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # CFS SCTG / MODE REFERENCE — code lists from the CFS PUF Data Users Guide (static)
+  # ---------------------------------------------------------------------------
+  - name: cfs_sctg_ref
+    freshness:
+      type: hash
+    pattern: "type=cfs_sctg_ref/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      SCTG (Standard Classification of Transported Goods) code list — Appendix A-3 of the
+      2017 CFS PUF Data Users Guide, the cfs_shipments.sctg_code lookup. Census/BTS publish
+      this only as a PDF table (no CSV/XLSX distribution), parsed here via CfsSctgRefTransformer.
+      43 rows: the 41 detailed 2-digit codes, "43" (mixed freight), and "00" (suppressed).
+      sctg_group is populated only on the first code of a confidentiality-collapsed range (e.g.
+      "01" carries group "01-05"); cfs_shipments.sctg_code itself can also independently hold
+      the collapsed "NN-NN" range value directly, which has no matching single row here — that
+      is expected, not a join defect (see the sctg_code column comment on cfs_shipments).
+      2017-vintage, one-time reference data; Census has not revised this appendix since.
+
+    dimensions:
+      type:
+        - cfs_sctg_ref
+
+    columns:
+      - name: sctg_code
+        type: string
+        nullable: false
+        comment: 2-digit SCTG code (PK; "00" = suppressed, "43" = mixed freight)
+      - name: description
+        type: string
+        nullable: false
+        comment: Official SCTG commodity description
+      - name: sctg_group
+        type: string
+        nullable: true
+        comment: Confidentiality-collapsed SCTG group range this code heads (e.g. "01-05"), only where the appendix gives one
+
+    source:
+      type: http
+      url: "https://www2.census.gov/programs-surveys/cfs/datasets/2017/cfs_2017_puf_users_guide.pdf"
+      method: GET
+      response:
+        format: TEXT   # CfsSctgRefTransformer re-downloads the PDF and emits JSON rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.CfsSctgRefTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cfs_sctg_ref/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: cfs_sctg_ref
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
+  - name: cfs_mode_ref
+    freshness:
+      type: hash
+    pattern: "type=cfs_mode_ref/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Mode of transportation code list — Appendix A-4 of the 2017 CFS PUF Data Users Guide,
+      the cfs_shipments.mode_code lookup. Parsed via CfsModeRefTransformer from the same PDF
+      as cfs_sctg_ref (no CSV/XLSX distribution exists). 21 rows: the 20 detailed mode codes
+      (e.g. "04" for-hire truck, "06" rail, "101" multiple waterways) plus "00" (suppressed).
+      2017-vintage, one-time reference data; Census has not revised this appendix since.
+
+    dimensions:
+      type:
+        - cfs_mode_ref
+
+    columns:
+      - name: mode_code
+        type: string
+        nullable: false
+        comment: CFS mode code (PK; "00" = suppressed)
+      - name: description
+        type: string
+        nullable: false
+        comment: Official mode-of-transportation description
+
+    source:
+      type: http
+      url: "https://www2.census.gov/programs-surveys/cfs/datasets/2017/cfs_2017_puf_users_guide.pdf"
+      method: GET
+      response:
+        format: TEXT   # CfsModeRefTransformer re-downloads the PDF and emits JSON rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.CfsModeRefTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cfs_mode_ref/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: cfs_mode_ref
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
@@ -2685,6 +2805,20 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+      # Not enforced/checked for "NN-NN" collapsed-range values (no single ref row by design —
+      # see the sctg_code column comment); DQ's T8 join-coverage check accounts for this.
+      - columns: [sctg_code]
+        targetTable: cfs_sctg_ref
+        targetColumns: [sctg_code]
+      - columns: [mode_code]
+        targetTable: cfs_mode_ref
+        targetColumns: [mode_code]
+
+  cfs_sctg_ref:
+    primaryKey: [sctg_code]
+
+  cfs_mode_ref:
+    primaryKey: [mode_code]
 
   bridges:
     primaryKey: [year, state_code, structure_number]

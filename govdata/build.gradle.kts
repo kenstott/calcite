@@ -127,6 +127,9 @@ dependencies {
     // Pure-Java Access (.mdb) reader for the NTSB aviation accident database (avall.mdb)
     implementation("com.healthmarketscience.jackcess:jackcess:4.0.5")
 
+    // PDF text extraction for the CFS PUF Data Users Guide's SCTG/Mode code-list appendices
+    implementation("org.apache.pdfbox:pdfbox:2.0.31")
+
     // Geometry processing with JTS (lightweight)
     implementation("org.locationtech.jts:jts-core:1.19.0")
 

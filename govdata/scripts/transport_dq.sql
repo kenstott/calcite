@@ -351,6 +351,10 @@ WITH counts AS (
   SELECT 'ntsb_aviation_accidents', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/ntsb_aviation_accidents', allow_moved_paths := true) LIMIT 1))
   UNION ALL
   SELECT 'bridges'                , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'cfs_sctg_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_sctg_ref', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'cfs_mode_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_mode_ref', allow_moved_paths := true) LIMIT 1))
 )
 SELECT 'transport', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
@@ -408,6 +412,51 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
       WHERE (decimal_latitude IS NOT NULL AND (decimal_latitude < 13 OR decimal_latitude > 72))
          OR (decimal_longitude IS NOT NULL AND (decimal_longitude < -180 OR decimal_longitude > -64)));
 
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cfs_sctg_ref / cfs_mode_ref (CFS PUF Data Users Guide appendix code lists; static,
+-- one PDF fetch — see the table comments in the schema for why there is no CSV/XLSX source)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'cfs_sctg_ref', 'T2_row_count',
+  CASE WHEN n = 43 THEN 'pass' ELSE 'fail' END, n, 43,
+  'Fixed 2017 CFS PUF appendix — exactly 43 SCTG codes (41 detailed + "43" mixed freight + "00" suppressed)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_sctg_ref', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'cfs_mode_ref', 'T2_row_count',
+  CASE WHEN n = 21 THEN 'pass' ELSE 'fail' END, n, 21,
+  'Fixed 2017 CFS PUF appendix — exactly 21 mode codes (20 detailed + "00" suppressed)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_mode_ref', allow_moved_paths := true));
+
+-- Join coverage: every non-null, non-suppressed cfs_shipments.sctg_code/mode_code that is NOT
+-- a confidentiality-collapsed "NN-NN" range should resolve against the ref table. WARN not
+-- FAIL — a scoped/partial cfs_shipments DQ sample can legitimately miss a rare code.
+INSERT INTO dq_results
+SELECT 'transport', 'cfs_shipments', 'T8_sctg_code_resolves',
+  CASE WHEN n_unresolved = 0 THEN 'pass' ELSE 'warn' END, n_unresolved, 0,
+  'sctg_code values (excluding NN-NN collapsed ranges) with no match in cfs_sctg_ref'
+FROM (
+  SELECT COUNT(*) AS n_unresolved
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_shipments', allow_moved_paths := true) s
+  WHERE s.sctg_code IS NOT NULL AND s.sctg_code NOT LIKE '%-%'
+    AND NOT EXISTS (
+      SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_sctg_ref', allow_moved_paths := true) r
+      WHERE r.sctg_code = s.sctg_code)
+);
+
+INSERT INTO dq_results
+SELECT 'transport', 'cfs_shipments', 'T8_mode_code_resolves',
+  CASE WHEN n_unresolved = 0 THEN 'pass' ELSE 'warn' END, n_unresolved, 0,
+  'mode_code values with no match in cfs_mode_ref'
+FROM (
+  SELECT COUNT(*) AS n_unresolved
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_shipments', allow_moved_paths := true) s
+  WHERE s.mode_code IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_mode_ref', allow_moved_paths := true) r
+      WHERE r.mode_code = s.mode_code)
+);
 
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
