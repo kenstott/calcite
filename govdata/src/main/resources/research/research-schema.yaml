@@ -3,13 +3,18 @@
 # ============================================================================
 # Data source: NSF NCSES (National Center for Science and Engineering
 # Statistics) — one of the 13 Principal Federal Statistical Agencies. There is
-# NO NCSES JSON API (ncsesdata.nsf.gov/api/ returns 405); every series is a free,
-# unauthenticated BULK FILE download over HTTPS. Three annual surveys, one tall
-# Iceberg table each (one ETL table = one upstream NCSES series):
+# NO NCSES JSON API (ncsesdata.nsf.gov/api/ returns 405); every NCSES series is a
+# free, unauthenticated BULK FILE download over HTTPS. One tall Iceberg table
+# each (one ETL table = one upstream NCSES series):
 #
 #   - nsf_national_rd              National Patterns of R&D (multi-year XLSX, Table 1)
 #   - nsf_federal_rd_obligations   Federal Funds for R&D (single-FY XLSX, Table 7)
+#   - nsf_rd_by_field              Federal Funds for R&D by field, all-agency/all-performer (XLSX)
 #   - nsf_herd_by_institution      HERD survey institution microdata (per-year ZIP CSV)
+#
+# nih_award_projects is NOT NCSES data — it's NIH's own RePORTER award-level
+# microdata (POST JSON API, DataProvider, not a bulk file), added here because
+# this is where funding-input data already lives, not because it's NCSES.
 #
 # Design notes (see govdata-schema-authoring):
 #   - No key required — nothing added to .env.prod.
@@ -323,6 +328,142 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # --- NIH AWARD-LEVEL MICRODATA — RePORTER API (POST, DataProvider) ---------
+  - name: nih_award_projects
+    pattern: "type=nih_award_projects/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    freshness:
+      type: hash
+    comment: >
+      NIH award-level grant microdata from RePORTER's POST /v2/projects/search API — one row
+      per funded project per fiscal year, with award_amount and activity_code (mechanism, e.g.
+      R01/F32), closing the gap that nsf_federal_rd_obligations/nsf_herd_by_institution leave
+      open: those are agency/institution TOTALS, not individual-award size or count. Answers
+      "is award size/count shifting toward fewer-bigger or more-smaller grants" directly.
+
+      RePORTER caps every query at offset<=14999 (confirmed live — a higher offset returns a
+      plain error, not an empty page), and a single fiscal year runs ~85,000 awards nationally,
+      well over that. NihReporterAwardsProvider slices by agency_ic (NIH Institute/Center) to
+      stay under the cap per (year, IC) query — the largest IC (NCI) was ~13,200 awards in a
+      single year when this was checked live, versus the ~15,000 ceiling — and walks each
+      slice's own pages to exhaustion, so the (year, IC) union is the true complete population
+      for that year, not a sampled prefix. Not NCSES data (unlike the rest of this schema — see
+      the schema-level header note); NIH itself, added because this schema is where funding-
+      input data already lives.
+
+      Scoped to FY2022-2024 (a recent-years trend window, not full history) by deliberate
+      choice — RePORTER's data goes back to FY1985, and growing this list is safe/expected but
+      was left out of the initial build to bound scope; extend the year dimension list to add
+      more years.
+
+    dimensions:
+      type:
+        - nih_award_projects
+      year:
+        - "2022"
+        - "2023"
+        - "2024"
+      agency_ic:
+        - NCI
+        - NIGMS
+        - NHLBI
+        - NIAID
+        - NICHD
+        - NIDDK
+        - NINDS
+        - NIMH
+        - NIA
+        - NIDA
+        - NEI
+        - NIAAA
+        - NIDCR
+        - NIEHS
+        - NIAMS
+        - NCATS
+        - NHGRI
+        - NIMHD
+        - NCCIH
+        - NIBIB
+        - NLM
+        - FIC
+        - NIDCD
+        - OD
+
+    columns:
+      - name: appl_id
+        type: long
+        nullable: false
+        comment: RePORTER application id — PK (one per funded project per fiscal year; a renewal gets a new appl_id each year)
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: NIH fiscal year
+      - name: project_num
+        type: string
+        nullable: true
+        comment: Full project number (grant number), stable across a project's renewal years
+      - name: agency_ic
+        type: string
+        nullable: true
+        comment: Administering NIH Institute/Center abbreviation, from the response (not just the query filter)
+      - name: activity_code
+        type: string
+        nullable: true
+        comment: NIH activity/mechanism code (e.g. R01, F32, U01)
+      - name: award_amount
+        type: double
+        nullable: true
+        comment: Total award amount for this fiscal year (USD)
+      - name: is_active
+        type: boolean
+        nullable: true
+      - name: contact_pi_name
+        type: string
+        nullable: true
+      - name: org_name
+        type: string
+        nullable: true
+        comment: Recipient institution name
+      - name: org_city
+        type: string
+        nullable: true
+      - name: org_state
+        type: string
+        nullable: true
+        comment: FK to geo.state_ref.state_abbr (nullable — foreign recipients have no US state)
+      - name: org_country
+        type: string
+        nullable: true
+
+    source:
+      type: http
+      url: "https://api.reporter.nih.gov/v2/projects/search"
+      method: POST
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.research.NihReporterAwardsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nih_award_projects/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nih_award_projects
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # --- HIGHER EDUCATION R&D (HERD) — institution microdata -------------------
   - name: nsf_herd_by_institution
     # NCSES restates prior-year figures on every annual release (see schema header
@@ -459,6 +600,14 @@ constraints:
 
   nsf_rd_by_field:
     primaryKey: [year, rd_field]
+
+  nih_award_projects:
+    primaryKey: [type, appl_id]
+    foreignKeys:
+      - columns: [org_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   nsf_herd_by_institution:
     primaryKey: [year, inst_id, rd_field, funding_source, federal_agency]

@@ -174,6 +174,58 @@ FROM (
 );
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: nih_award_projects (NIH RePORTER; FY2022-2024 recent-years window, not full history)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'research', 'nih_award_projects', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_award_projects', 'T2_row_count',
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END, n, 50000,
+  'Expected >=50000 awards for a single fiscal year (national FY total runs ~85,000)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true) WHERE fiscal_year = 2023);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_award_projects', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_award_projects', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL appl_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true) WHERE appl_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_award_projects', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate appl_id rows (offset-cap slicing by agency_ic should make each appl_id unique)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT appl_id, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true)
+  GROUP BY appl_id HAVING COUNT(*) > 1
+));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_award_projects', 'T7_ic_count',
+  CASE WHEN n >= 20 THEN 'pass' ELSE 'fail' END, n, 20,
+  'Distinct agency_ic values present (24 ICs queried; expect most to have at least one award per year)'
+FROM (SELECT COUNT(DISTINCT agency_ic) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_award_projects', 'T7_amount_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
+  'award_amount outside plausible [0, 50000000] range for a single project-year'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true)
+      WHERE award_amount IS NOT NULL AND (award_amount < 0 OR award_amount > 50000000));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: nsf_herd_by_institution
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
