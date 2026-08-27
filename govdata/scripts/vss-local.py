@@ -37,15 +37,15 @@ vectorized_chunks-shaped Iceberg table (see
 org.apache.calcite.adapter.govdata.ref.ChunkOrganizer for the row-concat producer).
 
 Commands:
-  backlog [--max-rows N --max-seconds S] [--source-schema S --iceberg-path P]
-                        PRIMARY job. Code the un-coded delta (newest-first for SEC),
-                        capped at --max-rows and time-boxed to --max-seconds (~2h); the
-                        backlog drains over successive runs. CPU only — no GPU. Defaults
-                        to SEC's own vectorized_chunks/codes; pass --source-schema (plus
-                        --iceberg-path, since each source's chunks live at a different
-                        path) to drain any other source's chunks the same way.
+  backlog [--max-rows N --max-seconds S]
+                        PRIMARY job. ref.vectorized_chunks is ONE table holding chunks from
+                        every source (sec, ref, fedregister, cyber_threat, ...) -- this is
+                        ONE queue over the whole table's un-coded delta, not a per-schema
+                        job. Capped at --max-rows and time-boxed to --max-seconds (~2h); the
+                        backlog drains over successive runs, resuming via the one watermark
+                        (see WATERMARK_DIR below). CPU only — no GPU.
   year --year N         Code a single SEC year's delta (manual/targeted).
-  stats                 Per-year counts in SEC's codes dataset.
+  stats                 Per-(source_schema, year) counts across every codes dataset.
 """
 
 import argparse
@@ -68,12 +68,6 @@ PARQUET_BUCKET = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-v1"
 # SEC's chunks are promoted into the shared ref.vectorized_chunks table (source_schema='sec'
 # partition) -- this schema no longer materializes its own vectorized_chunks Iceberg table.
 ICEBERG_CHUNKS = f"{PARQUET_BUCKET}/ref/vectorized_chunks"
-# The delivered semantic-search artifact: an append-only parquet dataset of quantized
-# codes (one file per producer run), Hive-partitioned by source_schema so a schema-scoped
-# search prunes to its own partition and future non-SEC sources land alongside SEC without
-# a layout change. Overridable so tests can target a scratch prefix.
-CODES_DATASET = os.environ.get(
-    "VSS_CODES_DATASET", f"{PARQUET_BUCKET}/sec/vectorized_chunk_codes/source_schema=sec")
 RCLONE_REMOTE = os.environ.get("GOVDATA_RCLONE_REMOTE", "minio")
 # Consolidate the codes dataset once it exceeds this many files (incremental flush + daily runs
 # accumulate small files; too many slows the query glob + the delta anti-join).
@@ -82,37 +76,80 @@ COMPACT_MIN_FILES = int(os.environ.get("VSS_COMPACT_MIN_FILES", "16"))
 # norm so components sit well inside +/-0.35; a fixed global scale keeps int8 dot
 # products comparable across rows for rerank.
 I8_SCALE = float(os.environ.get("VSS_I8_SCALE", "0.35"))
-MEM_LIMIT = os.environ.get("VSS_MEM_LIMIT", "4GB")
+# The unified backlog query joins+sorts across every source_schema partition of
+# ref.vectorized_chunks at once (no more per-schema partition pruning to shrink the working set
+# first), so it needs more headroom than the old per-schema scans did -- 4GB OOM'd live on just
+# an ORDER BY chunk_id LIMIT 50 test. No safe fixed default exists here: this runs alongside
+# whatever else the pool is doing on the same box at the time, so the caller must set
+# VSS_MEM_LIMIT explicitly based on actual free memory when launching a real run, not have the
+# script assume a number.
+MEM_LIMIT = os.environ.get("VSS_MEM_LIMIT")
+if not MEM_LIMIT:
+    raise SystemExit(
+        "VSS_MEM_LIMIT not set -- check free memory on this box and set it explicitly "
+        "(the unified backlog query needs more than the old default; there is no safe "
+        "one-size-fits-all default with a shared pool running other jobs concurrently)")
 TEMP_DIR = os.environ.get("VSS_TEMP_DIR", "/var/tmp/govdata/vss_tmp_duck")
+
+# ONE watermark for the ONE queue: ref.vectorized_chunks is a single table holding chunks from
+# every source, so there is exactly one backlog and exactly one resume position, not one per
+# source_schema. It is just the chunk_id of the last chunk this process actually finished
+# embedding -- the chunks scan and the codes write both walk chunk_id in the same ascending
+# order, so "we got through here" is always a safe place to resume, whether a run drained
+# everything or stopped at --max-seconds. It advances after every run, never gated on the whole
+# backlog being exhaustively drained first.
+#
+# The `_done` anti-join stays as a safety net on top of this: a crash between writing a codes
+# file and saving the watermark just gets re-scanned and found already-coded next run, never
+# double-embedded. No watermark file (first run) means start of the queue.
+WATERMARK_DIR = os.environ.get("VSS_WATERMARK_DIR", os.path.join(GOVDATA_HOME, ".vss-watermarks"))
+WATERMARK_PATH = os.path.join(WATERMARK_DIR, "chunk_id_watermark")
+
+
+def _load_watermark():
+    try:
+        with open(WATERMARK_PATH) as f:
+            return f.read().strip() or None
+    except FileNotFoundError:
+        return None
+
+
+def _save_watermark(chunk_id):
+    os.makedirs(WATERMARK_DIR, exist_ok=True)
+    tmp = WATERMARK_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(chunk_id)
+    os.replace(tmp, WATERMARK_PATH)
 
 
 def codes_dataset_for(source_schema):
-    """Hive-partitioned codes path for a given source_schema -- the same layout SEC's own
-    producer uses (CODES_DATASET above), generalized so a new source needs a registry entry,
-    not a code change. VSS_CODES_DATASET still overrides everything, same as CODES_DATASET."""
+    """Hive-partitioned codes output path for a given source_schema -- physical storage stays
+    partitioned this way (same idea as ref.vectorized_chunks itself: one table, one queue, but
+    partitioned on disk) even though the backlog queue that fills it is unified across all of
+    them. VSS_CODES_DATASET overrides to a single scratch path for every schema (tests only)."""
     override = os.environ.get("VSS_CODES_DATASET")
     if override:
         return override
     return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunk_codes/source_schema={source_schema}"
 
 
-# Every source_schema value ChunkOrganizer (govdata/.../ref/ChunkOrganizer.java) ever writes
-# into the shared ref.vectorized_chunks table: 'sec' via the backfill + live redirect,
-# everything else via its ROW_CONCAT_SOURCES/DOCUMENT_BLOB_SOURCES registries. Keep this in
-# sync with those registries -- a source_schema present there but missing here silently
-# resolves to a nonexistent per-schema table path below instead of the shared one (confirmed
-# live: this happened for 'fedregister'/'cyber_threat' after 'ref' was onboarded).
-SHARED_CHUNKS_SCHEMAS = ("sec", "ref", "fedregister", "cyber_threat")
+# Every source_schema value ChunkOrganizer (govdata/.../ref/ChunkOrganizer.java) ever writes into
+# the shared ref.vectorized_chunks table -- keep in sync with SemanticSearch.java's own
+# DEFAULT_SOURCE_SCHEMAS, which reads the same codes for search. A source_schema present there
+# but missing here just means its un-coded chunks keep getting found (harmless, re-embedded into
+# its own new partition the moment this list catches up); NOT keeping this in sync with
+# ChunkOrganizer's own registries would mean a real embedding never gets picked up as "done" (its
+# codes exist but this list can't see them), which is the failure mode worth avoiding.
+CODES_SOURCE_SCHEMAS = ("sec", "ref", "fedregister", "cyber_threat")
 
 
-def iceberg_chunks_for(source_schema):
-    """vectorized_chunks Iceberg path for a given source_schema. Sources sharing the one
-    promoted ref.vectorized_chunks table (ICEBERG_CHUNKS above, partitioned by source_schema)
-    are listed in SHARED_CHUNKS_SCHEMAS; anything else falls back to a per-schema directory
-    (no such source exists yet, but the fallback keeps this function total)."""
-    if source_schema in SHARED_CHUNKS_SCHEMAS:
-        return ICEBERG_CHUNKS
-    return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunks"
+def _codes_glob_arg():
+    """Bracketed list of every known codes dataset's glob, for one read_parquet() call spanning
+    all of them -- NOT a bare '*' at the bucket root, which would make DuckDB list every prefix
+    in the entire multi-schema bucket (confirmed live: a multi-minute paginated LIST across
+    unrelated schemas' data, not just the ~4 relevant ones)."""
+    return "[" + ", ".join(
+        f"'{codes_dataset_for(s)}/*.parquet'" for s in CODES_SOURCE_SCHEMAS) + "]"
 
 
 # ── Embedder interface ────────────────────────────────────────────────────────
@@ -164,6 +201,10 @@ def connect_lake():
     con = duckdb.connect()
     con.execute(f"SET memory_limit='{MEM_LIMIT}'")
     con.execute(f"SET temp_directory='{TEMP_DIR}'")
+    # The backlog query has its own explicit ORDER BY chunk_id, so DuckDB doesn't also need to
+    # preserve arbitrary intermediate-operator ordering just to keep output order stable --
+    # turning that off frees the buffering it costs.
+    con.execute("SET preserve_insertion_order=false")
     con.execute("INSTALL httpfs; LOAD httpfs")
     con.execute("INSTALL iceberg; LOAD iceberg")
     for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
@@ -181,15 +222,18 @@ def connect_lake():
 
 
 def _load_done(con, dataset=None):
-    """Temp table `_done` of already-coded chunk_ids; empty if the dataset is new."""
-    dataset = dataset or CODES_DATASET
+    """Temp table `_done` of already-coded chunk_ids across EVERY source's codes dataset (a
+    bracketed list of each known dataset's own glob -- one queue needs one combined view of
+    what's already coded, not a per-schema one). `dataset`, when passed, narrows to a single
+    dataset's own glob (used by compact/dedup, which do operate one physical dataset at a time)."""
+    codes_arg = f"'{dataset}/*.parquet'" if dataset else _codes_glob_arg()
     try:
         con.execute(
             f"CREATE OR REPLACE TEMP TABLE _done AS "
-            f"SELECT DISTINCT chunk_id FROM read_parquet('{dataset}/*.parquet')")
+            f"SELECT DISTINCT chunk_id FROM read_parquet({codes_arg})")
         return con.execute("SELECT count(*) FROM _done").fetchone()[0]
     except Exception as e:
-        # First run: the dataset doesn't exist yet. Only swallow "no files"; re-raise
+        # First run: no codes dataset exists yet anywhere. Only swallow "no files"; re-raise
         # anything else (bad creds, endpoint, etc.) so config errors aren't masked.
         if "No files found" in str(e) or "does not exist" in str(e):
             con.execute("CREATE OR REPLACE TEMP TABLE _done(chunk_id VARCHAR)")
@@ -207,66 +251,74 @@ def _pack_codes(X):
     return W, I8
 
 
-def _write_codes(con, ids, yrs, W, I8, label, dataset=None):
-    """Append one parquet file of codes for this run to the lake dataset. `dataset` defaults
-    to CODES_DATASET (SEC's own producer path); row-concat mode passes its own
-    codes_dataset_for(source_schema) so a second source lands in its own partition without
-    touching SEC's."""
+def _write_codes(con, ids, schemas, yrs, W, I8, label):
+    """Append one parquet file of codes per source_schema present in this batch -- the queue is
+    one unified thing, but physical storage stays Hive-partitioned by source_schema (same layout
+    as ref.vectorized_chunks itself: one table, partitioned, not one table per source). Returns
+    the set of source_schema values actually written this call, for compaction bookkeeping."""
     import numpy as np
     import pyarrow as pa
-    dataset = dataset or CODES_DATASET
-    rerank = pa.FixedSizeListArray.from_arrays(pa.array(I8.reshape(-1), type=pa.int8()), 384)
-    tbl = pa.table({
-        "chunk_id": pa.array(ids, pa.string()),
-        "year": pa.array(np.asarray(yrs, dtype=np.int32)),
-        "w0": pa.array(np.ascontiguousarray(W[:, 0])),
-        "w1": pa.array(np.ascontiguousarray(W[:, 1])),
-        "w2": pa.array(np.ascontiguousarray(W[:, 2])),
-        "w3": pa.array(np.ascontiguousarray(W[:, 3])),
-        "w4": pa.array(np.ascontiguousarray(W[:, 4])),
-        "w5": pa.array(np.ascontiguousarray(W[:, 5])),
-        "rerank_i8": rerank,
-    })
-    con.register("_codes_out", tbl)
-    out = f"{dataset}/codes-{label}.parquet"
-    con.execute(f"COPY _codes_out TO '{out}' (FORMAT parquet, COMPRESSION zstd)")
-    con.unregister("_codes_out")
-    return out
+    schemas_arr = np.asarray(schemas)
+    touched = set()
+    for schema in sorted(set(schemas)):
+        idx = np.where(schemas_arr == schema)[0]
+        rerank = pa.FixedSizeListArray.from_arrays(
+            pa.array(I8[idx].reshape(-1), type=pa.int8()), 384)
+        tbl = pa.table({
+            "chunk_id": pa.array([ids[i] for i in idx], pa.string()),
+            "year": pa.array(np.asarray([yrs[i] for i in idx], dtype=np.int32)),
+            "w0": pa.array(np.ascontiguousarray(W[idx, 0])),
+            "w1": pa.array(np.ascontiguousarray(W[idx, 1])),
+            "w2": pa.array(np.ascontiguousarray(W[idx, 2])),
+            "w3": pa.array(np.ascontiguousarray(W[idx, 3])),
+            "w4": pa.array(np.ascontiguousarray(W[idx, 4])),
+            "w5": pa.array(np.ascontiguousarray(W[idx, 5])),
+            "rerank_i8": rerank,
+        })
+        con.register("_codes_out", tbl)
+        out = f"{codes_dataset_for(schema)}/codes-{label}-{schema}.parquet"
+        con.execute(f"COPY _codes_out TO '{out}' (FORMAT parquet, COMPRESSION zstd)")
+        con.unregister("_codes_out")
+        print(f"[{label}] flushed {len(idx)} {schema} codes -> {out}", flush=True)
+        touched.add(schema)
+    return touched
 
 
-def _embed_and_write(con, todo, label, max_seconds=None, dataset=None):
-    """Embed every (chunk_id, yr, chunk_text) in `todo`, quantize, and APPEND codes to the lake
-    dataset — flushing a parquet file every FLUSH_ROWS so memory stays flat and each flush is
-    durable (a crash/time-box costs only the un-flushed tail, not the whole run). Stops early if
-    max_seconds elapses; the remainder is picked up next run."""
+def _embed_and_write(con, todo, label, max_seconds=None):
+    """Embed every (chunk_id, source_schema, yr, chunk_text) in `todo` -- ALREADY in ascending
+    chunk_id order, the one queue's scan order -- quantize, and write codes, flushing every
+    FLUSH_ROWS so memory stays flat and each flush is durable. Stops early if max_seconds
+    elapses; the remainder is picked up next run from wherever this one actually got to.
+    Returns (rows actually embedded, chunk_id of the last one, set of schemas touched)."""
     import numpy as np
     total = len(todo)
     if total == 0:
-        return 0
+        return 0, None, set()
     emb = make_embedder()
-    ids, yrs, Ws, I8s = [], [], [], []
+    ids, schemas, yrs, Ws, I8s = [], [], [], [], []
     buffered = 0
     flush_idx = 0
     done = 0
     t0 = time.time()
+    touched = set()
 
     def _flush():
-        nonlocal ids, yrs, Ws, I8s, buffered, flush_idx
+        nonlocal ids, schemas, yrs, Ws, I8s, buffered, flush_idx
         if not ids:
             return
-        out = _write_codes(con, ids, yrs, np.concatenate(Ws), np.concatenate(I8s),
-                           f"{label}-{flush_idx:04d}", dataset=dataset)
-        print(f"[{label}] flushed {len(ids)} codes -> {out}", flush=True)
-        ids, yrs, Ws, I8s = [], [], [], []
+        touched.update(_write_codes(con, ids, schemas, yrs, np.concatenate(Ws),
+                                     np.concatenate(I8s), f"{label}-{flush_idx:04d}"))
+        ids, schemas, yrs, Ws, I8s = [], [], [], [], []
         buffered = 0
         flush_idx += 1
 
     while done < total:
         batch = todo[done:done + BATCH]
-        X = np.asarray(emb.embed([r[2] for r in batch]), dtype=np.float32)
+        X = np.asarray(emb.embed([r[3] for r in batch]), dtype=np.float32)
         W, I8 = _pack_codes(X)
         ids.extend(r[0] for r in batch)
-        yrs.extend(int(r[1]) for r in batch)
+        schemas.extend(r[1] for r in batch)
+        yrs.extend(int(r[2]) for r in batch)
         Ws.append(W)
         I8s.append(I8)
         buffered += len(batch)
@@ -282,7 +334,8 @@ def _embed_and_write(con, todo, label, max_seconds=None, dataset=None):
             break
     _flush()
     print(f"[{label}] complete: coded {done} chunks this run", flush=True)
-    return done
+    last_chunk_id = todo[done - 1][0] if done > 0 else None
+    return done, last_chunk_id, touched
 
 
 def _run_label(prefix):
@@ -304,28 +357,38 @@ def _list_code_files(dataset):
     return [f.strip() for f in r.stdout.splitlines() if f.strip().endswith(".parquet")]
 
 
-def cmd_compact(con=None, dataset=None):
-    """Merge the codes dataset's many small files into one, once it exceeds COMPACT_MIN_FILES.
-    The consolidated file is written to a .compact/ staging key (outside the flat *.parquet glob),
-    moved into place, then the sources are deleted — so the query glob never sees a half-written
-    file. The brief overlap duplicates some chunk_ids, which is benign for search (redundant, not
-    missing) and for the delta anti-join (still 'coded')."""
-    dataset = dataset or CODES_DATASET
+def cmd_compact(con=None, dataset=None, force=False):
+    """Merge the codes dataset's many small files into one, once it exceeds COMPACT_MIN_FILES
+    (or unconditionally when force=True). The consolidated file is written to a .compact/
+    staging key (outside the flat *.parquet glob), moved into place, then the sources are
+    deleted — so the query glob never sees a half-written file. The merge keeps one row per
+    chunk_id (arbitrary pick among duplicates -- they're re-encodings of the same chunk_text,
+    so any is as good as any other): overlapping backlog runs can each code the same
+    not-yet-`_done`-visible chunk before either commits, and without this the duplicates would
+    only ever be merged together, never removed, growing every compaction."""
+    if dataset is None:
+        raise ValueError("cmd_compact requires an explicit dataset (which source_schema's codes)")
     own = con is None
     con = con or connect_lake()
     try:
         files = _list_code_files(dataset)
-        if len(files) <= COMPACT_MIN_FILES:
+        if not force and len(files) <= COMPACT_MIN_FILES:
             print(f"[compact] {len(files)} files <= threshold {COMPACT_MIN_FILES} — nothing to do",
                   flush=True)
+            return
+        if not files:
+            print("[compact] no files to compact", flush=True)
             return
         tag = time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
         staged = f"{dataset}/.compact/codes-compact-{tag}.parquet"
         final = f"{dataset}/codes-compact-{tag}.parquet"
-        print(f"[compact] merging {len(files)} files ...", flush=True)
+        print(f"[compact] merging {len(files)} files (deduped by chunk_id) ...", flush=True)
         t = time.time()
-        con.execute(f"COPY (SELECT * FROM read_parquet('{dataset}/*.parquet')) "
-                    f"TO '{staged}' (FORMAT parquet, COMPRESSION zstd)")
+        con.execute(
+            f"COPY (SELECT * EXCLUDE (_rn) FROM "
+            f"(SELECT *, row_number() OVER (PARTITION BY chunk_id) AS _rn "
+            f"FROM read_parquet('{dataset}/*.parquet')) WHERE _rn = 1) "
+            f"TO '{staged}' (FORMAT parquet, COMPRESSION zstd)")
         subprocess.run(["rclone", "moveto", _rclone_path(staged), _rclone_path(final)],
                        capture_output=True, text=True, check=True)
         base = _rclone_path(dataset)
@@ -340,72 +403,75 @@ def cmd_compact(con=None, dataset=None):
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
-def cmd_backlog(max_rows, max_seconds, source_schema="sec", iceberg_path=None,
-                 year_expr=None, order_by=None):
-    """PRIMARY job: find chunks with no codes yet (an Iceberg-vs-codes anti-join) and embed
-    them, time-boxed and resumable -- if time runs out, the rest picks up next run. Defaults
-    to SEC's own vectorized_chunks/codes (backward compatible); any other source with chunks
-    already organized into a vectorized_chunks-shaped Iceberg table (see
-    org.apache.calcite.adapter.govdata.ref.ChunkOrganizer, which does the organizing --
-    this command only ever embeds) drains the same way by passing source_schema (iceberg_path
-    defaults to that source's own conventional path, override only for a non-standard one).
-    """
-    iceberg_path = iceberg_path or iceberg_chunks_for(source_schema)
-    if source_schema == "sec":
-        # sec's chunks live in the shared ref.vectorized_chunks table (promoted via
-        # SecSchemaFactory#materializeSecChunksToRef), whose generalized schema has no
-        # `year` column -- only the per-schema wide columns (cik, accession_number,
-        # filing_date) populated when source_schema='sec'. Derive year from filing_date
-        # (ISO 8601, 'YYYY-...') instead. Newest-first via (filing_date, accession_number);
-        # accession encodes YY-seq, so recently filed / most-queried chunks lead and the
-        # historical backlog drains behind them.
-        year_expr = year_expr or "EXTRACT(year FROM s.filing_date)"
-        order_by = order_by or "s.filing_date DESC, s.accession_number DESC"
-    else:
-        # Other sources' vectorized_chunks has no year/accession_number -- codes' `year`
-        # column is a SEC-only convenience (see cmd_stats), so just carry 0.
-        year_expr = year_expr or "0"
-        order_by = order_by or "s.chunk_id"
-    dataset = codes_dataset_for(source_schema)
+def cmd_backlog(max_rows, max_seconds):
+    """PRIMARY job: one queue over the WHOLE ref.vectorized_chunks table's un-coded delta
+    (every source_schema together, ascending chunk_id order), time-boxed and resumable via the
+    one chunk_id watermark -- if time runs out, the rest picks up next run from wherever this
+    one actually got to."""
     con = connect_lake()
-    coded = _load_done(con, dataset)
-    print(f"[backlog] {coded} {source_schema} chunks already coded; "
-          f"scanning Iceberg for the un-coded delta ...", flush=True)
+    coded = _load_done(con)
+
+    watermark = _load_watermark()
+    watermark_clause = ""
+    if watermark:
+        watermark_clause = f"AND s.chunk_id > '{watermark.replace(chr(39), chr(39)*2)}'\n          "
+        print(f"[backlog] {coded} chunks already coded; resuming after {watermark} ...",
+              flush=True)
+    else:
+        print(f"[backlog] {coded} chunks already coded; "
+              f"no watermark yet — starting from the beginning of the queue ...", flush=True)
     t = time.time()
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.chunk_id, {year_expr} AS yr, s.chunk_text
-        FROM iceberg_scan('{iceberg_path}', allow_moved_paths=true) s
+        SELECT s.chunk_id, s.source_schema,
+               CASE WHEN s.source_schema = 'sec' THEN EXTRACT(year FROM s.filing_date)
+                    ELSE 0 END AS yr,
+               s.chunk_text
+        FROM iceberg_scan('{ICEBERG_CHUNKS}', allow_moved_paths=true) s
         LEFT JOIN _done d ON d.chunk_id = s.chunk_id
         WHERE d.chunk_id IS NULL
-          AND s.source_schema = '{source_schema}'
-          AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
-        ORDER BY {order_by}
+          {watermark_clause}AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
+        ORDER BY s.chunk_id
         LIMIT {int(max_rows)}
     """)
-    todo = con.execute("SELECT chunk_id, yr, chunk_text FROM _todo").fetchall()
+    todo = con.execute("SELECT chunk_id, source_schema, yr, chunk_text FROM _todo").fetchall()
     total = len(todo)
-    capped = total >= max_rows
-    tail = " (cap hit — more remain for next run)" if capped else " (drains the backlog)"
+    tail = " (cap hit — more remain for next run)" if total >= max_rows else " (drains the backlog)"
     print(f"[backlog] taking {total} un-coded chunks{tail} — scan {time.time()-t:.1f}s",
           flush=True)
     if total == 0:
         print("[backlog] nothing to do — fully caught up", flush=True)
         con.close()
         return
-    _embed_and_write(con, todo, _run_label("backlog"), max_seconds=max_seconds, dataset=dataset)
-    cmd_compact(con, dataset=dataset)   # consolidate small files (no-op below the threshold)
+    done, last_chunk_id, touched = _embed_and_write(con, todo, _run_label("backlog"),
+                                                     max_seconds=max_seconds)
+    if last_chunk_id is not None:
+        _save_watermark(last_chunk_id)
+    for schema in touched:
+        cmd_compact(con, dataset=codes_dataset_for(schema))  # no-op below the threshold
     con.close()
 
 
+def cmd_dedup(source_schema):
+    """One-time/on-demand forced compaction+dedup of a source's codes dataset, regardless of
+    current file count -- for when duplicates already ended up merged inside <= COMPACT_MIN_FILES
+    files by a prior un-deduped compact, so the normal threshold-gated path would report
+    'nothing to do' despite duplicates still being present."""
+    dataset = codes_dataset_for(source_schema)
+    cmd_compact(dataset=dataset, force=True)
+
+
 def cmd_year(year):
+    """Manual/targeted escape hatch: code a single SEC year's delta directly, bypassing the
+    backlog queue and its watermark entirely."""
     con = connect_lake()
     _load_done(con)
     print(f"[year {year}] scanning Iceberg for the un-coded delta ...", flush=True)
     t = time.time()
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.chunk_id, EXTRACT(year FROM s.filing_date) AS yr, s.chunk_text
+        SELECT s.chunk_id, 'sec' AS source_schema,
+               EXTRACT(year FROM s.filing_date) AS yr, s.chunk_text
         FROM iceberg_scan('{ICEBERG_CHUNKS}') s
         LEFT JOIN _done d ON d.chunk_id = s.chunk_id
         WHERE d.chunk_id IS NULL AND s.source_schema = 'sec'
@@ -413,7 +479,7 @@ def cmd_year(year):
           AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
         ORDER BY s.accession_number DESC
     """)
-    todo = con.execute("SELECT chunk_id, yr, chunk_text FROM _todo").fetchall()
+    todo = con.execute("SELECT chunk_id, source_schema, yr, chunk_text FROM _todo").fetchall()
     print(f"[year {year}] {len(todo)} un-coded chunks — scan {time.time()-t:.1f}s", flush=True)
     if not todo:
         print(f"[year {year}] nothing to do", flush=True)
@@ -424,18 +490,21 @@ def cmd_year(year):
 
 
 def cmd_stats():
+    """Per-(source_schema, year) counts across every source's codes dataset."""
     con = connect_lake()
     try:
         rows = con.execute(
-            f"SELECT year, count(*) AS codes FROM read_parquet('{CODES_DATASET}/*.parquet') "
-            "GROUP BY year ORDER BY year").fetchall()
+            f"SELECT source_schema, year, count(*) AS codes FROM "
+            f"read_parquet({_codes_glob_arg()}, hive_partitioning=1) "
+            f"GROUP BY source_schema, year ORDER BY source_schema, year"
+        ).fetchall()
     except duckdb.Exception:
         print("(no codes dataset yet)")
         con.close()
         return
     total = 0
-    for y, c in rows:
-        print(f"  year={y}  codes={c}")
+    for schema, y, c in rows:
+        print(f"  source_schema={schema}  year={y}  codes={c}")
         total += c
     print(f"  TOTAL codes={total}")
     con.close()
@@ -458,25 +527,27 @@ def main():
     p_bk.add_argument("--max-rows", type=int,
                       default=int(os.environ.get("VSS_MAX_ROWS", "1000000")))
     p_bk.add_argument("--max-seconds", type=int, default=_default_max_seconds())
-    p_bk.add_argument("--source-schema", default="sec",
-                      help="which vectorized_chunks to drain (default: sec)")
-    p_bk.add_argument("--iceberg-path", default=None,
-                      help="override; defaults to that source's own conventional path")
     p_year = sub.add_parser("year")
     p_year.add_argument("--year", type=int, required=True)
     sub.add_parser("stats")
-    sub.add_parser("compact")
+    p_compact = sub.add_parser("compact")
+    p_compact.add_argument("--source-schema", default="sec",
+                           help="which codes dataset to compact (default: sec)")
+    p_dedup = sub.add_parser("dedup")
+    p_dedup.add_argument("--source-schema", default="sec",
+                         help="which codes dataset to force-dedup (default: sec)")
     args = ap.parse_args()
 
     if args.cmd == "backlog":
-        cmd_backlog(args.max_rows, args.max_seconds, source_schema=args.source_schema,
-                    iceberg_path=args.iceberg_path)
+        cmd_backlog(args.max_rows, args.max_seconds)
     elif args.cmd == "year":
         cmd_year(args.year)
     elif args.cmd == "stats":
         cmd_stats()
     elif args.cmd == "compact":
-        cmd_compact()
+        cmd_compact(dataset=codes_dataset_for(args.source_schema))
+    elif args.cmd == "dedup":
+        cmd_dedup(args.source_schema)
     else:
         ap.error("unknown command")
 

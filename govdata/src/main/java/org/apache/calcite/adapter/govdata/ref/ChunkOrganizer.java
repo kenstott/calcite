@@ -369,6 +369,11 @@ public class ChunkOrganizer implements TableLifecycleListener {
     // is inferred from this value's runtime type on first write.
     Object sequence = row.get("sequence");
     out.put("sequence", sequence == null ? null : ((Number) sequence).longValue());
+    // This migration writes rows that already existed in sec.vectorized_chunks well before
+    // ingest_ts existed, not newly-produced content -- stamped with the current time (like every
+    // other writer) rather than backdated, since there is no real prior write time to recover and
+    // the column's contract only needs "this row wasn't here before, watermark past it now".
+    out.put("ingest_ts", java.sql.Timestamp.from(java.time.Instant.now()));
     out.put("source_type", row.get("source_type"));
     out.put("chunk_text", row.get("chunk_text"));
     out.put("enriched_text", row.get("enriched_text"));
@@ -425,6 +430,7 @@ public class ChunkOrganizer implements TableLifecycleListener {
         chunkRow.put("source_table", src.sourceTable);
         chunkRow.put("stringified_fk", pkValue);
         chunkRow.put("sequence", seq);
+        chunkRow.put("ingest_ts", java.sql.Timestamp.from(java.time.Instant.now()));
         chunkRow.put("source_type", "row_concat");
         chunkRow.put("chunk_text", chunks.get(seq));
         chunkRow.put("enriched_text", chunks.get(seq));
@@ -529,6 +535,7 @@ public class ChunkOrganizer implements TableLifecycleListener {
         chunkRow.put("source_table", src.sourceTable);
         chunkRow.put("stringified_fk", pkValue);
         chunkRow.put("sequence", seq);
+        chunkRow.put("ingest_ts", java.sql.Timestamp.from(java.time.Instant.now()));
         chunkRow.put("source_type", src.sourceType);
         chunkRow.put("chunk_text", chunk.getText());
         chunkRow.put("enriched_text", chunk.getText());

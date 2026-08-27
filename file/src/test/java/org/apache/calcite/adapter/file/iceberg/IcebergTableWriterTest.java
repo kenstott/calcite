@@ -155,6 +155,56 @@ public class IcebergTableWriterTest {
     assertEquals(1, countRows(), "corrected row lands as exactly one row, not a duplicate");
   }
 
+  // ---- deleteRows(Map) tests — the composite-key generalization of deleteRows(column, values),
+  // for tables whose reprocess/rewrite unit isn't a single column (e.g. ref.vectorized_chunks'
+  // generalized (source_schema, source_table, stringified_fk) identity). Reuses the same
+  // (data, year) columns as an AND-of-two-equalities stand-in for a real composite key, so these
+  // tests prove the AND semantics (same `data` but a different `year` must survive) without
+  // needing a schema change.
+
+  @Test void testDeleteRowsMapNullOrEmptyFilterIsNoop() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeAndCommitRow(writer, 1, "keep-me", 2024);
+    assertEquals(1, countRows());
+
+    writer.deleteRows((Map<String, String>) null);
+    writer.deleteRows(java.util.Collections.<String, String>emptyMap());
+    assertEquals(1, countRows(), "no-op deleteRows(Map) must not remove any row");
+  }
+
+  @Test void testDeleteRowsMapRequiresAllColumnsToMatch() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeAndCommitRow(writer, 1, "shared-key", 2023);   // same `data`, different `year`: must survive
+    writeAndCommitRow(writer, 2, "shared-key", 2024);   // matches both columns: must be deleted
+    writeAndCommitRow(writer, 3, "other-key", 2024);    // matches only `year`: must survive
+    assertEquals(3, countRows());
+
+    Map<String, String> filter = new HashMap<>();
+    filter.put("data", "shared-key");
+    filter.put("year", "2024");
+    writer.deleteRows(filter);
+
+    assertEquals(2, countRows(), "only the row matching every column should be deleted");
+  }
+
+  @Test void testDeleteRowsMapThenRewriteLandsTheCorrection() throws Exception {
+    // Same scenario as the single-column version, keyed on a composite instead: a source row's
+    // existing chunks must be gone before its corrected replacement writes, or the replacement
+    // duplicates rather than replaces.
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeAndCommitRow(writer, 1, "acc-123", 2024);
+    assertEquals(1, countRows());
+
+    Map<String, String> filter = new HashMap<>();
+    filter.put("data", "acc-123");
+    filter.put("year", "2024");
+    writer.deleteRows(filter);
+    assertEquals(0, countRows(), "old wrong row must be gone before the correction writes");
+
+    writeAndCommitRow(writer, 1, "acc-123", 2024);
+    assertEquals(1, countRows(), "corrected row lands as exactly one row, not a duplicate");
+  }
+
   private void writeAndCommitRow(IcebergTableWriter writer, int id, String data, int year)
       throws Exception {
     Map<String, Object> row = new HashMap<>();

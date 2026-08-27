@@ -2553,6 +2553,22 @@ partitionedTables:
         type: bigint
         nullable: false
         comment: Order within this source row's chunks (0 for a row-concat text that fit in one chunk)
+      - name: ingest_ts
+        type: timestamp
+        nullable: false
+        comment: >
+          Wall-clock time this row was written, stamped independently by whichever writer
+          produced it (ChunkOrganizer for row_concat/document-blob sources, SEC's own
+          materializeSecChunksToRef promotion) -- not tied to source_schema or any content
+          date, so it orders purely by insertion regardless of which of the four writers or
+          which content vintage a row came from. This is what the embeddings backlog scan
+          (vss-local.py) watermarks against instead of a full anti-join: a backfill of old
+          content still gets a current ingest_ts, so it's naturally picked up by "everything
+          since the last watermark" rather than silently skipped for being content-old.
+          Every row from before this column's rollout carries the single migration cutover
+          timestamp rather than its true original write time (never recoverable) -- exact
+          ordering among rows that already existed at rollout doesn't matter, only that they
+          all sort before every row written after.
       - name: source_type
         type: string
         nullable: false

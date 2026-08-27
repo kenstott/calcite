@@ -48,15 +48,16 @@ APP="$SCRIPT_DIR/vss-local.py"
 usage() {
   cat <<EOF
 Usage: $0 <command> [args...]
-  daily [--source-schema S --iceberg-path P]
-                           PRIMARY: code the un-coded backlog (all years, newest first),
-                           time-boxed (~2h). Appends quantized codes to the lake. Daily.
-                           Defaults to SEC; pass --source-schema (+ --iceberg-path) to
-                           drain a different source's vectorized_chunks the same way.
-  backlog [maxRows] [--source-schema S --iceberg-path P]
-                           Same as daily (with an explicit per-run row cap)
+  daily                    PRIMARY: one queue over ref.vectorized_chunks' whole un-coded delta
+                           (every source together), time-boxed (~2h). Appends quantized codes
+                           to the lake, resuming from the one chunk_id watermark. Daily.
+  backlog [maxRows]        Same as daily (with an explicit per-run row cap)
   year <N>                 Code a single SEC year's delta (manual)
-  stats                    Per-year counts in SEC's codes dataset
+  stats                    Per-(source_schema, year) counts across every codes dataset
+  dedup [--source-schema S]
+                           Force-compact + dedup a codes dataset by chunk_id, regardless of
+                           file count (manual/one-off; normal backlog runs self-compact but
+                           only above the file-count threshold)
 EOF
 }
 
@@ -76,5 +77,6 @@ case "$cmd" in
     ;;
   year)     "$PY" "$APP" year --year "${2:?year required}" ;;
   stats)    "$PY" "$APP" stats ;;
+  dedup)    shift; "$PY" "$APP" dedup "$@" ;;
   *)        usage; exit 1 ;;
 esac

@@ -2689,6 +2689,7 @@ public class XbrlToParquetConverter implements FileConverter {
     row.put("source_schema", "sec");
     row.put("source_table", "vectorized_chunks");
     row.put("stringified_fk", cik + ":" + accession);
+    row.put("ingest_ts", java.sql.Timestamp.from(java.time.Instant.now()));
   }
 
   /**

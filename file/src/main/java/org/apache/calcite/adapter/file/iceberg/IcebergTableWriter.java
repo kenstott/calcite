@@ -352,25 +352,28 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Computes the relative path from a base path.
+   * Computes the relative path (partition directory + basename) of a listed staging file
+   * relative to the staging root, preserving any Hive-style partition directories.
    */
   private String computeRelativePath(String basePath, String fullPath) {
-    // Normalize paths - ensure base ends with /
-    String normalizedBase = basePath.endsWith("/") ? basePath : basePath + "/";
+    // StorageProvider.listFiles always returns entries prefixed "s3://<bucket>/..." regardless
+    // of the scheme the caller's basePath used (e.g. "s3a://" for an Iceberg/Hadoop staging
+    // path) -- comparing the raw strings then never matches, and silently returning just the
+    // basename drops the partition directory instead of failing loudly (observed live: every
+    // file in a Hive-partitioned staging dir landed at table-root/data/<file>.parquet with no
+    // partition value, corrupting partition-pruning metadata while the column data stayed
+    // correct). Strip the scheme from both sides before comparing so partition dirs survive.
+    String normalizedBase = stripS3Scheme(basePath);
+    normalizedBase = normalizedBase.endsWith("/") ? normalizedBase : normalizedBase + "/";
+    String normalizedFull = stripS3Scheme(fullPath);
 
-    if (fullPath.startsWith(normalizedBase)) {
-      return fullPath.substring(normalizedBase.length());
+    if (normalizedFull.startsWith(normalizedBase)) {
+      return normalizedFull.substring(normalizedBase.length());
     }
 
-    // Handle case where paths differ in trailing slash
-    if (fullPath.startsWith(basePath)) {
-      String remainder = fullPath.substring(basePath.length());
-      return remainder.startsWith("/") ? remainder.substring(1) : remainder;
-    }
-
-    // Fallback - return just the filename
-    int lastSlash = fullPath.lastIndexOf('/');
-    return lastSlash >= 0 ? fullPath.substring(lastSlash + 1) : fullPath;
+    throw new IllegalStateException("Staged file " + fullPath
+        + " is not located under staging path " + basePath
+        + " -- refusing to silently drop its partition directory");
   }
 
   /**
@@ -586,17 +589,106 @@ public class IcebergTableWriter {
     if (values == null || values.isEmpty()) {
       return;
     }
+    deleteRowsMatching(Expressions.in(column, values),
+        record -> {
+          Object fieldValue = record.getField(column);
+          return fieldValue != null && values.contains(String.valueOf(fieldValue));
+        },
+        column + " IN (" + values.size() + " value(s))");
+  }
 
+  /**
+   * Deletes every row matching an AND of column=value equalities — the same targeted, row-level
+   * delete as {@link #deleteRows(String, Set)}, generalized to a composite key instead of one
+   * column. Exists for tables whose natural reprocess/rewrite unit isn't a single column — e.g.
+   * {@code ref.vectorized_chunks}' generalized {@code (source_schema, source_table,
+   * stringified_fk)} identity, which any of several independent writers can own a slice of; see
+   * that column's own comment for why a single column doesn't uniquely scope a rewrite there.
+   *
+   * @param equalityFilter column name to required value, ANDed together; a no-op if empty
+   * @throws IOException if deletion fails
+   */
+  public void deleteRows(Map<String, String> equalityFilter) throws IOException {
+    if (equalityFilter == null || equalityFilter.isEmpty()) {
+      return;
+    }
+    // Expressions.equal binds its literal against the column's actual Iceberg type — passing the
+    // raw String for a non-string column (e.g. an int/long partition-adjacent column) throws
+    // ValidationException at scan time, not just returns no matches. equalityFilter's values are
+    // always String (the natural type for something built from a stringified composite key like
+    // cik+":"+accession), so coerce each one to its column's real type before building the
+    // expression; the row-level match in deleteRowsMatching already compares via
+    // String.valueOf(...) regardless of type, so only the scan-pruning filter needs this.
+    Schema deleteScanSchema = table.schema();
+    org.apache.iceberg.expressions.Expression scanFilter = Expressions.alwaysTrue();
+    for (Map.Entry<String, String> entry : equalityFilter.entrySet()) {
+      scanFilter = Expressions.and(scanFilter,
+          Expressions.equal(entry.getKey(), coerceToColumnType(deleteScanSchema, entry)));
+    }
+    deleteRowsMatching(scanFilter,
+        record -> {
+          for (Map.Entry<String, String> entry : equalityFilter.entrySet()) {
+            Object fieldValue = record.getField(entry.getKey());
+            if (fieldValue == null || !entry.getValue().equals(String.valueOf(fieldValue))) {
+              return false;
+            }
+          }
+          return true;
+        },
+        equalityFilter.toString());
+  }
+
+  /**
+   * Converts one {@code deleteRows(Map)} filter value from its natural String form to the
+   * literal type {@link Expressions#equal} needs to bind against the column's real Iceberg type.
+   * Covers the primitive types partition-adjacent identity columns actually use; an unhandled
+   * type is left as the original String, which fails exactly as loudly (a bind-time
+   * ValidationException) as an unsupported type should, rather than silently matching nothing.
+   */
+  private static Object coerceToColumnType(Schema schema, Map.Entry<String, String> entry) {
+    Types.NestedField field = schema.findField(entry.getKey());
+    String value = entry.getValue();
+    if (field == null || value == null) {
+      return value;
+    }
+    org.apache.iceberg.types.Type.TypeID typeId = field.type().typeId();
+    switch (typeId) {
+    case INTEGER:
+      return Integer.valueOf(value);
+    case LONG:
+      return Long.valueOf(value);
+    case FLOAT:
+      return Float.valueOf(value);
+    case DOUBLE:
+      return Double.valueOf(value);
+    case BOOLEAN:
+      return Boolean.valueOf(value);
+    default:
+      return value;
+    }
+  }
+
+  /**
+   * Shared mechanics behind both {@code deleteRows} overloads: scan-prune to candidate files via
+   * {@code scanFilter}, then for each candidate read every row and test it against {@code
+   * rowMatches} (the scan filter alone is not authoritative — Iceberg's pruning is conservative,
+   * so a returned file may not actually contain a match once read). A file with no real match is
+   * left untouched; a file with a partial match is rewritten with only its non-matching rows
+   * (production data files here are merged batches, e.g. ~100 accessions per file, so a delete
+   * list routinely targets some, not all, rows in a shared file); a file matched in full is
+   * deleted outright with no replacement.
+   */
+  private void deleteRowsMatching(org.apache.iceberg.expressions.Expression scanFilter,
+      java.util.function.Predicate<Record> rowMatches, String description) throws IOException {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
-    org.apache.iceberg.expressions.Expression matchFilter = Expressions.in(column, values);
 
     List<DataFile> filesToDelete = new ArrayList<>();
     List<DataFile> replacementFiles = new ArrayList<>();
     long deletedRows = 0;
 
     try (CloseableIterable<FileScanTask> tasks =
-             table.newScan().filter(matchFilter).planFiles()) {
+             table.newScan().filter(scanFilter).planFiles()) {
       for (FileScanTask task : tasks) {
         DataFile oldFile = task.file();
         List<Map<String, Object>> keepRows = new ArrayList<>();
@@ -610,8 +702,7 @@ public class IcebergTableWriter {
                     schema, fileSchema))
             .build()) {
           for (Record record : records) {
-            Object fieldValue = record.getField(column);
-            if (fieldValue != null && values.contains(String.valueOf(fieldValue))) {
+            if (rowMatches.test(record)) {
               matchedInFile++;
             } else {
               keepRows.add(recordToMap(record, schema));
@@ -645,7 +736,7 @@ public class IcebergTableWriter {
     }
 
     if (filesToDelete.isEmpty()) {
-      LOGGER.info("deleteRows: no rows matched {} IN ({} value(s))", column, values.size());
+      LOGGER.info("deleteRows: no rows matched {}", description);
       return;
     }
 
@@ -2397,6 +2488,20 @@ public class IcebergTableWriter {
     // Fix s3:/ (single slash) to s3:// (double slashes)
     if (path.startsWith("s3:/") && !path.startsWith("s3://")) {
       return "s3://" + path.substring(4);
+    }
+    return path;
+  }
+
+  /**
+   * Strips a leading {@code s3://} or {@code s3a://} scheme so paths using either scheme can be
+   * compared by their bucket+key alone.
+   */
+  private String stripS3Scheme(String path) {
+    if (path.startsWith("s3a://")) {
+      return path.substring(6);
+    }
+    if (path.startsWith("s3://")) {
+      return path.substring(5);
     }
     return path;
   }

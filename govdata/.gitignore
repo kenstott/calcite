@@ -56,3 +56,6 @@ sec-cache/
 *.parquet.crc
 _SUCCESS*.env*
 *.duckdb*
+
+# vss-local.py runtime state (machine-local backlog resume position)
+.vss-watermarks/
