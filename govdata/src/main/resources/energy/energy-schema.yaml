@@ -2232,48 +2232,54 @@ views:
 
   - name: state_energy_mix
     comment: >
-      Annual renewable and fossil fuel generation mix by state. Aggregates
-      eia_electricity_generation by state and year, computing total generation
-      and generation by broad fuel category (renewables, nuclear, fossil, other).
-      Calculates renewable percentage and fossil percentage for trend analysis.
+      Annual renewable and fossil fuel generation mix by state. Reads
+      eia_electricity_generation's own EIA-published rollup rows (energy_source_code
+      ALL/FOS/REN/NUC at geo_level='state', sector_code='99' — "All Sectors") rather
+      than re-summing individual fuel codes, since several of EIA's own leaf-looking
+      codes are themselves nested rollups (e.g. COL is BIT+SUB+LIG) and summing them
+      alongside their children double-counts. other_gen is a residual
+      (total - fossil - renewable - nuclear) so the four categories always sum exactly
+      to the total, rather than relying on EIA's own OTH code, which does not capture
+      every non-fossil/non-renewable/non-nuclear source (e.g. pumped storage).
+      other_gen can be slightly negative in some state-years: EIA's own FOS/REN/NUC
+      rollups do not always sum exactly to ALL (confirmed live, e.g. Texas 2023),
+      so treat other_gen as a small balancing term rather than a clean physical
+      category — renewable_pct and fossil_pct are unaffected by this.
       One row per state + year. State name comes from eia_electricity_generation's own
       state_description column (no join to geo.states, and no FIPS code is included).
     sql: >
       SELECT
-        g.state_abbr,
-        MAX(g.state_description)                                           AS state_name,
-        g.generation_year,
-        SUM(g.generation_thousand_mwh)                                     AS total_gen_thousand_mwh,
-        SUM(CASE
-              WHEN g.energy_source_code IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG','PC','WH','AB')
-              THEN g.generation_thousand_mwh ELSE 0 END)                   AS renewable_gen_thousand_mwh,
-        SUM(CASE
-              WHEN g.energy_source_code IN ('NUC')
-              THEN g.generation_thousand_mwh ELSE 0 END)                   AS nuclear_gen_thousand_mwh,
-        SUM(CASE
-              WHEN g.energy_source_code IN ('COL','NG','DFO','RFO','KER','JF','PG','SGC','WC','SC','BIT','SUB','LIG')
-              THEN g.generation_thousand_mwh ELSE 0 END)                   AS fossil_gen_thousand_mwh,
-        SUM(CASE
-              WHEN g.energy_source_code NOT IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG','PC','WH','AB','NUC','COL','NG','DFO','RFO','KER','JF','PG','SGC','WC','SC','BIT','SUB','LIG')
-              THEN g.generation_thousand_mwh ELSE 0 END)                   AS other_gen_thousand_mwh,
+        state_abbr,
+        MAX(state_description)                                            AS state_name,
+        generation_year,
+        MAX(CASE WHEN energy_source_code = 'ALL' THEN generation_thousand_mwh END)
+                                                                            AS total_gen_thousand_mwh,
+        MAX(CASE WHEN energy_source_code = 'REN' THEN generation_thousand_mwh END)
+                                                                            AS renewable_gen_thousand_mwh,
+        COALESCE(MAX(CASE WHEN energy_source_code = 'NUC' THEN generation_thousand_mwh END), 0)
+                                                                            AS nuclear_gen_thousand_mwh,
+        MAX(CASE WHEN energy_source_code = 'FOS' THEN generation_thousand_mwh END)
+                                                                            AS fossil_gen_thousand_mwh,
+        MAX(CASE WHEN energy_source_code = 'ALL' THEN generation_thousand_mwh END)
+          - MAX(CASE WHEN energy_source_code = 'FOS' THEN generation_thousand_mwh END)
+          - MAX(CASE WHEN energy_source_code = 'REN' THEN generation_thousand_mwh END)
+          - COALESCE(MAX(CASE WHEN energy_source_code = 'NUC' THEN generation_thousand_mwh END), 0)
+                                                                            AS other_gen_thousand_mwh,
         CASE
-          WHEN SUM(g.generation_thousand_mwh) > 0
-          THEN 100.0 * SUM(CASE
-                WHEN g.energy_source_code IN ('SUN','DPV','WND','WAT','GEO','WAS','OBG','OBS','OBL','MLG','PC','WH','AB')
-                THEN g.generation_thousand_mwh ELSE 0 END)
-               / SUM(g.generation_thousand_mwh)
+          WHEN MAX(CASE WHEN energy_source_code = 'ALL' THEN generation_thousand_mwh END) > 0
+          THEN 100.0 * MAX(CASE WHEN energy_source_code = 'REN' THEN generation_thousand_mwh END)
+               / MAX(CASE WHEN energy_source_code = 'ALL' THEN generation_thousand_mwh END)
           ELSE NULL
         END                                                                AS renewable_pct,
         CASE
-          WHEN SUM(g.generation_thousand_mwh) > 0
-          THEN 100.0 * SUM(CASE
-                WHEN g.energy_source_code IN ('COL','NG','DFO','RFO','KER','JF','PG','SGC','WC','SC','BIT','SUB','LIG')
-                THEN g.generation_thousand_mwh ELSE 0 END)
-               / SUM(g.generation_thousand_mwh)
+          WHEN MAX(CASE WHEN energy_source_code = 'ALL' THEN generation_thousand_mwh END) > 0
+          THEN 100.0 * MAX(CASE WHEN energy_source_code = 'FOS' THEN generation_thousand_mwh END)
+               / MAX(CASE WHEN energy_source_code = 'ALL' THEN generation_thousand_mwh END)
           ELSE NULL
         END                                                                AS fossil_pct
-      FROM eia_electricity_generation g
-      GROUP BY g.state_abbr, g.generation_year
+      FROM eia_electricity_generation
+      WHERE geo_level = 'state' AND sector_code = '99'
+      GROUP BY state_abbr, generation_year
 
   - name: utility_scorecard
     comment: >
