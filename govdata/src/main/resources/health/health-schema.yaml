@@ -435,6 +435,149 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # FDA DRUG SHORTAGES — one row per shortage episode, bulk partition ZIP (single file)
+  # ==========================================================================
+  - name: fda_drug_shortages
+    pattern: "type=fda_drug_shortages"
+    freshness:
+      type: version
+      probe_url: "https://api.fda.gov/download.json"
+      version_field: "results.drug.shortages.export_date"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      FDA Drug Shortages Database — one row per shortage episode (a given
+      package_ndc can recur across multiple episodes over time, so the PK is
+      package_ndc + initial_posting_date, not package_ndc alone). status/
+      availability/update_type track the episode's current lifecycle stage
+      (Current/To Be Discontinued/Resolved). product_ndc/application_number
+      join to fda_ndc_products/fda_drug_approvals; company_name/manufacturer_name
+      are text-only (no structural FK, matching fda_drug_recalls' recalling_firm).
+      A handful of exact-duplicate (package_ndc, initial_posting_date) rows exist
+      in FDA's own source feed — see the DQ T6 warn, not a pipeline defect.
+
+    columns:
+      - name: package_ndc
+        type: string
+        nullable: false
+        comment: Package-level NDC for this shortage episode — PK part 1
+      - name: initial_posting_date
+        type: string
+        nullable: false
+        comment: MM/DD/YYYY when this shortage episode was first posted — PK part 2
+      - name: generic_name
+        type: string
+        nullable: true
+      - name: update_type
+        type: string
+        nullable: true
+        comment: e.g. New, Revised, Reverified
+      - name: update_date
+        type: string
+        nullable: true
+        comment: MM/DD/YYYY of the most recent update to this episode
+      - name: status
+        type: string
+        nullable: true
+        comment: Current, To Be Discontinued, Resolved
+      - name: availability
+        type: string
+        nullable: true
+      - name: discontinued_date
+        type: string
+        nullable: true
+        comment: MM/DD/YYYY; null unless status is a discontinuation
+      - name: dosage_form
+        type: string
+        nullable: true
+      - name: presentation
+        type: string
+        nullable: true
+        comment: Strength/form/package description
+      - name: therapeutic_category
+        type: string
+        nullable: true
+      - name: company_name
+        type: string
+        nullable: true
+      - name: contact_info
+        type: string
+        nullable: true
+      - name: related_info
+        type: string
+        nullable: true
+      - name: brand_name
+        type: string
+        nullable: true
+      - name: manufacturer_name
+        type: string
+        nullable: true
+      - name: product_ndc
+        type: string
+        nullable: true
+        comment: FK to fda_ndc_products.product_ndc
+      - name: application_number
+        type: string
+        nullable: true
+        comment: FK to fda_drug_approvals application_number
+      - name: route
+        type: string
+        nullable: true
+      - name: substance_name
+        type: string
+        nullable: true
+
+    source:
+      type: http
+      # Bulk: single partition ZIP resolved from download.json by OpenFdaPartitionResolver
+      # (no API key, no pagination — the whole ~1,600-row dataset is one file).
+      url: "{partition_file}"
+      method: GET
+      response:
+        format: TEXT
+      skipResponseBody: true
+      rateLimit:
+        requestsPerSecond: 5.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: false
+
+    hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDrugShortagesResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_drug_shortages
+      partition_file:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+        properties:
+          endpoint: "results.drug.shortages"
+          startYear: "${GOVDATA_START_YEAR:2010}"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # FDA ADVERSE EVENTS — FAERS reports, bulk partition ZIPs (download.open.fda.gov)
   # Year filter: GOVDATA_START_YEAR (default 2010); partitions enumerated from download.json
   # ==========================================================================
@@ -4967,6 +5110,19 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links recall voluntary firm state to geographic data
+
+  fda_drug_shortages:
+    # A given package_ndc can recur across multiple shortage episodes over time (see the
+    # table comment) — episode identity is package_ndc + initial_posting_date, not
+    # package_ndc alone. A handful of exact-duplicate rows exist in FDA's own feed (DQ T6 warn).
+    primaryKey: [type, package_ndc, initial_posting_date]
+    foreignKeys:
+      - columns: [product_ndc]
+        targetTable: fda_ndc_products
+        targetColumns: [product_ndc]
+      - columns: [application_number]
+        targetTable: fda_drug_approvals
+        targetColumns: [application_number]
 
   fda_adverse_events:
     primaryKey: [type, safety_report_id]

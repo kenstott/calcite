@@ -1,8 +1,8 @@
 -- dq-lookback: 1
 -- Health Data Quality Checks
 -- Schema: health
--- Tables: fda_ndc_products, fda_drug_approvals, fda_drug_recalls, fda_adverse_events,
---         fda_device_recalls, clinical_trials, clinical_trial_conditions,
+-- Tables: fda_ndc_products, fda_drug_approvals, fda_drug_recalls, fda_drug_shortages,
+--         fda_adverse_events, fda_device_recalls, clinical_trials, clinical_trial_conditions,
 --         clinical_trial_interventions, cdc_covid_vaccinations, cms_hospital_quality,
 --         medicaid_drug_utilization, cdc_mortality, cdc_brfss, cms_open_payments, rxnorm_drugs,
 --         who_gho_indicators, cms_pos_facilities, ahrf_physician_supply
@@ -263,6 +263,89 @@ SELECT 'health', 'fda_drug_recalls', 'T7_status',
   bad, 0, 'status outside (Terminated, Ongoing, Completed)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_recalls', allow_moved_paths := true)
       WHERE status IS NOT NULL AND status NOT IN ('Terminated', 'Ongoing', 'Completed'));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fda_drug_shortages
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'fda_drug_shortages', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true));
+
+-- T2: row_count (whole dataset is ~1,600 rows — single unpaginated bulk partition)
+INSERT INTO dq_results
+SELECT 'health', 'fda_drug_shortages', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 FDA drug shortage episode records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'fda_drug_shortages', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'health', 'fda_drug_shortages', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls_or_dupes (package_ndc + initial_posting_date). WARN not FAIL — a handful of
+-- exact-duplicate rows are a known artifact in FDA's own source feed (confirmed live 27 Aug
+-- 2026: 4 duplicate pairs out of 1,624 total rows), not a pipeline defect.
+INSERT INTO dq_results
+SELECT 'health', 'fda_drug_shortages', 'T6_pk_nulls_or_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'NULL package_ndc/initial_posting_date, or duplicate (package_ndc, initial_posting_date) pairs'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT package_ndc, initial_posting_date, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true)
+    WHERE package_ndc IS NULL OR initial_posting_date IS NULL
+    GROUP BY 1, 2
+    UNION ALL
+    SELECT package_ndc, initial_posting_date, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true)
+    WHERE package_ndc IS NOT NULL AND initial_posting_date IS NOT NULL
+    GROUP BY 1, 2
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: status values
+INSERT INTO dq_results
+SELECT 'health', 'fda_drug_shortages', 'T7_status',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'status outside (Current, To Be Discontinued, Resolved)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/fda_drug_shortages', allow_moved_paths := true)
+      WHERE status IS NOT NULL AND status NOT IN ('Current', 'To Be Discontinued', 'Resolved'));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: fda_adverse_events
