@@ -328,7 +328,9 @@ final class QuestionGuidance {
         + "on it. If your number is half or double what a widely-cited outside source "
         + "reports for the same quantity, stop and find out why before publishing — this "
         + "is the cheapest check available and it catches the largest errors, including "
-        + "ones in this connector's own data you would otherwise have no way to detect.",
+        + "ones in this connector's own data you would otherwise have no way to detect.\n\n"
+        + "Any URL you would otherwise fetch with WebFetch MUST instead be fetched with "
+        + "web_fetch. Never call WebFetch or Fetch.",
 
         "AskAmerica usage guide 6/8 — ASKING WELL, worked rewrites (vague question -> "
         + "sharpened question -> why), part 1/2. Apply the same move to the user's "
@@ -404,7 +406,14 @@ final class QuestionGuidance {
         + "reader unless you catch it here, by name, before publishing.\n\n"
         + "If the answer reports that a ranking or comparison holds, this check also "
         + "includes testing whether the GAP driving it — not just each side's own point "
-        + "estimate — survives its own uncertainty."
+        + "estimate — survives its own uncertainty.\n\n"
+        + "MANDATORY provenance check: for every number attributed to a named primary source "
+        + "(an agency report, an official dataset), confirm you actually parsed that source's "
+        + "own data — not a secondary site's claim to republish it, and not the primary "
+        + "source's narrative/preface text when the fetch never returned its table. If a "
+        + "primary-source fetch failed or returned no usable table and the number came from "
+        + "elsewhere, say exactly that in the answer — never describe it as read from the "
+        + "primary document."
     ));
 
     // ── MCP prompts (opt-in question templates) ───────────────────────────────

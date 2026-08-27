@@ -142,7 +142,20 @@ public final class R2CredentialProvider {
 
       int status = conn.getResponseCode();
       if (status != 200) {
-        throw new IOException("Credential refresh failed: HTTP " + status);
+        String errorBody;
+        try (InputStream err = conn.getErrorStream()) {
+          errorBody = err == null ? "" : new String(readFully(err), StandardCharsets.UTF_8);
+        } catch (IOException readEx) {
+          errorBody = "(could not read error body: " + readEx.getMessage() + ")";
+        }
+        // The server's own error body is the whole point here — a bare "HTTP 429" reads as a
+        // transient network blip and gets silently swallowed by callers, while the actual
+        // message underneath it (e.g. "exceeded your monthly query limit") is exactly what a
+        // user or log reader needs to act on. Truncate defensively in case of an unexpectedly
+        // large HTML error page, but never drop it entirely.
+        String detail = errorBody.isEmpty() ? "(no error body)"
+            : errorBody.length() > 2000 ? errorBody.substring(0, 2000) + "...(truncated)" : errorBody;
+        throw new IOException("Credential refresh failed: HTTP " + status + " — " + detail);
       }
 
       byte[] body;

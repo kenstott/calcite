@@ -313,7 +313,7 @@ public class McpServer {
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "fetch_xlsx_as_json", "fetch_pdf_as_text", "fetch_docx_as_text"));
+            "web_fetch"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -698,14 +698,12 @@ public class McpServer {
             + "econ.inflation_metrics, single-amount or whole-result-set, reports the index "
             + "used per year — never deflate by hand from a remembered CPI figure, and a "
             + "nominal multi-year comparison is not growth). This adjusts for TIME only, not "
-            + "PLACE — comparing states, not just years, needs a second step; call find_recipe "
-            + "for ANY multi-step comparison (places, rates, multi-year averages/trends, causal "
-            + "claims, attributing a trend to a named cause without testing the leading "
-            + "alternative explanation, a table whose construction basis — inventor vs. "
-            + "assignee, self-report vs. administrative — you have not verified) — call it "
-            + "BEFORE deciding you're already certain of the method, not only once you notice "
-            + "you're not; feeling certain is the exact state every cataloged recipe was written "
-            + "from. Cheap, catalog grows, an empty result means uncovered, not 'plan is fine'.\n\n"
+            + "PLACE.\n"
+            + "- **MANDATORY: CALL find_recipe BEFORE any multi-step comparison** — places, "
+            + "rates, multi-year trends, causal claims, a table's construction basis you have "
+            + "not verified. Call it before deciding you're already certain of the method, not "
+            + "only once you notice you're not. Empty result means uncovered, not 'plan is "
+            + "fine'.\n\n"
 
             + "## COVERAGE, VERSIONING, AND GAPS\n\n"
             + "- **This is a versioned snapshot, not a live feed.** describe_table reports a "
@@ -1879,7 +1877,11 @@ public class McpServer {
             + "tokens to return, because what comes back is a link rather than the page. "
             + "REQUIRES question_coverage — see its own description; this is not optional "
             + "boilerplate, it is the mechanism that catches a report quietly answering an "
-            + "easier adjacent question instead of the one asked.",
+            + "easier adjacent question instead of the one asked. MANDATORY before calling this: "
+            + "for every number attributed to a named primary source, confirm you actually "
+            + "parsed that source's own data via web_fetch — a WebSearch result summary is not "
+            + "a primary-source read. If a primary fetch failed, say so in the report instead of "
+            + "naming a table or document you never opened.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
@@ -1937,79 +1939,27 @@ public class McpServer {
             schema(recipeProps, new String[]{})));
 
         ObjectNode xlsxProps = MAPPER.createObjectNode();
-        xlsxProps.set(
+        ObjectNode webFetchProps = MAPPER.createObjectNode();
+        webFetchProps.set(
             "url", prop("string",
-            "Direct HTTP(S) URL to an .xlsx file — e.g. a government agency's published "
-            + "compiled-data spreadsheet. Must be a genuine, already-known download link "
-            + "(from a page you fetched or a search result), not a guess."));
-        xlsxProps.set(
-            "max_sheets", prop("integer",
-            "Max worksheets to return, first-to-last (default 5, max 20)."));
-        xlsxProps.set(
-            "max_rows_per_sheet", prop("integer",
-            "Max rows to return per worksheet, top-to-bottom (default 500, max 5000). "
-            + "Cell values are returned as-formatted text (dates and numbers rendered the "
-            + "way the spreadsheet displays them), one row per array."));
+            "Direct HTTP(S) URL. Must be a genuine, already-known link, not a guess."));
+        webFetchProps.set(
+            "max_pages", prop("integer", "PDF only: max pages, first-to-last (default 40)."));
+        webFetchProps.set(
+            "max_sheets", prop("integer", "Excel only: max worksheets (default 5)."));
+        webFetchProps.set(
+            "max_rows_per_sheet", prop("integer", "Excel only: max rows per sheet (default 500)."));
+        webFetchProps.set(
+            "max_chars", prop("integer",
+            "HTML/text only: max characters returned (default 20000)."));
         tools.add(
-            tool("fetch_xlsx_as_json",
-            "Fetch an .xlsx file from a public URL and convert it to a JSON "
-            + "sheet/row/column structure, so its data can be read without a spreadsheet "
-            + "application. This is an ALTERNATE to WebFetch, not something used alongside "
-            + "it: if the URL points to an .xlsx file (a common shape for a government "
-            + "agency's compiled historical series), you MUST use this tool instead of "
-            + "WebFetch — WebFetch cannot parse a binary spreadsheet, and will hand you "
-            + "unusable garbled bytes or nothing at all. This is a gap this connector can "
-            + "close on its own, without needing a code-execution tool this client does "
-            + "not have. Returns raw cell text per row; does not "
-            + "evaluate formulas beyond their last-computed cached value, and does not "
-            + "attempt to detect which row is a header — inspect the first few rows "
-            + "yourself. Not for .csv (fetch and read those as plain text directly), .pdf "
-            + "(use fetch_pdf_as_text), or .docx (use fetch_docx_as_text).",
-            schema(xlsxProps, new String[]{"url"})));
-
-        ObjectNode pdfProps = MAPPER.createObjectNode();
-        pdfProps.set(
-            "url", prop("string",
-            "Direct HTTP(S) URL to a .pdf file — e.g. a government or research report. "
-            + "Must be a genuine, already-known download link, not a guess."));
-        pdfProps.set(
-            "max_pages", prop("integer",
-            "Max pages to extract text from, first-to-last (default 40, max 200)."));
-        tools.add(
-            tool("fetch_pdf_as_text",
-            "Fetch a .pdf file from a public URL and extract its plain text, so a report or "
-            + "paper's content can be read without a PDF viewer. This is an ALTERNATE to "
-            + "WebFetch, not something used alongside it: if the URL points to a PDF (a "
-            + "government or research report), you MUST use this tool instead of WebFetch "
-            + "— WebFetch cannot parse a PDF's binary content, and will hand you unusable "
-            + "garbled bytes or nothing at all. Extracts TEXT ONLY, in "
-            + "reading order — no gridlines, so a data "
-            + "table's rows/columns aren't reconstructed as a table. But the row's own label "
-            + "(a state, agency, or category name) and the numbers that follow it on the "
-            + "source page typically stay adjacent in the flattened output, so scanning for "
-            + "'<label> ... <numbers>' line by line usually recovers most or all of a ranked "
-            + "table even without column alignment. A partial, self-reconstructed table for "
-            + "EVERY row beats a clean citation of the handful of rows a secondary source "
-            + "chose to mention — don't skip this because the extraction is lossy; describe "
-            + "exactly what you could and couldn't reconstruct rather than silently trusting "
-            + "a number pulled from it. Does not work on a scanned/image-only PDF with no "
-            + "embedded text layer.",
-            schema(pdfProps, new String[]{"url"})));
-
-        ObjectNode docxProps = MAPPER.createObjectNode();
-        docxProps.set(
-            "url", prop("string",
-            "Direct HTTP(S) URL to a .docx file. Must be a genuine, already-known download "
-            + "link, not a guess."));
-        tools.add(
-            tool("fetch_docx_as_text",
-            "Fetch a .docx (Word) file from a public URL and extract its plain text "
-            + "(paragraphs and table cell text, in document order). This is an ALTERNATE "
-            + "to WebFetch, not something used alongside it: if the URL points to a .docx "
-            + "file, you MUST use this tool instead of WebFetch — WebFetch cannot parse a "
-            + "binary Word document, and will hand you unusable garbled bytes or nothing "
-            + "at all. Not for the old binary .doc format.",
-            schema(docxProps, new String[]{"url"})));
+            tool("web_fetch",
+            "**MANDATORY**: use this tool for every URL. NEVER use WebFetch or Fetch. Detects "
+            + "the content type from the actual fetched bytes and returns it fully parsed: a "
+            + "PDF's text, an .xlsx workbook as JSON sheets/rows, a .docx's text, or an HTML "
+            + "page converted to Markdown — full content in every case, never a summary. "
+            + "One tool for any URL; you never need to guess the file type first.",
+            schema(webFetchProps, new String[]{"url"})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
         telemetryProps.set(
@@ -2367,29 +2317,20 @@ public class McpServer {
                     text = setTelemetry(enabled);
                     break;
                 }
-                case "fetch_xlsx_as_json": {
-                    String xlsxUrl = args.path("url").asText();
+                case "web_fetch": {
+                    String fetchUrl = args.path("url").asText();
+                    int maxPages = args.has("max_pages")
+                        ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
                     int maxSheets = args.has("max_sheets")
                         ? Math.min(Math.max(1, args.get("max_sheets").asInt()), 20) : 5;
                     int maxRows = args.has("max_rows_per_sheet")
                         ? Math.min(Math.max(1, args.get("max_rows_per_sheet").asInt()), 5000)
                         : 500;
-                    log.println("[askamerica-mcp] tool=fetch_xlsx_as_json url=" + xlsxUrl);
-                    text = fetchXlsxAsJson(xlsxUrl, maxSheets, maxRows);
-                    break;
-                }
-                case "fetch_pdf_as_text": {
-                    String pdfUrl = args.path("url").asText();
-                    int maxPages = args.has("max_pages")
-                        ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
-                    log.println("[askamerica-mcp] tool=fetch_pdf_as_text url=" + pdfUrl);
-                    text = fetchPdfAsText(pdfUrl, maxPages);
-                    break;
-                }
-                case "fetch_docx_as_text": {
-                    String docxUrl = args.path("url").asText();
-                    log.println("[askamerica-mcp] tool=fetch_docx_as_text url=" + docxUrl);
-                    text = fetchDocxAsText(docxUrl);
+                    int maxChars = args.has("max_chars")
+                        ? Math.min(Math.max(1000, args.get("max_chars").asInt()), 200000)
+                        : 20000;
+                    log.println("[askamerica-mcp] tool=web_fetch url=" + fetchUrl);
+                    text = webFetch(fetchUrl, maxPages, maxSheets, maxRows, maxChars);
                     break;
                 }
                 case "update_schema": {
@@ -7266,16 +7207,30 @@ public class McpServer {
     private static final String ISSUE_STAMP = "askamerica-mcp";
 
     /** 25MB — a compiled historical-series workbook/report is small; guards against a
-     *  mistaken or abusive large download. Shared by all fetch_*_as_{json,text} tools. */
+     *  mistaken or abusive large download. Used by web_fetch. */
     private static final int DOC_FETCH_MAX_BYTES = 25 * 1024 * 1024;
 
     /**
-     * Shared GET-and-buffer helper for fetch_xlsx_as_json/fetch_pdf_as_text/
-     * fetch_docx_as_text. Returns the fetched bytes, or throws with a caller-facing message
-     * (via {@link FetchException}) on a non-http(s) scheme, a non-2xx response, or a
-     * download exceeding {@link #DOC_FETCH_MAX_BYTES}.
+     * Shared GET-and-buffer helper for web_fetch. Returns the fetched bytes, or throws with a
+     * caller-facing message (via {@link FetchException}) on a non-http(s) scheme, a non-2xx
+     * response, or a download exceeding {@link #DOC_FETCH_MAX_BYTES}.
      */
     private static byte[] fetchUrlBytes(String urlStr) throws FetchException {
+        return fetchUrlContent(urlStr).bytes;
+    }
+
+    /** Bytes plus the server's own Content-Type header (may be {@code null} if absent), for
+     *  callers that want it as a detection hint alongside magic-byte sniffing. */
+    private static final class FetchedContent {
+        final byte[] bytes;
+        final String contentType;
+        FetchedContent(byte[] bytes, String contentType) {
+            this.bytes = bytes;
+            this.contentType = contentType;
+        }
+    }
+
+    private static FetchedContent fetchUrlContent(String urlStr) throws FetchException {
         HttpURLConnection c = null;
         try {
             URL url = java.net.URI.create(urlStr).toURL();
@@ -7293,6 +7248,7 @@ public class McpServer {
             if (code < 200 || code >= 300) {
                 throw new FetchException("Could not fetch " + urlStr + " (HTTP " + code + ").");
             }
+            String contentType = c.getContentType();
             try (InputStream in = c.getInputStream()) {
                 ByteArrayOutputStream buf = new ByteArrayOutputStream();
                 byte[] chunk = new byte[8192];
@@ -7306,7 +7262,7 @@ public class McpServer {
                     }
                     buf.write(chunk, 0, n);
                 }
-                return buf.toByteArray();
+                return new FetchedContent(buf.toByteArray(), contentType);
             }
         } catch (FetchException fe) {
             throw fe;
@@ -7328,17 +7284,13 @@ public class McpServer {
     }
 
     /**
-     * Fetches an .xlsx file from a public URL and converts it to a JSON sheet/row/column
-     * structure — see {@code fetch_xlsx_as_json}'s tool description for why this exists:
-     * askamerica-desktop-style clients have no spreadsheet-parsing or code-execution tool of
-     * their own, so a government agency's compiled Excel workbook (a common shape for
-     * published historical series) would otherwise be unreadable raw bytes to them. Uses
-     * Apache POI, already a govdata dependency for the same purpose during ETL.
+     * Converts .xlsx bytes (already fetched by {@link #webFetch}) to a JSON sheet/row/column
+     * structure using Apache POI, already a govdata dependency for the same purpose during
+     * ETL.
      */
-    private static String fetchXlsxAsJson(String urlStr, int maxSheets, int maxRowsPerSheet) {
+    private static String parseXlsxBytes(String urlStr, byte[] bytes, int maxSheets,
+            int maxRowsPerSheet) {
         try {
-            byte[] bytes = fetchUrlBytes(urlStr);
-
             try (org.apache.poi.ss.usermodel.Workbook wb =
                      org.apache.poi.ss.usermodel.WorkbookFactory.create(
                          new ByteArrayInputStream(bytes))) {
@@ -7379,11 +7331,8 @@ public class McpServer {
                 }
                 return out.toString();
             }
-        } catch (FetchException fe) {
-            log.println("[askamerica-mcp] fetch_xlsx_as_json fetch error: " + fe.getMessage());
-            return fe.getMessage();
         } catch (Exception e) {
-            log.println("[askamerica-mcp] fetch_xlsx_as_json parse error: " + e.getMessage());
+            log.println("[askamerica-mcp] web_fetch xlsx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as an .xlsx workbook: " + e.getMessage()
                 + ". If this is a .xls (old binary format) or .csv file, this tool cannot "
                 + "help with it — read .csv directly as text via WebFetch.";
@@ -7391,14 +7340,11 @@ public class McpServer {
     }
 
     /**
-     * Fetches a .pdf file from a public URL and extracts its plain text via PDFBox
-     * ({@code PDFTextStripper}) — text only, no table-structure reconstruction. See
-     * {@code fetch_pdf_as_text}'s tool description for the lossiness caveat on embedded
-     * data tables.
+     * Extracts plain text from PDF bytes via PDFBox ({@code PDFTextStripper}) — text only, no
+     * table-structure reconstruction.
      */
-    private static String fetchPdfAsText(String urlStr, int maxPages) {
+    private static String parsePdfBytes(String urlStr, byte[] bytes, int maxPages) {
         try {
-            byte[] bytes = fetchUrlBytes(urlStr);
             try (org.apache.pdfbox.pdmodel.PDDocument doc =
                      org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
                 int totalPages = doc.getNumberOfPages();
@@ -7408,35 +7354,36 @@ public class McpServer {
                 stripper.setStartPage(1);
                 stripper.setEndPage(pagesToRead);
                 String extracted = stripper.getText(doc);
+                boolean truncated = totalPages > pagesToRead;
                 ObjectNode out = MAPPER.createObjectNode();
                 out.put("source_url", urlStr);
                 out.put("total_pages", totalPages);
                 out.put("pages_extracted", pagesToRead);
-                out.put("truncated", totalPages > pagesToRead);
+                out.put("truncated", truncated);
                 out.put("text", extracted);
                 if (extracted == null || extracted.trim().isEmpty()) {
                     out.put("warning",
                         "No text extracted — this is likely a scanned/image-only PDF with no "
                         + "embedded text layer, which this tool cannot read.");
+                } else if (truncated) {
+                    out.put("warning",
+                        "Only pages 1-" + pagesToRead + " of " + totalPages + " were extracted. "
+                        + "Call web_fetch again with a higher max_pages to read the rest.");
                 }
                 return out.toString();
             }
-        } catch (FetchException fe) {
-            log.println("[askamerica-mcp] fetch_pdf_as_text fetch error: " + fe.getMessage());
-            return fe.getMessage();
         } catch (Exception e) {
-            log.println("[askamerica-mcp] fetch_pdf_as_text parse error: " + e.getMessage());
+            log.println("[askamerica-mcp] web_fetch pdf parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .pdf file: " + e.getMessage();
         }
     }
 
     /**
-     * Fetches a .docx file from a public URL and extracts its plain text (paragraphs and
-     * table cell text, in document order) via POI's {@code XWPFWordExtractor}.
+     * Extracts plain text from .docx bytes (paragraphs and table cell text, in document order)
+     * via POI's {@code XWPFWordExtractor}.
      */
-    private static String fetchDocxAsText(String urlStr) {
+    private static String parseDocxBytes(String urlStr, byte[] bytes) {
         try {
-            byte[] bytes = fetchUrlBytes(urlStr);
             try (org.apache.poi.xwpf.usermodel.XWPFDocument doc =
                      new org.apache.poi.xwpf.usermodel.XWPFDocument(
                          new ByteArrayInputStream(bytes));
@@ -7448,13 +7395,269 @@ public class McpServer {
                 out.put("text", extracted == null ? "" : extracted);
                 return out.toString();
             }
-        } catch (FetchException fe) {
-            log.println("[askamerica-mcp] fetch_docx_as_text fetch error: " + fe.getMessage());
-            return fe.getMessage();
         } catch (Exception e) {
-            log.println("[askamerica-mcp] fetch_docx_as_text parse error: " + e.getMessage());
+            log.println("[askamerica-mcp] web_fetch docx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .docx file: " + e.getMessage()
                 + ". If this is the old binary .doc format, this tool cannot help with it.";
+        }
+    }
+
+    /**
+     * Converts fetched HTML bytes to Markdown directly, with no intermediate summarization
+     * step, using jsoup (already a govdata dependency for the same purpose during ETL
+     * scraping).
+     */
+    private static String parseHtmlBytes(String urlStr, byte[] bytes, int maxChars) {
+        try {
+            org.jsoup.nodes.Document doc =
+                org.jsoup.Jsoup.parse(new ByteArrayInputStream(bytes), null, urlStr);
+            doc.select("script, style, nav, footer, header, noscript, iframe, svg, form")
+                .remove();
+            org.jsoup.nodes.Element body = doc.body();
+            StringBuilder md = new StringBuilder();
+            htmlNodeToMarkdown(body, md);
+            String markdown = md.toString().replaceAll("\\n{3,}", "\n\n").trim();
+            boolean truncated = markdown.length() > maxChars;
+            ObjectNode out = MAPPER.createObjectNode();
+            out.put("source_url", urlStr);
+            String title = doc.title();
+            if (title != null && !title.isEmpty()) {
+                out.put("title", title);
+            }
+            if (truncated) {
+                markdown = markdown.substring(0, maxChars);
+                out.put("warning",
+                    "Truncated at " + maxChars + " chars. Call web_fetch again with a higher "
+                    + "max_chars to read the rest.");
+            }
+            out.put("markdown", markdown);
+            out.put("truncated", truncated);
+            return out.toString();
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] web_fetch HTML parse error: " + e.getMessage());
+            return "Could not parse " + urlStr + " as HTML: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Unified fetch tool ({@code web_fetch}): fetches a URL once and dispatches to the
+     * matching parser by sniffing the actual bytes (magic numbers), not the URL's extension
+     * or an untrustworthy Content-Type header — a PDF served without a .pdf extension, or a
+     * mislabeled response, still gets parsed correctly. Exists so there is exactly one tool
+     * name to remember instead of four, closing the adoption gap a caller reaching for
+     * WebFetch by habit would otherwise fall into.
+     */
+    private static String webFetch(String urlStr, int maxPages, int maxSheets,
+            int maxRowsPerSheet, int maxChars) {
+        FetchedContent fetched;
+        try {
+            fetched = fetchUrlContent(urlStr);
+        } catch (FetchException fe) {
+            log.println("[askamerica-mcp] web_fetch fetch error: " + fe.getMessage());
+            return fe.getMessage();
+        }
+        byte[] bytes = fetched.bytes;
+        String kind = sniffContentKind(bytes, fetched.contentType);
+        log.println("[askamerica-mcp] web_fetch url=" + urlStr + " content-type="
+            + fetched.contentType + " detected=" + kind);
+        switch (kind) {
+        case "pdf":
+            return parsePdfBytes(urlStr, bytes, maxPages);
+        case "xlsx":
+            return parseXlsxBytes(urlStr, bytes, maxSheets, maxRowsPerSheet);
+        case "docx":
+            return parseDocxBytes(urlStr, bytes);
+        case "html":
+            return parseHtmlBytes(urlStr, bytes, maxChars);
+        case "text": {
+            ObjectNode out = MAPPER.createObjectNode();
+            out.put("source_url", urlStr);
+            String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            boolean truncated = text.length() > maxChars;
+            out.put("text", truncated ? text.substring(0, maxChars) : text);
+            out.put("truncated", truncated);
+            return out.toString();
+        }
+        default: {
+            ObjectNode out = MAPPER.createObjectNode();
+            out.put("source_url", urlStr);
+            String ct = fetched.contentType;
+            String ctNote = ct == null || ct.isEmpty() ? "" : " Server reported Content-Type: "
+                + ct + ".";
+            out.put("error",
+                "Fetched " + bytes.length + " bytes of an unrecognized binary content type "
+                + "(not PDF, Excel, Word, HTML, or plain text) — no text could be extracted "
+                + "from this URL." + ctNote);
+            return out.toString();
+        }
+        }
+    }
+
+    /**
+     * Identifies fetched bytes as "pdf", "xlsx", "docx", "html", "text", or "unknown".
+     * Magic-number sniffing of the actual bytes is authoritative for pdf/xlsx/docx — PDF and
+     * the Office Open XML zip container (shared by .xlsx/.docx/.pptx) both have unambiguous
+     * magic numbers; telling xlsx apart from docx requires looking at which top-level entry
+     * the zip actually contains ({@code xl/} vs {@code word/}). The HTTP {@code Content-Type}
+     * header is used only as a secondary signal once magic bytes are inconclusive — a server
+     * can mislabel the header, but it can't fake a PDF's or zip's magic number.
+     */
+    private static String sniffContentKind(byte[] bytes, String contentType) {
+        if (bytes.length >= 5
+                && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F'
+                && bytes[4] == '-') {
+            return "pdf";
+        }
+        if (bytes.length >= 4 && bytes[0] == 'P' && bytes[1] == 'K'
+                && (bytes[2] == 3 || bytes[2] == 5 || bytes[2] == 7)) {
+            try (java.util.zip.ZipInputStream zis =
+                     new java.util.zip.ZipInputStream(new ByteArrayInputStream(bytes))) {
+                java.util.zip.ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    String name = entry.getName();
+                    if (name.startsWith("xl/")) {
+                        return "xlsx";
+                    }
+                    if (name.startsWith("word/")) {
+                        return "docx";
+                    }
+                }
+            } catch (Exception ignored) {
+                // Fall through — a zip we can't enumerate is still not html/text/pdf.
+            }
+            return "unknown";
+        }
+        String head = new String(bytes, 0, Math.min(bytes.length, 512),
+            java.nio.charset.StandardCharsets.UTF_8).trim().toLowerCase(java.util.Locale.ROOT);
+        if (head.startsWith("<!doctype html") || head.startsWith("<html")
+                || head.contains("<html")) {
+            return "html";
+        }
+        String ct = contentType == null ? "" : contentType.toLowerCase(java.util.Locale.ROOT);
+        try {
+            java.nio.charset.CharsetDecoder decoder =
+                java.nio.charset.StandardCharsets.UTF_8.newDecoder();
+            decoder.decode(java.nio.ByteBuffer.wrap(bytes));
+            // Decodes cleanly as UTF-8 and isn't recognizably HTML. A text/html Content-Type
+            // on a doctype-less body still means html; otherwise it's plain text (.txt, .csv,
+            // .json).
+            if (head.startsWith("<") || ct.startsWith("text/html")) {
+                return "html";
+            }
+            return "text";
+        } catch (java.nio.charset.CharacterCodingException notUtf8) {
+            return "unknown";
+        }
+    }
+
+    /**
+     * Recursively walks a jsoup node tree emitting Markdown — handles the common tags a
+     * research/agency report page actually uses (headings, paragraphs, lists, tables, links,
+     * emphasis, code, blockquotes); falls back to plain text for anything else.
+     */
+    private static void htmlNodeToMarkdown(org.jsoup.nodes.Node node, StringBuilder out) {
+        if (node instanceof org.jsoup.nodes.TextNode) {
+            String text = ((org.jsoup.nodes.TextNode) node).text();
+            if (!text.trim().isEmpty()) {
+                out.append(text.trim()).append(' ');
+            }
+            return;
+        }
+        if (!(node instanceof org.jsoup.nodes.Element)) {
+            return;
+        }
+        org.jsoup.nodes.Element el = (org.jsoup.nodes.Element) node;
+        String tag = el.tagName();
+        switch (tag) {
+        case "h1": case "h2": case "h3": case "h4": case "h5": case "h6": {
+            int level = tag.charAt(1) - '0';
+            out.append("\n\n");
+            for (int i = 0; i < level; i++) {
+                out.append('#');
+            }
+            out.append(' ').append(el.text().trim()).append("\n\n");
+            return;
+        }
+        case "p": case "div": case "section": case "article":
+            out.append("\n\n");
+            for (org.jsoup.nodes.Node child : el.childNodes()) {
+                htmlNodeToMarkdown(child, out);
+            }
+            out.append("\n\n");
+            return;
+        case "br":
+            out.append("\n");
+            return;
+        case "a": {
+            String href = el.attr("abs:href");
+            String linkText = el.text().trim();
+            if (linkText.isEmpty()) {
+                return;
+            }
+            if (href.isEmpty()) {
+                out.append(linkText).append(' ');
+            } else {
+                out.append('[').append(linkText).append("](").append(href).append(") ");
+            }
+            return;
+        }
+        case "strong": case "b":
+            out.append("**").append(el.text().trim()).append("** ");
+            return;
+        case "em": case "i":
+            out.append('*').append(el.text().trim()).append("* ");
+            return;
+        case "code":
+            out.append('`').append(el.text().trim()).append("` ");
+            return;
+        case "pre":
+            out.append("\n\n```\n").append(el.text()).append("\n```\n\n");
+            return;
+        case "blockquote":
+            out.append("\n\n> ").append(el.text().trim().replace("\n", "\n> ")).append("\n\n");
+            return;
+        case "ul": case "ol":
+            out.append('\n');
+            int idx = 1;
+            for (org.jsoup.nodes.Element li : el.children()) {
+                if (!"li".equals(li.tagName())) {
+                    continue;
+                }
+                out.append(tag.equals("ol") ? (idx++ + ". ") : "- ")
+                    .append(li.text().trim()).append('\n');
+            }
+            out.append('\n');
+            return;
+        case "table": {
+            out.append('\n');
+            org.jsoup.select.Elements rows = el.select("tr");
+            boolean first = true;
+            for (org.jsoup.nodes.Element row : rows) {
+                org.jsoup.select.Elements cells = row.select("th, td");
+                if (cells.isEmpty()) {
+                    continue;
+                }
+                out.append("| ");
+                for (org.jsoup.nodes.Element cell : cells) {
+                    out.append(cell.text().trim().replace("|", "\\|")).append(" | ");
+                }
+                out.append('\n');
+                if (first) {
+                    out.append("| ");
+                    for (int i = 0; i < cells.size(); i++) {
+                        out.append("--- | ");
+                    }
+                    out.append('\n');
+                    first = false;
+                }
+            }
+            out.append('\n');
+            return;
+        }
+        default:
+            for (org.jsoup.nodes.Node child : el.childNodes()) {
+                htmlNodeToMarkdown(child, out);
+            }
         }
     }
 

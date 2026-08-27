@@ -67,17 +67,21 @@ dependencies {
     implementation(project(":govdata"))
     implementation("com.formdev:flatlaf:3.3")
     implementation("org.knowm.xchart:xchart:4.0.4")
-    // PDF-to-text for fetch_pdf_as_text (McpServer). Not previously a real dependency here —
+    // PDF-to-text for web_fetch (McpServer). Not previously a real dependency here —
     // the shadowJar excludes for org/apache/pdfbox/** predate this and were dead code (no
     // pdfbox anywhere in the resolved runtime classpath) until this line.
     implementation("org.apache.pdfbox:pdfbox:2.0.31")
-    // Excel/Word parsing for fetch_xlsx_as_json/fetch_docx_as_text (McpServer). govdata
+    // Excel/Word parsing for web_fetch (McpServer). govdata
     // already declares these for ETL, but Gradle's `implementation` config is not transitive
     // to a consuming module's compile classpath — this module needs its own declaration to
     // reference POI classes directly, even though the resolved jar was already on the
     // runtime classpath via govdata.
     implementation("org.apache.poi:poi:5.3.0")
     implementation("org.apache.poi:poi-ooxml:5.3.0")
+    // HTML-to-Markdown for web_fetch (McpServer) — same non-transitive-dependency reason
+    // as poi/pdfbox above: govdata already has jsoup for ETL scraping, but this module
+    // needs its own declaration to reference it at compile time.
+    implementation("org.jsoup:jsoup")
     // Multivariate regression (OLS, 2SLS) and hypothesis tests for ols_regression,
     // iv_2sls, diff_in_diff, and hypothesis_test — real matrix algebra DuckDB's
     // single-pass SQL aggregates (corr, regr_slope, ...) can't express. Frozen/stable
@@ -173,12 +177,9 @@ tasks.shadowJar {
 
     // ── ETL-only third-party libraries ─────────────────────────────────────
 
-    // PDF parsing (pdfbox/fontbox/xmpbox) and Excel/Word parsing (poi) are now query-time
-    // dependencies too — McpServer's fetch_pdf_as_text/fetch_docx_as_text/fetch_xlsx_as_json
-    // use them directly. No longer excluded; kept in the shaded jar.
-
-    // HTML scraping
-    exclude("org/jsoup/**")
+    // PDF parsing (pdfbox/fontbox/xmpbox), Excel/Word parsing (poi), and HTML-to-Markdown
+    // (jsoup) are now query-time dependencies too — McpServer's web_fetch tool uses them
+    // directly. No longer excluded; kept in the shaded jar.
 
     // DJL stays out: the query-time tokenizer is BertWordPieceTokenizer, in-tree and pure Java,
     // specifically so no per-platform tokenizer binary is needed.
@@ -284,9 +285,8 @@ val stageEngineRuntime by tasks.registering(Sync::class) {
     val dropPrefixes = listOf(
         // "onnxruntime" removed: it backs OnnxClsEmbedder, the query-time embedder for
         // SEMANTIC_SEARCH/EMBED. Dropping the jar left those functions permanently broken.
-        // "pdfbox"/"fontbox"/"xmpbox"/"poi" removed: fetch_pdf_as_text/fetch_docx_as_text/
-        // fetch_xlsx_as_json (McpServer) need them at query time now.
-        "jsoup",
+        // "pdfbox"/"fontbox"/"xmpbox"/"poi"/"jsoup" removed: web_fetch (McpServer) needs
+        // them at query time now.
         "tokenizers",   // ai.djl.huggingface tokenizers — djl classes excluded from fat jar too
         "arrow-gandiva", // LLVM expr compiler — reached only via reflective .arrow path (govdata has none)
         // hadoop-aws (S3AFileSystem) + its 297 MB aws-java-sdk-bundle. The whole read path
