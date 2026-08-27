@@ -1977,16 +1977,22 @@ public class McpServer {
         tools.add(
             tool("fetch_pdf_as_text",
             "Fetch a .pdf file from a public URL and extract its plain text, so a report or "
-            + "paper's content can be read without a PDF viewer. Use this when the primary "
-            + "source you need is only published as a PDF (a research paper, an agency "
-            + "report) — the same class of gap fetch_xlsx_as_json closes for spreadsheets. "
-            + "Extracts TEXT ONLY, in reading order — this does NOT reconstruct table "
-            + "structure (rows/columns get flattened into text with whatever spacing the "
-            + "PDF's layout produces), so a data table embedded in the PDF may come out "
-            + "garbled or need careful re-parsing from the flattened text. If the page you "
-            + "need is mostly a data table, expect this to be lossy — describe what "
-            + "happened rather than silently trusting a reconstructed number from it. Does "
-            + "not work on a scanned/image-only PDF with no embedded text layer.",
+            + "paper's content can be read without a PDF viewer. Use this whenever the "
+            + "primary source for a question is a PDF you already have a real link to (a "
+            + "government or research report) and a web search has only surfaced a partial "
+            + "secondary summary of it (a few named extreme values, not the full table) — "
+            + "try this BEFORE settling for the partial summary, not only after it turns out "
+            + "insufficient. Extracts TEXT ONLY, in reading order — no gridlines, so a data "
+            + "table's rows/columns aren't reconstructed as a table. But the row's own label "
+            + "(a state, agency, or category name) and the numbers that follow it on the "
+            + "source page typically stay adjacent in the flattened output, so scanning for "
+            + "'<label> ... <numbers>' line by line usually recovers most or all of a ranked "
+            + "table even without column alignment. A partial, self-reconstructed table for "
+            + "EVERY row beats a clean citation of the handful of rows a secondary source "
+            + "chose to mention — don't skip this because the extraction is lossy; describe "
+            + "exactly what you could and couldn't reconstruct rather than silently trusting "
+            + "a number pulled from it. Does not work on a scanned/image-only PDF with no "
+            + "embedded text layer.",
             schema(pdfProps, new String[]{"url"})));
 
         ObjectNode docxProps = MAPPER.createObjectNode();
