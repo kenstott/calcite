@@ -348,6 +348,92 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health
       WHERE status IS NOT NULL AND status NOT IN ('Current', 'To Be Discontinued', 'Resolved'));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: chr_premature_death (County Health Rankings; one national CSV, nation/state/county rows)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true));
+
+-- T2: row_count (1 nation + 51 states/DC + ~3,143-3,155 counties/county-equivalents)
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T2_row_count',
+  CASE WHEN n >= 3100 THEN 'pass' ELSE 'fail' END,
+  n, 3100, 'Expected ~3,200 rows (1 nation + 51 states + ~3,150 counties)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      -- release_year is legitimately constant: this table is one annual CHR release file, not
+      -- a multi-year time series (see the table comment)
+      AND column_name NOT IN ('type', 'release_year')
+  )
+);
+
+-- T6: pk_nulls (fips_code NOT NULL)
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL fips_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true) WHERE fips_code IS NULL);
+
+-- T7: geo_level domain
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T7_geo_level_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'geo_level outside (nation, state, county)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true)
+      WHERE geo_level NOT IN ('nation', 'state', 'county'));
+
+-- T7: county row count (distinct US counties/county-equivalents)
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T7_county_count',
+  CASE WHEN n BETWEEN 3000 AND 3300 THEN 'pass' ELSE 'fail' END,
+  n, 3143, 'Distinct county-grain fips_code values (expected ~3,143-3,155)'
+FROM (SELECT COUNT(DISTINCT fips_code) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true) WHERE geo_level = 'county');
+
+-- T7: premature_death_rate plausibility (YPLL per 100k; national historical range is roughly
+-- 4,000-12,000, county extremes can run higher — bound loosely, not tightly)
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death', 'T7_rate_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'premature_death_rate outside plausible [500, 40000] YPLL-per-100k range'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true)
+      WHERE premature_death_rate IS NOT NULL AND (premature_death_rate < 500 OR premature_death_rate > 40000));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: fda_adverse_events
 -- ─────────────────────────────────────────────────────────────
 

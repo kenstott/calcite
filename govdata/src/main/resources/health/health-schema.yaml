@@ -578,6 +578,137 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # COUNTY HEALTH RANKINGS — Premature Death (YPLL/100k), nation/state/county, current-era
+  # ==========================================================================
+  - name: chr_premature_death
+    freshness:
+      type: hash
+    pattern: "type=chr_premature_death"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Premature Death (years of potential life lost before age 75, per 100,000 population) at
+      nation/state/county grain, from County Health Rankings & Roadmaps' national analytic-data
+      file (University of Wisconsin Population Health Institute / RWJF; input mortality data is
+      NCHS's own multi-year detailed-death files). This is the current-era, county-grain
+      mortality-outcome series CDC WONDER cannot provide at all: WONDER's NVSS underlying-cause-
+      of-death API rejects sub-national location grouping entirely (confirmed live; see
+      cdc_wonder_cause_of_death's comment), and CDC's own county-grain product (PLACES) covers
+      disease prevalence and risk factors, not mortality. Premature Death (YPLL) is a truncated
+      (deaths before age 75) measure, not a full all-ages age-adjusted rate — appropriate for
+      relative county comparisons and trend questions, not a substitute for cdc_mortality's
+      all-ages state-level rate. geo_level distinguishes nation/state/county rows sharing this
+      one table (see the rollup-vs-leaf convention used elsewhere in this corpus) — filter to
+      geo_level='county' rather than summing across levels.
+
+    columns:
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: "'nation', 'state', or 'county' — filter, don't sum across levels"
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: 2-digit state FIPS ('00' for the national row)
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 3-digit county FIPS ('000' for state/nation rows)
+      - name: fips_code
+        type: string
+        nullable: true
+        comment: 5-digit combined FIPS code
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: FK to geo.state_ref.state_abbr (nation row carries 'US')
+      - name: name
+        type: string
+        nullable: true
+        comment: County, state, or "United States" name
+      - name: release_year
+        type: integer
+        nullable: true
+        comment: CHR annual data-release year (the underlying mortality data lags this by several years — see CHR's own methodology)
+      - name: premature_death_rate
+        type: double
+        nullable: true
+        comment: Years of potential life lost before age 75, per 100,000 population (age-adjusted)
+      - name: premature_death_numerator
+        type: double
+        nullable: true
+        comment: Total years of potential life lost
+      - name: premature_death_denominator
+        type: double
+        nullable: true
+        comment: Population denominator
+      - name: ci_low
+        type: double
+        nullable: true
+      - name: ci_high
+        type: double
+        nullable: true
+      - name: data_flag
+        type: string
+        nullable: true
+        comment: "0 = no flag, 1 = unreliable (small numerator), 2 = suppressed"
+      - name: rate_aian
+        type: double
+        nullable: true
+        comment: Premature death rate, American Indian/Alaska Native subpopulation
+      - name: rate_asian
+        type: double
+        nullable: true
+      - name: rate_black
+        type: double
+        nullable: true
+      - name: rate_hispanic
+        type: double
+        nullable: true
+      - name: rate_white
+        type: double
+        nullable: true
+      - name: rate_nhopi
+        type: double
+        nullable: true
+        comment: Native Hawaiian/Other Pacific Islander subpopulation
+
+    source:
+      type: http
+      url: "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2025_v3.csv"
+      method: GET
+      response:
+        format: TEXT   # CountyHealthRankingsPrematureDeathTransformer re-downloads and parses the CSV
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CountyHealthRankingsPrematureDeathTransformer"
+
+    dimensions:
+      type:
+        - chr_premature_death
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # FDA ADVERSE EVENTS — FAERS reports, bulk partition ZIPs (download.open.fda.gov)
   # Year filter: GOVDATA_START_YEAR (default 2010); partitions enumerated from download.json
   # ==========================================================================
@@ -5123,6 +5254,14 @@ constraints:
       - columns: [application_number]
         targetTable: fda_drug_approvals
         targetColumns: [application_number]
+
+  chr_premature_death:
+    primaryKey: [type, fips_code]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   fda_adverse_events:
     primaryKey: [type, safety_report_id]
