@@ -1176,6 +1176,46 @@ build_inline_model() {
     "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json" "$user_tables_json"
 }
 
+# Filter a bespoke worker's hardcoded per-model table list down to a GOVDATA_TABLES override.
+# The schemas with their own model-building function (worker-health.sh, worker-health-rebuild.sh,
+# worker-cyber.sh, worker-edu.sh, worker-lands.sh, worker-patents.sh) bypass build_inline_model
+# entirely, so GOVDATA_TABLES (the --tables scoping worker-dq-run.sh exports) was silently a
+# no-op for all of them: a run always covered every table in the hardcoded per-model group,
+# regardless of what --tables asked for.
+#
+# Usage: filtered=$(filter_enabled_tables "table1,table2,table3")
+#   Echoes a JSON-array-ready, double-quoted, comma-separated list for the group. With
+#   GOVDATA_TABLES unset, echoes the group unchanged. With it set, echoes only the
+#   intersection — empty if none of the group's tables were requested, so callers should skip
+#   running that model entirely.
+filter_enabled_tables() {
+  local group_csv=$1 _t out=""
+
+  if [ -z "${GOVDATA_TABLES:-}" ]; then
+    IFS=',' read -ra _arr <<< "$group_csv"
+    for _t in "${_arr[@]}"; do
+      _t="$(echo "$_t" | xargs)"
+      [ -n "$_t" ] && out="${out}\"${_t}\","
+    done
+    echo "${out%,}"
+    return
+  fi
+
+  local _w wanted=","
+  IFS=',' read -ra _want_arr <<< "$GOVDATA_TABLES"
+  for _w in "${_want_arr[@]}"; do
+    _w="$(echo "$_w" | xargs)"
+    [ -n "$_w" ] && wanted="${wanted}${_w},"
+  done
+
+  IFS=',' read -ra _arr <<< "$group_csv"
+  for _t in "${_arr[@]}"; do
+    _t="$(echo "$_t" | xargs)"
+    [[ "$wanted" == *",${_t},"* ]] && out="${out}\"${_t}\","
+  done
+  echo "${out%,}"
+}
+
 # Run the ETL with a given model file
 # Usage: run_etl <model_file> <worker_id> [extra_args...]
 run_etl() {

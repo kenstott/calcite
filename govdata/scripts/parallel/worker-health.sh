@@ -40,9 +40,16 @@ mkdir -p "$MODEL_DIR"
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 run_health_model() {
-  local model_name=$1 enabled_tables=$2
+  local model_name=$1 table_csv=$2
   shift 2
   local extra_operands="${1:-}"
+
+  local enabled_tables
+  enabled_tables="$(filter_enabled_tables "$table_csv")"
+  if [ -z "$enabled_tables" ]; then
+    log_info "$WORKER_ID: skipping $model_name — none of its tables match GOVDATA_TABLES=${GOVDATA_TABLES}"
+    return
+  fi
 
   local model_file="$MODEL_DIR/${model_name}.json"
   local extra_json=""
@@ -101,25 +108,25 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 # already: each table self-manages its own cadence via freshness:/releaseWindow:.
 run_all_health_tables() {
   run_health_model "health-fda" \
-    '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
+    'fda_ndc_products,fda_drug_approvals,fda_drug_recalls,fda_adverse_events,fda_device_recalls'
 
   run_health_model "health-who" \
-    '"who_gho_indicators"'
+    'who_gho_indicators'
 
   run_health_model "health-trials" \
-    '"clinical_trials", "clinical_trial_conditions", "clinical_trial_interventions"'
+    'clinical_trials,clinical_trial_conditions,clinical_trial_interventions'
 
   run_health_model "health-cdc" \
-    '"cdc_covid_vaccinations", "cdc_mortality", "cdc_brfss"'
+    'cdc_covid_vaccinations,cdc_mortality,cdc_brfss'
 
   run_health_model "health-cms-medicaid" \
-    '"cms_hospital_quality", "cms_open_payments", "medicaid_drug_utilization", "cms_pos_facilities"'
+    'cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities'
 
   run_health_model "health-rxnorm" \
-    '"rxnorm_drugs"'
+    'rxnorm_drugs'
 
   run_health_model "health-hrsa" \
-    '"ahrf_physician_supply"'
+    'ahrf_physician_supply'
 }
 
 # Daily-only: the 9 CDC WONDER tables and 4 data.cdc.gov Socrata county/state tables are all
@@ -130,12 +137,12 @@ run_all_health_tables() {
 # rationale as cyber_threat being daily-only in worker-cyber.sh.
 run_daily_only_health_tables() {
   run_health_model "health-cdc-geo" \
-    '"cdc_county_overdose_deaths", "cdc_county_injury_mortality", "cdc_state_vital_provisional", "cdc_teen_birth_rates_county"'
+    'cdc_county_overdose_deaths,cdc_county_injury_mortality,cdc_state_vital_provisional,cdc_teen_birth_rates_county'
 
   # CDC WONDER XML API tables — isolated from health-cdc-geo because WONDER enforces a strict
   # 15-second minimum between requests (HTTP 429 otherwise), unlike data.cdc.gov Socrata.
   run_health_model "health-wonder" \
-    '"cdc_wonder_cancer_incidence", "cdc_wonder_std_morbidity", "cdc_wonder_tb", "cdc_wonder_natality", "cdc_wonder_cause_of_death", "cdc_wonder_cause_of_death_2018_2024", "cdc_wonder_multiple_cause_of_death", "cdc_wonder_multiple_cause_of_death_2018_2024", "cdc_wonder_vaers"'
+    'cdc_wonder_cancer_incidence,cdc_wonder_std_morbidity,cdc_wonder_tb,cdc_wonder_natality,cdc_wonder_cause_of_death,cdc_wonder_cause_of_death_2018_2024,cdc_wonder_multiple_cause_of_death,cdc_wonder_multiple_cause_of_death_2018_2024,cdc_wonder_vaers'
 }
 
 case "$MODE" in
