@@ -1954,12 +1954,13 @@ public class McpServer {
             tool("fetch_xlsx_as_json",
             "Fetch an .xlsx file from a public URL and convert it to a JSON "
             + "sheet/row/column structure, so its data can be read without a spreadsheet "
-            + "application. Use this when search_catalog/describe_table confirm askamerica "
-            + "has no table for what a question needs, and the closest primary source you "
-            + "can find is a government agency's own published Excel workbook (a common "
-            + "shape for compiled historical series) rather than a queryable API — this is "
-            + "a gap this connector can close on its own, without needing a code-execution "
-            + "tool this client does not have. Returns raw cell text per row; does not "
+            + "application. This is an ALTERNATE to WebFetch, not something used alongside "
+            + "it: if the URL points to an .xlsx file (a common shape for a government "
+            + "agency's compiled historical series), you MUST use this tool instead of "
+            + "WebFetch — WebFetch cannot parse a binary spreadsheet, and will hand you "
+            + "unusable garbled bytes or nothing at all. This is a gap this connector can "
+            + "close on its own, without needing a code-execution tool this client does "
+            + "not have. Returns raw cell text per row; does not "
             + "evaluate formulas beyond their last-computed cached value, and does not "
             + "attempt to detect which row is a header — inspect the first few rows "
             + "yourself. Not for .csv (fetch and read those as plain text directly), .pdf "
@@ -1977,12 +1978,12 @@ public class McpServer {
         tools.add(
             tool("fetch_pdf_as_text",
             "Fetch a .pdf file from a public URL and extract its plain text, so a report or "
-            + "paper's content can be read without a PDF viewer. Use this whenever the "
-            + "primary source for a question is a PDF you already have a real link to (a "
-            + "government or research report) and a web search has only surfaced a partial "
-            + "secondary summary of it (a few named extreme values, not the full table) — "
-            + "try this BEFORE settling for the partial summary, not only after it turns out "
-            + "insufficient. Extracts TEXT ONLY, in reading order — no gridlines, so a data "
+            + "paper's content can be read without a PDF viewer. This is an ALTERNATE to "
+            + "WebFetch, not something used alongside it: if the URL points to a PDF (a "
+            + "government or research report), you MUST use this tool instead of WebFetch "
+            + "— WebFetch cannot parse a PDF's binary content, and will hand you unusable "
+            + "garbled bytes or nothing at all. Extracts TEXT ONLY, in "
+            + "reading order — no gridlines, so a data "
             + "table's rows/columns aren't reconstructed as a table. But the row's own label "
             + "(a state, agency, or category name) and the numbers that follow it on the "
             + "source page typically stay adjacent in the flattened output, so scanning for "
@@ -2003,9 +2004,11 @@ public class McpServer {
         tools.add(
             tool("fetch_docx_as_text",
             "Fetch a .docx (Word) file from a public URL and extract its plain text "
-            + "(paragraphs and table cell text, in document order). Use this for the rarer "
-            + "case where a primary source is published as a Word document rather than a "
-            + "PDF or spreadsheet. Not for the old binary .doc format.",
+            + "(paragraphs and table cell text, in document order). This is an ALTERNATE "
+            + "to WebFetch, not something used alongside it: if the URL points to a .docx "
+            + "file, you MUST use this tool instead of WebFetch — WebFetch cannot parse a "
+            + "binary Word document, and will hand you unusable garbled bytes or nothing "
+            + "at all. Not for the old binary .doc format.",
             schema(docxProps, new String[]{"url"})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
