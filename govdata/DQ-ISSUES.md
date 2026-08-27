@@ -571,3 +571,9 @@ the declared `yearRange` to 2023-2024 if backfill is not planned. (2) Fix the `g
 derivation in the transformer — it appears to derive from an apparent current-run-year-based offset
 rather than the year/month the row actually describes; the varchar `year` partition column has the
 correct value and can serve as the reference during the fix.
+
+Note: `fuel_consumed_for_eg_mmbtu`'s ~10^6 under-scaling on this same table (found by `askamerica`
+during Q34 of the comparative-eval `optimize` pass, independently reconfirmed 2026-08-26 by direct
+query) is tracked in the Govdata Defect Register artifact, not duplicated here — see that entry for
+`energy.eia_electricity_generation` / "fuel_consumed_for_eg_mmbtu is mis-scaled ... off by orders of
+magnitude."

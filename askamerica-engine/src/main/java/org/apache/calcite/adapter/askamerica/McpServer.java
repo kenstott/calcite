@@ -25,6 +25,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -309,7 +312,8 @@ public class McpServer {
      */
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
-            "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe"));
+            "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
+            "fetch_xlsx_as_json", "fetch_pdf_as_text", "fetch_docx_as_text"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -918,7 +922,7 @@ public class McpServer {
             + "windows of the tables involved. Read it before answering: a 'high' warning "
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
             + "health, only that no listed defect was detected."
-            + QuestionGuidance.exemplarBlock(),
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
         ObjectNode critiqueProps = MAPPER.createObjectNode();
@@ -935,8 +939,29 @@ public class McpServer {
             + "before an expensive aggregate, or when a result looks surprising and you want "
             + "to know whether the question or the data is at fault. It reports defects it can "
             + "see; silence from it is not approval."
-            + QuestionGuidance.exemplarBlock(),
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(critiqueProps, new String[]{"sql"})));
+
+        // Eight small, self-contained tools rather than one large one or a return to the
+        // (silently unreachable) initialize.instructions banner — see QuestionGuidance.
+        // USAGE_GUIDE's class doc for the two client bugs this design works around.
+        //
+        // The GUIDE TEXT ITSELF is the tool description below, not a teaser that requires
+        // calling the tool to get. A client resends every tool's description on every
+        // request whether or not the tool is ever called — that resend is the entire
+        // mechanism this design relies on to reach the model reliably, so the payload has
+        // to live there, not behind an optional invocation. Calling the tool (handled in
+        // handleToolsCall) returns the identical text, which is only a convenience for a
+        // host that wants to re-fetch it mid-conversation, not how it primarily reaches
+        // context. Each description is kept well under the ~2048-char client truncation
+        // ceiling.
+        for (int gi = 0; gi < QuestionGuidance.USAGE_GUIDE.size(); gi++) {
+            int sectionNum = gi + 1;
+            tools.add(
+                tool("get_usage_guide_section_" + sectionNum,
+                QuestionGuidance.USAGE_GUIDE.get(gi),
+                schema(MAPPER.createObjectNode(), new String[]{})));
+        }
 
         ObjectNode resolveProps = MAPPER.createObjectNode();
         resolveProps.set("term", prop("string",
@@ -1805,7 +1830,18 @@ public class McpServer {
             + "For an AskAmerica-table citation, also include \"sql\": the exact query() call "
             + "that produced the cited figure — it renders as a collapsed 'Show SQL' toggle "
             + "the reader can expand, so a claim traced to this connector is independently "
-            + "checkable, not just named. Omit sql for web sources.");
+            + "checkable, not just named. For a figure produced by any OTHER AskAmerica tool "
+            + "call (adjust_inflation, per_capita, hypothesis_test, ols_regression, etc. — "
+            + "anything that isn't query()), do NOT cite a generic external URL for it even if "
+            + "the tool's subject has one (e.g. don't cite https://www.bls.gov/cpi/ for a "
+            + "number adjust_inflation computed) — a landing page can't be checked against the "
+            + "figure. Instead include \"tool\": the tool name, and \"params\": the exact "
+            + "arguments you called it with, as [[\"param_name\", value], ...], e.g. "
+            + "{\"label\":\"BLS CPI-U deflator, 2014→2024\", \"tool\":\"adjust_inflation\", "
+            + "\"params\":[[\"from_year\",2014],[\"to_year\",2024],[\"series\",\"CPI-U\"]]} — "
+            + "this renders the same way sql does, a collapsed toggle showing exactly what was "
+            + "asked of the connector, so the figure is independently re-derivable. Omit both "
+            + "sql and tool/params for genuine web sources.");
         pubProps.set("sources", sourcesProp);
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
@@ -1899,6 +1935,81 @@ public class McpServer {
             + "caught it. Costs nothing to call and an empty result teaches you the catalog "
             + "hasn't covered this yet, not that your plan is fine.",
             schema(recipeProps, new String[]{})));
+
+        ObjectNode xlsxProps = MAPPER.createObjectNode();
+        xlsxProps.set(
+            "url", prop("string",
+            "Direct HTTP(S) URL to an .xlsx file — e.g. a government agency's published "
+            + "compiled-data spreadsheet. Must be a genuine, already-known download link "
+            + "(from a page you fetched or a search result), not a guess."));
+        xlsxProps.set(
+            "max_sheets", prop("integer",
+            "Max worksheets to return, first-to-last (default 5, max 20)."));
+        xlsxProps.set(
+            "max_rows_per_sheet", prop("integer",
+            "Max rows to return per worksheet, top-to-bottom (default 500, max 5000). "
+            + "Cell values are returned as-formatted text (dates and numbers rendered the "
+            + "way the spreadsheet displays them), one row per array."));
+        tools.add(
+            tool("fetch_xlsx_as_json",
+            "Fetch an .xlsx file from a public URL and convert it to a JSON "
+            + "sheet/row/column structure, so its data can be read without a spreadsheet "
+            + "application. This is an ALTERNATE to WebFetch, not something used alongside "
+            + "it: if the URL points to an .xlsx file (a common shape for a government "
+            + "agency's compiled historical series), you MUST use this tool instead of "
+            + "WebFetch — WebFetch cannot parse a binary spreadsheet, and will hand you "
+            + "unusable garbled bytes or nothing at all. This is a gap this connector can "
+            + "close on its own, without needing a code-execution tool this client does "
+            + "not have. Returns raw cell text per row; does not "
+            + "evaluate formulas beyond their last-computed cached value, and does not "
+            + "attempt to detect which row is a header — inspect the first few rows "
+            + "yourself. Not for .csv (fetch and read those as plain text directly), .pdf "
+            + "(use fetch_pdf_as_text), or .docx (use fetch_docx_as_text).",
+            schema(xlsxProps, new String[]{"url"})));
+
+        ObjectNode pdfProps = MAPPER.createObjectNode();
+        pdfProps.set(
+            "url", prop("string",
+            "Direct HTTP(S) URL to a .pdf file — e.g. a government or research report. "
+            + "Must be a genuine, already-known download link, not a guess."));
+        pdfProps.set(
+            "max_pages", prop("integer",
+            "Max pages to extract text from, first-to-last (default 40, max 200)."));
+        tools.add(
+            tool("fetch_pdf_as_text",
+            "Fetch a .pdf file from a public URL and extract its plain text, so a report or "
+            + "paper's content can be read without a PDF viewer. This is an ALTERNATE to "
+            + "WebFetch, not something used alongside it: if the URL points to a PDF (a "
+            + "government or research report), you MUST use this tool instead of WebFetch "
+            + "— WebFetch cannot parse a PDF's binary content, and will hand you unusable "
+            + "garbled bytes or nothing at all. Extracts TEXT ONLY, in "
+            + "reading order — no gridlines, so a data "
+            + "table's rows/columns aren't reconstructed as a table. But the row's own label "
+            + "(a state, agency, or category name) and the numbers that follow it on the "
+            + "source page typically stay adjacent in the flattened output, so scanning for "
+            + "'<label> ... <numbers>' line by line usually recovers most or all of a ranked "
+            + "table even without column alignment. A partial, self-reconstructed table for "
+            + "EVERY row beats a clean citation of the handful of rows a secondary source "
+            + "chose to mention — don't skip this because the extraction is lossy; describe "
+            + "exactly what you could and couldn't reconstruct rather than silently trusting "
+            + "a number pulled from it. Does not work on a scanned/image-only PDF with no "
+            + "embedded text layer.",
+            schema(pdfProps, new String[]{"url"})));
+
+        ObjectNode docxProps = MAPPER.createObjectNode();
+        docxProps.set(
+            "url", prop("string",
+            "Direct HTTP(S) URL to a .docx file. Must be a genuine, already-known download "
+            + "link, not a guess."));
+        tools.add(
+            tool("fetch_docx_as_text",
+            "Fetch a .docx (Word) file from a public URL and extract its plain text "
+            + "(paragraphs and table cell text, in document order). This is an ALTERNATE "
+            + "to WebFetch, not something used alongside it: if the URL points to a .docx "
+            + "file, you MUST use this tool instead of WebFetch — WebFetch cannot parse a "
+            + "binary Word document, and will hand you unusable garbled bytes or nothing "
+            + "at all. Not for the old binary .doc format.",
+            schema(docxProps, new String[]{"url"})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
         telemetryProps.set(
@@ -2156,6 +2267,19 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=list_schemas");
                     text = listSchemas();
                     break;
+                case "get_usage_guide_section_1":
+                case "get_usage_guide_section_2":
+                case "get_usage_guide_section_3":
+                case "get_usage_guide_section_4":
+                case "get_usage_guide_section_5":
+                case "get_usage_guide_section_6":
+                case "get_usage_guide_section_7": {
+                    int sectionNum = Integer.parseInt(
+                        name.substring("get_usage_guide_section_".length()));
+                    log.println("[askamerica-mcp] tool=" + name);
+                    text = QuestionGuidance.USAGE_GUIDE.get(sectionNum - 1);
+                    break;
+                }
                 case "search_catalog": {
                     String q = args.path("query").asText();
                     int lim = args.has("limit")
@@ -2241,6 +2365,31 @@ public class McpServer {
                     boolean enabled = args.path("enabled").asBoolean(false);
                     log.println("[askamerica-mcp] tool=set_telemetry enabled=" + enabled);
                     text = setTelemetry(enabled);
+                    break;
+                }
+                case "fetch_xlsx_as_json": {
+                    String xlsxUrl = args.path("url").asText();
+                    int maxSheets = args.has("max_sheets")
+                        ? Math.min(Math.max(1, args.get("max_sheets").asInt()), 20) : 5;
+                    int maxRows = args.has("max_rows_per_sheet")
+                        ? Math.min(Math.max(1, args.get("max_rows_per_sheet").asInt()), 5000)
+                        : 500;
+                    log.println("[askamerica-mcp] tool=fetch_xlsx_as_json url=" + xlsxUrl);
+                    text = fetchXlsxAsJson(xlsxUrl, maxSheets, maxRows);
+                    break;
+                }
+                case "fetch_pdf_as_text": {
+                    String pdfUrl = args.path("url").asText();
+                    int maxPages = args.has("max_pages")
+                        ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
+                    log.println("[askamerica-mcp] tool=fetch_pdf_as_text url=" + pdfUrl);
+                    text = fetchPdfAsText(pdfUrl, maxPages);
+                    break;
+                }
+                case "fetch_docx_as_text": {
+                    String docxUrl = args.path("url").asText();
+                    log.println("[askamerica-mcp] tool=fetch_docx_as_text url=" + docxUrl);
+                    text = fetchDocxAsText(docxUrl);
                     break;
                 }
                 case "update_schema": {
@@ -2724,10 +2873,26 @@ public class McpServer {
                     }
                     java.util.List<ReportPage.Source> srcs = new java.util.ArrayList<>();
                     for (JsonNode src : args.path("sources")) {
+                        String toolName = src.has("tool") ? src.get("tool").asText(null) : null;
+                        String toolParams = null;
+                        if (toolName != null && src.has("params") && src.get("params").isArray()) {
+                            StringBuilder pb = new StringBuilder();
+                            for (JsonNode pair : src.get("params")) {
+                                if (!pair.isArray() || pair.size() < 2) {
+                                    continue;
+                                }
+                                if (pb.length() > 0) {
+                                    pb.append(", ");
+                                }
+                                pb.append(pair.get(0).asText()).append('=').append(pair.get(1));
+                            }
+                            toolParams = pb.toString();
+                        }
                         srcs.add(new ReportPage.Source(src.path("label").asText(null),
                             src.path("url").asText(null),
                             src.has("note") ? src.get("note").asText(null) : null,
-                            src.has("sql") ? src.get("sql").asText(null) : null));
+                            src.has("sql") ? src.get("sql").asText(null) : null,
+                            toolName, toolParams));
                     }
                     String boardSvg = null;
                     String boardSvgUrl = null;
@@ -7083,6 +7248,199 @@ public class McpServer {
      * public so a customer whose key is the broken thing can still report it.
      */
     private static final String ISSUE_STAMP = "askamerica-mcp";
+
+    /** 25MB — a compiled historical-series workbook/report is small; guards against a
+     *  mistaken or abusive large download. Shared by all fetch_*_as_{json,text} tools. */
+    private static final int DOC_FETCH_MAX_BYTES = 25 * 1024 * 1024;
+
+    /**
+     * Shared GET-and-buffer helper for fetch_xlsx_as_json/fetch_pdf_as_text/
+     * fetch_docx_as_text. Returns the fetched bytes, or throws with a caller-facing message
+     * (via {@link FetchException}) on a non-http(s) scheme, a non-2xx response, or a
+     * download exceeding {@link #DOC_FETCH_MAX_BYTES}.
+     */
+    private static byte[] fetchUrlBytes(String urlStr) throws FetchException {
+        HttpURLConnection c = null;
+        try {
+            URL url = java.net.URI.create(urlStr).toURL();
+            String proto = url.getProtocol();
+            if (!"http".equals(proto) && !"https".equals(proto)) {
+                throw new FetchException("Refused: only http:// and https:// URLs are supported.");
+            }
+            c = (HttpURLConnection) url.openConnection();
+            c.setRequestMethod("GET");
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(30000);
+            c.setInstanceFollowRedirects(true);
+            c.setRequestProperty("User-Agent", "askamerica-engine/1.0");
+            int code = c.getResponseCode();
+            if (code < 200 || code >= 300) {
+                throw new FetchException("Could not fetch " + urlStr + " (HTTP " + code + ").");
+            }
+            try (InputStream in = c.getInputStream()) {
+                ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                byte[] chunk = new byte[8192];
+                int n;
+                int total = 0;
+                while ((n = in.read(chunk)) != -1) {
+                    total += n;
+                    if (total > DOC_FETCH_MAX_BYTES) {
+                        throw new FetchException(
+                            "Refused: file at " + urlStr + " exceeds the 25MB size cap.");
+                    }
+                    buf.write(chunk, 0, n);
+                }
+                return buf.toByteArray();
+            }
+        } catch (FetchException fe) {
+            throw fe;
+        } catch (Exception e) {
+            throw new FetchException("Could not fetch " + urlStr + ": " + e.getMessage());
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
+        }
+    }
+
+    /** Caller-facing fetch failure for the fetch_*_as_{json,text} tools — its message is
+     *  returned directly as the tool result text, not thrown up as a protocol error. */
+    private static final class FetchException extends Exception {
+        FetchException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Fetches an .xlsx file from a public URL and converts it to a JSON sheet/row/column
+     * structure — see {@code fetch_xlsx_as_json}'s tool description for why this exists:
+     * askamerica-desktop-style clients have no spreadsheet-parsing or code-execution tool of
+     * their own, so a government agency's compiled Excel workbook (a common shape for
+     * published historical series) would otherwise be unreadable raw bytes to them. Uses
+     * Apache POI, already a govdata dependency for the same purpose during ETL.
+     */
+    private static String fetchXlsxAsJson(String urlStr, int maxSheets, int maxRowsPerSheet) {
+        try {
+            byte[] bytes = fetchUrlBytes(urlStr);
+
+            try (org.apache.poi.ss.usermodel.Workbook wb =
+                     org.apache.poi.ss.usermodel.WorkbookFactory.create(
+                         new ByteArrayInputStream(bytes))) {
+                org.apache.poi.ss.usermodel.DataFormatter formatter =
+                    new org.apache.poi.ss.usermodel.DataFormatter();
+                ObjectNode out = MAPPER.createObjectNode();
+                out.put("source_url", urlStr);
+                ArrayNode sheetsOut = MAPPER.createArrayNode();
+                int sheetCount = Math.min(wb.getNumberOfSheets(), maxSheets);
+                for (int s = 0; s < sheetCount; s++) {
+                    org.apache.poi.ss.usermodel.Sheet sheet = wb.getSheetAt(s);
+                    ObjectNode sheetOut = MAPPER.createObjectNode();
+                    sheetOut.put("name", sheet.getSheetName());
+                    int totalRows = sheet.getLastRowNum() + 1; // 0-indexed, inclusive
+                    sheetOut.put("row_count", totalRows);
+                    int rowsToRead = Math.min(totalRows, maxRowsPerSheet);
+                    sheetOut.put("truncated", totalRows > rowsToRead);
+                    ArrayNode rowsOut = MAPPER.createArrayNode();
+                    for (int r = 0; r < rowsToRead; r++) {
+                        org.apache.poi.ss.usermodel.Row row = sheet.getRow(r);
+                        ArrayNode rowOut = MAPPER.createArrayNode();
+                        if (row != null) {
+                            int lastCol = row.getLastCellNum(); // exclusive, -1 if empty
+                            for (int col = 0; col < lastCol; col++) {
+                                org.apache.poi.ss.usermodel.Cell cell = row.getCell(col);
+                                rowOut.add(cell == null ? "" : formatter.formatCellValue(cell));
+                            }
+                        }
+                        rowsOut.add(rowOut);
+                    }
+                    sheetOut.set("rows", rowsOut);
+                    sheetsOut.add(sheetOut);
+                }
+                out.set("sheets", sheetsOut);
+                if (wb.getNumberOfSheets() > maxSheets) {
+                    out.put("sheets_truncated", true);
+                    out.put("total_sheet_count", wb.getNumberOfSheets());
+                }
+                return out.toString();
+            }
+        } catch (FetchException fe) {
+            log.println("[askamerica-mcp] fetch_xlsx_as_json fetch error: " + fe.getMessage());
+            return fe.getMessage();
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] fetch_xlsx_as_json parse error: " + e.getMessage());
+            return "Could not parse " + urlStr + " as an .xlsx workbook: " + e.getMessage()
+                + ". If this is a .xls (old binary format) or .csv file, this tool cannot "
+                + "help with it — read .csv directly as text via WebFetch.";
+        }
+    }
+
+    /**
+     * Fetches a .pdf file from a public URL and extracts its plain text via PDFBox
+     * ({@code PDFTextStripper}) — text only, no table-structure reconstruction. See
+     * {@code fetch_pdf_as_text}'s tool description for the lossiness caveat on embedded
+     * data tables.
+     */
+    private static String fetchPdfAsText(String urlStr, int maxPages) {
+        try {
+            byte[] bytes = fetchUrlBytes(urlStr);
+            try (org.apache.pdfbox.pdmodel.PDDocument doc =
+                     org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
+                int totalPages = doc.getNumberOfPages();
+                int pagesToRead = Math.min(totalPages, maxPages);
+                org.apache.pdfbox.text.PDFTextStripper stripper =
+                    new org.apache.pdfbox.text.PDFTextStripper();
+                stripper.setStartPage(1);
+                stripper.setEndPage(pagesToRead);
+                String extracted = stripper.getText(doc);
+                ObjectNode out = MAPPER.createObjectNode();
+                out.put("source_url", urlStr);
+                out.put("total_pages", totalPages);
+                out.put("pages_extracted", pagesToRead);
+                out.put("truncated", totalPages > pagesToRead);
+                out.put("text", extracted);
+                if (extracted == null || extracted.trim().isEmpty()) {
+                    out.put("warning",
+                        "No text extracted — this is likely a scanned/image-only PDF with no "
+                        + "embedded text layer, which this tool cannot read.");
+                }
+                return out.toString();
+            }
+        } catch (FetchException fe) {
+            log.println("[askamerica-mcp] fetch_pdf_as_text fetch error: " + fe.getMessage());
+            return fe.getMessage();
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] fetch_pdf_as_text parse error: " + e.getMessage());
+            return "Could not parse " + urlStr + " as a .pdf file: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Fetches a .docx file from a public URL and extracts its plain text (paragraphs and
+     * table cell text, in document order) via POI's {@code XWPFWordExtractor}.
+     */
+    private static String fetchDocxAsText(String urlStr) {
+        try {
+            byte[] bytes = fetchUrlBytes(urlStr);
+            try (org.apache.poi.xwpf.usermodel.XWPFDocument doc =
+                     new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                         new ByteArrayInputStream(bytes));
+                 org.apache.poi.xwpf.extractor.XWPFWordExtractor extractor =
+                     new org.apache.poi.xwpf.extractor.XWPFWordExtractor(doc)) {
+                String extracted = extractor.getText();
+                ObjectNode out = MAPPER.createObjectNode();
+                out.put("source_url", urlStr);
+                out.put("text", extracted == null ? "" : extracted);
+                return out.toString();
+            }
+        } catch (FetchException fe) {
+            log.println("[askamerica-mcp] fetch_docx_as_text fetch error: " + fe.getMessage());
+            return fe.getMessage();
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] fetch_docx_as_text parse error: " + e.getMessage());
+            return "Could not parse " + urlStr + " as a .docx file: " + e.getMessage()
+                + ". If this is the old binary .doc format, this tool cannot help with it.";
+        }
+    }
 
     /**
      * Files a customer issue via POST /v1/issues, which records it in D1.
