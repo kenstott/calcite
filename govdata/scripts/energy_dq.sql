@@ -731,6 +731,82 @@ FROM (
 ) t;
 
 -- ============================================================
+-- eia_natural_gas_price
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_price', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_price', allow_moved_paths := true);
+
+-- T2: row_count (daily since 1997-01-07, ~7,500 rows as of Aug 2026)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_price', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 5000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 5000, 'expected >= 5000 daily Henry Hub spot price rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_price', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_price', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_price', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_price', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_price', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_price', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'series_id', 'series_description', 'product', 'process_name', 'units')
+) t;
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_price', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'report_date IS NULL OR series_id IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_price', allow_moved_paths := true)
+WHERE report_date IS NULL OR series_id IS NULL;
+
+-- T7: expected_values — a Henry Hub spot price should be a small positive dollar figure,
+-- never negative and never in the thousands (would indicate a unit/decimal error)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_price', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'value_dollars_per_mmbtu outside [0, 100]'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_price', allow_moved_paths := true)
+  WHERE value_dollars_per_mmbtu IS NOT NULL
+    AND (value_dollars_per_mmbtu < 0 OR value_dollars_per_mmbtu > 100)
+) t;
+
+-- ============================================================
 -- eia_crude_oil_imports
 -- ============================================================
 

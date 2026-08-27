@@ -1421,6 +1421,99 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # EIA NATURAL GAS PRICE - Henry Hub daily spot price (EIA API v2)
+  # ---------------------------------------------------------------------------
+  - name: eia_natural_gas_price
+    # Freshness gate: hashes the response body post-fetch to skip the materialize/commit
+    # when unchanged. Spot prices are final same-day (unlike EIA's monthly survey series),
+    # so no trailing_window is needed here.
+    freshness:
+      type: hash
+    pattern: "type=eia_ng_price/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      EIA API v2 Henry Hub Natural Gas Spot Price (series RNGWHHD), daily, in dollars
+      per million Btu. Full history in one unpartitioned fetch (~7,500 rows since
+      1997-01-07, paginated via OFFSET). Pairs with eia_natural_gas_storage /
+      weekly_gas_storage_signal to answer inventory-vs-price questions the corpus
+      previously had no price series for at all — only the storage/inventory side
+      existed.
+
+    dimensions:
+      type:
+        - eia_ng_price
+
+    columns:
+      - name: report_date
+        type: string
+        nullable: false
+        comment: Report date in ISO format (YYYY-MM-DD)
+      - name: series_id
+        type: string
+        nullable: true
+        comment: EIA API v2 series identifier (RNGWHHD = Henry Hub spot)
+      - name: series_description
+        type: string
+        nullable: true
+        comment: Full series description
+      - name: product
+        type: string
+        nullable: true
+        comment: Product description (Natural Gas)
+      - name: process_name
+        type: string
+        nullable: true
+        comment: Process description (Spot Price)
+      - name: value_dollars_per_mmbtu
+        type: double
+        nullable: true
+        comment: Price in dollars per million Btu
+      - name: units
+        type: string
+        nullable: true
+        comment: Unit label as published ($/MMBTU)
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/natural-gas/pri/fut/data/?frequency=daily&data[0]=value&facets[series][]=RNGWHHD&sort[0][column]=period&sort[0][direction]=asc"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaNaturalGasPriceTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_ng_price/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_natural_gas_price
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        # Single fetch (all history, one type partition) — disable the anchor's
+        # year-batching (would replace-partition per year on the lone partition).
+        batchPartitionColumns: []
+
+  # ---------------------------------------------------------------------------
   # EIA CRUDE OIL IMPORTS - EIA-814 Monthly Import Survey
   # ---------------------------------------------------------------------------
   - name: eia_crude_oil_imports
@@ -2189,6 +2282,9 @@ constraints:
 
   eia_petroleum_stocks:
     primaryKey: [eia_area_code, product_code, process_code, report_date]
+
+  eia_natural_gas_price:
+    primaryKey: [series_id, report_date]
 
   eia_crude_oil_imports:
     primaryKey: [importer_name, origin_country_code, refinery_site_id, rpt_period]
