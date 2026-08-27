@@ -106,6 +106,16 @@ public final class FileAdapterFunctions {
         LOGGER.warn("Failed to register duckdb json functions: {}", e.getMessage());
       }
     }
+    // DuckDB-native STRING_SPLIT, which Calcite core does not define. Same rationale as
+    // JSON_EXTRACT above: DuckDB engine ONLY, no implementation on the other engines.
+    if (duckDbEngine && root.getFunctions("STRING_SPLIT").isEmpty()) {
+      try {
+        root.add("STRING_SPLIT", org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
+            org.apache.calcite.adapter.file.duckdb.DuckDBStringFunctions.class, "stringSplit"));
+      } catch (Exception e) {
+        LOGGER.warn("Failed to register duckdb string functions: {}", e.getMessage());
+      }
+    }
     // Spatial ST_* are provided by Calcite's built-in SPATIAL library — connect
     // with fun=...,spatial. No schema registration is needed (and reflective
     // registration would duplicate the library operators).

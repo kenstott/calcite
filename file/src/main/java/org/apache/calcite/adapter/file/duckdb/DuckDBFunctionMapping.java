@@ -94,6 +94,10 @@ public class DuckDBFunctionMapping {
     FUNCTION_MAP.put("JSON_EXTRACT", "json_extract");
     FUNCTION_MAP.put("JSON_VALUE", "json_extract");
 
+    // STRING_SPLIT is the file adapter's own declaration (see DuckDBStringFunctions)
+    // registered under DuckDB's native spelling.
+    FUNCTION_MAP.put("STRING_SPLIT", "string_split");
+
     // Vector similarity functions - map to DuckDB's native array functions
     FUNCTION_MAP.put("COSINE_SIMILARITY", "array_cosine_similarity");
     FUNCTION_MAP.put("COSINE_DISTANCE", "array_cosine_distance");
