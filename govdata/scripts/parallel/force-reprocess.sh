@@ -291,7 +291,13 @@ if $FORCE_DOWNLOAD; then
   echo ""
 fi
 
+# GOVDATA_FORCE_REPROCESS_TABLES alone only bypasses the tracker skip-check for the named
+# table(s) — it does NOT scope which tables the model loads. That's GOVDATA_TABLES, read by
+# build_inline_model()/filter_enabled_tables() to set enabledTables. Exporting both keeps the
+# model's enabledTables matching --tables exactly, so a run only ever touches the table(s)
+# actually requested, per this script's own contract ("only rerun the affected table(s)").
 export GOVDATA_FORCE_REPROCESS_TABLES="$TABLES"
+export GOVDATA_TABLES="$TABLES"
 RUN_POOL="$SCRIPT_DIR/run-pool.sh"
 
 if ! $SKIP_HISTORICAL; then
