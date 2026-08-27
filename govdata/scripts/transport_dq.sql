@@ -458,6 +458,41 @@ FROM (
       WHERE r.mode_code = s.mode_code)
 );
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: bts_port_teu (BTS Port Performance Program; static, Jan 2019-Oct 2022, not currently
+-- updated — see the table comment in the schema)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'bts_port_teu', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_port_teu', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_port_teu', 'T2_row_count',
+  CASE WHEN n = 414 THEN 'pass' ELSE 'fail' END, n, 414,
+  'Fixed static series — exactly 46 months x 9 ports = 414 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_port_teu', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_port_teu', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL report_date/port_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_port_teu', allow_moved_paths := true)
+      WHERE report_date IS NULL OR port_code IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_port_teu', 'T7_date_range',
+  CASE WHEN miny = '2019-01-01' AND maxy = '2022-10-01' THEN 'pass' ELSE 'fail' END,
+  0, 0, 'Expected exactly 2019-01-01 through 2022-10-01: got ' || miny || ' to ' || maxy
+FROM (SELECT MIN(report_date)::VARCHAR AS miny, MAX(report_date)::VARCHAR AS maxy
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_port_teu', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_port_teu', 'T7_teu_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
+  'teu outside plausible [1000, 2000000] range for a single port-month'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_port_teu', allow_moved_paths := true)
+      WHERE teu IS NOT NULL AND (teu < 1000 OR teu > 2000000));
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

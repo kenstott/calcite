@@ -2401,6 +2401,73 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # BTS PORT TEU — Monthly container throughput, Top-10 US ports (static, Jan 2019-Oct 2022)
+  # ---------------------------------------------------------------------------
+  - name: bts_port_teu
+    freshness:
+      type: hash
+    pattern: "type=bts_port_teu/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Monthly container throughput (TEUs) for the Top-10 U.S. container ports, from BTS's Port
+      Performance Freight Statistics Program (Socrata rd72-aq8r, "Monthly TEU Data"). Melted from
+      the source's one-row-per-month/one-column-per-port layout into one row per (port, month).
+      This is the best freely-ingestible port-level container-volume series found — the
+      industry-standard NRF/Hackett Global Port Tracker has no free bulk-downloadable time
+      series, only point figures in press releases (confirmed independently by two arms in
+      Defect Register D-109). NOT a currently-updated series: the source dataset itself stops at
+      October 2022 (46 months from Jan 2019) and has not been refreshed since — verified live
+      27 Aug 2026. Real historical data for that window, not a live/current-era proxy; a
+      national customs-value proxy (econ.trade_imports) remains the only current-era option.
+
+    dimensions:
+      type:
+        - bts_port_teu
+
+    columns:
+      - name: report_date
+        type: date
+        nullable: false
+        comment: First of month
+      - name: port_code
+        type: string
+        nullable: false
+        comment: Source column name for this port (e.g. "los_angeles_ca")
+      - name: port_name
+        type: string
+        nullable: true
+        comment: Human-readable port name
+      - name: teu
+        type: double
+        nullable: true
+        comment: Twenty-foot equivalent units handled that month
+
+    source:
+      type: http
+      url: "https://data.bts.gov/resource/rd72-aq8r.json?$limit=100"
+      method: GET
+      response:
+        format: json   # BtsPortTeuTransformer melts the wide JSON response into long rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.BtsPortTeuTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bts_port_teu/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: bts_port_teu
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # NBI BRIDGES — FHWA National Bridge Inventory (delta by year, delimited zip)
   # ---------------------------------------------------------------------------
   - name: bridges
@@ -2819,6 +2886,9 @@ constraints:
 
   cfs_mode_ref:
     primaryKey: [mode_code]
+
+  bts_port_teu:
+    primaryKey: [type, port_code, report_date]
 
   bridges:
     primaryKey: [year, state_code, structure_number]
