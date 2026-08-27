@@ -4056,7 +4056,8 @@ partitionedTables:
         - T20100   # Personal Income and Its Disposition
         - T20200   # Personal Consumption Expenditures by Major Type
         # Section 3: Government
-        - T30100   # Federal Government Current Receipts and Expenditures
+        - T30100   # Government Current Receipts and Expenditures (combined federal+state+local)
+        - T30200   # Federal Government Current Receipts and Expenditures (federal only)
         # Section 4: Foreign Transactions
         - T40100   # Foreign Transactions in GDP
         - T40205B  # Exports and Imports of Goods and Services
