@@ -516,6 +516,71 @@ SELECT 'banking', 'consumer_complaints', 'expected_values',
 FROM (SELECT COUNT(DISTINCT product) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/consumer_complaints', allow_moved_paths := true));
 
 -- ============================================================================
+-- ncua_branch_locations (NCUA credit union branches; quarterly, 2017-03 to 2026-03)
+-- ============================================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'banking', 'ncua_branch_locations', 'existence',
+  CASE WHEN n = 0 THEN 'fail' ELSE 'pass' END,
+  n, 1, 'row count'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true));
+
+-- T2: row_count. ~5,000-6,000 branches per quarter x 37 quarters queried; skipOn:[404]
+-- may drop a handful of early quarters, so the floor is generously below the naive product.
+INSERT INTO dq_results
+SELECT 'banking', 'ncua_branch_locations', 'row_count',
+  CASE WHEN n < 100000 THEN 'fail' ELSE 'pass' END,
+  n, 100000, 'Expected >=100,000 rows across ~37 quarterly cycles (~5-6K branches/quarter)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'banking', 'ncua_branch_locations', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true))
+  WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'cycle')
+);
+
+-- T6: pk_nulls (cycle, cu_number, site_id)
+INSERT INTO dq_results
+SELECT 'banking', 'ncua_branch_locations', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  n, 0, 'NULL cycle, cu_number, or site_id rows'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true)
+  WHERE cycle IS NULL OR cu_number IS NULL OR site_id IS NULL
+);
+
+-- T6b: pk_dupes (cycle, cu_number, site_id) — site_id alone is scoped per credit union,
+-- not globally unique, so cu_number is part of the real key.
+INSERT INTO dq_results
+SELECT 'banking', 'ncua_branch_locations', 'pk_dupes',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  n, 0, 'Duplicate (cycle, cu_number, site_id) rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT cycle, cu_number, site_id, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true)
+    GROUP BY cycle, cu_number, site_id HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: cycle_count. Some early quarters may 404; expect most of the 37 requested cycles present.
+INSERT INTO dq_results
+SELECT 'banking', 'ncua_branch_locations', 'cycle_count',
+  CASE WHEN n < 25 THEN 'fail' ELSE 'pass' END,
+  n, 25, 'Distinct cycle values present (37 quarters requested, 2017-03 to 2026-03)'
+FROM (SELECT COUNT(DISTINCT cycle) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true));
+
+-- ============================================================================
 -- Final results
 -- ============================================================================
 SELECT schema, tbl AS table_name, test, status, value, threshold, detail

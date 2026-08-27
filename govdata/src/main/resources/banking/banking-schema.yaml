@@ -85,6 +85,16 @@ column_templates:
     columnDefinitions:
       - *partition_type
 
+  partition_cycle: &partition_cycle
+    name: cycle
+    type: VARCHAR
+
+  cycle_partitions: &cycle_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_cycle
+
   standard_partitions: &standard_partitions
     style: hive
     columnDefinitions:
@@ -1122,6 +1132,147 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # NCUA_BRANCH_LOCATIONS — federally-insured credit union branches (NCUA 5300 Call Report)
+  # ---------------------------------------------------------------------------
+  # The credit-union counterpart to `locations` (FDIC branches). NCUA publishes no REST
+  # API for this — each quarter's "5300 Call Report Quarterly Data" bulk zip is fetched
+  # whole and NcuaBranchLocationsTransformer streams just its "Credit Union Branch
+  # Information.txt" member (comma-delimited, RFC4180-quoted). Quarterly since 2017-03
+  # (2016-12 and earlier 404 under this URL pattern); skipOn:[404] covers any single
+  # missing quarter without failing the whole fetch.
+  - name: ncua_branch_locations
+    # Freshness gate: NCUA serves a real Last-Modified header on each quarterly zip
+    # (confirmed live). Use last_modified, not hash — a StreamingResponseTransformer
+    # never materializes a raw response body to hash, so hash freshness can't gate here
+    # and every run (including the historical sub-pass this daily+historical DQ split
+    # always runs alongside daily) would re-fetch and re-write every cycle.
+    freshness:
+      type: last_modified
+    pattern: "type=ncua_branch_locations/cycle=*/*.parquet"
+    partitions: *cycle_partitions
+    comment: >
+      NCUA-insured credit union branch/office locations, one row per office per
+      quarterly cycle — main-office flag, address, and ATM/drive-thru flags. Together
+      with banking.locations (FDIC bank branches), a UNION ALL on (state_abbr,
+      county_name) with a literal institution_type discriminant answers any
+      bank-vs-credit-union comparison natively. Source: ncua.gov quarterly 5300 Call
+      Report bulk zip, "Credit Union Branch Information.txt" member.
+
+    dimensions:
+      type:
+        - ncua_branch_locations
+      cycle:
+        type: list
+        values: ["2017-03", "2017-06", "2017-09", "2017-12", "2018-03", "2018-06",
+                 "2018-09", "2018-12", "2019-03", "2019-06", "2019-09", "2019-12",
+                 "2020-03", "2020-06", "2020-09", "2020-12", "2021-03", "2021-06",
+                 "2021-09", "2021-12", "2022-03", "2022-06", "2022-09", "2022-12",
+                 "2023-03", "2023-06", "2023-09", "2023-12", "2024-03", "2024-06",
+                 "2024-09", "2024-12", "2025-03", "2025-06", "2025-09", "2025-12",
+                 "2026-03"]
+
+    columns:
+      - name: cycle
+        type: string
+        nullable: false
+        comment: "Report cycle, YYYY-MM (calendar quarter-end; partition column)"
+      - name: cu_number
+        type: long
+        nullable: true
+        comment: NCUA credit union charter number (join key across NCUA tables)
+      - name: site_id
+        type: long
+        nullable: true
+        comment: NCUA branch/site identifier
+      - name: cu_name
+        type: string
+        nullable: true
+        comment: Credit union name
+      - name: site_name
+        type: string
+        nullable: true
+        comment: Branch/site name
+      - name: site_type_name
+        type: string
+        nullable: true
+        comment: "Site type (e.g. Corporate Office, Branch)"
+      - name: is_main_office
+        type: boolean
+        nullable: true
+        comment: Whether this site is the credit union's main/corporate office
+      - name: address
+        type: string
+        nullable: true
+        comment: Street address
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - <<: *state_abbr_column
+      - name: zip
+        type: string
+        nullable: true
+        comment: ZIP code
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (as reported by NCUA, not FIPS-coded)
+      - name: country
+        type: string
+        nullable: true
+        comment: Country
+      - name: phone
+        type: string
+        nullable: true
+        comment: Phone number
+      - name: has_atm
+        type: boolean
+        nullable: true
+        comment: Whether this site has an ATM
+      - name: has_drive_thru
+        type: boolean
+        nullable: true
+        comment: Whether this site has a drive-thru
+
+    source:
+      type: http
+      url: "https://ncua.gov/files/publications/analysis/call-report-data-{cycle}.zip"
+      method: GET
+      response:
+        format: json  # ignored: NcuaBranchLocationsTransformer streams the zip itself
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+        # A handful of early quarters under this naming convention 404 (NCUA's bulk-zip
+        # URL pattern only reliably resolves from 2017-03 forward); skip rather than fail.
+        skipOn: [404]
+      # No rawCache: block — a StreamingResponseTransformer opens its own connection and
+      # HttpSource returns before its rawCache path ever runs, so it would be a no-op here.
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.NcuaBranchLocationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ncua_branch_locations/cycle=*/"
+      partition:
+        columns: [type, cycle]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: ncua_branch_locations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [cycle]
+        incrementalKeys: [cycle]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1166,6 +1317,17 @@ constraints:
         targetSchema: banking
         targetTable: institutions
         targetColumns: [cert]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  ncua_branch_locations:
+    # SiteId is scoped per credit union, not globally unique (confirmed live: site_id=1
+    # recurs across dozens of distinct cu_numbers within the same cycle) — cu_number is
+    # part of the real key.
+    primaryKey: [cycle, cu_number, site_id]
+    foreignKeys:
       - columns: [state_abbr]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
