@@ -777,6 +777,95 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health
         AND overall_rating NOT IN ('1', '2', '3', '4', '5', 'Not Available', ''));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cms_nursing_home
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true));
+
+-- T2: row_count (~14,690 facilities)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T2_row_count',
+  CASE WHEN n >= 14000 THEN 'pass' ELSE 'fail' END,
+  n, 14000, 'Expected at least 14000 CMS nursing home records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls (ccn NOT NULL)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL ccn rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true) WHERE ccn IS NULL);
+
+-- T7: state coverage (facilities in all 50 states)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T7_state_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Distinct states with nursing home records'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true)
+      WHERE state IS NOT NULL);
+
+-- T7: staffing hours plausible (a real facility's total nurse hours per resident per day
+-- is a small positive number, typically 1-10; catches a unit/decimal parsing error)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T7_staffing_hours_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'total_nurse_hours_per_resident_day outside [0, 24]'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true)
+      WHERE total_nurse_hours_per_resident_day IS NOT NULL
+        AND total_nurse_hours_per_resident_day <> ''
+        AND (TRY_CAST(total_nurse_hours_per_resident_day AS DOUBLE) < 0
+             OR TRY_CAST(total_nurse_hours_per_resident_day AS DOUBLE) > 24));
+
+-- T7: deficiency count present for at least some facilities (proves the join between
+-- staffing and health-inspection data this table exists to provide actually landed)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home', 'T7_deficiencies_populated',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
+  n, 1, 'Rows with a non-null, non-empty total_health_deficiencies'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home', allow_moved_paths := true)
+      WHERE total_health_deficiencies IS NOT NULL AND total_health_deficiencies <> '');
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: medicaid_drug_utilization
 -- ─────────────────────────────────────────────────────────────
 

@@ -1466,6 +1466,211 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # CMS NURSING HOME PROVIDER INFORMATION — staffing + health-deficiency file
+  # ==========================================================================
+  - name: cms_nursing_home
+    # Freshness gate: CMS datastore query API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
+    releaseWindow:
+      months: [1,2,3,4,5,6,7,8,9,10,11,12] # CMS refreshes this monthly, per its own
+                                            # nextUpdateDate cadence — every month is a
+                                            # real release window, not a quarterly one.
+    pattern: "type=cms_nursing_home"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS Provider Data Catalog "Nursing Homes including Rehab Services — Provider
+      Information" (dataset 4pq5-n9py), one row per facility (PK: ccn — CMS
+      Certification Number). Carries staffing hours-per-resident-day (nurse aide, LPN,
+      RN, total), star ratings (overall/health inspection/staffing/QM), health
+      -deficiency counts and score from the facility's most recent standard survey,
+      and penalty/fine counts together in one file — a staffing-vs-deficiency
+      question needs no second CMS dataset joined in. Complements
+      cms_hospital_quality (acute-care hospitals) and cms_pos_facilities (all
+      certified facility types, identity/bed-count only, no ratings or staffing) —
+      this table is the only one in the corpus carrying skilled-nursing-facility
+      staffing and deficiency detail. Source: data.cms.gov/provider-data/dataset/4pq5-n9py.
+
+    columns:
+      - name: ccn
+        type: string
+        nullable: false
+        comment: CMS Certification Number — PK
+      - name: provider_name
+        type: string
+        nullable: true
+        comment: Facility legal/doing-business-as name
+      - name: address
+        type: string
+        nullable: true
+        comment: Facility street address
+      - name: city
+        type: string
+        nullable: true
+        comment: City or town
+      - name: state
+        type: string
+        nullable: true
+        comment: FK to geo.state_ref.state_abbr
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: ZIP code
+      - name: county
+        type: string
+        nullable: true
+        comment: County or parish
+      - name: ownership_type
+        type: string
+        nullable: true
+        comment: For profit - Corporation, Non profit, Government, etc.
+      - name: certified_beds
+        type: string
+        nullable: true
+        comment: Total certified beds
+      - name: avg_residents_per_day
+        type: string
+        nullable: true
+        comment: Average daily census
+      - name: overall_rating
+        type: string
+        nullable: true
+        comment: 1-5 star overall rating
+      - name: health_inspection_rating
+        type: string
+        nullable: true
+        comment: 1-5 star health inspection rating
+      - name: qm_rating
+        type: string
+        nullable: true
+        comment: 1-5 star quality-measure rating
+      - name: staffing_rating
+        type: string
+        nullable: true
+        comment: 1-5 star staffing rating
+      - name: nurse_aide_hours_per_resident_day
+        type: string
+        nullable: true
+        comment: Reported nurse aide staffing hours per resident per day
+      - name: lpn_hours_per_resident_day
+        type: string
+        nullable: true
+        comment: Reported LPN staffing hours per resident per day
+      - name: rn_hours_per_resident_day
+        type: string
+        nullable: true
+        comment: Reported RN staffing hours per resident per day
+      - name: total_nurse_hours_per_resident_day
+        type: string
+        nullable: true
+        comment: Reported total nurse staffing hours per resident per day (nurse aide + LPN + RN)
+      - name: nursing_staff_turnover_pct
+        type: string
+        nullable: true
+        comment: Total nursing staff turnover (percent)
+      - name: rn_turnover_pct
+        type: string
+        nullable: true
+        comment: Registered nurse turnover (percent)
+      - name: total_health_deficiencies
+        type: string
+        nullable: true
+        comment: Total number of health deficiencies cited on the most recent standard survey (rating cycle 1)
+      - name: health_deficiency_score
+        type: string
+        nullable: true
+        comment: Weighted health deficiency score for the most recent standard survey (rating cycle 1)
+      - name: number_of_fines
+        type: string
+        nullable: true
+        comment: Count of fines issued
+      - name: total_fines_dollars
+        type: string
+        nullable: true
+        comment: Total dollar amount of fines issued
+      - name: number_of_payment_denials
+        type: string
+        nullable: true
+        comment: Count of payment-denial penalties
+      - name: total_number_of_penalties
+        type: string
+        nullable: true
+        comment: Total count of all penalty types (fines + payment denials + other)
+      - name: latitude
+        type: string
+        nullable: true
+        comment: Facility latitude
+      - name: longitude
+        type: string
+        nullable: true
+        comment: Facility longitude
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "cms_nursing_home"'
+
+    source:
+      type: http
+      url: "https://data.cms.gov/provider-data/api/1/datastore/query/4pq5-n9py/0"
+      method: GET
+      parameters:
+        "limit": "1500"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1500
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsNursingHomeResponseTransformer"
+
+    dimensions:
+      type:
+        - cms_nursing_home
+      # A single cache-buster combo, not one per release month: a multi-value list here
+      # (the cms_hospital_quality/cms_pos_facilities convention) sends N independent
+      # fetches into the SAME single [type] partition in one run, and they all land in
+      # one buffer before ONE commit — overwritePartitions does not help, since there is
+      # no prior commit being replaced, only a single run's own combos merging into each
+      # other. Confirmed live in production: cms_hospital_quality (identical shape, 3
+      # cache-buster months) holds exactly 3x its true row count (16,257 rows / 5,419
+      # distinct facility_id) from precisely this mechanism. One value plus the freshness
+      # hash gate below is sufficient — a real upstream change still triggers a re-fetch
+      # and re-commit; only the redundant same-run multi-fetch is the defect.
+      year: ["${GOVDATA_CURRENT_YEAR}"]
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+
+  # ==========================================================================
   # HRSA AREA HEALTH RESOURCES FILE — county-level physician supply (annual snapshot)
   # ==========================================================================
   - name: ahrf_physician_supply
@@ -4872,6 +5077,15 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Links facility county to geographic data (null when FIPS_CNTY_CD is unpopulated)
+
+  cms_nursing_home:
+    primaryKey: [ccn]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links facility state to geographic data
 
   ahrf_physician_supply:
     primaryKey: [county_fips]
