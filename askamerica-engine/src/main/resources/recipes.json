@@ -439,8 +439,8 @@
       "body": "Reporting a margin of error next to a point estimate is not the same as testing whether a ranking is real. A question that asks 'which state/entity ranks highest' and turns up several candidates within a few points of each other needs an actual test of whether the gap between the top candidates exceeds what sampling noise alone would produce - not just naming each one's own MOE and moving on, and not silently picking whichever value happens to be numerically largest.\n\nMeasured directly in this harness: on a question asking which state's household income grew the most and whether that survives a cost-of-living adjustment, one arm reported its top state's own margin of error (well under 2% of the point estimate) and treated the ranking as settled at that point - its top-3 states sat within a 2.2-point spread of each other, and that spread was never tested against the combined sampling error of the states being compared. A second, unaided arm working the same question by hand recognized the top-2 states' gap (about 0.04 points) was inside the ACS/CPS standard errors and explicitly reported it as a statistical tie rather than naming a single winner - the correct call, reached without any connector tools at all, on a question the connector-equipped arm had the tools to settle more rigorously and did not.\n\nFIX: whenever a ranking's top few values sit within roughly the combined margin of error of each other, do not stop at reporting each value's own MOE - run hypothesis_test (or a two-sample comparison via the appropriate statistical tool) on the top candidates' difference to check whether it is actually distinguishable from zero. If it is not, say so as a tie or a statistical toss-up and name which candidates are functionally indistinguishable, rather than reporting a single winner the data cannot actually support. This applies to any close top-N comparison across states, industries, institutions, or time periods - not just income growth."
     },
     {
-      "id": "coverage-gap-means-fetch-the-agencys-own-per-year-data-not-era-literature",
-      "title": "When your own table can't answer a calendar-anchored trend question, use web tools to find the source agency's own per-year primary data before settling for era-level literature",
+      "id": "coverage-gap-means-fetch-primary-data-not-just-literature",
+      "title": "A missing OR wrong connector answer isn't a stopping point \u2014 fetch the source agency's own primary data externally before settling for a caveated bad number or literature synthesis, the way a fully-resourced analyst would",
       "triggers": [
         "over the last twenty years",
         "over the last two decades",
@@ -451,9 +451,83 @@
         "compare to twenty years ago",
         "table only has latest date",
         "no receipt date column",
-        "no original submission date"
+        "no original submission date",
+        "no table for this in the corpus",
+        "warehouse doesn't have this data",
+        "genuine coverage gap",
+        "connector can't answer this",
+        "data not in this corpus",
+        "sanity check fails",
+        "contradicts published figures",
+        "every row has the same sign",
+        "result doesn't match known landmark",
+        "internal number looks wrong",
+        "table produces implausible result"
       ],
-      "body": "A question anchored to a specific calendar window ('over the last twenty years,' 'since 2005') cannot be answered by substituting the nearest available era or legislative boundary for the actual window asked about - eras (e.g. a decade bounded by a law's enactment) rarely line up with the calendar span the question names, and treating an era median as if it were the calendar-window answer silently answers a different, easier question. This trap is compounded when the connector's own table turns out not to cover the needed field at all: it is tempting to treat that coverage gap as license to fall back on secondary era-literature synthesis, when a live web fetch of the source agency's own current per-year dataset would answer the actual question asked.\n\nMeasured directly in this harness: on a question asking how FDA drug-approval review time has changed 'over the last twenty years,' the connector's own health.fda_drug_approvals table was correctly found (via describe_table) to carry only latest_submission_date, not an original receipt/submission date - a real, already-logged coverage gap, not a mistake to fix by hand. The arm that had this gap and access to WebSearch/WebFetch used them to find only secondary era-literature (industry medians bucketed by regulatory era: PDUFA 1992-2012, FDASIA 2012-2022), which does not actually pin down real endpoints near 2005 and near 2025. A separate arm, working the identical gap with the same web tools, instead fetched FDA's own primary receipt/approval-date dataset directly from fda.gov (a public FDA-hosted spreadsheet, n=780 applications 2006-2025), bucketed it into real 5-year windows spanning the exact twenty-year ask, and cross-validated the result against a peer-reviewed source to within 0.1 months on the overlapping window - a genuinely different and more rigorous answer to the question as asked, reached with the same tool access.\n\nFIX: when your own connector tables are confirmed (via describe_table/data_coverage) not to cover a field a calendar-anchored trend question needs, do not stop at synthesizing existing era-level literature with WebSearch. First try to fetch the source agency's own per-year or per-record primary dataset directly (a government agency's published spreadsheet, API, or data portal almost always exists for FDA/CDC/BLS/Census-style regulatory or statistical series) and bucket it into real calendar windows matching the question's own span. Only fall back to era-literature synthesis, clearly labeled as an approximation of the real window, if a genuinely fetchable primary per-year source cannot be found."
+      "body": "A confirmed connector coverage gap OR a confirmed WRONG answer from a table that does exist (a sanity check against a known landmark figure fails, e.g. a 'donor state' computation that shows every single state as a net beneficiary, or a total that is off by a multiple from a published aggregate) is not the end of the analysis - it means switch to WebSearch/WebFetch and get the SAME primary data a fully-resourced analyst (this harness's 'expert' persona, with a full shell, filesystem, and Python) would get, rather than settling for secondary literature synthesis as if that were the ceiling of what's achievable.\n\nMeasured directly in this harness, twice: (1) on a calendar-anchored FDA drug-review-time question, the arm that stopped at literature synthesis (era medians from industry commentary) got a materially less precise answer than the arm that instead fetched FDA's own primary per-application dataset directly from fda.gov and bucketed it into the exact calendar windows asked about. (2) On separate questions, the 'expert' persona routinely out-performs by extracting a primary source's own published table directly - a PDF report via pdfplumber, or a government agency's compiled Excel workbook - rather than relaying what secondary web coverage says about that source.\n\nFIX: when a connector table is confirmed absent or insufficient for a question, before writing an answer based on literature synthesis, spend one real attempt trying to fetch the source agency's own primary dataset directly (a .csv/.xlsx download, a public API, a data portal) via WebFetch. A fetched primary file may arrive as raw text/bytes this connector cannot parse as a spreadsheet or PDF table (no Python tool is available here, unlike a real Claude Desktop session) - if so, say exactly that ('found the primary source at <url> but cannot parse its .xlsx/PDF table without a code-execution tool') rather than silently falling back to a paraphrased secondary figure without naming what was actually available. Only settle for literature synthesis, clearly labeled as an approximation, once a genuine primary-source fetch has been attempted and specifically could not be used.\n\nA WRONG answer deserves the exact same external-fallback response as a MISSING one, not a lesser one: report the wrong figure with a caveat, or stop at 'this table can't answer it.' Measured directly in this harness: on a federal-money-vs-taxes-paid-by-state question, a table pairing a state's ALL-source federal spending against its INDIVIDUAL-INCOME-TAX-ONLY revenue made literally every one of 51 states/DC look like a net beneficiary, including California and New York - which every independent published analysis identifies as the largest net PAYERS. The correct response, and the one taken, was not to report this internal number with a caveat, but to name the exact mechanism of the error precisely (a 2.2x base mismatch, ~$4.66T vs ~$2.10T nationally) and switch to Rockefeller Institute/USAFacts external data for the actual headline figures - the defect is worth reporting IN ADDITION to answering the question correctly, never INSTEAD of it."
+    },
+    {
+      "id": "check-sign-at-multiple-aggregation-grains",
+      "title": "A policy-vs-industry-employment answer can flip sign depending on the NAICS/industry code grain chosen",
+      "triggers": [
+        "did tariffs help",
+        "did the tariff",
+        "tariff employment",
+        "protected industry jobs",
+        "trade policy employment effect",
+        "did the policy help this industry",
+        "industry employment before and after",
+        "naics",
+        "narrow industry vs broader category"
+      ],
+      "body": "A policy that targets a NARROW product category (e.g. steel mills, NAICS 3311) is often reported against a BROADER published employment series that contains it (e.g. primary metals, NAICS 331, which also includes aluminum and foundries the policy didn't target). These two levels can move in opposite directions over the identical window and the identical policy action \u2014 measured directly in this harness: steel mills alone (3311) gained +3.3% while the broader primary-metals category (331) lost -2.4% over the same tariff period, because the policy's own effect was swamped at the broader grain by unrelated industries moving the other way.\n\nBefore reporting a single headline employment-effect number for a targeted industry policy: pull the series at BOTH the narrowest code that actually matches what the policy targeted AND the next broader published aggregate it rolls up into, and check whether the sign or magnitude changes. If it does, that sensitivity to aggregation level IS part of the answer \u2014 report both figures and name which one actually isolates the policy's effect, rather than picking whichever grain the first table returned.\n\nThis pairs with a diff_in_diff or similar causal test against a comparison industry (see the tariff/protection statistical-rigor pattern): running the test is necessary but not sufficient if the industry series itself was pulled at the wrong aggregation level to begin with."
+    },
+    {
+      "id": "import-penetration-no-clean-series-substitute",
+      "title": "No single clean government series measures industry-level import penetration over a long window \u2014 substitute and disclose, don't force one source",
+      "triggers": [
+        "import dependence",
+        "import penetration",
+        "import reliance",
+        "apparent consumption",
+        "reliance on foreign",
+        "domestic production share",
+        "how much do we import",
+        "import share by industry",
+        "manufacturing import share"
+      ],
+      "body": "There is no single, freely-queryable, industry-level import-penetration series spanning a long (e.g. 20-year) window. The two natural government sources are both blocked in different ways: Census's international trade API requires a key with no self-service path in this connector's reach, and BEA's Import Matrix / apparent-consumption tables are published as an interactive web tool, not a downloadable series. Expect one of these substitutions instead, and name which one was used rather than presenting it as the literal thing asked for:\n\n  1. Compute your own penetration ratio by joining econ.industry_gdp (BEA Gross Output, domestic production) against econ.trade_imports/trade_exports (Census HS, at whatever industry crosswalk grain both sides support) - this is reproducible from data already in the warehouse but the earliest usable year may be much later than the requested window's start (Census HS detail in this warehouse currently starts around 2013).\n\n  2. Fall back to BEA end-use trade categories (capital goods, industrial supplies, consumer goods, etc.) - coarser than a true industry breakdown but freely available for the full requested window.\n\n  3. Cite an academic paper that used confidential Census microdata to compute true NAICS-level penetration (e.g. Amiti & Heise, NY Fed) - precise industry detail, but on whatever window that paper's authors happened to study, not the window the question asks about.\n\nA trade-share-of-GDP or trade-balance figure is NOT the same measurement as import penetration and can move in the opposite direction: manufactured-goods import SHARE OF TRADE can fall even as true import PENETRATION (imports / (imports + domestic production - exports)) rises, if domestic output is growing slower than both imports and exports. Compute penetration directly rather than inferring it from a trade-balance or trade-share trend."
+    },
+    {
+      "id": "trade-war-payment-program-official-vs-press-name",
+      "title": "A press/colloquial name for a farm-payment program (e.g. \"Farmer Bridge Assistance\") often differs from its official USDA program_description",
+      "triggers": [
+        "trade war payments",
+        "farmer bridge assistance",
+        "tariff relief payments",
+        "farm bailout",
+        "market facilitation program",
+        "did farmers get compensated",
+        "trade aid payments",
+        "farm payments cover losses"
+      ],
+      "body": "A question naming a farm trade-war compensation program by its press/colloquial name (e.g. \"Farmer Bridge Assistance\" for the 2025-26 round) will not necessarily match anything in search_catalog or in a table name search - the official USDA FSA program_description used inside ag.fsa_commodity_payments is often a different, more bureaucratic name than what news coverage calls it. Measured directly in this harness: the actual 2025 disbursements for the currently-active round appear under program_description = 'EMERGENCY COMMODITY ASSISTANCE PROGRAM' ($9.36B in 2025), not under any table or program name matching \"Farmer Bridge Assistance\" - an agent that searched for the press name and found nothing incorrectly concluded no data existed for the current round.\n\nBefore concluding a named farm-payment program has no data in the corpus: query `SELECT DISTINCT program_description FROM ag.fsa_commodity_payments WHERE \"year\" >= <most recent 1-2 years>` and scan the returned list for a plausible official-name match, rather than relying on search_catalog or a table-name search finding the press name directly. This applies generally whenever a question names an event or program colloquially (an informal or press shorthand) rather than by its official government designation - check the underlying table's own category/program values for the current period before concluding the program isn't covered.\n\nAlso, when a question names an ambiguous or unscoped event (\"the trade war\", not a specific year), and the domain has more than one live or recent episode as of the question's own date, address ALL currently-relevant episodes rather than only the most historically-documented one - a still-actively-disbursing current-year program is at least as relevant as a well-documented older one, and skipping it is a real completeness gap even if the older episode is answered thoroughly."
+    },
+    {
+      "id": "check-gross-vs-net-before-treating-as-disagreement",
+      "title": "Two different-looking percentages for the same phenomenon may be the same study's gross and net estimate, not literature disagreement",
+      "triggers": [
+        "studies disagree",
+        "conflicting estimates",
+        "different figures for the same",
+        "range of estimates",
+        "some studies say",
+        "literature disagreement",
+        "gross effect",
+        "net effect",
+        "does X cause Y decline"
+      ],
+      "body": "When two different percentages circulate for what looks like the same underlying phenomenon (e.g. bank branch closures causing a '9-13%' lending decline in one citation and a '19%' decline in another), do not assume this is genuine disagreement between two separate studies before checking whether they are actually the SAME paper's gross and net estimates.\n\nMeasured directly in this harness: a bank-branch-closure lending study's commonly cited '9-13%' and '19%' figures are the same paper's gross-vs-net decomposition, not two competing findings - a 19% GROSS decline in the directly-affected lender's activity shrinks to roughly 10% NET once other lenders (smaller banks, credit unions) absorb about half the gap. Reporting either number alone, or treating both as competing estimates from different sources, misses the actual finding: the effect is real but partially self-healing, and a reader needs the residual/net figure to correctly size the uncompensated harm, not the gross figure that ignores substitution.\n\nBefore presenting two circulating figures for the same effect as a range or as competing estimates: check the primary source(s) directly for whether one is a gross effect and the other a net-of-substitution effect from the identical study, or whether a headline figure and a footnoted adjusted figure are being separately cited. If so, report both explicitly labeled (gross vs. net, before vs. after substitution) rather than either picking one or presenting the pair as an unresolved range.\n\nSeparately: a specific circulating statistic that cannot be traced to a named, identifiable publication (only to a source category like 'one study' or 'researchers found') should be omitted from the answer entirely, not repeated with vague attribution - if you cannot find the actual source when checking, say so and drop the figure rather than keep it because it fits the narrative."
     }
   ]
 }
