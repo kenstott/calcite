@@ -236,6 +236,93 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # --- FEDERAL R&D OBLIGATIONS BY FIELD (all-agency, all-performer) ----------
+  - name: nsf_rd_by_field
+    pattern: "type=nsf_rd_by_field/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    freshness:
+      type: last_modified
+    comment: >
+      NSF NCSES Survey of Federal Funds for R&D — total federal obligations for
+      RESEARCH (basic + applied, all funding agencies, all performers combined)
+      broken out by detailed field of R&D, FYs 2016-2025. Values in current
+      USD millions. Closes the all-agency/all-performer field-of-science gap
+      that nsf_federal_rd_obligations (rd_field hard-coded to "All fields")
+      and nsf_herd_by_institution (real rd_field column, but scoped to
+      university-performed R&D only) each leave open on their own. Does not
+      cover experimental development obligations by field — NCSES's own field
+      taxonomy was historically collected for research only, and the field
+      breakdown for development obligations is not published as its own
+      crosscut in this table.
+
+      field_level encodes the row's place in NCSES's own field hierarchy (read
+      from the source XLSX cell's indentation, not inferred): 0 = grand total
+      ("All fields"), 1 = a broad field of R&D, 2 = a detailed sub-field
+      nested under the preceding level-1 row. Level-1 rows sum to the level-0
+      total; level-2 rows sum to their enclosing level-1 row. Pick one level
+      to aggregate on — summing across levels double-counts, the same
+      rollup-vs-leaf discipline as energy.eia_electricity_generation's
+      sector_is_rollup/fuel_is_rollup flags. A field's taxonomy label can
+      differ across the 2021 field-of-R&D revision (e.g. "Computer sciences
+      and mathematics" pre-2021 vs. "Computer and information sciences"
+      post-2021); both eras' labels are preserved as-is from the source, with
+      NA years absent as null rather than zero.
+
+    dimensions:
+      type:
+        - nsf_rd_by_field
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year
+      - name: rd_field
+        type: string
+        nullable: false
+        comment: Field of R&D label, as published (taxonomy differs pre/post the 2021 revision)
+      - name: field_level
+        type: integer
+        nullable: false
+        comment: 0 = grand total, 1 = broad field, 2 = detailed sub-field of the preceding level-1 row
+      - name: obligations_usd_million
+        type: double
+        nullable: true
+        comment: Federal research obligations in current USD millions ("*" in source rounds to 0.0; null where NA under that year's taxonomy)
+
+    source:
+      type: http
+      url: "https://ncses.nsf.gov/pubs/nsf26316/assets/data-tables/tables/nsf26316-tab091.xlsx"
+      method: GET
+      response:
+        format: TEXT   # NsfRdByFieldTransformer re-downloads the XLSX and emits JSON rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfRdByFieldTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nsf_rd_by_field/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nsf_rd_by_field
+        # Single xlsx (all years, ~580 rows) → one [type] partition = one file. Disable the
+        # anchor's year-batching (would replace-partition per year on the lone partition).
+        batchPartitionColumns: []
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # --- HIGHER EDUCATION R&D (HERD) — institution microdata -------------------
   - name: nsf_herd_by_institution
     # NCSES restates prior-year figures on every annual release (see schema header
@@ -369,6 +456,9 @@ constraints:
 
   nsf_federal_rd_obligations:
     primaryKey: [year, funding_agency, performing_sector, rd_field, rd_type]
+
+  nsf_rd_by_field:
+    primaryKey: [year, rd_field]
 
   nsf_herd_by_institution:
     primaryKey: [year, inst_id, rd_field, funding_source, federal_agency]
