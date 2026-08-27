@@ -88,7 +88,18 @@ public final class FileAdapterFunctions {
     // they are declarations that push down to DuckDB and have no implementation on the
     // other file-adapter engines, so registering them elsewhere would only offer a
     // function that always fails at execution.
-    if (duckDbEngine && root.getFunctions("AGG_CORR").isEmpty()) {
+    //
+    // Registered under lowercase names: this project's standard connection settings
+    // (Oracle lex, unquotedCasing=TO_LOWER) lowercase every unquoted identifier before
+    // function-name lookup, and SchemaPlus function lookup is exact-match, not
+    // case-insensitive. A name registered uppercase therefore never resolves for any
+    // normal (unquoted) call, in any case the caller typed it — only an explicitly
+    // quoted, exact-uppercase call like "JSON_EXTRACT"(...) would have matched, which
+    // is not a usage pattern anyone writes. Lowercase matches what TO_LOWER normalizes
+    // every unquoted call to, so STRING_SPLIT/string_split/String_Split all resolve
+    // identically. DuckDBFunctionMapping's FUNCTION_MAP already upper-cases
+    // operator.getName() before its own lookup, so it needs no change here.
+    if (duckDbEngine && root.getFunctions("agg_corr").isEmpty()) {
       try {
         registerDuckDBStatsAggregates(root);
       } catch (Exception e) {
@@ -98,9 +109,9 @@ public final class FileAdapterFunctions {
     // DuckDB-native JSON_EXTRACT, which Calcite core does not define under that name
     // (the ANSI equivalent is JSON_VALUE). DuckDB engine ONLY, for the same reason as
     // the stats aggregates above: it has no implementation on the other engines.
-    if (duckDbEngine && root.getFunctions("JSON_EXTRACT").isEmpty()) {
+    if (duckDbEngine && root.getFunctions("json_extract").isEmpty()) {
       try {
-        root.add("JSON_EXTRACT", org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
+        root.add("json_extract", org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
             org.apache.calcite.adapter.file.duckdb.DuckDBJsonFunctions.class, "jsonExtract"));
       } catch (Exception e) {
         LOGGER.warn("Failed to register duckdb json functions: {}", e.getMessage());
@@ -108,9 +119,9 @@ public final class FileAdapterFunctions {
     }
     // DuckDB-native STRING_SPLIT, which Calcite core does not define. Same rationale as
     // JSON_EXTRACT above: DuckDB engine ONLY, no implementation on the other engines.
-    if (duckDbEngine && root.getFunctions("STRING_SPLIT").isEmpty()) {
+    if (duckDbEngine && root.getFunctions("string_split").isEmpty()) {
       try {
-        root.add("STRING_SPLIT", org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
+        root.add("string_split", org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
             org.apache.calcite.adapter.file.duckdb.DuckDBStringFunctions.class, "stringSplit"));
       } catch (Exception e) {
         LOGGER.warn("Failed to register duckdb string functions: {}", e.getMessage());
@@ -128,17 +139,17 @@ public final class FileAdapterFunctions {
    * parser keywords and cannot be registered under their real names here.
    */
   private static void registerDuckDBStatsAggregates(SchemaPlus root) {
-    root.add("MEDIAN", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("median", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.MedianUdaf.class));
-    root.add("SKEWNESS", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("skewness", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.SkewnessUdaf.class));
-    root.add("KURTOSIS", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("kurtosis", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.KurtosisUdaf.class));
-    root.add("MAD", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("mad", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.MadUdaf.class));
-    root.add("QUANTILE_CONT", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("quantile_cont", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.QuantileContUdaf.class));
-    root.add("QUANTILE_DISC", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("quantile_disc", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.QuantileDiscUdaf.class));
 
     // Reserved regression aggregates: registered under non-reserved ALIAS names. A
@@ -147,19 +158,19 @@ public final class FileAdapterFunctions {
     // they share an accumulator but the operator name is the only thing distinguishing
     // corr from regr_slope, and a static UDAF cannot see the operator name, so one shared
     // class could not tell which statistic to return.
-    root.add("AGG_CORR", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("agg_corr", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.CorrUdaf.class));
-    root.add("AGG_REGR_SLOPE", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("agg_regr_slope", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrSlopeUdaf.class));
-    root.add("AGG_REGR_INTERCEPT", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("agg_regr_intercept", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrInterceptUdaf.class));
-    root.add("AGG_REGR_R2", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("agg_regr_r2", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrR2Udaf.class));
-    root.add("AGG_REGR_AVGX", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("agg_regr_avgx", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrAvgXUdaf.class));
-    root.add("AGG_REGR_AVGY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("agg_regr_avgy", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrAvgYUdaf.class));
-    root.add("AGG_REGR_SXY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+    root.add("agg_regr_sxy", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
         org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrSxyUdaf.class));
   }
 }
