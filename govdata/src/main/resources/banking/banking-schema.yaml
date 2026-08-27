@@ -767,10 +767,15 @@ partitionedTables:
     dqRowLimit: 5000
     comment: >
       Quarterly call-report financials — total assets/liabilities, domestic deposits,
-      net income, employee count, and key ratios (equity/assets, net interest margin)
-      per institution per report date. One row per (cert, repdte). VERY LARGE
-      (millions of rows all-history). Windowed by a REPDTE date range covering the
-      calendar year. Joins to institutions by cert. Source: api.fdic.gov/banks/financials.
+      net income, employee count, key ratios (equity/assets, net interest margin), CRE
+      loan balances by property type (nonfarm-nonresidential, construction/land
+      development, multifamily), and total risk-based capital, per institution per
+      report date. One row per (cert, repdte). VERY LARGE (millions of rows
+      all-history). Windowed by a REPDTE date range covering the calendar year. Joins
+      to institutions by cert. The CRE fields let a caller compute a standard
+      CRE-concentration ratio (CRE loans / total risk-based capital) directly, joined
+      against institutions' charter-city geography, without relaying a third-party
+      screener's numbers. Source: api.fdic.gov/banks/financials.
 
     dimensions:
       type:
@@ -818,6 +823,22 @@ partitionedTables:
         type: long
         nullable: true
         comment: Total interest expense (USD thousands)
+      - name: cre_nonfarm_nonresidential_thousands
+        type: long
+        nullable: true
+        comment: Loans secured by nonfarm nonresidential (commercial) real estate — Call Report item LNRENRES (USD thousands)
+      - name: cre_construction_land_dev_thousands
+        type: long
+        nullable: true
+        comment: Construction and land development loans — Call Report item LNRECONS (USD thousands)
+      - name: cre_multifamily_thousands
+        type: long
+        nullable: true
+        comment: Multifamily residential real estate loans — Call Report item LNREMULT (USD thousands)
+      - name: total_risk_based_capital_thousands
+        type: long
+        nullable: true
+        comment: Total risk-based capital — Call Report item RBC (USD thousands)
 
     backfill_period: annual
 
@@ -827,10 +848,15 @@ partitionedTables:
       # live: this endpoint's own REPDTE field in the response is YYYYMMDD (e.g. "20250331"),
       # unlike institutions/locations/history/failures/sod which all render MM/DD/YYYY —
       # AbstractFdicTransformer.putFdicDate() tries both formats to handle this.
+      # An explicit fields= list is required: RBC/LNRENRES/LNRECONS/LNREMULT are NOT part
+      # of this endpoint's default (no-fields=) response — confirmed live, a bare request
+      # returns 161 fields, none of the four CRE/RBC ones. Every field the transformer
+      # reads (original + CRE) must be named here or it silently arrives null.
       url: "https://api.fdic.gov/banks/financials"
       method: GET
       parameters:
         filters: "REPDTE:[{year}0101 TO {year}1231]"
+        fields: "CERT,REPDTE,ASSET,DEPDOM,NETINC,LIAB,NUMEMP,EQV,NIMY,EINTEXP,LNRENRES,LNRECONS,LNREMULT,RBC"
         format: "json"
       response:
         format: json

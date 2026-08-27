@@ -31,5 +31,9 @@ public class FdicFinancialsTransformer extends AbstractFdicTransformer {
     putDouble(row, "equity_to_assets_pct", rec, "EQV");
     putDouble(row, "net_interest_margin_pct", rec, "NIMY");
     putLong(row, "interest_expense_thousands", rec, "EINTEXP");
+    putLong(row, "cre_nonfarm_nonresidential_thousands", rec, "LNRENRES");
+    putLong(row, "cre_construction_land_dev_thousands", rec, "LNRECONS");
+    putLong(row, "cre_multifamily_thousands", rec, "LNREMULT");
+    putLong(row, "total_risk_based_capital_thousands", rec, "RBC");
   }
 }

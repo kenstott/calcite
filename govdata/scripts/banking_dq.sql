@@ -375,6 +375,23 @@ FROM (
   WHERE cert IS NULL
 );
 
+-- T7: CRE loan / total risk-based capital fields are genuinely populated for at least some
+-- banks in the sample (only banks with CRE exposure report LNRENRES/LNRECONS/LNREMULT; RBC
+-- is a near-universal post-Basel-III field). Warns, not fails, since a narrow DQ sample
+-- window could genuinely miss every CRE-exposed bank.
+INSERT INTO dq_results
+SELECT 'banking', 'financials', 'cre_rbc_fields_populated',
+  CASE WHEN n_cre = 0 OR n_rbc = 0 THEN 'warn' ELSE 'pass' END,
+  n_cre, 1, 'rows with a non-null CRE loan field (n_cre) and total_risk_based_capital (n_rbc=' || n_rbc || ')'
+FROM (
+  SELECT
+    COUNT(*) FILTER (WHERE cre_nonfarm_nonresidential_thousands IS NOT NULL
+                         OR cre_construction_land_dev_thousands IS NOT NULL
+                         OR cre_multifamily_thousands IS NOT NULL) AS n_cre,
+    COUNT(*) FILTER (WHERE total_risk_based_capital_thousands IS NOT NULL) AS n_rbc
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/financials', allow_moved_paths := true)
+);
+
 -- ============================================================================
 -- summary (industry-wide rollup, ~8,107 rows; grain year x state, state_abbr nullable for
 -- nationwide row; partitions: type, year)
