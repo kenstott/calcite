@@ -84,6 +84,63 @@ public class IcebergTableWriterTest {
     writer.runMaintenance(7);
   }
 
+  /**
+   * D-062/D-157: pruneMetadataFiles used to assume the numerically-highest {@code
+   * vN.metadata.json} in the directory listing was current, deleting a file version-hint.text
+   * still named whenever a concurrent/racing writer left the pointer behind the listing's
+   * highest number -- producing "Iceberg metadata file not found for table version N" on every
+   * subsequent read. This pins the fix: the file version-hint.text names must survive pruning
+   * even when it is not the top-N-by-number entry.
+   */
+  @Test void testPruneMetadataFilesNeverDeletesTheVersionHintPointsAt() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    for (int i = 0; i < 5; i++) {
+      writeAndCommitRow(writer, i, "row-" + i, 2024);
+    }
+
+    String metadataDir = table.location() + "/metadata/";
+    String versionHintPath = metadataDir + "version-hint.text";
+    int actualCurrentVersion = readVersionHint(versionHintPath);
+    assertTrue(actualCurrentVersion >= 5,
+        "expected several commits to have advanced the metadata version");
+
+    // Simulate the race this fix closes: version-hint.text names an OLDER version than the
+    // numerically-highest metadata.json visible in this listing (a torn/racing commit).
+    int rolledBackVersion = actualCurrentVersion - 2;
+    storageProvider.writeFile(versionHintPath,
+        String.valueOf(rolledBackVersion).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    // Keep only the 1 most recent BY NUMBER -- without the fix this deletes the rolled-back
+    // version's file even though version-hint.text still names it.
+    writer.pruneMetadataFiles(1);
+
+    assertTrue(
+        storageProvider.exists(metadataDir + "v" + rolledBackVersion + ".metadata.json"),
+        "must never delete the version-hint.text-pointed-at file, even when it isn't the "
+        + "numerically-highest metadata.json visible");
+  }
+
+  /** A prune that can't confirm the current version must no-op, not guess. */
+  @Test void testPruneMetadataFilesNoOpsWhenVersionHintUnreadable() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    for (int i = 0; i < 3; i++) {
+      writeAndCommitRow(writer, i, "row-" + i, 2024);
+    }
+
+    storageProvider.delete(table.location() + "/metadata/version-hint.text");
+
+    int deleted = writer.pruneMetadataFiles(1);
+
+    assertEquals(0, deleted, "must not guess and delete when version-hint.text can't be read");
+  }
+
+  private int readVersionHint(String versionHintPath) throws Exception {
+    try (java.io.InputStream is = storageProvider.openInputStream(versionHintPath)) {
+      return Integer.parseInt(new String(is.readAllBytes(),
+          java.nio.charset.StandardCharsets.UTF_8).trim());
+    }
+  }
+
   @Test void testCommitFromStagingEmptyDirectory() throws Exception {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 

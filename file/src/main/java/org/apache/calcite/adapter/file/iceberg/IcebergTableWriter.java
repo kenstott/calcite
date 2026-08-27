@@ -1294,7 +1294,8 @@ public class IcebergTableWriter {
 
   /**
    * Prunes superseded {@code v{N}.metadata.json} version files down to the {@code
-   * previousVersionsMax} most recent, keeping the current version.
+   * previousVersionsMax} most recent, always keeping whichever version {@code
+   * version-hint.text} currently names.
    *
    * <p>This table's {@code TableOperations} ({@link S3FileIOTableOperations}) writes a new
    * metadata version file on every commit and never reclaims old ones — Iceberg's standard
@@ -1306,6 +1307,15 @@ public class IcebergTableWriter {
    * codebase's read path opens a metadata.json by explicit version; every reader resolves the
    * current version through {@code version-hint.text}.
    *
+   * <p>Runs under {@link #underCommitLock}, like every other table-mutating method in this
+   * class, and reads {@code version-hint.text} before deleting anything rather than assuming
+   * the numerically-highest file in the directory listing is current: those can disagree under
+   * a concurrent writer or an eventually-consistent listing, and treating "highest visible
+   * number" as "current" is exactly what let this method delete a file {@code version-hint.text}
+   * still named, producing an "Iceberg metadata file not found for table version N" read
+   * failure. If the hint can't be read/parsed, or names a version this listing doesn't contain,
+   * this no-ops rather than guess — a skipped prune is safe; a wrong delete is not.
+   *
    * @param previousVersionsMax number of most-recent versions to retain; a non-positive value
    *     disables pruning
    * @return the number of metadata files deleted
@@ -1315,11 +1325,27 @@ public class IcebergTableWriter {
       return 0;
     }
     int keep = Math.max(previousVersionsMax, 1);
+    int[] deletedHolder = new int[1];
+    underCommitLock(() -> deletedHolder[0] = pruneMetadataFilesLocked(keep));
+    return deletedHolder[0];
+  }
 
+  private int pruneMetadataFilesLocked(int keep) {
     // Trailing slash matters: an S3 delimiter listing with prefix "…/metadata" (no slash) rolls
     // every key under it into one common-prefix entry instead of returning them individually,
     // since the delimiter appears immediately after the given prefix.
     String metadataDir = table.location() + "/metadata/";
+
+    int currentVersion;
+    try (InputStream is = storageProvider.openInputStream(metadataDir + "version-hint.text")) {
+      currentVersion = Integer.parseInt(
+          new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim());
+    } catch (IOException | NumberFormatException e) {
+      LOGGER.warn("Cannot read version-hint.text for {}, skipping metadata prune: {}",
+          table.location(), e.getMessage());
+      return 0;
+    }
+
     List<StorageProvider.FileEntry> metadataFiles;
     try {
       metadataFiles = storageProvider.listFiles(metadataDir, false);
@@ -1340,21 +1366,33 @@ public class IcebergTableWriter {
       }
     }
 
+    if (!versionToPath.containsKey(currentVersion)) {
+      LOGGER.warn("version-hint.text for {} points at v{}, not present in this metadata "
+          + "listing; skipping prune this run", table.location(), currentVersion);
+      return 0;
+    }
+
     int toDelete = versionToPath.size() - keep;
     if (toDelete <= 0) {
       return 0;
     }
 
     int deleted = 0;
-    for (String path : versionToPath.values()) {
+    for (Map.Entry<Integer, String> entry : versionToPath.entrySet()) {
       if (deleted >= toDelete) {
         break;
       }
+      if (entry.getKey() == currentVersion) {
+        // Never delete the version readers currently resolve to, even if it isn't the
+        // numerically-highest file in this listing.
+        continue;
+      }
       try {
-        storageProvider.delete(path);
+        storageProvider.delete(entry.getValue());
         deleted++;
       } catch (IOException e) {
-        LOGGER.warn("Failed to delete superseded metadata file {}: {}", path, e.getMessage());
+        LOGGER.warn("Failed to delete superseded metadata file {}: {}",
+            entry.getValue(), e.getMessage());
       }
     }
     LOGGER.info("Pruned {} superseded metadata.json version file(s) for table {}",
