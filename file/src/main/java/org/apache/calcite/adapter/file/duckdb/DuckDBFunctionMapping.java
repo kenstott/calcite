@@ -10,7 +10,11 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexVisitorImpl;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
@@ -218,6 +222,43 @@ public class DuckDBFunctionMapping {
     } else {
       // Let default handling take care of it
       call.getOperator().unparse(writer, call, leftPrec, rightPrec);
+    }
+  }
+
+  /**
+   * True if any expression rooted at {@code node} calls a user-defined function that this
+   * class does not know how to render for DuckDB (see {@link #needsSpecialHandling}). Used by
+   * {@link DuckDBProjectRule}/{@link DuckDBFilterRule} to generalize the stock
+   * {@code JdbcProjectRule}/{@code JdbcFilterRule}'s blanket refusal to push down a
+   * Project/Filter containing any user-defined function at all -- those core Calcite rules
+   * block unconditionally without ever consulting the dialect, which meant this project's own
+   * DuckDB-pushdown stub UDFs (JSON_EXTRACT, STRING_SPLIT, ...) could never reach DuckDB even
+   * though {@link #unparseCall} already knows exactly how to render them. A call to any OTHER
+   * (unrecognized) user-defined function still makes this return true, preserving the stock
+   * rules' safety for anything this class doesn't have a mapping for.
+   */
+  public static boolean hasUnsupportedUserDefinedFunction(RexNode node) {
+    UnsupportedUdfVisitor visitor = new UnsupportedUdfVisitor();
+    node.accept(visitor);
+    return visitor.found;
+  }
+
+  private static final class UnsupportedUdfVisitor extends RexVisitorImpl<Void> {
+    private boolean found = false;
+
+    UnsupportedUdfVisitor() {
+      super(true);
+    }
+
+    @Override public Void visitCall(RexCall call) {
+      SqlOperator operator = call.getOperator();
+      if (operator instanceof SqlFunction
+          && ((SqlFunction) operator).getFunctionType().isUserDefined()
+          && !needsSpecialHandling(operator)) {
+        found = true;
+        return null;
+      }
+      return super.visitCall(call);
     }
   }
 

@@ -166,6 +166,63 @@ public class DuckDBFullCoverageTest {
   }
 
   /**
+   * Tests that STRING_SPLIT and JSON_EXTRACT (a DuckDB-pushdown stub UDF this fix
+   * generalizes from) validate through Calcite AND actually push down to DuckDB for
+   * execution, in both a SELECT projection and a WHERE clause &mdash; the class of query
+   * D-164 in the govdata defect register needed. Before {@code DuckDBProjectRule}/
+   * {@code DuckDBFilterRule}, both validated but always fell back to the stub's
+   * intentional throw at execution, since the stock {@code JdbcProjectRule}/
+   * {@code JdbcFilterRule} unconditionally refuse to push down any Project/Filter
+   * containing a user-defined-function call. Does NOT cover {@code UNNEST(STRING_SPLIT(...))}
+   * &mdash; that shape is a Correlate/Uncollect RelNode, not a Project/Filter, and hits a
+   * separate, still-open SQL-generation bug (see the govdata defect register).
+   */
+  @Test public void testStringSplitPushesDownToDuckDb() throws Exception {
+    createCsvFile("agencies.csv",
+        "doc_id,agency_names\n"
+        + "1,\"Department Of Transportation, Federal Aviation Administration\"\n"
+        + "2,Department Of Energy\n");
+
+    try (Connection conn = createDuckDBConnection()) {
+      // Scalar STRING_SPLIT usage (not UNNEST, which needs separate Correlate/Uncollect
+      // handling -- see class comment) pushes down and executes via DuckDB.
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs =
+               stmt.executeQuery(
+                   "SELECT doc_id, STRING_SPLIT(agency_names, ', ')[1] AS first_agency "
+                   + "FROM files.agencies ORDER BY doc_id")) {
+        assertTrue(rs.next());
+        assertEquals("1", rs.getString("doc_id"));
+        assertEquals("Department Of Transportation", rs.getString("first_agency"));
+        assertTrue(rs.next());
+        assertEquals("2", rs.getString("doc_id"));
+        assertEquals("Department Of Energy", rs.getString("first_agency"));
+        assertFalse(rs.next());
+      }
+      // JSON_EXTRACT is the pre-existing function this fix generalizes -- prove it now
+      // pushes down too, not just STRING_SPLIT.
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs =
+               stmt.executeQuery(
+                   "SELECT JSON_EXTRACT('{\"a\":42}', '$.a') AS v FROM files.agencies "
+                   + "WHERE doc_id = 1")) {
+        assertTrue(rs.next());
+        assertEquals("42", rs.getString("v"));
+      }
+      // A WHERE clause referencing a stub UDF must push down too (DuckDBFilterRule).
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs =
+               stmt.executeQuery(
+                   "SELECT doc_id FROM files.agencies "
+                   + "WHERE JSON_EXTRACT('{\"a\":1}', '$.a') IS NOT NULL AND doc_id = 2")) {
+        assertTrue(rs.next());
+        assertEquals("2", rs.getString("doc_id"));
+        assertFalse(rs.next());
+      }
+    }
+  }
+
+  /**
    * Tests schema creation with ephemeral cache for test isolation.
    */
   @Test public void testSchemaFactoryEphemeralCache() throws Exception {

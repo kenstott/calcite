@@ -105,6 +105,16 @@ public class DuckDBConvention extends JdbcConvention {
       planner.addRule(rule);
     }
 
+    // Stock JdbcProjectRule/JdbcFilterRule (just registered above) unconditionally refuse to
+    // push down a Project/Filter containing ANY user-defined-function call, without consulting
+    // the dialect -- so this project's own DuckDB-pushdown stub UDFs (JSON_EXTRACT,
+    // STRING_SPLIT, ...; see DuckDBFunctionMapping) could never reach DuckDB even though
+    // DuckDBFunctionMapping already knows how to render them. These two rules generalize that
+    // block to allow recognized stub UDFs through while still blocking any other unrecognized
+    // one -- added alongside, not instead of, the stock rules (see their class comments).
+    planner.addRule(DuckDBProjectRule.create(this));
+    planner.addRule(DuckDBFilterRule.create(this));
+
     LOGGER.debug("Registered DuckDB convention with HLL + parquet statistics optimizations + comprehensive JDBC pushdown rules");
   }
 }
