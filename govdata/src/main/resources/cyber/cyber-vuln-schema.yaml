@@ -142,7 +142,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 32835
-      checkedAt: "2026-08-26T11:19:31Z"
+      checkedAt: "2026-08-28T01:48:44Z"
     # Windowing is driven by NvdPublishedWindowDimensionResolver (pubStartDate/pubEndDate
     # dims): quarterly history + daily tip, GOVDATA_START_YEAR-bounded. Rows route to the
     # correct [type,year,quarter] partition via the pub_year/pub_month computed columns.
