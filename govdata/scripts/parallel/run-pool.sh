@@ -494,6 +494,7 @@ committed_mb=0          # Sum of max heaps of all active workers
 queue_idx=0
 done_count=0
 failed_count=0
+requeue_count=0
 failed_list=()
 restart_count=0
 
@@ -666,7 +667,10 @@ fill_pool() {
       # consuming the run loop with repeated rejections. Record rejection time for comparison.
       local _reject_time=$(($(date +%s) + 30))
       queue+=("$next_slot:_rejected_until_$_reject_time")
-      # NOTE: do NOT increment total — requeuing doesn't add a new job, just moves existing one
+      # Increment total so the loop reaches this requeued job, but track requeue_count
+      # separately so Queued display doesn't inflate (Queued = total - done - failed - requeue_count - running).
+      ((total++)) || true
+      ((requeue_count++)) || true
       if [ "$scan_idx" -eq "$queue_idx" ]; then
         ((queue_idx++)) || true
       fi
@@ -704,6 +708,10 @@ fill_pool() {
     fi
 
     queue_idx=$scan_idx
+    # If this job had requeue metadata, it's now launching successfully — decrement requeue_count
+    if [[ "${queue[$queue_idx]}" =~ :_rejected_until_ ]]; then
+      ((requeue_count--)) || true
+    fi
     launch_worker "${queue[$queue_idx]}" || true
     ((queue_idx++)) || true
     scan_idx=$queue_idx
@@ -888,7 +896,8 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
   fill_pool
 
   # Status line
-  remaining=$((total - done_count - failed_count - ${#active_pids[@]}))
+  # Queued = total jobs - done - failed - requeued (tracked separately to avoid inflation) - currently running
+  remaining=$((total - done_count - failed_count - requeue_count - ${#active_pids[@]}))
   active_str=""
   if [ "${#active_labels[@]}" -gt 0 ]; then
     active_str="| ${active_labels[*]}"
