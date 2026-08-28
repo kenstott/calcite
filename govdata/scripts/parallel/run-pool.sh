@@ -621,6 +621,21 @@ fill_pool() {
   local scan_idx=$queue_idx
   while [ "${#active_pids[@]}" -lt "$MAX_WORKERS" ] && [ "$scan_idx" -lt "$total" ]; do
     local next_slot="${queue[$scan_idx]}"
+
+    # Check if this job is still in backoff after a recent conflict rejection.
+    # If so, skip it and move to the next job instead of consuming the run loop.
+    if [[ "$next_slot" =~ :_rejected_until_([0-9]+)$ ]]; then
+      local _backoff_until="${BASH_REMATCH[1]}"
+      local _now=$(date +%s)
+      if [ "$_now" -lt "$_backoff_until" ]; then
+        # Still in backoff period, skip to next job
+        ((scan_idx++)) || true
+        continue
+      fi
+      # Backoff expired, strip metadata for use below
+      next_slot="${next_slot%%:_rejected_until_*}"
+    fi
+
     local next_heap_mb next_foot_mb
     next_heap_mb=$(get_worker_heap_mb "$next_slot")
     next_foot_mb=$((next_heap_mb + WORKER_NATIVE_MB))   # heap + native footprint
@@ -647,9 +662,11 @@ fill_pool() {
     local next_cy_start next_cy_end _conflict_msg
     read -r next_cy_start next_cy_end <<< "$(_year_range_from_mode "$next_mode")"
     if ! _conflict_msg=$(check_schema_year_conflict "$PID_DIR" "$next_schema" "$next_cy_start" "$next_cy_end" 2>&1); then
-      log_info "$_conflict_msg — requeuing ${next_id} at the back of the queue"
-      queue+=("$next_slot")
-      ((total++)) || true
+      # Requeue at back with backoff: skip re-checking this job for 30 seconds to avoid
+      # consuming the run loop with repeated rejections. Record rejection time for comparison.
+      local _reject_time=$(($(date +%s) + 30))
+      queue+=("$next_slot:_rejected_until_$_reject_time")
+      # NOTE: do NOT increment total — requeuing doesn't add a new job, just moves existing one
       if [ "$scan_idx" -eq "$queue_idx" ]; then
         ((queue_idx++)) || true
       fi
