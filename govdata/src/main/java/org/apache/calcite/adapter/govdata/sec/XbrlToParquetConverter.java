@@ -2661,7 +2661,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Builds a globally unique chunk_id: {accession}_{seq}_{sha256[:16]}.
    * The hash prevents collisions when the same logical sequence position appears across accessions.
    */
-  private String buildGlobalChunkId(String accession, int seq, String text) {
+  private String buildGlobalChunkId(String accession, long seq, String text) {
     try {
       java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
       byte[] hash = md.digest(
@@ -4341,6 +4341,28 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Detects whether a security is debt-denominated (e.g., Convertible Notes, Exchangeable Notes).
+   *
+   * For debt derivatives, the XBRL transactionShares field contains the principal/face value
+   * in dollars, not an actual share count. This helper identifies these securities so that
+   * downstream aggregations don't multiply principal * price to create invalid "implied proceeds"
+   * values (which can reach 10^17 scale artifacts for large face-value debt instruments).
+   *
+   * @param securityTitle the security title from XBRL (e.g., "Convertible Senior Notes")
+   * @return true if the security appears to be debt-denominated
+   */
+  private boolean isDebtDenominatedSecurity(String securityTitle) {
+    if (securityTitle == null) {
+      return false;
+    }
+
+    String lowerTitle = securityTitle.toLowerCase();
+    return lowerTitle.contains("note") || lowerTitle.contains("bond") ||
+           lowerTitle.contains("convertible") || lowerTitle.contains("exchangeable") ||
+           lowerTitle.contains("senior debt") || lowerTitle.contains("debenture");
+  }
+
+  /**
    * Add non-derivative transactions for a specific reporting owner.
    */
   private void addNonDerivativeTransactions(Document doc, String cik, String filingType, String filingDate,
@@ -4496,7 +4518,16 @@ public class XbrlToParquetConverter implements FileConverter {
       if (price == null || price.isEmpty()) {
         price = getElementText(trans, "conversionOrExercisePrice", "value");
       }
-      data.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
+
+      // For debt-denominated derivatives (Convertible Notes, Exchangeable Notes, etc.),
+      // the transactionShares field contains principal/face value in dollars, not actual shares.
+      // Setting price_per_share to null prevents downstream aggregations from multiplying
+      // principal * price to create invalid "implied proceeds" values (fixes D-099).
+      Double priceValue = null;
+      if (price != null && !price.isEmpty() && !isDebtDenominatedSecurity(secTitle)) {
+        priceValue = Double.parseDouble(price);
+      }
+      data.put("price_per_share", priceValue);
 
       String sharesAfter = getElementText(trans, "sharesOwnedFollowingTransaction", "value");
       data.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
@@ -4575,7 +4606,13 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // For derivative holdings, get conversion/exercise price
       String price = getElementText(holding, "conversionOrExercisePrice", "value");
-      data.put("price_per_share", price != null && !price.isEmpty() ? Double.parseDouble(price) : null);
+      // For debt-denominated derivatives (Convertible Notes, Exchangeable Notes, etc.),
+      // set price_per_share to null to prevent invalid "implied proceeds" calculations (fixes D-099).
+      Double priceValue = null;
+      if (price != null && !price.isEmpty() && !isDebtDenominatedSecurity(secTitle)) {
+        priceValue = Double.parseDouble(price);
+      }
+      data.put("price_per_share", priceValue);
 
       String shares = getElementText(holding, "sharesOwnedFollowingTransaction", "value");
       data.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
@@ -4903,7 +4940,7 @@ public class XbrlToParquetConverter implements FileConverter {
       sigPos = bodyText.length();
     }
 
-    int sequence = 0;
+    long sequence = 0;
     Set<String> boilerplate = new HashSet<>();
     boilerplate.add("FORWARD-LOOKING STATEMENTS");
     boilerplate.add("Safe Harbor");
@@ -5053,7 +5090,7 @@ public class XbrlToParquetConverter implements FileConverter {
         AbstractSecDataDownloader.loadTableColumns("vectorized_chunks");
 
     List<Map<String, Object>> dataList = new ArrayList<>();
-    int sequence = 0;
+    long sequence = 0;
 
     // Extract year from filing date for Iceberg partitioning
     int year = 0;
@@ -5327,7 +5364,7 @@ public class XbrlToParquetConverter implements FileConverter {
         List<Map<String, Object>> allChunks = new ArrayList<>();
 
         // Convert earnings records to chunk format
-        int sequence = 0;
+        long sequence = 0;
         for (Map<String, Object> earnings : earningsRecords) {
           String paragraphText = (String) earnings.get("paragraph_text");
           if (paragraphText == null || paragraphText.length() < 20) {
@@ -5408,7 +5445,7 @@ public class XbrlToParquetConverter implements FileConverter {
         AbstractSecDataDownloader.loadTableColumns("vectorized_chunks");
 
     List<Map<String, Object>> chunksList = new ArrayList<>();
-    int sequence = 0;
+    long sequence = 0;
 
     for (Map<String, Object> earnings : earningsRecords) {
       String paragraphText = (String) earnings.get("paragraph_text");
@@ -5759,7 +5796,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Convert chunks to Parquet records
-    int sequence = 0;
+    long sequence = 0;
     for (SecTextVectorizer.ContextualChunk chunk : allChunks) {
       Map<String, Object> data = new HashMap<>();
 
@@ -5770,7 +5807,7 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("year", year);
 
       // Core identifiers — chunk_id is globally unique: accession + sequence + sha256[:16] of text
-      int seq = sequence++;
+      long seq = sequence++;
       data.put("chunk_id", buildGlobalChunkId(
           accessionNumber != null ? accessionNumber : cik, seq, chunk.text));
       data.put("source_type", chunk.blobType);
@@ -7356,7 +7393,7 @@ public class XbrlToParquetConverter implements FileConverter {
       sigPos = bodyText.length();
     }
 
-    int sequence = 0;
+    long sequence = 0;
     Set<String> boilerplate = new HashSet<>();
     boilerplate.add("FORWARD-LOOKING STATEMENTS");
     boilerplate.add("Safe Harbor");
