@@ -856,6 +856,7 @@ final class QuestionDiagnostics {
         boolean capped = rows != null && rowLimit > 0 && rows.size() >= rowLimit;
 
         emptyOrLowCoverage(sql, rows, warnings);
+        rowCapReached(sql, capped, rowLimit, warnings);
         coveragePercentColumns(rows, columns, warnings);
         outOfCoverageYears(sql, rows, warnings);
         smallNAndGrain(sql, grain, n, capped, warnings);
@@ -893,6 +894,31 @@ final class QuestionDiagnostics {
     }
 
     // ── Individual checks ─────────────────────────────────────────────────────
+
+    /**
+     * Flags a result silently truncated by the connector's own row cap (never surfaced as an
+     * error) as distinct from a caller-written {@code LIMIT}/{@code FETCH FIRST}, which reflects
+     * an intentional request rather than truncation. {@code runSqlRows} only appends its own
+     * {@code FETCH FIRST ... ROWS ONLY} when neither clause is already present, so the same check
+     * here keeps this warning from firing on a query that asked for exactly {@code rowLimit} rows
+     * on purpose.
+     */
+    private static void rowCapReached(String sql, boolean capped, int rowLimit,
+            ArrayNode warnings) {
+        if (!capped) {
+            return;
+        }
+        String lower = sql == null ? "" : sql.toLowerCase(Locale.ROOT);
+        if (lower.contains("fetch first") || lower.contains(" limit ")) {
+            return;
+        }
+        warnings.add(warning("row_limit_reached", HIGH,
+            "Returned exactly the " + rowLimit + "-row cap with no LIMIT/FETCH FIRST in the "
+            + "query as written, so this is very likely a truncated result, not the true row "
+            + "count — especially for a GROUP BY or DISTINCT whose true cardinality can exceed "
+            + "the cap. The full count is unknown; add an explicit LIMIT if a sample was "
+            + "intended, or aggregate/paginate to see the complete result."));
+    }
 
     private static void emptyOrLowCoverage(String sql, ArrayNode rows, ArrayNode warnings) {
         if (rows != null && rows.size() == 0) {

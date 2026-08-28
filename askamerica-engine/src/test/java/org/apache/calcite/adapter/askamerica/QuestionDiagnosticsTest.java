@@ -128,6 +128,55 @@ class QuestionDiagnosticsTest {
     assertTrue(env.get("diagnostics").get("n_basis").asText().contains("floor"));
   }
 
+  @Test void aGroupByThatFillsTheConnectorsCapWithNoCallerLimitIsFlaggedAsTruncated() {
+    ArrayNode arr = MAPPER.createArrayNode();
+    for (int i = 0; i < 500; i++) {
+      ObjectNode row = MAPPER.createObjectNode();
+      row.put("transaction_date", String.format("2024-01-%03d", i));
+      row.put("total", 5.0);
+      arr.add(row);
+    }
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT transaction_date, SUM(amount) AS total FROM fec.individual_contributions "
+        + "GROUP BY transaction_date", arr, 500);
+
+    JsonNode capWarning = firstOfType(env, "row_limit_reached");
+    assertNotNull(capWarning,
+        "500 of an unknown true count of dates must be flagged as truncated, not a complete "
+        + "series: " + env);
+    assertEquals("high", capWarning.get("severity").asText());
+  }
+
+  @Test void aCallerWrittenLimitThatHappensToMatchTheCapIsNotMisreadAsTruncation() {
+    ArrayNode arr = MAPPER.createArrayNode();
+    for (int i = 0; i < 500; i++) {
+      ObjectNode row = MAPPER.createObjectNode();
+      row.put("transaction_date", String.format("2024-01-%03d", i));
+      arr.add(row);
+    }
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT transaction_date FROM fec.individual_contributions "
+        + "GROUP BY transaction_date LIMIT 500", arr, 500);
+
+    assertFalse(hasType(env, "row_limit_reached"),
+        "the caller explicitly asked for exactly 500 rows, so this is not silent truncation: "
+        + env);
+  }
+
+  @Test void aResultUnderTheCapIsNotFlaggedAsTruncated() {
+    ArrayNode arr = MAPPER.createArrayNode();
+    for (int i = 0; i < 40; i++) {
+      ObjectNode row = MAPPER.createObjectNode();
+      row.put("state_fips", String.format("%02d", i));
+      arr.add(row);
+    }
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT state_fips FROM edu.naep_state GROUP BY state_fips", arr, 500);
+
+    assertFalse(hasType(env, "row_limit_reached"),
+        "40 rows under a 500-row cap is a complete result, not a truncated one: " + env);
+  }
+
   @Test void countyGrainWithManyUnitsDrawsNoSmallNOrGrainWarning() {
     ArrayNode arr = MAPPER.createArrayNode();
     for (int i = 0; i < 3000; i++) {
