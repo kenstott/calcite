@@ -1276,7 +1276,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     data.put("fiscal_year_end", fiscalYearEnd);
 
-    String businessAddress = extractDeiValue(doc, "EntityAddressAddressLine1", "BusinessAddress");
+    String businessAddress = buildFullAddress(doc, "BusinessAddress");
     data.put("business_address", businessAddress);
 
     String mailingAddress = submissionsInfo.get("mailing_address");
@@ -1523,6 +1523,29 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
     return null;
+  }
+
+  private String buildFullAddress(Document doc, String addressType) {
+    String street = extractDeiValue(doc, addressType + "AddressLine1");
+    String city = extractDeiValue(doc, addressType + "CityOrTown");
+    String state = extractDeiValue(doc, addressType + "StateOrProvince");
+    String zip = extractDeiValue(doc, addressType + "PostalCode");
+
+    if (street == null || street.isEmpty()) {
+      return null;
+    }
+
+    StringBuilder addr = new StringBuilder(street);
+    if (city != null && !city.isEmpty()) {
+      addr.append(", ").append(city);
+    }
+    if (state != null && !state.isEmpty()) {
+      addr.append(", ").append(state);
+    }
+    if (zip != null && !zip.isEmpty()) {
+      addr.append(" ").append(zip);
+    }
+    return addr.toString();
   }
 
   private String extractAccessionNumber(String filename) {
@@ -5280,8 +5303,16 @@ public class XbrlToParquetConverter implements FileConverter {
           || fileContent.toLowerCase().contains("conference call")) {
 
         List<String> paragraphs = extractEarningsParagraphs(fileContent);
+        String currentSection = null;
 
         for (int i = 0; i < paragraphs.size(); i++) {
+          String para = paragraphs.get(i);
+          String sectionType = detectSectionTypeWithState(para, currentSection);
+
+          if (!sectionType.equals("other")) {
+            currentSection = sectionType;
+          }
+
           Map<String, Object> data = new HashMap<>();
           data.put("accession_number", accession);
           data.put("cik", cik);
@@ -5289,11 +5320,11 @@ public class XbrlToParquetConverter implements FileConverter {
           data.put("year", year);
           data.put("filing_type", filingType);
           data.put("exhibit_number", detectExhibitNumber(fileContent));
-          data.put("section_type", detectSectionType(paragraphs.get(i)));
+          data.put("section_type", sectionType);
           data.put("paragraph_number", i + 1);
-          data.put("paragraph_text", paragraphs.get(i));
-          data.put("speaker_name", extractSpeaker(paragraphs.get(i)));
-          data.put("speaker_role", extractSpeakerRole(paragraphs.get(i)));
+          data.put("paragraph_text", para);
+          data.put("speaker_name", extractSpeaker(para));
+          data.put("speaker_role", extractSpeakerRole(para));
 
           earningsRecords.add(data);
         }
@@ -5601,6 +5632,26 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     return "other";
+  }
+
+  private String detectSectionTypeWithState(String text, String currentSection) {
+    String lowerText = text.toLowerCase();
+    boolean isHeading = text.length() < 200 && (lowerText.startsWith("exhibit")
+        || lowerText.contains("remarks") || lowerText.contains("q&a")
+        || lowerText.contains("financial results"));
+
+    if (isHeading) {
+      String newSection = detectSectionType(text);
+      if (!newSection.equals("other")) {
+        return newSection;
+      }
+    }
+
+    if (currentSection != null && !currentSection.equals("other")) {
+      return currentSection;
+    }
+
+    return detectSectionType(text);
   }
 
   private String extractSpeaker(String text) {
