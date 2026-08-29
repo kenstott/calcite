@@ -3082,50 +3082,131 @@ public class SecDataFetcher {
     }
     Map<String, String> info = new HashMap<>();
     try {
-      String url = String.format(SUBMISSIONS_URL_TMPL, normalized);
-      HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
-      conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
-      // A prolific filer's CIK gets looked up once per accession that names it; if its first
-      // lookup lands on a JDK keep-alive connection the server already dropped, that request
-      // hangs to the read timeout — and the empty result only gets cached on the same thread
-      // that made it, so every other in-flight accession for that CIK races the same stale
-      // connection before the cache catches up. Disabling keep-alive costs nothing here (a
-      // one-shot small JSON fetch, cached per-CIK afterward) and removes the failure mode.
-      conn.setRequestProperty("Connection", "close");
-      conn.setConnectTimeout(8000);
-      conn.setReadTimeout(10000);
-      if (conn.getResponseCode() == 200) {
-        JsonNode node = MAPPER.readTree(conn.getInputStream());
-        String name = node.path("name").asText(null);
-        if (name != null && !name.isEmpty()) {
-          info.put("company_name", name);
-        }
-        JsonNode tickers = node.path("tickers");
-        if (tickers.isArray() && tickers.size() > 0) {
-          info.put("ticker", tickers.get(0).asText());
-        }
-        String sic = node.path("sic").asText(null);
-        if (sic != null && !sic.isEmpty()) {
-          info.put("sic_code", sic);
-        }
-        String fye = node.path("fiscalYearEnd").asText(null);
-        if (fye != null && !fye.isEmpty()) {
-          info.put("fiscal_year_end_mmdd", fye);
-        }
-        JsonNode mailing = node.path("addresses").path("mailing");
-        if (!mailing.isMissingNode()) {
-          String street1 = mailing.path("street1").asText(null);
-          if (street1 != null && !street1.isEmpty()) {
-            info.put("mailing_address", street1);
-          }
-        }
-        indexFilingItems(node.path("filings").path("recent"));
+      JsonNode node = readSubmissionsJsonWithCache(normalized);
+      if (node != null) {
+        info = parseSubmissionsJson(node);
       }
     } catch (Exception e) {
       LOGGER.warn("Failed to fetch submissions.json for CIK {}: {}", normalized, e.getMessage());
     }
     COMPANY_INFO_CACHE.put(normalized, info);
     return info;
+  }
+
+  private static JsonNode readSubmissionsJsonWithCache(String cik) throws Exception {
+    String cacheDir = System.getenv("ETL_RAW_CACHE_DIR");
+    if (cacheDir == null) {
+      cacheDir = System.getProperty("user.home") + "/.govdata/.etl-cache";
+    }
+    java.io.File submissionsDir = new java.io.File(cacheDir, "sec/submissions");
+    submissionsDir.mkdirs();
+    java.io.File cacheFile = new java.io.File(submissionsDir, cik + ".json");
+
+    long maxAgeMs = 30L * 24 * 60 * 60 * 1000;
+    long now = System.currentTimeMillis();
+    if (cacheFile.exists() && (now - cacheFile.lastModified()) < maxAgeMs) {
+      try {
+        return MAPPER.readTree(cacheFile);
+      } catch (Exception e) {
+        LOGGER.debug("Cache read failed for {}, fetching fresh", cik);
+      }
+    }
+
+    String url = String.format(SUBMISSIONS_URL_TMPL, cik);
+    HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
+    conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+    conn.setRequestProperty("Connection", "close");
+    conn.setConnectTimeout(8000);
+    conn.setReadTimeout(10000);
+    if (conn.getResponseCode() == 200) {
+      JsonNode node = MAPPER.readTree(conn.getInputStream());
+      try {
+        MAPPER.writeValue(cacheFile, node);
+      } catch (Exception e) {
+        LOGGER.debug("Failed to write cache for {}", cik);
+      }
+      return node;
+    }
+    return null;
+  }
+
+  private static Map<String, String> parseSubmissionsJson(JsonNode node) {
+    Map<String, String> info = new HashMap<>();
+    String name = node.path("name").asText(null);
+    if (name != null && !name.isEmpty()) {
+      info.put("company_name", name);
+    }
+    JsonNode tickers = node.path("tickers");
+    if (tickers.isArray() && tickers.size() > 0) {
+      info.put("ticker", tickers.get(0).asText());
+    }
+    String sic = node.path("sic").asText(null);
+    if (sic != null && !sic.isEmpty()) {
+      info.put("sic_code", sic);
+    }
+    String fye = node.path("fiscalYearEnd").asText(null);
+    if (fye != null && !fye.isEmpty()) {
+      info.put("fiscal_year_end_mmdd", fye);
+    }
+    JsonNode addresses = node.path("addresses");
+    String mailingAddress = formatAddress(addresses.path("mailing"));
+    if (mailingAddress != null) {
+      info.put("mailing_address", mailingAddress);
+    }
+    String businessAddress = formatAddress(addresses.path("business"));
+    if (businessAddress != null) {
+      info.put("business_address", businessAddress);
+    }
+    indexFilingItems(node.path("filings").path("recent"));
+    return info;
+  }
+
+  /**
+   * Builds a full postal address string ("street1, street2, city, state zip") from one of
+   * EDGAR submissions.json's {@code addresses.mailing}/{@code addresses.business} nodes.
+   *
+   * <p>Each node carries street1, street2, city, stateOrCountry, and zipCode as separate fields;
+   * this joins the non-empty ones into a single line so city/state/ZIP are never dropped.
+   *
+   * @return the formatted address, or {@code null} if the node has no usable fields
+   */
+  private static String formatAddress(JsonNode addressNode) {
+    if (addressNode == null || addressNode.isMissingNode()) {
+      return null;
+    }
+    String street1 = addressNode.path("street1").asText(null);
+    String street2 = addressNode.path("street2").asText(null);
+    String city = addressNode.path("city").asText(null);
+    String state = addressNode.path("stateOrCountry").asText(null);
+    String zip = addressNode.path("zipCode").asText(null);
+
+    List<String> lines = new ArrayList<>();
+    if (street1 != null && !street1.isEmpty()) {
+      lines.add(street1);
+    }
+    if (street2 != null && !street2.isEmpty()) {
+      lines.add(street2);
+    }
+    StringBuilder cityStateZip = new StringBuilder();
+    if (city != null && !city.isEmpty()) {
+      cityStateZip.append(city);
+    }
+    if (state != null && !state.isEmpty()) {
+      if (cityStateZip.length() > 0) {
+        cityStateZip.append(", ");
+      }
+      cityStateZip.append(state);
+    }
+    if (zip != null && !zip.isEmpty()) {
+      if (cityStateZip.length() > 0) {
+        cityStateZip.append(' ');
+      }
+      cityStateZip.append(zip);
+    }
+    if (cityStateZip.length() > 0) {
+      lines.add(cityStateZip.toString());
+    }
+    return lines.isEmpty() ? null : String.join(", ", lines);
   }
 
   /**
