@@ -313,6 +313,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       Document doc = null;
       boolean isInlineXbrl = false;
+      boolean usedJsoupFallback = false;
 
       // Check if it's an HTML file (potential inline XBRL)
       if (fileName.endsWith(".htm") || fileName.endsWith(".html")) {
@@ -339,6 +340,7 @@ public class XbrlToParquetConverter implements FileConverter {
               LOGGER.info("Strict XML parse failed for {}: {} — falling back to JSoup",
                   xbrlPath.substring(xbrlPath.lastIndexOf('/') + 1), e.getMessage());
               doc = parseWithJsoupFallback(xbrlPath);
+              usedJsoupFallback = true;
             }
           }
         }
@@ -357,6 +359,7 @@ public class XbrlToParquetConverter implements FileConverter {
           LOGGER.info("Strict XML parse failed for {}: {} — falling back to JSoup",
               fileName, e.getMessage());
           doc = parseWithJsoupFallback(sourceFilePath);
+          usedJsoupFallback = true;
         }
       }
 
@@ -381,6 +384,19 @@ public class XbrlToParquetConverter implements FileConverter {
       String cik = extractCik(doc, sourceFilePath);
       String filingType = extractFilingType(doc, sourceFilePath);
       String periodEndDate = extractPeriodEndDate(doc, sourceFilePath);
+
+      // If JSoup fallback was used and found XBRL-like elements (context, cik, type)
+      // but cannot extract period end date for forms that require it, the file is corrupted.
+      // Mark as permanently failed, not retryable.
+      if (usedJsoupFallback && periodEndDate == null && requiresPeriodEndDate(filingType)
+          && cik != null && !cik.equals("0000000000") && filingType != null) {
+        String hintCik = metadata != null ? metadata.getHint("cik") : null;
+        String hintAcc = metadata != null ? metadata.getHint("accession") : null;
+        LOGGER.warn("Corrupted XBRL filing (malformed XML, found XBRL structure but no valid period end date): "
+            + "cik={}, accession={}, type={}, file={} — marking as invalid, no retry",
+            hintCik, hintAcc, filingType, fileName);
+        throw new IOException("Corrupted XBRL filing: found XBRL structure but missing period end date for " + filingType);
+      }
 
       // Compute actual filing date: prefer SEC submission date from EDGAR (metadata hint),
       // fall back to period end date extracted from document for standalone conversion
@@ -1938,12 +1954,31 @@ public class XbrlToParquetConverter implements FileConverter {
       // a companion fetched on any previous pass is still correct, and re-fetching it buys
       // nothing but rate-limit budget spent on bytes already held.
       String summaryPath = storageProvider.resolvePath(parentDir, "FilingSummary.xml");
+      String noSummaryMarker = storageProvider.resolvePath(parentDir, ".no-summary");
       String xbrlFileName = null;
       String summaryXml = readCachedFile(summaryPath);
       boolean summaryFromCache = summaryXml != null;
+
       if (summaryXml == null) {
-        summaryXml = downloadFile(baseUrl + "/FilingSummary.xml");
+        // Check if we previously cached a 404 for this filing — don't re-check EDGAR
+        boolean markerExists = fileExists(noSummaryMarker);
+        if (markerExists) {
+          LOGGER.info("FilingSummary.xml known absent (cached 404): {}", accessionDir);
+        } else {
+          summaryXml = downloadFile(baseUrl + "/FilingSummary.xml");
+          // Cache negative result (404) so we don't keep hitting EDGAR for this filing
+          if (summaryXml == null) {
+            try {
+              byte[] marker = "404\n".getBytes(StandardCharsets.UTF_8);
+              storageProvider.writeFile(noSummaryMarker, marker);
+              LOGGER.debug("Wrote 404 marker for {}", accessionDir);
+            } catch (Exception e) {
+              LOGGER.warn("Failed to write 404 marker for {}: {}", accessionDir, e.getMessage());
+            }
+          }
+        }
       }
+
       if (summaryXml != null) {
         xbrlFileName = parseXbrlFilenameFromSummary(summaryXml);
       }
@@ -7525,6 +7560,18 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.trace("Pattern extraction failed: {}", e.getMessage());
     }
     return null;
+  }
+
+  /**
+   * Returns true if the filing type requires a period end date for valid processing.
+   * Forms like 10-K, 10-Q represent periodic reports and must have a period end date.
+   * Forms like 8-K (current reports), insider filings (3/4/5), or 13D/G may not require it.
+   */
+  private boolean requiresPeriodEndDate(String filingType) {
+    if (filingType == null) return false;
+    String upper = filingType.toUpperCase();
+    return upper.contains("10-K") || upper.contains("10-Q")
+        || upper.contains("20-F") || upper.contains("40-F");
   }
 
   /**
