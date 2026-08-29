@@ -3102,17 +3102,34 @@ public class SecDataFetcher {
     submissionsDir.mkdirs();
     java.io.File cacheFile = new java.io.File(submissionsDir, cik + ".json");
 
-    long maxAgeMs = 30L * 24 * 60 * 60 * 1000;
-    long now = System.currentTimeMillis();
-    if (cacheFile.exists() && (now - cacheFile.lastModified()) < maxAgeMs) {
+    String url = String.format(SUBMISSIONS_URL_TMPL, cik);
+
+    // Check cache validity by comparing content size (submissions.json is append-only)
+    if (cacheFile.exists()) {
       try {
-        return MAPPER.readTree(cacheFile);
+        HttpURLConnection headConn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
+        headConn.setRequestMethod("HEAD");
+        headConn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+        headConn.setConnectTimeout(8000);
+        headConn.setReadTimeout(10000);
+        int headStatus = headConn.getResponseCode();
+        if (headStatus == 200) {
+          long remoteSize = headConn.getContentLengthLong();
+          long cachedSize = cacheFile.length();
+          if (remoteSize == cachedSize && remoteSize > 0) {
+            // Content unchanged, serve from cache
+            try {
+              return MAPPER.readTree(cacheFile);
+            } catch (Exception e) {
+              LOGGER.debug("Cache read failed for {}, fetching fresh", cik);
+            }
+          }
+        }
       } catch (Exception e) {
-        LOGGER.debug("Cache read failed for {}, fetching fresh", cik);
+        LOGGER.debug("HEAD check failed for {}, attempting full fetch: {}", cik, e.getMessage());
       }
     }
 
-    String url = String.format(SUBMISSIONS_URL_TMPL, cik);
     HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
     conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
     conn.setRequestProperty("Connection", "close");
