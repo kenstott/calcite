@@ -1183,6 +1183,13 @@ partitionedTables:
   # USGS STREAMFLOW — NWIS daily values RDB (delta by state × year, transformer)
   # ---------------------------------------------------------------------------
   - name: streamflow
+    # USGS publishes daily values continuously and later promotes provisional readings to
+    # approved. One combo covers a whole year, so the period-completion gate would otherwise mark
+    # the in-progress year complete on its first successful run and never revisit it, freezing
+    # that year at however much of it had been gauged that day. Reopening the 2 most recently
+    # published years covers both the accrual and the provisional-to-approved promotion; the hash
+    # check skips the write when nothing changed.
+    lookbackPeriods: 2
     # Freshness gate: USGS NWIS daily-values service is a live query with no meaningful
     # Last-Modified, so this hashes the response body post-fetch to skip the
     # materialize/commit when unchanged (fails open on a missing prior token).
@@ -1917,6 +1924,12 @@ partitionedTables:
   # WATER QUALITY PORTAL — measured sample results (delta by state × year)
   # ---------------------------------------------------------------------------
   - name: water_quality_samples
+    # Contributing agencies load samples to the Water Quality Portal on their own schedules, so a
+    # year keeps filling in long after it starts. One combo covers a whole year, so the
+    # period-completion gate would otherwise mark the in-progress year complete on its first
+    # successful run and never revisit it. Reopening the 2 most recently published years covers
+    # that late-arriving load; the hash check skips the write when nothing changed.
+    lookbackPeriods: 2
     # Freshness gate: waterqualitydata.us is a live query with no meaningful
     # Last-Modified, so this hashes the response body post-fetch to skip the
     # materialize/commit when unchanged (fails open on a missing prior token).

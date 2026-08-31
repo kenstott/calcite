@@ -2096,6 +2096,13 @@ partitionedTables:
   # Default dataset: 2023 data (d890d3a9-6b00-43fd-8b31-fcba4c8e2909)
   # ==========================================================================
   - name: medicaid_drug_utilization
+    # CMS adds each quarter to the annual dataset ~3 months after that quarter ends (see
+    # releaseWindow below), so a year is only complete once its Q4 lands the following March.
+    # One combo covers a whole year, so the period-completion gate would otherwise mark the
+    # in-progress year complete after its first successful run and never revisit it, leaving it
+    # holding only the quarters published by then. Reopening the 2 most recently published years
+    # covers the trailing quarter; the hash check skips the write when nothing changed.
+    lookbackPeriods: 2
     # Freshness gate: Medicaid datastore query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).

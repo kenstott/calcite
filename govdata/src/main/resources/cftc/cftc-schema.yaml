@@ -1140,6 +1140,12 @@ partitionedTables:
   # COT DISAGGREGATED FUTURES-ONLY — CFTC public Socrata (delta by year, JSON)
   # ---------------------------------------------------------------------------
   - name: cot_disaggregated_futures
+    # CFTC adds a report every week and republishes prior weeks when a reporting firm resubmits.
+    # One combo covers a whole year, so the period-completion gate would otherwise mark the
+    # in-progress year complete after its first successful run and never revisit it, leaving that
+    # year holding only the weeks published up to that day. Reopening the 2 most recently
+    # published years covers both; the hash check skips the write when nothing changed.
+    lookbackPeriods: 2
     # Freshness gate: Socrata SODA JSON query API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged.
     freshness:
