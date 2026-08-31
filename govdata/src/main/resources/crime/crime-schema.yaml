@@ -416,6 +416,15 @@ partitionedTables:
   # CDE POLICE EMPLOYMENT - Sworn officers and civilian employees
   # ---------------------------------------------------------------------------
   - name: cde_police_employment
+    # FBI CDE serves the LATEST master file, rebuilt on every monthly release and silently
+    # absorbing late and amended agency submissions for prior years -- the 2023 release
+    # restated both 2021 and 2022 (2022 violent crime went from -2.1% to +4.5%). No closing
+    # date is published, so reopen the current and two prior years; the fetch is 51 small
+    # per-state JSON calls, so the extra year is nearly free.
+    # https://ucr.fbi.gov/data-quality-guidelines-new
+    lookbackPeriods: 3
+    freshness:
+      type: hash
     pattern: "type=pe/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >

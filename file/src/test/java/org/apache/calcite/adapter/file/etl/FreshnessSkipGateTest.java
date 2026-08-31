@@ -211,6 +211,23 @@ class FreshnessSkipGateTest {
    * Builds a config with a YEAR_RANGE period dimension (so {@code hasPeriodDimension} is true and
    * the per-unit freshness gate is active) spanning {@code [startYear, endYear]}.
    */
+  /**
+   * Per-unit hash-token scoping is engaged by the table declaring a lookback, so tests that assert
+   * per-unit behaviour must set it — it is no longer implied by the freshness block.
+   */
+  private EtlPipelineConfig buildPeriodConfig(FreshnessConfig freshness, int startYear, int endYear,
+      Integer lookbackPeriods) {
+    EtlPipelineConfig base = buildPeriodConfig(freshness, startYear, endYear);
+    return EtlPipelineConfig.builder()
+        .name(base.getName())
+        .source(base.getSource())
+        .dimensions(base.getDimensions())
+        .materialize(base.getMaterialize())
+        .freshness(base.getFreshness())
+        .lookbackPeriods(lookbackPeriods)
+        .build();
+  }
+
   private EtlPipelineConfig buildPeriodConfig(FreshnessConfig freshness, int startYear, int endYear) {
     Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
     dims.put("year", DimensionConfig.builder()
@@ -228,6 +245,13 @@ class FreshnessSkipGateTest {
         .dimensions(dims)
         .materialize(MaterializeConfig.builder()
             .format(MaterializeConfig.Format.PARQUET)
+            // Partition on the fetch dimension. Per-unit freshness skipping is only enabled when
+            // the partition key is a function of the fetch unit -- without this the fixture would
+            // model a table where skipping one year could drop another, and the per-unit behaviour
+            // these tests assert is correctly withheld from such a table.
+            .partition(MaterializePartitionConfig.builder()
+                .columns(java.util.Collections.singletonList("year"))
+                .build())
             .output(MaterializeOutputConfig.builder()
                 .location(tempDir.toString())
                 .build())
@@ -549,24 +573,24 @@ class FreshnessSkipGateTest {
   }
 
   /**
-   * HASH-type freshness with {@code trailing_window} set must scope its post-download token
+   * HASH-type freshness on a table declaring a lookback must scope its post-download token
    * PER FETCH UNIT, not per pipeline — otherwise processing year=2023 then year=2024 in the same
    * run would compare 2024's hash against 2023's just-stored hash (a single pipeline-scoped
    * token), always see "different", and always write, even when neither year's content actually
    * changed since the last run.
    *
-   * <p>Runs a two-year (2023, 2024) HASH+trailing_window pipeline twice with IDENTICAL fetched
+   * <p>Runs a two-year (2023, 2024) HASH + lookback pipeline twice with IDENTICAL fetched
    * data both times. The first run writes both years (no prior tokens). The second run must write
    * NEITHER year — proving each year's hash was compared against its OWN prior token, not a
    * cross-contaminated shared one.
    */
-  @Test void testHashFreshnessScopedPerUnitWhenTrailingWindowSet() throws IOException {
+  @Test void testHashFreshnessScopedPerUnitWhenLookbackSet() throws IOException {
     StorageProvider sp = new LocalFileStorageProvider();
     MemoryFreshnessTracker tracker = new MemoryFreshnessTracker();
 
     Map<String, Object> hashFreshnessMap = new HashMap<String, Object>();
     hashFreshnessMap.put("type", "hash");
-    hashFreshnessMap.put("trailing_window", 2);
+    // per-unit hash scoping now comes from the table-level lookback, declared below
     FreshnessConfig freshnessConfig = FreshnessConfig.fromMap(hashFreshnessMap);
 
     // Probe result is irrelevant for HASH (post-download only; HttpSource#probe returns an empty
@@ -583,7 +607,7 @@ class FreshnessSkipGateTest {
     CountingDataProvider provider = new CountingDataProvider(Collections.singletonList(row));
     CountingDataWriter writer = new CountingDataWriter();
 
-    EtlPipelineConfig config = buildPeriodConfig(freshnessConfig, 2023, 2024);
+    EtlPipelineConfig config = buildPeriodConfig(freshnessConfig, 2023, 2024, 2);
 
     // --- First run: no per-unit tokens yet — both years must be written. ---
     StubProbePipeline run1 = new StubProbePipeline(
@@ -612,9 +636,9 @@ class FreshnessSkipGateTest {
   }
 
   /**
-   * The complement to {@link #testHashFreshnessScopedPerUnitWhenTrailingWindowSet}: that test
+   * The complement to {@link #testHashFreshnessScopedPerUnitWhenLookbackSet}: that test
    * only proves "no prior token → write" and "identical content → skip". Neither proves the
-   * scenario trailing_window exists for — an upstream agency REVISING a period's data (e.g. BLS
+   * scenario the lookback exists for — an upstream agency REVISING a period's data (e.g. BLS
    * restating a prior year in its February benchmark) — because "no prior token" is a first-ever
    * fetch, not a changed re-fetch of a period already held.
    *
@@ -629,7 +653,7 @@ class FreshnessSkipGateTest {
 
     Map<String, Object> hashFreshnessMap = new HashMap<String, Object>();
     hashFreshnessMap.put("type", "hash");
-    hashFreshnessMap.put("trailing_window", 2);
+    // per-unit hash scoping now comes from the table-level lookback, declared below
     FreshnessConfig freshnessConfig = FreshnessConfig.fromMap(hashFreshnessMap);
 
     HttpSource.ProbeResult probeResult = new HttpSource.ProbeResult(new HashMap<String, String>(), null);
@@ -637,7 +661,7 @@ class FreshnessSkipGateTest {
         HttpSourceConfig.builder().url("https://example.invalid/api/{year}").build(),
         probeResult);
 
-    EtlPipelineConfig config = buildPeriodConfig(freshnessConfig, 2023, 2024);
+    EtlPipelineConfig config = buildPeriodConfig(freshnessConfig, 2023, 2024, 2);
 
     Map<String, Object> stableRow = new HashMap<String, Object>();
     stableRow.put("id", 1);

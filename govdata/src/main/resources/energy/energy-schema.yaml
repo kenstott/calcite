@@ -119,14 +119,24 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 2
+    # EIA publishes roughly two MONTHS after the reference month (PSM: "within 60 days
+    # of the close of the reference month"; EIA-923's Aug 2026 release carried Jun 2026).
+    # Expressed as a year-granular lag this rounded up and capped the table ~2 years
+    # short of what is published.
+    # https://www.eia.gov/petroleum/supply/monthly/pdf/psmnotes.pdf
+    dataMonthLag: 2
 
   # EIA retail sales year range
   eia_elec_price_years: &eia_elec_price_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 2
+    # EIA publishes roughly two MONTHS after the reference month (PSM: "within 60 days
+    # of the close of the reference month"; EIA-923's Aug 2026 release carried Jun 2026).
+    # Expressed as a year-granular lag this rounded up and capped the table ~2 years
+    # short of what is published.
+    # https://www.eia.gov/petroleum/supply/monthly/pdf/psmnotes.pdf
+    dataMonthLag: 2
 
   # EIA-861 utility annual year range (2008+; pre-2008 XLSX format differs).
   # dataLag: 3 — the f861{effective_year}.zip archive only publishes through current-3
@@ -163,7 +173,12 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 2
+    # EIA publishes roughly two MONTHS after the reference month (PSM: "within 60 days
+    # of the close of the reference month"; EIA-923's Aug 2026 release carried Jun 2026).
+    # Expressed as a year-granular lag this rounded up and capped the table ~2 years
+    # short of what is published.
+    # https://www.eia.gov/petroleum/supply/monthly/pdf/psmnotes.pdf
+    dataMonthLag: 2
 
   # EIA SEDS state energy consumption year range
   eia_seds_years: &eia_seds_years
@@ -193,14 +208,24 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 2
+    # EIA publishes roughly two MONTHS after the reference month (PSM: "within 60 days
+    # of the close of the reference month"; EIA-923's Aug 2026 release carried Jun 2026).
+    # Expressed as a year-granular lag this rounded up and capped the table ~2 years
+    # short of what is published.
+    # https://www.eia.gov/petroleum/supply/monthly/pdf/psmnotes.pdf
+    dataMonthLag: 2
 
   # EIA refinery operations year range
   eia_refinery_years: &eia_refinery_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 2
+    # EIA publishes roughly two MONTHS after the reference month (PSM: "within 60 days
+    # of the close of the reference month"; EIA-923's Aug 2026 release carried Jun 2026).
+    # Expressed as a year-granular lag this rounded up and capped the table ~2 years
+    # short of what is published.
+    # https://www.eia.gov/petroleum/supply/monthly/pdf/psmnotes.pdf
+    dataMonthLag: 2
 
   # MSHA coal mines year range (MinesProdYearly contains all history; transformer filters by year)
   msha_coal_years: &msha_coal_years
@@ -219,14 +244,13 @@ partitionedTables:
   # EIA ELECTRICITY GENERATION - Monthly generation and fuel consumption by state
   # ---------------------------------------------------------------------------
   - name: eia_electricity_generation
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # 24 periods = 2 YEARS of monthly data. EIA-923 monthly data are preliminary and restated
+    # ONCE, when the annual EIA-923 for that data year is finalized (~Sept of year+1) -- not
+    # every month. Post-final revisions occur only for errors >=1% nationally.
+    # https://www.eia.gov/electricity/monthly/pdf/technotes.pdf
+    lookbackPeriods: 24
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_elec_gen/year=*/month=*/*.parquet"
     # DQ sample cap (GOVDATA_DQ mode): ~120k rows/year (state × source × sector × 12 months),
     # fetched per-year (backfill_period: annual) via ~24 paginated EIA API pages. Cap each
@@ -368,14 +392,12 @@ partitionedTables:
   # EIA ELECTRICITY PRICES - Annual retail electricity sales and prices by state
   # ---------------------------------------------------------------------------
   - name: eia_electricity_prices
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # EIA-861 retail sales go early-release (Aug) then final (Oct) in year+1, and final files are
+    # re-posted with corrections afterwards (the 2024 final was updated Dec 2025); 2 spans that.
+    # https://www.eia.gov/electricity/data/eia861/
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_elec_price/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -468,14 +490,12 @@ partitionedTables:
   # EIA UTILITY ANNUAL - EIA-861 Annual Electric Power Industry Report
   # ---------------------------------------------------------------------------
   - name: eia_utility_annual
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # EIA-861 archive ZIPs are re-posted with corrections after the October final (the 2024 final
+    # was updated Dec 2025); 2 catches a late or corrected archive.
+    # https://www.eia.gov/electricity/data/eia861/
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_utility/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -638,14 +658,12 @@ partitionedTables:
   # EIA POWER PLANTS - EIA-860 Annual Electric Generator Report
   # ---------------------------------------------------------------------------
   - name: eia_power_plants
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # EIA-860 goes early-release (June) then final (Sept) in year+1. With dataLag: 3 the fetch is
+    # already post-final, so the second period exists to catch a late-posted or corrected archive,
+    # not a revision. https://www.eia.gov/electricity/data/eia860/
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_plant/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -837,14 +855,13 @@ partitionedTables:
   # EIA CAPACITY CHANGES - EIA-860M Monthly Generator Capacity Changes
   # ---------------------------------------------------------------------------
   - name: eia_capacity_changes
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # The archived december_generator{year}.xlsx is an immutable point-in-time snapshot --
+    # EIA-860M corrections land in SUBSEQUENT months' files, a different URL, never by editing
+    # this one. 1 exists only so the ~Feb publication of the prior December file is not locked
+    # out by the period-completion gate. https://www.eia.gov/electricity/data/eia860m/
+    lookbackPeriods: 1
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_capacity/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -975,14 +992,14 @@ partitionedTables:
   # EIA FOSSIL FUEL PRODUCTION - Crude oil and natural gas production
   # ---------------------------------------------------------------------------
   - name: eia_fossil_fuel_production
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # 36 periods = 3 YEARS of monthly data. EIA-914 re-estimates the two prior months every month,
+    # and the annual PSA (Aug) restates up to 10 prior years of oil production, the NGA (Oct) two
+    # prior years of gas. EIA considers a state final "prior to two calendar years back", so 2
+    # years sat exactly on that boundary with no margin; 3 covers it.
+    # https://www.eia.gov/petroleum/production/pdf/eia914revisionpolicy.pdf
+    lookbackPeriods: 36
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_fossil/year=*/month=*/*.parquet"
     partitions: *standard_partitions_monthly
     comment: >
@@ -1306,14 +1323,14 @@ partitionedTables:
   # EIA PETROLEUM STOCKS - Weekly petroleum product stocks by PADD
   # ---------------------------------------------------------------------------
   - name: eia_petroleum_stocks
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # WPSR data are NEVER revised: "Absent significant errors, omissions, or natural disasters, we
+    # never revise the data published in the WPSR." The lookback here is for ACCRUAL, not revision
+    # -- dataLag: 0 with a year-grain partition holding weekly rows means the current year keeps
+    # gaining ~52 rows, and the second period catches the late-December weeks published after the
+    # calendar rolls over. https://www.eia.gov/tools/faqs/faq.php?id=1398&t=6
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_pet_stocks/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1517,14 +1534,12 @@ partitionedTables:
   # EIA CRUDE OIL IMPORTS - EIA-814 Monthly Import Survey
   # ---------------------------------------------------------------------------
   - name: eia_crude_oil_imports
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # EIA-814 feeds the Petroleum Supply Reporting System: "monthly revisions typically affect
+    # data for the current year and up to two prior years", with final values set by the PSA each
+    # August. https://www.eia.gov/petroleum/supply/monthly/pdf/psmnotes.pdf
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_crude_imp/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1642,14 +1657,12 @@ partitionedTables:
   # EIA REFINERY OPERATIONS - Monthly refinery input and capacity data
   # ---------------------------------------------------------------------------
   - name: eia_refinery_operations
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # 24 periods = 2 YEARS of monthly data. Petroleum Supply Monthly: revisions affect the current
+    # year and up to two prior years, finalized by the PSA each August; PSA values reflect all PSM
+    # resubmissions. https://www.eia.gov/petroleum/supply/monthly/pdf/psmnotes.pdf
+    lookbackPeriods: 24
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=eia_refinery/year=*/month=*/*.parquet"
     partitions: *standard_partitions_monthly
     comment: >
@@ -1757,14 +1770,16 @@ partitionedTables:
   # MSHA COAL MINES - MSHA MinesProdYearly coal production data
   # ---------------------------------------------------------------------------
   - name: eia_coal_mines
-    # EIA states its monthly series are "preliminary, likely to be revised the
-    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
-    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
-    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
-    # the year permanently.
+    # MSHA MinesProdYearly (Form 7000-2 quarterly filings rolled to calendar year) -- NOT an EIA
+    # source, despite the table name. Republished weekly as a complete file replacement. A vintage
+    # diff of the retained raw cache (2026-06-12 vs 2026-08-28) shows the in-progress year churning
+    # heavily and the prior year still absorbing late/amended filings (7 keys edited), with every
+    # earlier year back to 2009 byte-identical -- so the current + prior data year is the whole
+    # revision surface. MSHA publishes no finality policy, so this rests on that measurement.
+    # https://arlweb.msha.gov/opengovernmentdata/ogimsha.asp
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=msha_coal/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >

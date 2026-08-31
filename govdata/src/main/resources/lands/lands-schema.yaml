@@ -1071,6 +1071,12 @@ partitionedTables:
   # NPS VISITATION — NPS IRMA monthly visitation statistics
   # ---------------------------------------------------------------------------
   - name: nps_visitation
+    # NPS visitation is preliminary until the calendar year is finalized in Q1 of the
+    # following year, so the current AND prior year can both still change; 2 reopens exactly
+    # that. https://www.nps.gov/subjects/socialscience/statistics-faq.htm
+    lookbackPeriods: 2
+    freshness:
+      type: hash
     pattern: "type=nps_visitation/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >

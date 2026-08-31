@@ -131,6 +131,12 @@ partitionedTables:
 
   # --- REFERENCE JOLTS INDUSTRIES ---
   - name: jolts_industries
+    # No lookback: this is a CODE LIST, not a time series -- there are no values to restate and
+    # no period dimension to count. hash is required, not preferred: BLS restamps every file
+    # under /pub/time.series/jt/ with an identical Last-Modified and ETag on each monthly
+    # release, so a probe-type gate would fire monthly on unchanged content.
+    freshness:
+      type: hash
     pattern: "jolts_industries.parquet"
     sourcePaths:
       ftpFiles:
@@ -195,6 +201,10 @@ partitionedTables:
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: jolts_dataelements
+    # No lookback: code list, no period dimension. hash is required -- BLS restamps every file
+    # under /pub/time.series/jt/ with an identical Last-Modified and ETag each monthly release.
+    freshness:
+      type: hash
     pattern: "jolts_dataelements.parquet"
     sourcePaths:
       ftpFiles:

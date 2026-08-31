@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -434,6 +433,15 @@ public class EtlPipeline {
         }
       }
 
+      // Widen the year range down to the oldest period the lookback selected, BEFORE expanding.
+      // Reopening works by index into the generated combinations, so a period the dimension never
+      // produced cannot be reopened however it was selected. In daily mode the configured range is
+      // a single year, which is why the lookback is otherwise inert there — the window looks set
+      // and does nothing. Resolving the lookback first and lowering the start is what makes it
+      // reach; it is a no-op for tables that declare none.
+      Map<String, DimensionConfig> effectiveDimensions =
+          widenYearRangeForLookback(config, pipelineName);
+
       // Phase 1: Expand dimensions (with optional custom DimensionResolver from hooks)
       LOGGER.info("Phase 1: Expanding dimensions for pipeline '{}'", pipelineName);
       DimensionResolver dimensionResolver = loadDimensionResolver(config.getHooks());
@@ -444,7 +452,7 @@ public class EtlPipeline {
       // Check if partitioned expansion is applicable (CUSTOM dimensions with resolver).
       // planPartitions returns null if not applicable, signaling standard expand.
       DimensionPartitionPlan partitionPlan =
-          dimensionIterator.planPartitions(config.getDimensions());
+          dimensionIterator.planPartitions(effectiveDimensions);
       boolean usePartitionedExpansion = partitionPlan != null;
 
       List<Map<String, String>> combinations = null;
@@ -472,7 +480,7 @@ public class EtlPipeline {
             partitionPlan.getPartitionCount(), partitionPlan.getContextKey(),
             totalBatches);
       } else {
-        combinations = dimensionIterator.expand(config.getDimensions());
+        combinations = dimensionIterator.expand(effectiveDimensions);
         totalBatches = combinations.size();
         dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
         LOGGER.info("Expanded to {} dimension combinations", totalBatches);
@@ -570,17 +578,19 @@ public class EtlPipeline {
         // even if a per-combo TTL would otherwise re-queue it.
         removePeriodCompleteIndices(pipelineName, combinations, standardUnprocessedIndices);
 
-        // Force-reopen freshness.trailing_window periods (e.g. the current year + prior year for
-        // employment_statistics — BLS's Feb benchmark revision restates the prior calendar year).
+        // Force-reopen the most recently published periods (lookbackPeriods) so their freshness is
+        // re-evaluated — e.g. BLS restates 5 years of seasonally adjusted data each February.
         // Every gate above is permanent once a combo is first fully processed: the per-combo
         // tracker (the bulk filterUnprocessed / Phase 1.5 self-heal quick-check above) and the
         // per-period 'complete' marker just consulted by removePeriodCompleteIndices have no
         // automatic re-check tied to the calendar. Rather than special-case each of those gates,
-        // re-add any trailing-window combo here regardless of which one dropped it; the
+        // re-add any combo in a looked-back period here regardless of which one dropped it; the
         // hash-freshness gate in processSingleBatch then decides whether the re-fetch actually
         // results in a write (skip-vs-overwrite), so an unrevised period churns no new snapshot.
-        reopenTrailingWindowPeriods(pipelineName, freshnessConfig, combinations,
-            standardUnprocessedIndices);
+        reopenLookbackPeriods(pipelineName,
+            PeriodLookback.resolve(pipelineName, config.getDimensions(),
+                config.getLookbackPeriods(), lookbackFloorYear(config), incrementalTracker),
+            combinations, standardUnprocessedIndices);
 
         // Unavailable skip: drop any combo whose latest marker is state="unavailable" and the
         // retry window has not elapsed (per-schema errorHandling.notFoundRetryDays, default 7).
@@ -785,19 +795,31 @@ public class EtlPipeline {
       // units by their full fetch-variable set, so per-state tokens are tracked independently.
       boolean templatedMultiUnitFetch =
           config.getDimensions() != null && !config.getDimensions().isEmpty();
-      // HASH stays excluded from this pre-download probe path UNLESS trailing_window is set: HASH
+      // HASH stays excluded from this pre-download probe path UNLESS a lookback is set: HASH
       // can only be computed from the downloaded body (HttpSource#probe's HASH case is a
       // documented no-op — empty ProbeResult, no request — and FreshnessCheck#token returns null
       // for HASH when passed a null `content`, which this call always does), so relaxing the
       // exclusion never routes HASH through a pre-download skip here. The real per-unit HASH skip
-      // is the post-download gate in processSingleBatch (hashFreshnessActive), which trailing
-      // periods now also engage per-unit — see the per-unit hash token scoping there.
+      // is the post-download gate in processSingleBatch (hashFreshnessActive), which looked-back
+      // periods also engage per-unit — see the per-unit hash token scoping there.
       boolean hashPreDownloadExcluded = freshnessConfig != null
           && freshnessConfig.getType() == FreshnessConfig.Type.HASH
-          && freshnessConfig.getTrailingWindow() == null;
+          && config.getLookbackPeriods() == null;
+      // Per-unit skipping is only safe when the partition key is a function of the fetch unit;
+      // otherwise a run that wrote some units would replace the partition with a subset and drop
+      // the rest. Falling back to all-or-nothing removes an optimization without changing what is
+      // written, and is what these tables did before per-unit skipping was extended to them.
+      Set<String> unsafeDims = PerUnitSkipSafety.unsafeDimensions(config);
+      if (!unsafeDims.isEmpty()) {
+        LOGGER.warn("Per-unit freshness DISABLED for '{}': fetch dimension(s) {} are not in the "
+            + "partition key, so a per-unit skip could replace the partition with a subset. "
+            + "Falling back to all-or-nothing. Add them to the partition to restore skipping.",
+            pipelineName, unsafeDims);
+      }
       perUnitFreshnessEnabled = (hasPeriod || templatedMultiUnitFetch)
           && freshnessConfig != null
           && !hashPreDownloadExcluded
+          && unsafeDims.isEmpty()
           && dataSource instanceof HttpSource;
       // Probe+capture always runs (to seed the token on a cold run); only the skip is gated on
       // having committed data, exactly like the pipeline-level gate above.
@@ -2147,16 +2169,16 @@ public class EtlPipeline {
     boolean hashFreshnessActive = freshnessConfigForHash != null
         && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
         && dataSource instanceof HttpSource;
-    // A per-year (or otherwise per-unit) templated table with trailing_window set processes
+    // A per-year (or otherwise per-unit) templated table with a lookback set processes
     // MULTIPLE units in one run (e.g. year=2025 then year=2026). The bare pipelineName token
     // below is a SINGLE scalar for the whole pipeline: comparing unit N's hash against the token
     // unit N-1 just wrote would always see "different" and always write, defeating the point of
     // the check (churns a snapshot every run, though not unsafe). Scope the token per-unit here,
     // same as the ETAG/LAST_MODIFIED per-unit gate above (unitKey = pipeline::freshnessUnitKey).
     // Existing pipeline-scoped HASH tables (house_price_index, fair_market_rents — single-URL,
-    // one unit per run) do not set trailing_window, so their behavior is unchanged.
-    boolean hashTokenPerUnit = hashFreshnessActive
-        && freshnessConfigForHash.getTrailingWindow() != null;
+    // one unit per run) declare no lookback, so their behavior is unchanged.
+    boolean hashTokenPerUnit = hashFreshnessActive && config.getLookbackPeriods() != null
+        && PerUnitSkipSafety.isSafe(config);
     String hashTokenKey = hashTokenPerUnit
         ? pipelineName + "::" + freshnessUnitKey(variables)
         : pipelineName;
@@ -2348,7 +2370,7 @@ public class EtlPipeline {
                   computedDeltaHwm[0], pipelineName);
             }
           }
-          // Persist hash freshness token after a successful write. Per-unit (trailing_window)
+          // Persist hash freshness token after a successful write. Per-unit (lookback)
           // tokens are deferred to pendingUnitFreshnessTokens — published only after the
           // whole-pipeline writer.commit() succeeds, same as the ETAG/LAST_MODIFIED per-unit gate
           // above — so a later commit failure can't leave a token recorded for data that was
@@ -2876,7 +2898,7 @@ public class EtlPipeline {
    *
    * <p>Marking a combo processed here (an existing partition = "done") is otherwise permanent,
    * same as a real successful write — this method does not need its own trailing-window
-   * special-case because {@link #reopenTrailingWindowPeriods} runs after this method's result
+   * special-case because {@link #reopenLookbackPeriods} runs after this method's result
    * feeds into the Phase 2 unprocessed set and unconditionally re-adds any trailing-window combo,
    * regardless of whether this self-heal (or the plain per-combo tracker) is what excluded it.
    *
@@ -3258,63 +3280,109 @@ public class EtlPipeline {
   }
 
   /**
-   * Force-reopens combos whose period falls within {@code freshness.trailing_window}, adding
-   * them back into {@code unprocessedIndices} regardless of whatever excluded them — the
+   * Force-reopens combos belonging to a previously-published period selected by the lookback,
+   * adding them back into {@code unprocessedIndices} regardless of whatever excluded them — the
    * per-combo tracker's permanent "already processed" state (from a prior successful write, or
    * from Phase 1.5's self-heal treating an existing Iceberg partition as done) or the per-period
-   * 'complete' marker. No-op when the freshness config has no {@code trailing_window} set.
+   * 'complete' marker.
+   *
+   * <p>Eligibility is set membership, not a comparison against the clock: {@link PeriodLookback}
+   * has already walked back over the periods this pipeline actually published and chosen the most
+   * recent {@code lookbackPeriods} of them. A combo whose period was never published is therefore
+   * untouched here — it is already unprocessed and is reached by the ordinary path.
    *
    * @param pipelineName       the pipeline name
-   * @param freshnessConfig    the pipeline's freshness config, or null
+   * @param lookbackPeriods    period-value maps to reopen, from {@link PeriodLookback#resolve}
    * @param combinations       all combinations (indexed by the set entries)
-   * @param unprocessedIndices mutable set of indices considered unprocessed; combos within the
-   *                           trailing window are added back in place
+   * @param unprocessedIndices mutable set of indices considered unprocessed; matching combos are
+   *                           added back in place
    */
-  private void reopenTrailingWindowPeriods(String pipelineName, FreshnessConfig freshnessConfig,
-      List<Map<String, String>> combinations, Set<Integer> unprocessedIndices) {
-    if (freshnessConfig == null || freshnessConfig.getTrailingWindow() == null
+  /**
+   * Returns {@code config} with its {@code year} dimension start lowered far enough to generate
+   * every period the lookback selected, or unchanged when nothing needs widening.
+   *
+   * <p>The lookback chooses periods from what the pipeline has published; this makes those periods
+   * reachable. The two are separate on purpose — selection is data-anchored and does no calendar or
+   * lag arithmetic, while this only adjusts the range so the selection can be acted on.
+   *
+   * @param config the pipeline config
+   * @param pipelineName the pipeline name, for the period-completion lookups and logging
+   * @return the dimension map to expand — year range widened, or the original map
+   */
+  private Map<String, DimensionConfig> widenYearRangeForLookback(EtlPipelineConfig config,
+      String pipelineName) {
+    Map<String, DimensionConfig> dimensions = config.getDimensions();
+    Integer lookback = config.getLookbackPeriods();
+    if (lookback == null || dimensions == null) {
+      return dimensions;
+    }
+    DimensionConfig year = dimensions.get("year");
+    if (year == null || year.getType() != DimensionType.YEAR_RANGE || year.getStart() == null) {
+      return dimensions;
+    }
+    List<Map<String, String>> periods = PeriodLookback.resolve(pipelineName, dimensions,
+        lookback, lookbackFloorYear(config), incrementalTracker);
+    int oldest = PeriodLookback.oldestYear(periods);
+    if (oldest == Integer.MAX_VALUE || oldest >= year.getStart()) {
+      return dimensions;
+    }
+
+    Map<String, DimensionConfig> widened = new LinkedHashMap<>(dimensions);
+    widened.put("year", year.withStart(oldest));
+    LOGGER.info("Lookback: widened '{}' year range start {} -> {} to cover {} published period(s)",
+        pipelineName, year.getStart(), oldest, periods.size());
+    return widened;
+  }
+
+  /**
+   * Lowest year the lookback walk may probe, so a table with little or nothing published cannot
+   * walk indefinitely. Taken from the year dimension's declared start (or its hard {@code minYear}
+   * floor), since a period below that was never in scope to publish.
+   *
+   * @param config the pipeline config
+   * @return the floor year
+   */
+  private static int lookbackFloorYear(EtlPipelineConfig config) {
+    Map<String, DimensionConfig> dimensions = config.getDimensions();
+    DimensionConfig year = dimensions != null ? dimensions.get("year") : null;
+    if (year != null) {
+      if (year.getStart() != null) {
+        return year.getStart();
+      }
+      if (year.getMinYear() != null) {
+        return year.getMinYear();
+      }
+    }
+    // No declared floor: bound the walk generously rather than letting it run to the step cap.
+    return PipelineClock.currentYear() - 50;
+  }
+
+  private void reopenLookbackPeriods(String pipelineName,
+      List<Map<String, String>> lookbackPeriods, List<Map<String, String>> combinations,
+      Set<Integer> unprocessedIndices) {
+    if (lookbackPeriods == null || lookbackPeriods.isEmpty()
         || combinations == null || combinations.isEmpty()) {
       return;
     }
+    Set<String> reopenKeys = new HashSet<>();
+    for (Map<String, String> period : lookbackPeriods) {
+      reopenKeys.add(IncrementalTracker.periodCompletionKey(pipelineName, period));
+    }
     int reopened = 0;
     for (int i = 0; i < combinations.size(); i++) {
-      if (isWithinTrailingWindow(freshnessConfig, combinations.get(i))
+      Map<String, String> combo = combinations.get(i);
+      if (!IncrementalTracker.hasCanonicalPeriod(combo)) {
+        continue;
+      }
+      if (reopenKeys.contains(IncrementalTracker.periodCompletionKey(pipelineName, combo))
           && unprocessedIndices.add(i)) {
         reopened++;
       }
     }
     if (reopened > 0) {
-      LOGGER.info("Trailing window: force-reopened {} combo(s) within trailing_window={} for "
-          + "'{}', regardless of prior completion/self-heal state",
-          reopened, freshnessConfig.getTrailingWindow(), pipelineName);
-    }
-  }
-
-  /**
-   * True if {@code combo}'s {@code year} is within the most recent {@code trailing_window}
-   * periods, compared against the actual current calendar year — e.g. {@code trailing_window: 2}
-   * means the current year and the immediately prior year. Reuses the same
-   * {@link Calendar#YEAR}-based "current year" calculation already used by
-   * {@link DimensionIterator}'s YEAR_RANGE resolution, rather than a second ad-hoc clock. Combos
-   * with no (or an unparsable) {@code year} are never in the trailing window — a table without a
-   * canonical year dimension has nothing for {@code trailing_window} to compare against.
-   */
-  private static boolean isWithinTrailingWindow(FreshnessConfig freshnessConfig,
-      Map<String, String> combo) {
-    Integer trailingWindow = freshnessConfig.getTrailingWindow();
-    if (trailingWindow == null || trailingWindow <= 0 || combo == null) {
-      return false;
-    }
-    String yearStr = combo.get("year");
-    if (yearStr == null || yearStr.isEmpty()) {
-      return false;
-    }
-    try {
-      int year = Integer.parseInt(yearStr);
-      int currentYear = Calendar.getInstance().get(Calendar.YEAR);
-      return currentYear - year <= trailingWindow - 1;
-    } catch (NumberFormatException e) {
-      return false;
+      LOGGER.info("Lookback: force-reopened {} combo(s) across {} published period(s) for '{}', "
+          + "regardless of prior completion/self-heal state",
+          reopened, lookbackPeriods.size(), pipelineName);
     }
   }
 

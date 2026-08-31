@@ -1657,6 +1657,14 @@ partitionedTables:
   # COMMUNICATION COSTS — Internal communications by corporations/unions
   # ==========================================================================
   - name: communication_costs
+    # 2 = the two most recent PUBLISHED election cycles; the walk counts published periods, so
+    # the even-year cadence needs no inflated value. hash, NOT last_modified: the FEC
+    # regenerates every cycle file daily (verified 2026-08-30: files back to 2016 all carried a
+    # same-day timestamp), and there is no amendment deadline, so a closed cycle can still
+    # change. https://www.fec.gov/help-candidates-and-committees/filing-reports/electronic-filing/
+    lookbackPeriods: 2
+    freshness:
+      type: hash
     pattern: "type=communication_costs/year={year}/costs.parquet"
     partitions:
       style: hive

@@ -22,7 +22,6 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -182,11 +181,10 @@ public class DimensionIterator {
       if (config.getType() != DimensionType.YEAR_RANGE || !config.isMonthlyYtd()) {
         continue;
       }
-      // Calendar.MONTH is 0-based, so its value is exactly the number of the last fully
-      // completed month: June (MONTH=5) -> 5 (May is the last closed month); January
-      // (MONTH=0) -> 0, meaning no month has completed yet for the current year.
-      int currentYear = Calendar.getInstance().get(Calendar.YEAR);
-      int lastCompletedMonth = Calendar.getInstance().get(Calendar.MONTH);
+      // lastCompletedMonth is 1-based and 0 in January, meaning no month of the current year has
+      // completed yet: June -> 5 (May is the last closed month).
+      int currentYear = PipelineClock.currentYear();
+      int lastCompletedMonth = PipelineClock.lastCompletedMonth();
       int dropped = 0;
       Iterator<Map<String, String>> it = combinations.iterator();
       while (it.hasNext()) {
@@ -632,7 +630,7 @@ public class DimensionIterator {
     Integer dataLag = config.getDataLag();
     int effectiveMax = (maxYear != null) ? maxYear : Integer.MAX_VALUE;
     if (dataLag != null && dataLag > 0) {
-      int lagYear = Calendar.getInstance().get(Calendar.YEAR) - dataLag;
+      int lagYear = PipelineClock.currentYear() - dataLag;
       effectiveMax = Math.min(effectiveMax, lagYear);
     }
     boolean hasFilter = minYear != null || effectiveMax != Integer.MAX_VALUE;
@@ -725,18 +723,22 @@ public class DimensionIterator {
       return new ArrayList<String>();
     }
 
-    int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+    int currentYear = PipelineClock.currentYear();
     int lag = dataLag != null ? dataLag : 0;
 
     if (step == null || step == 0) {
       step = 1;
     }
 
-    // Latest available data year = currentYear - dataLag, adjusted for releaseMonth.
-    int latestEffectiveYear = currentYear - lag;
+    // Latest available data period = now minus the publication lag, in whichever unit declared it.
+    // Going through Period rather than subtracting years keeps the month case ordinary arithmetic:
+    // two months before January is the prior November, and the year falls out of that rather than
+    // needing a boundary special-case.
+    int latestEffectiveYear =
+        PipelineClock.today().withDayOfMonth(1).minus(config.getLagOffset()).getYear();
     Integer releaseMonth = config.getReleaseMonth();
     if (releaseMonth != null && releaseMonth >= 1 && releaseMonth <= 12) {
-      int currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1;
+      int currentMonth = PipelineClock.currentMonth();
       if (currentMonth < releaseMonth) {
         latestEffectiveYear = latestEffectiveYear - 1;
         LOGGER.debug("Year range dimension '{}' adjusted for releaseMonth={}: latestEffectiveYear={}",

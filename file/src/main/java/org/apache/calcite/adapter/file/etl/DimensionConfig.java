@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -86,6 +87,46 @@ public class DimensionConfig {
   private final boolean descending;
   private final Integer cadenceStart;
   private final Integer cadenceLength;
+  private final Integer dataMonthLag;
+
+  /**
+   * Returns a copy of this dimension with a different range start, leaving every other setting
+   * intact. Used to lower a year range so the periods a lookback selected are actually generated —
+   * reopening indexes into the expanded combinations, so a period that was never produced cannot
+   * be reopened.
+   *
+   * @param newStart the replacement start year
+   * @return a copy with {@code start} replaced
+   */
+  public DimensionConfig withStart(int newStart) {
+    Builder b = builder()
+        .name(this.name)
+        .type(this.type)
+        .start(newStart)
+        .end(this.end)
+        .step(this.step)
+        .dataLag(this.dataLag)
+        .dataMonthLag(this.dataMonthLag)
+        .releaseMonth(this.releaseMonth)
+        .monthlyYtd(this.monthlyYtd)
+        .skipWeekends(this.skipWeekends)
+        .values(this.values)
+        .sql(this.sql)
+        .source(this.source)
+        .path(this.path)
+        .properties(this.properties)
+        .excludeYears(this.excludeYears)
+        .minYear(this.minYear)
+        .maxYear(this.maxYear)
+        .effectiveYearField(this.effectiveYearField)
+        .effectiveMonthField(this.effectiveMonthField)
+        .weekYear(this.weekYear)
+        .format(this.format)
+        .descending(this.descending)
+        .cadenceStart(this.cadenceStart)
+        .cadenceLength(this.cadenceLength);
+    return b.build();
+  }
 
   private DimensionConfig(Builder builder) {
     this.name = builder.name;
@@ -118,6 +159,7 @@ public class DimensionConfig {
     this.descending = builder.descending;
     this.cadenceStart = builder.cadenceStart;
     this.cadenceLength = builder.cadenceLength;
+    this.dataMonthLag = builder.dataMonthLag;
   }
 
   /**
@@ -163,6 +205,33 @@ public class DimensionConfig {
    */
   public Integer getDataLag() {
     return dataLag;
+  }
+
+  /**
+   * Publication lag expressed in months — the same concept as {@link #getDataLag()} at a finer
+   * granularity, so {@code dataLag: 2} and {@code dataMonthLag: 24} are equivalent. The two are
+   * mutually exclusive; declaring both fails at load. Null when not declared.
+   *
+   * <p>Exists because sources routinely publish a month or two in arrears, which a year-granular
+   * lag can only express by rounding up — discarding the most recent published data.
+   */
+  public Integer getDataMonthLag() {
+    return dataMonthLag;
+  }
+
+  /**
+   * The publication lag as a {@link Period}, whichever unit declared it. Years when
+   * {@code dataLag} is set, months when {@code dataMonthLag} is, zero when neither.
+   *
+   * <p>Returning one type for both keeps the year-boundary case ordinary date arithmetic rather
+   * than a special case: subtracting two months from January lands in the prior November without
+   * anything having to notice the boundary.
+   */
+  public Period getLagOffset() {
+    if (dataMonthLag != null) {
+      return Period.ofMonths(dataMonthLag);
+    }
+    return Period.ofYears(dataLag != null ? dataLag : 0);
   }
 
   /**
@@ -459,6 +528,31 @@ public class DimensionConfig {
       }
     }
 
+    // dataMonthLag is the same publication lag at month granularity, so declaring both is
+    // ambiguous rather than additive. Checked on key PRESENCE: dataLag defaults to 0 once built,
+    // so a stray `dataLag: 0` beside a month lag would be indistinguishable from absence
+    // afterwards -- and would silently look like it had been honoured.
+    Object dataMonthLagObj = map.get("dataMonthLag");
+    if (dataMonthLagObj != null) {
+      if (map.containsKey("dataLag")) {
+        throw new IllegalArgumentException("Dimension '" + builder.name
+            + "': dataLag and dataMonthLag are the same publication lag at different granularities "
+            + "and are mutually exclusive. Declare one (dataLag: 2 == dataMonthLag: 24); remove the "
+            + "other key entirely rather than setting it to 0.");
+      }
+      Integer months = null;
+      if (dataMonthLagObj instanceof Number) {
+        months = ((Number) dataMonthLagObj).intValue();
+      } else if (dataMonthLagObj instanceof String) {
+        months = VariableResolver.resolveInteger((String) dataMonthLagObj);
+      }
+      if (months == null || months < 0) {
+        throw new IllegalArgumentException("Dimension '" + builder.name
+            + "': dataMonthLag must be a non-negative integer, got '" + dataMonthLagObj + "'.");
+      }
+      builder.dataMonthLag(months);
+    }
+
     // Parse release month (1-12, month when data for previous year becomes available)
     Object releaseMonthObj = map.get("releaseMonth");
     if (releaseMonthObj instanceof Number) {
@@ -719,6 +813,7 @@ public class DimensionConfig {
     private boolean descending;
     private Integer cadenceStart;
     private Integer cadenceLength;
+    private Integer dataMonthLag;
 
     public Builder name(String name) {
       this.name = name;
@@ -832,6 +927,11 @@ public class DimensionConfig {
 
     public Builder cadenceStart(Integer cadenceStart) {
       this.cadenceStart = cadenceStart;
+      return this;
+    }
+
+    public Builder dataMonthLag(Integer dataMonthLag) {
+      this.dataMonthLag = dataMonthLag;
       return this;
     }
 

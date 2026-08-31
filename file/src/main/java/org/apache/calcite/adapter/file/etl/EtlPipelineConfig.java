@@ -91,6 +91,7 @@ public class EtlPipelineConfig {
   private final String datasetType;
   private final String backfillPeriod;
   private final int dqRowLimit;
+  private final Integer lookbackPeriods;
 
   private EtlPipelineConfig(Builder builder) {
     this.name = builder.name;
@@ -116,6 +117,7 @@ public class EtlPipelineConfig {
     this.datasetType = builder.datasetType != null ? builder.datasetType : "delta";
     this.backfillPeriod = builder.backfillPeriod;
     this.dqRowLimit = builder.dqRowLimit;
+    this.lookbackPeriods = builder.lookbackPeriods;
   }
 
   /**
@@ -192,6 +194,19 @@ public class EtlPipelineConfig {
    */
   public HooksConfig getHooks() {
     return hooks;
+  }
+
+  /**
+   * How many of the most recently <em>published</em> periods to reopen so their freshness is
+   * re-evaluated. Null disables reopening.
+   *
+   * <p>Counted in published periods rather than calendar intervals, so a stepped or cadenced axis
+   * needs no inflated value and gaps do not consume the budget. Two independent drivers call for
+   * it: the source revising an already-published period, and a period having been marked complete
+   * while it was still accruing.
+   */
+  public Integer getLookbackPeriods() {
+    return lookbackPeriods;
   }
 
   /** Optional freshness check (snapshot/computed_delta); null = off. */
@@ -343,7 +358,25 @@ public class EtlPipelineConfig {
 
     Map<String, Object> freshnessMap = toMap(map.get("freshness"));
     if (freshnessMap != null) {
+      // The lookback moved out of freshness: to the table level. Honouring the old key silently
+      // would reintroduce the failure it was moved to eliminate -- a setting that looks active and
+      // is not -- so a stale key fails the load instead.
+      if (freshnessMap.containsKey("trailing_window")) {
+        throw new IllegalArgumentException("Pipeline '" + builder.name
+            + "': freshness.trailing_window is no longer supported. Declare lookbackPeriods at the "
+            + "table level instead, counted in published periods rather than years.");
+      }
       builder.freshness(FreshnessConfig.fromMap(freshnessMap));
+    }
+
+    Object lookbackObj = map.get("lookbackPeriods");
+    if (lookbackObj != null) {
+      Integer lookback = asInteger(lookbackObj);
+      if (lookback == null || lookback < 1) {
+        throw new IllegalArgumentException("Pipeline '" + builder.name
+            + "': lookbackPeriods must be a positive integer, got '" + lookbackObj + "'.");
+      }
+      builder.lookbackPeriods(lookback);
     }
 
     Map<String, Object> releaseWindowMap = toMap(map.get("releaseWindow"));
@@ -463,6 +496,21 @@ public class EtlPipelineConfig {
    * @return Map representation, or null if not convertible
    */
   @SuppressWarnings("unchecked")
+  /** Parses a config value as an integer, accepting Number and String forms; null if neither. */
+  private static Integer asInteger(Object obj) {
+    if (obj instanceof Number) {
+      return ((Number) obj).intValue();
+    }
+    if (obj instanceof String) {
+      try {
+        return Integer.valueOf(((String) obj).trim());
+      } catch (NumberFormatException e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
   private static Map<String, Object> toMap(Object obj) {
     if (obj == null) {
       return null;
@@ -686,6 +734,7 @@ public class EtlPipelineConfig {
     private String datasetType;
     private String backfillPeriod;
     private int dqRowLimit;
+    private Integer lookbackPeriods;
 
     public Builder name(String name) {
       this.name = name;
@@ -754,6 +803,11 @@ public class EtlPipelineConfig {
 
     public Builder backfillPeriod(String backfillPeriod) {
       this.backfillPeriod = backfillPeriod;
+      return this;
+    }
+
+    public Builder lookbackPeriods(Integer lookbackPeriods) {
+      this.lookbackPeriods = lookbackPeriods;
       return this;
     }
 

@@ -513,9 +513,9 @@ partitionedTables:
     # pipeline's period-completion gate marks each year 'complete' the first time it succeeds and
     # never re-checks it — trailing_window force-reopens the current + prior year every run; the
     # hash check then skips the write (no new snapshot) unless BLS actually revised the data.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=employment_statistics/frequency=*/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -784,9 +784,9 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=inflation_metrics/frequency=*/year=*/inflation_metrics.parquet"
     partitions: *standard_partitions
     comment: >
@@ -928,9 +928,15 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
+    # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
+    # are recomputed each February. https://www.bls.gov/cpi/technical-notes/
+    # The lookback here is for ACCRUAL, not revision: one combo covers a whole year, and the
+    # period-completion gate would otherwise freeze the current year mid-stream and lock out
+    # December, which BLS does not publish until mid-January of the following year.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=regional_cpi/frequency=*/year=*/regional_cpi.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1059,9 +1065,15 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
+    # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
+    # are recomputed each February. https://www.bls.gov/cpi/technical-notes/
+    # The lookback here is for ACCRUAL, not revision: one combo covers a whole year, and the
+    # period-completion gate would otherwise freeze the current year mid-stream and lock out
+    # December, which BLS does not publish until mid-January of the following year.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=metro_cpi/frequency=*/year=*/metro_cpi.parquet"
     partitions: *standard_partitions
 
@@ -1363,9 +1375,15 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
+    # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
+    # are recomputed each February. https://www.bls.gov/cpi/technical-notes/
+    # The lookback here is for ACCRUAL, not revision: one combo covers a whole year, and the
+    # period-completion gate would otherwise freeze the current year mid-stream and lock out
+    # December, which BLS does not publish until mid-January of the following year.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=regional_food_cpi/frequency=*/year=*/regional_food_cpi.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1496,9 +1514,15 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
+    # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
+    # are recomputed each February. https://www.bls.gov/cpi/technical-notes/
+    # The lookback here is for ACCRUAL, not revision: one combo covers a whole year, and the
+    # period-completion gate would otherwise freeze the current year mid-stream and lock out
+    # December, which BLS does not publish until mid-January of the following year.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=metro_food_cpi/frequency=*/year=*/metro_food_cpi.parquet"
     partitions: *standard_partitions
 
@@ -1649,9 +1673,9 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=state_industry/frequency=*/year=*/state_industry.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1918,9 +1942,9 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    lookbackPeriods: 3
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=metro_industry/frequency=*/year=*/metro_industry.parquet"
     partitions: *standard_partitions
     comment: >
@@ -2041,9 +2065,9 @@ partitionedTables:
     # figures. trailing_window force-reopens the current + prior year every run so the
     # period-completion gate doesn't freeze them permanently; year-grain only (does not model
     # QCEW's within-year quarterly revision cycle) -- a partial mitigation, not a complete fix.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=metro_wages/frequency=*/year=*/metro_wages.parquet"
     partitions: *standard_partitions
     comment: >
@@ -2293,9 +2317,9 @@ partitionedTables:
     # figures. trailing_window force-reopens the current + prior year every run so the
     # period-completion gate doesn't freeze them permanently; year-grain only (does not model
     # QCEW's within-year quarterly revision cycle) -- a partial mitigation, not a complete fix.
+    lookbackPeriods: 2
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=county_wages/frequency=*/year=*/county_wages.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2008
@@ -2429,9 +2453,9 @@ partitionedTables:
     # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
     # trailing_window force-reopens the current + prior year every run; the hash check skips the
     # write when the source file is unrevised for that year.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=jolts_regional/frequency=*/year=*/jolts_regional.parquet"
     partitions: *standard_partitions
     sourcePaths:
@@ -2599,9 +2623,9 @@ partitionedTables:
     # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
     # trailing_window force-reopens the current + prior year every run; the hash check skips the
     # write when the source file is unrevised for that year.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=jolts_industry/frequency=*/year=*/jolts_industry.parquet"
     partitions: *standard_partitions
     sourcePaths:
@@ -2744,9 +2768,9 @@ partitionedTables:
     # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
     # trailing_window force-reopens the current + prior year every run; the hash check skips the
     # write when the source file is unrevised for that year.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=jolts_state/frequency=*/year=*/jolts_state.parquet"
     partitions: *standard_partitions
     sourcePaths:
@@ -2898,9 +2922,9 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=wage_growth/frequency=*/year=*/wage_growth.parquet"
     partitions: *standard_partitions
     comment: >
@@ -3014,9 +3038,9 @@ partitionedTables:
     # restates the prior calendar year in its annual benchmark update. trailing_window
     # force-reopens the current + prior year every run; the hash check skips the write when
     # unrevised (year-grain only -- does not separately re-check quarter-level revision).
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=labor_productivity/frequency=*/year=*/labor_productivity.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2009
@@ -3137,9 +3161,9 @@ partitionedTables:
     # prior calendar year in its annual February benchmark revision (same cadence as
     # employment_statistics). trailing_window force-reopens the current + prior year every run so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=regional_employment/year=*/regional_employment.parquet"
     partitions:
       style: hive
@@ -3643,9 +3667,9 @@ partitionedTables:
     # PAYEMS mirrors BLS CES -- prior months revised monthly, prior year restated each February).
     # trailing_window force-reopens the current + prior year every run; the hash check skips the
     # write when unrevised.
+    lookbackPeriods: 72
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=fred_indicators/series=*/year=*/month=*/fred_indicators.parquet"
     partitions:
       style: hive
@@ -3901,9 +3925,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=national_accounts/frequency=*/year=*/tablename=*/national_accounts.parquet"
     partitions:
       style: hive
@@ -4109,7 +4133,6 @@ partitionedTables:
     # further than one year, but it stops the period-completion gate from freezing forever.
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=regional_price_parities/year=*/tablename=*/regional_price_parities.parquet"
     partitions:
       style: hive
@@ -4915,9 +4938,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 8
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=*/year=*/*.parquet"
     partitions:
       style: hive
@@ -5202,9 +5225,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=ita_data/frequency=*/year=*/indicator=*/ita_data.parquet"
     partitions:
       style: hive
@@ -5417,9 +5440,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=fdi_direct_investment/direction=*/classification=*/year=*/fdi_direct_investment.parquet"
     partitions:
       style: hive
@@ -5565,9 +5588,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 3
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=fdi_activities/direction=*/classification=*/year=*/fdi_activities.parquet"
     partitions:
       style: hive
@@ -5650,9 +5673,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=iip_positions/frequency=*/year=*/iip_positions.parquet"
     partitions:
       style: hive
@@ -5788,9 +5811,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=gdp_statistics/frequency=*/year=*/gdp_statistics.parquet"
     partitions: *standard_partitions
     comment: >
@@ -5903,9 +5926,9 @@ partitionedTables:
     # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
     # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
     # further than one year, but it stops the period-completion gate from freezing forever.
+    lookbackPeriods: 6
     freshness:
       type: hash
-      trailing_window: 2
     pattern: "type=industry_gdp/frequency=*/year=*/industry=*/industry_gdp.parquet"
     dimensions:
       type:

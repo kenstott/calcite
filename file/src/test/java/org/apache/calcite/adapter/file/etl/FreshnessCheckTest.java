@@ -138,21 +138,6 @@ public class FreshnessCheckTest {
     assertFalse(b.equals(FreshnessCheck.sha256Hex("world")));
   }
 
-  @Test void parsesTrailingWindow() {
-    FreshnessConfig withWindow =
-        FreshnessConfig.fromMap(map("type", "hash", "trailing_window", 2));
-    assertEquals(FreshnessConfig.Type.HASH, withWindow.getType());
-    assertEquals(Integer.valueOf(2), withWindow.getTrailingWindow());
-
-    // Absent trailing_window (unchanged existing HASH tables) leaves it disabled.
-    FreshnessConfig noWindow = FreshnessConfig.fromMap(map("type", "hash"));
-    assertNull(noWindow.getTrailingWindow());
-
-    // Accepts a YAML-parsed numeric string just as readily as an Integer.
-    FreshnessConfig fromString =
-        FreshnessConfig.fromMap(map("type", "hash", "trailing_window", "3"));
-    assertEquals(Integer.valueOf(3), fromString.getTrailingWindow());
-  }
 
   @Test void changedSemantics() {
     assertTrue(FreshnessCheck.changed(null, "x"));     // first run
