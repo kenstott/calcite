@@ -10,21 +10,17 @@
  */
 package org.apache.calcite.adapter.govdata.ref;
 
-import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
-import org.apache.calcite.adapter.file.etl.EtlResult;
-import org.apache.calcite.adapter.file.etl.MaterializationWriter;
-import org.apache.calcite.adapter.file.etl.MaterializationWriterFactory;
-import org.apache.calcite.adapter.file.etl.MaterializeConfig;
-import org.apache.calcite.adapter.file.etl.TableContext;
-import org.apache.calcite.adapter.file.etl.TableLifecycleListener;
+import org.apache.calcite.adapter.file.partition.PGPipelineTracker;
 import org.apache.calcite.adapter.govdata.sec.SemanticTextChunker;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -32,13 +28,18 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
 
 /**
- * Organizes chunks for {@code ref.vectorized_chunks}, in both of its two content modes: see
- * semantic-search-plan.md "Row-level design" / "Table curation".
+ * Organizes chunks into the PG compute layer ({@code vc_staging}), in both of its two content
+ * modes: see semantic-search-plan.md "Row-level design" / "Table curation".
  * <ul>
  *   <li><b>Row-concat mode</b> ({@code source_type='row_concat'}): concatenates an included
  *   entity-grain dimension table's string columns per row ({@code col: value | col: value}),
@@ -50,28 +51,53 @@ import java.util.Map;
  *   structure needed for a flat blob column).</li>
  * </ul>
  *
- * <p>This class does the organizing only -- the vector writer is always an external script
- * ({@code govdata/scripts/vss-local.py}), which finds chunks with no codes yet (a simple
- * anti-join against {@code vectorized_chunk_codes}) and embeds them, time-boxed and
- * resumable across runs, exactly as it already does for SEC's document-chunk mode. Java's
- * job stops at organizing text into chunk rows; it never touches embeddings.
+ * <p>This class does the organizing only -- embeddings are a separate, later, time-boxed stage
+ * that reads {@code vc_staging} directly (there is deliberately no {@code ref.vectorized_chunks}
+ * Iceberg table for it to read instead: {@code chunk_text} only ever needs to travel alongside an
+ * embedding row for result display/citation, never as an independently queryable dataset, so
+ * materializing it separately would just be a second, driftable copy of the same rows with no
+ * consumer of its own). Java's job stops at organizing text into chunk rows in PG; it never
+ * touches embeddings.
  *
- * <p>Wired via {@code hooks.tableLifecycleListener} on {@code ref.vectorized_chunks} (it has
- * no {@code source:} block, so {@code afterTable} is the only lifecycle hook that fires for
- * it -- same wiring rationale as {@link EntityBridgeListener}).
+ * <p>Chunking ({@link #sweep}) organizes text into rows and lands them in {@code vc_staging}/
+ * {@code vc_tombstones} (see {@code govdata/scripts/sql/vc_schema.sql}). Each source row is a
+ * "parent"; a SHA-256 hash of its pre-chunk text ({@code parent_hash}) is compared against what
+ * is already staged for that parent. An unchanged hash is a no-op (the idempotency check); a
+ * changed or new hash moves every existing row for that parent into {@code vc_tombstones} (an
+ * append-only change log -- not itself drained by this class, but available to whatever
+ * downstream stage needs to know what changed since it last ran) and inserts the freshly computed
+ * set -- always the WHOLE parent's chunk set, never a partial chunk-level upsert, which is what
+ * makes a content-addressed chunk key unnecessary here (see vc_schema.sql's design note).
+ *
+ * <p>{@code vc_staging}'s durability is a plain {@code pg_dump} backup to object storage (see
+ * {@code govdata/scripts/vc_pg_dump.sh}), not an Iceberg copy -- chunking is cheap and
+ * deterministic from source tables, so the backup exists purely to avoid redoing that work after
+ * a PG loss, not because the data is otherwise irreplaceable.
+ *
+ * <p><b>Not wired into any schema's {@code hooks.tableLifecycleListener} -- this is a standalone
+ * job, invoked only via {@link #main}/{@link #sweep} by {@code x-schema.sh} on its own schedule.
+ * </b> Per the cross-schema separation-of-concerns principle (schema ETL runs operate only on
+ * self-contained elements; cross-schema derivations run in one separate job after daily ETL), no
+ * schema's own build may be what decides when this runs.
+ *
+ * <p>Change tracking is watermark- and version-based, so "find what changed" and "redo a prior
+ * run" are the same operation -- no separate backout/removal tool is part of the design (see
+ * {@link #CHUNKER_VERSION}, {@link #sourceNeedsSweep}): a source whose own {@code
+ * pipeline_tracker.table_completion.completed_at} hasn't advanced since the last sweep is skipped
+ * entirely (the coarse layer); within a swept source, a parent whose {@code parent_hash} (which
+ * folds in {@link #CHUNKER_VERSION}) is unchanged is a no-op (the fine layer). Bumping {@link
+ * #CHUNKER_VERSION} after a chunking-logic fix invalidates every stored hash at once, so the next
+ * normal sweep reprocesses everyone with no special-casing.
  */
-public class ChunkOrganizer implements TableLifecycleListener {
+public class ChunkOrganizer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ChunkOrganizer.class);
 
-  private static final String TRIGGER_TABLE = "vectorized_chunks";
-
-  // Per-batch row cap for the SEC backfill's real-write path (see backfillSecChunks): bounds
-  // peak JVM heap for one batch's full row content (chunk_text/enriched_text included) to a
-  // constant regardless of how large a single year's backlog is -- some SEC years run into the
-  // millions of rows / multiple GiB, far past what one unbatched SELECT s.* can safely hold in
-  // a Java List at once.
-  private static final int SEC_BACKFILL_BATCH_SIZE = 5000;
+  // Bump after any change to the chunking logic itself (CHUNK_SIZE/CHUNK_OVERLAP, chunkFixed,
+  // SemanticTextChunker's settings, the row-concat text-building rules) so every existing
+  // parent_hash is invalidated and the next sweep reprocesses every parent with no separate
+  // removal step -- see the class javadoc's change-tracking paragraph.
+  private static final int CHUNKER_VERSION = 1;
 
   // Naive fixed-window chunk size / overlap over the delimited column concatenation (row-concat
   // mode only -- document-blob mode uses SemanticTextChunker's own target/min/max sizing).
@@ -106,304 +132,352 @@ public class ChunkOrganizer implements TableLifecycleListener {
       new RowConcatSource("fedregister", "fr_documents", Arrays.asList("document_number"),
           Arrays.asList("document_number", "title", "doc_type", "publication_date",
               "effective_on", "action", "agency_names", "cfr_references", "rin",
-              "docket_ids", "signing_date"), "fedregister_document_number"));
+              "docket_ids", "signing_date"), "fedregister_document_number"),
+      // semantic-search-plan.md "Table curation": entity-grain (one carrier), size is
+      // irrelevant per the plan's own fmcsa_carriers-vs-insider_transactions counter-example.
+      new RowConcatSource("transport", "fmcsa_carriers", Arrays.asList("dot_number"),
+          Arrays.asList("dot_number", "carrier_name", "dba_name", "phy_city", "state_abbr",
+              "phy_zip", "business_org", "classdef", "operation_type", "safety_rating",
+              "hazmat_flag", "status_code"), "fmcsa_dot_number"),
+      // Row-concat mode covers only patent_title here -- patent_abstracts/patent_claims/
+      // patent_summaries/trademark_statement are separate tables, handled below in
+      // document-blob mode; including their content here too would double-count it under two
+      // source_types (semantic-search-plan.md's "Table curation" note).
+      new RowConcatSource("patents", "patent_grants", Arrays.asList("patent_id"),
+          Arrays.asList("patent_id", "patent_title"), "patents_patent_id"),
+      // PK is the OpenFEMA row UUID (id), NOT disaster_number -- disaster_number is a nullable,
+      // non-unique join key (confirmed against the schema's own constraints-block comment), not
+      // this table's actual identity.
+      new RowConcatSource("disasters", "disaster_declarations", Arrays.asList("id"),
+          Arrays.asList("fema_declaration_string", "declaration_type", "declaration_title",
+              "incident_type", "state_fips", "county_fips", "designated_area"), null),
+      new RowConcatSource("disasters", "public_assistance_projects", Arrays.asList("hash"),
+          Arrays.asList("application_title", "applicant_id", "incident_type",
+              "damage_category_code", "damage_category", "project_status", "project_size",
+              "state_fips", "county_fips", "county_name", "state_abbr"), null),
+      // year is a Hive-partition dimension column (declared under dimensions:, not columns:),
+      // same category as ref.sec_company_tickers' own "type" -- proven to resolve correctly via
+      // iceberg_scan by that existing registration, not a new assumption here.
+      new RowConcatSource("geo", "rural_urban_continuum",
+          Arrays.asList("county_fips", "year"),
+          Arrays.asList("county_fips", "state_fips", "county_name", "rucc_description",
+              "metro_nonmetro"), null),
+      // tract_fips_20 (NOT tract_fips) -- the schema's own constraints block declares this
+      // table's PK/FK as "tract_fips", but no column by that name exists on the table; the real
+      // column is tract_fips_20 (confirmed against the table's own columns: block; a separate
+      // schema-authoring bug worth fixing independently, not something to replicate here).
+      new RowConcatSource("geo", "ruca_codes",
+          Arrays.asList("tract_fips_20", "year"),
+          Arrays.asList("tract_fips_20", "state_fips_20", "county_fips_20",
+              "primary_ruca_description"), null),
+      new RowConcatSource("officials", "federal_judges", Arrays.asList("jid"),
+          federalJudgeStringColumns(), null));
+
+  /** federal_judges' content columns: 6 base identity fields plus 12 fields repeated across 6
+   *  numbered appointment groups (a judge can hold up to 6 distinct court appointments) --
+   *  generated rather than hand-transcribed to avoid a 78-entry literal list. Per
+   *  semantic-search-plan.md's "column-level filtering was rejected" rule, every declared
+   *  string column goes in, including short categorical ones (aba_rating_N, party_of_
+   *  appointing_president_N) -- the plan's own judgment call, not a chunk-parsing decision. */
+  private static List<String> federalJudgeStringColumns() {
+    List<String> cols = new ArrayList<String>(Arrays.asList(
+        "last_name", "first_name", "middle_name", "suffix", "gender", "race_or_ethnicity"));
+    String[] perGroup = {"court_type", "court_name", "appointment_title", "appointing_president",
+        "party_of_appointing_president", "aba_rating", "nomination_date", "confirmation_date",
+        "commission_date", "senior_status_date", "termination_date", "termination_reason"};
+    for (int group = 1; group <= 6; group++) {
+      for (String field : perGroup) {
+        cols.add(field + "_" + group);
+      }
+    }
+    return cols;
+  }
+
+  /** A chunking function turns one row's blob text into an ordered list of pieces -- this is
+   *  CHUNK PARSING, not doc parsing/sectioning (see the class javadoc's terminology paragraph):
+   *  it operates on text a source's own ETL has already extracted into one atomic column, and
+   *  never itself decides what counts as a "section". Pluggable per {@link DocumentBlobSource}
+   *  so a future source needing a different chunker (see the SEC note on {@link GenericChunk})
+   *  is a new registry entry, not a new code path in {@link #chunkDocumentBlobSource}. */
+  @FunctionalInterface
+  interface ChunkFunction {
+    List<GenericChunk> chunk(String text);
+  }
+
+  /** One chunker-agnostic output piece. {@code paragraphContinuation} is {@code null} when a
+   *  chunker doesn't have the concept (only {@link SemanticTextChunker} does today). */
+  static final class GenericChunk {
+    final String text;
+    final int sequenceNumber;
+    final Boolean paragraphContinuation;
+
+    GenericChunk(String text, int sequenceNumber, Boolean paragraphContinuation) {
+      this.text = text;
+      this.sequenceNumber = sequenceNumber;
+      this.paragraphContinuation = paragraphContinuation;
+    }
+  }
+
+  /** The chunker every current document-blob source uses: {@link SemanticTextChunker}'s
+   *  sentence-boundary-aware plain-text splitter (target/min/max sizing per its DEFAULT_*
+   *  constants -- these are short-to-medium prose fields, not full filings, so the SEC defaults
+   *  apply without retuning), 1-based sequence numbers renumbered to 0-based to match this
+   *  table's convention.
+   *
+   *  <p>NOT a fit for SEC's actual chunker ({@code SecTextVectorizer.createIndividualChunks}):
+   *  that one takes MULTIPLE blob lists at once (a filing's MD&A sections + footnotes together,
+   *  to build a cross-reference map) plus a financial-facts map -- a per-filing aggregate over
+   *  several source tables, not a per-row "text in, chunks out" function. Migrating SEC onto
+   *  this pipeline needs a different {@code ChunkSource} registration shape (grouped by filing,
+   *  reading multiple tables), not a {@link ChunkFunction} plugged into {@link
+   *  DocumentBlobSource} -- see the memory note on the untangled SEC migration plan. */
+  private static final ChunkFunction SEMANTIC_TEXT_CHUNKER = text -> {
+    List<SemanticTextChunker.Chunk> chunks = new SemanticTextChunker().chunkPlainText(text);
+    List<GenericChunk> result = new ArrayList<GenericChunk>(chunks.size());
+    for (SemanticTextChunker.Chunk c : chunks) {
+      result.add(new GenericChunk(c.getText(), c.getSequenceNumber() - 1,
+          c.isParagraphContinuation()));
+    }
+    return result;
+  };
 
   /** Document-blob sources per semantic-search-plan.md's "Document-blob sources" table.
-   *  Each gets its own source_type value and reuses SemanticTextChunker's plain-text chunker
-   *  (target/min/max sizing per its DEFAULT_* constants -- these are short-to-medium prose
-   *  fields, not full filings, so the SEC defaults apply without retuning). */
+   *  Each gets its own source_type value; all three use {@link #SEMANTIC_TEXT_CHUNKER} today,
+   *  but the chunker is a per-source field precisely so a future source needing a different one
+   *  is a new entry here, not a new branch in {@link #chunkDocumentBlobSource}. */
   private static final List<DocumentBlobSource> DOCUMENT_BLOB_SOURCES = Arrays.asList(
       new DocumentBlobSource("cyber_threat", "nist_controls", Arrays.asList("control_id"),
-          "description", "nist_control_description", null),
+          "description", "nist_control_description", null, SEMANTIC_TEXT_CHUNKER),
       new DocumentBlobSource("cyber_threat", "cis_controls", Arrays.asList("safeguard_id"),
-          "description", "cis_control_description", null),
+          "description", "cis_control_description", null, SEMANTIC_TEXT_CHUNKER),
       new DocumentBlobSource("cyber_threat", "owasp_top10", Arrays.asList("entry_id"),
-          "overview", "owasp_entry_overview", null));
-
-  @Override public void beforeTable(TableContext context) {
-    // No-op: this listener does all its work in afterTable, once, on TRIGGER_TABLE.
-  }
-
-  @Override public boolean onTableError(TableContext context, Exception error) {
-    LOGGER.error("ChunkOrganizer: table '{}' failed upstream of chunk organization",
-        context.getTableName(), error);
-    return true;
-  }
-
-  @Override public void afterTable(TableContext context, EtlResult result) {
-    if (!TRIGGER_TABLE.equals(context.getTableName())) {
-      return;
-    }
-    LOGGER.info("ChunkOrganizer: organizing chunks for {} row-concat + {} document-blob "
-        + "source(s)", ROW_CONCAT_SOURCES.size(), DOCUMENT_BLOB_SOURCES.size());
-    try (Connection conn = openDuckDb(context)) {
-      String base = context.getSchemaContext().getMaterializeDirectory();
-      List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
-      for (RowConcatSource src : ROW_CONCAT_SOURCES) {
-        chunkRows.addAll(chunkRowConcatSource(conn, base, src));
-      }
-      for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
-        chunkRows.addAll(chunkDocumentBlobSource(conn, base, src));
-      }
-      if (chunkRows.isEmpty()) {
-        LOGGER.info("ChunkOrganizer: no chunks produced, nothing to write");
-      } else {
-        writeTable(context, TRIGGER_TABLE, chunkRows);
-        LOGGER.info("ChunkOrganizer: wrote {} chunk rows to ref.vectorized_chunks",
-            chunkRows.size());
-      }
-      backfillSecChunks(context, conn, base);
-    } catch (Exception e) {
-      // afterTable declares no throws clause; this is a best-effort post-processing pass over
-      // already-committed data, so a failure here must not fail the ref schema's own ETL run.
-      LOGGER.error("ChunkOrganizer: chunk organization failed", e);
-    }
-  }
+          "overview", "owasp_entry_overview", null, SEMANTIC_TEXT_CHUNKER),
+      new DocumentBlobSource("patents", "patent_abstracts", Arrays.asList("patent_id"),
+          "patent_abstract", "patent_abstract", null, SEMANTIC_TEXT_CHUNKER),
+      // Composite PK (patent_id, claim_sequence) -- one patent has many claims.
+      new DocumentBlobSource("patents", "patent_claims",
+          Arrays.asList("patent_id", "claim_sequence"),
+          "claim_text", "patent_claim", null, SEMANTIC_TEXT_CHUNKER),
+      new DocumentBlobSource("patents", "patent_summaries", Arrays.asList("patent_id"),
+          "summary_text", "patent_summary", null, SEMANTIC_TEXT_CHUNKER),
+      // Composite PK (serial_no, statement_type_cd) -- one trademark can carry several
+      // statement types (of which "goods/services description" is one).
+      new DocumentBlobSource("patents", "trademark_statement",
+          Arrays.asList("serial_no", "statement_type_cd"),
+          "statement_text", "trademark_statement", null, SEMANTIC_TEXT_CHUNKER),
+      // Composite PK (type, nct_id) -- "type" is a Hive-partition dimension column here (not a
+      // hand-declared columns: entry), same category as ref.sec_company_tickers' own "type".
+      // brief_summary is truncated to 2000 chars at the source/ETL level.
+      new DocumentBlobSource("health", "clinical_trials", Arrays.asList("type", "nct_id"),
+          "brief_summary", "clinical_trial_summary", null, SEMANTIC_TEXT_CHUNKER),
+      // Composite PK (type, nct_id, intervention_name) -- one trial has many interventions.
+      // Unlike clinical_trials above, "type" IS a real declared columns: entry on this table
+      // (confirmed against the schema directly). description is truncated to 2000 chars.
+      new DocumentBlobSource("health", "clinical_trial_interventions",
+          Arrays.asList("type", "nct_id", "intervention_name"),
+          "description", "clinical_trial_intervention", null, SEMANTIC_TEXT_CHUNKER),
+      // Composite PK (event_id, aircraft_key) -- one accident event can involve several
+      // aircraft. probable_cause is truncated to 4000 chars at the source/ETL level.
+      new DocumentBlobSource("transport", "ntsb_aviation_accidents",
+          Arrays.asList("event_id", "aircraft_key"),
+          "probable_cause", "ntsb_probable_cause", null, SEMANTIC_TEXT_CHUNKER));
 
   // ========================================================================
-  // sec.vectorized_chunks -> ref.vectorized_chunks backfill (one-time migration)
+  // Standalone sweep entry point -- invoked by x-schema.sh, not by any schema's own ETL
   // ========================================================================
-  //
-  // See semantic-search-plan.md "Promoting vectorized_chunks". This is NOT a source in
-  // ROW_CONCAT_SOURCES/DOCUMENT_BLOB_SOURCES: SEC's chunks are already organized (chunked +
-  // enriched) by DocumentETLProcessor, this just reshapes and copies them into the shared
-  // table. Off by default (GOVDATA_CHUNKS_BACKFILL) so routine ref schema runs never pay for
-  // it. Time-boxed and resumable across separate invocations by construction: each year is
-  // migrated via an anti-join against chunk_id values already present under
-  // source_schema='sec', so re-running (whether after a clean stop at the time budget or an
-  // interrupted/crashed run) only ever migrates what's still missing -- no separate progress
-  // marker needed, same anti-join idea vss-local.py's cmd_backlog already uses for embeddings.
-  //
-  // Controlled by env vars, not the schema YAML/ModelOperand: this is a one-time operator
-  // switch for a migration run, not per-schema adapter config, and GovDataSchemaFactory's
-  // operand pipeline only carries a narrow, curated set of keys (dataSource/directory/tables/
-  // casing/engine) through to what ModelOperand captures -- a schema-level custom key like this
-  // one is silently unreachable there regardless of YAML declaration. GOVDATA_CHUNKS_BACKFILL /
-  // the ETL_ prefix are exactly the run/infra-flag category model-operand-guard.py's own
-  // EXEMPT_NAMES/EXEMPT_PREFIX carve out for direct System.getenv reads.
 
-  private void backfillSecChunks(TableContext context, Connection conn, String base)
-      throws SQLException, IOException {
-    boolean enabled = "true".equalsIgnoreCase(System.getenv("GOVDATA_CHUNKS_BACKFILL"));
-    LOGGER.info("ChunkOrganizer: SEC backfill env check: GOVDATA_CHUNKS_BACKFILL={}", enabled);
-    if (!enabled) {
-      return;
+  /** One sweep over every registered source: skip a source entirely if its own {@code
+   *  table_completion.completed_at} hasn't advanced since this source was last swept (the
+   *  coarse watermark), otherwise chunk it and hand the rows to {@link #writeToPgStaging} (which
+   *  applies the fine-grained {@code parent_hash} skip/tombstone/replace per parent). {@code
+   *  pg} must already have its search_path set to the target namespace and {@link
+   *  #ensureVcSchema} already applied -- both {@link #main} and a future caller sharing one
+   *  connection across multiple sweeps are expected to do that once, not per source. */
+  static void sweep(Connection duckdb, Connection pg, String base) throws SQLException {
+    LOGGER.info("ChunkOrganizer sweep: checking {} row-concat + {} document-blob source(s)",
+        ROW_CONCAT_SOURCES.size(), DOCUMENT_BLOB_SOURCES.size());
+    int swept = 0;
+    int skipped = 0;
+    for (RowConcatSource src : ROW_CONCAT_SOURCES) {
+      if (!sourceNeedsSweep(pg, src.sourceTable)) {
+        skipped++;
+        continue;
+      }
+      chunkRowConcatSource(duckdb, pg, base, src);
+      markSwept(pg, src.sourceSchema, src.sourceTable);
+      swept++;
     }
-    boolean dryRun = "true".equalsIgnoreCase(System.getenv("ETL_CHUNKS_BACKFILL_DRY_RUN"));
-    long maxSeconds = 1800L;
-    String maxSecondsEnv = System.getenv("ETL_CHUNKS_BACKFILL_MAX_SECONDS");
-    if (maxSecondsEnv != null && !maxSecondsEnv.trim().isEmpty()) {
+    for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
+      if (!sourceNeedsSweep(pg, src.sourceTable)) {
+        skipped++;
+        continue;
+      }
+      chunkDocumentBlobSource(duckdb, pg, base, src);
+      markSwept(pg, src.sourceSchema, src.sourceTable);
+      swept++;
+    }
+    LOGGER.info("ChunkOrganizer sweep complete: {} source(s) swept, {} unchanged (skipped)",
+        swept, skipped);
+  }
+
+  /** True if {@code sourceTable}'s own {@code pipeline_tracker.table_completion.completed_at}
+   *  has advanced since the last sweep that actually rescanned it (or it has never been swept).
+   *  An unchanged completed_at means nothing in that source has changed at all since last time
+   *  -- the coarse layer that lets a sweep skip a source without even querying its rows. */
+  static boolean sourceNeedsSweep(Connection pg, String sourceTable) throws SQLException {
+    Long completedAt = selectTableCompletedAt(pg, sourceTable);
+    if (completedAt == null) {
+      // Never completed an ETL run at all (yet) -- nothing to sweep regardless of watermark.
+      return false;
+    }
+    Long lastSwept = selectLastSweptCompletedAt(pg, sourceTable);
+    return lastSwept == null || completedAt > lastSwept;
+  }
+
+  static Long selectTableCompletedAt(Connection pg, String sourceTable)
+      throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "SELECT completed_at FROM table_completion WHERE pipeline_name = ?")) {
+      ps.setString(1, sourceTable);
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() ? rs.getLong(1) : null;
+      }
+    }
+  }
+
+  static Long selectLastSweptCompletedAt(Connection pg, String sourceTable)
+      throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "SELECT last_swept_completed_at FROM vc_sync_state "
+        + "WHERE source_table = ? LIMIT 1")) {
+      ps.setString(1, sourceTable);
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() ? rs.getLong(1) : null;
+      }
+    }
+  }
+
+  static void markSwept(Connection pg, String sourceSchema, String sourceTable)
+      throws SQLException {
+    Long completedAt = selectTableCompletedAt(pg, sourceTable);
+    long watermark = completedAt != null ? completedAt : System.currentTimeMillis();
+    try (PreparedStatement ps = pg.prepareStatement(
+        "INSERT INTO vc_sync_state (source_schema, source_table, last_swept_completed_at) "
+        + "VALUES (?, ?, ?) "
+        + "ON CONFLICT (source_schema, source_table) "
+        + "DO UPDATE SET last_swept_completed_at = EXCLUDED.last_swept_completed_at")) {
+      ps.setString(1, sourceSchema);
+      ps.setString(2, sourceTable);
+      ps.setLong(3, watermark);
+      ps.executeUpdate();
+    }
+    pg.commit();
+  }
+
+  /** Standalone entry point for {@code x-schema.sh}. Reads {@code CALCITE_TRACKER_PG_URL}/
+   *  {@code _USER}/{@code _PASSWORD} and {@code AWS_*} (all exempt from the model-operand guard
+   *  as run/infra config -- see {@code .claude/hooks/model-operand-guard.py}'s EXEMPT_PREFIX)
+   *  plus {@code GOVDATA_PARQUET_DIR} (explicitly exempt). Not reachable through any schema's
+   *  model operand because this is not schema-model-driven code -- it is the standalone sweep
+   *  job itself, run on its own schedule, independent of any one schema's ETL. */
+  public static void main(String[] args) throws Exception {
+    String jdbcUrl = System.getenv("CALCITE_TRACKER_PG_URL");
+    if (jdbcUrl == null) {
+      throw new IllegalStateException("CALCITE_TRACKER_PG_URL not set");
+    }
+    String user = System.getenv("CALCITE_TRACKER_PG_USER");
+    String password = System.getenv("CALCITE_TRACKER_PG_PASSWORD");
+    String base = System.getenv("GOVDATA_PARQUET_DIR");
+    if (base == null) {
+      base = "s3://govdata-parquet-v1";
+    }
+    String ns = PGPipelineTracker.sanitizeNamespace(base);
+    if (ns == null) {
+      throw new IllegalStateException("cannot derive a PG namespace from '" + base + "'");
+    }
+
+    try (Connection pg = user != null ? DriverManager.getConnection(jdbcUrl, user, password)
+            : DriverManager.getConnection(jdbcUrl);
+         Connection duckdb = openDuckDbStandalone()) {
+      pg.setAutoCommit(false);
+      try (Statement stmt = pg.createStatement()) {
+        stmt.execute("CREATE SCHEMA IF NOT EXISTS \"" + ns + "\"");
+        stmt.execute("SET search_path TO \"" + ns + "\"");
+      }
+      ensureVcSchema(pg);
+      pg.commit();
+      sweep(duckdb, pg, base);
+    }
+  }
+
+  /** DuckDB connection for the standalone job: same setup as the old {@link #openDuckDb}, but
+   *  S3 credentials come from {@code AWS_*} env vars (exempt, infra-layer config) instead of a
+   *  {@code TableContext}'s {@code StorageProvider} -- there is no TableContext outside an
+   *  actual schema ETL run. */
+  static Connection openDuckDbStandalone() throws SQLException {
+    Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("SET threads=2");
+      stmt.execute("SET memory_limit='2GB'");
+      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/chunk-organizer-duckdb";
+      stmt.execute("SET temp_directory='" + tempDir + "'");
       try {
-        maxSeconds = Long.parseLong(maxSecondsEnv.trim());
-      } catch (NumberFormatException e) {
-        LOGGER.warn("ChunkOrganizer: ETL_CHUNKS_BACKFILL_MAX_SECONDS='{}' not a number, "
-            + "using default {}s", maxSecondsEnv, maxSeconds);
+        stmt.execute("INSTALL parquet");
+        stmt.execute("LOAD parquet");
+      } catch (SQLException e) {
+        LOGGER.debug("Parquet extension already loaded or built-in");
       }
+      stmt.execute("INSTALL iceberg");
+      stmt.execute("LOAD iceberg");
+      stmt.execute("SET unsafe_enable_version_guessing = true");
+    } catch (SQLException e) {
+      LOGGER.warn("DuckDB Iceberg extension unavailable: {}", e.getMessage());
     }
-
-    String secLoc = base + "/sec/vectorized_chunks";
-    String destLoc = base + "/" + context.getSchemaName() + "/" + TRIGGER_TABLE;
-
-    int minYear;
-    int maxYear;
-    String rangeSql = "SELECT MIN(year) AS min_year, MAX(year) AS max_year FROM iceberg_scan('"
-        + secLoc + "', allow_moved_paths=true)";
-    List<Map<String, Object>> range = queryRows(conn, rangeSql);
-    Object minObj = range.isEmpty() ? null : range.get(0).get("min_year");
-    Object maxObj = range.isEmpty() ? null : range.get(0).get("max_year");
-    if (minObj == null || maxObj == null) {
-      LOGGER.info("ChunkOrganizer: SEC backfill enabled but sec.vectorized_chunks is empty "
-          + "or unreadable, nothing to migrate");
-      return;
-    }
-    minYear = ((Number) minObj).intValue();
-    maxYear = ((Number) maxObj).intValue();
-
-    LOGGER.info("ChunkOrganizer: SEC backfill starting, years {}-{}, dryRun={}, "
-        + "maxSeconds={}", minYear, maxYear, dryRun, maxSeconds);
-    java.time.Instant start = java.time.Instant.now();
-    int yearsDone = 0;
-    int yearsSkipped = 0;
-    long totalRows = 0;
-    for (int year = minYear; year <= maxYear; year++) {
-      if (dryRun) {
-        // Dry-run only ever reports a count, so let DuckDB compute it server-side and never
-        // materialize row content (chunk_text/enriched_text) into the JVM at all. Recent SEC
-        // years run into the millions of rows / multiple GiB (2003-2022 combined is a few MB;
-        // 2023 alone is 2.7GiB) -- pulling that through as SELECT s.* into a Java List is what
-        // actually exhausted heap, well before the time budget below ever got a chance to bite.
-        String countSql = "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc
-            + "', allow_moved_paths=true) s WHERE s.year = " + year + " AND NOT EXISTS ("
-            + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
-            + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)";
-        long count = ((Number) queryRows(conn, countSql).get(0).get("n")).longValue();
-        if (count == 0) {
-          yearsSkipped++;
-        } else {
-          LOGGER.info("ChunkOrganizer: SEC backfill dry-run year {}: {} rows would be written",
-              year, count);
-          totalRows += count;
-          yearsDone++;
-        }
-        long elapsedSeconds =
-            java.time.Duration.between(start, java.time.Instant.now()).getSeconds();
-        if (elapsedSeconds >= maxSeconds && year < maxYear) {
-          LOGGER.info("ChunkOrganizer: SEC backfill time budget ({}s) reached after year {}; "
-              + "{} year(s) remaining, will resume on next run", maxSeconds, year,
-              maxYear - year);
-          return;
-        }
-        continue;
-      }
-
-      // Real write: page through the year in bounded batches. Peak heap for one batch stays
-      // constant regardless of the year's total backlog. Each batch is written and committed
-      // immediately, so a mid-year time-budget stop is safe to resume from.
-      //
-      // Resume state is NOT a chunk_id high-water mark: chunk_id is unique within a year but
-      // NOT across years -- the same accession/chunk occasionally appears under two different
-      // `year` values upstream (a data-quality property of sec.vectorized_chunks, confirmed
-      // live: e.g. accession 0000103730-24-000034's chunks are filed under both year=2023 and
-      // year=2024). A MAX(chunk_id)-among-already-migrated cursor treats any such collision as
-      // proof everything below it was migrated for THIS year, when it may only mean an EARLIER
-      // year's migration happened to write a chunk_id that collides with one of this year's --
-      // silently skipping the rest of the year. Measured live: this dropped ~4.7M of 9.6M rows
-      // (years 2024-2025) before being caught by a post-migration row-count audit.
-      //
-      // Nor is it a per-batch anti-join against iceberg_scan(secLoc): re-running that same
-      // WHERE-year-AND-NOT-EXISTS query, unindexed, once per 5000-row batch means DuckDB has to
-      // rescan this year's whole remaining backlog on EVERY batch to find the next one -- also
-      // measured live, ~80s/batch once a year reached a few hundred thousand still-unmigrated
-      // rows, which does not finish a multi-million-row year in practical time.
-      //
-      // The rows still needing migration are computed ONCE per year (one full-row anti-join
-      // against destLoc) into a local DuckDB temp table. Every batch after that pages the
-      // already-materialized table -- no further S3/Iceberg scanning, so batch cost stays flat
-      // regardless of how many batches the year takes. A cheap COUNT-only comparison first
-      // skips this entirely for years already fully migrated, so a `starting`-to-first-batch
-      // resume doesn't pay a full scan for every one of the 24 years on every future invocation.
-      // This materialization is what backfill mode's raised memory_limit (see openDuckDb) is
-      // for: a full year runs ~6GB of raw chunk_text/enriched_text through it at once.
-      long yearSourceCount = ((Number) queryRows(conn,
-          "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) "
-          + "WHERE year = " + year).get(0).get("n")).longValue();
-      long yearMigratedCount = ((Number) queryRows(conn,
-          "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
-          + "WHERE s.year = " + year + " AND EXISTS ("
-          + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
-          + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)").get(0).get("n"))
-          .longValue();
-      if (yearMigratedCount >= yearSourceCount) {
-        yearsSkipped++;
-        continue;
-      }
+    String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
+    String secretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+    if (accessKey != null && secretKey != null) {
       try (Statement stmt = conn.createStatement()) {
-        stmt.execute("DROP TABLE IF EXISTS tmp_sec_backfill_todo");
-        stmt.execute("CREATE TEMP TABLE tmp_sec_backfill_todo AS "
-            + "SELECT s.* FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
-            + "WHERE s.year = " + year + " AND NOT EXISTS ("
-            + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
-            + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)");
-      }
-      boolean yearHasWork = false;
-      while (true) {
-        // No chunk_id > cursor filter: rows are DELETEd from tmp_sec_backfill_todo right after
-        // being written (below), so the table shrinks as the year progresses instead of every
-        // batch re-sorting the same untouched rows it already passed over -- a
-        // "no chunk_id > cursor" version still costs O(remaining size) per batch even off a
-        // local temp table (a plain ORDER BY + LIMIT with no index still scans everything ahead
-        // of it). Deleting keeps each batch's scan bounded to what is actually still left.
-        String sql = "SELECT * FROM tmp_sec_backfill_todo ORDER BY chunk_id LIMIT "
-            + SEC_BACKFILL_BATCH_SIZE;
-        List<Map<String, Object>> sourceRows = queryRows(conn, sql);
-        if (sourceRows.isEmpty()) {
-          break;
-        }
-        yearHasWork = true;
-        List<Map<String, Object>> destRows = new ArrayList<Map<String, Object>>(sourceRows.size());
-        for (Map<String, Object> row : sourceRows) {
-          destRows.add(transformSecChunkRow(row));
-        }
-        writeAppendBatch(context, TRIGGER_TABLE, destRows);
-        totalRows += destRows.size();
-        String cursor = String.valueOf(sourceRows.get(sourceRows.size() - 1).get("chunk_id"));
-        try (Statement stmt = conn.createStatement()) {
-          stmt.execute("DELETE FROM tmp_sec_backfill_todo WHERE chunk_id <= '"
-              + cursor.replace("'", "''") + "'");
-        }
-        LOGGER.info("ChunkOrganizer: SEC backfill year {}: wrote {} rows (batch, cursor={})",
-            year, destRows.size(), cursor);
-
-        long elapsedSeconds =
-            java.time.Duration.between(start, java.time.Instant.now()).getSeconds();
-        if (elapsedSeconds >= maxSeconds) {
-          LOGGER.info("ChunkOrganizer: SEC backfill time budget ({}s) reached mid-year {}; "
-              + "will resume on next run", maxSeconds, year);
-          return;
-        }
-      }
-      if (yearHasWork) {
-        yearsDone++;
-      } else {
-        yearsSkipped++;
+        String s3ConfigMap = accessKey + "|" + secretKey;
+        configureS3FromEnv(stmt, accessKey, secretKey,
+            System.getenv("AWS_ENDPOINT_OVERRIDE"),
+            System.getenv("AWS_REGION") != null ? System.getenv("AWS_REGION") : "auto");
       }
     }
-    LOGGER.info("ChunkOrganizer: SEC backfill complete: {} year(s) migrated ({} rows), "
-        + "{} year(s) already up to date", yearsDone, totalRows, yearsSkipped);
+    return conn;
   }
 
-  /** Reshapes one sec.vectorized_chunks row into ref.vectorized_chunks's generalized shape.
-   *  chunk_id is preserved as-is (not regenerated) so vectorized_chunk_codes' existing
-   *  embeddings, keyed by this same chunk_id, keep resolving after the migration. */
-  static Map<String, Object> transformSecChunkRow(Map<String, Object> row) {
-    Object cik = row.get("cik");
-    Object accessionNumber = row.get("accession_number");
-    Object filingDate = row.get("filing_date");
-    Map<String, Object> out = new LinkedHashMap<String, Object>();
-    out.put("chunk_id", row.get("chunk_id"));
-    out.put("source_schema", "sec");
-    out.put("source_table", "vectorized_chunks");
-    out.put("stringified_fk", cik + ":" + accessionNumber);
-    // Coerce to Long: ResultSet#getObject doesn't guarantee a consistent Number subtype for
-    // this BIGINT column, and ref.vectorized_chunks has no source: block, so its Iceberg schema
-    // is inferred from this value's runtime type on first write.
-    Object sequence = row.get("sequence");
-    out.put("sequence", sequence == null ? null : ((Number) sequence).longValue());
-    // This migration writes rows that already existed in sec.vectorized_chunks well before
-    // ingest_ts existed, not newly-produced content -- stamped with the current time (like every
-    // other writer) rather than backdated, since there is no real prior write time to recover and
-    // the column's contract only needs "this row wasn't here before, watermark past it now".
-    out.put("ingest_ts", java.sql.Timestamp.from(java.time.Instant.now()));
-    out.put("source_type", row.get("source_type"));
-    out.put("chunk_text", row.get("chunk_text"));
-    out.put("enriched_text", row.get("enriched_text"));
-    out.put("section", row.get("section"));
-    out.put("subsection", row.get("subsection"));
-    out.put("section_path", row.get("section_path"));
-    out.put("paragraph_continuation", row.get("paragraph_continuation"));
-    // Same coercion as sequence above.
-    Object paragraphNumber = row.get("paragraph_number");
-    out.put("paragraph_number",
-        paragraphNumber == null ? null : ((Number) paragraphNumber).longValue());
-    out.put("content_type", row.get("content_type"));
-    out.put("financial_concepts", row.get("financial_concepts"));
-    out.put("exhibit_number", row.get("exhibit_number"));
-    out.put("speaker_name", row.get("speaker_name"));
-    out.put("speaker_role", row.get("speaker_role"));
-    out.put("cik", cik);
-    out.put("accession_number", accessionNumber);
-    // ISO 8601 date string, matching the destination column's documented shape -- not the raw
-    // java.sql.Date object, so schema inference lands on VARCHAR rather than guessing from a
-    // JDBC type it has never seen from any other source.
-    out.put("filing_date", filingDate == null ? null : filingDate.toString());
-    return out;
+  private static void configureS3FromEnv(Statement stmt, String accessKey, String secretKey,
+      String endpoint, String region) throws SQLException {
+    stmt.execute("INSTALL httpfs");
+    stmt.execute("LOAD httpfs");
+    stmt.execute("SET http_timeout=10000");
+    stmt.execute("SET http_retries=2");
+    stmt.execute("SET http_retry_wait_ms=500");
+    StringBuilder secret = new StringBuilder("CREATE OR REPLACE SECRET calcite_s3 (TYPE S3");
+    secret.append(", KEY_ID '").append(accessKey).append('\'');
+    secret.append(", SECRET '").append(secretKey).append('\'');
+    if (endpoint != null && !endpoint.isEmpty()) {
+      String endpointHost = endpoint.replaceFirst("^https?://", "");
+      secret.append(", ENDPOINT '").append(endpointHost).append('\'');
+      secret.append(", URL_STYLE 'path'");
+      secret.append(", USE_SSL ").append(endpoint.startsWith("http://") ? "false" : "true");
+    }
+    secret.append(", REGION '").append(region).append('\'');
+    secret.append(')');
+    stmt.execute(secret.toString());
   }
 
   // ========================================================================
   // Row-concat mode
   // ========================================================================
 
-  private List<Map<String, Object>> chunkRowConcatSource(Connection conn, String base,
+  /** Streams the source table in fixed-size batches (see {@link #queryRowsBatched} -- required
+   *  for large entity-grain tables like {@code transport.fmcsa_carriers} (4.47M rows) or
+   *  {@code patents.patent_claims} (tens of millions); the original one-shot query loaded the
+   *  entire table into a Java List, an unbounded-memory pattern that OOM'd in practice once a
+   *  table that size was registered, 2026-08-30), writing each batch to PG staging as it goes
+   *  so peak memory stays O(batch size) regardless of table size. */
+  private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
@@ -414,35 +488,55 @@ public class ChunkOrganizer implements TableLifecycleListener {
         selectCols.add(c);
       }
     }
-    String sql = "SELECT " + String.join(", ", selectCols) + " FROM iceberg_scan('"
-        + loc + "', allow_moved_paths=true)";
-    List<Map<String, Object>> sourceRows = queryRows(conn, sql);
-    List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
-    for (Map<String, Object> row : sourceRows) {
-      String pkValue = stringifyPk(row, src.pkColumns);
-      String text = buildRowConcatText(row, src.stringColumns);
-      List<String> chunks = chunkFixed(text);
-      for (int seq = 0; seq < chunks.size(); seq++) {
-        Map<String, Object> chunkRow = new LinkedHashMap<String, Object>();
-        chunkRow.put("chunk_id",
-            src.sourceSchema + ":" + src.sourceTable + ":" + pkValue + ":" + seq);
-        chunkRow.put("source_schema", src.sourceSchema);
-        chunkRow.put("source_table", src.sourceTable);
-        chunkRow.put("stringified_fk", pkValue);
-        chunkRow.put("sequence", seq);
-        chunkRow.put("ingest_ts", java.sql.Timestamp.from(java.time.Instant.now()));
-        chunkRow.put("source_type", "row_concat");
-        chunkRow.put("chunk_text", chunks.get(seq));
-        chunkRow.put("enriched_text", chunks.get(seq));
-        if (src.wideFkColumn != null) {
-          chunkRow.put(src.wideFkColumn, pkValue);
+    long[] totals = {0, 0}; // [chunkCount, sourceRowCount]
+    // Defensive against a source table's own declared primary key not actually being unique --
+    // confirmed live on fedregister.fr_documents (17 of 463,338 document_numbers reprinted
+    // verbatim across two different months by GPO's own bulk XML, a genuine upstream artifact,
+    // not an extraction bug -- see FedRegisterBulkXmlDataProvider). vc_staging's PK is
+    // (source_schema, source_table, stringified_fk, sequence); without this guard, a second row
+    // sharing the same source PK aborts the whole batch insert for every other row in it. Tracked
+    // across the entire scan (not just one batch) since keyset pagination can split a duplicate
+    // pair across page boundaries.
+    Set<String> seenPk = new HashSet<String>();
+    queryRowsBatched(conn, loc, selectCols, src.pkColumns, ROW_CONCAT_BATCH_SIZE, batch -> {
+      List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
+      for (Map<String, Object> row : batch) {
+        String pkValue = stringifyPk(row, src.pkColumns);
+        if (!seenPk.add(pkValue)) {
+          LOGGER.warn("ChunkOrganizer: {}.{} has a non-unique declared primary key -- dropping "
+              + "duplicate row for {}={}", src.sourceSchema, src.sourceTable, src.pkColumns,
+              pkValue);
+          continue;
         }
-        chunkRows.add(chunkRow);
+        String text = buildRowConcatText(row, src.stringColumns);
+        String parentHash = sha256Hex(CHUNKER_VERSION + ":" + text);
+        List<String> chunks = chunkFixed(text);
+        for (int seq = 0; seq < chunks.size(); seq++) {
+          Map<String, Object> chunkRow = new LinkedHashMap<String, Object>();
+          chunkRow.put("chunk_id",
+              src.sourceSchema + ":" + src.sourceTable + ":" + pkValue + ":" + seq);
+          chunkRow.put("source_schema", src.sourceSchema);
+          chunkRow.put("source_table", src.sourceTable);
+          chunkRow.put("stringified_fk", pkValue);
+          chunkRow.put("sequence", seq);
+          chunkRow.put("parent_hash", parentHash);
+          chunkRow.put("source_type", "row_concat");
+          chunkRow.put("chunk_text", chunks.get(seq));
+          chunkRow.put("enriched_text", chunks.get(seq));
+          if (src.wideFkColumn != null) {
+            chunkRow.put(src.wideFkColumn, pkValue);
+          }
+          chunkRows.add(chunkRow);
+        }
       }
-    }
+      if (!chunkRows.isEmpty()) {
+        writeToPgStaging(pg, chunkRows);
+      }
+      totals[0] += chunkRows.size();
+      totals[1] += batch.size();
+    });
     LOGGER.info("ChunkOrganizer: row-concat {}.{} -> {} chunks from {} rows",
-        src.sourceSchema, src.sourceTable, chunkRows.size(), sourceRows.size());
-    return chunkRows;
+        src.sourceSchema, src.sourceTable, totals[0], totals[1]);
   }
 
   /** Stringifies a (possibly composite) primary key as ':'-joined column values -- uniform
@@ -505,193 +599,298 @@ public class ChunkOrganizer implements TableLifecycleListener {
   // Document-blob mode
   // ========================================================================
 
-  private List<Map<String, Object>> chunkDocumentBlobSource(Connection conn, String base,
+  /** Streams the source table in batches -- see {@link #chunkRowConcatSource}'s javadoc for
+   *  why. Uses a smaller batch size than row-concat mode: {@link SemanticTextChunker} (or a
+   *  future custom {@link ChunkFunction}) does real per-row work, not just a string split. */
+  private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
       DocumentBlobSource src) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     List<String> selectCols = new ArrayList<String>(src.pkColumns);
     if (!selectCols.contains(src.blobColumn)) {
       selectCols.add(src.blobColumn);
     }
-    String sql = "SELECT " + String.join(", ", selectCols) + " FROM iceberg_scan('"
-        + loc + "', allow_moved_paths=true)";
-    List<Map<String, Object>> sourceRows = queryRows(conn, sql);
-    List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
-    SemanticTextChunker chunker = new SemanticTextChunker();
-    for (Map<String, Object> row : sourceRows) {
-      Object blobValue = row.get(src.blobColumn);
-      if (blobValue == null) {
+    long[] totals = {0, 0}; // [chunkCount, sourceRowCount]
+    // See the matching guard in chunkRowConcatSource for why this is needed: a source table's
+    // declared primary key is not a guarantee its data is actually unique.
+    Set<String> seenPk = new HashSet<String>();
+    queryRowsBatched(conn, loc, selectCols, src.pkColumns, DOCUMENT_BLOB_BATCH_SIZE, batch -> {
+      List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
+      for (Map<String, Object> row : batch) {
+        Object blobValue = row.get(src.blobColumn);
+        if (blobValue == null) {
+          continue;
+        }
+        String pkValue = stringifyPk(row, src.pkColumns);
+        if (!seenPk.add(pkValue)) {
+          LOGGER.warn("ChunkOrganizer: {}.{} has a non-unique declared primary key -- dropping "
+              + "duplicate row for {}={}", src.sourceSchema, src.sourceTable, src.pkColumns,
+              pkValue);
+          continue;
+        }
+        String text = blobValue.toString();
+        String parentHash = sha256Hex(CHUNKER_VERSION + ":" + text);
+        List<GenericChunk> chunks = src.chunker.chunk(text);
+        for (GenericChunk chunk : chunks) {
+          int seq = chunk.sequenceNumber;
+          Map<String, Object> chunkRow = new LinkedHashMap<String, Object>();
+          chunkRow.put("chunk_id",
+              src.sourceSchema + ":" + src.sourceTable + ":" + pkValue + ":" + seq);
+          chunkRow.put("source_schema", src.sourceSchema);
+          chunkRow.put("source_table", src.sourceTable);
+          chunkRow.put("stringified_fk", pkValue);
+          chunkRow.put("sequence", seq);
+          chunkRow.put("parent_hash", parentHash);
+          chunkRow.put("source_type", src.sourceType);
+          chunkRow.put("chunk_text", chunk.text);
+          chunkRow.put("enriched_text", chunk.text);
+          chunkRow.put("paragraph_continuation", chunk.paragraphContinuation);
+          if (src.wideFkColumn != null) {
+            chunkRow.put(src.wideFkColumn, pkValue);
+          }
+          chunkRows.add(chunkRow);
+        }
+      }
+      if (!chunkRows.isEmpty()) {
+        writeToPgStaging(pg, chunkRows);
+      }
+      totals[0] += chunkRows.size();
+      totals[1] += batch.size();
+    });
+    LOGGER.info("ChunkOrganizer: document-blob {}.{} -> {} chunks from {} rows",
+        src.sourceSchema, src.sourceTable, totals[0], totals[1]);
+  }
+
+  // ========================================================================
+  // PG compute-layer write (vc_staging / vc_tombstones) -- see vc_schema.sql
+  // ========================================================================
+
+  /** Groups {@code chunkRows} by parent (source_schema, source_table, stringified_fk) and, for
+   *  each parent, compares its {@code parent_hash} against what is already staged: unchanged
+   *  means skip (idempotent no-op), changed or new means tombstone every existing row for that
+   *  parent and insert the freshly computed set. {@code vc_staging} is the only durable copy of
+   *  this data (backed up via plain {@code pg_dump}, not synced to Iceberg -- see the class
+   *  javadoc); {@code vc_tombstones} is an append-only change log for whatever downstream
+   *  consumer (the embeddings stage) needs to know what changed since it last ran.
+   *  {@code pg} must already have its search_path set to the target namespace with {@link
+   *  #ensureVcSchema} already applied -- callers own the connection lifecycle so one connection
+   *  can be reused across an entire sweep instead of reopening per source.
+   *
+   *  <p>Every row in one call shares the same (source_schema, source_table) -- each caller scans
+   *  exactly one registered source per invocation -- so the existing-hash lookup, tombstoning,
+   *  and insert are each done as ONE bulk round-trip against the whole batch's parent set (via
+   *  {@code = ANY(?)} array parameters) instead of one round-trip per parent. The original
+   *  per-parent version cost 3-4 round-trips PER PARENT: at 20,000 parents/batch that's 60,000+
+   *  round-trips and was the actual bottleneck (~23s/batch, ~870 rows/sec) -- confirmed live
+   *  2026-08-31 the cost was Postgres round-trip chatter, not DuckDB read time or chunking CPU. */
+  static void writeToPgStaging(Connection pg, List<Map<String, Object>> chunkRows)
+      throws SQLException {
+    if (chunkRows.isEmpty()) {
+      return;
+    }
+    String sourceSchema = (String) chunkRows.get(0).get("source_schema");
+    String sourceTable = (String) chunkRows.get(0).get("source_table");
+
+    // Group by parent, preserving first-seen order for stable logging only (not semantically
+    // required -- every row in a group shares one parent_hash by construction).
+    Map<String, List<Map<String, Object>>> byParent =
+        new LinkedHashMap<String, List<Map<String, Object>>>();
+    for (Map<String, Object> row : chunkRows) {
+      byParent.computeIfAbsent((String) row.get("stringified_fk"),
+          k -> new ArrayList<Map<String, Object>>()).add(row);
+    }
+
+    Map<String, String> existingHashes =
+        selectExistingParentHashes(pg, sourceSchema, sourceTable, byParent.keySet());
+
+    List<String> changedFks = new ArrayList<String>();
+    List<Map<String, Object>> toInsert = new ArrayList<Map<String, Object>>();
+    int skipped = 0;
+    for (Map.Entry<String, List<Map<String, Object>>> entry : byParent.entrySet()) {
+      String stringifiedFk = entry.getKey();
+      String newHash = (String) entry.getValue().get(0).get("parent_hash");
+      if (newHash.equals(existingHashes.get(stringifiedFk))) {
+        skipped++;
         continue;
       }
-      String pkValue = stringifyPk(row, src.pkColumns);
-      List<SemanticTextChunker.Chunk> chunks = chunker.chunkPlainText(blobValue.toString());
-      for (SemanticTextChunker.Chunk chunk : chunks) {
-        // SemanticTextChunker's own sequence numbers are 1-based; 0-based here matches
-        // row-concat mode's convention (see vectorized_chunks.sequence's column comment).
-        int seq = chunk.getSequenceNumber() - 1;
-        Map<String, Object> chunkRow = new LinkedHashMap<String, Object>();
-        chunkRow.put("chunk_id",
-            src.sourceSchema + ":" + src.sourceTable + ":" + pkValue + ":" + seq);
-        chunkRow.put("source_schema", src.sourceSchema);
-        chunkRow.put("source_table", src.sourceTable);
-        chunkRow.put("stringified_fk", pkValue);
-        chunkRow.put("sequence", seq);
-        chunkRow.put("ingest_ts", java.sql.Timestamp.from(java.time.Instant.now()));
-        chunkRow.put("source_type", src.sourceType);
-        chunkRow.put("chunk_text", chunk.getText());
-        chunkRow.put("enriched_text", chunk.getText());
-        chunkRow.put("paragraph_continuation", chunk.isParagraphContinuation());
-        if (src.wideFkColumn != null) {
-          chunkRow.put(src.wideFkColumn, pkValue);
+      changedFks.add(stringifiedFk);
+      toInsert.addAll(entry.getValue());
+    }
+
+    if (!changedFks.isEmpty()) {
+      tombstoneParents(pg, sourceSchema, sourceTable, changedFks);
+      insertParentRows(pg, toInsert);
+    }
+    pg.commit();
+    LOGGER.info("ChunkOrganizer: staged {} parent(s) ({} replaced, {} unchanged/skipped) "
+        + "into vc_staging", byParent.size(), changedFks.size(), skipped);
+  }
+
+  /** Bulk-fetches every already-staged parent_hash for the given (source_schema, source_table)
+   *  whose stringified_fk is in {@code stringifiedFks}, in ONE round-trip via a Postgres array
+   *  parameter -- see the writeToPgStaging javadoc for why this replaced a per-parent query. */
+  static Map<String, String> selectExistingParentHashes(Connection conn, String sourceSchema,
+      String sourceTable, java.util.Collection<String> stringifiedFks) throws SQLException {
+    Map<String, String> result = new HashMap<String, String>();
+    String sql = "SELECT stringified_fk, parent_hash FROM vc_staging WHERE source_schema = ? "
+        + "AND source_table = ? AND stringified_fk = ANY(?)";
+    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+      ps.setString(1, sourceSchema);
+      ps.setString(2, sourceTable);
+      ps.setArray(3, conn.createArrayOf("varchar", stringifiedFks.toArray()));
+      try (ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) {
+          result.put(rs.getString(1), rs.getString(2));
         }
-        chunkRows.add(chunkRow);
       }
     }
-    LOGGER.info("ChunkOrganizer: document-blob {}.{} -> {} chunks from {} rows",
-        src.sourceSchema, src.sourceTable, chunkRows.size(), sourceRows.size());
-    return chunkRows;
+    return result;
   }
 
-  // ========================================================================
-  // DuckDB / write-out (same pattern as EntityBridgeListener)
-  // ========================================================================
-
-  private Connection openDuckDb(TableContext context) throws SQLException {
-    Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-    try (Statement stmt = conn.createStatement()) {
-      // The one-time SEC chunks migration (GOVDATA_CHUNKS_BACKFILL) materializes a whole year's
-      // still-to-migrate rows at once -- up to ~2.5M rows of chunk_text/enriched_text, ~6GB raw,
-      // which blows well past the 2GB every OTHER ChunkOrganizer run uses for its normal
-      // incremental per-source chunking. 8GB still spilled several GB (raw data + DuckDB's own
-      // processing overhead exceeds 8GB); that spilling was also driving S3 write retries by
-      // contending with MinIO for local disk I/O on the same host. 16GB is comfortably inside
-      // the host's consistently-observed ~19-25GB free. More threads (host has 16 cores)
-      // parallelizes the year-wide sort/materialize. The permanent, ongoing incremental path
-      // (2 threads / 2GB) is unaffected either way.
-      boolean backfillMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_CHUNKS_BACKFILL"));
-      stmt.execute("SET threads=" + (backfillMode ? "8" : "2"));
-      stmt.execute("SET memory_limit='" + (backfillMode ? "16GB" : "2GB") + "'");
-      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/chunk-organizer-duckdb";
-      stmt.execute("SET temp_directory='" + tempDir + "'");
-      try {
-        stmt.execute("INSTALL parquet");
-        stmt.execute("LOAD parquet");
-      } catch (SQLException e) {
-        LOGGER.debug("Parquet extension already loaded or built-in");
-      }
+  /** Bulk-tombstones every existing vc_staging row for the given (source_schema, source_table)
+   *  whose stringified_fk is in {@code stringifiedFks}, in ONE round-trip pair (insert into
+   *  vc_tombstones, then delete) via a Postgres array parameter regardless of how many parents
+   *  changed -- see the writeToPgStaging javadoc. A no-op for any fk that has no existing rows
+   *  (a genuinely new parent, not a changed one), which is fine: both statements simply match
+   *  zero rows for it. */
+  static void tombstoneParents(Connection conn, String sourceSchema, String sourceTable,
+      List<String> stringifiedFks) throws SQLException {
+    long now = System.currentTimeMillis();
+    java.sql.Array fkArray = conn.createArrayOf("varchar", stringifiedFks.toArray());
+    String insertTombstones = "INSERT INTO vc_tombstones "
+        + "(source_schema, source_table, stringified_fk, sequence, chunk_id, tombstoned_at) "
+        + "SELECT source_schema, source_table, stringified_fk, sequence, chunk_id, ? "
+        + "FROM vc_staging WHERE source_schema = ? AND source_table = ? "
+        + "AND stringified_fk = ANY(?)";
+    try (PreparedStatement ps = conn.prepareStatement(insertTombstones)) {
+      ps.setLong(1, now);
+      ps.setString(2, sourceSchema);
+      ps.setString(3, sourceTable);
+      ps.setArray(4, fkArray);
+      ps.executeUpdate();
     }
-    try (Statement stmt = conn.createStatement()) {
-      stmt.execute("INSTALL iceberg");
-      stmt.execute("LOAD iceberg");
-      stmt.execute("SET unsafe_enable_version_guessing = true");
-    } catch (SQLException e) {
-      LOGGER.warn("DuckDB Iceberg extension unavailable: {}", e.getMessage());
+    String delete = "DELETE FROM vc_staging "
+        + "WHERE source_schema = ? AND source_table = ? AND stringified_fk = ANY(?)";
+    try (PreparedStatement ps = conn.prepareStatement(delete)) {
+      ps.setString(1, sourceSchema);
+      ps.setString(2, sourceTable);
+      ps.setArray(3, fkArray);
+      ps.executeUpdate();
     }
-    Map<String, String> s3Config = context.getStorageProvider() != null
-        ? context.getStorageProvider().getS3Config() : null;
-    if (s3Config != null && !s3Config.isEmpty()) {
-      try (Statement stmt = conn.createStatement()) {
-        configureS3(stmt, s3Config);
-      }
-    }
-    return conn;
   }
 
-  private static void configureS3(Statement stmt, Map<String, String> s3Config)
+  /** Column order/presence in each row's map is whatever the caller happened to {@code put} --
+   *  this inserts by column NAME via a fixed statement, reading each via {@code row.get}
+   *  (absent -> null), so callers never need to populate every column. */
+  private static final List<String> VC_STAGING_COLUMNS = Arrays.asList(
+      "source_schema", "source_table", "stringified_fk", "sequence", "chunk_id", "parent_hash",
+      "source_type", "year", "cik", "accession_number", "filing_date", "section", "subsection",
+      "section_path", "paragraph_continuation", "chunk_text", "enriched_text", "content_type",
+      "financial_concepts", "exhibit_number", "speaker_name", "speaker_role", "paragraph_number",
+      "ref_naics_code", "fedregister_document_number");
+
+  static void insertParentRows(Connection conn, List<Map<String, Object>> rows)
       throws SQLException {
-    stmt.execute("INSTALL httpfs");
-    stmt.execute("LOAD httpfs");
-    stmt.execute("SET http_timeout=10000");
-    stmt.execute("SET http_retries=2");
-    stmt.execute("SET http_retry_wait_ms=500");
-    String accessKey = s3Config.get("accessKeyId");
-    String secretKey = s3Config.get("secretAccessKey");
-    String endpoint = s3Config.get("endpoint");
-    String region = s3Config.containsKey("region") ? s3Config.get("region") : "auto";
-    if (accessKey != null && secretKey != null) {
-      StringBuilder secret = new StringBuilder("CREATE OR REPLACE SECRET calcite_s3 (TYPE S3");
-      secret.append(", KEY_ID '").append(accessKey).append('\'');
-      secret.append(", SECRET '").append(secretKey).append('\'');
-      if (endpoint != null && !endpoint.isEmpty()) {
-        String endpointHost = endpoint.replaceFirst("^https?://", "");
-        secret.append(", ENDPOINT '").append(endpointHost).append('\'');
-        secret.append(", URL_STYLE 'path'");
-        secret.append(", USE_SSL ").append(endpoint.startsWith("http://") ? "false" : "true");
+    String sql = "INSERT INTO vc_staging (" + String.join(", ", VC_STAGING_COLUMNS)
+        + ", updated_at) VALUES (" + String.join(", ",
+            java.util.Collections.nCopies(VC_STAGING_COLUMNS.size() + 1, "?")) + ")";
+    try (PreparedStatement ps = conn.prepareStatement(sql)) {
+      long now = System.currentTimeMillis();
+      for (Map<String, Object> row : rows) {
+        int i = 1;
+        for (String col : VC_STAGING_COLUMNS) {
+          ps.setObject(i++, row.get(col));
+        }
+        ps.setLong(i, now);
+        ps.addBatch();
       }
-      secret.append(", REGION '").append(region).append('\'');
-      secret.append(')');
-      stmt.execute(secret.toString());
+      ps.executeBatch();
     }
   }
 
-  private static void writeTable(TableContext context, String tableName,
-      List<Map<String, Object>> rows) throws IOException {
-    EtlPipelineConfig tableConfig = tableConfigOf(context, tableName);
-    MaterializeConfig matConfig =
-        MaterializeConfig.withTableDefaults(tableConfig.getMaterialize(), tableConfig);
-    String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
-        + "/" + context.getSchemaName();
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        matConfig, context.getStorageProvider(), schemaMaterializeDir,
-        context.getIncrementalTracker());
-    writer.initialize(matConfig);
-    writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
-    writer.commit();
-    writer.close();
-  }
-
-  /** Same target table as {@link #writeTable}, but {@code overwritePartitions: false} (plain
-   *  append) instead of the main config's dynamic-overwrite-of-touched-partitions -- needed so
-   *  each backfilled year adds to the {@code source_schema='sec'} partition instead of
-   *  replacing it, since the anti-join in {@link #backfillSecChunks} (not partition-scoped
-   *  overwrite) is what keeps repeated/resumed runs from duplicating rows. */
-  private static void writeAppendBatch(TableContext context, String tableName,
-      List<Map<String, Object>> rows) throws IOException {
-    EtlPipelineConfig tableConfig = tableConfigOf(context, tableName);
-    MaterializeConfig baseConfig = tableConfig.getMaterialize();
-    List<String> partitionColumns = baseConfig.getPartition() != null
-        && baseConfig.getPartition().getColumns() != null
-        ? baseConfig.getPartition().getColumns()
-        : Collections.<String>emptyList();
-    String targetTableId =
-        baseConfig.getTargetTableId() != null ? baseConfig.getTargetTableId() : tableName;
-
-    MaterializeConfig.Builder builder = MaterializeConfig.builder()
-        .enabled(true)
-        .format(MaterializeConfig.Format.ICEBERG)
-        .name(tableName)
-        .targetTableId(targetTableId)
-        .output(org.apache.calcite.adapter.file.etl.MaterializeOutputConfig.builder().build())
-        .iceberg(MaterializeConfig.IcebergConfig.builder()
-            .catalogType(MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
-            .overwritePartitions(false)
-            .build());
-    if (!partitionColumns.isEmpty()) {
-      builder.partition(org.apache.calcite.adapter.file.etl.MaterializePartitionConfig.builder()
-          .columns(partitionColumns)
-          .build());
+  static void ensureVcSchema(Connection conn) throws SQLException {
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute(
+          "CREATE TABLE IF NOT EXISTS vc_staging ("
+          + "  source_schema VARCHAR NOT NULL,"
+          + "  source_table VARCHAR NOT NULL,"
+          + "  stringified_fk VARCHAR NOT NULL,"
+          + "  sequence BIGINT NOT NULL,"
+          + "  parent_unit VARCHAR NOT NULL DEFAULT '',"
+          + "  chunk_id VARCHAR NOT NULL,"
+          + "  parent_hash VARCHAR NOT NULL,"
+          + "  source_type VARCHAR NOT NULL,"
+          + "  year INT,"
+          + "  cik VARCHAR,"
+          + "  accession_number VARCHAR,"
+          + "  filing_date VARCHAR,"
+          + "  section VARCHAR,"
+          + "  subsection VARCHAR,"
+          + "  section_path VARCHAR,"
+          + "  paragraph_continuation BOOLEAN,"
+          + "  chunk_text TEXT NOT NULL,"
+          + "  enriched_text TEXT,"
+          + "  content_type VARCHAR,"
+          + "  financial_concepts VARCHAR,"
+          + "  exhibit_number VARCHAR,"
+          + "  speaker_name VARCHAR,"
+          + "  speaker_role VARCHAR,"
+          + "  paragraph_number BIGINT,"
+          + "  ref_naics_code VARCHAR,"
+          + "  fedregister_document_number VARCHAR,"
+          + "  updated_at BIGINT NOT NULL,"
+          + "  PRIMARY KEY (source_schema, source_table, stringified_fk, sequence)"
+          + ")");
+      stmt.execute(
+          "CREATE INDEX IF NOT EXISTS idx_vc_staging_updated_at "
+          + "ON vc_staging (source_schema, source_table, updated_at)");
+      stmt.execute(
+          "CREATE TABLE IF NOT EXISTS vc_tombstones ("
+          + "  source_schema VARCHAR NOT NULL,"
+          + "  source_table VARCHAR NOT NULL,"
+          + "  stringified_fk VARCHAR NOT NULL,"
+          + "  sequence BIGINT NOT NULL,"
+          + "  chunk_id VARCHAR NOT NULL,"
+          + "  tombstoned_at BIGINT NOT NULL,"
+          + "  PRIMARY KEY (source_schema, source_table, stringified_fk, sequence, tombstoned_at)"
+          + ")");
+      stmt.execute(
+          "CREATE TABLE IF NOT EXISTS vc_sync_state ("
+          + "  source_schema VARCHAR NOT NULL,"
+          + "  source_table VARCHAR NOT NULL,"
+          + "  last_swept_completed_at BIGINT NOT NULL DEFAULT 0,"
+          + "  PRIMARY KEY (source_schema, source_table)"
+          + ")");
+      // A deployment that created vc_sync_state before last_swept_completed_at was added (this
+      // session, 2026-08-30) has an existing table missing the column -- CREATE TABLE IF NOT
+      // EXISTS above is a no-op against it. Same migration pattern PGPipelineTracker uses for
+      // pipeline_tracker.source_as_of.
+      stmt.execute("ALTER TABLE vc_sync_state ADD COLUMN IF NOT EXISTS "
+          + "last_swept_completed_at BIGINT NOT NULL DEFAULT 0");
+      // applied_at/last_synced_at existed only to mark a tombstone/schema as drained into
+      // ref.vectorized_chunks -- dead columns now that sync-to-Iceberg was removed in favor of a
+      // plain pg_dump backup of vc_staging (see the class javadoc). Dropped here, not just
+      // omitted from the CREATE statements above, so an already-deployed instance converges too.
+      stmt.execute("DROP INDEX IF EXISTS idx_vc_tombstones_pending");
+      stmt.execute("ALTER TABLE vc_tombstones DROP COLUMN IF EXISTS applied_at");
+      stmt.execute("ALTER TABLE vc_sync_state DROP COLUMN IF EXISTS last_synced_at");
     }
-    MaterializeConfig appendConfig =
-        MaterializeConfig.withTableDefaults(builder.build(), tableConfig);
-
-    String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
-        + "/" + context.getSchemaName();
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        appendConfig, context.getStorageProvider(), schemaMaterializeDir,
-        context.getIncrementalTracker());
-    writer.initialize(appendConfig);
-    writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
-    writer.commit();
-    writer.close();
   }
 
-  private static EtlPipelineConfig tableConfigOf(TableContext context, String tableName) {
-    for (EtlPipelineConfig cfg : context.getSchemaContext().getTables()) {
-      if (tableName.equals(cfg.getName())) {
-        return cfg;
+  static String sha256Hex(String text) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] hash = digest.digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      StringBuilder sb = new StringBuilder(hash.length * 2);
+      for (byte b : hash) {
+        sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+        sb.append(Character.forDigit(b & 0xF, 16));
       }
+      return sb.toString();
+    } catch (NoSuchAlgorithmException e) {
+      // SHA-256 is a JDK-guaranteed algorithm (every JCE provider implements it); this is
+      // unreachable in practice, not a real error condition.
+      throw new IllegalStateException("SHA-256 unavailable", e);
     }
-    throw new IllegalStateException(
-        "ChunkOrganizer: table config not found for " + tableName);
   }
 
   private static List<Map<String, Object>> queryRows(Connection conn, String sql)
@@ -709,6 +908,76 @@ public class ChunkOrganizer implements TableLifecycleListener {
       }
     }
     return rows;
+  }
+
+  /** Row-concat mode's per-batch row count -- matches EntityBridgeListener's own
+   *  MAX_ORG_MATCH_BATCH_SIZE precedent for the same "bound peak memory for one batch to a
+   *  constant regardless of table size" problem. */
+  private static final int ROW_CONCAT_BATCH_SIZE = 20_000;
+
+  /** Document-blob mode's per-batch row count -- smaller than row-concat's because {@link
+   *  SemanticTextChunker} (or a custom {@link ChunkFunction}) does real per-row CPU work, not
+   *  just a string split. */
+  private static final int DOCUMENT_BLOB_BATCH_SIZE = 5_000;
+
+  @FunctionalInterface
+  private interface BatchConsumer {
+    void accept(List<Map<String, Object>> batch) throws SQLException;
+  }
+
+  /** Streams {@code loc}'s rows in fixed-size batches via keyset pagination ordered by {@code
+   *  pkColumns} -- {@code WHERE (pk1, pk2, ...) > (lastSeen1, lastSeen2, ...) ORDER BY pk1,
+   *  pk2, ... LIMIT batchSize}, not {@code OFFSET} (which DuckDB re-scans-and-discards on every
+   *  call -- same problem and same fix EntityBridgeListener's own batching already established
+   *  for runOrgSource). Confirmed live that DuckDB supports row-tuple comparison
+   *  ({@code (a, b) > (x, y)}) correctly, including for composite keys.
+   *
+   *  <p>Bounds peak memory to one batch regardless of table size -- required once a
+   *  multi-million-row entity-grain table (e.g. {@code transport.fmcsa_carriers}) is a
+   *  registered source; the original one-shot {@link #queryRows} call loaded the entire table
+   *  into a Java List, which OOM'd in practice the moment such a table was added, 2026-08-30. */
+  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
+      List<String> pkColumns, int batchSize, BatchConsumer batchConsumer) throws SQLException {
+    String orderBy = String.join(", ", pkColumns);
+    List<Object> cursor = null;
+    while (true) {
+      StringBuilder sql = new StringBuilder("SELECT ").append(String.join(", ", selectCols))
+          .append(" FROM iceberg_scan('").append(loc).append("', allow_moved_paths=true)");
+      if (cursor != null) {
+        sql.append(" WHERE (").append(orderBy).append(") > (");
+        for (int i = 0; i < cursor.size(); i++) {
+          if (i > 0) {
+            sql.append(", ");
+          }
+          sql.append(sqlLiteral(cursor.get(i)));
+        }
+        sql.append(')');
+      }
+      sql.append(" ORDER BY ").append(orderBy).append(" LIMIT ").append(batchSize);
+      List<Map<String, Object>> batch = queryRows(conn, sql.toString());
+      if (batch.isEmpty()) {
+        break;
+      }
+      batchConsumer.accept(batch);
+      if (batch.size() < batchSize) {
+        break;
+      }
+      Map<String, Object> last = batch.get(batch.size() - 1);
+      cursor = new ArrayList<Object>(pkColumns.size());
+      for (String pk : pkColumns) {
+        cursor.add(last.get(pk));
+      }
+    }
+  }
+
+  private static String sqlLiteral(Object value) {
+    if (value == null) {
+      return "NULL";
+    }
+    if (value instanceof Number || value instanceof Boolean) {
+      return value.toString();
+    }
+    return "'" + value.toString().replace("'", "''") + "'";
   }
 
   /** One row-concat source registry entry. */
@@ -742,15 +1011,20 @@ public class ChunkOrganizer implements TableLifecycleListener {
     final String blobColumn;
     final String sourceType;
     final String wideFkColumn;
+    /** Pluggable chunk-parsing function for this source's blob column -- see {@link
+     *  ChunkFunction}'s javadoc for why this exists instead of every source sharing one
+     *  hardcoded chunker. */
+    final ChunkFunction chunker;
 
     DocumentBlobSource(String sourceSchema, String sourceTable, List<String> pkColumns,
-        String blobColumn, String sourceType, String wideFkColumn) {
+        String blobColumn, String sourceType, String wideFkColumn, ChunkFunction chunker) {
       this.sourceSchema = sourceSchema;
       this.sourceTable = sourceTable;
       this.pkColumns = pkColumns;
       this.blobColumn = blobColumn;
       this.sourceType = sourceType;
       this.wideFkColumn = wideFkColumn;
+      this.chunker = chunker;
     }
   }
 }

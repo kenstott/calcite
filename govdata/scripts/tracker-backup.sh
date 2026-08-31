@@ -22,6 +22,14 @@
 
 set -euo pipefail
 
+# cron invokes this with a minimal PATH (/usr/bin:/bin) that omits ~/.local/bin, where rclone is
+# actually installed here -- confirmed live 2026-08-31: every night's upload step was silently
+# failing with "rclone: command not found", leaving every backup local-disk-only despite the
+# "verified" log line (verification only checks pg_restore --list, not the upload). Prepending
+# common user-install locations makes the script correct regardless of invoker (interactive shell
+# or cron), rather than depending on a crontab PATH= line that isn't version-controlled.
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+
 BACKUP_DIR="/var/tmp/govdata-tracker-backups"
 KEEP=7
 VERIFY=false
