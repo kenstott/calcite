@@ -467,7 +467,7 @@ partitionedTables:
   # --- HIGHER EDUCATION R&D (HERD) — institution microdata -------------------
   - name: nsf_herd_by_institution
     # NCSES restates prior-year figures on every annual release (see schema header
-    # note). trailing_window force-reopens the current + prior year every run so the
+    # note). The lookback reopens the 3 most recently published years so the
     # period-completion gate doesn't freeze the year permanently; the hash check skips the write
     # when unrevised.
     lookbackPeriods: 3

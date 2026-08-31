@@ -1443,7 +1443,7 @@ partitionedTables:
   - name: eia_natural_gas_price
     # Freshness gate: hashes the response body post-fetch to skip the materialize/commit
     # when unchanged. Spot prices are final same-day (unlike EIA's monthly survey series),
-    # so no trailing_window is needed here.
+    # so no lookback is needed here.
     freshness:
       type: hash
     pattern: "type=eia_ng_price/*.parquet"

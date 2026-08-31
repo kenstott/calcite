@@ -509,10 +509,10 @@ partitionedTables:
   # --- EMPLOYMENT STATISTICS ---
   - name: employment_statistics
     # Freshness gate: BLS revises the prior 1-2 months on every monthly release and restates the
-    # prior calendar year in its annual February benchmark revision. Without trailing_window, the
-    # pipeline's period-completion gate marks each year 'complete' the first time it succeeds and
-    # never re-checks it — trailing_window force-reopens the current + prior year every run; the
-    # hash check then skips the write (no new snapshot) unless BLS actually revised the data.
+    # prior calendar year in its annual February benchmark revision. The period-completion gate
+    # marks each year 'complete' the first time it succeeds and never re-checks it, so the lookback
+    # reopens the 6 most recently published years every run; the hash check then skips the write
+    # (no new snapshot) unless BLS actually revised the data.
     lookbackPeriods: 6
     freshness:
       type: hash
@@ -782,7 +782,7 @@ partitionedTables:
   - name: inflation_metrics
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 2 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     lookbackPeriods: 2
     freshness:
@@ -926,7 +926,7 @@ partitionedTables:
   - name: regional_cpi
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 2 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
     # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
@@ -1063,7 +1063,7 @@ partitionedTables:
   - name: metro_cpi
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 2 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
     # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
@@ -1373,7 +1373,7 @@ partitionedTables:
   - name: regional_food_cpi
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 2 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
     # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
@@ -1512,7 +1512,7 @@ partitionedTables:
   - name: metro_food_cpi
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 2 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     # CPI-U unadjusted (CUUR) index levels are FINAL WHEN RELEASED and are never revised -- the
     # 5-year restatement applies only to seasonally adjusted (CUSR) series, whose seasonal factors
@@ -1671,7 +1671,7 @@ partitionedTables:
   - name: state_industry
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 2 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     lookbackPeriods: 2
     freshness:
@@ -1795,6 +1795,11 @@ partitionedTables:
   # --- STATE WAGES ---
   - name: state_wages
     pattern: "type=state_wages/frequency=*/year=*/state_wages.parquet"
+    # QCEW data year Y stays preliminary until it is finalized alongside the following year's Q1
+    # release (~Sept Y+1), and BLS rewrites the annual singlefile in between. Reopening the 2 most
+    # recently published years picks up that preliminary-to-final rewrite; BLS does not edit the
+    # file again afterwards. https://www.bls.gov/cew/revisions/
+    lookbackPeriods: 2
     # BLS serves both ETag and Last-Modified on this static per-year zip (confirmed via HEAD);
     # ETag is the more precise signal. Lets a historical/daily re-run skip a year whose upstream
     # file hasn't changed instead of unconditionally re-downloading and re-writing every year in
@@ -1940,7 +1945,7 @@ partitionedTables:
   - name: metro_industry
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 3 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     lookbackPeriods: 3
     freshness:
@@ -2062,7 +2067,7 @@ partitionedTables:
   # --- METRO WAGES ---
   - name: metro_wages
     # BLS QCEW revises the most recent quarters as it finalizes each year's annual
-    # figures. trailing_window force-reopens the current + prior year every run so the
+    # figures. The lookback reopens the 2 most recently published years so the
     # period-completion gate doesn't freeze them permanently; year-grain only (does not model
     # QCEW's within-year quarterly revision cycle) -- a partial mitigation, not a complete fix.
     lookbackPeriods: 2
@@ -2199,7 +2204,9 @@ partitionedTables:
       rowCount: 49175565
       checkedAt: "2026-08-28T01:48:12Z"
     # Same BLS per-year zip as state_wages (filtered differently by rowFilter below), so the
-    # same ETag freshness signal applies — see the comment on state_wages' freshness: block.
+    # same preliminary-to-final rewrite applies — see the comment on state_wages.
+    lookbackPeriods: 2
+    # Same ETag freshness signal as state_wages — see the comment on its freshness: block.
     freshness:
       type: etag
     # DQ sample cap (GOVDATA_DQ mode): the QCEW annual bulk ZIP is one fetch per year whose
@@ -2314,7 +2321,7 @@ partitionedTables:
   # --- COUNTY WAGES ---
   - name: county_wages
     # BLS QCEW revises the most recent quarters as it finalizes each year's annual
-    # figures. trailing_window force-reopens the current + prior year every run so the
+    # figures. The lookback reopens the 2 most recently published years so the
     # period-completion gate doesn't freeze them permanently; year-grain only (does not model
     # QCEW's within-year quarterly revision cycle) -- a partial mitigation, not a complete fix.
     lookbackPeriods: 2
@@ -2451,7 +2458,7 @@ partitionedTables:
   - name: jolts_regional
     # JOLTS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
-    # trailing_window force-reopens the current + prior year every run; the hash check skips the
+    # The lookback reopens the 6 most recently published years; the hash check skips the
     # write when the source file is unrevised for that year.
     lookbackPeriods: 6
     freshness:
@@ -2621,7 +2628,7 @@ partitionedTables:
   - name: jolts_industry
     # JOLTS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
-    # trailing_window force-reopens the current + prior year every run; the hash check skips the
+    # The lookback reopens the 6 most recently published years; the hash check skips the
     # write when the source file is unrevised for that year.
     lookbackPeriods: 6
     freshness:
@@ -2766,7 +2773,7 @@ partitionedTables:
   - name: jolts_state
     # JOLTS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
-    # trailing_window force-reopens the current + prior year every run; the hash check skips the
+    # The lookback reopens the 6 most recently published years; the hash check skips the
     # write when the source file is unrevised for that year.
     lookbackPeriods: 6
     freshness:
@@ -2920,7 +2927,7 @@ partitionedTables:
   - name: wage_growth
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 6 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     lookbackPeriods: 6
     freshness:
@@ -3035,8 +3042,8 @@ partitionedTables:
   # --- LABOR PRODUCTIVITY ---
   - name: labor_productivity
     # BLS revises recent quarters of the Major Sector Productivity series and
-    # restates the prior calendar year in its annual benchmark update. trailing_window
-    # force-reopens the current + prior year every run; the hash check skips the write when
+    # restates the prior calendar year in its annual benchmark update. The lookback
+    # reopens the 6 most recently published years; the hash check skips the write when
     # unrevised (year-grain only -- does not separately re-check quarter-level revision).
     lookbackPeriods: 6
     freshness:
@@ -3159,7 +3166,7 @@ partitionedTables:
   - name: regional_employment
     # BLS revises the prior 1-2 months on every monthly release and restates the
     # prior calendar year in its annual February benchmark revision (same cadence as
-    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # employment_statistics). The lookback reopens the 6 most recently published years so
     # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
     lookbackPeriods: 6
     freshness:
@@ -3665,8 +3672,8 @@ partitionedTables:
   - name: fred_indicators
     # FRED series mirror the revision cadence of their underlying source (e.g.
     # PAYEMS mirrors BLS CES -- prior months revised monthly, prior year restated each February).
-    # trailing_window force-reopens the current + prior year every run; the hash check skips the
-    # write when unrevised.
+    # The lookback reopens the 72 most recently published months (= 6 years of monthly data); the
+    # hash check skips the write when unrevised.
     lookbackPeriods: 72
     freshness:
       type: hash
@@ -3922,9 +3929,9 @@ partitionedTables:
   - name: national_accounts
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 6 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 6
     freshness:
       type: hash
@@ -4128,9 +4135,11 @@ partitionedTables:
   - name: regional_price_parities
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 8 most recently published years, matching
+    # regional_income: both come from the same BEA regional program and are restated on the same
+    # cycle. Without it the period-completion gate marks each year complete on first success and
+    # the hash check can never re-fire.
+    lookbackPeriods: 8
     freshness:
       type: hash
     pattern: "type=regional_price_parities/year=*/tablename=*/regional_price_parities.parquet"
@@ -4935,9 +4944,9 @@ partitionedTables:
   - name: regional_income
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 8 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 8
     freshness:
       type: hash
@@ -5222,9 +5231,9 @@ partitionedTables:
   - name: ita_data
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 6 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 6
     freshness:
       type: hash
@@ -5437,9 +5446,9 @@ partitionedTables:
   - name: fdi_direct_investment
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 6 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 6
     freshness:
       type: hash
@@ -5585,9 +5594,9 @@ partitionedTables:
   - name: fdi_activities
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 3 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 3
     freshness:
       type: hash
@@ -5670,9 +5679,9 @@ partitionedTables:
   - name: iip_positions
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 6 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 6
     freshness:
       type: hash
@@ -5808,9 +5817,9 @@ partitionedTables:
   - name: gdp_statistics
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 6 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 6
     freshness:
       type: hash
@@ -5923,9 +5932,9 @@ partitionedTables:
   - name: industry_gdp
     # BEA advances quarterly GDP-family estimates (advance -> second -> third,
     # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
-    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
-    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
-    # further than one year, but it stops the period-completion gate from freezing forever.
+    # and regional revisions. The lookback reopens the 6 most recently published years, which
+    # covers the reach of a typical annual revision; a comprehensive revision reaching back
+    # further than that still requires a full reprocess.
     lookbackPeriods: 6
     freshness:
       type: hash
