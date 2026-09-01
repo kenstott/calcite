@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.fiscal;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -42,10 +43,20 @@ import java.util.Map;
  * belongs in a join against {@code census.acs_population} at query time, where the
  * population vintage is explicit.
  */
-public class UsaSpendingCountyProvider implements DataProvider {
+public class UsaSpendingCountyProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UsaSpendingCountyProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  /**
+   * Cache identity for one of this batch's POSTs. Requests sharing an endpoint differ only in
+   * their body, so the label keeps entries legible and the body rides in the query position: the
+   * cache names the file from the path and digests the whole key, so a changed request body
+   * re-keys itself instead of replaying the previous answer.
+   */
+  private static String cacheKey(String label, String body) {
+    return ENDPOINT + "/" + label + "?" + body;
+  }
+
   private static final String ENDPOINT =
       "https://api.usaspending.gov/api/v2/search/spending_by_geography/";
 
@@ -71,7 +82,7 @@ public class UsaSpendingCountyProvider implements DataProvider {
       + "\"name\":\"Centers for Medicare and Medicaid Services\"}],";
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
       year = variables.get("year");
@@ -97,7 +108,8 @@ public class UsaSpendingCountyProvider implements DataProvider {
     LOGGER.info("usaspending_by_county: POST {} fy={}", ENDPOINT, fy);
 
     JsonNode root;
-    InputStream in = FiscalHttp.openPostJson(ENDPOINT, body).getInputStream();
+    InputStream in = rawCache.openStream(cacheKey("all", body),
+        () -> FiscalHttp.openPostJson(ENDPOINT, body).getInputStream());
     try {
       root = MAPPER.readTree(in);
     } finally {
@@ -111,7 +123,8 @@ public class UsaSpendingCountyProvider implements DataProvider {
         + "\"spending_level\":\"transactions\",\"subawards\":false}";
     LOGGER.info("usaspending_by_county: POST {} fy={} (excl loans)", ENDPOINT, fy);
     JsonNode rootExclLoans;
-    InputStream inExclLoans = FiscalHttp.openPostJson(ENDPOINT, bodyExclLoans).getInputStream();
+    InputStream inExclLoans = rawCache.openStream(cacheKey("excl-loans", bodyExclLoans),
+        () -> FiscalHttp.openPostJson(ENDPOINT, bodyExclLoans).getInputStream());
     try {
       rootExclLoans = MAPPER.readTree(inExclLoans);
     } finally {
@@ -136,7 +149,8 @@ public class UsaSpendingCountyProvider implements DataProvider {
         + "\"spending_level\":\"transactions\",\"subawards\":false}";
     LOGGER.info("usaspending_by_county: POST {} fy={} (CMS only, excl loans)", ENDPOINT, fy);
     JsonNode rootCms;
-    InputStream inCms = FiscalHttp.openPostJson(ENDPOINT, bodyCms).getInputStream();
+    InputStream inCms = rawCache.openStream(cacheKey("cms-excl-loans", bodyCms),
+        () -> FiscalHttp.openPostJson(ENDPOINT, bodyCms).getInputStream());
     try {
       rootCms = MAPPER.readTree(inCms);
     } finally {

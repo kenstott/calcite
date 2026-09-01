@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.fiscal;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,14 +35,24 @@ import java.util.Map;
  * ({@code POST /api/v2/spending/}, {@code type=agency}, {@code period=12}).
  * Amounts are cumulative obligations through the fiscal year (Oct-Sep).
  */
-public class UsaSpendingAgencyProvider implements DataProvider {
+public class UsaSpendingAgencyProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UsaSpendingAgencyProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  /**
+   * Cache identity for one of this batch's POSTs. Requests sharing an endpoint differ only in
+   * their body, so the label keeps entries legible and the body rides in the query position: the
+   * cache names the file from the path and digests the whole key, so a changed request body
+   * re-keys itself instead of replaying the previous answer.
+   */
+  private static String cacheKey(String label, String body) {
+    return ENDPOINT + "/" + label + "?" + body;
+  }
+
   private static final String ENDPOINT = "https://api.usaspending.gov/api/v2/spending/";
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
       year = variables.get("year");
@@ -54,7 +65,8 @@ public class UsaSpendingAgencyProvider implements DataProvider {
     LOGGER.info("usaspending_by_agency: POST {} fy={}", ENDPOINT, year);
 
     JsonNode root;
-    InputStream in = FiscalHttp.openPostJson(ENDPOINT, body).getInputStream();
+    InputStream in = rawCache.openStream(cacheKey("all", body),
+        () -> FiscalHttp.openPostJson(ENDPOINT, body).getInputStream());
     try {
       root = MAPPER.readTree(in);
     } finally {

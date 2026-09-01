@@ -2383,8 +2383,10 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider POSTs through this cache, keyed per request (endpoint + label +
+      # body), so each of the batch's queries is issued once and a changed body re-keys.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAgencyProvider"
@@ -2485,8 +2487,10 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider POSTs through this cache, keyed per request (endpoint + label +
+      # body), so each of the batch's queries is issued once and a changed body re-keys.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingStateProvider"
@@ -2584,8 +2588,10 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider POSTs through this cache, keyed per request (endpoint + label +
+      # body), so each of the batch's queries is issued once and a changed body re-keys.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingCountyProvider"
