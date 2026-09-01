@@ -250,6 +250,8 @@ partitionedTables:
       type: http
       url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATDIS/g_patent.tsv.zip"
       method: GET
+      headers:
+        X-Api-Key: "${USPTO_API_KEY}"
       skipResponseBody: true
       response:
         format: JSON
@@ -816,6 +818,8 @@ partitionedTables:
       type: http
       url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATTXT/g_claims_{effective_year}.tsv.zip"
       method: GET
+      headers:
+        X-Api-Key: "${USPTO_API_KEY}"
       skipResponseBody: true
       response:
         format: JSON
@@ -877,6 +881,8 @@ partitionedTables:
       type: http
       url: "https://api.uspto.gov/api/v1/datasets/products/files/PVGPATTXT/g_brf_sum_text_{effective_year}.tsv.zip"
       method: GET
+      headers:
+        X-Api-Key: "${USPTO_API_KEY}"
       skipResponseBody: true
       response:
         format: JSON

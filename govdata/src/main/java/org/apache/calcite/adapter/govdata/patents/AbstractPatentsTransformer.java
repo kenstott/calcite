@@ -594,8 +594,21 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       String destPath, String... extensions) throws IOException {
     File tempZip = File.createTempFile("patents-zip-", ".zip");
     try {
-      // Phase 1: download the ZIP completely to a local temp file
+      // Phase 1: download the ZIP completely to a local temp file.
+      //
+      // api.uspto.gov's ODP gateway (PVGPATTXT confirmed live 2026-08-31; likely every product)
+      // never serves the file itself -- it 302s to a presigned data.uspto.gov URL (query string
+      // carries Expires/Signature/Key-Pair-Id, a CloudFront/S3-style signed URL). Presigned URLs
+      // validate against an EXACT expected request; HttpURLConnection's automatic redirect
+      // following (the JVM default) carries this method's X-Api-Key and User-Agent headers into
+      // that second request unchanged, which the signed URL was never issued to accept --
+      // confirmed live: the ODP hop alone (X-Api-Key only, no auto-follow) correctly returns 302
+      // + a valid signed Location, but auto-following it inline came back HTTP 200 with a
+      // text/html body instead of the ZIP. Disabling auto-follow and manually re-requesting the
+      // Location URL with NO headers at all (a presigned URL needs none) is the fix -- not a
+      // WAF/UA block despite the old error message's guess.
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setInstanceFollowRedirects(false);
       conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
       conn.setReadTimeout(READ_TIMEOUT_MS);
       conn.setRequestProperty("User-Agent", "GovData/1.0");
@@ -605,6 +618,21 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         }
       }
       int status = conn.getResponseCode();
+      if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+        String location = conn.getHeaderField("Location");
+        if (location == null || location.isEmpty()) {
+          throw new IOException("HTTP " + status + " from " + url + " with no Location header");
+        }
+        conn.disconnect();
+        conn = (HttpURLConnection) URI.create(location).toURL().openConnection();
+        conn.setInstanceFollowRedirects(false);
+        conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(READ_TIMEOUT_MS);
+        // Deliberately NO headers here -- a presigned URL's signature covers the exact request
+        // it was issued for; any extra header (even a generic User-Agent) risks the same
+        // signature-mismatch failure this fix exists to avoid.
+        status = conn.getResponseCode();
+      }
       if (status != 200) {
         throw new IOException("HTTP " + status + " from " + url);
       }

@@ -36,9 +36,11 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -86,7 +88,11 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
   private static final String GOVINFO_URL_TEMPLATE =
       "https://www.govinfo.gov/bulkdata/FR/%d/%02d/FR-%d-%02d.zip";
 
-  private static final Pattern DOC_NUMBER_PATTERN = Pattern.compile("\\d{4}-\\d+");
+  // Optional leading correction-notice prefix (e.g. "C1-", "E1-") must be captured, not
+  // skipped -- an unanchored \d{4}-\d+ matches only the trailing original-document number
+  // inside "[FR Doc. C1-2010-11578 Filed ...]", silently dropping the correction marker and
+  // colliding with that original document's own row on document_number.
+  private static final Pattern DOC_NUMBER_PATTERN = Pattern.compile("([A-Z]\\d*-)?\\d{4}-\\d+");
   private static final Pattern FILENAME_DATE_PATTERN =
       Pattern.compile("FR-(\\d{4}-\\d{2}-\\d{2})\\.xml$");
 
@@ -167,6 +173,14 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
     }
     java.util.Arrays.sort(xmlFiles);
 
+    // GPO's own bulk XML occasionally reprints the identical document (same document_number,
+    // full text repeated verbatim) in a later day's issue within the same month -- a genuine
+    // upstream artifact (confirmed live against the FR public API for several instances), not
+    // an extraction bug. document_number is this table's declared primary key, so the first
+    // occurrence chronologically (xmlFiles is sorted ascending) is kept and later repeats are
+    // dropped with a warning, rather than letting the batch insert fail on a PK collision.
+    Set<String> seenDocNumbers = new HashSet<String>();
+
     try {
       for (java.io.File xmlFile : xmlFiles) {
         String pubDate = extractDateFromFilename(xmlFile.getName());
@@ -176,7 +190,7 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
           try (InputStream in = new java.io.FileInputStream(xmlFile)) {
             xmlDoc = builder.parse(in);
           }
-          parseXmlDocument(xmlDoc.getDocumentElement(), pubDate, rows);
+          parseXmlDocument(xmlDoc.getDocumentElement(), pubDate, rows, seenDocNumbers);
         } catch (Exception e) {
           LOGGER.warn("Failed to parse {}: {}", xmlFile.getName(), e.getMessage());
         }
@@ -188,7 +202,7 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
 
 
   private void parseXmlDocument(Element root, String pubDate,
-      List<Map<String, Object>> rows) {
+      List<Map<String, Object>> rows, Set<String> seenDocNumbers) {
 
     for (String[] containerInfo : CONTAINER_TYPES) {
       String containerTag = containerInfo[0];
@@ -206,8 +220,15 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
             continue;
           }
           Map<String, Object> row = extractDocument(doc, docType, pubDate);
-          if (row.get("document_number") != null) {
-            rows.add(row);
+          Object docNumber = row.get("document_number");
+          if (docNumber != null) {
+            if (seenDocNumbers.add((String) docNumber)) {
+              rows.add(row);
+            } else {
+              LOGGER.warn("fr_documents: dropping reprint of document_number={} "
+                  + "(publication_date={}) -- already captured earlier this month", docNumber,
+                  pubDate);
+            }
           }
         }
       }

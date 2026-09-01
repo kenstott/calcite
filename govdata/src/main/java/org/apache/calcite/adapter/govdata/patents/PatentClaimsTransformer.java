@@ -47,6 +47,17 @@ public class PatentClaimsTransformer extends AbstractPatentsTransformer {
     }
 
     String url = context.getUrl();
+    // Same catalog-availability gate AbstractTrademarkFileTransformer already uses: a year whose
+    // file isn't listed in PVGPATTXT's catalog yet (confirmed live 2026-08-31: the catalog's
+    // own productToDate lags the current year) is not an error, just not published -- skip
+    // cleanly instead of attempting a download that a missing file turns into a confusing
+    // "Expected ZIP but got HTML" failure (USPTO's site serves its own SPA shell for a
+    // non-existent object instead of a plain 404).
+    if (!isPublished(url)) {
+      LOGGER.info("PatentClaims: {} not in ODP catalog yet — skipping (auto-ingests once "
+          + "USPTO publishes it).", yearStr);
+      return Collections.emptyIterator();
+    }
     String dest = cacheFile("g_claims_" + yearStr + "_" + quarterToken(context) + ".tsv");
     // downloadAndCacheTsv applies the release-freshness gate and may return a prior cached copy —
     // always read from the path it returns, not the quarter-stamped dest.
