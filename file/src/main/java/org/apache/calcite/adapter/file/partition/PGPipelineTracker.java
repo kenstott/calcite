@@ -118,8 +118,14 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
    * Reduce a parquet-bucket-derived namespace to a safe unquoted PG identifier
    * ([a-z0-9_]); returns null for null/blank so the tracker falls back to the
    * default (public) schema.
+   *
+   * <p>Public so other PG-backed writers sharing this database (e.g.
+   * {@code ChunkOrganizer}'s vc_staging/vc_tombstones tables) derive the identical
+   * namespace from the same parquet-bucket string instead of re-deriving their own —
+   * one algorithm, matched by {@code tracker_pg.sh}'s {@code pg_ns_from_bucket} on the
+   * shell side.
    */
-  private static String sanitizeNamespace(String raw) {
+  public static String sanitizeNamespace(String raw) {
     if (raw == null) {
       return null;
     }

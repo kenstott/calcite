@@ -171,7 +171,20 @@ public class ChunkOrganizer {
           Arrays.asList("tract_fips_20", "state_fips_20", "county_fips_20",
               "primary_ruca_description"), null),
       new RowConcatSource("officials", "federal_judges", Arrays.asList("jid"),
-          federalJudgeStringColumns(), null));
+          federalJudgeStringColumns(), null),
+      // SEC is a contributor like any other -- chunked here, in the centralized sweep, not by a
+      // per-schema writer during SEC's own ETL run (that pattern -- materializeSecChunksToRef,
+      // removed from SecSchemaFactory.java -- was exactly the per-table-hook coupling this
+      // pipeline's cross-schema separation-of-concerns design exists to avoid). No special
+      // multi-table grouped chunker needed: these are ordinary per-row text columns, same shape
+      // as every other row-concat source.
+      new RowConcatSource("sec", "mda_sections",
+          Arrays.asList("cik", "accession_number", "section", "paragraph_number"),
+          Arrays.asList("section", "subsection", "paragraph_text"), null),
+      new RowConcatSource("sec", "earnings_transcripts",
+          Arrays.asList("cik", "accession_number", "section_type", "paragraph_number"),
+          Arrays.asList("section_type", "speaker_name", "speaker_role", "paragraph_text"),
+          null));
 
   /** federal_judges' content columns: 6 base identity fields plus 12 fields repeated across 6
    *  numbered appointment groups (a judge can hold up to 6 distinct court appointments) --
@@ -222,15 +235,10 @@ public class ChunkOrganizer {
    *  sentence-boundary-aware plain-text splitter (target/min/max sizing per its DEFAULT_*
    *  constants -- these are short-to-medium prose fields, not full filings, so the SEC defaults
    *  apply without retuning), 1-based sequence numbers renumbered to 0-based to match this
-   *  table's convention.
-   *
-   *  <p>NOT a fit for SEC's actual chunker ({@code SecTextVectorizer.createIndividualChunks}):
-   *  that one takes MULTIPLE blob lists at once (a filing's MD&A sections + footnotes together,
-   *  to build a cross-reference map) plus a financial-facts map -- a per-filing aggregate over
-   *  several source tables, not a per-row "text in, chunks out" function. Migrating SEC onto
-   *  this pipeline needs a different {@code ChunkSource} registration shape (grouped by filing,
-   *  reading multiple tables), not a {@link ChunkFunction} plugged into {@link
-   *  DocumentBlobSource} -- see the memory note on the untangled SEC migration plan. */
+   *  table's convention. SEC's own text (mda_sections, earnings_transcripts) doesn't use this --
+   *  those tables are already pre-split into one row per paragraph by SEC's own ETL, so they're
+   *  registered as ordinary {@link RowConcatSource}s instead (see {@link #ROW_CONCAT_SOURCES}),
+   *  same shape as every other source. */
   private static final ChunkFunction SEMANTIC_TEXT_CHUNKER = text -> {
     List<SemanticTextChunker.Chunk> chunks = new SemanticTextChunker().chunkPlainText(text);
     List<GenericChunk> result = new ArrayList<GenericChunk>(chunks.size());

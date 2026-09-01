@@ -950,39 +950,37 @@ if [ "$failed_count" -gt 0 ]; then
   exit 2
 fi
 
-# ── Embeddings (daily only) ───────────────────────────────────────────────────
-# Best-effort post-ETL step, now LOCAL + CPU (vss-local.sh) — the Vultr remote path
-# (vss-gpu-runner.sh) is retired. A failure here must NOT poison the pool exit code:
-# otherwise run-scheduled.sh reads the non-zero exit as an ETL crash and restarts
-# daily forever instead of moving on to the historical fill. Log loudly, never abort.
+# ── x-schema -> Embeddings (daily only) ────────────────────────────────────────
+# Best-effort post-ETL steps. A failure here must NOT poison the pool exit code: otherwise
+# run-scheduled.sh reads the non-zero exit as an ETL crash and restarts daily forever instead
+# of moving on to the historical fill. Log loudly, never abort.
+#
+# Sequence: x-schema (chunk-parsing sweep, ChunkOrganizer via x-schema.sh) THEN vss
+# (embeddings, vss-local.sh) -- vss embeds vc_staging's un-coded backlog, so it needs
+# x-schema to have organized that backlog first. Both run only after the daily queue above
+# has fully drained, because x-schema needs every source schema already materialized (see
+# semantic-search-plan.md "Extension mechanism" for why a per-table hook can't give that
+# ordering guarantee -- this is why chunking is a standalone post-drain job, not a
+# per-schema ETL hook).
 if $RUN_EMBEDDINGS; then
   VSS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-  # Delta-driven, time-boxed: embed the un-embedded backlog across all years (newest
-  # first), capped by VSS_MAX_SECONDS (~2h) / VSS_MAX_ROWS. Drains over successive days.
-  log_info "Embeddings (local CPU): coding un-coded backlog (newest-first, time-boxed) → lake"
+  log_info "x-schema: sweeping every registered source (SEC included) into vc_staging"
+  if [ -f "$VSS_DIR/x-schema.sh" ]; then
+    bash "$VSS_DIR/x-schema.sh" || log_info "WARNING: x-schema sweep failed (non-fatal)"
+  else
+    log_info "WARNING: x-schema.sh not found — chunk-parsing sweep skipped"
+  fi
+  # Delta-driven, time-boxed: embed the un-embedded backlog across all sources together
+  # (newest first), capped by VSS_MAX_SECONDS (~2h) / VSS_MAX_ROWS. Drains over successive
+  # days via its own watermark (see vss-local.py) -- one unified queue, not per-schema.
+  log_info "vss: coding un-coded backlog (newest-first, time-boxed) → lake"
   if [ -f "$VSS_DIR/vss-local.sh" ]; then
     bash "$VSS_DIR/vss-local.sh" backlog \
-      || log_info "WARNING: vss-local backlog (sec) failed (non-fatal)"
-    # Row-concat mode: any other schema's vectorized_chunks (organized by a Java
-    # TableLifecycleListener during that schema's own ETL -- e.g.
-    # org.apache.calcite.adapter.govdata.ref.ChunkOrganizer for ref) drains the exact
-    # same time-boxed, resumable way. This only runs post-drain (here, not per-schema)
-    # because it needs every source schema already materialized -- see
-    # semantic-search-plan.md "Extension mechanism" for why a per-table hook can't give
-    # that ordering guarantee. This list must match every source_schema value
-    # ChunkOrganizer's ROW_CONCAT_SOURCES/DOCUMENT_BLOB_SOURCES registries write into
-    # ref.vectorized_chunks (currently ref, fedregister, cyber_threat) -- a source
-    # organized there but missing from this list gets chunked but never embedded, so add
-    # its source_schema here in the same commit that onboards it. Each entry is
-    # independent; one failing doesn't block the rest.
-    for src_schema in ref fedregister cyber_threat; do
-      bash "$VSS_DIR/vss-local.sh" backlog --source-schema "$src_schema" \
-        || log_info "WARNING: vss-local backlog ($src_schema) failed (non-fatal)"
-    done
+      || log_info "WARNING: vss-local backlog failed (non-fatal)"
   else
     log_info "WARNING: vss-local.sh not found — embeddings skipped"
   fi
-  log_info "Embeddings: complete"
+  log_info "x-schema + Embeddings: complete"
 fi
 
 exit 0

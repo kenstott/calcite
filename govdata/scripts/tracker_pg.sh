@@ -110,6 +110,34 @@ pg_tracker_purge_accessions() {
   echo "        Deleted ${n} accession completion row(s) from ${ns}${year_range:+ (years ${year_range})}"
 }
 
+# Deletes the per-accession document completion(s) for ONE specific accession — narrower than
+# pg_tracker_purge_accessions, which sweeps every accession for a table. Used when a caller wants
+# to force reprocessing of a single filing without touching any other accession's completion
+# state. source_key format: "accession_number=<accession>__year=<year>" (see
+# pg_tracker_purge_accessions for where that was confirmed against live rows); year is optional —
+# omit it to match the accession regardless of year (an accession belongs to exactly one year in
+# practice, so this is a convenience, not a real ambiguity risk).
+#
+# @param in_list comma-separated, single-quoted table names (the per-accession suffixes, e.g.
+#   'chunks' or 'chunks','mda')
+pg_tracker_clear_accession() {
+  local ns="$1" in_list="$2" accession="$3" dry_run="$4" year="${5:-}"
+  local key_pattern="accession_number=${accession}__year=%"
+  [[ -n "$year" ]] && key_pattern="accession_number=${accession}__year=${year}"
+  local n
+  n=$(pg_tracker_exec "
+    SELECT count(*) FROM \"${ns}\".pipeline_tracker
+     WHERE phase = 'staging' AND table_name IN (${in_list}) AND source_key LIKE '${key_pattern}'") || return 1
+  if [[ "$dry_run" == "true" ]]; then
+    echo "        [DRY RUN] Would delete ${n} accession completion row(s) for '${accession}' from ${ns}"
+    return 0
+  fi
+  pg_tracker_exec "
+    DELETE FROM \"${ns}\".pipeline_tracker
+     WHERE phase = 'staging' AND table_name IN (${in_list}) AND source_key LIKE '${key_pattern}';" > /dev/null || return 1
+  echo "        Deleted ${n} accession completion row(s) for '${accession}' from ${ns}"
+}
+
 # Maps a govdata table name to the per-accession completion suffix DocumentETLProcessor/
 # SecFilingCache record it under (phase='staging', table_name=<suffix>) — a SEPARATE, lower-level
 # tracker layer from the table's own phase='incremental' row that pg_tracker_clear_completion /

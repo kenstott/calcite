@@ -17,7 +17,7 @@
 """
 vss-local.py — LOCAL, CPU, delta-driven quantized-code producer for semantic search.
 
-Embeds un-coded chunks from the vectorized_chunks Iceberg table on CPU
+Embeds un-coded chunks from Postgres's vc_staging table on CPU
 (snowflake-arctic-embed-xs), quantizes each 384-d unit vector to:
   * a 48-byte BINARY code  (sign bits, packed into 6x uint64)  — Hamming prefilter
   * a 384-byte INT8 vector (scalar-quantized)                  — rerank
@@ -26,30 +26,34 @@ lake. That dataset is the delivered semantic-search artifact (Path B): a Java
 intercept materializes it into a persistent local DuckDB and runs a two-stage
 `bit_count` Hamming prefilter + int8 rerank (fast on repeat via DuckDB persistence).
 
-No HNSW, no DuckDB HNSW cache, no Postgres — vectors live only as quantized codes in
-the lake, and the "what's un-coded" delta is a self-describing Iceberg-vs-codes
-anti-join (chunk_ids in vectorized_chunks not yet in vectorized_chunk_codes).
+No HNSW, no DuckDB HNSW cache -- vectors live only as quantized codes in the lake.
+The chunks being embedded live in Postgres, not Iceberg: vc_staging is the sole
+durable copy of organized-but-not-yet-embedded chunk text (see
+org.apache.calcite.adapter.govdata.ref.ChunkOrganizer's class javadoc for why there
+is deliberately no Iceberg copy of it), and the "what's un-coded" delta is a
+DuckDB-side anti-join between a Postgres-attached vc_staging and the lake's own
+codes parquet files.
 
 This script only ever embeds already-organized chunks -- it never builds chunk_text
 itself. Organizing text into chunk rows (row-concat mode's naive per-row chunker,
-document-blob mode's SemanticTextChunker) is always Java's job, writing into a
-vectorized_chunks-shaped Iceberg table (see
-org.apache.calcite.adapter.govdata.ref.ChunkOrganizer for the row-concat producer).
+document-blob mode's SemanticTextChunker) is always ChunkOrganizer's job (run via
+x-schema.sh), writing into vc_staging -- every registered source, SEC's own
+mda_sections/earnings_transcripts text included, goes through that one sweep.
 
 Commands:
   backlog [--max-rows N --max-seconds S]
-                        PRIMARY job. ref.vectorized_chunks is ONE table holding chunks from
-                        every source (sec, ref, fedregister, cyber_threat, ...) -- this is
-                        ONE queue over the whole table's un-coded delta, not a per-schema
-                        job. Capped at --max-rows and time-boxed to --max-seconds (~2h); the
+                        PRIMARY job. vc_staging holds chunks from every registered source
+                        (sec, ref, fedregister, cyber_threat, ...) together -- this is ONE
+                        queue over the whole table's un-coded delta, not a per-schema job.
+                        Capped at --max-rows and time-boxed to --max-seconds (~2h); the
                         backlog drains over successive runs, resuming via the one watermark
                         (see WATERMARK_DIR below). CPU only — no GPU.
-  year --year N         Code a single SEC year's delta (manual/targeted).
   stats                 Per-(source_schema, year) counts across every codes dataset.
 """
 
 import argparse
 import os
+import re
 import subprocess
 import time
 
@@ -65,10 +69,23 @@ FLUSH_ROWS = int(os.environ.get("VSS_FLUSH_ROWS", "100000"))    # write a codes 
 GOVDATA_HOME = os.environ.get("GOVDATA_HOME") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
 PARQUET_BUCKET = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-v1")
-# SEC's chunks are promoted into the shared ref.vectorized_chunks table (source_schema='sec'
-# partition) -- this schema no longer materializes its own vectorized_chunks Iceberg table.
-ICEBERG_CHUNKS = f"{PARQUET_BUCKET}/ref/vectorized_chunks"
 RCLONE_REMOTE = os.environ.get("GOVDATA_RCLONE_REMOTE", "minio")
+
+# vc_staging lives in a Postgres schema derived from the bucket name -- same derivation as
+# PGPipelineTracker.sanitizeNamespace (Java) and ChunkOrganizer's own main(): strip the
+# scheme, lowercase, collapse non-alphanumerics to underscores, trim leading/trailing ones.
+# Kept in sync by hand (no shared config between the JVM and this script's own process).
+def _pg_namespace(bucket_uri):
+    s = re.sub(r"^[a-zA-Z0-9+.-]+://", "", bucket_uri)
+    s = re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
+    return s or None
+
+
+PG_NAMESPACE = _pg_namespace(PARQUET_BUCKET)
+PG_URL = os.environ.get("CALCITE_TRACKER_PG_URL") or os.environ.get("GOVDATA_TRACKER_PG_URL")
+PG_USER = os.environ.get("CALCITE_TRACKER_PG_USER") or os.environ.get("GOVDATA_TRACKER_PG_USER")
+PG_PASSWORD = (os.environ.get("CALCITE_TRACKER_PG_PASSWORD")
+               or os.environ.get("GOVDATA_TRACKER_PG_PASSWORD"))
 # Consolidate the codes dataset once it exceeds this many files (incremental flush + daily runs
 # accumulate small files; too many slows the query glob + the delta anti-join).
 COMPACT_MIN_FILES = int(os.environ.get("VSS_COMPACT_MIN_FILES", "16"))
@@ -134,13 +151,14 @@ def codes_dataset_for(source_schema):
 
 
 # Every source_schema value ChunkOrganizer (govdata/.../ref/ChunkOrganizer.java) ever writes into
-# the shared ref.vectorized_chunks table -- keep in sync with SemanticSearch.java's own
-# DEFAULT_SOURCE_SCHEMAS, which reads the same codes for search. A source_schema present there
-# but missing here just means its un-coded chunks keep getting found (harmless, re-embedded into
-# its own new partition the moment this list catches up); NOT keeping this in sync with
-# ChunkOrganizer's own registries would mean a real embedding never gets picked up as "done" (its
-# codes exist but this list can't see them), which is the failure mode worth avoiding.
-CODES_SOURCE_SCHEMAS = ("sec", "ref", "fedregister", "cyber_threat")
+# vc_staging -- keep in sync with SemanticSearch.java's own DEFAULT_SOURCE_SCHEMAS, which reads
+# the same codes for search. A source_schema present there but missing here just means its
+# un-coded chunks keep getting found (harmless, re-embedded into its own new partition the moment
+# this list catches up); NOT keeping this in sync with ChunkOrganizer's own registries would mean
+# a real embedding never gets picked up as "done" (its codes exist but this list can't see them),
+# which is the failure mode worth avoiding.
+CODES_SOURCE_SCHEMAS = ("sec", "ref", "fedregister", "cyber_threat", "transport", "patents",
+                         "disasters", "geo", "officials", "health")
 
 
 def _codes_glob_arg():
@@ -219,6 +237,29 @@ def connect_lake():
     con.execute("SET s3_url_style='path'")
     con.execute("SET unsafe_enable_version_guessing=true")
     return con
+
+
+def attach_pg(con):
+    """Attaches vc_staging's Postgres database onto an existing DuckDB connection (DuckDB's
+    postgres scanner, not a separate Python driver -- keeps this script's dependencies exactly
+    what vss-embed-setup.sh already installs). Queried as pg.<namespace>.vc_staging afterward."""
+    if not PG_URL:
+        raise SystemExit(
+            "CALCITE_TRACKER_PG_URL not set -- vc_staging's connection info is required for "
+            "the backlog command")
+    if not PG_NAMESPACE:
+        raise SystemExit(f"cannot derive a PG namespace from GOVDATA_PARQUET_DIR={PARQUET_BUCKET!r}")
+    # jdbc:postgresql://host:port/db -> host, port, db
+    hostport, _, db = PG_URL[len("jdbc:postgresql://"):].partition("/")
+    host, _, port = hostport.partition(":")
+    port = port or "5432"
+    con.execute("INSTALL postgres; LOAD postgres")
+    dsn = f"host={host} port={port} dbname={db}"
+    if PG_USER:
+        dsn += f" user={PG_USER}"
+    if PG_PASSWORD:
+        dsn += f" password={PG_PASSWORD}"
+    con.execute(f"ATTACH '{dsn}' AS pg (TYPE postgres, READ_ONLY)")
 
 
 def _load_done(con, dataset=None):
@@ -404,11 +445,12 @@ def cmd_compact(con=None, dataset=None, force=False):
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 def cmd_backlog(max_rows, max_seconds):
-    """PRIMARY job: one queue over the WHOLE ref.vectorized_chunks table's un-coded delta
-    (every source_schema together, ascending chunk_id order), time-boxed and resumable via the
-    one chunk_id watermark -- if time runs out, the rest picks up next run from wherever this
-    one actually got to."""
+    """PRIMARY job: one queue over the WHOLE vc_staging table's un-coded delta (every
+    source_schema together, ascending chunk_id order), time-boxed and resumable via the one
+    chunk_id watermark -- if time runs out, the rest picks up next run from wherever this one
+    actually got to."""
     con = connect_lake()
+    attach_pg(con)
     coded = _load_done(con)
 
     watermark = _load_watermark()
@@ -423,11 +465,8 @@ def cmd_backlog(max_rows, max_seconds):
     t = time.time()
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.chunk_id, s.source_schema,
-               CASE WHEN s.source_schema = 'sec' THEN EXTRACT(year FROM s.filing_date)
-                    ELSE 0 END AS yr,
-               s.chunk_text
-        FROM iceberg_scan('{ICEBERG_CHUNKS}', allow_moved_paths=true) s
+        SELECT s.chunk_id, s.source_schema, COALESCE(s.year, 0) AS yr, s.chunk_text
+        FROM pg."{PG_NAMESPACE}".vc_staging s
         LEFT JOIN _done d ON d.chunk_id = s.chunk_id
         WHERE d.chunk_id IS NULL
           {watermark_clause}AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
@@ -459,34 +498,6 @@ def cmd_dedup(source_schema):
     'nothing to do' despite duplicates still being present."""
     dataset = codes_dataset_for(source_schema)
     cmd_compact(dataset=dataset, force=True)
-
-
-def cmd_year(year):
-    """Manual/targeted escape hatch: code a single SEC year's delta directly, bypassing the
-    backlog queue and its watermark entirely."""
-    con = connect_lake()
-    _load_done(con)
-    print(f"[year {year}] scanning Iceberg for the un-coded delta ...", flush=True)
-    t = time.time()
-    con.execute(f"""
-        CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.chunk_id, 'sec' AS source_schema,
-               EXTRACT(year FROM s.filing_date) AS yr, s.chunk_text
-        FROM iceberg_scan('{ICEBERG_CHUNKS}') s
-        LEFT JOIN _done d ON d.chunk_id = s.chunk_id
-        WHERE d.chunk_id IS NULL AND s.source_schema = 'sec'
-          AND EXTRACT(year FROM s.filing_date) = {int(year)}
-          AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
-        ORDER BY s.accession_number DESC
-    """)
-    todo = con.execute("SELECT chunk_id, source_schema, yr, chunk_text FROM _todo").fetchall()
-    print(f"[year {year}] {len(todo)} un-coded chunks — scan {time.time()-t:.1f}s", flush=True)
-    if not todo:
-        print(f"[year {year}] nothing to do", flush=True)
-        con.close()
-        return
-    _embed_and_write(con, todo, _run_label(f"year{year}"))
-    con.close()
 
 
 def cmd_stats():
@@ -527,8 +538,6 @@ def main():
     p_bk.add_argument("--max-rows", type=int,
                       default=int(os.environ.get("VSS_MAX_ROWS", "1000000")))
     p_bk.add_argument("--max-seconds", type=int, default=_default_max_seconds())
-    p_year = sub.add_parser("year")
-    p_year.add_argument("--year", type=int, required=True)
     sub.add_parser("stats")
     p_compact = sub.add_parser("compact")
     p_compact.add_argument("--source-schema", default="sec",
@@ -540,8 +549,6 @@ def main():
 
     if args.cmd == "backlog":
         cmd_backlog(args.max_rows, args.max_seconds)
-    elif args.cmd == "year":
-        cmd_year(args.year)
     elif args.cmd == "stats":
         cmd_stats()
     elif args.cmd == "compact":

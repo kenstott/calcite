@@ -48,11 +48,10 @@ APP="$SCRIPT_DIR/vss-local.py"
 usage() {
   cat <<EOF
 Usage: $0 <command> [args...]
-  daily                    PRIMARY: one queue over ref.vectorized_chunks' whole un-coded delta
-                           (every source together), time-boxed (~2h). Appends quantized codes
+  daily                    PRIMARY: one queue over vc_staging's whole un-coded delta (every
+                           source together), time-boxed (~2h). Appends quantized codes
                            to the lake, resuming from the one chunk_id watermark. Daily.
   backlog [maxRows]        Same as daily (with an explicit per-run row cap)
-  year <N>                 Code a single SEC year's delta (manual)
   stats                    Per-(source_schema, year) counts across every codes dataset
   dedup [--source-schema S]
                            Force-compact + dedup a codes dataset by chunk_id, regardless of
@@ -75,7 +74,6 @@ case "$cmd" in
       "$PY" "$APP" backlog "$@"
     fi
     ;;
-  year)     "$PY" "$APP" year --year "${2:?year required}" ;;
   stats)    "$PY" "$APP" stats ;;
   dedup)    shift; "$PY" "$APP" dedup "$@" ;;
   *)        usage; exit 1 ;;
