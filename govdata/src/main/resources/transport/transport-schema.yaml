@@ -1220,8 +1220,11 @@ partitionedTables:
         retryOn: [429, 500, 503]
         maxRetries: 3
       # DataProvider fetches + unzips itself; nothing to cache.
+      # The provider reads through this cache, so a re-run neither re-downloads nor (for
+      # t100) re-runs the ASP.NET form handshake. Explicit because an absent rawCache block
+      # means disabled, not enabled.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.transport.BtsT100DataProvider"

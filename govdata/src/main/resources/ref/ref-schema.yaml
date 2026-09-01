@@ -1714,8 +1714,11 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 5.0
         maxRetries: 3
+      # The provider reads through this cache, so a re-run neither re-downloads nor (for
+      # t100) re-runs the ASP.NET form handshake. Explicit because an absent rawCache block
+      # means disabled, not enabled.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.ref.HolidaysDataProvider"

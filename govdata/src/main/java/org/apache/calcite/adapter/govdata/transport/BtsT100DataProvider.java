@@ -11,7 +11,8 @@
 package org.apache.calcite.adapter.govdata.transport;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import org.slf4j.Logger;
@@ -62,7 +63,7 @@ import java.util.zip.ZipInputStream;
  * <p>The base URL ({@code gnoyr_VQ=GEE}) is read from the table's {@code source.url}
  * so the table id stays declared in the model.
  */
-public class BtsT100DataProvider implements DataProvider {
+public class BtsT100DataProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(BtsT100DataProvider.class);
 
@@ -98,7 +99,7 @@ public class BtsT100DataProvider implements DataProvider {
   private static final int MAX_HANDSHAKE_ATTEMPTS = 3;
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
       year = variables.get("year");
@@ -114,34 +115,14 @@ public class BtsT100DataProvider implements DataProvider {
       baseUrl = config.getSource().getUrl();
     }
 
-    byte[] zip = null;
-    IOException lastFailure = null;
-    for (int attempt = 1; attempt <= MAX_HANDSHAKE_ATTEMPTS; attempt++) {
-      try {
-        // Step 1 — GET the form; capture cookies + hidden fields.
-        GetResult form = httpGet(baseUrl);
-        String viewState = scrape(form.body, "__VIEWSTATE");
-        String viewStateGen = scrape(form.body, "__VIEWSTATEGENERATOR");
-        String eventValidation = scrape(form.body, "__EVENTVALIDATION");
-        if (viewState == null || eventValidation == null) {
-          throw new IOException("t100_segments: could not scrape ASP.NET hidden fields from "
-              + baseUrl + " (page-specific __VIEWSTATE/__EVENTVALIDATION missing)");
-        }
-
-        // Step 2 — POST the postback; body is the ZIP.
-        String body = buildPostBody(viewState, viewStateGen, eventValidation, year);
-        zip = httpPostForZip(baseUrl, form.cookies, body);
-        lastFailure = null;
-        break;
-      } catch (IOException e) {
-        lastFailure = e;
-        LOGGER.warn("t100_segments: handshake attempt {}/{} failed for year {} ({})",
-            attempt, MAX_HANDSHAKE_ATTEMPTS, year, e.getMessage());
-      }
-    }
-    if (zip == null) {
-      throw lastFailure;
-    }
+    // The ASP.NET handshake -- GET the form for cookies and hidden fields, then POST the
+    // postback whose body is the zip -- is the miss path. On a hit none of it runs: the year's
+    // zip is read straight from storage, so a re-run neither re-scrapes __VIEWSTATE nor re-posts.
+    // Keyed on the base URL plus the year, since the year is what the postback body selects.
+    final String zipUrl = baseUrl;
+    final String zipYear = year;
+    byte[] zip = readFully(rawCache.openStream(baseUrl + "/t100?year=" + year,
+        () -> new java.io.ByteArrayInputStream(handshakeAndDownload(zipUrl, zipYear))));
 
     List<Map<String, Object>> rows = parseZip(zip, year);
     LOGGER.info("t100_segments: {} segment rows for year {}", rows.size(), year);
@@ -176,6 +157,50 @@ public class BtsT100DataProvider implements DataProvider {
     }
     sb.append(URLEncoder.encode(name, "UTF-8")).append('=')
         .append(URLEncoder.encode(value, "UTF-8"));
+  }
+
+  /**
+   * Runs the form handshake and returns the zip, retrying the whole exchange: the hidden fields
+   * are single-use, so a retry has to start from the GET rather than re-post a stale __VIEWSTATE.
+   * Throws when every attempt fails, which keeps a failure out of the cache -- an entry is written
+   * only after content has been produced and copied.
+   */
+  private byte[] handshakeAndDownload(String baseUrl, String year) throws IOException {
+    IOException lastFailure = null;
+    for (int attempt = 1; attempt <= MAX_HANDSHAKE_ATTEMPTS; attempt++) {
+      try {
+        // Step 1 — GET the form; capture cookies + hidden fields.
+        GetResult form = httpGet(baseUrl);
+        String viewState = scrape(form.body, "__VIEWSTATE");
+        String viewStateGen = scrape(form.body, "__VIEWSTATEGENERATOR");
+        String eventValidation = scrape(form.body, "__EVENTVALIDATION");
+        if (viewState == null || eventValidation == null) {
+          throw new IOException("t100_segments: could not scrape ASP.NET hidden fields from "
+              + baseUrl + " (page-specific __VIEWSTATE/__EVENTVALIDATION missing)");
+        }
+
+        // Step 2 — POST the postback; body is the ZIP.
+        String body = buildPostBody(viewState, viewStateGen, eventValidation, year);
+        return httpPostForZip(baseUrl, form.cookies, body);
+      } catch (IOException e) {
+        lastFailure = e;
+        LOGGER.warn("t100_segments: handshake attempt {}/{} failed for year {} ({})",
+            attempt, MAX_HANDSHAKE_ATTEMPTS, year, e.getMessage());
+      }
+    }
+    throw lastFailure;
+  }
+
+  private static byte[] readFully(InputStream in) throws IOException {
+    try (InputStream s = in) {
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      byte[] buf = new byte[1 << 16];
+      int n;
+      while ((n = s.read(buf)) != -1) {
+        out.write(buf, 0, n);
+      }
+      return out.toByteArray();
+    }
   }
 
   private GetResult httpGet(String url) throws IOException {

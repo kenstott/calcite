@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.ref;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,7 +49,7 @@ import java.util.Map;
  * rows; a non-200 response for a single country is logged and that country is skipped for the
  * year (mirrors the per-item degradation in {@link FigiDataProvider}).
  */
-public class HolidaysDataProvider implements DataProvider {
+public class HolidaysDataProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HolidaysDataProvider.class);
 
@@ -63,7 +64,7 @@ public class HolidaysDataProvider implements DataProvider {
   }
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String yearStr = variables.get("effective_year");
     if (yearStr == null || yearStr.isEmpty()) {
       yearStr = variables.get("year");
@@ -73,13 +74,13 @@ public class HolidaysDataProvider implements DataProvider {
     }
     int year = Integer.parseInt(yearStr.trim());
 
-    Map<String, String> countries = fetchCountries();
+    Map<String, String> countries = fetchCountries(rawCache);
     LOGGER.info("HolidaysDataProvider: {} countries for year {}", countries.size(), year);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     for (Map.Entry<String, String> country : countries.entrySet()) {
       String code = country.getKey();
-      rows.addAll(fetchCountryHolidays(year, code, country.getValue()));
+      rows.addAll(fetchCountryHolidays(year, code, country.getValue(), rawCache));
       sleep();
     }
     LOGGER.info("HolidaysDataProvider: {} holiday rows across {} countries for year {}",
@@ -88,8 +89,8 @@ public class HolidaysDataProvider implements DataProvider {
   }
 
   /** ISO alpha-2 country code → English country name for every Nager-supported country. */
-  private Map<String, String> fetchCountries() throws IOException {
-    String body = get(COUNTRIES_URL);
+  private Map<String, String> fetchCountries(RawCache rawCache) throws IOException {
+    String body = get(COUNTRIES_URL, rawCache);
     JsonNode root = MAPPER.readTree(body);
     Map<String, String> countries = new HashMap<String, String>();
     if (root.isArray()) {
@@ -106,12 +107,13 @@ public class HolidaysDataProvider implements DataProvider {
     return countries;
   }
 
-  private List<Map<String, Object>> fetchCountryHolidays(int year, String code, String name) {
+  private List<Map<String, Object>> fetchCountryHolidays(int year, String code, String name,
+      RawCache rawCache) {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     String url = String.format(HOLIDAYS_URL, year, code);
     String body;
     try {
-      body = get(url);
+      body = get(url, rawCache);
     // fallback-guard: allow bounded per-country batch continuation — one country's fetch failure is logged and skipped, the loop continues to the next of ~200 countries
     } catch (IOException e) {
       LOGGER.warn("HolidaysDataProvider: {} {} failed: {}", code, year, e.getMessage());
@@ -143,7 +145,24 @@ public class HolidaysDataProvider implements DataProvider {
     return rows;
   }
 
-  private String get(String urlStr) throws IOException {
+  /**
+   * Every fetch in this provider goes through here, so routing it through the raw cache covers the
+   * country list and each country-year alike. The status check stays in {@link #rawGet}: a non-200
+   * throws before any content exists, so a failure cannot be committed as an entry.
+   */
+  private String get(String urlStr, RawCache rawCache) throws IOException {
+    try (InputStream in = rawCache.openStream(urlStr, () -> rawGet(urlStr))) {
+      byte[] buf = new byte[65536];
+      StringBuilder sb = new StringBuilder();
+      int n;
+      while ((n = in.read(buf)) != -1) {
+        sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+      }
+      return sb.toString();
+    }
+  }
+
+  private InputStream rawGet(String urlStr) throws IOException {
     URL url = URI.create(urlStr).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setRequestMethod("GET");
@@ -155,15 +174,7 @@ public class HolidaysDataProvider implements DataProvider {
     if (responseCode != 200) {
       throw new IOException("HTTP " + responseCode + " from " + urlStr);
     }
-    try (InputStream in = conn.getInputStream()) {
-      byte[] buf = new byte[65536];
-      StringBuilder sb = new StringBuilder();
-      int n;
-      while ((n = in.read(buf)) != -1) {
-        sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
-      }
-      return sb.toString();
-    }
+    return conn.getInputStream();
   }
 
   private void sleep() {
