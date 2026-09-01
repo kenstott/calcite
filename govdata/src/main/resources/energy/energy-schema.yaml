@@ -1778,8 +1778,10 @@ partitionedTables:
     # revision surface. MSHA publishes no finality policy, so this rests on that measurement.
     # https://arlweb.msha.gov/opengovernmentdata/ogimsha.asp
     lookbackPeriods: 2
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=msha_coal/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >

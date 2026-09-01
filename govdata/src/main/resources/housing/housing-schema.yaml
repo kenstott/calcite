@@ -1102,8 +1102,10 @@ partitionedTables:
     # Freshness gate: ArcGIS FeatureServer is a live query with no meaningful
     # Last-Modified, so this hashes the response body post-fetch to skip the
     # materialize/commit when unchanged (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=opportunity_zones/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1184,8 +1186,10 @@ partitionedTables:
     # Freshness gate: ArcGIS FeatureServer is a live query with no meaningful
     # Last-Modified, so this hashes the response body post-fetch to skip the
     # materialize/commit when unchanged (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=hud_subsidized_housing/*.parquet"
     partitions: *static_partitions
     comment: >

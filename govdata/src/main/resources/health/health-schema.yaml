@@ -581,8 +581,10 @@ partitionedTables:
   # COUNTY HEALTH RANKINGS — Premature Death (YPLL/100k), nation/state/county, current-era
   # ==========================================================================
   - name: chr_premature_death
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=chr_premature_death"
     partitions:
       style: hive
@@ -983,8 +985,10 @@ partitionedTables:
     # Freshness gate: ClinicalTrials.gov REST API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=clinical_trials"
     # DQ sample cap (GOVDATA_DQ mode): ClinicalTrials.gov returns ~500k studies via CURSOR
     # pagination; cap the DQ sample. Cache-safe — the paginated cache commits only on full drain,
@@ -1127,8 +1131,10 @@ partitionedTables:
     # Freshness gate: ClinicalTrials.gov REST API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=clinical_trial_conditions"
     dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
     partitions:
@@ -1218,8 +1224,10 @@ partitionedTables:
     # Freshness gate: ClinicalTrials.gov REST API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=clinical_trial_interventions"
     dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
     partitions:
@@ -1426,8 +1434,10 @@ partitionedTables:
     # Freshness gate: CMS datastore query API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     releaseWindow:
       months: [7, 8, 9, 10] # CMS hospital quality annual release July–October
     pattern: "type=cms_hospital_quality"
@@ -1580,8 +1590,10 @@ partitionedTables:
     # Freshness gate: CMS data.json catalog is a dynamic index response with no
     # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
     # materialize/commit when unchanged (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     releaseWindow:
       months: [1, 4, 7, 10] # CMS POS republishes quarterly
     pattern: "type=cms_pos_facilities"
@@ -1746,8 +1758,10 @@ partitionedTables:
     # Freshness gate: CMS datastore query API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     releaseWindow:
       months: [1,2,3,4,5,6,7,8,9,10,11,12] # CMS refreshes this monthly, per its own
                                             # nextUpdateDate cadence — every month is a
@@ -2387,8 +2401,10 @@ partitionedTables:
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     releaseWindow:
       months: [5, 6, 7, 8]  # CDC publishes annual BRFSS survey data May–August
     dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
@@ -4615,8 +4631,10 @@ partitionedTables:
     # Freshness: rxnav has no version endpoint; hash the downloaded body (single
     # ~37k-concept page) and skip the Iceberg commit when byte-identical to the last
     # successful run (replaces the monthly GOVDATA_CURRENT_MONTH cache-buster).
+      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
+      # gate has to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
-      type: hash
+      type: etag
     comment: >
       RxNorm drug concepts from the NLM bulk allconcepts endpoint.
       Covers ingredient (IN), brand name (BN), and clinical drug (SCD) term types.
