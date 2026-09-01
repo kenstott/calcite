@@ -458,6 +458,11 @@ partitionedTables:
       type: http
       url: "https://api.reporter.nih.gov/v2/projects/search"
       method: POST
+      # RePORTER pages are read through the raw cache, one entry per (year, IC, offset), so a
+      # re-run reissues only the pages it has not already fetched. Explicit because an absent
+      # rawCache block means disabled, not enabled.
+      rawCache:
+        enabled: true
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.research.NihReporterAwardsProvider"
 

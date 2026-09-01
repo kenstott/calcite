@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.research;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -46,7 +47,7 @@ import java.util.Set;
  * truncation — every IC's own full page range is walked to exhaustion, so the (year, IC) union
  * is the true, complete population for that year, not a sampled prefix of it.
  */
-public class NihReporterAwardsProvider implements DataProvider {
+public class NihReporterAwardsProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(NihReporterAwardsProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -56,7 +57,7 @@ public class NihReporterAwardsProvider implements DataProvider {
   private static final int MAX_OFFSET = 14999;
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("year");
     String ic = variables.get("agency_ic");
     if (year == null || year.isEmpty() || ic == null || ic.isEmpty()) {
@@ -73,7 +74,7 @@ public class NihReporterAwardsProvider implements DataProvider {
     while (offset <= MAX_OFFSET) {
       String body = "{\"criteria\":{\"fiscal_years\":[" + year.trim() + "],\"agencies\":[\""
           + ic.trim() + "\"]},\"limit\":" + PAGE_SIZE + ",\"offset\":" + offset + "}";
-      JsonNode root = postJson(ENDPOINT, body);
+      JsonNode root = postJson(ENDPOINT, body, rawCache, "offset-" + offset);
       JsonNode results = root.path("results");
       if (!results.isArray() || results.size() == 0) {
         break;
@@ -110,7 +111,27 @@ public class NihReporterAwardsProvider implements DataProvider {
     return row;
   }
 
-  private JsonNode postJson(String url, String jsonBody) throws IOException {
+  /**
+   * One page of results, read through the raw cache.
+   *
+   * <p>Keyed as endpoint + page label + body. The pages of one (year, IC) differ only by offset,
+   * so a key naming the endpoint alone would collapse them onto a single entry; carrying the body
+   * also means a change to the criteria re-keys rather than replaying answers to the old query.
+   *
+   * <p>A non-2xx response throws out of the supplier, so nothing is committed: the cache writes an
+   * entry only after the content has been copied without error, and an error body cached here
+   * would be indistinguishable from a real page forever after.
+   */
+  private JsonNode postJson(String url, String jsonBody, RawCache rawCache, String pageLabel)
+      throws IOException {
+    String key = url + "/" + pageLabel + "?" + jsonBody;
+    try (InputStream in = rawCache.openStream(key, () -> rawPost(url, jsonBody))) {
+      return MAPPER.readTree(in);
+    }
+  }
+
+  /** Issues the POST, failing on a non-2xx rather than returning the error body as content. */
+  private InputStream rawPost(String url, String jsonBody) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestMethod("POST");
     conn.setRequestProperty("Content-Type", "application/json");
@@ -122,16 +143,21 @@ public class NihReporterAwardsProvider implements DataProvider {
       os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
     }
     int status = conn.getResponseCode();
-    InputStream in = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
-    try {
-      JsonNode node = MAPPER.readTree(in);
-      if (status < 200 || status >= 300) {
-        throw new IOException("NIH RePORTER HTTP " + status + ": " + node);
+    if (status < 200 || status >= 300) {
+      StringBuilder err = new StringBuilder();
+      InputStream es = conn.getErrorStream();
+      if (es != null) {
+        try (java.io.BufferedReader r = new java.io.BufferedReader(
+            new java.io.InputStreamReader(es, StandardCharsets.UTF_8))) {
+          String line;
+          while ((line = r.readLine()) != null) {
+            err.append(line);
+          }
+        }
       }
-      return node;
-    } finally {
-      in.close();
+      throw new IOException("NIH RePORTER HTTP " + status + ": " + err);
     }
+    return conn.getInputStream();
   }
 
   private static String text(JsonNode node, String field) {
