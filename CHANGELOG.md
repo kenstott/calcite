@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.81.0](https://github.com/kenstott/calcite/compare/engine-v0.80.0...engine-v0.81.0) (2026-09-01)
+
+
+### Features
+
+* **chunk-parsing:** add row-cap mechanism to ChunkOrganizer for bounded testing ([8c6d12a](https://github.com/kenstott/calcite/commit/8c6d12a773badcc66eb862cf39a1198b7c8b6a65))
+* **chunk-parsing:** auto-generate FK columns for all 23 contributors for star-schema joins ([2c8727d](https://github.com/kenstott/calcite/commit/2c8727dffc78513ac9e41975573a9a329d676698))
+* **chunk-parsing:** materialize vc_staging chunks to Iceberg vectorized_chunks ([daf340f](https://github.com/kenstott/calcite/commit/daf340f243ae4956e9bfb906cfeb7aa0be0d713b))
+* **chunk-parsing:** register SEC as a contributor, wire x-schema + vss into the pool ([9a6a623](https://github.com/kenstott/calcite/commit/9a6a623208b8cee21f102c49eaa3a600bed3a1ff))
+* **file,govdata:** cache a provider fetch that is not a plain GET ([2919ef1](https://github.com/kenstott/calcite/commit/2919ef1b98f1b8361c999d1c77d1370bc966cb47))
+* **file:** add lookbackPeriods and dataMonthLag; fix per-unit freshness safety ([dc5c1e5](https://github.com/kenstott/calcite/commit/dc5c1e59df33f5004cab536852f76f69b8ffd989))
+* **file:** let a DataProvider read through the pipeline's raw cache ([b1cb2aa](https://github.com/kenstott/calcite/commit/b1cb2aa70e04f2f5b44cf4591139b46740a59644))
+* **govdata:** materialize the full IRS SOI files, not a 16% slice ([de11e0b](https://github.com/kenstott/calcite/commit/de11e0b5659dee707137c7a682daeb8c3604f7a5))
+* **govdata:** qwi_employment reads the per-state bulk CSV, DQ-validated ([594ba99](https://github.com/kenstott/calcite/commit/594ba9964e825a4ab82b420430ce174683dcd2ad))
+
+
+### Bug Fixes
+
+* **chunk-parsing:** auto-create FK columns in vc_staging schema ([e3e22ab](https://github.com/kenstott/calcite/commit/e3e22abf6810b62104b85ef81145688f2f5d864b))
+* **file,govdata:** make IRS SOI freshness gates able to fire at all ([4205498](https://github.com/kenstott/calcite/commit/42054980a76f1359ef0a751ccf2843cad25300a3))
+* **file:** a hash gate always fetches the body it is about to hash ([9b93208](https://github.com/kenstott/calcite/commit/9b93208189458f211a7399e6bb28191d6b770fca))
+* **file:** drop the raw cache entry when the freshness probe says it changed ([8757ac0](https://github.com/kenstott/calcite/commit/8757ac0849d7914c7e8d7585f944cab98ecc826e))
+* **file:** key the provider raw cache per URL, not per batch ([3157c51](https://github.com/kenstott/calcite/commit/3157c5102d908a3d836ccb2004ba1fc30a9da1db))
+* **govdata:** add lookbacks to three sources measured to reissue published years ([cdb3ac6](https://github.com/kenstott/calcite/commit/cdb3ac63329437995f30dfaccae5ab44519001ac))
+* **govdata:** apply missed QCEW lookbacks, close BEA parities gap, drop dead term ([b495685](https://github.com/kenstott/calcite/commit/b4956851f48b88ec3c2e4420fa720002039e5895))
+* **govdata:** cms_hospital_quality wrote every row three times ([755ba7f](https://github.com/kenstott/calcite/commit/755ba7f90a6008e374ab20cae329111c790293bb))
+* **govdata:** nih_award_projects was pinned to FY2022-2024 and could not advance ([547aa29](https://github.com/kenstott/calcite/commit/547aa29aefe207a90425a8c6def3a3e1fcb31c8d))
+* **govdata:** shape SOI columns in place instead of materializing twins ([5efe70d](https://github.com/kenstott/calcite/commit/5efe70db9b1681cca1857630692d9d3318b6d743))
+* **govdata:** state_minimum_wage_history reads DOL live, not a Wayback capture ([683e230](https://github.com/kenstott/calcite/commit/683e23023a5e086597f3abf082e1dd79b6d7e354))
+* **govdata:** un-freeze four accruing tables whose in-progress year was permanent ([51a86d8](https://github.com/kenstott/calcite/commit/51a86d8f0ecade652dd4d70378cc875d3c2df322))
+* **govdata:** USPTO auth headers, redirect leakage, and fedregister correction prefixes ([fb50906](https://github.com/kenstott/calcite/commit/fb509063080de5a89728a549daf6bec2fa6bc830))
+* **pool:** add backoff for conflict rejections, don't increment queue counter on requeue ([0920759](https://github.com/kenstott/calcite/commit/09207599940db23f2fa255c95d47fe76f6925d17))
+* **pool:** track requeue_count separately to keep requeued jobs reachable ([576d321](https://github.com/kenstott/calcite/commit/576d3212866efd79e1894ab9cd8b9b561e08537b))
+* **sec:** change sequence column from int to long to match bigint schema ([248174e](https://github.com/kenstott/calcite/commit/248174e728fce84928bb23efef6a258a9787eb41))
+* **sec:** extract full address (street, city, state, ZIP) and track prepared_remarks section boundaries ([194141e](https://github.com/kenstott/calcite/commit/194141e9c183352fb658a379a30b2d2658dcbf84))
+* **sec:** handle corrupted XBRL filings and cache FilingSummary.xml 404s ([a932da9](https://github.com/kenstott/calcite/commit/a932da901502f692e799920818aa96fabf93b5b4))
+
+
+### Performance Improvements
+
+* **govdata:** cache four tables whose key already advances ([47a2e85](https://github.com/kenstott/calcite/commit/47a2e8574668fb168ff7e3a8e7a4539a65eae49e))
+* **govdata:** move 15 more tables off hash onto a probe gate ([1201b2b](https://github.com/kenstott/calcite/commit/1201b2b5870b3331f019e52a726ea3d75f815fc9))
+* **govdata:** Socrata tables gate on ETag instead of hashing the body ([260b880](https://github.com/kenstott/calcite/commit/260b880582f96082d4db061f874deb0050e0cb75))
+* **sec:** add file-based caching with 30-day freshness for submissions.json ([f357a8e](https://github.com/kenstott/calcite/commit/f357a8e6908e8805203beec7a108577000b39b72))
+* **sec:** replace submissions.json TTL cache with content-size validation ([6088b07](https://github.com/kenstott/calcite/commit/6088b07b4f525683c0cd0a422420b9ba7b436504))
+
 ## [0.80.0](https://github.com/kenstott/calcite/compare/engine-v0.79.0...engine-v0.80.0) (2026-08-28)
 
 
