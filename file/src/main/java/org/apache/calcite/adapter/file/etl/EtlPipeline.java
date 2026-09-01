@@ -2156,6 +2156,21 @@ public class EtlPipeline {
       }
     }
 
+    // A HASH gate is computed FROM the fetched body, so it can only detect a change if the body
+    // actually comes from the source. The raw cache is consulted before the body is read and is
+    // validated by existence alone, so on a table whose cache key does not change between runs the
+    // gate would hash the bytes the cache just handed back and match its own stored token forever:
+    // the table frozen at its first fetch, reporting "unchanged" every day while the source moves.
+    // Drop this unit's entry first so the hash sees the source. The drain below repopulates it, and
+    // the write re-fetch then reads that warm entry, so the body is still downloaded only once.
+    FreshnessConfig freshnessConfigForHash = config.getFreshness();
+    boolean hashFreshnessActive = freshnessConfigForHash != null
+        && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
+        && dataSource instanceof HttpSource;
+    if (hashFreshnessActive) {
+      ((HttpSource) dataSource).invalidateRawCache(variables);
+    }
+
     // Fetch data via the (re-runnable) source chain — the expensive network I/O. The
     // hash-freshness branch below drains this once to compute a streaming hash, then re-fetches
     // from the now-warm raw cache for the write, so a large dataset is never held in memory.
@@ -2175,10 +2190,6 @@ public class EtlPipeline {
     // The hash is computed by STREAMING the fetched rows through an order-independent multiset
     // digest (no full materialisation — a large table would OOM otherwise). When the content
     // changed, the chain is re-fetched from the now-warm raw cache for the write.
-    FreshnessConfig freshnessConfigForHash = config.getFreshness();
-    boolean hashFreshnessActive = freshnessConfigForHash != null
-        && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
-        && dataSource instanceof HttpSource;
     // A per-year (or otherwise per-unit) templated table with a lookback set processes
     // MULTIPLE units in one run (e.g. year=2025 then year=2026). The bare pipelineName token
     // below is a SINGLE scalar for the whole pipeline: comparing unit N's hash against the token
