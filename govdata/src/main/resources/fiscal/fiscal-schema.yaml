@@ -2072,8 +2072,10 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider reads through this cache rather than opening its own connection, so the
+      # yearly file is downloaded once and re-read on later runs.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SoiMigrationProvider"

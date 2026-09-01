@@ -11,7 +11,8 @@
 package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import org.slf4j.Logger;
@@ -20,7 +21,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Iterator;
@@ -39,7 +39,7 @@ import java.util.NoSuchElementException;
  * buckets (state FIPS >= 57; county 000), non-migrant same-county rows, and
  * suppressed cells (n1 &lt; 0) are filtered out. AGI in $1000s.
  */
-public class SoiMigrationProvider implements DataProvider {
+public class SoiMigrationProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SoiMigrationProvider.class);
 
@@ -47,7 +47,7 @@ public class SoiMigrationProvider implements DataProvider {
       "y1_statefips", "y1_countyfips", "y2_statefips", "y2_countyfips", "n1", "n2", "agi"};
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
       year = variables.get("year");
@@ -69,9 +69,12 @@ public class SoiMigrationProvider implements DataProvider {
     final String url = "https://www.irs.gov/pub/irs-soi/countyoutflow" + pair + ".csv";
     LOGGER.info("county_migration_flows: fetching {}", url);
 
-    HttpURLConnection conn = FiscalHttp.openGet(url);
-    final BufferedReader reader =
-        new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.US_ASCII));
+    // Read through the pipeline's raw cache rather than opening a connection. This provider
+    // still has to exist -- it drops foreign and summary buckets, suppressed cells and
+    // non-migrant rows, which no declarative filter can express -- but none of that is a reason
+    // to re-download the file on every run.
+    final BufferedReader reader = new BufferedReader(
+        new InputStreamReader(rawCache.openStream(url), StandardCharsets.US_ASCII));
     String headerRecord = CsvRecordReader.readRecord(reader);
     if (headerRecord == null) {
       reader.close();
