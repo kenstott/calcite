@@ -2122,6 +2122,15 @@ public class EtlPipeline {
           return 0;
         }
         if (currentToken != null) {
+          // Reaching here means the probe did not match, so the upstream content changed (or was
+          // never seen). Drop this unit's raw cache entry before fetching: entries are validated by
+          // existence alone, so otherwise the fetch is handed the very bytes the probe just called
+          // out of date, writes them, and records the new token -- burying the revision and making
+          // sure no later run looks again. This is what makes a lookback able to see a restatement
+          // on a table that caches.
+          if (previousToken != null) {
+            ((HttpSource) dataSource).invalidateRawCache(variables);
+          }
           // Defer recording until the write succeeds (see the successful return below).
           capturedFreshnessUnitKey = unitKey;
           capturedFreshnessToken = currentToken;

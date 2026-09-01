@@ -3364,6 +3364,43 @@ public class HttpSource implements DataSource {
    * @return a {@link ProbeResult}; never null
    * @throws IOException if the probe request fails
    */
+  /**
+   * Drops this batch's raw cache entry so the next fetch goes to the source.
+   *
+   * <p>Called when the freshness gate has determined the upstream content changed. An entry here
+   * is validated by existence alone — staleness is decided by the tracker, not a TTL — so without
+   * this, a lookback that reopens a revised period does the probe, sees the change, declines to
+   * skip, and is then handed the very bytes the probe just said were out of date. The revision is
+   * written off as already seen, and the new token is recorded, so no later run looks again.
+   *
+   * <p>Best-effort: a delete that fails leaves the entry in place, which is the pre-existing
+   * behaviour rather than a new failure mode, and is logged rather than thrown.
+   *
+   * @param variables the batch's dimension values
+   * @return whether an entry was removed
+   */
+  public boolean invalidateRawCache(Map<String, String> variables) {
+    if (rawCachePath == null || storageProvider == null) {
+      return false;
+    }
+    String path = buildRawCachePath(variables);
+    try {
+      if (!storageProvider.exists(path)) {
+        return false;
+      }
+      boolean removed = storageProvider.delete(path);
+      if (removed) {
+        LOGGER.info("Freshness changed — dropped raw cache entry {}", path);
+      }
+      return removed;
+    // fallback-guard: a cache entry that cannot be removed is left alone; the fetch then reads it,
+    // which is the behaviour before this method existed, so this degrades rather than fails.
+    } catch (IOException e) {
+      LOGGER.warn("Could not drop raw cache entry {}: {}", path, e.getMessage());
+      return false;
+    }
+  }
+
   public ProbeResult probe(FreshnessConfig freshnessConfig,
       Map<String, String> variables) throws IOException {
     if (freshnessConfig == null) {
