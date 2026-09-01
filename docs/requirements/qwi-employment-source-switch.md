@@ -1,4 +1,21 @@
-# qwi_employment — staged replacement (NOT applied)
+# qwi_employment — config applied, DQ-validated, production reprocess pending
+
+**Status:** the config is applied and validated end to end against the DQ bucket
+(govdata-parquet-v1-dq): 51/51 states, 3,176,253 rows, 0 errors, every check below passing.
+**Production still needs the purge + reprocess in the runbook, which needs go-ahead** — the old
+time= partitions do not migrate, so production currently holds the old scheme.
+
+**Four corrections the block needed before it would run.** It had never been executed:
+- `state: *census_state_fips` — that anchor does not exist. Defined `all_state_abbrs_lower`
+  instead, and named it for what it holds: LEHD addresses files as `/ak/qwi_ak_…`, so these are
+  lowercase USPS abbreviations, not FIPS. The host 404s `AK` and serves `ak`. All 51 verified.
+- `<<: *iceberg_defaults` — also undefined; expanded to the block its siblings spell out.
+- `materialize.output` — absent, so the config would not build at all.
+- `format`/`compression` at source level — ignored there, so the gzip body was parsed as JSON and
+  failed on the magic byte. They belong under `response:` as `format`/`compressed`, which is what
+  lodes_workplace already does for the same host.
+- `rawCache` — absent means disabled, and with it off the fetch returns the body where a path is
+  expected, so the CSV header line was parsed as an S3 URI. Required, not optional, here.
 
 **Why this is staged rather than applied:** it changes the partition scheme from `[type, time]` to
 `[type, state]`. Applying the config alone would have the table writing new-scheme partitions

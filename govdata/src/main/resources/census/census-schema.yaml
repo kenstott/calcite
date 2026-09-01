@@ -216,6 +216,62 @@ dimension_values:
     - '55'  # Wisconsin
     - '56'  # Wyoming
 
+  # Lowercase USPS abbreviations, which is how LEHD addresses its per-state QWI files
+  # (…/latest_release/ak/qwi_ak_…). Not FIPS, and not uppercase: the host 404s AK and serves ak.
+  # All 51 confirmed to resolve against latest_release.
+  all_state_abbrs_lower: &all_state_abbrs_lower
+    - al
+    - ak
+    - az
+    - ar
+    - ca
+    - co
+    - ct
+    - de
+    - dc
+    - fl
+    - ga
+    - hi
+    - id
+    - il
+    - in
+    - ia
+    - ks
+    - ky
+    - la
+    - me
+    - md
+    - ma
+    - mi
+    - mn
+    - ms
+    - mo
+    - mt
+    - ne
+    - nv
+    - nh
+    - nj
+    - nm
+    - ny
+    - nc
+    - nd
+    - oh
+    - ok
+    - or
+    - pa
+    - ri
+    - sc
+    - sd
+    - tn
+    - tx
+    - ut
+    - vt
+    - va
+    - wa
+    - wv
+    - wi
+    - wy
+
 # ============================================================================
 # MATERIALIZATION OPTIONS
 # ============================================================================
@@ -4541,95 +4597,137 @@ partitionedTables:
   # QWI EMPLOYMENT - Quarterly employment by sex and age
   # ---------------------------------------------------------------------------
   - name: qwi_employment
-    freshness:
-      type: hash
-    pattern: "type=qwi/time=*/*.parquet"
+    # Census rebuilds the COMPLETE QWI time series every quarterly release and advises against
+    # combining data across releases, so there is no bounded set of "recently changed" periods --
+    # deliberately NO lookbackPeriods here; do not add one. A per-file freshness check governs.
+    # https://lehd.ces.census.gov/doc/QWI_data_notices.pdf
+    pattern: "type=qwi/state=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - name: type
-          type: VARCHAR
-        - name: time
-          type: VARCHAR
+          type: string
+        - name: state
+          type: string
     comment: >
-      Quarterly Workforce Indicators (QWI) beginning-of-quarter employment, stable
-      employment, hires, separations, and average monthly earnings of stable workers, at
-      state level by quarter (YYYY-QN). No age, sex, or industry breakdown in this table.
-
+      LEHD Quarterly Workforce Indicators, Sex-by-Age tabulation at state level (all industries,
+      private ownership). One row per state x quarter x demographic cell. Ingested from the
+      per-state bulk CSV rather than the per-quarter API: one file carries that state's whole
+      history, so a release costs 51 fetches instead of ~4,700, and every published measure and
+      suppression flag is retained rather than a five-variable projection.
     dimensions:
       type:
         - qwi
-      # QWI API uses time parameter in format "YYYY-QN"
-      time:
-        - '2022-Q1'
-        - '2022-Q2'
-        - '2022-Q3'
-        - '2022-Q4'
-        - '2023-Q1'
-        - '2023-Q2'
-        - '2023-Q3'
-        - '2023-Q4'
-        - '2024-Q1'
-        - '2024-Q2'
-        - '2024-Q3'
-        - '2024-Q4'
-      # QWI doesn't support wildcard - need explicit state FIPS codes
-      state: *all_state_fips
-
-    columns:
-      - *state_column
-      - name: quarter
-        type: string
-        nullable: true
-        expression: 'src."time"'
-        comment: Quarter in YYYY-QN format
-      - name: employment
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."Emp" AS BIGINT)'
-        comment: Beginning-of-quarter employment
-      - name: stable_employment
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."EmpS" AS BIGINT)'
-        comment: Stable employment (employed full quarter)
-      - name: hires
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."HirA" AS BIGINT)'
-        comment: All hires
-      - name: separations
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."Sep" AS BIGINT)'
-        comment: All separations
-      - name: earnings
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."EarnS" AS BIGINT)'
-        comment: Average monthly earnings of stable workers
-
+      state: *all_state_abbrs_lower
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/qwi/sa?get=Emp,EmpS,HirA,Sep,EarnS&for=state:{state}&time={time}&key={env:CENSUS_API_KEY}"
-      method: GET
+      url: "https://lehd.ces.census.gov/data/qwi/latest_release/{state}/qwi_{state}_sa_f_gs_ns_op_u.csv.gz"
+      # format/compressed belong under response:, as lodes_workplace has them for the same host.
+      # At source level they are silently ignored and the body is parsed as JSON, which fails on
+      # the gzip magic byte rather than on anything that names the real problem.
       response:
-        format: json
-      rateLimit:
-        requestsPerSecond: 2.0
-        retryOn: [429, 503]
+        format: csv
+        compressed: gzip
+      # Required, not optional, for these files. Each state is a multi-megabyte gzipped CSV that
+      # the pipeline streams to the raw cache and then reads back; with the cache off the fetch
+      # returns the body itself where a path is expected, and the first line -- the CSV header --
+      # is then parsed as an S3 URI. An absent rawCache block means disabled, hence explicit.
       rawCache:
         enabled: true
-
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
-
+    freshness:
+      # HEAD the data file itself. latest_release/ is a live alias for the newest release
+      # (verified 2026-08-31: byte-identical to R2026Q3), so this tracks releases without
+      # hardcoding a label.
+      type: last_modified
+    columns:
+      - {name: periodicity, type: varchar}
+      - {name: seasonadj, type: varchar}
+      - {name: geo_level, type: varchar}
+      - {name: geography, type: varchar}
+      - {name: ind_level, type: varchar}
+      - {name: industry, type: varchar}
+      - {name: ownercode, type: varchar}
+      - {name: sex, type: varchar}
+      - {name: agegrp, type: varchar}
+      - {name: race, type: varchar}
+      - {name: ethnicity, type: varchar}
+      - {name: education, type: varchar}
+      - {name: firmage, type: varchar}
+      - {name: firmsize, type: varchar}
+      - {name: year, type: int}
+      - {name: quarter, type: int}
+      - {name: agg_level, type: varchar}
+      - {name: Emp, type: bigint}
+      - {name: EmpEnd, type: bigint}
+      - {name: EmpS, type: bigint}
+      - {name: EmpTotal, type: bigint}
+      - {name: EmpSpv, type: bigint}
+      - {name: HirA, type: bigint}
+      - {name: HirN, type: bigint}
+      - {name: HirR, type: bigint}
+      - {name: Sep, type: bigint}
+      - {name: HirAEnd, type: bigint}
+      - {name: SepBeg, type: bigint}
+      - {name: HirAEndRepl, type: bigint}
+      - {name: HirAEndR, type: double}
+      - {name: SepBegR, type: double}
+      - {name: HirAEndReplR, type: double}
+      - {name: HirAS, type: bigint}
+      - {name: HirNS, type: bigint}
+      - {name: SepS, type: bigint}
+      - {name: SepSnx, type: bigint}
+      - {name: TurnOvrS, type: double}
+      - {name: FrmJbGn, type: bigint}
+      - {name: FrmJbLs, type: bigint}
+      - {name: FrmJbC, type: bigint}
+      - {name: FrmJbGnS, type: bigint}
+      - {name: FrmJbLsS, type: bigint}
+      - {name: FrmJbCS, type: bigint}
+      - {name: EarnS, type: bigint}
+      - {name: EarnBeg, type: bigint}
+      - {name: EarnHirAS, type: bigint}
+      - {name: EarnHirNS, type: bigint}
+      - {name: EarnSepS, type: bigint}
+      - {name: Payroll, type: bigint}
+      - {name: sEmp, type: int}
+      - {name: sEmpEnd, type: int}
+      - {name: sEmpS, type: int}
+      - {name: sEmpTotal, type: int}
+      - {name: sEmpSpv, type: int}
+      - {name: sHirA, type: int}
+      - {name: sHirN, type: int}
+      - {name: sHirR, type: int}
+      - {name: sSep, type: int}
+      - {name: sHirAEnd, type: int}
+      - {name: sSepBeg, type: int}
+      - {name: sHirAEndRepl, type: int}
+      - {name: sHirAEndR, type: int}
+      - {name: sSepBegR, type: int}
+      - {name: sHirAEndReplR, type: int}
+      - {name: sHirAS, type: int}
+      - {name: sHirNS, type: int}
+      - {name: sSepS, type: int}
+      - {name: sSepSnx, type: int}
+      - {name: sTurnOvrS, type: int}
+      - {name: sFrmJbGn, type: int}
+      - {name: sFrmJbLs, type: int}
+      - {name: sFrmJbC, type: int}
+      - {name: sFrmJbGnS, type: int}
+      - {name: sFrmJbLsS, type: int}
+      - {name: sFrmJbCS, type: int}
+      - {name: sEarnS, type: int}
+      - {name: sEarnBeg, type: int}
+      - {name: sEarnHirAS, type: int}
+      - {name: sEarnHirNS, type: int}
+      - {name: sEarnSepS, type: int}
+      - {name: sPayroll, type: int}
     materialize:
+      enabled: true
       format: iceberg
       output:
-        pattern: "type=qwi/time=*/"
+        pattern: "type=qwi/state=*/"
       partition:
-        columns: [type, time]
+        columns: [type, state]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: qwi_employment
@@ -4637,18 +4735,10 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
-        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
-
-# ============================================================================
-# LEHD/LODES - Origin-Destination Employment Statistics
-# Commuting patterns (file-based, not API)
-# ============================================================================
-
-  # ---------------------------------------------------------------------------
-  # LODES WAC - Workplace Area Characteristics
-  # ---------------------------------------------------------------------------
+        overwritePartitions: true
+        sortOrder: [year, quarter]
   - name: lodes_workplace
     # LODES reissues corrected per-state-year files under a new data vintage (LODESTechDoc 8.3:
     # "New or corrected data may cause newer vintages of data to be released"). With dataLag: 3
