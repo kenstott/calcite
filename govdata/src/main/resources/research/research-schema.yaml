@@ -330,6 +330,14 @@ partitionedTables:
 
   # --- NIH AWARD-LEVEL MICRODATA — RePORTER API (POST, DataProvider) ---------
   - name: nih_award_projects
+    # Awards land throughout the fiscal year and RePORTER keeps adding to a year after it opens
+    # (FY2026 stood at roughly half a full year's count partway through it, checked live), while
+    # supplements and corrections continue to land against years already closed. The (year, IC)
+    # combos cover a whole fiscal year, so the period-completion gate would otherwise mark the
+    # in-progress year complete on its first successful run and never revisit it. Reopening the 2
+    # most recently published years covers the accrual and the following year's settling; the hash
+    # check skips the write when a year is unchanged.
+    lookbackPeriods: 2
     pattern: "type=nih_award_projects/year=*/*.parquet"
     partitions:
       style: hive
@@ -355,18 +363,25 @@ partitionedTables:
       the schema-level header note); NIH itself, added because this schema is where funding-
       input data already lives.
 
-      Scoped to FY2022-2024 (a recent-years trend window, not full history) by deliberate
-      choice — RePORTER's data goes back to FY1985, and growing this list is safe/expected but
-      was left out of the initial build to bound scope; extend the year dimension list to add
-      more years.
+      Scoped to a recent-years trend window rather than full history by deliberate choice —
+      RePORTER's data goes back to FY1985. The window starts at FY2022 and follows the calendar
+      forward; lower minYear on the year dimension to reach further back.
 
     dimensions:
       type:
         - nih_award_projects
       year:
-        - "2022"
-        - "2023"
-        - "2024"
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2022}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        # Floor, not a source limit: RePORTER goes back to FY1985, and this table is deliberately
+        # a recent-years trend window. minYear clamps the start so a schema-wide GOVDATA_START_YEAR
+        # set for backfilling other tables cannot silently widen this one to 40 fiscal years.
+        minYear: 2022
+        # NIH fiscal year N runs Oct N-1 to Sep N, so the calendar year names the fiscal year that
+        # is current or has just closed, and never one that has not started. Confirmed live: FY2027
+        # returns 0 awards, so reaching the current year costs an empty response, not an error.
+        dataLag: 0
       agency_ic:
         - NCI
         - NIGMS
