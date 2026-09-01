@@ -1564,8 +1564,13 @@ partitionedTables:
       type:
         - cms_hospital_quality
       year: ["${GOVDATA_CURRENT_YEAR}"]
-      # month is not in the URL; these values are cache-busters for the annual release window
-      month: ["7","8","9"]
+      # month is not in the URL — it exists only to re-key the raw cache as the release window is
+      # crawled. It must therefore resolve to ONE value per run. Listing 7, 8 and 9 made a single
+      # run issue three identical requests, and because neither year nor month is a partition
+      # column all three results landed in the same type= partition, which replace-partitions then
+      # committed together: every row written three times. Advancing a single value covers the same
+      # July-September window across the runs that happen in those months, at one row per row.
+      month: ["${GOVDATA_CURRENT_MONTH:9}"]
 
     materialize:
       enabled: true
