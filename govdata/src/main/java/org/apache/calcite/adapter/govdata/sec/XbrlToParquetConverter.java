@@ -2716,24 +2716,14 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Builds a globally unique chunk_id: {accession}_{seq}_{sha256[:16]}.
-   * The hash prevents collisions when the same logical sequence position appears across accessions.
+   * Builds a deterministic, extraction-stable chunk_id: {accession}_{section}_{position}.
+   * Uses accession, section, and position (not text hash), making chunk_id stable even when
+   * text extraction logic changes. This enables true idempotent UPSERT: same logical chunk
+   * always produces same chunk_id, regardless of text processing improvements.
    */
-  private String buildGlobalChunkId(String accession, long seq, String text) {
-    try {
-      java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-      byte[] hash = md.digest(
-          (accession + "_" + seq + "_" + (text != null ? text : ""))
-              .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      StringBuilder hex = new StringBuilder();
-      for (int i = 0; i < 8; i++) {
-        hex.append(String.format("%02x", hash[i]));
-      }
-      return accession + "_" + seq + "_" + hex;
-    // fallback-guard: allow SHA-256 is JVM-guaranteed available; this checked-exception path is effectively unreachable
-    } catch (java.security.NoSuchAlgorithmException e) {
-      return accession + "_" + seq;
-    }
+  private String buildGlobalChunkId(String accession, String section, long position) {
+    String sectionPart = section != null ? section.replaceAll("[^a-zA-Z0-9_-]", "_") : "unknown";
+    return accession + "_" + sectionPart + "_" + position;
   }
 
   /**
@@ -5892,17 +5882,19 @@ public class XbrlToParquetConverter implements FileConverter {
           "accession_number missing for CIK " + cik + " — refusing to synthesize a fabricated accession"));
       data.put("year", year);
 
-      // Core identifiers — chunk_id is globally unique: accession + sequence + sha256[:16] of text
+      // Core identifiers — chunk_id is extraction-stable: accession + section + position
+      // (stable across text extraction changes, enabling idempotent UPSERT)
       long seq = sequence++;
+      String section = chunk.metadata != null ? (String) chunk.metadata.get("parent_section") : null;
       data.put("chunk_id", buildGlobalChunkId(
-          accessionNumber != null ? accessionNumber : cik, seq, chunk.text));
+          accessionNumber != null ? accessionNumber : cik, section, seq));
       data.put("source_type", chunk.blobType);
       data.put("section", chunk.metadata.get("parent_section"));
       data.put("subsection", chunk.metadata.get("subsection"));
       data.put("section_path", chunk.metadata.get("section_path"));
       Object pcObj = chunk.metadata.get("paragraph_continuation");
       data.put("paragraph_continuation", pcObj instanceof Boolean ? pcObj : false);
-      data.put("sequence", seq);
+      data.put("sequence", sequence++);
       data.put("filing_date", filingDate);
 
       // Text columns - chunk_text is original before normalization, enriched_text is normalized
