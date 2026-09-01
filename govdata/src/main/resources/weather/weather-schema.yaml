@@ -1157,6 +1157,11 @@ partitionedTables:
       response:
         format: json
 
+      # The provider reads each downloaded file through this cache, keyed on its own URL.
+      # A file the source does not have is signalled by throwing, never cached: a committed
+      # empty entry would read as a real empty file and the day would never be retried.
+      rawCache:
+        enabled: true
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.weather.HmsSmokeSpatialJoinProvider"
 
@@ -1228,6 +1233,11 @@ partitionedTables:
       response:
         format: json
 
+      # The provider reads each downloaded file through this cache, keyed on its own URL.
+      # A file the source does not have is signalled by throwing, never cached: a committed
+      # empty entry would read as a real empty file and the day would never be retried.
+      rawCache:
+        enabled: true
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.weather.HmsSmokeSpatialJoinProvider"
 

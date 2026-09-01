@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.ag;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
@@ -78,7 +79,7 @@ import java.util.regex.Pattern;
  * rendered raw (see {@link RawNumberFormatter}) so values are identical to the
  * former usermodel path regardless of cell number-format.
  */
-public class FsaCommodityPaymentsProvider implements DataProvider {
+public class FsaCommodityPaymentsProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(FsaCommodityPaymentsProvider.class);
 
@@ -114,7 +115,7 @@ public class FsaCommodityPaymentsProvider implements DataProvider {
   }
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String landingUrl = config.getSource() != null ? config.getSource().getUrl() : null;
     if (landingUrl == null || landingUrl.isEmpty()) {
       throw new IOException("FSA: source.url (landing page) is required");
@@ -131,7 +132,7 @@ public class FsaCommodityPaymentsProvider implements DataProvider {
 
     Map<String, Agg> agg = new HashMap<String, Agg>();
     for (String xlsxUrl : xlsxUrls) {
-      aggregateFile(xlsxUrl, userAgent, agg);
+      aggregateFile(xlsxUrl, userAgent, agg, rawCache);
     }
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(agg.size());
@@ -227,21 +228,62 @@ public class FsaCommodityPaymentsProvider implements DataProvider {
    * Downloads to a temp file first so the OPC package reads zip entries lazily (never the whole
    * sheet into one array).
    */
-  private void aggregateFile(String xlsxUrl, String userAgent, Map<String, Agg> agg)
-      throws IOException {
+  /** A stream over a staging download that deletes the file once the cache has consumed it. */
+  private static final class DeleteOnCloseFileInputStream extends java.io.FileInputStream {
+    private final File backing;
+
+    DeleteOnCloseFileInputStream(File backing) throws IOException {
+      super(backing);
+      this.backing = backing;
+    }
+
+    @Override public void close() throws IOException {
+      try {
+        super.close();
+      } finally {
+        if (backing.exists() && !backing.delete()) {
+          LOGGER.debug("FSA: could not delete staging file {}", backing);
+        }
+      }
+    }
+  }
+
+  private void aggregateFile(String xlsxUrl, String userAgent, Map<String, Agg> agg,
+      RawCache rawCache) throws IOException {
     // FSA sheet XML compresses very highly; disable POI's zip-bomb inflate-ratio guard (precedent:
     // NsfFederalRdTransformer, NsfNationalRdTransformer). Streaming avoids the byte[] size cap.
     ZipSecureFile.setMinInflateRatio(0.0);
     File tmp = File.createTempFile("fsa-", ".xlsx");
     OPCPackage pkg = null;
     try {
-      Map<String, String> dlHeaders = new HashMap<String, String>();
+      final Map<String, String> dlHeaders = new HashMap<String, String>();
       dlHeaders.put("User-Agent", userAgent);
-      // Robust download: retry/backoff, HTML+404 detection, and a completeness check. A truncated
-      // file makes POI fall back from random-access ZipFile to stream mode, which materializes the
-      // whole sheet entry into one array and trips POI's array-length cap — the exact failure this
-      // avoids (a partial download otherwise reaches OPCPackage.open and blows up there).
-      ZipDownloadUtils.downloadToFile(xlsxUrl, dlHeaders, tmp);
+      // Read through the raw cache, with the robust download as the miss path: retry/backoff,
+      // HTML+404 detection and a completeness check. A truncated file makes POI fall back from
+      // random-access ZipFile to stream mode, which materializes the whole sheet entry into one
+      // array and trips POI's array-length cap, so a partial file must never reach OPCPackage --
+      // nor be committed as a cache entry, which is why the download stages to its own file and
+      // only a completed one is handed back. POI needs a File, so the entry is streamed to tmp.
+      final String fileUrl = xlsxUrl;
+      try (InputStream cached = rawCache.openStream(fileUrl, () -> {
+            File staging = File.createTempFile("fsa-dl-", ".xlsx");
+            try {
+              ZipDownloadUtils.downloadToFile(fileUrl, dlHeaders, staging);
+              return new DeleteOnCloseFileInputStream(staging);
+            } catch (IOException e) {
+              if (staging.exists() && !staging.delete()) {
+                LOGGER.debug("FSA: could not delete staging file {}", staging);
+              }
+              throw e;
+            }
+          });
+          java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
+        byte[] chunk = new byte[1 << 16];
+        int n;
+        while ((n = cached.read(chunk)) != -1) {
+          out.write(chunk, 0, n);
+        }
+      }
       pkg = OPCPackage.open(tmp, PackageAccess.READ);
       ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
       XSSFReader reader = new XSSFReader(pkg);

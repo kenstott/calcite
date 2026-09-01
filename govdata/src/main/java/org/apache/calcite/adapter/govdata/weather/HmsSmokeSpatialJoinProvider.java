@@ -12,7 +12,8 @@ package org.apache.calcite.adapter.govdata.weather;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.govdata.geo.TigerShapefileParser;
 
@@ -27,6 +28,7 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -70,7 +72,7 @@ import java.util.zip.ZipInputStream;
  * <p>Output columns: county_fips, state_fips, date, year,
  * smoke_coverage_pct, heavy_smoke_pct, medium_smoke_pct, light_smoke_pct.
  */
-public class HmsSmokeSpatialJoinProvider implements DataProvider {
+public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HmsSmokeSpatialJoinProvider.class);
 
@@ -100,7 +102,8 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
       new ConcurrentHashMap<String, List<Map<String, Object>>>();
 
   @Override public Iterator<Map<String, Object>> fetch(
-      EtlPipelineConfig config, Map<String, String> variables) throws IOException {
+      EtlPipelineConfig config, Map<String, String> variables, RawCache rawCache)
+      throws IOException {
 
     String year = variables.get("year");
     String month = variables.get("month");
@@ -110,23 +113,24 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
 
     String tableName = config.getName();
     if (TABLE_POLYGONS.equals(tableName)) {
-      return fetchPolygons(year, month);
+      return fetchPolygons(year, month, rawCache);
     }
-    return fetchCountyCoverage(year, month);
+    return fetchCountyCoverage(year, month, rawCache);
   }
 
   // ---------------------------------------------------------------------------
   // Mode: hms_smoke_daily — spatial join producing county coverage rows
   // ---------------------------------------------------------------------------
 
-  private Iterator<Map<String, Object>> fetchCountyCoverage(String year, String month)
+  private Iterator<Map<String, Object>> fetchCountyCoverage(String year, String month,
+      RawCache rawCache)
       throws IOException {
 
     int yearInt  = Integer.parseInt(year);
     int monthInt = Integer.parseInt(month);
     String tigerYear = String.valueOf(Math.max(yearInt, 2010));
 
-    List<CountyGeometry> counties = getCountyGeometries(tigerYear);
+    List<CountyGeometry> counties = getCountyGeometries(tigerYear, rawCache);
     if (counties.isEmpty()) {
       LOGGER.warn("No county geometries for year={} — returning empty", tigerYear);
       return new ArrayList<Map<String, Object>>().iterator();
@@ -137,7 +141,7 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
       countyEnvelopes.add(county.geometry.getEnvelopeInternal());
     }
 
-    List<SmokePolygon> allPolygons = downloadMonthPolygons(year, month, yearInt, monthInt);
+    List<SmokePolygon> allPolygons = downloadMonthPolygons(year, month, yearInt, monthInt, rawCache);
 
     // Cache polygon rows for hms_smoke_polygons (which runs after this table)
     String cacheKey = year + "-" + month;
@@ -170,7 +174,8 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
   // Mode: hms_smoke_polygons — raw geometry rows
   // ---------------------------------------------------------------------------
 
-  private Iterator<Map<String, Object>> fetchPolygons(String year, String month)
+  private Iterator<Map<String, Object>> fetchPolygons(String year, String month,
+      RawCache rawCache)
       throws IOException {
 
     String cacheKey = year + "-" + month;
@@ -185,7 +190,7 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
     LOGGER.info("HMS polygon cache miss for {}-{} — re-fetching", year, month);
     int yearInt  = Integer.parseInt(year);
     int monthInt = Integer.parseInt(month);
-    List<SmokePolygon> polygons = downloadMonthPolygons(year, month, yearInt, monthInt);
+    List<SmokePolygon> polygons = downloadMonthPolygons(year, month, yearInt, monthInt, rawCache);
     List<Map<String, Object>> rows = toPolygonRows(polygons, year, month);
     LOGGER.info("HMS smoke {}-{}: {} polygon rows", year, month, rows.size());
     return rows.iterator();
@@ -196,7 +201,7 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
   // ---------------------------------------------------------------------------
 
   private List<SmokePolygon> downloadMonthPolygons(
-      String year, String month, int yearInt, int monthInt) {
+      String year, String month, int yearInt, int monthInt, RawCache rawCache) {
 
     Calendar cal = Calendar.getInstance();
     cal.set(yearInt, monthInt - 1, 1);
@@ -218,7 +223,7 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
         tempDir = Files.createTempDirectory("hms_smoke_");
         File zipFile = new File(tempDir.toFile(), "hms_smoke.zip");
 
-        if (!downloadFile(zipUrl, zipFile)) {
+        if (!downloadFile(zipUrl, zipFile, rawCache)) {
           LOGGER.debug("HMS smoke ZIP not available for {}", dateStr);
           continue;
         }
@@ -258,7 +263,8 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
   // County geometry loading — reads from materialized geo.counties Iceberg table
   // ---------------------------------------------------------------------------
 
-  private List<CountyGeometry> getCountyGeometries(String year) throws IOException {
+  private List<CountyGeometry> getCountyGeometries(String year, RawCache rawCache)
+      throws IOException {
     List<CountyGeometry> cached = COUNTY_CACHE.get(year);
     if (cached != null) {
       return cached;
@@ -269,7 +275,7 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
       counties = loadCountiesFromIceberg(year);
     } catch (Exception e) {
       LOGGER.warn("Could not read counties from Iceberg ({}), falling back to TIGER download", e.getMessage());
-      counties = loadCountiesFromTiger(year);
+      counties = loadCountiesFromTiger(year, rawCache);
     }
 
     LOGGER.info("Loaded {} county geometries for year={}", counties.size(), year);
@@ -363,7 +369,8 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
   }
 
   /** Fallback: downloads and parses the TIGER county shapefile directly. */
-  private List<CountyGeometry> loadCountiesFromTiger(String year) throws IOException {
+  private List<CountyGeometry> loadCountiesFromTiger(String year, RawCache rawCache)
+      throws IOException {
     int tigerYear = Math.min(Integer.parseInt(year), MAX_TIGER_YEAR);
     String url = TIGER_COUNTY_URL_PATTERN.replace("{year}", String.valueOf(tigerYear));
     LOGGER.info("Downloading TIGER county shapefile for year={}: {}", tigerYear, url);
@@ -373,7 +380,7 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
       tempDir = Files.createTempDirectory("tiger_counties_");
       File zipFile = new File(tempDir.toFile(), "counties.zip");
 
-      if (!downloadFile(url, zipFile)) {
+      if (!downloadFile(url, zipFile, rawCache)) {
         throw new IOException("Failed to download TIGER county shapefile from: " + url);
       }
       extractZip(zipFile, tempDir.toFile());
@@ -515,7 +522,37 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
    * Downloads a URL to a file. Returns false (without throwing) for 404/missing files
    * since HMS smoke files are absent on many days (nights, cloudy periods).
    */
-  private boolean downloadFile(String urlStr, File dest) throws IOException {
+  /** Signals a file the source does not have, which is ordinary here and is never cached. */
+  private static final class AbsentFile extends IOException {
+    AbsentFile(String message) {
+      super(message);
+    }
+  }
+
+  /**
+   * Downloads to {@code dest} through the raw cache, returning false for a file the source does
+   * not have. HMS publishes nothing for many days (nights, cloud), so absence is an ordinary
+   * outcome rather than a failure.
+   *
+   * <p>Absence is signalled by throwing out of the supplier, which keeps it out of the cache: a
+   * committed empty entry would read as a real, empty file on every later run, and the day would
+   * never be retried even once HMS backfilled it.
+   */
+  private boolean downloadFile(String urlStr, File dest, RawCache rawCache) throws IOException {
+    try (InputStream in = rawCache.openStream(urlStr, () -> openOrAbsent(urlStr));
+         FileOutputStream out = new FileOutputStream(dest)) {
+      byte[] buf = new byte[1 << 16];
+      int n;
+      while ((n = in.read(buf)) != -1) {
+        out.write(buf, 0, n);
+      }
+      return true;
+    } catch (AbsentFile e) {
+      return false;
+    }
+  }
+
+  private InputStream openOrAbsent(String urlStr) throws IOException {
     URL url = URI.create(urlStr).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setConnectTimeout(30000);
@@ -526,24 +563,14 @@ public class HmsSmokeSpatialJoinProvider implements DataProvider {
     if (responseCode == HttpURLConnection.HTTP_NOT_FOUND
         || responseCode == HttpURLConnection.HTTP_GONE) {
       conn.disconnect();
-      return false;
+      throw new AbsentFile("no file at " + urlStr);
     }
     if (responseCode != HttpURLConnection.HTTP_OK) {
       conn.disconnect();
       throw new IOException("HTTP " + responseCode + " downloading " + urlStr);
     }
 
-    try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream());
-         FileOutputStream out = new FileOutputStream(dest)) {
-      byte[] buf = new byte[8192];
-      int n;
-      while ((n = in.read(buf)) != -1) {
-        out.write(buf, 0, n);
-      }
-    } finally {
-      conn.disconnect();
-    }
-    return true;
+    return new BufferedInputStream(conn.getInputStream());
   }
 
   private void extractZip(File zipFile, File destDir) throws IOException {
