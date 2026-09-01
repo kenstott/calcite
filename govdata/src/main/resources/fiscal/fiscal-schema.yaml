@@ -2211,8 +2211,11 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider reads its four regional shards through this cache rather than opening its
+      # own connections, so each shard is downloaded once. Keyed per URL within the batch, so
+      # the four do not overwrite one another.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.IrsEoBmfProvider"
@@ -2818,8 +2821,10 @@ partitionedTables:
         requestsPerSecond: 0.5
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider fetches the SSA workbooks through a Wayback capture and reads them
+      # through this cache keyed on the canonical SSA URL, so each year is retrieved once.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SsaBenefitsProvider"

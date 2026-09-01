@@ -40,18 +40,18 @@ final class StorageRawCache implements RawCache {
   private static final Logger LOGGER = LoggerFactory.getLogger(StorageRawCache.class);
 
   private final StorageProvider storageProvider;
-  private final String cacheFilePath;
+  private final String cacheDir;
   private final boolean enabled;
 
   /**
    * @param storageProvider storage holding the raw cache, or null when unavailable
-   * @param cacheFilePath fully-resolved entry path for this batch, or null when not caching
+   * @param cacheDir resolved cache directory for this batch, or null when not caching
    * @param bypass whether this run must ignore existing entries (force-download / full reprocess)
    */
-  StorageRawCache(StorageProvider storageProvider, String cacheFilePath, boolean bypass) {
+  StorageRawCache(StorageProvider storageProvider, String cacheDir, boolean bypass) {
     this.storageProvider = storageProvider;
-    this.cacheFilePath = cacheFilePath;
-    this.enabled = storageProvider != null && cacheFilePath != null && !bypass;
+    this.cacheDir = cacheDir;
+    this.enabled = storageProvider != null && cacheDir != null && !bypass;
   }
 
   /**
@@ -76,7 +76,55 @@ final class StorageRawCache implements RawCache {
         && "gzip".equalsIgnoreCase(source.getResponse().getCompressed());
     String path = HttpSource.buildRawCachePath(rawCachePath, variables, rawCache.getKeyVars(),
         0, gzip);
-    return new StorageRawCache(storageProvider, path, bypass);
+    // Keep the directory the built-in path resolves to, but drop its fixed response.json leaf:
+    // a provider may fetch several URLs within one batch (the IRS business master file is four
+    // regional shards), and a single fixed filename would make them overwrite one another and
+    // serve whichever landed last for all four.
+    int slash = path.lastIndexOf('/');
+    String dir = slash > 0 ? path.substring(0, slash) : path;
+    return new StorageRawCache(storageProvider, dir, bypass);
+  }
+
+  /**
+   * The entry for one URL within this batch's directory.
+   *
+   * <p>Named from the URL's last segment for legibility, with a digest of the whole URL appended
+   * so two different URLs cannot collide on a shared basename — {@code .../2024/data.csv} and
+   * {@code .../2025/data.csv} both end in {@code data.csv}.
+   *
+   * <p>Including the URL means a source that moves its file re-fetches rather than replaying the
+   * old entry, which is the safe direction: a moved file is new content, and an entry here is
+   * validated by existence alone.
+   */
+  private String entryFor(String url) {
+    String tail = url;
+    int q = tail.indexOf('?');
+    if (q >= 0) {
+      tail = tail.substring(0, q);
+    }
+    int slash = tail.lastIndexOf('/');
+    if (slash >= 0 && slash < tail.length() - 1) {
+      tail = tail.substring(slash + 1);
+    }
+    if (tail.isEmpty()) {
+      tail = "response";
+    }
+    return cacheDir + "/" + HttpSource.sanitizePathComponent(tail) + "_" + digest(url);
+  }
+
+  /** Short, stable digest of the full URL. */
+  private static String digest(String url) {
+    try {
+      java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+      byte[] d = md.digest(url.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      StringBuilder hex = new StringBuilder();
+      for (int i = 0; i < 6; i++) {
+        hex.append(String.format("%02x", d[i]));
+      }
+      return hex.toString();
+    } catch (java.security.NoSuchAlgorithmException e) {
+      throw new IllegalStateException("MD5 unavailable", e);
+    }
   }
 
   @Override public boolean isEnabled() {
@@ -84,18 +132,23 @@ final class StorageRawCache implements RawCache {
   }
 
   @Override public InputStream openStream(String url) throws IOException {
-    if (enabled && exists()) {
-      LOGGER.debug("Provider raw cache hit: {}", cacheFilePath);
-      return storageProvider.openInputStream(cacheFilePath);
+    return openStream(url, () -> download(url));
+  }
+
+  @Override public InputStream openStream(String key, ContentSupplier onMiss) throws IOException {
+    if (storageProvider == null || cacheDir == null) {
+      return onMiss.open();
     }
-    if (storageProvider == null || cacheFilePath == null) {
-      return download(url);
+    String entry = entryFor(key);
+    if (enabled && exists(entry)) {
+      LOGGER.debug("Provider raw cache hit: {}", entry);
+      return storageProvider.openInputStream(entry);
     }
-    LOGGER.debug("Provider raw cache miss, downloading: {}", url);
+    LOGGER.debug("Provider raw cache miss, fetching: {}", key);
     File temp = File.createTempFile("provider-raw-cache-", ".bin");
     temp.deleteOnExit();
     try {
-      try (InputStream in = download(url); FileOutputStream out = new FileOutputStream(temp)) {
+      try (InputStream in = onMiss.open(); FileOutputStream out = new FileOutputStream(temp)) {
         byte[] buf = new byte[1 << 16];
         int n;
         while ((n = in.read(buf)) != -1) {
@@ -104,15 +157,12 @@ final class StorageRawCache implements RawCache {
       }
       // Committed only after the copy completed, so a failed download leaves no entry behind for
       // the next run to mistake for a whole file.
-      int slash = cacheFilePath.lastIndexOf('/');
-      if (slash > 0) {
-        storageProvider.createDirectories(cacheFilePath.substring(0, slash));
-      }
+      storageProvider.createDirectories(cacheDir);
       try (InputStream in = new FileInputStream(temp)) {
-        storageProvider.writeFile(cacheFilePath, in);
+        storageProvider.writeFile(entry, in);
       }
-      LOGGER.info("Provider cached response to raw: {} ({} bytes)", cacheFilePath, temp.length());
-      return storageProvider.openInputStream(cacheFilePath);
+      LOGGER.info("Provider cached response to raw: {} ({} bytes)", entry, temp.length());
+      return storageProvider.openInputStream(entry);
     } finally {
       if (temp.exists() && !temp.delete()) {
         LOGGER.debug("Could not delete temp file {}", temp);
@@ -120,9 +170,9 @@ final class StorageRawCache implements RawCache {
     }
   }
 
-  private boolean exists() {
+  private boolean exists(String entry) {
     try {
-      return storageProvider.exists(cacheFilePath);
+      return storageProvider.exists(entry);
     // fallback-guard: an unreadable cache must re-fetch rather than be trusted; logged at debug.
     } catch (IOException e) {
       LOGGER.debug("Error checking provider raw cache: {}", e.getMessage());

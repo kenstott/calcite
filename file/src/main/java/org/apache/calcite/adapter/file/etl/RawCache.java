@@ -31,12 +31,15 @@ import java.io.InputStream;
  *
  * <p>Byte-oriented throughout, so a zip or other binary caches exactly as a CSV does.
  *
- * <p>The cache key is the pipeline's dimension combination, identical to the key
- * {@link HttpSource} would compute for the same batch, so a provider-backed table's entries sit
- * beside every other table's and obey the same invalidation. The URL is deliberately not part of
- * the key: for a discovery-based provider the URL is itself a function of the dimensions, and a
- * newly discovered URL for the same batch means the upstream file moved, not that a different
- * batch is being fetched.
+ * <p>Entries live under the directory {@link HttpSource} would compute for the same batch, so a
+ * provider-backed table's cache sits beside every other table's and obeys the same invalidation.
+ * Within that directory an entry is keyed by URL, because a provider may fetch several URLs for
+ * one batch — the IRS business master file is four regional shards — and a single per-batch entry
+ * would make them overwrite one another and then serve whichever landed last for all four.
+ *
+ * <p>A consequence worth stating: a source that moves its file re-fetches rather than replaying
+ * the entry under the old URL. That is the safe direction, since an entry here is validated by
+ * existence alone.
  */
 public interface RawCache {
 
@@ -49,6 +52,40 @@ public interface RawCache {
    * @throws IOException if the download fails, or the entry can be neither read nor written
    */
   InputStream openStream(String url) throws IOException;
+
+  /**
+   * Serves the entry for {@code key}, calling {@code onMiss} to produce the content when there is
+   * none — for a provider whose fetch is not a plain GET of {@code key}.
+   *
+   * <p>The plain {@link #openStream(String)} form covers a provider that downloads exactly the URL
+   * it names, and most do. The rest do not, in ways that have nothing in common except that the
+   * caching is identical: the SSA workbooks are unreachable directly and are pulled from a Wayback
+   * capture derived from the canonical URL; the USAspending and RePORTER endpoints are POSTs whose
+   * body is built from the batch's dimensions; a discovery-based provider crawls a listing to find
+   * the file. Each knows how to fetch its own content and only wants somewhere to keep it.
+   *
+   * <p>{@code key} names the content, not the transport. Use the canonical URL — the SSA workbook
+   * rather than the Wayback wrapper around it, the endpoint plus whatever distinguishes the request
+   * rather than an opaque handle — so the entry stays stable when the way it is retrieved changes.
+   *
+   * @param key stable identity for the content within this batch
+   * @param onMiss produces the content when nothing is cached; not called on a hit
+   * @return a stream over the content; the caller closes it
+   * @throws IOException if the supplier fails, or the entry can be neither read nor written
+   */
+  InputStream openStream(String key, ContentSupplier onMiss) throws IOException;
+
+  /** Produces content for a cache miss. */
+  @FunctionalInterface
+  interface ContentSupplier {
+    /**
+     * Opens the content.
+     *
+     * @return a stream the cache will consume and close
+     * @throws IOException if the fetch fails
+     */
+    InputStream open() throws IOException;
+  }
 
   /**
    * Whether this handle actually caches. False when the table sets
@@ -66,6 +103,11 @@ public interface RawCache {
     return new RawCache() {
       @Override public InputStream openStream(String url) throws IOException {
         return java.net.URI.create(url).toURL().openStream();
+      }
+
+      @Override public InputStream openStream(String key, ContentSupplier onMiss)
+          throws IOException {
+        return onMiss.open();
       }
 
       @Override public boolean isEnabled() {

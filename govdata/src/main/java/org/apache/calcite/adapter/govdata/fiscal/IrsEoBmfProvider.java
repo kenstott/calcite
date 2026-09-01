@@ -11,7 +11,8 @@
 package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import org.slf4j.Logger;
@@ -20,7 +21,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -35,7 +35,7 @@ import java.util.NoSuchElementException;
  * sequentially (open shard 1, exhaust, open shard 2, ...) with O(1) memory.
  * Cumulative monthly snapshot; the whole {@code type} partition is overwritten.
  */
-public class IrsEoBmfProvider implements DataProvider {
+public class IrsEoBmfProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(IrsEoBmfProvider.class);
 
@@ -72,17 +72,27 @@ public class IrsEoBmfProvider implements DataProvider {
   private static final String[] REQUIRED = {"EIN", "NAME", "STATE"};
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
-    return new ShardIterator();
+      Map<String, String> variables, RawCache rawCache) throws IOException {
+    return new ShardIterator(rawCache);
   }
 
   /** Lazily walks the four regional shards, streaming rows across all of them. */
   private static final class ShardIterator implements Iterator<Map<String, Object>> {
+    /**
+     * The four shards are separate URLs read for one dimension combination, so each takes its own
+     * cache entry -- keyed by URL within the batch, not by the batch alone, or they would overwrite
+     * one another and serve whichever landed last as though it were all four.
+     */
+    private final RawCache rawCache;
     private int shard = -1;
     private BufferedReader reader;
     private Map<String, Integer> idx;
     private Map<String, Object> nextRow;
     private boolean done;
+
+    ShardIterator(RawCache rawCache) {
+      this.rawCache = rawCache;
+    }
 
     private boolean openNextShard() {
       closeReader();
@@ -93,8 +103,8 @@ public class IrsEoBmfProvider implements DataProvider {
       String url = SHARDS[shard];
       try {
         LOGGER.info("exempt_org_master: fetching shard {}", url);
-        HttpURLConnection conn = FiscalHttp.openGet(url);
-        reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.US_ASCII));
+        reader = new BufferedReader(
+            new InputStreamReader(rawCache.openStream(url), StandardCharsets.US_ASCII));
         String header = CsvRecordReader.readRecord(reader);
         if (header == null) {
           throw new IOException("exempt_org_master: empty shard " + url);

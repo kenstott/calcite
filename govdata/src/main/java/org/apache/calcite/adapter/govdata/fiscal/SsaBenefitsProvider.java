@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.fiscal;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import org.apache.poi.ss.usermodel.Cell;
@@ -55,7 +56,7 @@ import java.util.Map;
  * dollars are joined per county on the FIPS key. The {@code year} partition comes
  * from the year dimension, so it is not emitted.
  */
-public class SsaBenefitsProvider implements DataProvider {
+public class SsaBenefitsProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SsaBenefitsProvider.class);
 
@@ -85,7 +86,7 @@ public class SsaBenefitsProvider implements DataProvider {
   private static final int SSI_AMOUNT_COL = 10;
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
       year = variables.get("year");
@@ -98,18 +99,22 @@ public class SsaBenefitsProvider implements DataProvider {
     String yy = FiscalHttp.twoDigitYear(yr);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
 
-    parseOasdi(yr, yy, rows);
-    parseSsi(yr, yy, rows);
+    parseOasdi(yr, yy, rows, rawCache);
+    parseSsi(yr, yy, rows, rawCache);
 
     LOGGER.info("ssa_benefits_by_geography: {} county-benefit rows for year {}", rows.size(), yr);
     return rows.iterator();
   }
 
-  private void parseOasdi(String yr, String yy, List<Map<String, Object>> rows) throws IOException {
+  private void parseOasdi(String yr, String yy, List<Map<String, Object>> rows,
+      RawCache rawCache) throws IOException {
     String url = "https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/" + yr + "/oasdi_sc" + yy + ".xlsx";
     LOGGER.info("ssa_benefits_by_geography: OASDI via Wayback for {}", url);
-    byte[] bytes = FiscalHttp.fetchViaWayback(url);
-    Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(bytes));
+    // Keyed on the canonical SSA URL, not the Wayback wrapper that actually serves it: the
+    // workbook for a given year is the same content however it is retrieved, and keying on the
+    // transport would miss every time the capture URL changed.
+    Workbook wb = WorkbookFactory.create(
+        rawCache.openStream(url, () -> new ByteArrayInputStream(FiscalHttp.fetchViaWayback(url))));
     try {
       for (int s = 0; s < wb.getNumberOfSheets(); s++) {
         Sheet counts = wb.getSheetAt(s);
@@ -143,11 +148,15 @@ public class SsaBenefitsProvider implements DataProvider {
     }
   }
 
-  private void parseSsi(String yr, String yy, List<Map<String, Object>> rows) throws IOException {
+  private void parseSsi(String yr, String yy, List<Map<String, Object>> rows,
+      RawCache rawCache) throws IOException {
     String url = "https://www.ssa.gov/policy/docs/statcomps/ssi_sc/" + yr + "/ssi_sc" + yy + ".xlsx";
     LOGGER.info("ssa_benefits_by_geography: SSI via Wayback for {}", url);
-    byte[] bytes = FiscalHttp.fetchViaWayback(url);
-    Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(bytes));
+    // Keyed on the canonical SSA URL, not the Wayback wrapper that actually serves it: the
+    // workbook for a given year is the same content however it is retrieved, and keying on the
+    // transport would miss every time the capture URL changed.
+    Workbook wb = WorkbookFactory.create(
+        rawCache.openStream(url, () -> new ByteArrayInputStream(FiscalHttp.fetchViaWayback(url))));
     try {
       for (int s = 0; s < wb.getNumberOfSheets(); s++) {
         Sheet sheet = wb.getSheetAt(s);
