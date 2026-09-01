@@ -470,6 +470,12 @@ partitionedTables:
   # NHTSA FARS FATAL CRASHES — per-year National zip / accident.csv (delta)
   # ---------------------------------------------------------------------------
   - name: fatal_crashes
+    # NHTSA issues a crash year as an Annual Report File and reissues it as a Final File once
+    # late-reported cases and case-level corrections are in, so a year's counts move after first
+    # publication. Observed live: the most recent crop of years carry reissue dates months apart
+    # from one another, while older years share a single archive-migration timestamp. 4 covers the
+    # active reissue window. The Last-Modified gate makes each reopened year one HEAD.
+    lookbackPeriods: 4
     # Freshness gate: NHTSA FARS bulk zip per year on a fixed static path. A
     # Last-Modified probe skips the re-download and re-materialize on unchanged runs
     # (fails open).
@@ -1240,6 +1246,12 @@ partitionedTables:
   # FHWA VEHICLE REGISTRATIONS — Highway Statistics MV-1 XLSX (delta by year)
   # ---------------------------------------------------------------------------
   - name: vehicle_registrations
+    # States report registration counts to FHWA on their own schedules and FHWA reissues a year's
+    # table as late and corrected state submissions arrive. Observed live: each year carries its
+    # own reissue date, several of them three to four years after the year in question, with no
+    # shared batch timestamp -- these are genuine per-year revisions rather than an archive
+    # migration. 4 covers that window, and the Last-Modified gate makes each reopened year one HEAD.
+    lookbackPeriods: 4
     # Freshness gate: FHWA bulk xlsx per year on a fixed static path. A Last-Modified
     # probe skips the re-download and re-materialize on unchanged runs (fails open).
     freshness:

@@ -428,6 +428,13 @@ partitionedTables:
   # One bulk pipe-delimited zip per year (sobcov_{year}.zip, stable URL, 1989+).
   # Streamed by RmaSummaryOfBusinessTransformer (no per-request cap; ~150k rows/yr).
   - name: rma_crop_insurance
+    # Crop-year totals keep moving after the year closes because indemnities settle over several
+    # subsequent seasons, and RMA reissues the affected years rather than amending in place.
+    # Observed live: the four most recent crop years were all reissued in a single batch, and the
+    # year five back had been reissued within the preceding year. 5 covers that active window --
+    # older years change only when RMA migrates the whole archive, which is not a data revision.
+    # The Last-Modified gate makes each reopened year one HEAD, so the depth is nearly free.
+    lookbackPeriods: 5
     # Freshness gate: USDA RMA republishes this summary-of-business file periodically. A
     # Last-Modified probe skips the re-download and re-materialize on unchanged runs
     # (fails open — a null token just re-fetches).
