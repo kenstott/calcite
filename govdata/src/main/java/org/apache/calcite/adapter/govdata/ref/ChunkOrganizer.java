@@ -334,6 +334,64 @@ public class ChunkOrganizer {
     }
     LOGGER.info("ChunkOrganizer sweep complete: {} source(s) swept, {} unchanged (skipped)",
         swept, skipped);
+
+    // Materialize all chunks from Postgres vc_staging to Iceberg vectorized_chunks (the queryable
+    // data lake table). Embeddings will query Iceberg, and star-schema joins stay within Iceberg.
+    materializeToIceberg(duckdb, pg, base);
+  }
+
+  /** Materialize all chunks from Postgres vc_staging to Iceberg vectorized_chunks via DuckDB.
+   *  This is the queryable table where semantic-search embeddings run and star-schema joins
+   *  to source tables happen (all within Iceberg). Uses DuckDB to attach Postgres, read chunks,
+   *  and write Parquet to the Iceberg location. */
+  private static void materializeToIceberg(Connection duckdb, Connection pg, String base)
+      throws SQLException {
+    String vectorizedChunksPath = base + "/ref/vectorized_chunks";
+    LOGGER.info("ChunkOrganizer: materializing vc_staging → {}", vectorizedChunksPath);
+
+    try (Statement stmt = duckdb.createStatement()) {
+      // Configure S3 access for Iceberg writes
+      String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+      String keyId = System.getenv("AWS_ACCESS_KEY_ID");
+      String secret = System.getenv("AWS_SECRET_ACCESS_KEY");
+      if (endpoint != null && keyId != null && secret != null) {
+        String host = endpoint.replaceFirst("^https?://", "");
+        stmt.execute("SET s3_endpoint='" + host + "'");
+        stmt.execute("SET s3_access_key_id='" + keyId + "'");
+        stmt.execute("SET s3_secret_access_key='" + secret + "'");
+        stmt.execute("SET s3_use_ssl=false");
+        stmt.execute("SET s3_url_style='path'");
+      }
+
+      // Attach Postgres vc_staging as a readable source
+      String pgUrl = System.getenv("CALCITE_TRACKER_PG_URL");
+      String pgUser = System.getenv("CALCITE_TRACKER_PG_USER");
+      String pgPassword = System.getenv("CALCITE_TRACKER_PG_PASSWORD");
+      if (pgUrl == null) {
+        LOGGER.warn("CALCITE_TRACKER_PG_URL not set; skipping Iceberg materialization");
+        return;
+      }
+
+      String attachSql = "ATTACH DATABASE '" + pgUrl + "' AS pg_vc";
+      if (pgUser != null) {
+        attachSql += " (USER '" + pgUser + "'";
+        if (pgPassword != null) {
+          attachSql += " PASSWORD '" + pgPassword + "'";
+        }
+        attachSql += ")";
+      }
+      stmt.execute(attachSql);
+
+      // Copy all chunks from Postgres vc_staging to Iceberg vectorized_chunks as Parquet
+      String ns = PGPipelineTracker.sanitizeNamespace(base);
+      stmt.execute(
+          "COPY (SELECT * FROM pg_vc.\"" + ns + "\".vc_staging) "
+          + "TO '" + vectorizedChunksPath + "' (FORMAT PARQUET, PARTITION_BY (source_schema))");
+
+      LOGGER.info("ChunkOrganizer: vectorized_chunks materialization complete");
+    } catch (Exception e) {
+      LOGGER.warn("ChunkOrganizer: failed to materialize to Iceberg (non-fatal)", e);
+    }
   }
 
   /** True if {@code sourceTable}'s own {@code pipeline_tracker.table_completion.completed_at}
