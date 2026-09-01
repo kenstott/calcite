@@ -371,54 +371,17 @@ partitionedTables:
         comment: Earned income tax credit amount, $1000s (A59660)
 
 
-      # --- Full source passthrough -------------------------------------------------
-      # Every column IRS publishes in zpallagi.csv, under its own name and as published.
-      # The curated columns above stay as they are: they carry the readable names, the
-      # zero-padded keys and the FK types that downstream views already reference. These
-      # add the ~139 fields those 26 left behind -- the N* counts paired with each A*
-      # amount, the deduction and credit detail, the VITA/TCE fields -- so a question the
-      # curated set cannot answer does not require re-ingesting the file.
+      # --- The rest of the published file ------------------------------------------
+      # Every remaining column IRS publishes in zpallagi.csv, under its own name and as
+      # published: the N* counts paired with each A* amount, the deduction and credit
+      # detail, the VITA/TCE fields. One entry per published field, so the table is the
+      # file rather than a slice of it.
+      #
+      # The columns above are the same thing for the fields that need shaping -- a
+      # zero-padded key that has to match geo's FK convention, a readable name, a real
+      # type. Each replaces its raw field rather than sitting beside it, so no field is
+      # materialized twice and there is no second name for the same number.
 
-      - name: statefips
-        type: string
-        nullable: true
-        expression: 'src."STATEFIPS"'
-        comment: IRS SOI field STATEFIPS, as published
-      - name: state
-        type: string
-        nullable: true
-        expression: 'src."STATE"'
-        comment: IRS SOI field STATE, as published
-      - name: zipcode
-        type: string
-        nullable: true
-        expression: 'src."zipcode"'
-        comment: IRS SOI field zipcode, as published
-      - name: agi_stub
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."agi_stub" AS BIGINT)'
-        comment: IRS SOI field agi_stub, as published
-      - name: n1
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."N1" AS BIGINT)'
-        comment: IRS SOI field N1, as published
-      - name: mars1
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."mars1" AS BIGINT)'
-        comment: IRS SOI field mars1, as published
-      - name: mars2
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."MARS2" AS BIGINT)'
-        comment: IRS SOI field MARS2, as published
-      - name: mars4
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."MARS4" AS BIGINT)'
-        comment: IRS SOI field MARS4, as published
       - name: elf
         type: long
         nullable: true
@@ -444,11 +407,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."VRTCRIND" AS BIGINT)'
         comment: IRS SOI field VRTCRIND, as published
-      - name: n2
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."N2" AS BIGINT)'
-        comment: IRS SOI field N2, as published
       - name: total_vita
         type: long
         nullable: true
@@ -474,46 +432,21 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."RAC" AS BIGINT)'
         comment: IRS SOI field RAC, as published
-      - name: elderly
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."ELDERLY" AS BIGINT)'
-        comment: IRS SOI field ELDERLY, as published
-      - name: a00100
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00100" AS DOUBLE)'
-        comment: IRS SOI field A00100, as published
       - name: n02650
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N02650" AS BIGINT)'
         comment: IRS SOI field N02650, as published
-      - name: a02650
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A02650" AS DOUBLE)'
-        comment: IRS SOI field A02650, as published
       - name: n00200
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N00200" AS BIGINT)'
         comment: IRS SOI field N00200, as published
-      - name: a00200
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00200" AS DOUBLE)'
-        comment: IRS SOI field A00200, as published
       - name: n00300
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N00300" AS BIGINT)'
         comment: IRS SOI field N00300, as published
-      - name: a00300
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00300" AS DOUBLE)'
-        comment: IRS SOI field A00300, as published
       - name: n00400
         type: long
         nullable: true
@@ -529,11 +462,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N00600" AS BIGINT)'
         comment: IRS SOI field N00600, as published
-      - name: a00600
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00600" AS DOUBLE)'
-        comment: IRS SOI field A00600, as published
       - name: n00650
         type: long
         nullable: true
@@ -559,21 +487,11 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N00900" AS BIGINT)'
         comment: IRS SOI field N00900, as published
-      - name: a00900
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00900" AS DOUBLE)'
-        comment: IRS SOI field A00900, as published
       - name: n01000
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N01000" AS BIGINT)'
         comment: IRS SOI field N01000, as published
-      - name: a01000
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A01000" AS DOUBLE)'
-        comment: IRS SOI field A01000, as published
       - name: n01400
         type: long
         nullable: true
@@ -589,11 +507,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N01700" AS BIGINT)'
         comment: IRS SOI field N01700, as published
-      - name: a01700
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A01700" AS DOUBLE)'
-        comment: IRS SOI field A01700, as published
       - name: schf
         type: long
         nullable: true
@@ -604,21 +517,11 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N02300" AS BIGINT)'
         comment: IRS SOI field N02300, as published
-      - name: a02300
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A02300" AS DOUBLE)'
-        comment: IRS SOI field A02300, as published
       - name: n02500
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N02500" AS BIGINT)'
         comment: IRS SOI field N02500, as published
-      - name: a02500
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A02500" AS DOUBLE)'
-        comment: IRS SOI field A02500, as published
       - name: n26270
         type: long
         nullable: true
@@ -734,11 +637,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N04470" AS BIGINT)'
         comment: IRS SOI field N04470, as published
-      - name: a04470
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A04470" AS DOUBLE)'
-        comment: IRS SOI field A04470, as published
       - name: a00101
         type: double
         nullable: true
@@ -889,21 +787,11 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N04800" AS BIGINT)'
         comment: IRS SOI field N04800, as published
-      - name: a04800
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A04800" AS DOUBLE)'
-        comment: IRS SOI field A04800, as published
       - name: n05800
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N05800" AS BIGINT)'
         comment: IRS SOI field N05800, as published
-      - name: a05800
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A05800" AS DOUBLE)'
-        comment: IRS SOI field A05800, as published
       - name: n09600
         type: long
         nullable: true
@@ -1039,11 +927,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N59660" AS BIGINT)'
         comment: IRS SOI field N59660, as published
-      - name: a59660
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A59660" AS DOUBLE)'
-        comment: IRS SOI field A59660, as published
       - name: n59661
         type: long
         nullable: true
@@ -1129,21 +1012,11 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N06500" AS BIGINT)'
         comment: IRS SOI field N06500, as published
-      - name: a06500
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A06500" AS DOUBLE)'
-        comment: IRS SOI field A06500, as published
       - name: n10300
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N10300" AS BIGINT)'
         comment: IRS SOI field N10300, as published
-      - name: a10300
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A10300" AS DOUBLE)'
-        comment: IRS SOI field A10300, as published
       - name: n85530
         type: long
         nullable: true
@@ -1331,42 +1204,16 @@ partitionedTables:
         comment: Total tax liability, $1000s (A10300)
 
 
-      # --- Full source passthrough -------------------------------------------------
-      # Every column IRS publishes in incyallagi.csv, under its own name and as published.
-      # The curated columns above keep the readable names, the composed 5-digit county_fips
-      # and the FK types that downstream views reference; these add the fields those 15
-      # left behind, so a question they cannot answer needs no re-ingest.
+      # --- The rest of the published file ------------------------------------------
+      # Every remaining column IRS publishes in incyallagi.csv, under its own name and as
+      # published. One entry per published field, so the table is the file rather than a
+      # slice of it.
+      #
+      # The columns above are the same thing for the fields that need shaping -- notably
+      # county_fips, which geo's FK convention requires as 5 digits and the file supplies
+      # as a 3-digit COUNTYFIPS beside STATEFIPS. Each replaces its raw field rather than
+      # sitting beside it.
 
-      - name: statefips
-        type: string
-        nullable: true
-        expression: 'src."STATEFIPS"'
-        comment: IRS SOI field STATEFIPS, as published
-      - name: state
-        type: string
-        nullable: true
-        expression: 'src."STATE"'
-        comment: IRS SOI field STATE, as published
-      - name: countyfips
-        type: string
-        nullable: true
-        expression: 'src."COUNTYFIPS"'
-        comment: IRS SOI field COUNTYFIPS, as published
-      - name: countyname
-        type: string
-        nullable: true
-        expression: 'src."COUNTYNAME"'
-        comment: IRS SOI field COUNTYNAME, as published
-      - name: agi_stub
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."agi_stub" AS BIGINT)'
-        comment: IRS SOI field agi_stub, as published
-      - name: n1
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."N1" AS BIGINT)'
-        comment: IRS SOI field N1, as published
       - name: mars1
         type: long
         nullable: true
@@ -1407,11 +1254,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."VRTCRIND" AS BIGINT)'
         comment: IRS SOI field VRTCRIND, as published
-      - name: n2
-        type: long
-        nullable: true
-        expression: 'TRY_CAST(src."N2" AS BIGINT)'
-        comment: IRS SOI field N2, as published
       - name: total_vita
         type: long
         nullable: true
@@ -1442,31 +1284,16 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."ELDERLY" AS BIGINT)'
         comment: IRS SOI field ELDERLY, as published
-      - name: a00100
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00100" AS DOUBLE)'
-        comment: IRS SOI field A00100, as published
       - name: n02650
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N02650" AS BIGINT)'
         comment: IRS SOI field N02650, as published
-      - name: a02650
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A02650" AS DOUBLE)'
-        comment: IRS SOI field A02650, as published
       - name: n00200
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N00200" AS BIGINT)'
         comment: IRS SOI field N00200, as published
-      - name: a00200
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00200" AS DOUBLE)'
-        comment: IRS SOI field A00200, as published
       - name: n00300
         type: long
         nullable: true
@@ -1522,21 +1349,11 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N00900" AS BIGINT)'
         comment: IRS SOI field N00900, as published
-      - name: a00900
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A00900" AS DOUBLE)'
-        comment: IRS SOI field A00900, as published
       - name: n01000
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N01000" AS BIGINT)'
         comment: IRS SOI field N01000, as published
-      - name: a01000
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A01000" AS DOUBLE)'
-        comment: IRS SOI field A01000, as published
       - name: n01400
         type: long
         nullable: true
@@ -1852,11 +1669,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N04800" AS BIGINT)'
         comment: IRS SOI field N04800, as published
-      - name: a04800
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A04800" AS DOUBLE)'
-        comment: IRS SOI field A04800, as published
       - name: n05800
         type: long
         nullable: true
@@ -2092,21 +1904,11 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."N06500" AS BIGINT)'
         comment: IRS SOI field N06500, as published
-      - name: a06500
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A06500" AS DOUBLE)'
-        comment: IRS SOI field A06500, as published
       - name: n10300
         type: long
         nullable: true
         expression: 'TRY_CAST(src."N10300" AS BIGINT)'
         comment: IRS SOI field N10300, as published
-      - name: a10300
-        type: double
-        nullable: true
-        expression: 'TRY_CAST(src."A10300" AS DOUBLE)'
-        comment: IRS SOI field A10300, as published
       - name: n85530
         type: long
         nullable: true
