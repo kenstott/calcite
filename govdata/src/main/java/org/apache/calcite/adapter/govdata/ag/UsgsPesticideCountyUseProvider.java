@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.ag;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -74,7 +75,7 @@ import java.util.regex.Pattern;
  * pattern {@code ers_farm_income} uses for the same reason — a multi-vintage source with
  * no single per-year URL to template.
  */
-public class UsgsPesticideCountyUseProvider implements DataProvider {
+public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UsgsPesticideCountyUseProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -93,7 +94,7 @@ public class UsgsPesticideCountyUseProvider implements DataProvider {
   };
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String landingUrl = config.getSource() != null ? config.getSource().getUrl() : null;
     if (landingUrl == null || landingUrl.isEmpty()) {
       throw new IOException("USGS pesticide use: source.url (landing page) is required");
@@ -108,7 +109,7 @@ public class UsgsPesticideCountyUseProvider implements DataProvider {
     LOGGER.info("USGS pesticide use: resolved {} county-level data file(s) from {}",
         dataFileUrls.size(), landingUrl);
 
-    return new MultiFileRowIterator(dataFileUrls, userAgent);
+    return new MultiFileRowIterator(dataFileUrls, userAgent, rawCache);
   }
 
   // ---------------------------------------------------------------------
@@ -217,6 +218,12 @@ public class UsgsPesticideCountyUseProvider implements DataProvider {
 
   /** Lazily concatenates rows from each file in {@code fileUrls}, one open reader at a time. */
   private static final class MultiFileRowIterator implements Iterator<Map<String, Object>> {
+    /**
+     * Each discovered file is its own entry, keyed by its URL. The listing they came from
+     * stays uncached: freezing that would pin the table to whatever was listed on the first
+     * run, and the discovery step is the part that has to stay live.
+     */
+    private final RawCache rawCache;
     private final List<String> fileUrls;
     private final String userAgent;
     private int fileIndex;
@@ -226,9 +233,10 @@ public class UsgsPesticideCountyUseProvider implements DataProvider {
     private Map<String, Object> nextRow;
     private boolean done;
 
-    MultiFileRowIterator(List<String> fileUrls, String userAgent) {
+    MultiFileRowIterator(List<String> fileUrls, String userAgent, RawCache rawCache) {
       this.fileUrls = fileUrls;
       this.userAgent = userAgent;
+      this.rawCache = rawCache;
     }
 
     private void advance() throws IOException {
@@ -252,22 +260,33 @@ public class UsgsPesticideCountyUseProvider implements DataProvider {
       }
     }
 
-    private boolean openNextFile() throws IOException {
-      if (fileIndex >= fileUrls.size()) {
-        return false;
-      }
-      currentUrl = fileUrls.get(fileIndex++);
-      LOGGER.info("USGS pesticide use: streaming {}", currentUrl);
-      HttpURLConnection conn = (HttpURLConnection) URI.create(currentUrl).toURL().openConnection();
+    /** Opens the file with the required User-Agent, failing on a non-2xx before any content. */
+    private static InputStream openWithUserAgent(String url, String userAgent) throws IOException {
+      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setRequestProperty("User-Agent", userAgent);
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(300000);
       conn.setInstanceFollowRedirects(true);
       int code = conn.getResponseCode();
       if (code < 200 || code >= 300) {
-        throw new IOException("USGS pesticide use: HTTP " + code + " for " + currentUrl);
+        throw new IOException("USGS pesticide use: HTTP " + code + " for " + url);
       }
-      reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+      return conn.getInputStream();
+    }
+
+    private boolean openNextFile() throws IOException {
+      if (fileIndex >= fileUrls.size()) {
+        return false;
+      }
+      currentUrl = fileUrls.get(fileIndex++);
+      LOGGER.info("USGS pesticide use: streaming {}", currentUrl);
+      // Read through the cache, but keep this provider's own connection as the miss path: USGS
+      // is served only to a self-identifying User-Agent, which a plain GET would not carry.
+      final String fileUrl = currentUrl;
+      final String ua = userAgent;
+      reader = new BufferedReader(new InputStreamReader(
+          rawCache.openStream(fileUrl, () -> openWithUserAgent(fileUrl, ua)),
+          StandardCharsets.UTF_8));
       String header = reader.readLine();
       if (header == null) {
         throw new IOException("USGS pesticide use: empty file " + currentUrl);

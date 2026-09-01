@@ -954,6 +954,10 @@ partitionedTables:
       response:
         format: json  # ignored: UsgsPesticideCountyUseProvider discovers and streams the files itself
 
+      # The provider reads each discovered file through this cache, keyed on that file's own
+      # URL. The listing it discovers them from is not cached, so a new file is still seen.
+      rawCache:
+        enabled: true
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.ag.UsgsPesticideCountyUseProvider"
 

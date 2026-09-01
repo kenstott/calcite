@@ -2310,8 +2310,10 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider reads each discovered file through this cache, keyed on that file's own
+      # URL. The listing it discovers them from is not cached, so a new file is still seen.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.Irs990Provider"

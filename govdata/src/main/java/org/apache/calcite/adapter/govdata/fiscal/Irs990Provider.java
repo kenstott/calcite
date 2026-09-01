@@ -11,7 +11,8 @@
 package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import org.slf4j.Logger;
@@ -54,7 +55,7 @@ import java.util.zip.ZipInputStream;
  * so the pipeline row-cap can stop early. NTEE is not in the XML — join to
  * {@code exempt_org_master} on {@code ein}.
  */
-public class Irs990Provider implements DataProvider {
+public class Irs990Provider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Irs990Provider.class);
 
@@ -67,7 +68,7 @@ public class Irs990Provider implements DataProvider {
       java.util.Arrays.asList("total_revenue", "total_expenses", "total_assets"));
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
       year = variables.get("year");
@@ -83,7 +84,7 @@ public class Irs990Provider implements DataProvider {
 
     List<String> batchIds = readBatchIds(indexUrl);
     LOGGER.info("exempt_org_990: {} distinct XML batch zips for year {}", batchIds.size(), yr);
-    return new BatchIterator(base, batchIds);
+    return new BatchIterator(base, batchIds, rawCache);
   }
 
   /** Downloads the index CSV and returns the distinct XML_BATCH_ID values (in first-seen order). */
@@ -116,6 +117,12 @@ public class Irs990Provider implements DataProvider {
 
   /** Lazily walks each batch zip, yielding one row per XML return entry. */
   private static final class BatchIterator implements Iterator<Map<String, Object>> {
+    /**
+     * Each discovered file is its own entry, keyed by its URL. The listing they came from
+     * stays uncached: freezing that would pin the table to whatever was listed on the first
+     * run, and the discovery step is the part that has to stay live.
+     */
+    private final RawCache rawCache;
     private final String base;
     private final List<String> batchIds;
     private int batchPos = -1;
@@ -123,9 +130,10 @@ public class Irs990Provider implements DataProvider {
     private Map<String, Object> nextRow;
     private boolean done;
 
-    BatchIterator(String base, List<String> batchIds) {
+    BatchIterator(String base, List<String> batchIds, RawCache rawCache) {
       this.base = base;
       this.batchIds = batchIds;
+      this.rawCache = rawCache;
     }
 
     private boolean openNextZip() {
@@ -137,8 +145,7 @@ public class Irs990Provider implements DataProvider {
       String zipUrl = base + batchIds.get(batchPos) + ".zip";
       try {
         LOGGER.info("exempt_org_990: fetching batch {}", zipUrl);
-        HttpURLConnection conn = FiscalHttp.openGet(zipUrl);
-        zis = new ZipInputStream(conn.getInputStream());
+        zis = new ZipInputStream(rawCache.openStream(zipUrl));
         return true;
       // fallback-guard: allow comment below documents the design ("A single missing/failed batch should not abort the whole year"); narrowly scoped to one ZIP batch, iteration continues to the next
       } catch (IOException e) {
