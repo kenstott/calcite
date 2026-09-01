@@ -435,7 +435,7 @@ partitionedTables:
       distinctYears: 93
       contiguous: true
       rowCount: 570765
-      checkedAt: "2026-08-28T12:09:49Z"
+      checkedAt: "2026-09-01T22:31:35Z"
     partitions: *standard_partitions
     comment: >
       Branch-network change events (opening / closing / acquired-in-merger, etc.) — the
@@ -561,7 +561,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 2
-      checkedAt: "2026-08-28T12:09:50Z"
+      checkedAt: "2026-09-01T22:31:36Z"
     partitions: *standard_partitions
     comment: >
       Bank failure resolutions — resolution type, deposits/assets at failure, and the
@@ -682,7 +682,7 @@ partitionedTables:
       distinctYears: 32
       contiguous: true
       rowCount: 2822977
-      checkedAt: "2026-08-28T12:09:52Z"
+      checkedAt: "2026-09-01T22:31:39Z"
     partitions: *standard_partitions
     comment: >
       Annual branch-level deposit totals from FDIC's Summary of Deposits survey —
@@ -797,7 +797,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 4352
-      checkedAt: "2026-08-28T12:09:52Z"
+      checkedAt: "2026-09-01T22:31:41Z"
     partitions: *standard_partitions
     # DQ sample cap (GOVDATA_DQ mode): call-report financials are millions of rows
     # nationwide across all history. Cap each year's sample so DQ stops paginating
@@ -1043,7 +1043,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 353260
-      checkedAt: "2026-08-28T12:09:54Z"
+      checkedAt: "2026-09-01T22:31:43Z"
     partitions: *complaints_partitions
     # DQ sample cap (GOVDATA_DQ mode): the full complaint database is millions of rows
     # nationwide across all history. Cap each (year, state, product) fetch unit so DQ
