@@ -302,6 +302,14 @@ public class ChunkOrganizer {
    *  #ensureVcSchema} already applied -- both {@link #main} and a future caller sharing one
    *  connection across multiple sweeps are expected to do that once, not per source. */
   static void sweep(Connection duckdb, Connection pg, String base) throws SQLException {
+    sweep(duckdb, pg, base, 0);
+  }
+
+  /** As above, but caps each source at {@code maxRowsPerSource} rows ({@code <= 0} = unlimited,
+   *  the normal production sweep) -- see {@link #main}'s {@code
+   *  CHUNK_ORGANIZER_MAX_ROWS_PER_SOURCE}. */
+  static void sweep(Connection duckdb, Connection pg, String base, int maxRowsPerSource)
+      throws SQLException {
     LOGGER.info("ChunkOrganizer sweep: checking {} row-concat + {} document-blob source(s)",
         ROW_CONCAT_SOURCES.size(), DOCUMENT_BLOB_SOURCES.size());
     int swept = 0;
@@ -311,7 +319,7 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
-      chunkRowConcatSource(duckdb, pg, base, src);
+      chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource);
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
     }
@@ -320,7 +328,7 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
-      chunkDocumentBlobSource(duckdb, pg, base, src);
+      chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource);
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
     }
@@ -403,6 +411,15 @@ public class ChunkOrganizer {
     if (ns == null) {
       throw new IllegalStateException("cannot derive a PG namespace from '" + base + "'");
     }
+    // Test-only knob: caps every source at N rows regardless of its real size, for a fast sweep
+    // across every contributor at once. Unset (the normal production path) means unlimited --
+    // see sweep(Connection, Connection, String, int)'s javadoc. A run/infra flag owned by the
+    // launch script (x-schema.sh), same exemption category as CALCITE_TRACKER_PG_URL above.
+    int maxRowsPerSource = 0;
+    String maxRowsEnv = System.getenv("CHUNK_ORGANIZER_MAX_ROWS_PER_SOURCE");
+    if (maxRowsEnv != null && !maxRowsEnv.isEmpty()) {
+      maxRowsPerSource = Integer.parseInt(maxRowsEnv);
+    }
 
     try (Connection pg = user != null ? DriverManager.getConnection(jdbcUrl, user, password)
             : DriverManager.getConnection(jdbcUrl);
@@ -414,7 +431,7 @@ public class ChunkOrganizer {
       }
       ensureVcSchema(pg);
       pg.commit();
-      sweep(duckdb, pg, base);
+      sweep(duckdb, pg, base, maxRowsPerSource);
     }
   }
 
@@ -486,7 +503,7 @@ public class ChunkOrganizer {
    *  table that size was registered, 2026-08-30), writing each batch to PG staging as it goes
    *  so peak memory stays O(batch size) regardless of table size. */
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
-      RowConcatSource src) throws SQLException {
+      RowConcatSource src, int maxRowsPerSource) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
     // is the PK and also carries real text), so query each column once, not once per role.
@@ -506,7 +523,8 @@ public class ChunkOrganizer {
     // across the entire scan (not just one batch) since keyset pagination can split a duplicate
     // pair across page boundaries.
     Set<String> seenPk = new HashSet<String>();
-    queryRowsBatched(conn, loc, selectCols, src.pkColumns, ROW_CONCAT_BATCH_SIZE, batch -> {
+    queryRowsBatched(conn, loc, selectCols, src.pkColumns, ROW_CONCAT_BATCH_SIZE, maxRowsPerSource,
+        batch -> {
       List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
       for (Map<String, Object> row : batch) {
         String pkValue = stringifyPk(row, src.pkColumns);
@@ -611,7 +629,7 @@ public class ChunkOrganizer {
    *  why. Uses a smaller batch size than row-concat mode: {@link SemanticTextChunker} (or a
    *  future custom {@link ChunkFunction}) does real per-row work, not just a string split. */
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
-      DocumentBlobSource src) throws SQLException {
+      DocumentBlobSource src, int maxRowsPerSource) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     List<String> selectCols = new ArrayList<String>(src.pkColumns);
     if (!selectCols.contains(src.blobColumn)) {
@@ -621,7 +639,8 @@ public class ChunkOrganizer {
     // See the matching guard in chunkRowConcatSource for why this is needed: a source table's
     // declared primary key is not a guarantee its data is actually unique.
     Set<String> seenPk = new HashSet<String>();
-    queryRowsBatched(conn, loc, selectCols, src.pkColumns, DOCUMENT_BLOB_BATCH_SIZE, batch -> {
+    queryRowsBatched(conn, loc, selectCols, src.pkColumns, DOCUMENT_BLOB_BATCH_SIZE,
+        maxRowsPerSource, batch -> {
       List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
       for (Map<String, Object> row : batch) {
         Object blobValue = row.get(src.blobColumn);
@@ -946,9 +965,27 @@ public class ChunkOrganizer {
    *  into a Java List, which OOM'd in practice the moment such a table was added, 2026-08-30. */
   private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
       List<String> pkColumns, int batchSize, BatchConsumer batchConsumer) throws SQLException {
+    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, 0, batchConsumer);
+  }
+
+  /** As above, but stops once {@code maxTotalRows} rows have been fetched across all pages
+   *  ({@code <= 0} means unlimited, the production default). Test-only knob (see {@link #main}'s
+   *  {@code CHUNK_ORGANIZER_MAX_ROWS_PER_SOURCE}) for a fast, bounded sweep across every
+   *  contributor regardless of a source's real size -- never set in normal production runs. */
+  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
+      List<String> pkColumns, int batchSize, int maxTotalRows, BatchConsumer batchConsumer)
+      throws SQLException {
     String orderBy = String.join(", ", pkColumns);
     List<Object> cursor = null;
+    long fetched = 0;
     while (true) {
+      int limit = batchSize;
+      if (maxTotalRows > 0) {
+        limit = (int) Math.min(batchSize, maxTotalRows - fetched);
+        if (limit <= 0) {
+          break;
+        }
+      }
       StringBuilder sql = new StringBuilder("SELECT ").append(String.join(", ", selectCols))
           .append(" FROM iceberg_scan('").append(loc).append("', allow_moved_paths=true)");
       if (cursor != null) {
@@ -961,13 +998,14 @@ public class ChunkOrganizer {
         }
         sql.append(')');
       }
-      sql.append(" ORDER BY ").append(orderBy).append(" LIMIT ").append(batchSize);
+      sql.append(" ORDER BY ").append(orderBy).append(" LIMIT ").append(limit);
       List<Map<String, Object>> batch = queryRows(conn, sql.toString());
       if (batch.isEmpty()) {
         break;
       }
       batchConsumer.accept(batch);
-      if (batch.size() < batchSize) {
+      fetched += batch.size();
+      if (batch.size() < limit) {
         break;
       }
       Map<String, Object> last = batch.get(batch.size() - 1);
