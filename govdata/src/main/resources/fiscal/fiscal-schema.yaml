@@ -370,6 +370,840 @@ partitionedTables:
         expression: 'TRY_CAST(src."A59660" AS DOUBLE)'
         comment: Earned income tax credit amount, $1000s (A59660)
 
+
+      # --- Full source passthrough -------------------------------------------------
+      # Every column IRS publishes in zpallagi.csv, under its own name and as published.
+      # The curated columns above stay as they are: they carry the readable names, the
+      # zero-padded keys and the FK types that downstream views already reference. These
+      # add the ~139 fields those 26 left behind -- the N* counts paired with each A*
+      # amount, the deduction and credit detail, the VITA/TCE fields -- so a question the
+      # curated set cannot answer does not require re-ingesting the file.
+
+      - name: statefips
+        type: string
+        nullable: true
+        expression: 'src."STATEFIPS"'
+        comment: IRS SOI field STATEFIPS, as published
+      - name: state
+        type: string
+        nullable: true
+        expression: 'src."STATE"'
+        comment: IRS SOI field STATE, as published
+      - name: zipcode
+        type: string
+        nullable: true
+        expression: 'src."zipcode"'
+        comment: IRS SOI field zipcode, as published
+      - name: agi_stub
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."agi_stub" AS BIGINT)'
+        comment: IRS SOI field agi_stub, as published
+      - name: n1
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N1" AS BIGINT)'
+        comment: IRS SOI field N1, as published
+      - name: mars1
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."mars1" AS BIGINT)'
+        comment: IRS SOI field mars1, as published
+      - name: mars2
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MARS2" AS BIGINT)'
+        comment: IRS SOI field MARS2, as published
+      - name: mars4
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MARS4" AS BIGINT)'
+        comment: IRS SOI field MARS4, as published
+      - name: elf
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ELF" AS BIGINT)'
+        comment: IRS SOI field ELF, as published
+      - name: cprep
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CPREP" AS BIGINT)'
+        comment: IRS SOI field CPREP, as published
+      - name: prep
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."PREP" AS BIGINT)'
+        comment: IRS SOI field PREP, as published
+      - name: dir_dep
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."DIR_DEP" AS BIGINT)'
+        comment: IRS SOI field DIR_DEP, as published
+      - name: vrtcrind
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VRTCRIND" AS BIGINT)'
+        comment: IRS SOI field VRTCRIND, as published
+      - name: n2
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N2" AS BIGINT)'
+        comment: IRS SOI field N2, as published
+      - name: total_vita
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."TOTAL_VITA" AS BIGINT)'
+        comment: IRS SOI field TOTAL_VITA, as published
+      - name: vita
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VITA" AS BIGINT)'
+        comment: IRS SOI field VITA, as published
+      - name: tce
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."TCE" AS BIGINT)'
+        comment: IRS SOI field TCE, as published
+      - name: vita_eic
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VITA_EIC" AS BIGINT)'
+        comment: IRS SOI field VITA_EIC, as published
+      - name: rac
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."RAC" AS BIGINT)'
+        comment: IRS SOI field RAC, as published
+      - name: elderly
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ELDERLY" AS BIGINT)'
+        comment: IRS SOI field ELDERLY, as published
+      - name: a00100
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00100" AS DOUBLE)'
+        comment: IRS SOI field A00100, as published
+      - name: n02650
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02650" AS BIGINT)'
+        comment: IRS SOI field N02650, as published
+      - name: a02650
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02650" AS DOUBLE)'
+        comment: IRS SOI field A02650, as published
+      - name: n00200
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00200" AS BIGINT)'
+        comment: IRS SOI field N00200, as published
+      - name: a00200
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00200" AS DOUBLE)'
+        comment: IRS SOI field A00200, as published
+      - name: n00300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00300" AS BIGINT)'
+        comment: IRS SOI field N00300, as published
+      - name: a00300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00300" AS DOUBLE)'
+        comment: IRS SOI field A00300, as published
+      - name: n00400
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00400" AS BIGINT)'
+        comment: IRS SOI field N00400, as published
+      - name: a00400
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00400" AS DOUBLE)'
+        comment: IRS SOI field A00400, as published
+      - name: n00600
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00600" AS BIGINT)'
+        comment: IRS SOI field N00600, as published
+      - name: a00600
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00600" AS DOUBLE)'
+        comment: IRS SOI field A00600, as published
+      - name: n00650
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00650" AS BIGINT)'
+        comment: IRS SOI field N00650, as published
+      - name: a00650
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00650" AS DOUBLE)'
+        comment: IRS SOI field A00650, as published
+      - name: n00700
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00700" AS BIGINT)'
+        comment: IRS SOI field N00700, as published
+      - name: a00700
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00700" AS DOUBLE)'
+        comment: IRS SOI field A00700, as published
+      - name: n00900
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00900" AS BIGINT)'
+        comment: IRS SOI field N00900, as published
+      - name: a00900
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00900" AS DOUBLE)'
+        comment: IRS SOI field A00900, as published
+      - name: n01000
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N01000" AS BIGINT)'
+        comment: IRS SOI field N01000, as published
+      - name: a01000
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A01000" AS DOUBLE)'
+        comment: IRS SOI field A01000, as published
+      - name: n01400
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N01400" AS BIGINT)'
+        comment: IRS SOI field N01400, as published
+      - name: a01400
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A01400" AS DOUBLE)'
+        comment: IRS SOI field A01400, as published
+      - name: n01700
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N01700" AS BIGINT)'
+        comment: IRS SOI field N01700, as published
+      - name: a01700
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A01700" AS DOUBLE)'
+        comment: IRS SOI field A01700, as published
+      - name: schf
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."SCHF" AS BIGINT)'
+        comment: IRS SOI field SCHF, as published
+      - name: n02300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02300" AS BIGINT)'
+        comment: IRS SOI field N02300, as published
+      - name: a02300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02300" AS DOUBLE)'
+        comment: IRS SOI field A02300, as published
+      - name: n02500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02500" AS BIGINT)'
+        comment: IRS SOI field N02500, as published
+      - name: a02500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02500" AS DOUBLE)'
+        comment: IRS SOI field A02500, as published
+      - name: n26270
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N26270" AS BIGINT)'
+        comment: IRS SOI field N26270, as published
+      - name: a26270
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A26270" AS DOUBLE)'
+        comment: IRS SOI field A26270, as published
+      - name: n25870
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N25870" AS BIGINT)'
+        comment: IRS SOI field N25870, as published
+      - name: a25870
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A25870" AS DOUBLE)'
+        comment: IRS SOI field A25870, as published
+      - name: n02900
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02900" AS BIGINT)'
+        comment: IRS SOI field N02900, as published
+      - name: a02900
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02900" AS DOUBLE)'
+        comment: IRS SOI field A02900, as published
+      - name: n03220
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03220" AS BIGINT)'
+        comment: IRS SOI field N03220, as published
+      - name: a03220
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03220" AS DOUBLE)'
+        comment: IRS SOI field A03220, as published
+      - name: n03300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03300" AS BIGINT)'
+        comment: IRS SOI field N03300, as published
+      - name: a03300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03300" AS DOUBLE)'
+        comment: IRS SOI field A03300, as published
+      - name: n03270
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03270" AS BIGINT)'
+        comment: IRS SOI field N03270, as published
+      - name: a03270
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03270" AS DOUBLE)'
+        comment: IRS SOI field A03270, as published
+      - name: n03150
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03150" AS BIGINT)'
+        comment: IRS SOI field N03150, as published
+      - name: a03150
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03150" AS DOUBLE)'
+        comment: IRS SOI field A03150, as published
+      - name: n03210
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03210" AS BIGINT)'
+        comment: IRS SOI field N03210, as published
+      - name: a03210
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03210" AS DOUBLE)'
+        comment: IRS SOI field A03210, as published
+      - name: n04450
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04450" AS BIGINT)'
+        comment: IRS SOI field N04450, as published
+      - name: a04450
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04450" AS DOUBLE)'
+        comment: IRS SOI field A04450, as published
+      - name: n04100
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04100" AS BIGINT)'
+        comment: IRS SOI field N04100, as published
+      - name: a04100
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04100" AS DOUBLE)'
+        comment: IRS SOI field A04100, as published
+      - name: n04200
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04200" AS BIGINT)'
+        comment: IRS SOI field N04200, as published
+      - name: a04200
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04200" AS DOUBLE)'
+        comment: IRS SOI field A04200, as published
+      - name: n04470
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04470" AS BIGINT)'
+        comment: IRS SOI field N04470, as published
+      - name: a04470
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04470" AS DOUBLE)'
+        comment: IRS SOI field A04470, as published
+      - name: a00101
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00101" AS DOUBLE)'
+        comment: IRS SOI field A00101, as published
+      - name: n17000
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N17000" AS BIGINT)'
+        comment: IRS SOI field N17000, as published
+      - name: a17000
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A17000" AS DOUBLE)'
+        comment: IRS SOI field A17000, as published
+      - name: n18425
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18425" AS BIGINT)'
+        comment: IRS SOI field N18425, as published
+      - name: a18425
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18425" AS DOUBLE)'
+        comment: IRS SOI field A18425, as published
+      - name: n18450
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18450" AS BIGINT)'
+        comment: IRS SOI field N18450, as published
+      - name: a18450
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18450" AS DOUBLE)'
+        comment: IRS SOI field A18450, as published
+      - name: n18500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18500" AS BIGINT)'
+        comment: IRS SOI field N18500, as published
+      - name: a18500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18500" AS DOUBLE)'
+        comment: IRS SOI field A18500, as published
+      - name: n18800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18800" AS BIGINT)'
+        comment: IRS SOI field N18800, as published
+      - name: a18800
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18800" AS DOUBLE)'
+        comment: IRS SOI field A18800, as published
+      - name: n18460
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18460" AS BIGINT)'
+        comment: IRS SOI field N18460, as published
+      - name: a18460
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18460" AS DOUBLE)'
+        comment: IRS SOI field A18460, as published
+      - name: n18300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18300" AS BIGINT)'
+        comment: IRS SOI field N18300, as published
+      - name: a18300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18300" AS DOUBLE)'
+        comment: IRS SOI field A18300, as published
+      - name: n19300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19300" AS BIGINT)'
+        comment: IRS SOI field N19300, as published
+      - name: a19300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19300" AS DOUBLE)'
+        comment: IRS SOI field A19300, as published
+      - name: n19500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19500" AS BIGINT)'
+        comment: IRS SOI field N19500, as published
+      - name: a19500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19500" AS DOUBLE)'
+        comment: IRS SOI field A19500, as published
+      - name: n19530
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19530" AS BIGINT)'
+        comment: IRS SOI field N19530, as published
+      - name: a19530
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19530" AS DOUBLE)'
+        comment: IRS SOI field A19530, as published
+      - name: n19570
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19570" AS BIGINT)'
+        comment: IRS SOI field N19570, as published
+      - name: a19570
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19570" AS DOUBLE)'
+        comment: IRS SOI field A19570, as published
+      - name: n19700
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19700" AS BIGINT)'
+        comment: IRS SOI field N19700, as published
+      - name: a19700
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19700" AS DOUBLE)'
+        comment: IRS SOI field A19700, as published
+      - name: n20950
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N20950" AS BIGINT)'
+        comment: IRS SOI field N20950, as published
+      - name: a20950
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A20950" AS DOUBLE)'
+        comment: IRS SOI field A20950, as published
+      - name: n04475
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04475" AS BIGINT)'
+        comment: IRS SOI field N04475, as published
+      - name: a04475
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04475" AS DOUBLE)'
+        comment: IRS SOI field A04475, as published
+      - name: n04800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04800" AS BIGINT)'
+        comment: IRS SOI field N04800, as published
+      - name: a04800
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04800" AS DOUBLE)'
+        comment: IRS SOI field A04800, as published
+      - name: n05800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N05800" AS BIGINT)'
+        comment: IRS SOI field N05800, as published
+      - name: a05800
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A05800" AS DOUBLE)'
+        comment: IRS SOI field A05800, as published
+      - name: n09600
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N09600" AS BIGINT)'
+        comment: IRS SOI field N09600, as published
+      - name: a09600
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A09600" AS DOUBLE)'
+        comment: IRS SOI field A09600, as published
+      - name: n05780
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N05780" AS BIGINT)'
+        comment: IRS SOI field N05780, as published
+      - name: a05780
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A05780" AS DOUBLE)'
+        comment: IRS SOI field A05780, as published
+      - name: n07100
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07100" AS BIGINT)'
+        comment: IRS SOI field N07100, as published
+      - name: a07100
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07100" AS DOUBLE)'
+        comment: IRS SOI field A07100, as published
+      - name: n07300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07300" AS BIGINT)'
+        comment: IRS SOI field N07300, as published
+      - name: a07300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07300" AS DOUBLE)'
+        comment: IRS SOI field A07300, as published
+      - name: n07180
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07180" AS BIGINT)'
+        comment: IRS SOI field N07180, as published
+      - name: a07180
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07180" AS DOUBLE)'
+        comment: IRS SOI field A07180, as published
+      - name: n07230
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07230" AS BIGINT)'
+        comment: IRS SOI field N07230, as published
+      - name: a07230
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07230" AS DOUBLE)'
+        comment: IRS SOI field A07230, as published
+      - name: n07240
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07240" AS BIGINT)'
+        comment: IRS SOI field N07240, as published
+      - name: a07240
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07240" AS DOUBLE)'
+        comment: IRS SOI field A07240, as published
+      - name: n07225
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07225" AS BIGINT)'
+        comment: IRS SOI field N07225, as published
+      - name: a07225
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07225" AS DOUBLE)'
+        comment: IRS SOI field A07225, as published
+      - name: n07260
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07260" AS BIGINT)'
+        comment: IRS SOI field N07260, as published
+      - name: a07260
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07260" AS DOUBLE)'
+        comment: IRS SOI field A07260, as published
+      - name: n09400
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N09400" AS BIGINT)'
+        comment: IRS SOI field N09400, as published
+      - name: a09400
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A09400" AS DOUBLE)'
+        comment: IRS SOI field A09400, as published
+      - name: n85770
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85770" AS BIGINT)'
+        comment: IRS SOI field N85770, as published
+      - name: a85770
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85770" AS DOUBLE)'
+        comment: IRS SOI field A85770, as published
+      - name: n85775
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85775" AS BIGINT)'
+        comment: IRS SOI field N85775, as published
+      - name: a85775
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85775" AS DOUBLE)'
+        comment: IRS SOI field A85775, as published
+      - name: n10600
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N10600" AS BIGINT)'
+        comment: IRS SOI field N10600, as published
+      - name: a10600
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A10600" AS DOUBLE)'
+        comment: IRS SOI field A10600, as published
+      - name: n59660
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59660" AS BIGINT)'
+        comment: IRS SOI field N59660, as published
+      - name: a59660
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59660" AS DOUBLE)'
+        comment: IRS SOI field A59660, as published
+      - name: n59661
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59661" AS BIGINT)'
+        comment: IRS SOI field N59661, as published
+      - name: a59661
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59661" AS DOUBLE)'
+        comment: IRS SOI field A59661, as published
+      - name: n59662
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59662" AS BIGINT)'
+        comment: IRS SOI field N59662, as published
+      - name: a59662
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59662" AS DOUBLE)'
+        comment: IRS SOI field A59662, as published
+      - name: n59663
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59663" AS BIGINT)'
+        comment: IRS SOI field N59663, as published
+      - name: a59663
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59663" AS DOUBLE)'
+        comment: IRS SOI field A59663, as published
+      - name: n59664
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59664" AS BIGINT)'
+        comment: IRS SOI field N59664, as published
+      - name: a59664
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59664" AS DOUBLE)'
+        comment: IRS SOI field A59664, as published
+      - name: n59720
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59720" AS BIGINT)'
+        comment: IRS SOI field N59720, as published
+      - name: a59720
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59720" AS DOUBLE)'
+        comment: IRS SOI field A59720, as published
+      - name: n11070
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11070" AS BIGINT)'
+        comment: IRS SOI field N11070, as published
+      - name: a11070
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11070" AS DOUBLE)'
+        comment: IRS SOI field A11070, as published
+      - name: n10960
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N10960" AS BIGINT)'
+        comment: IRS SOI field N10960, as published
+      - name: a10960
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A10960" AS DOUBLE)'
+        comment: IRS SOI field A10960, as published
+      - name: n11560
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11560" AS BIGINT)'
+        comment: IRS SOI field N11560, as published
+      - name: a11560
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11560" AS DOUBLE)'
+        comment: IRS SOI field A11560, as published
+      - name: n06500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N06500" AS BIGINT)'
+        comment: IRS SOI field N06500, as published
+      - name: a06500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A06500" AS DOUBLE)'
+        comment: IRS SOI field A06500, as published
+      - name: n10300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N10300" AS BIGINT)'
+        comment: IRS SOI field N10300, as published
+      - name: a10300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A10300" AS DOUBLE)'
+        comment: IRS SOI field A10300, as published
+      - name: n85530
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85530" AS BIGINT)'
+        comment: IRS SOI field N85530, as published
+      - name: a85530
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85530" AS DOUBLE)'
+        comment: IRS SOI field A85530, as published
+      - name: n85300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85300" AS BIGINT)'
+        comment: IRS SOI field N85300, as published
+      - name: a85300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85300" AS DOUBLE)'
+        comment: IRS SOI field A85300, as published
+      - name: n11901
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11901" AS BIGINT)'
+        comment: IRS SOI field N11901, as published
+      - name: a11901
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11901" AS DOUBLE)'
+        comment: IRS SOI field A11901, as published
+      - name: n11900
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11900" AS BIGINT)'
+        comment: IRS SOI field N11900, as published
+      - name: a11900
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11900" AS DOUBLE)'
+        comment: IRS SOI field A11900, as published
+      - name: n11902
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11902" AS BIGINT)'
+        comment: IRS SOI field N11902, as published
+      - name: a11902
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11902" AS DOUBLE)'
+        comment: IRS SOI field A11902, as published
+      - name: n12000
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N12000" AS BIGINT)'
+        comment: IRS SOI field N12000, as published
+      - name: a12000
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A12000" AS DOUBLE)'
+        comment: IRS SOI field A12000, as published
     source:
       type: http
       url: "https://www.irs.gov/pub/irs-soi/{year_short}zpallagi.csv"
@@ -496,6 +1330,843 @@ partitionedTables:
         expression: 'TRY_CAST(src."A10300" AS DOUBLE)'
         comment: Total tax liability, $1000s (A10300)
 
+
+      # --- Full source passthrough -------------------------------------------------
+      # Every column IRS publishes in incyallagi.csv, under its own name and as published.
+      # The curated columns above keep the readable names, the composed 5-digit county_fips
+      # and the FK types that downstream views reference; these add the fields those 15
+      # left behind, so a question they cannot answer needs no re-ingest.
+
+      - name: statefips
+        type: string
+        nullable: true
+        expression: 'src."STATEFIPS"'
+        comment: IRS SOI field STATEFIPS, as published
+      - name: state
+        type: string
+        nullable: true
+        expression: 'src."STATE"'
+        comment: IRS SOI field STATE, as published
+      - name: countyfips
+        type: string
+        nullable: true
+        expression: 'src."COUNTYFIPS"'
+        comment: IRS SOI field COUNTYFIPS, as published
+      - name: countyname
+        type: string
+        nullable: true
+        expression: 'src."COUNTYNAME"'
+        comment: IRS SOI field COUNTYNAME, as published
+      - name: agi_stub
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."agi_stub" AS BIGINT)'
+        comment: IRS SOI field agi_stub, as published
+      - name: n1
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N1" AS BIGINT)'
+        comment: IRS SOI field N1, as published
+      - name: mars1
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."mars1" AS BIGINT)'
+        comment: IRS SOI field mars1, as published
+      - name: mars2
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MARS2" AS BIGINT)'
+        comment: IRS SOI field MARS2, as published
+      - name: mars4
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MARS4" AS BIGINT)'
+        comment: IRS SOI field MARS4, as published
+      - name: elf
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ELF" AS BIGINT)'
+        comment: IRS SOI field ELF, as published
+      - name: cprep
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CPREP" AS BIGINT)'
+        comment: IRS SOI field CPREP, as published
+      - name: prep
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."PREP" AS BIGINT)'
+        comment: IRS SOI field PREP, as published
+      - name: dir_dep
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."DIR_DEP" AS BIGINT)'
+        comment: IRS SOI field DIR_DEP, as published
+      - name: vrtcrind
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VRTCRIND" AS BIGINT)'
+        comment: IRS SOI field VRTCRIND, as published
+      - name: n2
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N2" AS BIGINT)'
+        comment: IRS SOI field N2, as published
+      - name: total_vita
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."TOTAL_VITA" AS BIGINT)'
+        comment: IRS SOI field TOTAL_VITA, as published
+      - name: vita
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VITA" AS BIGINT)'
+        comment: IRS SOI field VITA, as published
+      - name: tce
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."TCE" AS BIGINT)'
+        comment: IRS SOI field TCE, as published
+      - name: vita_eic
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VITA_EIC" AS BIGINT)'
+        comment: IRS SOI field VITA_EIC, as published
+      - name: rac
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."RAC" AS BIGINT)'
+        comment: IRS SOI field RAC, as published
+      - name: elderly
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ELDERLY" AS BIGINT)'
+        comment: IRS SOI field ELDERLY, as published
+      - name: a00100
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00100" AS DOUBLE)'
+        comment: IRS SOI field A00100, as published
+      - name: n02650
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02650" AS BIGINT)'
+        comment: IRS SOI field N02650, as published
+      - name: a02650
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02650" AS DOUBLE)'
+        comment: IRS SOI field A02650, as published
+      - name: n00200
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00200" AS BIGINT)'
+        comment: IRS SOI field N00200, as published
+      - name: a00200
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00200" AS DOUBLE)'
+        comment: IRS SOI field A00200, as published
+      - name: n00300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00300" AS BIGINT)'
+        comment: IRS SOI field N00300, as published
+      - name: a00300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00300" AS DOUBLE)'
+        comment: IRS SOI field A00300, as published
+      - name: n00400
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00400" AS BIGINT)'
+        comment: IRS SOI field N00400, as published
+      - name: a00400
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00400" AS DOUBLE)'
+        comment: IRS SOI field A00400, as published
+      - name: n00600
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00600" AS BIGINT)'
+        comment: IRS SOI field N00600, as published
+      - name: a00600
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00600" AS DOUBLE)'
+        comment: IRS SOI field A00600, as published
+      - name: n00650
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00650" AS BIGINT)'
+        comment: IRS SOI field N00650, as published
+      - name: a00650
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00650" AS DOUBLE)'
+        comment: IRS SOI field A00650, as published
+      - name: n00700
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00700" AS BIGINT)'
+        comment: IRS SOI field N00700, as published
+      - name: a00700
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00700" AS DOUBLE)'
+        comment: IRS SOI field A00700, as published
+      - name: n00900
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N00900" AS BIGINT)'
+        comment: IRS SOI field N00900, as published
+      - name: a00900
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00900" AS DOUBLE)'
+        comment: IRS SOI field A00900, as published
+      - name: n01000
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N01000" AS BIGINT)'
+        comment: IRS SOI field N01000, as published
+      - name: a01000
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A01000" AS DOUBLE)'
+        comment: IRS SOI field A01000, as published
+      - name: n01400
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N01400" AS BIGINT)'
+        comment: IRS SOI field N01400, as published
+      - name: a01400
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A01400" AS DOUBLE)'
+        comment: IRS SOI field A01400, as published
+      - name: n01700
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N01700" AS BIGINT)'
+        comment: IRS SOI field N01700, as published
+      - name: a01700
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A01700" AS DOUBLE)'
+        comment: IRS SOI field A01700, as published
+      - name: schf
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."SCHF" AS BIGINT)'
+        comment: IRS SOI field SCHF, as published
+      - name: n02300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02300" AS BIGINT)'
+        comment: IRS SOI field N02300, as published
+      - name: a02300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02300" AS DOUBLE)'
+        comment: IRS SOI field A02300, as published
+      - name: n02500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02500" AS BIGINT)'
+        comment: IRS SOI field N02500, as published
+      - name: a02500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02500" AS DOUBLE)'
+        comment: IRS SOI field A02500, as published
+      - name: n26270
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N26270" AS BIGINT)'
+        comment: IRS SOI field N26270, as published
+      - name: a26270
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A26270" AS DOUBLE)'
+        comment: IRS SOI field A26270, as published
+      - name: n25870
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N25870" AS BIGINT)'
+        comment: IRS SOI field N25870, as published
+      - name: a25870
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A25870" AS DOUBLE)'
+        comment: IRS SOI field A25870, as published
+      - name: n02900
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N02900" AS BIGINT)'
+        comment: IRS SOI field N02900, as published
+      - name: a02900
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A02900" AS DOUBLE)'
+        comment: IRS SOI field A02900, as published
+      - name: n03220
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03220" AS BIGINT)'
+        comment: IRS SOI field N03220, as published
+      - name: a03220
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03220" AS DOUBLE)'
+        comment: IRS SOI field A03220, as published
+      - name: n03300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03300" AS BIGINT)'
+        comment: IRS SOI field N03300, as published
+      - name: a03300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03300" AS DOUBLE)'
+        comment: IRS SOI field A03300, as published
+      - name: n03270
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03270" AS BIGINT)'
+        comment: IRS SOI field N03270, as published
+      - name: a03270
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03270" AS DOUBLE)'
+        comment: IRS SOI field A03270, as published
+      - name: n03150
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03150" AS BIGINT)'
+        comment: IRS SOI field N03150, as published
+      - name: a03150
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03150" AS DOUBLE)'
+        comment: IRS SOI field A03150, as published
+      - name: n03210
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N03210" AS BIGINT)'
+        comment: IRS SOI field N03210, as published
+      - name: a03210
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A03210" AS DOUBLE)'
+        comment: IRS SOI field A03210, as published
+      - name: n04450
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04450" AS BIGINT)'
+        comment: IRS SOI field N04450, as published
+      - name: a04450
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04450" AS DOUBLE)'
+        comment: IRS SOI field A04450, as published
+      - name: n04100
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04100" AS BIGINT)'
+        comment: IRS SOI field N04100, as published
+      - name: a04100
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04100" AS DOUBLE)'
+        comment: IRS SOI field A04100, as published
+      - name: n04200
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04200" AS BIGINT)'
+        comment: IRS SOI field N04200, as published
+      - name: a04200
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04200" AS DOUBLE)'
+        comment: IRS SOI field A04200, as published
+      - name: n04470
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04470" AS BIGINT)'
+        comment: IRS SOI field N04470, as published
+      - name: a04470
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04470" AS DOUBLE)'
+        comment: IRS SOI field A04470, as published
+      - name: a00101
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A00101" AS DOUBLE)'
+        comment: IRS SOI field A00101, as published
+      - name: n17000
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N17000" AS BIGINT)'
+        comment: IRS SOI field N17000, as published
+      - name: a17000
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A17000" AS DOUBLE)'
+        comment: IRS SOI field A17000, as published
+      - name: n18425
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18425" AS BIGINT)'
+        comment: IRS SOI field N18425, as published
+      - name: a18425
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18425" AS DOUBLE)'
+        comment: IRS SOI field A18425, as published
+      - name: n18450
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18450" AS BIGINT)'
+        comment: IRS SOI field N18450, as published
+      - name: a18450
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18450" AS DOUBLE)'
+        comment: IRS SOI field A18450, as published
+      - name: n18500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18500" AS BIGINT)'
+        comment: IRS SOI field N18500, as published
+      - name: a18500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18500" AS DOUBLE)'
+        comment: IRS SOI field A18500, as published
+      - name: n18800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18800" AS BIGINT)'
+        comment: IRS SOI field N18800, as published
+      - name: a18800
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18800" AS DOUBLE)'
+        comment: IRS SOI field A18800, as published
+      - name: n18460
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18460" AS BIGINT)'
+        comment: IRS SOI field N18460, as published
+      - name: a18460
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18460" AS DOUBLE)'
+        comment: IRS SOI field A18460, as published
+      - name: n18300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N18300" AS BIGINT)'
+        comment: IRS SOI field N18300, as published
+      - name: a18300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A18300" AS DOUBLE)'
+        comment: IRS SOI field A18300, as published
+      - name: n19300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19300" AS BIGINT)'
+        comment: IRS SOI field N19300, as published
+      - name: a19300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19300" AS DOUBLE)'
+        comment: IRS SOI field A19300, as published
+      - name: n19500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19500" AS BIGINT)'
+        comment: IRS SOI field N19500, as published
+      - name: a19500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19500" AS DOUBLE)'
+        comment: IRS SOI field A19500, as published
+      - name: n19530
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19530" AS BIGINT)'
+        comment: IRS SOI field N19530, as published
+      - name: a19530
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19530" AS DOUBLE)'
+        comment: IRS SOI field A19530, as published
+      - name: n19570
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19570" AS BIGINT)'
+        comment: IRS SOI field N19570, as published
+      - name: a19570
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19570" AS DOUBLE)'
+        comment: IRS SOI field A19570, as published
+      - name: n19700
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N19700" AS BIGINT)'
+        comment: IRS SOI field N19700, as published
+      - name: a19700
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A19700" AS DOUBLE)'
+        comment: IRS SOI field A19700, as published
+      - name: n20950
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N20950" AS BIGINT)'
+        comment: IRS SOI field N20950, as published
+      - name: a20950
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A20950" AS DOUBLE)'
+        comment: IRS SOI field A20950, as published
+      - name: n04475
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04475" AS BIGINT)'
+        comment: IRS SOI field N04475, as published
+      - name: a04475
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04475" AS DOUBLE)'
+        comment: IRS SOI field A04475, as published
+      - name: n04800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N04800" AS BIGINT)'
+        comment: IRS SOI field N04800, as published
+      - name: a04800
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A04800" AS DOUBLE)'
+        comment: IRS SOI field A04800, as published
+      - name: n05800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N05800" AS BIGINT)'
+        comment: IRS SOI field N05800, as published
+      - name: a05800
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A05800" AS DOUBLE)'
+        comment: IRS SOI field A05800, as published
+      - name: n09600
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N09600" AS BIGINT)'
+        comment: IRS SOI field N09600, as published
+      - name: a09600
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A09600" AS DOUBLE)'
+        comment: IRS SOI field A09600, as published
+      - name: n05780
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N05780" AS BIGINT)'
+        comment: IRS SOI field N05780, as published
+      - name: a05780
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A05780" AS DOUBLE)'
+        comment: IRS SOI field A05780, as published
+      - name: n07100
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07100" AS BIGINT)'
+        comment: IRS SOI field N07100, as published
+      - name: a07100
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07100" AS DOUBLE)'
+        comment: IRS SOI field A07100, as published
+      - name: n07300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07300" AS BIGINT)'
+        comment: IRS SOI field N07300, as published
+      - name: a07300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07300" AS DOUBLE)'
+        comment: IRS SOI field A07300, as published
+      - name: n07180
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07180" AS BIGINT)'
+        comment: IRS SOI field N07180, as published
+      - name: a07180
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07180" AS DOUBLE)'
+        comment: IRS SOI field A07180, as published
+      - name: n07230
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07230" AS BIGINT)'
+        comment: IRS SOI field N07230, as published
+      - name: a07230
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07230" AS DOUBLE)'
+        comment: IRS SOI field A07230, as published
+      - name: n07240
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07240" AS BIGINT)'
+        comment: IRS SOI field N07240, as published
+      - name: a07240
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07240" AS DOUBLE)'
+        comment: IRS SOI field A07240, as published
+      - name: n07225
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07225" AS BIGINT)'
+        comment: IRS SOI field N07225, as published
+      - name: a07225
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07225" AS DOUBLE)'
+        comment: IRS SOI field A07225, as published
+      - name: n07260
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N07260" AS BIGINT)'
+        comment: IRS SOI field N07260, as published
+      - name: a07260
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A07260" AS DOUBLE)'
+        comment: IRS SOI field A07260, as published
+      - name: n09400
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N09400" AS BIGINT)'
+        comment: IRS SOI field N09400, as published
+      - name: a09400
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A09400" AS DOUBLE)'
+        comment: IRS SOI field A09400, as published
+      - name: n85770
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85770" AS BIGINT)'
+        comment: IRS SOI field N85770, as published
+      - name: a85770
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85770" AS DOUBLE)'
+        comment: IRS SOI field A85770, as published
+      - name: n85775
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85775" AS BIGINT)'
+        comment: IRS SOI field N85775, as published
+      - name: a85775
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85775" AS DOUBLE)'
+        comment: IRS SOI field A85775, as published
+      - name: n10600
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N10600" AS BIGINT)'
+        comment: IRS SOI field N10600, as published
+      - name: a10600
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A10600" AS DOUBLE)'
+        comment: IRS SOI field A10600, as published
+      - name: n59660
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59660" AS BIGINT)'
+        comment: IRS SOI field N59660, as published
+      - name: a59660
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59660" AS DOUBLE)'
+        comment: IRS SOI field A59660, as published
+      - name: n59661
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59661" AS BIGINT)'
+        comment: IRS SOI field N59661, as published
+      - name: a59661
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59661" AS DOUBLE)'
+        comment: IRS SOI field A59661, as published
+      - name: n59662
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59662" AS BIGINT)'
+        comment: IRS SOI field N59662, as published
+      - name: a59662
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59662" AS DOUBLE)'
+        comment: IRS SOI field A59662, as published
+      - name: n59663
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59663" AS BIGINT)'
+        comment: IRS SOI field N59663, as published
+      - name: a59663
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59663" AS DOUBLE)'
+        comment: IRS SOI field A59663, as published
+      - name: n59664
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59664" AS BIGINT)'
+        comment: IRS SOI field N59664, as published
+      - name: a59664
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59664" AS DOUBLE)'
+        comment: IRS SOI field A59664, as published
+      - name: n59720
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N59720" AS BIGINT)'
+        comment: IRS SOI field N59720, as published
+      - name: a59720
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A59720" AS DOUBLE)'
+        comment: IRS SOI field A59720, as published
+      - name: n11070
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11070" AS BIGINT)'
+        comment: IRS SOI field N11070, as published
+      - name: a11070
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11070" AS DOUBLE)'
+        comment: IRS SOI field A11070, as published
+      - name: n10960
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N10960" AS BIGINT)'
+        comment: IRS SOI field N10960, as published
+      - name: a10960
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A10960" AS DOUBLE)'
+        comment: IRS SOI field A10960, as published
+      - name: n11560
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11560" AS BIGINT)'
+        comment: IRS SOI field N11560, as published
+      - name: a11560
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11560" AS DOUBLE)'
+        comment: IRS SOI field A11560, as published
+      - name: n06500
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N06500" AS BIGINT)'
+        comment: IRS SOI field N06500, as published
+      - name: a06500
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A06500" AS DOUBLE)'
+        comment: IRS SOI field A06500, as published
+      - name: n10300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N10300" AS BIGINT)'
+        comment: IRS SOI field N10300, as published
+      - name: a10300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A10300" AS DOUBLE)'
+        comment: IRS SOI field A10300, as published
+      - name: n85530
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85530" AS BIGINT)'
+        comment: IRS SOI field N85530, as published
+      - name: a85530
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85530" AS DOUBLE)'
+        comment: IRS SOI field A85530, as published
+      - name: n85300
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N85300" AS BIGINT)'
+        comment: IRS SOI field N85300, as published
+      - name: a85300
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A85300" AS DOUBLE)'
+        comment: IRS SOI field A85300, as published
+      - name: n11901
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11901" AS BIGINT)'
+        comment: IRS SOI field N11901, as published
+      - name: a11901
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11901" AS DOUBLE)'
+        comment: IRS SOI field A11901, as published
+      - name: n11900
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11900" AS BIGINT)'
+        comment: IRS SOI field N11900, as published
+      - name: a11900
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11900" AS DOUBLE)'
+        comment: IRS SOI field A11900, as published
+      - name: n11902
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N11902" AS BIGINT)'
+        comment: IRS SOI field N11902, as published
+      - name: a11902
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A11902" AS DOUBLE)'
+        comment: IRS SOI field A11902, as published
+      - name: n12000
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."N12000" AS BIGINT)'
+        comment: IRS SOI field N12000, as published
+      - name: a12000
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."A12000" AS DOUBLE)'
+        comment: IRS SOI field A12000, as published
     source:
       type: http
       url: "https://www.irs.gov/pub/irs-soi/{year_short}incyallagi.csv"
