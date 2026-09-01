@@ -2253,8 +2253,11 @@ partitionedTables:
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
     freshness:
-      type: hash
+      type: etag
     releaseWindow:
       dow: [1]              # CDC publishes weekly updates Fridays; Monday catches them
     comment: >
@@ -3505,8 +3508,11 @@ partitionedTables:
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
     freshness:
-      type: hash
+      type: etag
     comment: >
       Provisional 12-month-ending drug overdose death counts by county of residence, from CDC's
       Vital Statistics Rapid Release (VSRR) program. Currently updated (not a frozen historical
@@ -3624,8 +3630,11 @@ partitionedTables:
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
     freshness:
-      type: hash
+      type: etag
     comment: >
       County-level death counts and rates for drug overdose, suicide, homicide, and firearm
       injury, from CDC's Mapping Injury, Overdose, and Violence (MIOV) tool. Both yearly and
@@ -3726,8 +3735,11 @@ partitionedTables:
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
     freshness:
-      type: hash
+      type: etag
     comment: >
       State-level monthly provisional counts of live births, deaths, and infant deaths, from
       CDC's Vital Statistics Rapid Release (VSRR) program. State-level Natality is NOT obtainable
@@ -3810,8 +3822,11 @@ partitionedTables:
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
     freshness:
-      type: hash
+      type: etag
     comment: >
       County-level birth rates for females age 15-19, from NCHS. General county-level Natality
       counts are not publicly available (NCHS's All-County Natality File requires a restricted-

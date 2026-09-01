@@ -171,8 +171,11 @@ partitionedTables:
     # Freshness gate: Socrata SODA JSON query API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=vehicle_recalls/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -2416,8 +2419,11 @@ partitionedTables:
   # BTS PORT TEU — Monthly container throughput, Top-10 US ports (static, Jan 2019-Oct 2022)
   # ---------------------------------------------------------------------------
   - name: bts_port_teu
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
     freshness:
-      type: hash
+      type: etag
     pattern: "type=bts_port_teu/*.parquet"
     partitions: *static_partitions
     comment: >
