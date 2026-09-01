@@ -908,6 +908,22 @@ public class ChunkOrganizer {
       stmt.execute("DROP INDEX IF EXISTS idx_vc_tombstones_pending");
       stmt.execute("ALTER TABLE vc_tombstones DROP COLUMN IF EXISTS applied_at");
       stmt.execute("ALTER TABLE vc_sync_state DROP COLUMN IF EXISTS last_synced_at");
+
+      // Add FK columns for all 23 contributors to support star-schema joins. Each column is named
+      // {sourceSchema}_{sourceTable}_{pkColumn}, one per PK component. This allows direct SQL joins
+      // from vc_staging back to source rows without stringified_fk string parsing.
+      for (RowConcatSource src : ROW_CONCAT_SOURCES) {
+        for (String fkCol : src.fkColumns) {
+          stmt.execute("ALTER TABLE vc_staging ADD COLUMN IF NOT EXISTS "
+              + fkCol + " VARCHAR");
+        }
+      }
+      for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
+        for (String fkCol : src.fkColumns) {
+          stmt.execute("ALTER TABLE vc_staging ADD COLUMN IF NOT EXISTS "
+              + fkCol + " VARCHAR");
+        }
+      }
     }
   }
 
