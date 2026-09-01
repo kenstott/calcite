@@ -729,6 +729,11 @@ partitionedTables:
       headers:
         User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
 
+      # The provider reads the discovered file through this cache, keyed on that file's own
+      # URL. The landing page it is discovered from is not cached: freezing that would pin
+      # the table to whichever release was current on the first run.
+      rawCache:
+        enabled: true
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.ag.ErsFarmIncomeProvider"
 

@@ -2724,8 +2724,11 @@ partitionedTables:
         requestsPerSecond: 0.5
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # The provider reads the discovered file through this cache, keyed on that file's own
+      # URL. The landing page it is discovered from is not cached: freezing that would pin
+      # the table to whichever release was current on the first run.
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SbaLoansProvider"

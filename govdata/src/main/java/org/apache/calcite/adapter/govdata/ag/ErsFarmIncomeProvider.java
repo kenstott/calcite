@@ -10,7 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.ag;
 
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import org.slf4j.Logger;
@@ -49,7 +50,7 @@ import java.util.zip.ZipInputStream;
  * single fetch (dimension {@code type} only) and partitions by each row's
  * {@code year}. Rows are produced lazily (O(1) memory over the ~460k-row file).
  */
-public class ErsFarmIncomeProvider implements DataProvider {
+public class ErsFarmIncomeProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ErsFarmIncomeProvider.class);
 
@@ -76,7 +77,7 @@ public class ErsFarmIncomeProvider implements DataProvider {
   };
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String landingUrl = config.getSource() != null ? config.getSource().getUrl() : null;
     if (landingUrl == null || landingUrl.isEmpty()) {
       throw new IOException("ERS: source.url (landing page) is required");
@@ -86,7 +87,7 @@ public class ErsFarmIncomeProvider implements DataProvider {
     String zipUrl = resolveReleaseZipUrl(landingUrl, userAgent);
     LOGGER.info("ERS: current release zip resolved to {}", zipUrl);
 
-    final BufferedReader reader = openCsvReader(zipUrl, userAgent);
+    final BufferedReader reader = openCsvReader(zipUrl, userAgent, rawCache);
     final int[] index = readHeader(reader, zipUrl);
 
     return new Iterator<Map<String, Object>>() {
@@ -164,9 +165,18 @@ public class ErsFarmIncomeProvider implements DataProvider {
   }
 
   /** Downloads the zip and returns a latin-1 reader over its first .csv entry. */
-  private BufferedReader openCsvReader(String zipUrl, String userAgent) throws IOException {
-    HttpURLConnection conn = open(zipUrl, userAgent);
-    ZipInputStream zis = new ZipInputStream(conn.getInputStream());
+  /**
+   * Reads the release zip through the raw cache, keyed on the resolved zip URL.
+   *
+   * <p>Only the zip is cached. The landing page it was discovered from is deliberately fetched
+   * fresh every run: caching that would freeze discovery on whichever release was current the
+   * first time, and the table would never see a new one. Keying the zip on its own URL gives the
+   * opposite behaviour for free — a new release is a new URL, so it is a new entry.
+   */
+  private BufferedReader openCsvReader(String zipUrl, String userAgent, RawCache rawCache)
+      throws IOException {
+    ZipInputStream zis = new ZipInputStream(
+        rawCache.openStream(zipUrl, () -> open(zipUrl, userAgent).getInputStream()));
     ZipEntry entry;
     while ((entry = zis.getNextEntry()) != null) {
       if (entry.getName().toLowerCase().endsWith(".csv")) {

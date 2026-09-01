@@ -11,7 +11,8 @@
 package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
-import org.apache.calcite.adapter.file.etl.DataProvider;
+import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
 import org.slf4j.Logger;
@@ -48,7 +49,7 @@ import java.util.regex.Pattern;
  * emitted as a row column. {@code year} ({@code ApprovalFY}) is a data
  * column, not a partition.
  */
-public class SbaLoansProvider implements DataProvider {
+public class SbaLoansProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SbaLoansProvider.class);
 
@@ -81,7 +82,7 @@ public class SbaLoansProvider implements DataProvider {
   private static final String[] REQUIRED = {"BorrName", "GrossApproval", "ApprovalFY"};
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
-      Map<String, String> variables) throws IOException {
+      Map<String, String> variables, RawCache rawCache) throws IOException {
     String program = variables.get("program");
     if (program == null || program.isEmpty()) {
       LOGGER.warn("sba_loan_approvals: no program in dimension variables {}", variables);
@@ -90,7 +91,7 @@ public class SbaLoansProvider implements DataProvider {
     List<String> csvUrls = resolveCsvUrls(program);
     LOGGER.info("sba_loan_approvals: program {} resolved to {} file(s): {}",
         program, csvUrls.size(), csvUrls);
-    return new MultiCsvIterator(csvUrls);
+    return new MultiCsvIterator(csvUrls, rawCache);
   }
 
   /**
@@ -155,6 +156,12 @@ public class SbaLoansProvider implements DataProvider {
    * {@code SBAGuaranteedApproval} column).
    */
   private static final class MultiCsvIterator implements Iterator<Map<String, Object>> {
+    /**
+     * Each discovered CSV is its own entry, keyed by its URL. Only these are cached — the dataset
+     * landing page they were scraped from is fetched fresh every run, since caching that would
+     * freeze discovery on whichever files were listed the first time.
+     */
+    private final RawCache rawCache;
     private final Iterator<String> urls;
     private BufferedReader reader;
     private Map<String, Integer> idx;
@@ -162,8 +169,9 @@ public class SbaLoansProvider implements DataProvider {
     private Map<String, Object> nextRow;
     private boolean done;
 
-    MultiCsvIterator(List<String> urls) {
+    MultiCsvIterator(List<String> urls, RawCache rawCache) {
       this.urls = urls.iterator();
+      this.rawCache = rawCache;
     }
 
     private boolean openNext() throws IOException {
@@ -172,8 +180,8 @@ public class SbaLoansProvider implements DataProvider {
       }
       currentUrl = urls.next();
       LOGGER.info("sba_loan_approvals: streaming {}", currentUrl);
-      HttpURLConnection conn = FiscalHttp.openGet(currentUrl);
-      reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+      reader = new BufferedReader(
+          new InputStreamReader(rawCache.openStream(currentUrl), StandardCharsets.UTF_8));
       String headerRecord = CsvRecordReader.readRecord(reader);
       if (headerRecord == null) {
         reader.close();
