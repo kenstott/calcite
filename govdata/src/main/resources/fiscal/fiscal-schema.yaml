@@ -7,7 +7,7 @@
 # recipient). Both key to the geo (states/counties) and, for entities, the EIN.
 #
 # Data sources (all free, no key):
-#   - IRS SOI ZIP-code income        — {YY}zpallagi.csv    (SoiZipProvider)
+#   - IRS SOI ZIP-code income        — {YY}zpallagi.csv    (declarative: columns[].expression)
 #   - IRS SOI county income          — {YY}incyallagi.csv  (SoiCountyProvider)
 #   - IRS SOI county migration       — countyoutflow{YYZZ}.csv (SoiMigrationProvider)
 #   - IRS EO Business Master File    — eo1..eo4.csv        (IrsEoBmfProvider)
@@ -246,102 +246,128 @@ partitionedTables:
 
     columns:
       - <<: *state_fips_column
+        expression: 'LPAD(CAST(src."STATEFIPS" AS VARCHAR), 2, ''0'')'
       - <<: *state_abbr_column
+        expression: 'src."STATE"'
       - name: zip_code
         type: string
         nullable: false
+        expression: 'LPAD(CAST(src."zipcode" AS VARCHAR), 5, ''0'')'
         comment: 5-digit ZIP (00000 = state total)
       - name: agi_bracket
         type: string
         nullable: false
+        expression: 'CAST(src."agi_stub" AS VARCHAR)'
         comment: SOI AGI size class (agi_stub 1-6)
       - name: num_returns
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."N1" AS BIGINT)'
         comment: Number of returns (N1) ~ households
       - name: num_individuals
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."N2" AS BIGINT)'
         comment: Number of individuals / exemptions (N2) ~ population
       - name: num_single_returns
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."mars1" AS BIGINT)'
         comment: Single returns (mars1)
       - name: num_joint_returns
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."MARS2" AS BIGINT)'
         comment: Joint returns (MARS2)
       - name: num_hoh_returns
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."MARS4" AS BIGINT)'
         comment: Head-of-household returns (MARS4)
       - name: num_elderly_returns
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."ELDERLY" AS BIGINT)'
         comment: Returns with elderly (65+) taxpayers (ELDERLY)
       - name: adjusted_gross_income
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00100" AS DOUBLE)'
         comment: Adjusted gross income, $1000s (A00100)
       - name: total_income_amount
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A02650" AS DOUBLE)'
         comment: Total income, $1000s (A02650)
       - name: salaries_wages
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00200" AS DOUBLE)'
         comment: Salaries and wages amount, $1000s (A00200)
       - name: taxable_interest
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00300" AS DOUBLE)'
         comment: Taxable interest amount, $1000s (A00300)
       - name: ordinary_dividends
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00600" AS DOUBLE)'
         comment: Ordinary dividends amount, $1000s (A00600)
       - name: business_net_income
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00900" AS DOUBLE)'
         comment: Business/professional net income, $1000s (A00900)
       - name: net_capital_gain
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A01000" AS DOUBLE)'
         comment: Net capital gain amount, $1000s (A01000)
       - name: taxable_pensions
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A01700" AS DOUBLE)'
         comment: Taxable pensions and annuities, $1000s (A01700)
       - name: unemployment_comp
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A02300" AS DOUBLE)'
         comment: Unemployment compensation, $1000s (A02300)
       - name: taxable_social_security
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A02500" AS DOUBLE)'
         comment: Taxable Social Security benefits, $1000s (A02500)
       - name: total_itemized_deductions
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A04470" AS DOUBLE)'
         comment: Total itemized deductions, $1000s (A04470)
       - name: taxable_income
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A04800" AS DOUBLE)'
         comment: Taxable income, $1000s (A04800)
       - name: income_tax_before_credits
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A05800" AS DOUBLE)'
         comment: Income tax before credits, $1000s (A05800)
       - name: total_income_tax
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A06500" AS DOUBLE)'
         comment: Total income tax, $1000s (A06500)
       - name: total_tax_liability
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A10300" AS DOUBLE)'
         comment: Total tax liability, $1000s (A10300)
       - name: eitc_amount
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A59660" AS DOUBLE)'
         comment: Earned income tax credit amount, $1000s (A59660)
 
     source:
@@ -355,10 +381,7 @@ partitionedTables:
         retryOn: [429, 500, 503]
         maxRetries: 3
       rawCache:
-        enabled: false
-
-    hooks:
-      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SoiZipProvider"
+        enabled: true
 
     materialize:
       format: iceberg
