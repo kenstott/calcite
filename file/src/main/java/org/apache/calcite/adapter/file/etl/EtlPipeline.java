@@ -2411,12 +2411,51 @@ public class EtlPipeline {
    * front and again by the hash-freshness branch to re-read the (now warm-cached) source after
    * the first chain was drained to compute the content hash.
    */
+  /**
+   * The raw cache handle for one batch, keyed exactly as {@link HttpSource} would key it, so a
+   * provider-backed table's entries sit beside every other table's and share their invalidation.
+   *
+   * <p>Returns a handle that always downloads when the table has {@code rawCache.enabled: false},
+   * when no raw-cache storage is configured, or when this run is bypassing the cache — the same
+   * conditions under which {@code HttpSource} would skip it.
+   *
+   * @param config the pipeline config
+   * @param variables the batch's dimension values
+   * @return a cache handle; never null
+   */
+  private RawCache rawCacheForBatch(EtlPipelineConfig config, Map<String, String> variables) {
+    HttpSourceConfig source = config.getSource();
+    HttpSourceConfig.RawCacheConfig rawCacheConfig =
+        source != null ? source.getRawCache() : null;
+    String rawCachePath = null;
+    if (rawCacheConfig != null && rawCacheConfig.isEnabled()) {
+      rawCachePath = rawCacheConfig.getSharedKey() != null
+          ? rawCacheConfig.getSharedKey()
+          : config.getName();
+    }
+    // freshnessSkipAllowed is set once per run as !forceReprocessAll, so this is the same bypass
+    // condition createDataSource applies to HttpSource: a run that concluded it holds no reliable
+    // committed state must re-fetch rather than replay an entry whose existence is its only
+    // validity check.
+    boolean bypass = isTableForceDownloaded(config.getName()) || !freshnessSkipAllowed;
+    return StorageRawCache.forBatch(config, variables, sourceStorageProvider, rawCachePath, bypass);
+  }
+
   private Iterator<Map<String, Object>> fetchDataChain(EtlPipelineConfig config,
       DataSource dataSource, Map<String, String> variables, String pipelineName,
       int processedCount, long[] scannedOut) throws IOException {
     Iterator<Map<String, Object>> data = null;
     if (dataProvider != null) {
-      data = dataProvider.fetch(config, variables);
+      // A CachingDataProvider gets the same raw cache HttpSource would have used: it is here to
+      // reach something the built-in path cannot -- a binary, or a URL it has to discover -- which
+      // is unrelated to whether the bytes are worth keeping, so it should not forfeit the cache to
+      // do that. Anything else keeps the plain call. Checked by type rather than by a default
+      // method because a proxy-based provider does not run interface defaults, and a silent null
+      // from one would read here as "declined the batch" and fall through to HttpSource.
+      data = dataProvider instanceof CachingDataProvider
+          ? ((CachingDataProvider) dataProvider).fetch(config, variables,
+              rawCacheForBatch(config, variables))
+          : dataProvider.fetch(config, variables);
       if (data != null) {
         LOGGER.debug("Using custom DataProvider for batch {}", processedCount);
       }
