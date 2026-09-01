@@ -549,8 +549,12 @@ public class ChunkOrganizer {
           chunkRow.put("source_type", "row_concat");
           chunkRow.put("chunk_text", chunks.get(seq));
           chunkRow.put("enriched_text", chunks.get(seq));
-          if (src.wideFkColumn != null) {
-            chunkRow.put(src.wideFkColumn, pkValue);
+          // Write FK columns for each PK component to enable direct SQL joins back to source rows
+          if (!src.fkColumns.isEmpty()) {
+            String[] pkValueParts = pkValue.split(":", -1);
+            for (int i = 0; i < Math.min(src.fkColumns.size(), pkValueParts.length); i++) {
+              chunkRow.put(src.fkColumns.get(i), pkValueParts[i]);
+            }
           }
           chunkRows.add(chunkRow);
         }
@@ -671,8 +675,12 @@ public class ChunkOrganizer {
           chunkRow.put("chunk_text", chunk.text);
           chunkRow.put("enriched_text", chunk.text);
           chunkRow.put("paragraph_continuation", chunk.paragraphContinuation);
-          if (src.wideFkColumn != null) {
-            chunkRow.put(src.wideFkColumn, pkValue);
+          // Write FK columns for each PK component to enable direct SQL joins back to source rows
+          if (!src.fkColumns.isEmpty()) {
+            String[] pkValueParts = pkValue.split(":", -1);
+            for (int i = 0; i < Math.min(src.fkColumns.size(), pkValueParts.length); i++) {
+              chunkRow.put(src.fkColumns.get(i), pkValueParts[i]);
+            }
           }
           chunkRows.add(chunkRow);
         }
@@ -1034,19 +1042,34 @@ public class ChunkOrganizer {
      *  their ':'-joined values, uniform for single-column and composite PKs alike. */
     final List<String> pkColumns;
     final List<String> stringColumns;
-    /** Convenience wide FK column, only meaningful for a single-column PK -- a composite PK
-     *  doesn't map to one column simply, so this is null for those sources (the generic
-     *  stringified_fk still works for any PK shape). */
-    final String wideFkColumn;
+    /** Wide FK columns, one per PK component, named as {sourceSchema}_{sourceTable}_{pkColumn}.
+     *  Allows direct SQL joins back to source rows without string parsing. Automatically
+     *  generated if wideFkColumn is null; list is non-empty to ensure every source supports joins. */
+    final List<String> fkColumns;
 
     RowConcatSource(String sourceSchema, String sourceTable, List<String> pkColumns,
-        List<String> stringColumns, String wideFkColumn) {
+        List<String> stringColumns, String legacyWideFkColumn) {
       this.sourceSchema = sourceSchema;
       this.sourceTable = sourceTable;
       this.pkColumns = pkColumns;
       this.stringColumns = stringColumns;
-      this.wideFkColumn = wideFkColumn;
+      // All sources generate FK columns: legacy callers pass a single wideFkColumn (used as-is),
+      // but most pass null and we auto-generate from PK columns. Either way, fkColumns is
+      // non-empty to support star-schema joins from vc_staging back to every source row.
+      if (legacyWideFkColumn != null) {
+        this.fkColumns = Arrays.asList(legacyWideFkColumn);
+      } else {
+        this.fkColumns = fkColumnsFrom(sourceSchema, sourceTable, pkColumns);
+      }
     }
+  }
+
+  private static List<String> fkColumnsFrom(String sourceSchema, String sourceTable, List<String> pkColumns) {
+    List<String> cols = new ArrayList<String>(pkColumns.size());
+    for (String pk : pkColumns) {
+      cols.add(sourceSchema + "_" + sourceTable + "_" + pk);
+    }
+    return cols;
   }
 
   /** One document-blob source registry entry. */
@@ -1056,20 +1079,27 @@ public class ChunkOrganizer {
     final List<String> pkColumns;
     final String blobColumn;
     final String sourceType;
-    final String wideFkColumn;
+    final List<String> fkColumns;
     /** Pluggable chunk-parsing function for this source's blob column -- see {@link
      *  ChunkFunction}'s javadoc for why this exists instead of every source sharing one
      *  hardcoded chunker. */
     final ChunkFunction chunker;
 
     DocumentBlobSource(String sourceSchema, String sourceTable, List<String> pkColumns,
-        String blobColumn, String sourceType, String wideFkColumn, ChunkFunction chunker) {
+        String blobColumn, String sourceType, String legacyWideFkColumn, ChunkFunction chunker) {
       this.sourceSchema = sourceSchema;
       this.sourceTable = sourceTable;
       this.pkColumns = pkColumns;
       this.blobColumn = blobColumn;
       this.sourceType = sourceType;
-      this.wideFkColumn = wideFkColumn;
+      // All sources generate FK columns: legacy callers pass a single wideFkColumn (used as-is),
+      // but most pass null and we auto-generate from PK columns. Either way, fkColumns is
+      // non-empty to support star-schema joins from vc_staging back to every source row.
+      if (legacyWideFkColumn != null) {
+        this.fkColumns = Arrays.asList(legacyWideFkColumn);
+      } else {
+        this.fkColumns = fkColumnsFrom(sourceSchema, sourceTable, pkColumns);
+      }
       this.chunker = chunker;
     }
   }
