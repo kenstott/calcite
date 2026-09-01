@@ -346,7 +346,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.irs.gov/pub/irs-soi/zpallagi.csv"
+      url: "https://www.irs.gov/pub/irs-soi/{year_short}zpallagi.csv"
       method: GET
       response:
         format: csv
@@ -460,7 +460,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.irs.gov/pub/irs-soi/incyallagi.csv"
+      url: "https://www.irs.gov/pub/irs-soi/{year_short}incyallagi.csv"
       method: GET
       response:
         format: csv
@@ -556,7 +556,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.irs.gov/pub/irs-soi/countyoutflow.csv"
+      url: "https://www.irs.gov/pub/irs-soi/countyoutflow{year_short_prev}{year_short}.csv"
       method: GET
       response:
         format: csv

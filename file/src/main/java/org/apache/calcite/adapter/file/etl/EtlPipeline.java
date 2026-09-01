@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -480,7 +481,7 @@ public class EtlPipeline {
             partitionPlan.getPartitionCount(), partitionPlan.getContextKey(),
             totalBatches);
       } else {
-        combinations = dimensionIterator.expand(effectiveDimensions);
+        combinations = dimensionIterator.expand(effectiveDimensions, referencedCompanions(config));
         totalBatches = combinations.size();
         dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
         LOGGER.info("Expanded to {} dimension combinations", totalBatches);
@@ -3244,6 +3245,37 @@ public class EtlPipeline {
    * @param combinations       all combinations (indexed by the set entries)
    * @param unprocessedIndices mutable set of indices considered unprocessed; pruned in place
    */
+  /**
+   * The opt-in derived companions this pipeline's templates actually reference.
+   *
+   * <p>Read from the source URL and the freshness probe URL, the two places a companion can be
+   * consumed. Opt-in because a combination's entries form the raw cache key whenever
+   * {@code rawCache.keyVars} is unset, so injecting a companion into tables that never mention it
+   * would change their cache keys and discard their caches for nothing.
+   *
+   * @param config the pipeline config
+   * @return companion names referenced by this pipeline; empty when none are
+   */
+  private static Set<String> referencedCompanions(EtlPipelineConfig config) {
+    Set<String> requested = new LinkedHashSet<String>();
+    if (config == null) {
+      return requested;
+    }
+    StringBuilder templates = new StringBuilder();
+    HttpSourceConfig source = config.getSource();
+    if (source != null && source.getUrl() != null) {
+      templates.append(source.getUrl());
+    }
+    FreshnessConfig freshness = config.getFreshness();
+    if (freshness != null && freshness.getProbeUrl() != null) {
+      templates.append(' ').append(freshness.getProbeUrl());
+    }
+    if (templates.indexOf("{year_short}") >= 0 || templates.indexOf("{year_short_prev}") >= 0) {
+      requested.add("year_short");
+    }
+    return requested;
+  }
+
   private void removePeriodCompleteIndices(String pipelineName,
       List<Map<String, String>> combinations, Set<Integer> unprocessedIndices) {
     if (unprocessedIndices.isEmpty()) {

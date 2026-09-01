@@ -143,6 +143,27 @@ public class DimensionIterator {
    * @return List of parameter maps, one per combination
    */
   public List<Map<String, String>> expand(Map<String, DimensionConfig> dimensions) {
+    return expand(dimensions, null);
+  }
+
+  /**
+   * Expands dimension configurations into all value combinations, additionally injecting any
+   * opt-in derived companion named in {@code requestedCompanions}.
+   *
+   * <p>Opt-in rather than automatic because every entry of a combination becomes part of the raw
+   * cache key when {@code rawCache.keyVars} is unset, which is the default. Injecting a companion
+   * unconditionally would therefore change the cache key of every table sharing that dimension and
+   * invalidate their caches wholesale — a very large cost for a companion only a few tables
+   * reference. Injecting it only where a template actually uses it keeps the blast radius to those
+   * tables.
+   *
+   * @param dimensions Map of dimension name to configuration
+   * @param requestedCompanions companion variable names the caller's templates reference; may be
+   *                            null or empty
+   * @return List of parameter maps, one per combination
+   */
+  public List<Map<String, String>> expand(Map<String, DimensionConfig> dimensions,
+      Set<String> requestedCompanions) {
     if (dimensions == null || dimensions.isEmpty()) {
       LOGGER.debug("No dimensions to expand, returning single empty combination");
       return Collections.singletonList(Collections.<String, String>emptyMap());
@@ -223,7 +244,55 @@ public class DimensionIterator {
     // without risking an invalid date (2026-11-31) or leaking a day into the next month's fetch.
     injectMonthEnd(combinations);
 
+    // Opt-in companion: several publishers address a per-year file by its last two digits (IRS
+    // SOI's {YY}zpallagi.csv and the SSA and county-migration files alongside it). Plain {var}
+    // substitution cannot slice a string, so without this the URL is inexpressible in YAML and has
+    // to be assembled inside a data provider -- which leaves the declared source URL pointing at
+    // something that does not exist, and any freshness probe reading that URL probes a 404 page
+    // whose Last-Modified is the time of the request, so the gate reports "changed" every run.
+    if (requestedCompanions != null && requestedCompanions.contains("year_short")) {
+      injectYearShort(combinations);
+    }
+
     return combinations;
+  }
+
+  /**
+   * Injects {@code year_short} = the last two digits of the combination's year ({@code
+   * effective_year} when present, else {@code year}), zero-padded, e.g. {@code "07"} for 2007.
+   * A derived companion like {@link #injectMonthEnd}, not a cartesian axis.
+   *
+   * <p>Years below 100 and non-numeric years are left alone rather than guessed at, so the
+   * placeholder stays unresolved and the failure is visible instead of silently fetching a
+   * different year than the one requested.
+   */
+  private static void injectYearShort(List<Map<String, String>> combinations) {
+    for (Map<String, String> combo : combinations) {
+      String yearVal = combo.containsKey("effective_year")
+          ? combo.get("effective_year") : combo.get("year");
+      if (yearVal == null) {
+        continue;
+      }
+      try {
+        int year = Integer.parseInt(yearVal.trim());
+        if (year < 100) {
+          continue;
+        }
+        combo.put("year_short", twoDigit(year));
+        // Some files are addressed by the year pair they span rather than a single year -- IRS
+        // SOI's migration files are countyoutflow{YY-1}{YY}.csv -- so the prior year's two digits
+        // are needed alongside the current one to name the file at all.
+        combo.put("year_short_prev", twoDigit(year - 1));
+      } catch (NumberFormatException e) {
+        // Non-numeric year; leave the placeholder unresolved rather than inventing a value.
+      }
+    }
+  }
+
+  /** Last two digits of a year, zero-padded ({@code 2007 -> "07"}). */
+  private static String twoDigit(int year) {
+    int yy = ((year % 100) + 100) % 100;
+    return yy < 10 ? "0" + yy : String.valueOf(yy);
   }
 
   /**
