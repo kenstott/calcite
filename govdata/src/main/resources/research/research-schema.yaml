@@ -586,6 +586,12 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
+      # A hash gate drops this unit's entry before fetching, so the cache never hides a change
+      # from it. What the cache does buy is the second read: the gate drains the fetch once to
+      # hash it and the write re-reads it, which is two downloads per run without an entry to
+      # read back.
+      rawCache:
+        enabled: true
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfHerdTransformer"
 

@@ -615,6 +615,11 @@ partitionedTables:
       response:
         format: json  # ignored: RmaSummaryOfBusinessTransformer streams the zip itself
 
+      # Safe to cache: the year dimension advances, so a new crop year is a new key. A changed
+      # Last-Modified drops the entry before the refetch, so the 5-year lookback still sees a
+      # reissue rather than replaying what the probe just called stale.
+      rawCache:
+        enabled: true
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.ag.RmaSummaryOfBusinessTransformer"
 

@@ -6726,6 +6726,10 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
+      # Safe to cache: the year dimension advances, so a new year is a new key, and a year once
+      # fetched is historical trade data that does not change.
+      rawCache:
+        enabled: true
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.ComtradeTransformer"
     materialize:
@@ -6967,6 +6971,9 @@ partitionedTables:
       # One DataWeb year query returns the full HTS-8 x country grid. Pin to 1 so
       # only one year is resident at a time.
       parallel: 1
+      # Safe to cache: the year dimension advances, so a new year is a new key.
+      rawCache:
+        enabled: true
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.UsitcTariffsTransformer"
     materialize:
