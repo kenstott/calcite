@@ -218,4 +218,48 @@ public class StorageRawCacheTest {
     assertEquals("rows",
         caching.fetch(config(true), batch("2024"), cache).next().get("body"));
   }
+
+  /**
+   * Several URLs within one batch each get their own entry. The IRS business master file is four
+   * regional shards fetched for a single combination; a per-batch entry would have them overwrite
+   * one another and then serve whichever landed last as though it were all four.
+   */
+  @Test void severalUrlsInOneBatchDoNotCollide(@TempDir Path tmp) throws Exception {
+    StorageProvider sp = new LocalFileStorageProvider();
+    String base = tmp.resolve("raw").toString() + "/shards";
+    RawCache cache = StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false);
+
+    String[] names = {"eo1.csv", "eo2.csv", "eo3.csv", "eo4.csv"};
+    for (int i = 0; i < names.length; i++) {
+      File shard = tmp.resolve(names[i]).toFile();
+      Files.write(shard.toPath(), ("shard" + i).getBytes(StandardCharsets.UTF_8));
+      drain(cache.openStream(shard.toURI().toString()));
+    }
+    for (int i = 0; i < names.length; i++) {
+      File shard = tmp.resolve(names[i]).toFile();
+      assertTrue(shard.delete(), "originals removed so reads must come from the cache");
+      assertEquals("shard" + i,
+          new String(drain(cache.openStream(shard.toURI().toString())), StandardCharsets.UTF_8),
+          names[i] + " must still hold its own bytes");
+    }
+  }
+
+  /** Two URLs sharing a basename are still distinct entries. */
+  @Test void sameFilenameUnderDifferentPathsStaysDistinct(@TempDir Path tmp) throws Exception {
+    StorageProvider sp = new LocalFileStorageProvider();
+    Path a = tmp.resolve("y2024");
+    Path b = tmp.resolve("y2025");
+    Files.createDirectories(a);
+    Files.createDirectories(b);
+    Files.write(a.resolve("data.csv"), "AAAA".getBytes(StandardCharsets.UTF_8));
+    Files.write(b.resolve("data.csv"), "BBBB".getBytes(StandardCharsets.UTF_8));
+
+    RawCache cache = StorageRawCache.forBatch(config(true), batch("2024"), sp,
+        tmp.resolve("raw").toString() + "/shards", false);
+    drain(cache.openStream(a.resolve("data.csv").toUri().toString()));
+
+    assertEquals("BBBB", new String(
+        drain(cache.openStream(b.resolve("data.csv").toUri().toString())),
+        StandardCharsets.UTF_8), "a shared basename must not serve the other file's bytes");
+  }
 }
