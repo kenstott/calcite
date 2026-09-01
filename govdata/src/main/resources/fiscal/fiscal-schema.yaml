@@ -8,7 +8,7 @@
 #
 # Data sources (all free, no key):
 #   - IRS SOI ZIP-code income        — {YY}zpallagi.csv    (declarative: columns[].expression)
-#   - IRS SOI county income          — {YY}incyallagi.csv  (SoiCountyProvider)
+#   - IRS SOI county income          — {YY}incyallagi.csv  (declarative: columns[].expression)
 #   - IRS SOI county migration       — countyoutflow{YYZZ}.csv (SoiMigrationProvider)
 #   - IRS EO Business Master File    — eo1..eo4.csv        (IrsEoBmfProvider)
 #   - IRS Form 990 e-file XML        — index_{YEAR}.csv + TEOS zips (Irs990Provider)
@@ -429,56 +429,71 @@ partitionedTables:
 
     columns:
       - <<: *state_fips_column
+        expression: 'LPAD(CAST(src."STATEFIPS" AS VARCHAR), 2, ''0'')'
       - <<: *state_abbr_column
+        expression: 'src."STATE"'
       - <<: *county_fips_column
+        expression: 'LPAD(CAST(src."STATEFIPS" AS VARCHAR), 2, ''0'') || LPAD(CAST(src."COUNTYFIPS" AS VARCHAR), 3, ''0'')'
         nullable: false
       - name: county_name
         type: string
         nullable: true
+        expression: 'src."COUNTYNAME"'
         comment: County name (000 rows carry the state name)
       - name: agi_bracket
         type: string
         nullable: false
+        expression: 'CAST(src."agi_stub" AS VARCHAR)'
         comment: SOI AGI size class (agi_stub 1-6)
       - name: num_returns
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."N1" AS BIGINT)'
         comment: Number of returns (N1)
       - name: num_individuals
         type: long
         nullable: true
+        expression: 'TRY_CAST(src."N2" AS BIGINT)'
         comment: Number of individuals / exemptions (N2)
       - name: adjusted_gross_income
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00100" AS DOUBLE)'
         comment: Adjusted gross income, $1000s (A00100)
       - name: total_income_amount
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A02650" AS DOUBLE)'
         comment: Total income, $1000s (A02650)
       - name: salaries_wages
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00200" AS DOUBLE)'
         comment: Salaries and wages amount, $1000s (A00200)
       - name: business_net_income
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A00900" AS DOUBLE)'
         comment: Business/professional net income, $1000s (A00900)
       - name: net_capital_gain
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A01000" AS DOUBLE)'
         comment: Net capital gain amount, $1000s (A01000)
       - name: taxable_income
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A04800" AS DOUBLE)'
         comment: Taxable income, $1000s (A04800)
       - name: total_income_tax
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A06500" AS DOUBLE)'
         comment: Total income tax, $1000s (A06500)
       - name: total_tax_liability
         type: double
         nullable: true
+        expression: 'TRY_CAST(src."A10300" AS DOUBLE)'
         comment: Total tax liability, $1000s (A10300)
 
     source:
@@ -492,10 +507,7 @@ partitionedTables:
         retryOn: [429, 500, 503]
         maxRetries: 3
       rawCache:
-        enabled: false
-
-    hooks:
-      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SoiCountyProvider"
+        enabled: true
 
     materialize:
       format: iceberg
