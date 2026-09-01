@@ -20,7 +20,11 @@ import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,15 +40,21 @@ import java.util.regex.Pattern;
  * published "Changes in Basic Minimum Wages in Non-Farm Employment Under State Law"
  * table (selected years, 1968 to present).
  *
- * <p>Live URL confirmed via the Wayback Machine's CDX index (crawled through at least
- * January 2025, most recently at capture timestamp 20250114103314): {@code
- * https://www.dol.gov/agencies/whd/state/minimum-wage/history}. dol.gov 403s every
- * direct fetch attempted from this build environment — even the bare domain root, which
- * points to a domain-wide Akamai edge block rather than a per-path bot rule — the same
- * failure mode already solved in this schema for {@code ssa_benefits_by_geography}
- * ({@link SsaBenefitsProvider}). This provider follows that precedent: it never
- * contacts dol.gov directly, fetching the page instead via
- * {@link FiscalHttp#fetchViaWayback}.
+ * <p>Fetched live from {@code https://www.dol.gov/agencies/whd/state/minimum-wage/history},
+ * with {@link FiscalHttp#fetchViaWayback} kept as a fallback.
+ *
+ * <p>The direct fetch has to send its own User-Agent rather than the shared
+ * {@link FiscalHttp#USER_AGENT}. dol.gov sits behind an Akamai rule that rejects a browser
+ * masquerade: the shared agent begins {@code Mozilla/5.0 (Windows NT ...)} and is answered 403,
+ * while a plain self-identifying agent is answered 200 and serves the real page. Measured both
+ * ways against the live host. That is the same inversion seen on wonder.cdc.gov, and the opposite
+ * of download.bls.gov, which wants a self-identifying agent and rejects a blank one — so the agent
+ * belongs to the source, not to the client, and cannot be made uniform.
+ *
+ * <p>This is why the page was previously read only through a Wayback capture: with the shared
+ * agent every direct attempt did 403, which reads as a domain-wide block rather than a rule about
+ * how the client introduces itself. Reading a capture also meant the table carried whatever the
+ * archive last crawled rather than what DOL currently publishes.
  *
  * <p>Page structure (verified against the 2025-01-14 Wayback capture): six {@code
  * <table class="minwage">} elements, one per "selected years" span (1968-1981,
@@ -93,10 +103,46 @@ public class StateMinWageTransformer implements DataProvider {
 
   private static final Map<String, String> STATE_NAME_TO_FIPS = buildStateFipsMap();
 
+  /** Plain, self-identifying agent: dol.gov's Akamai rule rejects the shared browser-style one. */
+  private static final String DOL_USER_AGENT = "govdata-etl/1.0 (+https://github.com/kenstott/calcite)";
+
+  /** Reads the live page, falling back to a Wayback capture if the direct fetch fails. */
+  private byte[] fetchPage() throws IOException {
+    try {
+      HttpURLConnection conn = (HttpURLConnection) URI.create(DOL_URL).toURL().openConnection();
+      conn.setRequestProperty("User-Agent", DOL_USER_AGENT);
+      conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*");
+      conn.setConnectTimeout(30000);
+      conn.setReadTimeout(120000);
+      conn.setInstanceFollowRedirects(true);
+      int code = conn.getResponseCode();
+      if (code < 200 || code >= 300) {
+        throw new IOException("state_minimum_wage_history: HTTP " + code + " for " + DOL_URL);
+      }
+      ByteArrayOutputStream buf = new ByteArrayOutputStream();
+      try (InputStream in = conn.getInputStream()) {
+        byte[] chunk = new byte[1 << 16];
+        int n;
+        while ((n = in.read(chunk)) != -1) {
+          buf.write(chunk, 0, n);
+        }
+      } finally {
+        conn.disconnect();
+      }
+      return buf.toByteArray();
+    // fallback-guard: the live page is preferred because a capture carries whatever the archive
+    // last crawled; falling back to Wayback keeps the table working if the direct route is blocked
+    // again, and the reason is logged rather than swallowed.
+    } catch (IOException e) {
+      LOGGER.warn("state_minimum_wage_history: direct fetch of {} failed ({}), falling back to "
+          + "the Wayback capture", DOL_URL, e.getMessage());
+      return FiscalHttp.fetchViaWayback(DOL_URL);
+    }
+  }
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
-    byte[] bytes = FiscalHttp.fetchViaWayback(DOL_URL);
-    String html = new String(bytes, StandardCharsets.UTF_8);
+    String html = new String(fetchPage(), StandardCharsets.UTF_8);
 
     Document doc = Jsoup.parse(html);
     Elements tables = doc.select("table.minwage");
