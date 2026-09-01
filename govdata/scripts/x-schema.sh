@@ -59,4 +59,11 @@ fi
 : "${CALCITE_TRACKER_PG_URL:?CALCITE_TRACKER_PG_URL not set -- required to reach vc_staging}"
 
 echo "[x-schema] sweeping every registered source into vc_staging (jar: $JAR)"
-exec java -cp "$JAR" org.apache.calcite.adapter.govdata.ref.ChunkOrganizer
+java -cp "$JAR" org.apache.calcite.adapter.govdata.ref.ChunkOrganizer
+if [ $? -ne 0 ]; then
+  echo "ERROR: ChunkOrganizer failed" >&2
+  exit 1
+fi
+
+echo "[x-schema] building entity bridges across all schemas (jar: $JAR)"
+exec java -cp "$JAR" org.apache.calcite.adapter.govdata.ref.EntityBridgeOrganizer

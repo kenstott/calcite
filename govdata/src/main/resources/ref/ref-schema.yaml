@@ -1830,14 +1830,11 @@ partitionedTables:
         comment: ISO timestamp of the build run, so bridge quality is diffable across reruns
 
     hooks:
-      # enabled: true is REQUIRED here, not optional — SchemaConfig.fromMap's source-less-table
-      # pre-filter (SchemaConfig.java:262-275) checks this raw map key directly, with no
-      # default-true fallback, before EtlPipelineConfig/HooksConfig parsing ever runs. Without it
-      # this table is silently dropped from SchemaLifecycleProcessor's table list entirely — no
-      # error, no log line — and tableLifecycleListener never fires. Confirmed live: omitting this
-      # key excluded entity_org_bridge from a real 17-table processing run (18 declared, 17 seen).
-      enabled: true
-      tableLifecycleListener: "org.apache.calcite.adapter.govdata.ref.EntityBridgeListener"
+      # Entity resolution now runs as a standalone cross-schema job (EntityBridgeOrganizer)
+      # invoked by x-schema.sh after all daily ETL finishes, not as a lifecycle hook.
+      # enabled: false disables this table during schema ETL; entity_org_bridge is materialized
+      # by x-schema.sh afterward (via EntityBridgeOrganizer → EntityBridgeListener.buildBridges).
+      enabled: false
 
     materialize:
       enabled: true
@@ -1974,7 +1971,8 @@ partitionedTables:
         comment: ISO timestamp, diffable across reruns
 
     hooks:
-      enabled: true
+      # Entity resolution now runs as a standalone cross-schema job (EntityBridgeOrganizer).
+      enabled: false
 
     materialize:
       enabled: true

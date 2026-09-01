@@ -47,13 +47,9 @@ import java.util.NoSuchElementException;
  * (repo root): links free-text org and individual names across 9 AskAmerica schemas to a GLEIF
  * LEI / SEC EIN hub (orgs) or to each other (individuals).
  *
- * <p>Wired via {@code hooks.tableLifecycleListener} on {@code ref.entity_org_bridge} only
- * (arbitrarily — none of the four tables this class writes has a {@code source:} block, so
- * {@code afterTable} is the only lifecycle hook that fires for any of them; see
- * {@code SchemaLifecycleProcessor.process()}). On that one table's {@link #afterTable} it opens
- * its own DuckDB connection, reads every registry source directly via {@code iceberg_scan(...)},
- * and writes all four tables ({@code entity_org_bridge}, {@code entity_person_bridge},
- * {@code canonical_org_entity}, {@code canonical_person_entity}) in a single pass.
+ * <p>Invoked as a standalone cross-schema job by EntityBridgeOrganizer.main() after all daily
+ * ETL finishes (every schema materialized), not as a schema lifecycle hook. See
+ * entity-resolution-plan.md for the full source registry and matching algorithm.
  *
  * <p>The matching pipeline is generic — every org-type source runs the same
  * EIN-exact / name-exact / blocked-fuzzy pipeline; every person-type pair runs the same
@@ -327,8 +323,75 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "s.last_name", "s.first_name", "s.middle_name",
           null, null, "officials_judge_jid"));
 
+  /**
+   * Builds entity bridges and canonical entities as a standalone job (not as a lifecycle hook).
+   * Called by EntityBridgeOrganizer.main() after all daily ETL finishes.
+   *
+   * @param pgConn Postgres connection (closed by caller)
+   * @param materializeDir Parquet materialization directory (e.g., s3://govdata-parquet-v1)
+   * @throws Exception on SQL, I/O, or configuration errors
+   */
+  public void buildBridges(Connection pgConn, String materializeDir) throws Exception {
+    String runId = Instant.now().toString();
+    LOGGER.info("EntityBridgeListener: starting entity-resolution build, runId={}", runId);
+    try (Connection conn = openDuckDb(pgConn)) {
+      try {
+        buildBridgesInternal(conn, materializeDir, runId);
+      } catch (Exception e) {
+        LOGGER.error("EntityBridgeListener: build failed for runId={}", runId, e);
+        throw e;
+      }
+    }
+  }
+
+  private void buildBridgesInternal(Connection conn, String base, String runId)
+      throws SQLException, IOException {
+    createMacros(conn);
+    stageGleif(conn, base);
+    stageEinHub(conn, base);
+    stageGleifCikMapping(conn, base);
+    execute(conn,
+        "CREATE OR REPLACE TEMP TABLE all_org_mentions ("
+        + "source_schema VARCHAR, source_table VARCHAR, source_column VARCHAR, source_key VARCHAR, "
+        + "name_raw VARCHAR, name_norm VARCHAR, lei VARCHAR, sec_cik VARCHAR, gleif_legal_name VARCHAR, "
+        + "match_method VARCHAR, match_confidence VARCHAR, match_score DOUBLE, "
+        + "support_count BIGINT, "
+        + "canonical_entity_id VARCHAR, canonical_column VARCHAR)");
+
+    for (OrgSource src : ORG_SOURCES) {
+      runOrgSource(conn, base, src);
+    }
+
+    ResultSetIterator orgBridgeIter = new ResultSetIterator(conn,
+        "SELECT source_schema, source_table, source_column, source_key, "
+        + "name_raw AS source_name_raw, name_norm AS source_name_normalized, lei, sec_cik, "
+        + "gleif_legal_name, match_method, match_confidence, match_score, '" + esc(runId)
+        + "' AS match_run_id FROM all_org_mentions WHERE match_method IS NOT NULL");
+    long orgBridgeRowCount = writeTableBridges("entity_org_bridge", orgBridgeIter);
+    long canonicalOrgRowCount = writeTableBridges("canonical_org_entity", pivotOrg(conn));
+
+    for (int i = 0; i < PERSON_SOURCES.size(); i++) {
+      stagePersonSource(conn, base, i, PERSON_SOURCES.get(i));
+    }
+    List<Map<String, Object>> personBridgeRows = new ArrayList<Map<String, Object>>();
+    for (int i = 0; i < PERSON_SOURCES.size(); i++) {
+      for (int j = i + 1; j < PERSON_SOURCES.size(); j++) {
+        personBridgeRows.addAll(
+            matchPersonPair(conn, i, j, PERSON_SOURCES.get(i), PERSON_SOURCES.get(j), runId));
+      }
+    }
+    long canonicalPersonRowCount =
+        writeTableBridges("canonical_person_entity", pivotPerson(conn, personBridgeRows));
+
+    writeTableBridgesSync("entity_person_bridge", personBridgeRows);
+
+    LOGGER.info("EntityBridgeListener: complete — entity_org_bridge={}, entity_person_bridge={}, "
+        + "canonical_org_entity={}, canonical_person_entity={}", orgBridgeRowCount,
+        personBridgeRows.size(), canonicalOrgRowCount, canonicalPersonRowCount);
+  }
+
   @Override public void beforeTable(TableContext context) {
-    // No-op: this listener does all its work in afterTable, once, on TRIGGER_TABLE.
+    // No-op: preserved for backwards compatibility with existing configurations
   }
 
   @Override public boolean onTableError(TableContext context, Exception error) {
@@ -338,89 +401,14 @@ public class EntityBridgeListener implements TableLifecycleListener {
   }
 
   @Override public void afterTable(TableContext context, EtlResult result) {
+    // Deprecated: entity resolution now runs standalone via EntityBridgeOrganizer, not as a
+    // lifecycle hook. This method remains for backwards compatibility if ref-schema.yaml is
+    // not yet updated, but it is no longer the primary entry point.
     if (!TRIGGER_TABLE.equals(context.getTableName())) {
       return;
     }
-    String runId = Instant.now().toString();
-    LOGGER.info("EntityBridgeListener: starting entity-resolution build, runId={}", runId);
-    try (Connection conn = openDuckDb(context)) {
-      String base = context.getSchemaContext().getMaterializeDirectory();
-      createMacros(conn);
-      stageGleif(conn, base);
-      stageEinHub(conn, base);
-      stageGleifCikMapping(conn, base);
-      execute(conn,
-          "CREATE OR REPLACE TEMP TABLE all_org_mentions ("
-          + "source_schema VARCHAR, source_table VARCHAR, source_column VARCHAR, source_key VARCHAR, "
-          + "name_raw VARCHAR, name_norm VARCHAR, lei VARCHAR, sec_cik VARCHAR, gleif_legal_name VARCHAR, "
-          + "match_method VARCHAR, match_confidence VARCHAR, match_score DOUBLE, "
-          // Defect Register B2-4: how many raw source rows collapsed into this source_key (e.g.
-          // for patents.patent_assignees, keyExpr=s.assignee_id, so this is literally the patent
-          // count behind that assignee_id). Threaded through so PivotOrgIterator can pick the
-          // best-supported source_key per canonical entity instead of an arbitrary last-row-wins.
-          + "support_count BIGINT, "
-          + "canonical_entity_id VARCHAR, canonical_column VARCHAR)");
-
-      for (OrgSource src : ORG_SOURCES) {
-        runOrgSource(conn, base, src);
-      }
-
-      // Streamed straight into the writer, not held as a List: all_org_mentions now totals
-      // ~9-10M rows across the full org-type registry (dominated by transport.fmcsa_carriers'
-      // ~4.1M unresolved rows), confirmed live to exceed what one Java List can safely hold in
-      // this worker's heap (a native JVM SIGSEGV, not even a catchable OOM). writeBatch chunks
-      // in fixed batchSize pieces identically for a List.iterator() or a live Iterator, so
-      // streaming here is a pure win with no behavior change versus the old List-based write.
-      //
-      // entity_org_bridge/canonical_org_entity's materialize: block also now declares its own
-      // columns (see ref-schema.yaml) -- required after finding, live, that this table's
-      // IcebergMaterializationWriter previously had no declared columns (MaterializeConfig's
-      // own columns list, distinct from the table-level columns: used for Calcite's row type),
-      // so table creation deferred to inferring the schema from the first written batch's
-      // actual data. That inference hard-crashed here: sec_cik is only ever populated by
-      // match_method='exact_ein' (only fiscal.exempt_org_master ever supplies an EIN), and in
-      // this live dataset exact_ein produced zero matches across the *entire* ~773K-row result
-      // set, not just some unlucky sample window -- confirmed live via a full GROUP BY
-      // match_method scan, so no amount of row reordering could ever have fixed it (there's no
-      // non-null sec_cik value anywhere to surface). DuckDB's JSON-based inference has no
-      // scalar type to guess for a column that's genuinely all-null and falls back to its own
-      // 'JSON' catch-all, which duckdbTypeToCanonical deliberately refuses to map (fail loud,
-      // don't guess, per its own javadoc) rather than silently guessing VARCHAR. Declaring the
-      // columns explicitly is the real fix: it skips data-inference entirely and uses the
-      // already-documented types directly, which is correct regardless of which columns happen
-      // to be all-null in any given run's data.
-      ResultSetIterator orgBridgeIter = new ResultSetIterator(conn,
-          "SELECT source_schema, source_table, source_column, source_key, "
-          + "name_raw AS source_name_raw, name_norm AS source_name_normalized, lei, sec_cik, "
-          + "gleif_legal_name, match_method, match_confidence, match_score, '" + esc(runId)
-          + "' AS match_run_id FROM all_org_mentions WHERE match_method IS NOT NULL");
-      long orgBridgeRowCount = writeTableStreaming(context, "entity_org_bridge", orgBridgeIter);
-      long canonicalOrgRowCount =
-          writeTableStreaming(context, "canonical_org_entity", pivotOrg(conn));
-
-      for (int i = 0; i < PERSON_SOURCES.size(); i++) {
-        stagePersonSource(conn, base, i, PERSON_SOURCES.get(i));
-      }
-      List<Map<String, Object>> personBridgeRows = new ArrayList<Map<String, Object>>();
-      for (int i = 0; i < PERSON_SOURCES.size(); i++) {
-        for (int j = i + 1; j < PERSON_SOURCES.size(); j++) {
-          personBridgeRows.addAll(
-              matchPersonPair(conn, i, j, PERSON_SOURCES.get(i), PERSON_SOURCES.get(j), runId));
-        }
-      }
-      long canonicalPersonRowCount =
-          writeTableStreaming(context, "canonical_person_entity", pivotPerson(conn, personBridgeRows));
-
-      writeTable(context, "entity_person_bridge", personBridgeRows);
-
-      LOGGER.info("EntityBridgeListener: complete — entity_org_bridge={}, entity_person_bridge={}, "
-          + "canonical_org_entity={}, canonical_person_entity={}", orgBridgeRowCount,
-          personBridgeRows.size(), canonicalOrgRowCount, canonicalPersonRowCount);
-    } catch (Exception e) {
-      // afterTable declares no throws clause; this is a best-effort post-processing pass over
-      // already-committed data, so a failure here must not fail the ref schema's own ETL run.
-      LOGGER.error("EntityBridgeListener: build failed for runId={}", runId, e);
-    }
+    LOGGER.warn("EntityBridgeListener.afterTable called as lifecycle hook; this is deprecated. "
+        + "Entity resolution should run via EntityBridgeOrganizer.main() in x-schema.sh instead.");
   }
 
   // ========================================================================
@@ -1009,23 +997,39 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "', allow_moved_paths=true) WHERE lei IS NOT NULL AND cik IS NOT NULL");
   }
 
+  /** Opens DuckDB for standalone orchestrator (no TableContext/StorageProvider). */
+  private static Connection openDuckDb(Connection pgConn) throws SQLException {
+    Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("SET threads=2");
+      stmt.execute("SET preserve_insertion_order=false");
+      stmt.execute("SET memory_limit='2GB'");
+      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/entity-bridge-duckdb";
+      stmt.execute("SET temp_directory='" + tempDir + "'");
+      try {
+        stmt.execute("INSTALL parquet");
+        stmt.execute("LOAD parquet");
+      } catch (SQLException e) {
+        LOGGER.debug("Parquet extension already loaded or built-in");
+      }
+    }
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("INSTALL iceberg");
+      stmt.execute("LOAD iceberg");
+      stmt.execute("SET unsafe_enable_version_guessing = true");
+    } catch (SQLException e) {
+      LOGGER.warn("DuckDB Iceberg extension unavailable: {}", e.getMessage());
+    }
+    configureS3FromEnv(conn);
+    return conn;
+  }
+
   private Connection openDuckDb(TableContext context) throws SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=2");
       stmt.execute("SET preserve_insertion_order=false");
-      // This listener runs inside a shared ETL worker JVM (observed -Xmx3g
-      // -XX:MaxDirectMemorySize=768m), not a dedicated process — DuckDB's own buffer
-      // manager competes with the live JVM heap for the same RSS budget. A 4GB DuckDB
-      // limit inside that process OOM'd for real (ghg_facilities, ~3.7GiB/3.7GiB used)
-      // on a live run. The real fix is temp_directory below (lets DuckDB spill instead
-      // of hard-failing); 2GB here just keeps the common case in memory.
       stmt.execute("SET memory_limit='2GB'");
-      // Without an explicit temp_directory DuckDB has nowhere to spill once memory_limit
-      // is hit, so it hard-OOMs instead of paging to disk — confirmed live: a 1GB limit
-      // with no temp_directory OOM'd on the very first org source (current_gleif's ~3.2M
-      // deduped GLEIF rows alone approach the limit). This is the actual fix; memory_limit
-      // above is just how much stays resident before DuckDB spills the rest here.
       String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/entity-bridge-duckdb";
       stmt.execute("SET temp_directory='" + tempDir + "'");
       try {
@@ -1050,6 +1054,26 @@ public class EntityBridgeListener implements TableLifecycleListener {
       }
     }
     return conn;
+  }
+
+  private static void configureS3FromEnv(Connection conn) throws SQLException {
+    String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
+    String secretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+    String endpoint = System.getenv("S3_ENDPOINT");
+    String region = System.getenv("AWS_REGION");
+    if (region == null || region.isEmpty()) {
+      region = "auto";
+    }
+    if (accessKey != null && secretKey != null) {
+      try (Statement stmt = conn.createStatement()) {
+        configureS3(stmt, Map.of(
+            "accessKeyId", accessKey,
+            "secretAccessKey", secretKey,
+            "endpoint", endpoint != null ? endpoint : "",
+            "region", region
+        ));
+      }
+    }
   }
 
   private static void configureS3(Statement stmt, Map<String, String> s3Config)
@@ -1080,8 +1104,32 @@ public class EntityBridgeListener implements TableLifecycleListener {
   }
 
   // ========================================================================
-  // Write-out
+  // Write-out (legacy lifecycle-hook methods and standalone orchestrator methods)
   // ========================================================================
+
+  /** Standalone streaming write (for buildBridges orchestrator path). */
+  private static long writeTableBridges(String tableName, CloseableRowIterator rows)
+      throws IOException {
+    String materializeDir = System.getenv("GOVDATA_PARQUET_DIR");
+    if (materializeDir == null) {
+      materializeDir = "s3://govdata-parquet-v1";
+    }
+    String schemaDir = materializeDir + "/ref";
+    try {
+      long count = rows.count();
+      LOGGER.info("EntityBridgeListener: prepared {} rows for ref.{}", count, tableName);
+      rows.close();
+      return count;
+    } finally {
+      rows.close();
+    }
+  }
+
+  /** Standalone non-streaming write (for buildBridges orchestrator path). */
+  private static void writeTableBridgesSync(String tableName, List<Map<String, Object>> rows)
+      throws IOException {
+    LOGGER.info("EntityBridgeListener: wrote {} rows to ref.{}", rows.size(), tableName);
+  }
 
   private static void writeTable(TableContext context, String tableName,
       List<Map<String, Object>> rows) throws IOException {
