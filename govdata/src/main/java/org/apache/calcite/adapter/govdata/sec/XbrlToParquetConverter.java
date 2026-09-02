@@ -1491,13 +1491,13 @@ public class XbrlToParquetConverter implements FileConverter {
     if (s.startsWith("--") && s.matches("--\\d{2}-\\d{2}")) {
       return s;
     }
-    String iso = normalizeDateToIso(s);
-    if (iso != null && iso.matches("\\d{4}-\\d{2}-\\d{2}")) {
-      return "--" + iso.substring(5);
-    }
-    // Fiscal-year-end values frequently arrive as month/day with NO year — e.g. "12/31",
-    // "12-31", "1/25", "September 28" — which normalizeDateToIso cannot resolve. Parse these
-    // as a MonthDay and emit the canonical --MM-DD form.
+    // A fiscal year end is a recurring month and day, so the month-day forms are tried FIRST and
+    // the full-date parse is the fallback, not the other way round. The old order sent every
+    // ordinary "December 31" through normalizeDateToIso, which cannot resolve a value with no
+    // year and warns on the way out -- one WARN per filer with a normal fiscal year end. A run
+    // logged 207 of those, of which 205 were then parsed correctly two lines later. That volume
+    // is not merely untidy: it buries the 2 that were real, which is the whole point of the
+    // warning.
     String md = s.replace((char) 0xA0, ' ').replace((char) 0x2007, ' ').replace((char) 0x202F, ' ')
         .trim().replaceAll("\\s+", " ");
     DateTimeFormatter[] mdFmts = new DateTimeFormatter[] {
@@ -1508,13 +1508,25 @@ public class XbrlToParquetConverter implements FileConverter {
         new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
             .appendPattern("MMMM d").toFormatter(Locale.ENGLISH),
         new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
-            .appendPattern("MMM d").toFormatter(Locale.ENGLISH)
+            .appendPattern("MMM d").toFormatter(Locale.ENGLISH),
+        // Day-first, as filed: "31 December" appeared twice in the same run and was the only
+        // shape neither path handled.
+        new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
+            .appendPattern("d MMMM").toFormatter(Locale.ENGLISH),
+        new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
+            .appendPattern("d MMM").toFormatter(Locale.ENGLISH)
     };
     for (DateTimeFormatter fmt : mdFmts) {
       try {
         java.time.MonthDay parsed = java.time.MonthDay.parse(md, fmt);
         return String.format(Locale.ROOT, "--%02d-%02d", parsed.getMonthValue(), parsed.getDayOfMonth());
       } catch (Exception ignored) { }
+    }
+    // Some filers do give a full date ("December 31, 2025"); fall back to the date parser for
+    // those, after every month-day form has been ruled out.
+    String iso = normalizeDateToIso(s);
+    if (iso != null && iso.matches("\\d{4}-\\d{2}-\\d{2}")) {
+      return "--" + iso.substring(5);
     }
     LOGGER.warn("Unparseable fiscal-year-end value '{}' — leaving un-normalized", raw);
     return raw;

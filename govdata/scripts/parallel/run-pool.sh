@@ -709,7 +709,17 @@ fill_pool() {
 
     queue_idx=$scan_idx
     # If this job had requeue metadata, it's now launching successfully — decrement requeue_count
+    # and drop the marker from the queue entry itself. The scan above strips it from its own
+    # local copy, but the launch reads the raw queue entry, so without this the marker is passed
+    # through as part of the slot: worker.sh splits on the first colon and receives the year as
+    # "2026:_rejected_until_1788338231", which it rejects with "mode must be daily|historical
+    # (DQ) or a 4-digit year|current (prod)". That made a requeue a guaranteed later failure --
+    # sec_secondary-2026 and sec_13f-2026 were held behind a 604-minute sec_primary-2026, then
+    # failed the instant they were finally launched. sec_prices survived the same path only
+    # because "daily:_rejected_until_..." still matched the daily branch, which is luck of the
+    # argument shape rather than correctness.
     if [[ "${queue[$queue_idx]}" =~ :_rejected_until_ ]]; then
+      queue[$queue_idx]="${queue[$queue_idx]%%:_rejected_until_*}"
       ((requeue_count--)) || true
     fi
     launch_worker "${queue[$queue_idx]}" || true
