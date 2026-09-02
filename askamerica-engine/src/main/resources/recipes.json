@@ -579,7 +579,19 @@
         "invest or cut taxes",
         "did it make a difference",
         "outcome measures",
-        "no effect on growth"
+        "no effect on growth",
+        "disparities",
+        "health disparities",
+        "outcomes differ",
+        "how much do outcomes differ",
+        "gap over time",
+        "group gap",
+        "rural urban",
+        "urban rural",
+        "how big is the gap",
+        "disparities trend",
+        "gap between groups",
+        "differ between"
       ],
       "body": "When a question asks whether some policy or characteristic produced better results, it usually names or implies MORE THAN ONE outcome — income growth, cost-of-living-adjusted wages, migration, employment. The plausible-but-wrong shortcut is to pick the single most obvious outcome, find no relationship, and report a null as if it settled the question. It does not. The same predictor can be flat against one outcome and strongly related to another, and the outcome you skipped may be the one carrying the actual answer.\n\nMeasured directly in this harness (q7, 2026-09-02, a question about whether states did better for household incomes by investing or by keeping taxes low). One run tested state tax burden and a public-investment index against real median household income growth alone, found r=0.05 (p=0.71) and r=-0.10 (p=0.49), and correctly reported a rigorous null. A second run on the identical question tested the same levers against THREE outcomes and found near-zero against income growth (r=0.05 tax rank, r=-0.08 education spend) but STRONGLY negative against net domestic migration (r=-0.51 and r=-0.61). Low-tax states had not grown incomes faster; they had gained PEOPLE. The single-outcome run's null was correct for what it tested and was not the answer to the question asked.\n\nFIX: before reporting that a predictor has no relationship, enumerate the outcome measures the question names or plainly implies, and test the predictor against each one. In this warehouse that typically means census.income_summary or census.acs1_income for income level and growth, econ.regional_price_parities to re-express any dollar outcome in cost-of-living-adjusted terms (a separate question from time-inflation - see cost-of-living-adjusted-comparison), and the Census population-estimate components for net domestic migration. Report the full outcome-by-predictor grid, including the cells that came back null, rather than the single cell you tested. Where the predictor behaves differently across outcomes, THAT divergence is the finding and should lead the answer.\n\nRelated but different: check-sign-at-multiple-aggregation-grains covers varying the GRAIN of a series (a narrow industry code versus the broader category containing it). This recipe covers varying the OUTCOME VARIABLE at a fixed grain. Both are cases of one test not being the test, but they move along different axes and a question can need both."
     },
