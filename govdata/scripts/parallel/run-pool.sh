@@ -655,11 +655,9 @@ fill_pool() {
     # held behind sec_primary-2026 never ran again for the rest of the day even after
     # sec_primary-2026 finished. `break`-ing instead (stop the whole scan, matching the
     # memory-budget holds just below) avoids stranding but stalls every OTHER queued schema too,
-    # for as long as the conflict lasts — a real cost given sec's daily mode always splits into
-    # same-year sec_primary/sec_secondary/sec_13f/sec_prices slots that conflict with each other
-    # by design. Requeuing at the back gets both: this slot is guaranteed to be reattempted (it's
-    # still in the queue, `total` grows to cover it, same as a kill-and-requeue), and everything
-    # behind it keeps flowing in the meantime.
+    # for as long as the conflict lasts. Requeuing at the back gets both: this slot is guaranteed
+    # to be reattempted (it's still in the queue, `total` grows to cover it, same as a
+    # kill-and-requeue), and everything behind it keeps flowing in the meantime.
     local next_cy_start next_cy_end _conflict_msg
     read -r next_cy_start next_cy_end <<< "$(_year_range_from_mode "$next_mode")"
     if ! _conflict_msg=$(check_schema_year_conflict "$PID_DIR" "$next_schema" "$next_cy_start" "$next_cy_end" 2>&1); then

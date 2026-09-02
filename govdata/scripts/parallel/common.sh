@@ -1363,6 +1363,29 @@ _year_range_from_mode() {
   fi
 }
 
+# Usage: _schemas_write_same_tables <schema_a> <schema_b>
+# Returns 0 if two worker identities can write the same table, 1 if they are disjoint.
+#
+# The three SEC pool slots (sec_primary/sec_secondary/sec_13f) share the sec/ warehouse but
+# split the work by disjoint filingTypes, and every SEC table commits with AppendFiles. On a
+# failed compare-and-swap Iceberg refreshes and re-applies an append against the new base, so
+# two appends cannot drop each other's files; the per-table CrossProcessCommitLock already
+# serializes the commits themselves on this host. They are therefore safe to run at the same
+# time and are deliberately treated as distinct schemas here.
+#
+# A bare "sec" worker is not one of those slots -- it is an unscoped full-schema run that may
+# purge or replace partitions the slots are appending to, so it still conflicts with all of
+# them. detect_active_schemas keeps its own sec_*->sec collapse: sync-to-r2.sh asks "is anything
+# writing the sec/ path", which is a question about the warehouse, not about table conflict.
+_schemas_write_same_tables() {
+  local _a=$1 _b=$2
+  [ "$_a" = "$_b" ] && return 0
+  case "$_a:$_b" in
+    sec:sec_*|sec_*:sec) return 0 ;;
+  esac
+  return 1
+}
+
 # Usage: check_schema_year_conflict <pid_dir> <schema> <start_year> <end_year>
 # Returns 1 (and prints a message to stderr) if a live worker registered under
 # <pid_dir> already targets the same schema with an overlapping year range; 0 otherwise.
@@ -1384,10 +1407,8 @@ _year_range_from_mode() {
 # stale/PID-reused leftover and skipped, matching detect_active_schemas' existing rule.
 check_schema_year_conflict() {
   local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4
-  local _norm_schema="$_schema"
-  case "$_norm_schema" in sec_*|sec) _norm_schema=sec ;; esac
   [ -d "$_pid_dir" ] || return 0
-  local _pf _id _wpid _rest _other_schema _other_mode _other_norm _o_start _o_end
+  local _pf _id _wpid _rest _other_schema _other_mode _o_start _o_end
   for _pf in "$_pid_dir"/worker-*.pid; do
     [ -e "$_pf" ] || continue
     _id=$(basename "$_pf" .pid)
@@ -1405,9 +1426,7 @@ check_schema_year_conflict() {
     _other_schema="${_rest%%-*}"                       # up to first hyphen
     _other_mode="${_rest#*-}"                          # after first hyphen (may itself have hyphens)
     read -r _o_start _o_end <<< "$(_year_range_from_mode "$_other_mode")"
-    _other_norm="$_other_schema"
-    case "$_other_norm" in sec_*|sec) _other_norm=sec ;; esac
-    [ "$_other_norm" = "$_norm_schema" ] || continue
+    _schemas_write_same_tables "$_other_schema" "$_schema" || continue
     if (( _o_start <= _new_end && _new_start <= _o_end )); then
       echo "REFUSING: schema '${_schema}' years ${_new_start}-${_new_end} overlaps" \
            "already-running worker '${_id}' (pid ${_wpid}, years ${_o_start}-${_o_end})" \
