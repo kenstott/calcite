@@ -481,6 +481,15 @@ public class HttpSource implements DataSource {
           return streamFromRawCache(rawCacheFilePath, url, params, variables,
               (PerRecordResponseTransformer) responseTransformer);
         }
+        // A paginated JSON source's cache holds the merged {"results":[...]} envelope, not any
+        // upstream body. With no transformer to extract the records itself, parseResponse would
+        // see that envelope as one object and emit a single row whose every source column is
+        // null — so stream the envelope's array instead.
+        if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.JSON
+            && responseTransformer == null
+            && respConfig.getPagination().getType() != HttpSourceConfig.PaginationType.NONE) {
+          return streamJsonFromRawCache(rawCacheFilePath, variables);
+        }
         // For JSON, or CSV/TSV with a responseTransformer, read into memory and transform
         String cachedResponse = readRawCache(rawCacheFilePath);
         cachedResponse = transformResponse(cachedResponse, url, params, variables);
@@ -3778,6 +3787,108 @@ public class HttpSource implements DataSource {
   }
 
   /**
+   * Opens the raw cache file and positions a parser on the first element of its record array.
+   *
+   * <p>The file is either a bare JSON array (a single unpaginated response cached verbatim) or
+   * the {@code {"results":[...]}} envelope {@link PaginatedIterator#writeMergedCache} writes to
+   * merge a paginated source's pages. Anything else is a corrupt cache and is reported as one
+   * rather than parsed into whatever it happens to resemble.
+   *
+   * @param cachePath raw cache file to read
+   * @return a parser positioned so that the next {@code START_OBJECT} is the first record
+   */
+  private JsonParser openRawCacheArray(String cachePath) throws IOException {
+    InputStream is = storageProvider.openInputStream(cachePath);
+    JsonParser parser = null;
+    try {
+      parser = OBJECT_MAPPER.getFactory().createParser(is);
+      JsonToken token = parser.nextToken();
+      if (token == JsonToken.START_OBJECT) {
+        boolean found = false;
+        while (parser.nextToken() != null) {
+          if ("results".equals(parser.currentName())
+              && parser.nextToken() == JsonToken.START_ARRAY) {
+            found = true;
+            break;
+          }
+          parser.skipChildren();
+        }
+        if (!found) {
+          throw new IOException("Malformed raw cache for " + cachePath
+              + ": no top-level 'results' array found");
+        }
+      } else if (token != JsonToken.START_ARRAY) {
+        throw new IOException("Malformed raw cache for " + cachePath
+            + ": unexpected first token " + token);
+      }
+      return parser;
+    } catch (IOException e) {
+      if (parser != null) {
+        parser.close();
+      }
+      is.close();
+      throw e;
+    }
+  }
+
+  /**
+   * Streams records straight out of the raw cache, with no transformer in the path.
+   *
+   * <p>Used for a paginated JSON source, whose cache is always the merged
+   * {@code {"results":[...]}} envelope rather than any upstream body — so {@code dataPath} has
+   * already been applied per page by {@link PaginatedIterator#accumulateRawPage} and must not be
+   * applied again here.
+   */
+  private Iterator<Map<String, Object>> streamJsonFromRawCache(
+      final String cachePath, final Map<String, String> variables) throws IOException {
+
+    final JsonParser parser = openRawCacheArray(cachePath);
+
+    LOGGER.info("Streaming JSON records from raw cache: {}", cachePath);
+
+    return new Iterator<Map<String, Object>>() {
+      private Map<String, Object> nextRow;
+      private boolean exhausted;
+
+      @Override public boolean hasNext() {
+        if (nextRow != null) {
+          return true;
+        }
+        if (exhausted) {
+          return false;
+        }
+        try {
+          if (parser.nextToken() == JsonToken.START_OBJECT) {
+            @SuppressWarnings("unchecked") Map<String, Object> row =
+                OBJECT_MAPPER.readValue(parser, Map.class);
+            nextRow = normalizeRow(row, variables);
+            return true;
+          }
+        } catch (IOException e) {
+          throw new RuntimeException("Error reading raw cache " + cachePath, e);
+        }
+        exhausted = true;
+        try {
+          parser.close();
+        } catch (IOException e) {
+          LOGGER.debug("streamJsonFromRawCache: error closing parser for {}: {}", cachePath,
+              e.getMessage());
+        }
+        return false;
+      }
+
+      @Override public Map<String, Object> next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        }
+        Map<String, Object> row = nextRow;
+        nextRow = null;
+        return row;
+      }
+    };
+  }
+
+  /**
    * Streams a JSON array from the raw cache file without loading it into a String.
    *
    * <p>Used when the transformer implements {@link PerRecordResponseTransformer}: instead of
@@ -3799,36 +3910,7 @@ public class HttpSource implements DataSource {
         .dimensionValues(variables)
         .build();
 
-    final InputStream is = storageProvider.openInputStream(cachePath);
-
-    final JsonParser parser;
-    try {
-      parser = OBJECT_MAPPER.getFactory().createParser(is);
-      JsonToken token = parser.nextToken();
-      if (token == JsonToken.START_OBJECT) {
-        boolean found = false;
-        while (parser.nextToken() != null) {
-          if ("results".equals(parser.currentName())
-              && parser.nextToken() == JsonToken.START_ARRAY) {
-            found = true;
-            break;
-          }
-          parser.skipChildren();
-        }
-        if (!found) {
-          parser.close();
-          throw new IOException("Malformed raw cache for " + cachePath
-              + ": no top-level 'results' array found");
-        }
-      } else if (token != JsonToken.START_ARRAY) {
-        parser.close();
-        throw new IOException("Malformed raw cache for " + cachePath
-            + ": unexpected first token " + token);
-      }
-    } catch (IOException e) {
-      is.close();
-      throw e;
-    }
+    final JsonParser parser = openRawCacheArray(cachePath);
 
     LOGGER.info("Streaming from raw cache: {}", cachePath);
 

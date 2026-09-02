@@ -129,15 +129,21 @@ run_all_health_tables() {
     'ahrf_physician_supply'
 }
 
-# Daily-only: the 9 CDC WONDER tables and 4 data.cdc.gov Socrata county/state tables are all
-# single raw artifacts (dimensions: type: [<name>] only — no year axis), refreshed in place and
-# gated by freshness: type: hash. There is nothing for a historical run to backfill — running
-# them there would just re-pull the same current snapshot daily already handles, redundantly
-# (and, for the WONDER group, burn through its 15s-per-request budget for no new data). Same
-# rationale as cyber_threat being daily-only in worker-cyber.sh.
+# Daily-only: the 9 CDC WONDER tables, the 4 data.cdc.gov Socrata county/state tables and the
+# County Health Rankings annual file are all single raw artifacts (dimensions: type: [<name>]
+# only — no year axis), refreshed in place and gated by freshness. There is nothing for a
+# historical run to backfill — running them there would just re-pull the same current snapshot
+# daily already handles, redundantly (and, for the WONDER group, burn through its
+# 15s-per-request budget for no new data). Same rationale as cyber_threat being daily-only in
+# worker-cyber.sh.
 run_daily_only_health_tables() {
   run_health_model "health-cdc-geo" \
     'cdc_county_overdose_deaths,cdc_county_injury_mortality,cdc_state_vital_provisional,cdc_teen_birth_rates_county'
+
+  # County Health Rankings' 13MB annual CSV, isolated so its one long download cannot stall the
+  # Socrata group above.
+  run_health_model "health-chr" \
+    'chr_premature_death'
 
   # CDC WONDER XML API tables — isolated from health-cdc-geo because WONDER enforces a strict
   # 15-second minimum between requests (HTTP 429 otherwise), unlike data.cdc.gov Socrata.

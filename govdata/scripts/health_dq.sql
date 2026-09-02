@@ -425,13 +425,234 @@ SELECT 'health', 'chr_premature_death', 'T7_county_count',
 FROM (SELECT COUNT(DISTINCT fips_code) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true) WHERE geo_level = 'county');
 
 -- T7: premature_death_rate plausibility (YPLL per 100k; national historical range is roughly
--- 4,000-12,000, county extremes can run higher — bound loosely, not tightly)
+-- 4,000-12,000, county extremes run far higher — bound loosely, not tightly). The upper bound
+-- clears the real maximum in the 2025 release, 46,418 for Buffalo County SD (verified against
+-- the source CSV): the South Dakota tribal-land counties legitimately sit near 40,000-46,000,
+-- so a tighter ceiling warns on correct data every run.
 INSERT INTO dq_results
 SELECT 'health', 'chr_premature_death', 'T7_rate_plausible',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'premature_death_rate outside plausible [500, 40000] YPLL-per-100k range'
+  bad, 0, 'premature_death_rate outside plausible [500, 60000] YPLL-per-100k range'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death', allow_moved_paths := true)
-      WHERE premature_death_rate IS NOT NULL AND (premature_death_rate < 500 OR premature_death_rate > 40000));
+      WHERE premature_death_rate IS NOT NULL AND (premature_death_rate < 500 OR premature_death_rate > 60000));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_state_vital_provisional (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_vital_provisional', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_vital_provisional', allow_moved_paths := true));
+
+-- T2: row_count (1,980 upstream at 2026-09-02: state x year x month x 3 indicators)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_vital_provisional', 'T2_row_count',
+  CASE WHEN n >= 1900 THEN 'pass' ELSE 'fail' END,
+  n, 1900, 'Expected ~1,980 rows (jurisdiction x month x indicator)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_vital_provisional', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_vital_provisional', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_vital_provisional', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_vital_provisional', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_vital_provisional', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL state, year, month or indicator'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_vital_provisional', allow_moved_paths := true)
+      WHERE state IS NULL OR year IS NULL OR month IS NULL OR indicator IS NULL);
+
+-- T7: indicator domain
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_vital_provisional', 'T7_indicator_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'indicator outside (Number of Live Births, Number of Deaths, Number of Infant Deaths)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_vital_provisional', allow_moved_paths := true)
+      WHERE indicator NOT IN ('Number of Live Births', 'Number of Deaths', 'Number of Infant Deaths'));
+
+-- T7: jurisdiction coverage (50 states + DC + territories + the UNITED STATES total row)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_vital_provisional', 'T7_state_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Distinct state values'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_vital_provisional', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_county_overdose_deaths (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_overdose_deaths', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true));
+
+-- T2: row_count (226,368 upstream at 2026-09-02; grows monthly)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_overdose_deaths', 'T2_row_count',
+  CASE WHEN n >= 200000 THEN 'pass' ELSE 'fail' END,
+  n, 200000, 'Expected ~226,000+ rows (county x 12-month-ending period)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_overdose_deaths', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      -- footnote is populated only on suppressed rows, so it is legitimately sparse but not
+      -- fully null; type is the constant discriminator
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_overdose_deaths', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL fips, year or month'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true)
+      WHERE fips IS NULL OR year IS NULL OR month IS NULL);
+
+-- T7: county coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_overdose_deaths', 'T7_county_coverage',
+  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END,
+  n, 2000, 'Distinct county fips values'
+FROM (SELECT COUNT(DISTINCT fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_county_injury_mortality (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_injury_mortality', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true));
+
+-- T2: row_count (132,000 upstream at 2026-09-02)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_injury_mortality', 'T2_row_count',
+  CASE WHEN n >= 120000 THEN 'pass' ELSE 'fail' END,
+  n, 120000, 'Expected ~132,000 rows (county x intent x period)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_injury_mortality', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_injury_mortality', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL geoid, intent or period'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true)
+      WHERE geoid IS NULL OR intent IS NULL OR period IS NULL);
+
+-- T7: county coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_county_injury_mortality', 'T7_county_coverage',
+  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END,
+  n, 2000, 'Distinct county geoid values'
+FROM (SELECT COUNT(DISTINCT geoid) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_teen_birth_rates_county (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_teen_birth_rates_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_teen_birth_rates_county', allow_moved_paths := true));
+
+-- T2: row_count (56,466 upstream at 2026-09-02: county x year)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_teen_birth_rates_county', 'T2_row_count',
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
+  n, 50000, 'Expected ~56,000 rows (county x year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_teen_birth_rates_county', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_teen_birth_rates_county', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_teen_birth_rates_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_teen_birth_rates_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_teen_birth_rates_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL combined_fips_code or year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_teen_birth_rates_county', allow_moved_paths := true)
+      WHERE combined_fips_code IS NULL OR year IS NULL);
+
+-- T7: county coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_teen_birth_rates_county', 'T7_county_coverage',
+  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END,
+  n, 2000, 'Distinct county combined_fips_code values'
+FROM (SELECT COUNT(DISTINCT combined_fips_code) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_teen_birth_rates_county', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: fda_adverse_events
