@@ -254,7 +254,7 @@ partitionedTables:
       distinctYears: 31
       contiguous: true
       rowCount: 1996591
-      checkedAt: "2026-09-01T22:31:24Z"
+      checkedAt: "2026-09-02T22:33:27Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats field-crop statistics — production, area planted, area
@@ -353,7 +353,7 @@ partitionedTables:
       distinctYears: 31
       contiguous: true
       rowCount: 2138884
-      checkedAt: "2026-09-01T22:31:25Z"
+      checkedAt: "2026-09-02T22:33:28Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats livestock and poultry inventory head counts by county and
@@ -447,7 +447,7 @@ partitionedTables:
       distinctYears: 31
       contiguous: true
       rowCount: 3798354
-      checkedAt: "2026-09-01T22:31:28Z"
+      checkedAt: "2026-09-02T22:33:31Z"
     partitions: *nass_partitions
     comment: >
       USDA RMA Summary of Business — crop insurance experience by state, county,
@@ -657,7 +657,7 @@ partitionedTables:
       distinctYears: 117
       contiguous: true
       rowCount: 460534
-      checkedAt: "2026-09-01T22:31:30Z"
+      checkedAt: "2026-09-02T22:33:32Z"
     partitions: *nass_partitions
     comment: >
       USDA ERS Farm Income and Wealth Statistics by state and US total: cash
@@ -783,7 +783,7 @@ partitionedTables:
       contiguous: false
       years: [2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
       rowCount: 942472
-      checkedAt: "2026-09-01T22:31:31Z"
+      checkedAt: "2026-09-02T22:33:34Z"
     partitions: *nass_partitions
     comment: >
       USDA FSA program and conservation payments aggregated by county, program,
@@ -898,7 +898,7 @@ partitionedTables:
       distinctYears: 28
       contiguous: true
       rowCount: 9562214
-      checkedAt: "2026-09-01T22:31:33Z"
+      checkedAt: "2026-09-02T22:33:35Z"
     partitions: *nass_partitions
     comment: >
       USGS NAWQA Pesticide National Synthesis Project estimated annual agricultural
