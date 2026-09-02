@@ -163,7 +163,7 @@ if [[ ( "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" || "$SCHEMA" == "sec_pri
   exit 1
 fi
 
-PG_NS="$(pg_ns_from_bucket "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}")" || exit 2
+PG_NS="$(pg_ns_for_schema "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}" "$SCHEMA")" || exit 2
 
 echo "=================================================="
 echo "force-reprocess.sh"

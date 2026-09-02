@@ -25,6 +25,42 @@ pg_ns_from_bucket() {
   echo "$raw"
 }
 
+# Resolves the PG tracker schema for one govdata schema, given the parquet bucket.
+#
+# PGPipelineTracker derives its namespace from the `directory` operand the worker passes, NOT
+# from the bucket — and worker-health.sh / worker-lands.sh pass "${GOVDATA_PARQUET_DIR}/health"
+# and ".../lands", so their tracker rows live in govdata_parquet_v1_health /
+# govdata_parquet_v1_lands while every other schema shares govdata_parquet_v1. A caller that
+# derives the namespace from the bucket alone therefore reads an EMPTY schema for those two —
+# which is how force-reprocess.sh's post-run check reported "as_of did NOT advance (before=0
+# after=0)" for four health tables that had in fact just been reprocessed correctly.
+#
+# Resolution is by which namespace actually holds a pipeline_tracker, preferring the
+# schema-suffixed one, so this tracks however the worker is configured instead of restating the
+# worker's directory logic here. Neither present is an error, never a silent empty result.
+pg_ns_for_schema() {
+  local bucket="$1" schema="$2" base suffixed
+  base="$(pg_ns_from_bucket "$bucket")" || return 1
+  if [[ -z "$schema" ]]; then
+    echo "$base"
+    return 0
+  fi
+  suffixed="${base}_${schema}"
+  local exists
+  exists=$(pg_tracker_exec "SELECT to_regclass('\"${suffixed}\".pipeline_tracker') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')
+  if [[ "$exists" == "t" ]]; then
+    echo "$suffixed"
+    return 0
+  fi
+  exists=$(pg_tracker_exec "SELECT to_regclass('\"${base}\".pipeline_tracker') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')
+  if [[ "$exists" == "t" ]]; then
+    echo "$base"
+    return 0
+  fi
+  echo "ERROR: no pipeline_tracker found in PG schema '${suffixed}' or '${base}' for govdata schema '${schema}'" >&2
+  return 1
+}
+
 # Runs SQL against the tracker database. Connection comes from the same variables the workers
 # use, so the script and the ETL can never disagree about which tracker they are talking to.
 pg_tracker_exec() {

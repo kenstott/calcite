@@ -126,7 +126,7 @@ fi
 # Postgres is the canonical record of ETL state; there is no second copy to keep in step.
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/tracker_pg.sh"
-PG_NS="$(pg_ns_from_bucket "$PARQUET_BUCKET")" || exit 2
+PG_NS="$(pg_ns_for_schema "$PARQUET_BUCKET" "$SCHEMA")" || exit 2
 echo "Tracker schema: ${PG_NS}"
 
 s3_to_rclone() {

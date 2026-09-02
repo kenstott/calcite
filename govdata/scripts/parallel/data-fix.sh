@@ -131,7 +131,7 @@ fi
 # this work regardless of whether the table has a freshness gate.
 # shellcheck source=/dev/null
 source "$(dirname "$SCRIPT_DIR")/tracker_pg.sh"
-PG_NS="$(pg_ns_from_bucket "$GOVDATA_PARQUET_DIR")" || exit 2
+PG_NS="$(pg_ns_for_schema "$GOVDATA_PARQUET_DIR" "$SCHEMA")" || exit 2
 log_info "data-fix: tracker schema ${PG_NS}"
 
 DRY_RUN_STR=$($DRY_RUN && echo true || echo false)
