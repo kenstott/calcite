@@ -740,6 +740,7 @@ public class McpServer {
             + "- Every analytical result carries a second content block: a structured "
             + "'diagnostics' envelope — typed warnings (small_n, low_coverage, row_fanout, "
             + "grain_mismatch, vintage_misalignment, broken_field, uncontrolled_confound, "
+            + "recipe_not_consulted, "
             + "collinear_controls) each with severity info/caution/high, plus grain, "
             + "observation count, and the tables' declared coverage windows. Read it before "
             + "answering and let it set how hard you hedge — a 'high' warning generally means "
@@ -829,7 +830,11 @@ public class McpServer {
             "limit", prop("integer", "Max matches to return (default 40, max 200)."));
         tools.add(
             tool("search_catalog",
-            "Search the full data catalog by keyword to discover which schemas, tables, and "
+            "**MANDATORY: call find_recipe before your first query whenever the question "
+            + "compares across places, compares across years, averages or trends a rate, "
+            + "computes a share/ratio/index, ranks anything, or attributes a trend to a "
+            + "cause.** Call it before you decide you already know the method.\n\n"
+            + "Search the full data catalog by keyword to discover which schemas, tables, and "
             + "columns are relevant — each match includes its description. Call this FIRST when "
             + "you don't already know the exact table, then confirm with describe_table. "
             + "Returns {matches: [...]} plus, when the query also matches a keyless public "
@@ -912,10 +917,15 @@ public class McpServer {
             "Max rows to return (default 500, max 5000)."));
         tools.add(
             tool("query",
-            "Execute SQL against US government data. Returns a JSON array of row objects, "
+            "**MANDATORY: if this is the first query of a multi-step comparison — across "
+            + "places, across years, a rate, a share/ratio/index, a ranking, or a causal "
+            + "claim — call find_recipe first and read what it returns.** An empty result "
+            + "means uncovered, not approved.\n\n"
+            + "Execute SQL against US government data. Returns a JSON array of row objects, "
             + "plus a second content block holding a structured 'diagnostics' envelope — typed "
             + "warnings (small_n, low_coverage, row_fanout, grain_mismatch, "
-            + "vintage_misalignment, broken_field, uncontrolled_confound) with a severity of "
+            + "vintage_misalignment, broken_field, uncontrolled_confound, recipe_not_consulted) "
+            + "with a severity of "
             + "info/caution/high, the grain, the observation count, and the declared coverage "
             + "windows of the tables involved. Read it before answering: a 'high' warning "
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
@@ -2237,6 +2247,7 @@ public class McpServer {
                         : 40;
                     log.println("[askamerica-mcp] tool=search_catalog query=" + q);
                     text = searchCatalog(q, lim);
+                    diagnostics = recipeReminderDiagnostics();
                     break;
                 }
                 case "list_tables": {
@@ -2263,6 +2274,7 @@ public class McpServer {
                     ArrayNode rows = query(sql, limit);
                     text = rows.toString();
                     diagnostics = diagnose(sql, rows, limit);
+                    addRecipeNotice(diagnostics, sql);
                     break;
                 }
                 case "critique_query": {
@@ -2308,6 +2320,7 @@ public class McpServer {
                         ? Math.min(Math.max(1, args.get("limit").asInt()), 20)
                         : 5;
                     log.println("[askamerica-mcp] tool=find_recipe topic=" + topic);
+                    RECIPE_CONSULTED.set(true);
                     text = RecipeCatalog.find(topic, lim);
                     break;
                 }
@@ -4041,6 +4054,24 @@ public class McpServer {
      * from deep inside the execution path back out to the response the caller reads.
      */
     private static final ThreadLocal<String> LAST_REPAIR_NOTICE = new ThreadLocal<>();
+
+    /**
+     * Whether find_recipe has been called at any point in this server process.
+     *
+     * <p>The stdio server is one process per client session, so process lifetime IS session
+     * lifetime and a static flag is the correct scope — no per-request state to thread through.
+     *
+     * <p>Why this exists: the "call find_recipe before any multi-step comparison" mandate was
+     * carried first in the initialize.instructions banner (which this file's own comment at the
+     * usage-guide tools notes is silently unreachable on some hosts) and then, additionally, at
+     * the front of the search_catalog and query tool descriptions. Measured over five real runs
+     * on multi-step comparison questions, find_recipe was reached in ONE. Both text channels were
+     * verified as served and front-loaded; neither produced the call. A returned diagnostic is
+     * the channel that has actually changed a run's next query in this corpus, so the mandate is
+     * moved onto it here rather than restated in prose a third time.
+     */
+    private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_CONSULTED =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
      * Eval-only delivery channel for a client with no filesystem of its own.
@@ -7105,6 +7136,134 @@ public class McpServer {
         w.put("severity", "info");
         w.put("note", notice);
         warnings.add(w);
+    }
+
+    /**
+     * Whether this SQL has the shape the find_recipe mandate names — a multi-step comparison
+     * rather than a lookup.
+     *
+     * <p>Deliberately conservative. A warning that fires on every trivial SELECT becomes
+     * wallpaper and stops being read, which is the failure mode that makes an always-on notice
+     * worse than none. Three shapes qualify, all of which mean the caller is aggregating or
+     * relating rather than fetching:
+     *
+     * <ul>
+     *   <li>GROUP BY — any grouping is a comparison across the grouped dimension.
+     *   <li>a JOIN between two DIFFERENT schemas — a cross-domain join.
+     *   <li>an aggregate together with ORDER BY — a ranking.
+     * </ul>
+     *
+     * <p>A plain filtered SELECT, a describe-style probe, or a single-row lookup does not fire.
+     */
+    private static boolean isMultiStepShape(String sql) {
+        if (sql == null) {
+            return false;
+        }
+        String s = sql.toUpperCase(java.util.Locale.ROOT);
+        if (s.contains("GROUP BY")) {
+            return true;
+        }
+        boolean hasAggregate = s.contains("SUM(") || s.contains("AVG(")
+            || s.contains("COUNT(") || s.contains("MIN(") || s.contains("MAX(")
+            || s.contains("STDDEV") || s.contains("CORR(");
+        if (hasAggregate && s.contains("ORDER BY")) {
+            return true;
+        }
+        if (s.contains("JOIN")) {
+            // Two distinct schema qualifiers in the statement means the join crosses domains.
+            java.util.Set<String> schemas = new java.util.HashSet<>();
+            java.util.regex.Matcher m = SCHEMA_QUALIFIER.matcher(s);
+            while (m.find()) {
+                schemas.add(m.group(1));
+                if (schemas.size() > 1) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Matches a {@code schema.table} qualifier in an uppercased statement. */
+    private static final java.util.regex.Pattern SCHEMA_QUALIFIER =
+        java.util.regex.Pattern.compile("\\b(SEC|GEO|ECON|CENSUS|CRIME|WEATHER|FEC|REF"
+            + "|FEDREGISTER|OFFICIALS|CYBER_VULN|CYBER_THREAT|ENERGY|HEALTH|EDU"
+            + "|ECON_REFERENCE|PATENTS|LANDS|DISASTERS|HOUSING|CFTC|AG|TRANSPORT"
+            + "|ENVIRONMENT|FISCAL)\\.[A-Z_][A-Z_0-9]*");
+
+    /**
+     * Append the find_recipe notice when a multi-step query runs before the catalog was consulted.
+     *
+     * <p>Fires on every qualifying query until find_recipe is called, not once. That is
+     * deliberate and it is not the noise case: the caller can silence it permanently with a
+     * single call, so its persistence is an incentive rather than wallpaper. Severity is 'high'
+     * because the query tool's own description tells the reader a high warning usually means
+     * re-query rather than caveat, which is exactly the action wanted here.
+     */
+    private static void addRecipeNotice(ObjectNode diagnostics, String sql) {
+        if (diagnostics == null || RECIPE_CONSULTED.get() || !isMultiStepShape(sql)) {
+            return;
+        }
+        ObjectNode inner = diagnostics.get("diagnostics") instanceof ObjectNode
+            ? (ObjectNode) diagnostics.get("diagnostics")
+            : diagnostics;
+        ArrayNode warnings = inner.get("warnings") instanceof ArrayNode
+            ? (ArrayNode) inner.get("warnings")
+            : inner.putArray("warnings");
+        ObjectNode w = MAPPER.createObjectNode();
+        w.put("type", "recipe_not_consulted");
+        w.put("severity", "high");
+        w.put("note", "This query aggregates, ranks, or joins across schemas, and find_recipe "
+            + "has not been called in this session. Call find_recipe now with a plain-words "
+            + "topic for what you are computing, read what it returns, and re-run this query if "
+            + "the recipe names a different method. An empty result means the catalog does not "
+            + "cover this yet, not that the plan is sound. This warning repeats on every "
+            + "aggregate query until find_recipe is called once.");
+        warnings.add(w);
+    }
+
+    /** Fires the recipe reminder at most once per session, on the first search_catalog. */
+    private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_REMINDED =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * A standalone diagnostics envelope reminding the caller to consult the recipe catalog.
+     *
+     * <p>Attached to search_catalog rather than only to query because query is not the
+     * chokepoint. Measured across six real runs, search_catalog was called in EVERY one (2-3
+     * times each) while query ranged from 0 to 20 — and the single run that most needed a recipe
+     * was the one that issued no SQL at all, abandoning the warehouse for web sources, so a
+     * query-attached notice could never have reached it. search_catalog is where a run orients
+     * itself, before it has decided on a method.
+     *
+     * <p>Fires ONCE per session, not on every call. There is no SQL to shape-detect at this
+     * point, so the notice cannot be targeted the way the query-side one is; an untargeted
+     * warning repeated on every catalog search is exactly the wallpaper that gets ignored. One
+     * message, at the moment the run is choosing its approach, is the most this channel can
+     * carry honestly. The repeating, shape-targeted notice on query remains the backstop for
+     * runs that do reach SQL.
+     *
+     * @return the envelope, or null when already reminded or find_recipe was already called
+     */
+    private static ObjectNode recipeReminderDiagnostics() {
+        if (RECIPE_CONSULTED.get() || !RECIPE_REMINDED.compareAndSet(false, true)) {
+            return null;
+        }
+        ObjectNode envelope = MAPPER.createObjectNode();
+        ObjectNode inner = envelope.putObject("diagnostics");
+        ArrayNode warnings = inner.putArray("warnings");
+        ObjectNode w = MAPPER.createObjectNode();
+        w.put("type", "recipe_not_consulted");
+        w.put("severity", "high");
+        w.put("note", "find_recipe has not been called in this session. If this question "
+            + "compares across places or years, averages or trends a rate, computes a "
+            + "share/ratio/index, ranks anything, or attributes a trend to a cause, call "
+            + "find_recipe now — before choosing a method, not after. It returns the tool "
+            + "sequence, the formula, and the plausible-but-wrong shortcut a real run was "
+            + "already caught taking. An empty result means the catalog does not cover this "
+            + "yet, not that the plan is sound.");
+        warnings.add(w);
+        inner.put("basis", "Session state: no find_recipe call has been seen on this connection.");
+        return envelope;
     }
 
     /** {@link #diagnose} for the stats tools, which measure their own n and covariates. */
