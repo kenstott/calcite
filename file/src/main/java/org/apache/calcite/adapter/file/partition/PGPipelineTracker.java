@@ -596,6 +596,56 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     return false;
   }
 
+  /**
+   * Phase for per-period completion markers. Distinct from {@code incremental} (per fetch combo)
+   * so the two never collide on the {@code (source_key, table_name, phase)} key: a period marker
+   * and a combo marker for the same table legitimately coexist and mean different things.
+   */
+  private static final String PHASE_PERIOD = "period_completion";
+
+  /**
+   * Records that every combo of {@code periodValues}' period has been processed.
+   *
+   * <p>Without an implementation here the interface default applies, and it is a no-op documented
+   * for "non-persistent trackers" -- which this is not. Inheriting it meant nothing was ever
+   * written, {@link #isPeriodComplete} could only ever answer false, and both features built on
+   * that answer went silently inert: the per-period skip never fired, and a lookback asking which
+   * periods have been published was always told "none", so it reopened nothing on any table.
+   *
+   * @param pipelineName the pipeline name
+   * @param periodValues the dimension combination carrying the period slots
+   */
+  @Override public void markPeriodComplete(String pipelineName, Map<String, String> periodValues) {
+    upsertState(IncrementalTracker.periodCompletionKey(pipelineName, periodValues),
+        pipelineName, PHASE_PERIOD, "complete", -1, null, null, null);
+  }
+
+  /**
+   * Whether the given period was previously recorded complete.
+   *
+   * @param pipelineName the pipeline name
+   * @param periodValues the dimension combination carrying the period slots
+   * @return whether a complete marker exists for that period
+   */
+  @Override public boolean isPeriodComplete(String pipelineName, Map<String, String> periodValues) {
+    return isComplete(IncrementalTracker.periodCompletionKey(pipelineName, periodValues),
+        pipelineName, PHASE_PERIOD);
+  }
+
+  /**
+   * Clears a period's completion marker so the period is reprocessed.
+   *
+   * <p>Written as a non-complete state rather than deleted, so the row's history stays visible
+   * and the write goes through the same upsert path as every other state change.
+   *
+   * @param pipelineName the pipeline name
+   * @param periodValues the dimension combination carrying the period slots
+   */
+  @Override public void invalidatePeriod(String pipelineName, Map<String, String> periodValues) {
+    upsertState(IncrementalTracker.periodCompletionKey(pipelineName, periodValues),
+        pipelineName, PHASE_PERIOD, "invalidated", -1, null, null, null);
+  }
+
   @Override public void markProcessed(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern) {
     markProcessedWithRowCount(alternateName, sourceTable, keyValues, targetPattern, -1);
