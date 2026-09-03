@@ -58,10 +58,15 @@ class EiaFossilFuelTransformerTest {
         + "\"series\":\"NA1160_SAR_2\",\"series-description\":\"Arkansas Dry Natural Gas Production\","
         + "\"value\":\"34439\",\"units\":\"MMCF\"}]";
 
+    // Each endpoint's payload goes through transform() on its own, then the two outputs are
+    // concatenated — the union happens across fetches, so what matters here is that each row
+    // carries the fuel_type its own product-name implies rather than one inherited from the
+    // fetch it arrived in.
     EiaFossilFuelTransformer transformer = new EiaFossilFuelTransformer();
+    RequestContext ctx = RequestContext.builder().url("https://api.eia.gov/v2/test").build();
     ArrayNode result = M.createArrayNode();
-    transformer.appendRows(M.readTree(crude), result, "crude oil");
-    transformer.appendRows(M.readTree(gas), result, "natural gas");
+    result.addAll((ArrayNode) M.readTree(transformer.transform(crude, ctx)));
+    result.addAll((ArrayNode) M.readTree(transformer.transform(gas, ctx)));
 
     assertEquals(2, result.size());
 

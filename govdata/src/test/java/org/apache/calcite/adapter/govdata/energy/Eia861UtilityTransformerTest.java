@@ -23,6 +23,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,8 +71,14 @@ class Eia861UtilityTransformerTest {
       data.createCell(7).setCellValue(80.2);
       data.createCell(8).setCellValue(5000.0);
 
+      // parseOperationalData is an internal step of the zip-parsing path, so reach it
+      // reflectively rather than widening production visibility for the test's benefit.
+      Method m = Eia861UtilityTransformer.class.getDeclaredMethod(
+          "parseOperationalData", org.apache.poi.ss.usermodel.Workbook.class, int.class);
+      m.setAccessible(true);
+      @SuppressWarnings("unchecked")
       Map<String, Map<String, Double>> result =
-          new Eia861UtilityTransformer().parseOperationalData(wb, 2022);
+          (Map<String, Map<String, Double>>) m.invoke(new Eia861UtilityTransformer(), wb, 2022);
 
       assertTrue(result.containsKey("12341"), "expected utility 12341 in operational lookup");
       Map<String, Double> row = result.get("12341");

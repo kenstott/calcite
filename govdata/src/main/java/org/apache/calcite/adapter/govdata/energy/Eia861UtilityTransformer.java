@@ -341,18 +341,26 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
 
   private Map<String, Map<String, Double>> parseOperationalData(Workbook wb, int year) {
     Map<String, Map<String, Double>> result = new HashMap<>();
+    // The Operational_Data_<year>.xlsx archive carries its rows on a sheet named "States" (with
+    // a sibling "Territories"), not one named after the workbook — the same shape parseSalesSheet
+    // already falls back to. Matching only on "operational" finds no sheet at all, which leaves
+    // summer_peak_demand_mw, winter_peak_demand_mw and net_generation_mwh null for every utility.
     Sheet sheet = wb.getSheet("Operational_Data");
+    if (sheet == null) {
+      sheet = wb.getSheet("States");
+    }
     if (sheet == null) {
       for (int i = 0; i < wb.getNumberOfSheets(); i++) {
         String name = wb.getSheetName(i).toLowerCase();
-        if (name.contains("operational")) {
+        if (name.contains("operational") || name.equals("states") || name.equals("territories")) {
           sheet = wb.getSheetAt(i);
           break;
         }
       }
     }
     if (sheet == null) {
-      LOGGER.warn("EIA-861: Operational_Data sheet not found for year {}", year);
+      LOGGER.warn("EIA-861: operational sheet not found for year {} "
+          + "(tried Operational_Data, States, Territories)", year);
       return result;
     }
 
@@ -595,12 +603,20 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
       return combined;
     }
 
-    Row firstRow = sheet.getRow(0);
-    if (firstRow == null) {
+    // Width spans the whole header block, not row 0 alone. Row 0 carries only the sector labels
+    // and is routinely narrower than the row naming the fields (and is empty outright in some
+    // archives), so sizing from it drops every column past its last cell — the columns go
+    // unmapped and their measures land null for every row.
+    int maxCols = 0;
+    for (int r = 0; r < numHeaderRows; r++) {
+      Row hrow = sheet.getRow(r);
+      if (hrow != null) {
+        maxCols = Math.max(maxCols, hrow.getLastCellNum());
+      }
+    }
+    if (maxCols <= 0) {
       return combined;
     }
-
-    int maxCols = firstRow.getLastCellNum();
 
     // Build effective cell value map accounting for merged regions.
     // POI only stores the value in the top-left cell of a merge; all other
