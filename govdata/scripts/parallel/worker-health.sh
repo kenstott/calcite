@@ -103,30 +103,29 @@ ENDJSON
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
-# Run the 18 pre-existing health tables, grouped so a single model failure isolates to its
-# group. Called from both historical and daily — same rationale as every other group here
-# already: each table self-manages its own cadence via freshness:/releaseWindow:.
+# Groups are declared as data, not as a sequence of calls, so the coverage check below can read
+# the exact membership this script assigns without a second list to drift out of step. Grouping
+# itself stays hand-curated because it encodes real constraints — failure isolation, and the
+# per-source rate limits noted on the daily-only groups — that the schema does not express.
+#
+# Each entry is "<model name>|<comma-separated tables>".
+ALL_MODE_GROUPS=(
+  "health-fda|fda_ndc_products,fda_drug_approvals,fda_drug_recalls,fda_adverse_events,fda_device_recalls,fda_drug_shortages"
+  "health-who|who_gho_indicators"
+  "health-trials|clinical_trials,clinical_trial_conditions,clinical_trial_interventions"
+  "health-cdc|cdc_covid_vaccinations,cdc_mortality,cdc_brfss"
+  "health-cms-medicaid|cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home"
+  "health-rxnorm|rxnorm_drugs"
+  "health-hrsa|ahrf_physician_supply"
+)
+
+# Run the grouped health tables. Called from both historical and daily — same rationale as every
+# other group here already: each table self-manages its own cadence via freshness:/releaseWindow:.
 run_all_health_tables() {
-  run_health_model "health-fda" \
-    'fda_ndc_products,fda_drug_approvals,fda_drug_recalls,fda_adverse_events,fda_device_recalls'
-
-  run_health_model "health-who" \
-    'who_gho_indicators'
-
-  run_health_model "health-trials" \
-    'clinical_trials,clinical_trial_conditions,clinical_trial_interventions'
-
-  run_health_model "health-cdc" \
-    'cdc_covid_vaccinations,cdc_mortality,cdc_brfss'
-
-  run_health_model "health-cms-medicaid" \
-    'cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home'
-
-  run_health_model "health-rxnorm" \
-    'rxnorm_drugs'
-
-  run_health_model "health-hrsa" \
-    'ahrf_physician_supply'
+  local entry
+  for entry in "${ALL_MODE_GROUPS[@]}"; do
+    run_health_model "${entry%%|*}" "${entry#*|}"
+  done
 }
 
 # Daily-only: the 9 CDC WONDER tables, the 4 data.cdc.gov Socrata county/state tables and the
@@ -136,19 +135,59 @@ run_all_health_tables() {
 # daily already handles, redundantly (and, for the WONDER group, burn through its
 # 15s-per-request budget for no new data). Same rationale as cyber_threat being daily-only in
 # worker-cyber.sh.
-run_daily_only_health_tables() {
-  run_health_model "health-cdc-geo" \
-    'cdc_county_overdose_deaths,cdc_county_injury_mortality,cdc_state_vital_provisional,cdc_teen_birth_rates_county'
-
+DAILY_ONLY_GROUPS=(
+  "health-cdc-geo|cdc_county_overdose_deaths,cdc_county_injury_mortality,cdc_state_vital_provisional,cdc_teen_birth_rates_county"
   # County Health Rankings' 13MB annual CSV, isolated so its one long download cannot stall the
   # Socrata group above.
-  run_health_model "health-chr" \
-    'chr_premature_death'
-
+  "health-chr|chr_premature_death"
   # CDC WONDER XML API tables — isolated from health-cdc-geo because WONDER enforces a strict
   # 15-second minimum between requests (HTTP 429 otherwise), unlike data.cdc.gov Socrata.
-  run_health_model "health-wonder" \
-    'cdc_wonder_cancer_incidence,cdc_wonder_std_morbidity,cdc_wonder_tb,cdc_wonder_natality,cdc_wonder_cause_of_death,cdc_wonder_cause_of_death_2018_2024,cdc_wonder_multiple_cause_of_death,cdc_wonder_multiple_cause_of_death_2018_2024,cdc_wonder_vaers'
+  "health-wonder|cdc_wonder_cancer_incidence,cdc_wonder_std_morbidity,cdc_wonder_tb,cdc_wonder_natality,cdc_wonder_cause_of_death,cdc_wonder_cause_of_death_2018_2024,cdc_wonder_multiple_cause_of_death,cdc_wonder_multiple_cause_of_death_2018_2024,cdc_wonder_vaers"
+)
+
+run_daily_only_health_tables() {
+  local entry
+  for entry in "${DAILY_ONLY_GROUPS[@]}"; do
+    run_health_model "${entry%%|*}" "${entry#*|}"
+  done
+}
+
+# Catch every schema table this script does not explicitly group.
+#
+# Health names its tables by hand — grouping encodes rate limits and failure isolation the schema
+# cannot express — but that hand-maintained membership is exactly how chr_premature_death and
+# cms_nursing_home were each added to the schema, given columns and DQ checks, and then never run
+# by anything: absent from every group, the enabledTables gate scoped them out and the pool
+# reported success. Housing cannot have that bug because it derives its list from the schema.
+#
+# So membership is now checked against the schema on every launch. An ungrouped table is run
+# rather than skipped, routed by the same rule worker.sh uses for the split-aware schemas — a
+# `year` dimension means year-addressable (so it belongs to a historical backfill too), no year
+# dimension means a snapshot that only daily needs. The warning names it so it can be given a
+# proper group; running it in a catch-all is the safe default, not the intended end state.
+run_ungrouped_health_tables() {
+  local kind="$1" all_tables assigned="" entry t unassigned=""
+
+  all_tables="$(schema_tables health "$kind")" || return 1
+  for entry in "${ALL_MODE_GROUPS[@]}" "${DAILY_ONLY_GROUPS[@]}"; do
+    assigned="${assigned},${entry#*|}"
+  done
+  assigned="${assigned},"
+
+  IFS=',' read -ra _all <<< "$all_tables"
+  for t in "${_all[@]}"; do
+    t="$(echo "$t" | xargs)"
+    [ -n "$t" ] || continue
+    case "$assigned" in
+      *",${t},"*) ;;
+      *) unassigned="${unassigned}${t}," ;;
+    esac
+  done
+  unassigned="${unassigned%,}"
+
+  [ -n "$unassigned" ] || return 0
+  log_info "$WORKER_ID: WARNING — health-schema.yaml declares tables in no worker group: ${unassigned}. Running them in health-ungrouped; assign them to a group in worker-health.sh."
+  run_health_model "health-ungrouped" "$unassigned"
 }
 
 case "$MODE" in
@@ -163,12 +202,16 @@ case "$MODE" in
     export GOVDATA_UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
     export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
     run_all_health_tables
+    # Only year-addressable strays here: a snapshot table has nothing for a backfill to do, and
+    # daily picks it up below on its own pass.
+    run_ungrouped_health_tables year
     ;;
 
   daily)
     export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
     run_all_health_tables
     run_daily_only_health_tables
+    run_ungrouped_health_tables all
     ;;
 
   *)

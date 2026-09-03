@@ -1182,6 +1182,52 @@ build_inline_model() {
 # entirely, so GOVDATA_TABLES (the --tables scoping worker-dq-run.sh exports) was silently a
 # no-op for all of them: a run always covered every table in the hardcoded per-model group,
 # regardless of what --tables asked for.
+# Lists a schema's tables straight from the schema YAML bundled in the running jar, so a
+# worker can tell what it is *supposed* to cover rather than trusting a hand-maintained list.
+#
+# Usage: schema_tables <schema> [year|once|all]
+#   year — tables declaring a `year` dimension (year-addressable / backfillable)
+#   once — tables without one (snapshot / full-archive, refreshed in place)
+#   all  — every table (the default)
+# Echoes bare, comma-separated names. Fails loudly rather than echoing nothing: an empty list
+# read as "no work" is the silent-skip this exists to catch.
+schema_tables() {
+  local schema="$1" kind="${2:-all}" jar
+  jar=$(resolve_classpath) || return 1
+  python3 - "$jar" "$schema" "$kind" <<'PY'
+import subprocess, sys
+try:
+    import yaml
+except ImportError:
+    sys.stderr.write("ERROR: PyYAML required to derive the schema table list\n")
+    sys.exit(1)
+
+jar, schema, kind = sys.argv[1], sys.argv[2], sys.argv[3]
+res = subprocess.run(["unzip", "-p", jar, "%s/%s-schema.yaml" % (schema, schema)],
+                     capture_output=True)
+if res.returncode != 0 or not res.stdout:
+    sys.stderr.write("ERROR: %s/%s-schema.yaml not found in %s\n" % (schema, schema, jar))
+    sys.exit(1)
+
+doc = yaml.safe_load(res.stdout) or {}
+names = []
+for key in ("partitionedTables", "tables"):
+    for t in doc.get(key) or []:
+        name = t.get("name")
+        if not name:
+            continue
+        has_year = "year" in (t.get("dimensions") or {})
+        if kind == "all" or (has_year == (kind == "year")):
+            names.append(name)
+
+if not names:
+    sys.stderr.write("ERROR: no '%s' tables derived for schema '%s'\n" % (kind, schema))
+    sys.exit(1)
+
+print(",".join(names))
+PY
+}
+
 #
 # Usage: filtered=$(filter_enabled_tables "table1,table2,table3")
 #   Echoes a JSON-array-ready, double-quoted, comma-separated list for the group. With
