@@ -503,7 +503,9 @@ final class DashboardLayout {
                 .append("\" rx=\"6\"/>\n");
             double cy = y + h / 2;
             if (p.label != null) {
-                sb.append(text("stat-label", x + 16, cy - 18, p.label, MUTED, "start"));
+                int lsize = fittedSize(p.label, w - 32, STAT_LABEL_SIZE, STAT_LABEL_MIN);
+                sb.append(text("stat-label", x + 16, cy - 18, p.label, MUTED, "start",
+                    lsize == STAT_LABEL_SIZE ? null : "font-size:" + lsize + "px"));
             }
             if (p.value != null) {
                 int size = fittedStatSize(p.value, w - 32);
@@ -526,7 +528,8 @@ final class DashboardLayout {
             g.drawRoundRect((int) x, (int) y, (int) w, (int) h, 6, 6);
             double cy = y + h / 2;
             if (p.label != null) {
-                draw(g, p.label, x + 16, cy - 18, 12, false, MUTED);
+                draw(g, p.label, x + 16, cy - 18,
+                    fittedSize(p.label, w - 32, STAT_LABEL_SIZE, STAT_LABEL_MIN), false, MUTED);
             }
             if (p.value != null) {
                 draw(g, p.value, x + 16, cy + 12, fittedStatSize(p.value, w - 32), true, INK);
@@ -800,6 +803,22 @@ final class DashboardLayout {
      */
     /** Nominal stat-tile delta size; the CSS class and the raster path must agree on it. */
     private static final int STAT_DELTA_SIZE = 13;
+
+    /**
+     * Nominal stat-tile label size; the CSS class and the raster path must agree on it.
+     *
+     * <p>The label is the descriptive header drawn above a stat tile's value (e.g. "Cumulative
+     * fiscal balance, all levels of govt, 1994-2023 (Cato/NASEM model)") — unlike the value and
+     * delta lines above it, it was drawn at this fixed size with the tile width in scope and
+     * unused, so a label longer than its tile ran straight into the next tile's label, the same
+     * defect fixed for the value and delta lines in 2026-08-19f/h. Live report: two stat labels
+     * ("Cumulative fiscal balance..." and "CBO: federal deficit effect...") printed on the same
+     * line, one bleeding into the other's tile.
+     */
+    private static final int STAT_LABEL_SIZE = 12;
+
+    /** Smallest a stat-tile label may shrink before it is simply too long for its tile. */
+    private static final int STAT_LABEL_MIN = 8;
 
     /** Nominal header sizes; the CSS classes and the raster path must agree on them. */
     private static final int DASH_TITLE_SIZE = 20;
