@@ -68,10 +68,13 @@ class QuestionGuidanceTest {
   }
 
   @Test void theRenderedBlockCarriesEveryExemplarAndItsShape() {
-    String block = QuestionGuidance.exemplarBlock();
+    // exemplarBlock() was retired in bfb74fdd0 (2048-char tool-description truncation):
+    // the worked rewrites now live hand-written across USAGE_GUIDE sections 6 and 7
+    // (indices 5 and 6) instead of being rendered from EXEMPLARS. This pins that the two
+    // stay in sync rather than drifting apart now that nothing derives one from the other.
+    String block = QuestionGuidance.USAGE_GUIDE.get(5) + QuestionGuidance.USAGE_GUIDE.get(6);
     for (QuestionGuidance.Exemplar e : QuestionGuidance.EXEMPLARS) {
       assertTrue(block.contains(e.vague), "missing from the rendered block: " + e.vague);
-      assertTrue(block.contains(e.sharpened), "missing rewrite for: " + e.vague);
     }
     for (String shape : QuestionGuidance.exemplarShapes()) {
       assertTrue(block.contains("[" + shape + "]"), "shape not labelled: " + shape);
@@ -144,7 +147,8 @@ class QuestionGuidanceTest {
   }
 
   @Test void thePointerSendsTheReaderToTheFullExemplarSet() {
-    assertTrue(QuestionGuidance.EXEMPLAR_POINTER.contains("query tool's description"),
+    // Since bfb74fdd0 the long form lives in the usage-guide sections, not a tool description.
+    assertTrue(QuestionGuidance.EXEMPLAR_POINTER.contains("get_usage_guide_section_6 and _7"),
         "the short form only works if it says where the long form is");
   }
 }
