@@ -431,7 +431,14 @@ partitionedTables:
       office). place_geoid and mcd_geoid are populated ONLY where a real code backs them, never
       synthesised from a sentinel, so a join on either cannot silently merge distinct
       jurisdictions. Filter to jurisdiction_type='place' to compare municipalities; keep every
-      type to reconcile a state total against the county-grain table. months_reported says how
+      type to reconcile against the county-grain building_permits table — but expect an exact
+      match only for recent years. Census's place and county products do not fully agree on older
+      vintages: 2023 and 2024 reconcile to the unit, while 2009-2022 and 2025 differ by up to
+      0.8% (2013: 625,225 place units against 620,785 county). Both tables here match their own
+      source file to the row (verified against fresh downloads), so that gap is upstream, in how
+      Census aggregates and imputes at each grain — not an ingestion difference. Treat the county
+      table as authoritative for county totals and this one for within-county composition, rather
+      than expecting either to be derivable from the other. months_reported says how
       many of the year's 12 months the jurisdiction actually reported — the rest is imputed,
       which matters more here than at county grain because one small jurisdiction's silence is
       not averaged away.
