@@ -2317,7 +2317,13 @@ partitionedTables:
       - name: state_fips
         type: string
         nullable: true
-        comment: 2-digit state FIPS code, source column FIPST — FK to geo.states.state_fips
+        comment: >
+          2-digit state FIPS code — FK to geo.states.state_fips. From source column FIPST for
+          FY2022 and later; earlier files publish a narrower header with no FIPST at all, so it
+          is taken from the leading two digits of CONUM (a county FIPS is the state FIPS plus a
+          3-digit county code). Null for the handful of multi-county educational cooperatives
+          whose CONUM is the "M" not-applicable marker, and for those years PID6, UNIT_TYPE and
+          SCHLEV are null too — those columns do not exist in the pre-FY2022 file.
       - name: county_fips
         type: string
         nullable: true

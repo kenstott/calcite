@@ -111,14 +111,19 @@ public class F33DistrictFinanceProvider implements DataProvider {
       if (headerLine == null) {
         return rows;
       }
-      List<String> headers = CsvRecordReader.splitFields(headerLine, ',');
+      // The delimiter is not stable across fiscal years despite the .txt name: FY2019's file is
+      // tab-separated where its neighbours are comma-separated. Reading it with a fixed comma
+      // yields one field per line, so every column but the first parses as absent. Decide from
+      // whichever character actually separates the header's column names.
+      final char delimiter = countChar(headerLine, '\t') > countChar(headerLine, ',') ? '\t' : ',';
+      List<String> headers = CsvRecordReader.splitFields(headerLine, delimiter);
 
       String line;
       while ((line = CsvRecordReader.readRecord(reader)) != null) {
         if (line.trim().isEmpty()) {
           continue;
         }
-        List<String> values = CsvRecordReader.splitFields(line, ',');
+        List<String> values = CsvRecordReader.splitFields(line, delimiter);
         Map<String, Object> row = mapRow(headers, values, year);
         if (row != null) {
           rows.add(row);
@@ -139,8 +144,18 @@ public class F33DistrictFinanceProvider implements DataProvider {
     row.put("year", Integer.valueOf(year));
     putString(row, "pid6", col(headers, values, "PID6"));
     putString(row, "unit_type", col(headers, values, "UNIT_TYPE"));
-    putString(row, "state_fips", col(headers, values, "FIPST"));
-    putString(row, "county_fips", col(headers, values, "CONUM"));
+    String countyFips = col(headers, values, "CONUM");
+    String stateFips = col(headers, values, "FIPST");
+    if (stateFips == null && countyFips != null && countyFips.length() >= 2) {
+      // FY2021 and earlier publish a narrower header (IDCENSUS, NAME, CONUM, ...) with no FIPST
+      // column at all. A county FIPS is by construction the 2-digit state FIPS followed by the
+      // 3-digit county code, so CONUM carries the state identity those years otherwise lack.
+      // IDCENSUS is NOT usable for this: it leads with the Census Bureau's own alphabetical state
+      // code, which diverges from FIPS above Arkansas (Census 05 = California, FIPS 06).
+      stateFips = countyFips.substring(0, 2);
+    }
+    putString(row, "state_fips", stateFips);
+    putString(row, "county_fips", countyFips);
     putString(row, "district_name", col(headers, values, "NAME"));
     putString(row, "cbsa", col(headers, values, "CBSA"));
     putString(row, "school_level", col(headers, values, "SCHLEV"));
@@ -165,6 +180,16 @@ public class F33DistrictFinanceProvider implements DataProvider {
     putDouble(row, "per_pupil_support_services_expenditure", col(headers, values, "PPSTOTAL"));
 
     return row;
+  }
+
+  private static int countChar(String s, char c) {
+    int n = 0;
+    for (int i = 0; i < s.length(); i++) {
+      if (s.charAt(i) == c) {
+        n++;
+      }
+    }
+    return n;
   }
 
   private String col(List<String> headers, List<String> values, String name) {
