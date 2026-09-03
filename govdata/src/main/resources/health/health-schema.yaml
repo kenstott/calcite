@@ -2117,11 +2117,17 @@ partitionedTables:
   - name: medicaid_drug_utilization
     # CMS adds each quarter to the annual dataset ~3 months after that quarter ends (see
     # releaseWindow below), so a year is only complete once its Q4 lands the following March.
-    # One combo covers a whole year, so the period-completion gate would otherwise mark the
-    # in-progress year complete after its first successful run and never revisit it, leaving it
-    # holding only the quarters published by then. Reopening the 2 most recently published years
-    # covers the trailing quarter; the hash check skips the write when nothing changed.
-    lookbackPeriods: 2
+    # The hash gate skips the write when the published dataset has not changed.
+    #
+    # One dataset id addresses exactly one year: the configured id serves the whole 5,326,586-row
+    # annual file and every row in it carries the same year (verified live — a year filter for
+    # that year returns the full count, any other year returns 0). There is therefore nothing for
+    # a yearRange dimension to vary: it fanned out N batches that each re-fetched the same single
+    # year, and no request-side filter can narrow them, because the DKAN datastore ignores the
+    # $where parameter outright (verified live: identical 5,326,586 count with and without it).
+    # The fan-out, its incremental filter and the lookbackPeriods period gate that existed to
+    # reopen its in-progress years are all removed as inert. Reaching other years means wiring
+    # their own dataset ids, not filtering this one.
     # Freshness gate: Medicaid datastore query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
@@ -2135,11 +2141,13 @@ partitionedTables:
     # fetch (before the iterator) and stays complete for prod; the cap only bounds the read +
     # materialize. Ignored outside DQ mode (prod loads everything).
     dqRowLimit: 25000
-    pattern: "type=medicaid_drug_utilization"
+    pattern: "type=medicaid_drug_utilization/year=*"
     partitions:
       style: hive
       columnDefinitions:
         - name: type
+          type: VARCHAR
+        - name: year
           type: VARCHAR
 
     comment: >
@@ -2230,31 +2238,27 @@ partitionedTables:
         retryOn: [429, 503]
       rawCache:
         enabled: true
-      incremental:
-        sinceYear: "${GOVDATA_START_YEAR:}"
-        sinceQuarter: "${MEDICAID_SINCE_QUARTER:}"
-        untilYear: "${GOVDATA_END_YEAR:}"
-        # DKAN ignores $where; conditions[] syntax needed for server-side filtering (not yet supported).
-        # Without server-side filtering, all 5.3M records are fetched from the annual dataset.
-        filterParam: "$where"
-        yearField: "year"
-        quarterField: "quarter"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.MedicaidDrugUtilizationResponseTransformer"
 
+    # No year dimension: the dataset id addresses one year and no request-side filter narrows it,
+    # so a yearRange only re-fetched the same 5.3M rows once per year in the range.
     dimensions:
       type:
         - medicaid_drug_utilization
-      year: *health_year_range
 
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "type=medicaid_drug_utilization/year=*/"
+      # year is a partition column but NOT a dimension, so the writer fans each row out by its own
+      # year field rather than by a batch-level value. That keeps the partition honest against the
+      # data instead of against the fetch loop, and means adding a second year's dataset id later
+      # lands it in its own partition rather than replacing this one.
       partition:
-        columns: [type]
+        columns: [type, year]
       options:
         compression: snappy
       iceberg:

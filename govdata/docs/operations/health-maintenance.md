@@ -45,7 +45,6 @@ Set these in `.env.prod` (or the environment used by your cron/scheduler):
 # Override only for manual one-off runs:
 # export GOVDATA_SINCE_DATE=2024-01-01          # ISO date for daily/weekly date-filtered tables
 # export GOVDATA_START_YEAR=2024                # 4-digit year for year-filtered tables
-export MEDICAID_SINCE_QUARTER=1                 # Quarter (1-4) for Medicaid delta start (no global equivalent)
 
 # Optional API keys
 export HEALTH_FDA_API_KEY=your-fda-key          # register at open.fda.gov/apis/authentication
@@ -130,7 +129,7 @@ Refreshes sources that change on a monthly or slower cadence:
 | Table | Source | Incremental mechanism |
 |---|---|---|
 | `cdc_brfss` | CDC Socrata (BRFSS surveys) | `year >= GOVDATA_START_YEAR` (unquoted; numeric field) |
-| `medicaid_drug_utilization` | data.medicaid.gov (DLTSS) | `year`/`quarter` compound `$where` filter via `GOVDATA_START_YEAR` + `MEDICAID_SINCE_QUARTER` |
+| `medicaid_drug_utilization` | data.medicaid.gov (DLTSS) | Full refresh of one year. The DKAN datastore ignores `$where`, so no request-side filter narrows it; the year is fixed by `MEDICAID_DRUG_UTIL_DATASET_ID` (one dataset id per year), not by a cutoff variable |
 | `cms_hospital_quality` | data.cms.gov | Full refresh (~5,400 hospitals) |
 | `cms_open_payments` | data.cms.gov | Full refresh |
 | `fda_ndc_products` | openFDA | Full refresh; NDC catalog changes slowly |
@@ -145,7 +144,6 @@ Refreshes sources that change on a monthly or slower cadence:
 ```bash
 # GOVDATA_START_YEAR is set automatically by run-pool.sh; override only for manual runs
 export GOVDATA_START_YEAR=2022
-export MEDICAID_SINCE_QUARTER=1
 ./scripts/parallel/worker-health.sh monthly
 ```
 
