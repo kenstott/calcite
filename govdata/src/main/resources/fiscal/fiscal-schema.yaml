@@ -202,7 +202,7 @@ dimension_values:
   # (census.gov/data/datasets/{year}/econ/local/public-use-datasets.html) are
   # confirmed live 2012 through 2024 (verified 2026-08-02); a plain bounded
   # range (not yearRange/current) since the actual ZIP filename/casing is
-  # discovered per year by GovtFinanceTransformer, not templated, so there is
+  # discovered per year by GovtFinanceProvider, not templated, so there is
   # no "current" auto-detection to anchor against. Uses the standard
   # GOVDATA_START_YEAR/END_YEAR directly, same as every other year-addressed
   # schema — no dedicated override var, to avoid a second knob that could
@@ -3131,11 +3131,12 @@ partitionedTables:
       File" — one row per government unit x finance item code x year (long/tall
       layout: amount_thousands is the single fact, item_code the dimension). The
       landing page (census.gov/data/datasets/{year}/econ/local/public-use-datasets.html)
-      is fetched by the framework; GovtFinanceTransformer discovers and downloads
-      the actual ZIP link (filename is neither year-templatable nor stable —
-      confirmed live: 2023_Individual_Unit_Files.zip vs
-      2021_Individual_Unit_File.zip, singular/plural and casing both vary), then
-      parses the 32-char fixed-width data file inside it. item_code follows the
+      is read by GovtFinanceProvider, which discovers and streams the actual
+      ZIP link (filename is neither year-templatable nor stable — confirmed
+      live: 2023_Individual_Unit_Files.zip vs 2021_Individual_Unit_File.zip,
+      singular/plural and casing both vary), then streams the fixed-width data
+      file inside it (records are 32 chars for 2017+ and 34 for 2012-2016,
+      whose ID field is two characters wider). item_code follows the
       Census government finance classification manual (2006_classification_manual.pdf);
       notable codes for capital-vs-operating comparisons: E12/F12 (elementary-
       secondary education current operations / construction), E36/F36 (hospitals
@@ -3204,7 +3205,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.GovtFinanceTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.GovtFinanceProvider"
 
     materialize:
       format: iceberg
