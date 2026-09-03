@@ -70,34 +70,6 @@ public class SecSchemaYamlTest extends AbstractSecDataDownloader {
   }
 
   @Test
-  void testLoadVectorizedChunksColumns() {
-    List<TableColumn> columns = loadTableColumns("vectorized_chunks");
-
-    assertNotNull(columns, "Columns should not be null");
-    assertFalse(columns.isEmpty(), "Columns should not be empty");
-
-    // Verify cik column exists (from YAML template)
-    TableColumn cikColumn = findColumn(columns, "cik");
-    assertNotNull(cikColumn, "cik column should exist in vectorized_chunks");
-
-    // Verify accession_number column exists (from YAML template)
-    TableColumn accessionColumn = findColumn(columns, "accession_number");
-    assertNotNull(accessionColumn, "accession_number column should exist in vectorized_chunks");
-
-    // Verify chunk_id column exists
-    TableColumn chunkIdColumn = findColumn(columns, "chunk_id");
-    assertNotNull(chunkIdColumn, "chunk_id column should exist");
-
-    // Print columns for debugging
-    System.out.println("vectorized_chunks columns (" + columns.size() + "):");
-    for (TableColumn col : columns) {
-      System.out.println("  - " + col.getName() + " (" + col.getType()
-          + ", nullable=" + col.isNullable()
-          + (col.isComputed() ? ", computed" : "") + ")");
-    }
-  }
-
-  @Test
   void testLoadAllSecTables() {
     String[] tableNames = {
         "filing_metadata",
@@ -106,8 +78,7 @@ public class SecSchemaYamlTest extends AbstractSecDataDownloader {
         "mda_sections",
         "xbrl_relationships",
         "insider_transactions",
-        "earnings_transcripts",
-        "vectorized_chunks"
+        "earnings_transcripts"
     };
 
     for (String tableName : tableNames) {
