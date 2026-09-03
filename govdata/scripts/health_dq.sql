@@ -1466,6 +1466,18 @@ SELECT 'health', 'cdc_brfss', 'T7_state_coverage',
 FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_brfss', allow_moved_paths := true)
       WHERE state IS NOT NULL);
 
+-- T7: year coverage — catches the year-partition collapse. Every commit goes through
+-- replacePartitionsDataFiles, so a table keyed only on `type` has each run replace all prior
+-- years with just its own; production sat at a single year (2018 of 2011-2024) undetected
+-- because nothing asserted on year breadth. Bound is 2, not the full upstream 14: a DQ run only
+-- ingests its own year window (current + lookback), so a full-range threshold would fail here
+-- for a reason that is not a defect. One distinct year is the collapse signature.
+INSERT INTO dq_results
+SELECT 'health', 'cdc_brfss', 'T7_year_coverage',
+  CASE WHEN n >= 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Distinct years present (1 means the year partitions collapsed)'
+FROM (SELECT COUNT(DISTINCT year) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_brfss', allow_moved_paths := true));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: cms_open_payments
 -- ─────────────────────────────────────────────────────────────

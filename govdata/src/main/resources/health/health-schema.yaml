@@ -2505,9 +2505,19 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "type=cdc_brfss/year=*/"
+      # year MUST be a partition column: this table fans out over a yearRange, and every commit
+      # goes through replacePartitionsDataFiles, which swaps out every file in each partition it
+      # touches. Under a type-only key all years share one partition, so a later run covering a
+      # narrower span replaces the whole table with just its own years — verified live: a
+      # 2023-2024 run left both years, then a forced 2025-only run over the same table left
+      # 2023 alone. Keying on year makes a run replace only the years it actually covered.
+      # valueSource maps the partition value to the effective_year dimension (year minus the
+      # dataLag), which is the year the rows themselves carry.
       partition:
-        columns: [type]
+        columns: [type, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
       iceberg:
