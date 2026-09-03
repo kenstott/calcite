@@ -435,7 +435,7 @@ partitionedTables:
       distinctYears: 93
       contiguous: true
       rowCount: 570765
-      checkedAt: "2026-09-02T22:33:37Z"
+      checkedAt: "2026-09-03T22:34:29Z"
     partitions: *standard_partitions
     comment: >
       Branch-network change events (opening / closing / acquired-in-merger, etc.) — the
@@ -562,7 +562,7 @@ partitionedTables:
       contiguous: false
       years: [2023, 2026]
       rowCount: 7
-      checkedAt: "2026-09-02T22:33:37Z"
+      checkedAt: "2026-09-03T22:34:30Z"
     partitions: *standard_partitions
     comment: >
       Bank failure resolutions — resolution type, deposits/assets at failure, and the
@@ -683,7 +683,7 @@ partitionedTables:
       distinctYears: 32
       contiguous: true
       rowCount: 2822977
-      checkedAt: "2026-09-02T22:33:39Z"
+      checkedAt: "2026-09-03T22:34:31Z"
     partitions: *standard_partitions
     comment: >
       Annual branch-level deposit totals from FDIC's Summary of Deposits survey —
@@ -798,7 +798,7 @@ partitionedTables:
       distinctYears: 4
       contiguous: true
       rowCount: 74375
-      checkedAt: "2026-09-02T22:33:39Z"
+      checkedAt: "2026-09-03T22:34:32Z"
     partitions: *standard_partitions
     # DQ sample cap (GOVDATA_DQ mode): call-report financials are millions of rows
     # nationwide across all history. Cap each year's sample so DQ stops paginating
@@ -946,7 +946,7 @@ partitionedTables:
       contiguous: false
       years: [2022, 2023, 2025]
       rowCount: 362
-      checkedAt: "2026-09-02T22:33:40Z"
+      checkedAt: "2026-09-03T22:34:32Z"
     partitions: *standard_partitions
     comment: >
       Annual FDIC industry summary — bank count, net income, interest income,
@@ -1052,7 +1052,7 @@ partitionedTables:
       distinctYears: 5
       contiguous: true
       rowCount: 1564546
-      checkedAt: "2026-09-02T22:33:41Z"
+      checkedAt: "2026-09-03T22:34:32Z"
     partitions: *complaints_partitions
     # DQ sample cap (GOVDATA_DQ mode): the full complaint database is millions of rows
     # nationwide across all history. Cap each (year, state, product) fetch unit so DQ
