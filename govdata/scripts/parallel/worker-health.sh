@@ -120,7 +120,7 @@ run_all_health_tables() {
     'cdc_covid_vaccinations,cdc_mortality,cdc_brfss'
 
   run_health_model "health-cms-medicaid" \
-    'cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities'
+    'cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home'
 
   run_health_model "health-rxnorm" \
     'rxnorm_drugs'
