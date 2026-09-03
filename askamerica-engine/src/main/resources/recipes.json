@@ -74,7 +74,7 @@
     },
     {
       "id": "pick-the-grain-the-question-actually-asks-for",
-      "title": "Choosing among sibling tables that cover the same subject at different geographic or entity grains",
+      "title": "Choosing among sibling tables at different grains - and what to do when the grain you need does not exist",
       "triggers": [
         "adjacent county",
         "border county",
@@ -89,9 +89,25 @@
         "wrong grain",
         "too coarse",
         "smallest unit available",
-        "finer grain"
+        "finer grain",
+        "city ordinance",
+        "municipal policy",
+        "city-level policy",
+        "place level",
+        "place-level",
+        "city vs county",
+        "county stands in for the city",
+        "proxy for the city",
+        "only county data",
+        "no table at that grain",
+        "rent control",
+        "rent stabilization",
+        "building permits",
+        "school district policy",
+        "local ordinance",
+        "policy is city-wide"
       ],
-      "body": "This corpus commonly loads the SAME underlying series at multiple grains as separate sibling tables - e.g. econ carries state_wages, metro_wages, county_wages AND county_qcew side by side, all from BLS QCEW. search_catalog returns all of them for a generic keyword search, ranked by textual relevance to the keyword, NOT by which grain the question actually needs - so the first or most obviously-named match is very often the wrong one when the question specifies (or implies) a finer unit than state.\n\nMeasured directly in this harness: a question explicitly requiring adjacent cross-state COUNTY pairs was answered with a state-level two-way-fixed-effects panel instead. search_catalog's own results for the query used ('minimum wage') already listed county_qcew and county_wages by name, multiple times, alongside state_wages - the finer-grain tables were surfaced and simply not opened. The state-level analysis was statistically well-executed (event study, pre-trend test, sensitivity check) but answered a coarser question than the one asked, because nobody checked whether a same-subject table existed at the grain the question actually specified.\n\nFIX: when a question names or implies a specific unit (county, metro, congressional district, adjacent/bordering, establishment-level) - scan the FULL list search_catalog returns for a sibling table at that grain before settling on the first keyword match. Prefer the named grain even when it costs more query/join effort than the coarser table sitting right next to it in the results; a well-executed analysis at the wrong grain still doesn't answer the question."
+      "body": "This corpus commonly loads the SAME underlying series at multiple grains as separate sibling tables - e.g. econ carries state_wages, metro_wages, county_wages AND county_qcew side by side, all from BLS QCEW. search_catalog returns all of them for a generic keyword search, ranked by textual relevance to the keyword, NOT by which grain the question actually needs - so the first or most obviously-named match is very often the wrong one when the question specifies (or implies) a finer unit than state.\n\nMeasured directly in this harness: a question explicitly requiring adjacent cross-state COUNTY pairs was answered with a state-level two-way-fixed-effects panel instead. search_catalog's own results for the query used ('minimum wage') already listed county_qcew and county_wages by name, multiple times, alongside state_wages - the finer-grain tables were surfaced and simply not opened. The state-level analysis was statistically well-executed (event study, pre-trend test, sensitivity check) but answered a coarser question than the one asked, because nobody checked whether a same-subject table existed at the grain the question actually specified.\n\nFIX: when a question names or implies a specific unit (county, metro, congressional district, adjacent/bordering, establishment-level) - scan the FULL list search_catalog returns for a sibling table at that grain before settling on the first keyword match. Prefer the named grain even when it costs more query/join effort than the coarser table sitting right next to it in the results; a well-executed analysis at the wrong grain still doesn't answer the question.\n\nSECOND CASE - the required grain is NOT in the corpus at all. The fix above assumes a finer sibling\nexists and was simply not opened. Sometimes it does not exist, and then there is no table to prefer.\nThis is common when the SUBJECT is defined at a finer grain than the statistical program that\npublishes it: municipal ordinances, school-district policies, city taxes, single-campus programs.\nThe corpus loads the Census Building Permits Survey COUNTY file only (housing.building_permits,\nfrom www2.census.gov/econ/bps/County/co{year}a.txt) - there is no place/municipality table - so any\nquestion about a CITY housing policy can only be answered with COUNTY permits.\n\nMeasured directly in this harness: asked whether rent control suppresses construction, a run built\na treated-vs-control comparison of Ramsey County against Hennepin County to stand in for St. Paul\nagainst Minneapolis, and wrote 'Ramsey County (St. Paul)' as though the two were the same object -\ncarrying that onto its dashboard subtitle as the literal equation 'Ramsey Co. = St. Paul'. The\nrent-stabilization ordinance binds only inside St. Paul, which is 56% of Ramsey County by\npopulation; Minneapolis is only 33% of Hennepin. Both series are therefore dominated or heavily\ndiluted by suburbs the policy never touched, biasing the measured effect toward zero, and no reader\nwas given the chance to weigh that. The underlying numbers were correct and the county substitution\nwas unavoidable; the failure was entirely in not saying so.\n\nFIX when no table exists at the required grain: do the analysis at the coarsest grain available -\nthat is the right call, not a reason to refuse - and then do three things in the answer itself.\n(1) State plainly that the unit of analysis is coarser than the unit the question is about, and\nname both. (2) BOUND THE DILUTION with a number rather than a hedge: query the treated\nsub-unit's share of the reporting unit and report it. Population shares come from the census schema\njoined to geo.counties on county_fips; use resolve_geo when the place-to-county mapping is not\nobvious. (3) Say which way the dilution pushes the estimate - a treatment diluted by untreated area\nbiases toward zero, so a surviving effect is conservative and a null result is uninformative.\nNEVER print the fine-grain name in parentheses after the coarse-grain unit, or set the two equal in\na chart title or subtitle; that converts a disclosed limitation into a silent false identity."
     },
     {
       "id": "voter-turnout-denominator-must-be-vep",
@@ -626,6 +642,31 @@
         "incomplete coverage"
       ],
       "body": "Filtering an aggregate is often correct — a year whose reporting coverage collapsed, a city-state that is not comparable to states, a table-year loaded only in part. The plausible-but-wrong shortcut is to state the exclusion as a methodology note and move on, leaving the reader unable to tell whether it moved the answer by a rounding error or by a third of the effect. An exclusion you cannot price is indistinguishable from a choice that produced the result you reported.\n\nMeasured directly in this harness. On a 2026-09-02 crime question a run excluded 31 of 510 state-years whose FBI reporting coverage fell below 80% - a correct and well-justified filter, reported as a methodology line with no quantification. Checking the cost directly: Alaska's ten-year mean violent-crime rate is 783 per 100k computed over all ten years and 805 once the low-coverage state-years are dropped, a 22-point swing on a single state, and the direction is systematic rather than random - the filter always removes under-reported years, so it always raises the affected state's average and flattens the spread between extremes. A separate run on a health question excluded a whole year on the same reasoning and likewise never reported what the exclusion changed.\n\nFIX: whenever you drop years, units, or outliers from an aggregate, compute the aggregate BOTH ways and report the delta in the answer, not only the filter. One extra query - the same aggregate with the WHERE clause removed - is enough. Say which direction the exclusion pushes and whether it is systematic (a coverage filter always removes under-reported periods, so it has a sign) or incidental. If the delta is negligible, saying so strengthens the result; if it is large, the reader needed to know and the exclusion is itself part of the finding. This applies equally to dropping DC from a state comparison, which several analyses in this corpus do by convention - state the convention AND its effect on the headline number.\n\nDetecting WHICH periods to exclude in the crime series specifically is covered by crime-series-reporting-coverage-instability; this recipe is about what you owe the reader once you have excluded anything, in any table."
+    },
+    {
+      "id": "make-the-before-and-after-windows-the-same-length",
+      "title": "A before/after comparison around a dated policy event, where the baseline window was picked rather than derived",
+      "triggers": [
+        "did wages go up after",
+        "before and after the tax cut",
+        "pre and post",
+        "pre-period",
+        "baseline period",
+        "growth rate before and after",
+        "did it accelerate",
+        "no acceleration",
+        "trend break",
+        "did the policy move the trend",
+        "since the reform",
+        "after the reform took effect",
+        "compare growth before and after",
+        "two years before",
+        "years before the policy",
+        "effective date",
+        "did X change after Y",
+        "annualized growth before and after"
+      ],
+      "body": "Asking whether a rate of change moved after a dated policy event forces a choice the data does not make for you: how far back the 'before' window reaches. That choice is not cosmetic - on a series with any curvature it can decide the answer, and an asymmetric pre/post pair can manufacture flatness or acceleration out of the same rows.\n\nMeasured directly in this harness. Asked whether ordinary workers' pay rose after the 2017 corporate tax cut, a run computed real average hourly earnings for production/nonsupervisory workers from econ.wage_growth (CES0500000008) deflated by econ.inflation_metrics (CUUR0000SA0) and reported 1.11%/yr before against 1.11%/yr after - headline: 'no acceleration at all'. The arithmetic was exact. But the 'before' was 2014-2017 (three years) and the 'after' was 2017-2019 (two), and the answer described BOTH as two years. Recomputed like-for-like on two-year windows the same table gives 0.685% -> 1.113%, which reads as acceleration. Nothing was wrong with the data or the code; the conclusion was an artifact of an unjustified, mislabelled window. A second unaided analyst on the same question avoided this by reporting two different wage measures that disagreed in direction and concluding only that there was no visible break at the effective date - a claim that survives the window choice.\n\nFIX, before publishing any before/after comparison:\n(1) Make the pre and post windows the SAME length and say what that length is. If the post-period is short because the policy is recent, shorten the pre-period to match rather than reaching back for a longer, better-looking baseline.\n(2) Recompute on at least one alternative pre-window - one year shorter and one year longer is enough - before deciding what the headline says. In this corpus that is one more GROUP BY year against a table you have already queried, so the check is nearly free. Note that several econ tables DECLARE a narrower range than they hold (econ.wage_growth declares 2018-2024 and holds 2009-2026 measured), so run data_coverage or a MIN/MAX year scan rather than assuming a short declared window forbids the baseline you need.\n(3) If the sign or the headline changes across those windows, that sensitivity IS the finding - report both and say the conclusion is window-dependent. Do not pick the window whose result reads more cleanly.\n(4) Prefer a claim that does not rest on one window at all where the data allows it: whether there is a visible break at the effective date, or whether two independent measures of the same quantity agree in direction, both survive a reader disagreeing with your baseline choice.\n\nThis is about CHOOSING a baseline window, not about disclosing rows you removed - for the latter see report-what-an-exclusion-changed-not-only-that-you-made-one. Where the event admits a real control group, a diff_in_diff or event_study on a panel is stronger than any single-series before/after and should be preferred; this recipe is the floor for when only one series exists."
     }
   ]
 }
