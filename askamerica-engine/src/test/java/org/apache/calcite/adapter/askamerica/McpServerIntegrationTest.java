@@ -378,32 +378,51 @@ public class McpServerIntegrationTest {
   }
 
   @Test void toolDescriptionsCarryTheContrastiveExemplars() throws Exception {
+    // Since bfb74fdd0, the query tool's own description carries only a short pointer
+    // (EXEMPLAR_POINTER) to get_usage_guide_section_6/_7 -- the full contrastive set was
+    // pulled out of every individual tool description to avoid a ~2048-char client
+    // truncation ceiling, per QuestionGuidance.USAGE_GUIDE's own class doc. The exemplars
+    // now live in those two usage-guide tools' descriptions instead.
     send("{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"params\":{},\"id\":9004}");
     String resp = readUntilId(9004, TOOL_TIMEOUT_MS);
     com.fasterxml.jackson.databind.JsonNode tools =
         new com.fasterxml.jackson.databind.ObjectMapper()
             .readTree(resp).path("result").path("tools");
     String queryDescription = null;
+    String usageGuide6 = null;
+    String usageGuide7 = null;
     boolean sawCritique = false;
     for (com.fasterxml.jackson.databind.JsonNode t : tools) {
-      if ("query".equals(t.path("name").asText())) {
+      String name = t.path("name").asText();
+      if ("query".equals(name)) {
         queryDescription = t.path("description").asText();
       }
-      if ("critique_query".equals(t.path("name").asText())) {
+      if ("get_usage_guide_section_6".equals(name)) {
+        usageGuide6 = t.path("description").asText();
+      }
+      if ("get_usage_guide_section_7".equals(name)) {
+        usageGuide7 = t.path("description").asText();
+      }
+      if ("critique_query".equals(name)) {
         sawCritique = true;
       }
     }
     assertNotNull(queryDescription, "query tool missing from tools/list");
     assertTrue(sawCritique, "critique_query missing from tools/list");
+    assertNotNull(usageGuide6, "get_usage_guide_section_6 missing from tools/list");
+    assertNotNull(usageGuide7, "get_usage_guide_section_7 missing from tools/list");
+    assertTrue(queryDescription.contains("get_usage_guide_section_6 and _7"),
+        "the query description must point to where the full exemplar set lives");
+    String usageGuideText = usageGuide6 + usageGuide7;
     int exemplars = 0;
     for (QuestionGuidance.Exemplar e : QuestionGuidance.EXEMPLARS) {
-      if (queryDescription.contains(e.vague) && queryDescription.contains(e.sharpened)) {
+      if (usageGuideText.contains(e.vague)) {
         exemplars++;
       }
     }
     assertTrue(exemplars >= 6,
-        "the query description must carry the full contrastive set; found " + exemplars);
-    assertTrue(queryDescription.contains("[honest-refusal]"),
+        "get_usage_guide_section_6/_7 must carry the full contrastive set; found " + exemplars);
+    assertTrue(usageGuideText.contains("[honest-refusal]"),
         "the refusal exemplars are what stop the set teaching that everything is answerable");
   }
 
