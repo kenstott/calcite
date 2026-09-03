@@ -148,12 +148,16 @@ final class FiaLookups {
     typgrp.put(999, "Nonstocked");
     TYPGRP_NAME = Collections.unmodifiableMap(typgrp);
 
+    // OWNGRPCD domain per the FIADB Phase 2 User Guide, COND table: exactly four values. The
+    // finer OWNCD splits state (31), local (32) and other non-federal public (33), but OWNGRPCD
+    // combines all three under 30, and 40 is Private (OWNCD 41-46). There is no code 50: treating
+    // 40 as "Local" and 50 as "Private" left every privately owned condition — the largest
+    // ownership category in the US — labelled as local government, and "Private" unreachable.
     Map<Integer, String> own = new HashMap<Integer, String>();
     own.put(10, "National Forest");
     own.put(20, "Other Federal");
-    own.put(30, "State");
-    own.put(40, "Local");
-    own.put(50, "Private");
+    own.put(30, "State and local government");
+    own.put(40, "Private");
     OWNGRP_NAME = Collections.unmodifiableMap(own);
   }
 
