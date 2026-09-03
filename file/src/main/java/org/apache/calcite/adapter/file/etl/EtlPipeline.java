@@ -1469,7 +1469,18 @@ public class EtlPipeline {
             try {
               f.get();
             } catch (Exception e) {
-              LOGGER.error("Unexpected error in parallel batch: {}", e.getMessage(), e);
+              // Anything reaching here escaped the task body's own error handling, so it was
+              // never counted there. The task body catches Exception, so this is where an Error
+              // — an OutOfMemoryError from an oversized batch, most of all — arrives, wrapped in
+              // ExecutionException. Counting it as a failed batch is what keeps the run honest:
+              // failedBatches feeds both the snapshot 0-successful guard and the
+              // markTableCompleteWithConfig check below, so a batch that died leaves the table
+              // uncommitted and retried next run instead of reporting a clean pass over a
+              // partition that produced nothing.
+              String errorMsg = "Unexpected error in parallel batch: " + e.getMessage();
+              LOGGER.error(errorMsg, e);
+              parallelErrors.add(errorMsg);
+              parallelFailed.incrementAndGet();
             }
           }
           executor.shutdown();
