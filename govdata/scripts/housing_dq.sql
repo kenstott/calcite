@@ -99,6 +99,103 @@ SELECT 'housing', 'building_permits', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits', allow_moved_paths := true) WHERE county_fips IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: building_permits_place (Census BPS place grain; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true));
+
+-- ~20,000 places per year across the four regional files; one year clears 15,000
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T2_row_count',
+  CASE WHEN n >= 15000 THEN 'pass' ELSE 'fail' END, n, 15000, 'Expected >=15000 place-year permit rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      -- footnote_code and central_city are populated only on the minority of rows Census flags
+      AND column_name NOT IN ('type', 'year', 'footnote_code', 'central_city')));
+
+-- Every row must be locatable. place_geoid is deliberately NULL on MCD-reported and
+-- unincorporated rows (the majority nationally), so requiring it would fail on correct data —
+-- what must always hold is that the row carries a county and some identity.
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with no county_fips or no identity'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true)
+      WHERE county_fips IS NULL OR jurisdiction_type IS NULL);
+
+-- T7: all four Census regions present — the table is assembled from four separate regional
+-- files, so a silently-404ing or mis-encoded region path would drop a quarter of the country
+-- while every other check still passed.
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T7_region_coverage',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END, n, 4, 'Distinct region_code values (expect all 4)'
+FROM (SELECT COUNT(DISTINCT region_code) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true));
+
+-- T7: place grain is genuinely finer than the county table it complements
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T7_place_grain',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000, 'Distinct place_geoid values'
+FROM (SELECT COUNT(DISTINCT place_geoid) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true));
+
+-- T7: the documented key really is unique. place_geoid alone is NOT a key — a jurisdiction
+-- straddling a county line is reported once per county part, MCD-reported rows share the 00000
+-- place code, and the 99990 unincorporated sentinel recurs once per county. A duplicate here
+-- means either the grain changed upstream or a region file was ingested twice.
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T7_key_unique',
+  CASE WHEN dupes = 0 THEN 'pass' ELSE 'fail' END, dupes, 0,
+  'Duplicate (state_fips, place_fips, mcd_fips, county_fips, year) rows'
+FROM (SELECT COUNT(*) AS dupes FROM (
+  SELECT state_fips, place_fips, mcd_fips, county_fips, year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true)
+  GROUP BY state_fips, place_fips, mcd_fips, county_fips, year HAVING COUNT(*) > 1));
+
+-- T7: a synthesised GEOID must never appear. place_geoid is emitted only for a real place code,
+-- so a 00000/99990 suffix here means the sentinel guard regressed and joins would silently merge
+-- every township in a county into one nonexistent place.
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T7_no_sentinel_geoid',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'place_geoid built from a 00000/99990 sentinel'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true)
+      WHERE place_geoid IS NOT NULL AND (place_geoid LIKE '%00000' OR place_geoid LIKE '%99990'));
+
+-- T7: MCD-reported rows are the majority nationally; their absence means the MCD identity was
+-- dropped and those jurisdictions silently lost their only join key.
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T7_mcd_identity',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Rows carrying an mcd_geoid'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true)
+      WHERE mcd_geoid IS NOT NULL);
+
+-- T7: the unincorporated sentinel is present and is a minority of rows — all-true or all-false
+-- both mean the 99990 flag stopped tracking the data
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T7_unincorporated_flag',
+  CASE WHEN n_true > 0 AND n_true < n_all THEN 'pass' ELSE 'fail' END, n_true, 1,
+  'Rows flagged is_unincorporated_area (expect a nonzero minority)'
+FROM (SELECT COUNT(*) FILTER (WHERE is_unincorporated_area) AS n_true, COUNT(*) AS n_all
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true));
+
+-- T7: months_reported must sit in its documented 0-12 domain; anything else means the
+-- positional field mapping has drifted against a future file layout
+INSERT INTO dq_results
+SELECT 'housing', 'building_permits_place', 'T7_months_reported_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'months_reported outside 0-12'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/building_permits_place', allow_moved_paths := true)
+      WHERE months_reported IS NOT NULL AND (months_reported < 0 OR months_reported > 12));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: fair_market_rents (HUD; partition cols: type, year, state)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

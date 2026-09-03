@@ -397,6 +397,235 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # CENSUS BPS — PLACE GRAIN (Place/<Region>/<prefix><year>a.txt, 4 regional files per year)
+  # ---------------------------------------------------------------------------
+  - name: building_permits_place
+    # Freshness gate: Census bulk txt files on fixed static paths, same publication schedule as
+    # the county file (co2025a.txt and so2025a.txt both present, verified). A Last-Modified probe
+    # skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
+    pattern: "type=building_permits_place/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Census Building Permits Survey — new privately-owned residential construction authorized
+      by building permits, at PLACE (incorporated city/town/village) grain, annual. One row per
+      place per year with buildings/units/valuation for 1-unit, 2-unit, 3-4-unit and 5-plus-unit
+      structures (Census's imputed totals, the canonical series). This is the grain municipal
+      housing policy is actually made at: zoning, permitting and approval decisions are a city
+      function, and the county-grain building_permits table sums across every jurisdiction in a
+      county plus its unincorporated area, so it cannot separate a permissive city from a
+      restrictive neighbour. Roughly 20,000 rows per year across the four regional files,
+      available back to 1980.
+
+      GRAIN — one row per permit-issuing jurisdiction per county part per year. The unique key is
+      (state_fips, place_fips, mcd_fips, county_fips, year); place_geoid alone is NOT a key.
+      Two things break the naive one-row-per-place assumption. First, a jurisdiction straddling
+      a county line is reported once per county it falls in. Second, and much larger: most rows
+      nationally are NOT identified by place at all — in strong-MCD states (PA, MA, NJ, NY, ...)
+      the permit-issuing jurisdiction is a township or town carried in the MCD field, and those
+      rows have place_fips 00000. Chester County PA alone reports 57 townships that way.
+      Use jurisdiction_type to tell which identity a row carries — 'place' (place_geoid set),
+      'mcd' (mcd_geoid set), 'unincorporated' (a county's leftover unincorporated area, the
+      99990 sentinel, also flagged by is_unincorporated_area), or 'county' (a county-wide permit
+      office). place_geoid and mcd_geoid are populated ONLY where a real code backs them, never
+      synthesised from a sentinel, so a join on either cannot silently merge distinct
+      jurisdictions. Filter to jurisdiction_type='place' to compare municipalities; keep every
+      type to reconcile a state total against the county-grain table. months_reported says how
+      many of the year's 12 months the jurisdiction actually reported — the rest is imputed,
+      which matters more here than at county grain because one small jurisdiction's silence is
+      not averaged away.
+      Source: www2.census.gov/econ/bps/Place/{region}/{prefix}{year}a.txt.
+
+    dimensions:
+      type:
+        - building_permits_place
+      # One dimension value must supply BOTH path segments the URL needs — the region directory
+      # and that region's file prefix — because a dimension contributes a single value per
+      # combination. The literal %20 survives substitution: HttpSource URL-encodes query
+      # parameters, not path text (verified live: all four resolve 200). The region a row belongs
+      # to is read from the file's own region_code field, not from this fetch axis.
+      region_path:
+        - "Midwest%20Region/mw"
+        - "Northeast%20Region/ne"
+        - "South%20Region/so"
+        - "West%20Region/we"
+      year: *bps_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - name: place_fips
+        type: string
+        nullable: true
+        comment: 5-digit Census place FIPS code
+      - name: place_geoid
+        type: string
+        nullable: true
+        comment: >
+          7-character state+place GEOID (2-digit state FIPS + 5-digit place FIPS). NULL unless a
+          real place code backs it — never synthesised from the 00000 (MCD-reported) or 99990
+          (unincorporated) sentinels, so joining on it cannot merge distinct jurisdictions.
+      - name: mcd_geoid
+        type: string
+        nullable: true
+        comment: >
+          10-character state+county+MCD GEOID for an MCD-reported (township/town) jurisdiction;
+          NULL when the row is not MCD-identified. The majority of rows nationally carry this
+          rather than place_geoid.
+      - name: jurisdiction_type
+        type: string
+        nullable: true
+        comment: >
+          Which identity the row carries: 'place', 'mcd', 'unincorporated' (a county's 99990
+          remainder) or 'county' (county-wide permit office). Filter to 'place' to compare
+          municipalities.
+      - name: place_name
+        type: string
+        nullable: true
+        comment: Place name (as published by Census)
+      - <<: *county_fips_column
+      - name: is_unincorporated_area
+        type: boolean
+        nullable: true
+        comment: >
+          True when place_fips is the 99990 sentinel — a county's unincorporated remainder, not
+          a municipality. Filter these out to compare real places; keep them to reconcile
+          against the county-grain building_permits table.
+      - name: census_place_code
+        type: string
+        nullable: true
+        comment: Census's own 4-digit place code (distinct from the FIPS place code)
+      - name: mcd_fips
+        type: string
+        nullable: true
+        comment: FIPS minor civil division code ('00000' where not applicable)
+      - name: population
+        type: integer
+        nullable: true
+        comment: Place population as carried on the permit file
+      - name: csa_code
+        type: string
+        nullable: true
+        comment: Combined Statistical Area code
+      - name: cbsa_code
+        type: string
+        nullable: true
+        comment: Core Based Statistical Area code
+      - name: footnote_code
+        type: string
+        nullable: true
+        comment: Census footnote code for the row, when present
+      - name: central_city
+        type: string
+        nullable: true
+        comment: Central-city indicator for the place within its CBSA, when present
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: ZIP code of the permit-issuing office
+      - name: region_code
+        type: integer
+        nullable: true
+        comment: Census region code (1 Northeast, 2 Midwest, 3 South, 4 West)
+      - name: division_code
+        type: integer
+        nullable: true
+        comment: Census division code
+      - name: months_reported
+        type: integer
+        nullable: true
+        comment: Months of the year the place actually reported (0-12); the remainder is imputed
+      - name: units_1unit_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 1-unit buildings permitted
+      - name: units_1unit_units
+        type: integer
+        nullable: true
+        comment: Number of 1-unit housing units permitted
+      - name: units_1unit_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 1-unit permits (USD)
+      - name: units_2unit_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 2-unit buildings permitted
+      - name: units_2unit_units
+        type: integer
+        nullable: true
+        comment: Number of 2-unit housing units permitted
+      - name: units_2unit_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 2-unit permits (USD)
+      - name: units_34unit_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 3-4-unit buildings permitted
+      - name: units_34unit_units
+        type: integer
+        nullable: true
+        comment: Number of 3-4-unit housing units permitted
+      - name: units_34unit_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 3-4-unit permits (USD)
+      - name: units_5plus_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 5-plus-unit buildings permitted
+      - name: units_5plus_units
+        type: integer
+        nullable: true
+        comment: Number of 5-plus-unit housing units permitted
+      - name: units_5plus_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 5-plus-unit permits (USD)
+
+    source:
+      type: http
+      url: "https://www2.census.gov/econ/bps/Place/{region_path}{effective_year}a.txt"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.CensusBuildingPermitsPlaceTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=building_permits_place/year=*/"
+      # Keyed on year, not type alone: every commit goes through replacePartitionsDataFiles, so a
+      # type-only key would let any run replace the whole table with just the years it covered
+      # (the defect proven on health.cdc_brfss). The four regional files for a year all land in
+      # that year's partition and accumulate within the run.
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: building_permits_place
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # HUD FAIR MARKET RENTS — fmr/statedata (delta year × state list, JSON)
   # ---------------------------------------------------------------------------
   - name: fair_market_rents
