@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.StringReader;
 import java.net.HttpURLConnection;
@@ -1972,37 +1974,178 @@ public class HttpSource implements DataSource {
   private String extractFromZip(InputStream input, String pattern, String cachePath)
       throws IOException {
     boolean csvFormat = config.getResponse().getFormat() == HttpSourceConfig.ResponseFormat.CSV;
-    File tempFile = File.createTempFile("http-source-", ".tmp");
-    tempFile.deleteOnExit();
-    long totalBytes = 0;
-    boolean matchedAny = false;
-    try (ZipInputStream zis = new ZipInputStream(input);
-         FileOutputStream fos = new FileOutputStream(tempFile)) {
+    // Each matched entry lands in its own temp file first. Merging needs every entry's header
+    // before it can write the first row, and the zip arrives as a one-shot stream that cannot be
+    // rewound; staging on disk keeps the merge streaming row-by-row rather than in memory.
+    List<File> parts = new ArrayList<File>();
+    List<String> partNames = new ArrayList<String>();
+    try (ZipInputStream zis = new ZipInputStream(input)) {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
         String name = entry.getName();
         if (zipEntryMatches(name, pattern)) {
           LOGGER.info("Extracting from ZIP: {}", name);
-          totalBytes += copyZipEntry(zis, fos, csvFormat && matchedAny);
-          matchedAny = true;
+          File part = File.createTempFile("http-source-part-", ".tmp");
+          part.deleteOnExit();
+          try (FileOutputStream pos = new FileOutputStream(part)) {
+            copyZipEntry(zis, pos, false);
+          }
+          parts.add(part);
+          partNames.add(name);
         }
         zis.closeEntry();
       }
     }
-    if (!matchedAny) {
-      tempFile.delete();
+    if (parts.isEmpty()) {
       throw new IOException("No file matching pattern '" + pattern + "' found in ZIP");
     }
 
-    // Write to cache
-    try (InputStream fis = new FileInputStream(tempFile)) {
-      String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
-      storageProvider.createDirectories(parentPath);
-      storageProvider.writeFile(cachePath, fis);
+    File tempFile = File.createTempFile("http-source-", ".tmp");
+    tempFile.deleteOnExit();
+    try {
+      mergeZipParts(parts, partNames, tempFile, csvFormat);
+      long totalBytes = tempFile.length();
+      try (InputStream fis = new FileInputStream(tempFile)) {
+        String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+        storageProvider.createDirectories(parentPath);
+        storageProvider.writeFile(cachePath, fis);
+      }
+      LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
+    } finally {
+      tempFile.delete();
+      for (File part : parts) {
+        part.delete();
+      }
     }
-    tempFile.delete();
-    LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
     return cachePath;
+  }
+
+  /**
+   * Merges the entries matched inside one archive into the single file the raw cache holds.
+   *
+   * <p>Non-CSV entries are concatenated byte-for-byte, and so is a lone CSV entry. Several CSV
+   * entries are concatenated under one header: when they all declare the same columns that is a
+   * plain header-strip, and when they do not the rows are rewritten under the union of every
+   * entry's columns.
+   *
+   * <p>Aligning those rows by column NAME rather than by position is the point. A bulk archive
+   * whose members cover different ranges — BEA's {@code SAINC.zip} pairs {@code *_1929_1957}
+   * files with {@code *_1958_2001} and {@code *_1998_2025} ones, each a block of year-named
+   * columns — otherwise has every later member's values read against the first member's column
+   * names, which silently reattributes them to the wrong year rather than failing.
+   */
+  private static void mergeZipParts(List<File> parts, List<String> names, File out,
+      boolean csvFormat) throws IOException {
+    if (!csvFormat || parts.size() == 1) {
+      try (FileOutputStream fos = new FileOutputStream(out)) {
+        for (File part : parts) {
+          try (InputStream in = new FileInputStream(part)) {
+            copyZipEntry(in, fos, false);
+          }
+        }
+      }
+      return;
+    }
+
+    List<List<String>> headers = new ArrayList<List<String>>();
+    for (File part : parts) {
+      headers.add(readCsvHeader(part));
+    }
+    boolean uniform = true;
+    for (int i = 1; i < headers.size(); i++) {
+      if (!headers.get(0).equals(headers.get(i))) {
+        uniform = false;
+        break;
+      }
+    }
+    if (uniform) {
+      try (FileOutputStream fos = new FileOutputStream(out)) {
+        for (int i = 0; i < parts.size(); i++) {
+          try (InputStream in = new FileInputStream(parts.get(i))) {
+            copyZipEntry(in, fos, i > 0);
+          }
+        }
+      }
+      return;
+    }
+
+    Map<String, Integer> unionIndex = new LinkedHashMap<String, Integer>();
+    for (List<String> header : headers) {
+      for (String col : header) {
+        if (!unionIndex.containsKey(col)) {
+          unionIndex.put(col, unionIndex.size());
+        }
+      }
+    }
+    List<String> union = new ArrayList<String>(unionIndex.keySet());
+    LOGGER.info("ZIP entries {} declare different CSV columns; merging under the union of {} "
+        + "columns, matched by name", names, union.size());
+
+    try (BufferedWriter writer = new BufferedWriter(
+        new OutputStreamWriter(new FileOutputStream(out), StandardCharsets.UTF_8))) {
+      writeCsvRow(writer, union.toArray(new String[0]));
+      for (int i = 0; i < parts.size(); i++) {
+        List<String> header = headers.get(i);
+        int[] target = new int[header.size()];
+        for (int c = 0; c < header.size(); c++) {
+          target[c] = unionIndex.get(header.get(c)).intValue();
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+            new FileInputStream(parts.get(i)), StandardCharsets.UTF_8))) {
+          CsvRecordReader.readRecord(reader);  // header, already parsed
+          String record;
+          while ((record = CsvRecordReader.readRecord(reader)) != null) {
+            if (record.isEmpty()) {
+              continue;
+            }
+            List<String> fields = CsvRecordReader.splitFields(record, ',');
+            String[] row = new String[union.size()];
+            int n = Math.min(fields.size(), target.length);
+            for (int c = 0; c < n; c++) {
+              row[target[c]] = fields.get(c);
+            }
+            writeCsvRow(writer, row);
+          }
+        }
+      }
+    }
+  }
+
+  /** Reads one CSV file's header as a list of column names. */
+  private static List<String> readCsvHeader(File file) throws IOException {
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+      String header = CsvRecordReader.readRecord(reader);
+      List<String> cols = new ArrayList<String>();
+      if (header != null) {
+        for (String col : CsvRecordReader.splitFields(header, ',')) {
+          cols.add(col.trim());
+        }
+      }
+      return cols;
+    }
+  }
+
+  /** Writes one RFC4180 CSV row; null cells become empty, and only cells that need it are quoted. */
+  private static void writeCsvRow(BufferedWriter writer, String[] row) throws IOException {
+    for (int i = 0; i < row.length; i++) {
+      if (i > 0) {
+        writer.write(',');
+      }
+      String value = row[i];
+      if (value == null || value.isEmpty()) {
+        continue;
+      }
+      if (value.indexOf(',') >= 0 || value.indexOf('"') >= 0
+          || value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) {
+        writer.write('"');
+        writer.write(value.replace("\"", "\"\""));
+        writer.write('"');
+      } else {
+        writer.write(value);
+      }
+    }
+    writer.write('\n');
   }
 
   /**
