@@ -142,12 +142,15 @@ public class ClimateNormalsTransformer implements ResponseTransformer {
           rec.normalTavgC = tenthsFahrenheitToCelsius(rawValue);
           break;
         case "MLY-PRCP-NORMAL":
-          // Hundredths of an inch -> mm.
-          rec.normalPrcpMm = (rawValue / 100.0) * MM_PER_INCH;
+          // Hundredths of an inch -> mm. -7777 is CDO's "trace" flag, not a measurement:
+          // a non-zero amount too small to round up to the reporting resolution. Converting it
+          // arithmetically yields -1975.4 mm, a negative precipitation normal. Trace is
+          // conventionally carried as zero accumulation.
+          rec.normalPrcpMm = isTrace(rawValue) ? 0.0 : (rawValue / 100.0) * MM_PER_INCH;
           break;
         case "MLY-SNOW-NORMAL":
-          // Tenths of an inch -> mm.
-          rec.normalSnowMm = (rawValue / 10.0) * MM_PER_INCH;
+          // Tenths of an inch -> mm; same trace flag as precipitation.
+          rec.normalSnowMm = isTrace(rawValue) ? 0.0 : (rawValue / 10.0) * MM_PER_INCH;
           break;
         case "MLY-TMAX-STDDEV":
           rec.tmaxStddev = tenthsFahrenheitDeltaToCelsius(rawValue);
@@ -195,6 +198,15 @@ public class ClimateNormalsTransformer implements ResponseTransformer {
   private static final double MM_PER_INCH = 25.4;
 
   /** Converts a raw value in tenths of &deg;F to an absolute temperature in &deg;C. */
+  /**
+   * True for CDO's {@code -7777} trace flag, which occupies the value field of a precipitation or
+   * snowfall normal in place of a measurement. Compared with a tolerance because the field arrives
+   * as a JSON number.
+   */
+  private static boolean isTrace(double rawValue) {
+    return Math.abs(rawValue - (-7777.0)) < 0.5;
+  }
+
   private static double tenthsFahrenheitToCelsius(double tenthsF) {
     return ((tenthsF / 10.0) - 32.0) * 5.0 / 9.0;
   }

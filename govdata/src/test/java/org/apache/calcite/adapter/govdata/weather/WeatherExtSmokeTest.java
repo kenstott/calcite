@@ -340,17 +340,22 @@ class WeatherExtSmokeTest {
 
   @Tag("unit")
   @Test void testClimateNormalsPivot() throws Exception {
+    // Raw values are in CDO's default "standard" units, which the query deliberately keeps (see
+    // ClimateNormalsTransformer's class comment on why units=metric is not requested):
+    // temperature in tenths of a DEGREE FAHRENHEIT, precipitation in hundredths of an inch.
+    // Values here are Montgomery AL (USW00013876) January/February normals, so the expected
+    // Celsius figures below are the real ones for that station.
     String response = "{"
         + "\"metadata\":{\"resultset\":{\"offset\":1,\"count\":4,\"limit\":1000}},"
         + "\"results\":["
         + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-TMAX-NORMAL\","
-        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":139},"
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":570},"
         + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-TMIN-NORMAL\","
-        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":44},"
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":399},"
         + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-PRCP-NORMAL\","
-        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":1219},"
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":480},"
         + "{\"date\":\"2010-02-01T00:00:00\",\"datatype\":\"MLY-TMAX-NORMAL\","
-        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":149}"
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":588}"
         + "]}";
 
     Map<String, String> dims = new HashMap<>();
@@ -370,14 +375,42 @@ class WeatherExtSmokeTest {
     assertEquals("USW00013876", jan.get("station_id").asText());
     assertEquals("01", jan.get("state_fips").asText());
     assertEquals(1, jan.get("month").intValue());
-    assertEquals(13.9, jan.get("normal_tmax_c").doubleValue(), 0.01, "139 tenths → 13.9°C");
-    assertEquals(4.4, jan.get("normal_tmin_c").doubleValue(), 0.01, "44 tenths → 4.4°C");
-    assertEquals(121.9, jan.get("normal_prcp_mm").doubleValue(), 0.01, "1219 tenths → 121.9mm");
+    assertEquals(13.9, jan.get("normal_tmax_c").doubleValue(), 0.05, "570 tenths °F = 57.0°F → 13.9°C");
+    assertEquals(4.4, jan.get("normal_tmin_c").doubleValue(), 0.05, "399 tenths °F = 39.9°F → 4.4°C");
+    assertEquals(121.9, jan.get("normal_prcp_mm").doubleValue(), 0.05,
+        "480 hundredths of an inch = 4.80in → 121.9mm");
     assertTrue(jan.get("county_fips").isNull(), "county_fips should be null (post-ETL join)");
 
     JsonNode feb = rows.get(1);
     assertEquals(2, feb.get("month").intValue());
-    assertEquals(14.9, feb.get("normal_tmax_c").doubleValue(), 0.01);
+    assertEquals(14.9, feb.get("normal_tmax_c").doubleValue(), 0.05, "588 tenths °F = 58.8°F → 14.9°C");
+  }
+
+  @Tag("unit")
+  @Test void testClimateNormalsTraceFlagIsNotAMeasurement() throws Exception {
+    // -7777 is CDO's trace flag occupying the value field. Converted arithmetically it becomes
+    // -1975.4 mm, a negative precipitation normal.
+    String response = "{"
+        + "\"results\":["
+        + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-PRCP-NORMAL\","
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":-7777},"
+        + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-SNOW-NORMAL\","
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":-7777}"
+        + "]}";
+
+    Map<String, String> dims = new HashMap<>();
+    dims.put("state_fips", "01");
+    RequestContext ctx = RequestContext.builder()
+        .url("https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY")
+        .dimensionValues(dims)
+        .build();
+
+    JsonNode rows = MAPPER.readTree(new ClimateNormalsTransformer().transform(response, ctx));
+    assertEquals(1, rows.size());
+    assertEquals(0.0, rows.get(0).get("normal_prcp_mm").doubleValue(), 0.001,
+        "trace must not become negative precipitation");
+    assertEquals(0.0, rows.get(0).get("normal_snow_mm").doubleValue(), 0.001,
+        "trace must not become negative snowfall");
   }
 
   @Tag("unit")
