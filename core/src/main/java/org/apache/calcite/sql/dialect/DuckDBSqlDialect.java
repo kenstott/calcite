@@ -22,6 +22,7 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.RelDataTypeSystemImpl;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDialect;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlLiteral;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.fun.SqlLibraryOperators;
@@ -92,9 +93,20 @@ public class DuckDBSqlDialect extends PostgresqlSqlDialect {
       int leftPrec, int rightPrec) {
     switch (call.getKind()) {
     case CAST:
+    case SAFE_CAST:
       // DuckDB requires CAST without extra parentheses around type
-      // Handle CAST specially to avoid issues with parentheses
-      writer.keyword("CAST");
+      // Handle CAST specially to avoid issues with parentheses.
+      //
+      // RexBuilder.makeCast(..., safe=true) always rebuilds a safe cast using the
+      // SqlLibraryOperators.SAFE_CAST singleton (name "SAFE_CAST"), even when the original
+      // SQL text used TRY_CAST (SqlLibraryOperators.TRY_CAST, same SqlKind.SAFE_CAST, different
+      // operator instance/name) -- the two collapse to one Rex-level representation, so the
+      // dialect cannot tell which keyword the caller wrote and must not rely on
+      // call.getOperator().getName(). DuckDB's parser only recognizes the CAST-style
+      // "TRY_CAST(expr AS type)" grammar, not "SAFE_CAST(...)" (that name isn't a keyword to
+      // DuckDB's parser, so unparsing SqlKind.SAFE_CAST as literal "SAFE_CAST" fails with a
+      // parser error at "AS"), so always emit the DuckDB-native keyword here.
+      writer.keyword(call.getKind() == SqlKind.SAFE_CAST ? "TRY_CAST" : "CAST");
       writer.print("(");
       call.operand(0).unparse(writer, 0, 0);
       writer.sep("AS");

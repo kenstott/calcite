@@ -132,9 +132,26 @@ public class GovDataDriver extends Driver {
     // standard,spatial). Validation happens in Calcite before pushdown, so a function
     // absent here fails even when the underlying DuckDB engine implements it — which is
     // why DuckDB-only names like strlen() and hex() still do not resolve, correctly.
+    // mssql is included for TRY_CAST: it parses via Calcite's CAST-style grammar and binds
+    // to SqlLibraryOperators.TRY_CAST regardless of which libraries are active, but
+    // SqlFunction.deriveType() re-validates that operator against the connection's operator
+    // table, so without mssql it fails validation with the same "No match found for function
+    // signature" error even though the parse succeeded. This matters because some source data
+    // (e.g. fedregister.fr_documents.effective_on) contains malformed date strings that plain
+    // CAST throws on, and TRY_CAST is the only way a caller can null out such rows instead.
+    // mssql also contributes a second CONCAT_WS overload (3-254 args, never-null semantics)
+    // alongside postgresql's (2+ args, null-propagating); SqlLibraryOperatorTableFactory
+    // builds the operator list by scanning SqlLibraryOperators' fields in declaration order,
+    // not fun= list order, and CONCAT_WS_POSTGRESQL is declared before CONCAT_WS_MSSQL, so
+    // postgresql's overload always wins the "first on schema path" resolution in SqlUtil
+    // .lookupRoutine — CONCAT_WS behavior is unchanged from postgresql-only. Confirmed no
+    // Calcite-validated SQL in this codebase (schema YAML expression:/materialize: SQL,
+    // askamerica-engine) calls CONCAT_WS, CONVERT, DATEADD, DATEDIFF, or DATEPART; the only
+    // CONCAT_WS usages in govdata/ (edu_dq.sql, weather_dq.sql) are piped straight into the
+    // duckdb CLI and never pass through this operator table.
     if (!govDataInfo.containsKey("fun")) {
-      govDataInfo.setProperty("fun", "standard,postgresql,spatial");
-      LOGGER.debug("Using default fun=standard,postgresql,spatial");
+      govDataInfo.setProperty("fun", "standard,postgresql,spatial,mssql");
+      LOGGER.debug("Using default fun=standard,postgresql,spatial,mssql");
     }
     // Without this, a VALUES row constructor with ragged-width string literals types its
     // column as CHAR(n) (n = widest literal) and blank-pads every shorter one, so an equi-join
