@@ -77,6 +77,29 @@ public class ChartSvgTest {
         assertFalse(svg.contains("…"), "no need to truncate when the names fit");
     }
 
+    @Test void aBoldTitleThatAwtMeasuresAsFittingButBrowsersRenderWiderShrinksFurther() {
+        // Observed live 2026-09-04 on askamerica.ai: this exact 62-char bold title in a 412px
+        // panel measured under Java AWT's SansSerif font as fitting at font-size 11 (drawn
+        // untruncated), but Chrome renders the SVG's declared font-family (system-ui/
+        // -apple-system) measurably wider at bold weight, so the shipped title overflowed the
+        // panel and was clipped at BOTH ends (title text is centred) -- "Empirical check..."
+        // arrived as "npirical check...listi". ChartScene.textWidth's bold safety margin makes
+        // fittedTitleSize's own re-check (against that same margined measurement) shrink the
+        // font further -- to 10px here -- so the full title still fits without needing
+        // to fall back to ellipsis truncation at all.
+        String title = "Empirical check: days from CVE publication to CISA KEV listing";
+        String svg = ChartRenderer.layout("bar", title, "Days", "Share", Arrays.asList(
+            "<=0 (same day/before)", "1-7", "8-30", "31+"),
+            Arrays.asList(series("Share", 29, 26, 20, 25)), 412, 268).toSvg();
+
+        int at = svg.indexOf(title);
+        assertTrue(at > 0, "shrinking further must keep the title readable in full: " + svg);
+        String elem = svg.substring(svg.lastIndexOf("<text", at), at);
+        assertTrue(elem.contains("font-size=\"10\""),
+            "expected the title to shrink to 10px once the bold safety margin no longer lets "
+            + "it fit at a larger size, got: " + elem);
+    }
+
     @Test void rotatesRatherThanDroppingWhenLabelsGenuinelyCollide() {
         // The same eight names in half the width. The old renderer answered this by printing
         // every other label; every bar must still be identifiable.

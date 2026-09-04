@@ -231,15 +231,23 @@ final class ChartLayout {
      * left-aligned one because it damages the start of the string, which is the part a reader uses
      * to tell one panel from another.
      *
-     * <p>Width is approximated from the character count, for the same reason the captions and stat
-     * values are: the SVG and the PNG must break identically or the two artifacts disagree.
+     * <p>Verified against {@link ChartScene#textWidth}, the same measurement {@link
+     * #fittedTitleText} uses to decide whether to truncate — a character-count guess here that
+     * disagreed with that measurement was exactly how a title could pass this method's fitted
+     * size straight into truncation instead of ever being drawn at a smaller, genuinely-fitting
+     * size (observed 2026-09-04 once {@code textWidth}'s bold safety margin made the two
+     * disagree for a title that fits after shrinking).
      */
     private static int fittedTitleSize(String title, double width) {
         if (title == null || title.isEmpty() || width <= 0) {
             return TITLE_SIZE;
         }
-        int size = (int) Math.floor((width - 12) / (title.length() * 0.55));
-        return Math.max(9, Math.min(TITLE_SIZE, size));
+        double maxWidth = width - 12;
+        int size = TITLE_SIZE;
+        while (size > 9 && ChartScene.textWidth(title, size, true) > maxWidth) {
+            size--;
+        }
+        return size;
     }
 
     /**

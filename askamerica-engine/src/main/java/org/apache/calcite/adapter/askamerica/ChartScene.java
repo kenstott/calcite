@@ -533,15 +533,39 @@ final class ChartScene {
 
     // ── shared helpers ───────────────────────────────────────────────────────
 
-    /** Width of a string at a given size, used by layout to decide if labels fit. */
+    /**
+     * Width of a string at a given size, used by layout to decide if labels fit.
+     *
+     * <p>Measured with Java AWT's logical {@code SansSerif} font, but the SVG this feeds
+     * declares {@code font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial,
+     * sans-serif"} for the browser that actually renders it — a different font, with no
+     * guarantee its metrics agree. Observed live 2026-09-04: a 62-character BOLD chart title
+     * measured here at <=400px (so left untruncated) rendered wider than its 412px panel in
+     * Chrome on macOS (`-apple-system` resolving wider than AWT's SansSerif at the same weight
+     * and size), clipping the title at both ends. {@link #TEXT_WIDTH_SAFETY_MARGIN} inflates
+     * bold measurements only — plain tick/axis labels were not observed to diverge, and an
+     * across-the-board margin was measured to force unnecessary rotation on labels that
+     * genuinely fit (e.g. eight state names at plain weight in an 800px panel) — so a title
+     * sitting right at the AWT-measured boundary truncates defensively instead of shipping a
+     * size the browser will actually overflow, without over-tightening plain-weight fits.
+     */
     static int textWidth(String text, int size, boolean bold) {
         BufferedImage probe = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = probe.createGraphics();
         g.setFont(new Font(Font.SANS_SERIF, bold ? Font.BOLD : Font.PLAIN, size));
         int w = g.getFontMetrics().stringWidth(text);
         g.dispose();
-        return w;
+        return bold ? (int) Math.ceil(w * TEXT_WIDTH_SAFETY_MARGIN) : w;
     }
+
+    /**
+     * Multiplier applied in {@link #textWidth} for bold text to cover the gap between Java
+     * AWT's {@code SansSerif} metrics and the browser's actual {@code system-ui}/
+     * {@code -apple-system} rendering font, which runs measurably wider at bold weights. Not a
+     * precise correction — fonts and platforms vary — just enough headroom that a borderline
+     * bold measurement fails safe (truncates) rather than shipping text the browser then clips.
+     */
+    private static final double TEXT_WIDTH_SAFETY_MARGIN = 1.12;
 
     /** One reserved-band line for the header, or nothing when the band was never set. */
     private static String band(String label, double top, double bottom) {
