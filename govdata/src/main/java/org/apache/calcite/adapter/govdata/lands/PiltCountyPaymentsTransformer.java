@@ -22,9 +22,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 /**
  * Transformer for DOI's Payments in Lieu of Taxes (PILT) per-county payment/acreage page
  * ({@code pilt.doi.gov/counties.cfm?fiscal_yr=YYYY&state_code=XX}) — no bulk CSV/JSON export
@@ -35,15 +32,35 @@ import java.util.regex.Pattern;
  * {@code <table>} whose header row's first cell reads "COUNTY" (site-wide constant text even for
  * states — Louisiana parishes, New England towns — where the row labels themselves are not
  * literally counties). Each data row has exactly two data columns: a payment amount (formatted
- * {@code $1,234,567} or {@code $0}) and a total-acres figure (formatted {@code 1,234,567}).
- * {@code area_type} is derived from the row label's own trailing word (COUNTY/PARISH/BOROUGH/
- * TOWN/CITY/...) rather than assumed from the state, since Vermont's table mixes town-level rows
- * with county-level subtotal rows in the same page.
+ * {@code $1,234,567} or {@code $0}) and a total-acres figure (formatted {@code 1,234,567}). The
+ * final row of every page is a state-wide {@code TOTAL} in the same row shape as the data rows
+ * and is dropped rather than ingested as a phantom area.
+ *
+ * <p>{@code area_type} is derived by matching the row label against a fixed vocabulary of area-
+ * type words (as a trailing suffix — "ALBANY COUNTY" — or, for the handful of states that instead
+ * prefix it, as an "X OF ..." lead-in — "MUNICIPALITY OF ANCHORAGE") rather than assumed from the
+ * state, since Vermont's table mixes town-level rows with county-level subtotal rows on the same
+ * page. Confirmed live across WY/VT/CT/ME/LA/AK/PR/GU/VI/DC, the label vocabulary is inconsistent
+ * enough (Maine's "SOUTHWEST HARBOR" and "CRANBERRY ISLES" carry no type word at all; Alaska's
+ * "MUNICIPALITY-SKAGWAY" hyphenates instead of using "OF"; DC/Guam/the Virgin Islands are one
+ * territory-wide row with no county-equivalent label) that a small fixed vocabulary is safer than
+ * a positional heuristic: an unrecognized label produces a null area_type rather than a
+ * plausible-looking wrong one (e.g. the naive trailing word of "COMMONWEALTH OF PUERTO RICO" is
+ * "RICO").
  */
 public class PiltCountyPaymentsTransformer implements ResponseTransformer {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final Pattern TRAILING_WORD = Pattern.compile("\\s(\\S+)$");
+
+  /** Longest first, so multi-word types (e.g. "CENSUS AREA") match before a shorter suffix would. */
+  private static final String[] SUFFIX_TYPES = {
+      "CITY AND BOROUGH", "CITY & BOROUGH", "CITY BOROUGH", "CENSUS AREA",
+      "COUNTY", "PARISH", "BOROUGH", "PLANTATION", "MUNICIPALITY", "TOWN", "CITY",
+  };
+
+  private static final String[] PREFIX_TYPES = {
+      "COMMONWEALTH", "MUNICIPALITY", "CITY", "BOROUGH", "TOWN", "PARISH",
+  };
 
   @Override public String transform(String response, RequestContext context) {
     // "year" is the schema dimension name (bound to the URL's fiscal_yr query param via
@@ -65,7 +82,7 @@ public class PiltCountyPaymentsTransformer implements ResponseTransformer {
         continue;
       }
       String areaName = cells.get(0).text().trim();
-      if (areaName.isEmpty()) {
+      if (areaName.isEmpty() || "TOTAL".equalsIgnoreCase(areaName)) {
         continue;
       }
       String paymentRaw = cells.get(1).text().trim();
@@ -75,7 +92,12 @@ public class PiltCountyPaymentsTransformer implements ResponseTransformer {
       row.put("fiscal_year", fiscalYear);
       row.put("state_code", stateCode);
       row.put("area_name", areaName);
-      row.put("area_type", trailingWord(areaName));
+      String areaType = areaType(areaName);
+      if (areaType != null) {
+        row.put("area_type", areaType);
+      } else {
+        row.putNull("area_type");
+      }
       Long payment = parseMoney(paymentRaw);
       if (payment != null) {
         row.put("payment_dollars", payment);
@@ -106,9 +128,27 @@ public class PiltCountyPaymentsTransformer implements ResponseTransformer {
     return null;
   }
 
-  private static String trailingWord(String areaName) {
-    Matcher m = TRAILING_WORD.matcher(areaName);
-    return m.find() ? m.group(1) : null;
+  /**
+   * Matches {@code areaName} against {@link #SUFFIX_TYPES} (as a trailing " TYPE") and
+   * {@link #PREFIX_TYPES} (as a leading "TYPE OF "), longest candidate first. Returns null
+   * rather than a guess when the label matches neither shape.
+   */
+  private static String areaType(String areaName) {
+    for (String suffix : SUFFIX_TYPES) {
+      if (areaName.length() > suffix.length()
+          && areaName.regionMatches(true, areaName.length() - suffix.length(),
+              suffix, 0, suffix.length())
+          && areaName.charAt(areaName.length() - suffix.length() - 1) == ' ') {
+        return suffix;
+      }
+    }
+    for (String prefix : PREFIX_TYPES) {
+      String lead = prefix + " OF ";
+      if (areaName.regionMatches(true, 0, lead, 0, lead.length())) {
+        return prefix;
+      }
+    }
+    return null;
   }
 
   private static Long parseMoney(String raw) {
