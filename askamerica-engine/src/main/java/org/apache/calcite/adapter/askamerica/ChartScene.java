@@ -296,10 +296,21 @@ final class ChartScene {
         }
 
         @Override void writeSvg(StringBuilder sb, String indent) {
+            // The shared <style> block sets a class rule for every text class this chart uses
+            // (.title, .axis-title, .tick, ...) -- a class selector in an author stylesheet
+            // always wins the CSS cascade over a presentation attribute, so a bare
+            // font-size="N" attribute is silently overridden back to the class's nominal size
+            // in every browser regardless of what N is. Observed live 2026-09-04: a title
+            // shrunk here to font-size="10" still rendered (and clipped) at the .title class's
+            // 15px, because the attribute never had a chance to apply. An inline style="..."
+            // has higher specificity than any class selector, so it is what actually makes a
+            // shrunk size take effect; the attribute is kept alongside it only for callers that
+            // read font-size via getAttribute rather than getComputedStyle.
             sb.append(indent).append("<text").append(attr("id", id)).append(attr("class", cls))
                 .append(" x=\"").append(num(x)).append("\" y=\"").append(num(y))
                 .append("\" fill=\"").append(hex(fill))
-                .append("\" font-size=\"").append(size).append("\"");
+                .append("\" font-size=\"").append(size).append("\"")
+                .append(" style=\"font-size:").append(size).append("px\"");
             if (bold) {
                 sb.append(" font-weight=\"600\"");
             }

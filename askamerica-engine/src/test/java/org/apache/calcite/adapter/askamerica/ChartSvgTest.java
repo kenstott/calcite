@@ -98,6 +98,14 @@ public class ChartSvgTest {
         assertTrue(elem.contains("font-size=\"10\""),
             "expected the title to shrink to 10px once the bold safety margin no longer lets "
             + "it fit at a larger size, got: " + elem);
+        assertTrue(elem.contains("style=\"font-size:10px\""),
+            "a shrunk size written only as a font-size ATTRIBUTE is silently overridden by "
+            + "the shared stylesheet's .title { font-size: 15px } rule in every browser -- a "
+            + "class selector always beats a presentation attribute in the CSS cascade. Only "
+            + "an inline style=\"...\" has enough specificity to actually take effect, which "
+            + "is exactly the gap that shipped a title still rendering (and clipping) at 15px "
+            + "live on askamerica.ai despite this element's own font-size=\"10\" attribute. "
+            + "Got: " + elem);
     }
 
     @Test void rotatesRatherThanDroppingWhenLabelsGenuinelyCollide() {
