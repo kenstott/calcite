@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.lands;
 
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
@@ -104,12 +105,36 @@ final class FiaStateArchive {
       // Last-Modified when no ETag is sent. A HEAD reads the current validator; we reuse the cached
       // copy only when it matches what we recorded for the cached bytes. A changed (or first-seen)
       // validator triggers a full re-download.
-      String upstreamValidator = headValidator(url);
-      if (sp.exists(target) && upstreamValidator != null
-          && upstreamValidator.equals(readSidecar(sp, sidecar))) {
-        LOGGER.info("FIA {} archive unchanged (validator {}), reusing: {}",
-            st, upstreamValidator, target);
+      // A forced reprocess re-runs the transform over bytes already downloaded — that is the
+      // whole distinction the pipeline draws between GOVDATA_FORCE_REPROCESS_TABLES (re-run) and
+      // GOVDATA_FORCE_DOWNLOAD_TABLES (re-fetch). Probing upstream in that case buys nothing and
+      // adds a failure surface: a transform-only fix could not be applied at all while
+      // apps.fs.usda.gov was refusing connections, despite every state archive sitting complete
+      // in the raw cache. Only re-fetch when the caller actually asked to.
+      if (sp.exists(target) && isForcedReprocess() && !isForcedDownload()) {
+        LOGGER.info("FIA {} archive: forced reprocess — using cached copy {} without probing "
+            + "upstream", st, target);
         return target;
+      }
+
+      String upstreamValidator = headValidator(url);
+      if (sp.exists(target)) {
+        if (upstreamValidator != null
+            && upstreamValidator.equals(readSidecar(sp, sidecar))) {
+          LOGGER.info("FIA {} archive unchanged (validator {}), reusing: {}",
+              st, upstreamValidator, target);
+          return target;
+        }
+        if (upstreamValidator == null) {
+          // The probe could not reach upstream, so freshness is UNKNOWN — which is not the same
+          // as stale. Falling through here would discard a complete cached archive and re-download
+          // it from the very host that just refused the probe, turning "cannot check for updates"
+          // into "cannot read the data at all". Serve what we already downloaded, and say plainly
+          // that it was not freshness-checked so a stale read is never mistaken for a verified one.
+          LOGGER.warn("FIA {} archive: upstream unreachable, freshness NOT verified — serving "
+              + "cached copy {}", st, target);
+          return target;
+        }
       }
       HttpURLConnection conn =
           (HttpURLConnection) URI.create(url).toURL().openConnection();
@@ -171,6 +196,22 @@ final class FiaStateArchive {
       return "lm:" + lm.trim();
     }
     return null;
+  }
+
+  /**
+   * True when this run was launched as a forced reprocess. Resolved the same way EtlPipeline
+   * resolves it, so the two agree on what "forced" means; these are launch-script run flags, not
+   * schema inputs.
+   */
+  private static boolean isForcedReprocess() {
+    String raw = VariableResolver.resolveEnvVars("${GOVDATA_FORCE_REPROCESS_TABLES:}");
+    return raw != null && !raw.trim().isEmpty();
+  }
+
+  /** True when the run explicitly asked for a re-fetch, which outranks the cache. */
+  private static boolean isForcedDownload() {
+    String raw = VariableResolver.resolveEnvVars("${GOVDATA_FORCE_DOWNLOAD_TABLES:}");
+    return raw != null && !raw.trim().isEmpty();
   }
 
   /** Issues a HEAD and returns the upstream cache validator (ETag preferred), or null if unavailable. */

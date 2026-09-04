@@ -61,6 +61,10 @@ column_templates:
     name: year
     type: INTEGER
 
+  partition_state: &partition_state
+    name: state
+    type: VARCHAR
+
   standard_partitions: &standard_partitions
     style: hive
     columnDefinitions:
@@ -71,6 +75,13 @@ column_templates:
     style: hive
     columnDefinitions:
       - *partition_type
+
+  state_partitions: &state_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_state
 
 # ============================================================================
 # DIMENSION VALUES
@@ -100,6 +111,24 @@ dimension_values:
     type: json_catalog
     source: "/lands/fia-states.json"
     path: "[*].state_abbr"
+
+  # DOI PILT counties.cfm carries FY1999-present (site's own fiscal_yr dropdown floor,
+  # confirmed live); current FY is posted before FY end, so dataLag 0 is correct.
+  pilt_year_range: &pilt_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1999}"
+    minYear: 1999
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
+  # Exact state_code dropdown values from pilt.doi.gov/counties.cfm (confirmed live):
+  # 50 states + DC, Guam, Puerto Rico, and the Virgin Islands.
+  pilt_states: &pilt_states
+    type: list
+    values: ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","GU","HI","ID",
+             "IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO",
+             "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
+             "PR","RI","SC","SD","TN","TX","UT","VT","VI","VA","WA","WV","WI","WY"]
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -909,6 +938,467 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   # FIA POP EVALUATIONS — published evaluations with types (EXPVOL, EXPCURR, ...)
   # ---------------------------------------------------------------------------
+  - name: fia_pop_stratum
+    pattern: "type=fia_pop_stratum/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      FIA stratification stratum — carries EXPNS (the expansion factor, acres represented per
+      plot) and the ADJ_FACTOR_* adjustments. Join fia_pop_plot_stratum_assgn to attach a plot to
+      its stratum, then weight by EXPNS to turn plot observations into design-based population
+      totals. Without this table only per-plot averages are possible, never state or regional
+      estimates. Carried at its published grain (one row per source row) from per-state
+      {ST}_POP_STRATUM.csv, because aggregating it would defeat its purpose.
+
+    dimensions:
+      type:
+        - fia_pop_stratum
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: cn
+        type: string
+        nullable: true
+        comment: FIA control number (surrogate key), carried as a string because FIA CNs exceed 64-bit range
+      - name: estn_unit_cn
+        type: string
+        nullable: true
+        comment: Estimation-unit control number — FK to fia_pop_estn_unit.cn
+      - name: rscd
+        type: integer
+        nullable: true
+      - name: evalid
+        type: integer
+        nullable: true
+        comment: Evaluation identifier (state + year + evaluation type)
+      - name: estn_unit
+        type: integer
+        nullable: true
+      - name: stratumcd
+        type: integer
+        nullable: true
+      - name: stratum_descr
+        type: string
+        nullable: true
+      - name: statecd
+        type: integer
+        nullable: true
+        comment: FIA state code
+      - name: p1pointcnt
+        type: integer
+        nullable: true
+      - name: p2pointcnt
+        type: integer
+        nullable: true
+      - name: expns
+        type: double
+        nullable: true
+        comment: >
+          Expansion factor — acres represented by each plot in this stratum. Multiply plot
+          values by this to get population totals.
+      - name: adj_factor_macr
+        type: double
+        nullable: true
+        comment: Adjustment factor for macroplot-based attributes
+      - name: adj_factor_subp
+        type: double
+        nullable: true
+        comment: Adjustment factor for subplot-based attributes
+      - name: adj_factor_micr
+        type: double
+        nullable: true
+        comment: Adjustment factor for microplot-based attributes
+      - name: adj_factor_cwd
+        type: double
+        nullable: true
+      - name: adj_factor_fwd_sm
+        type: double
+        nullable: true
+      - name: adj_factor_fwd_lg
+        type: double
+        nullable: true
+      - name: adj_factor_duff
+        type: double
+        nullable: true
+      - name: created_date
+        type: string
+        nullable: true
+      - name: modified_date
+        type: string
+        nullable: true
+      - name: adj_factor_pile
+        type: double
+        nullable: true
+      - name: adj_factor_regen_micr
+        type: string
+        nullable: true
+      - name: adj_factor_inv_subp
+        type: string
+        nullable: true
+      - name: adj_factor_p2veg_subp
+        type: string
+        nullable: true
+      - name: adj_factor_grndlyr_microquad
+        type: string
+        nullable: true
+      - name: adj_factor_soil
+        type: string
+        nullable: true
+
+    freshness:
+      type: etag
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaArchiveTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_pop_stratum/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_pop_stratum
+        catalogType: hadoop
+        overwritePartitions: true
+
+  - name: fia_pop_plot_stratum_assgn
+    pattern: "type=fia_pop_plot_stratum_assgn/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Assigns each plot (PLT_CN) to a stratum (STRATUM_CN) within an evaluation (EVALID). This is
+      the join key between plot-level observations and the stratification that expands them to
+      population totals. Carried at its published grain (one row per source row) from per-state
+      {ST}_POP_PLOT_STRATUM_ASSGN.csv, because aggregating it would defeat its purpose.
+
+    dimensions:
+      type:
+        - fia_pop_plot_stratum_assgn
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: cn
+        type: string
+        nullable: true
+        comment: FIA control number (surrogate key), carried as a string because FIA CNs exceed 64-bit range
+      - name: stratum_cn
+        type: string
+        nullable: true
+        comment: Stratum control number — FK to fia_pop_stratum.cn
+      - name: plt_cn
+        type: string
+        nullable: true
+        comment: Plot control number — FK to fia_plots
+      - name: statecd
+        type: integer
+        nullable: true
+        comment: FIA state code
+      - name: invyr
+        type: integer
+        nullable: true
+      - name: unitcd
+        type: integer
+        nullable: true
+      - name: countycd
+        type: integer
+        nullable: true
+      - name: plot
+        type: integer
+        nullable: true
+      - name: rscd
+        type: integer
+        nullable: true
+      - name: evalid
+        type: integer
+        nullable: true
+        comment: Evaluation identifier (state + year + evaluation type)
+      - name: estn_unit
+        type: integer
+        nullable: true
+      - name: stratumcd
+        type: integer
+        nullable: true
+      - name: created_date
+        type: string
+        nullable: true
+      - name: modified_date
+        type: string
+        nullable: true
+
+    freshness:
+      type: etag
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaArchiveTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_pop_plot_stratum_assgn/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_pop_plot_stratum_assgn
+        catalogType: hadoop
+        overwritePartitions: true
+
+  - name: fia_pop_estn_unit
+    pattern: "type=fia_pop_estn_unit/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Estimation unit — the geographic partition a stratification is built within, carrying its
+      land and total area. The denominator for area-based estimates. Carried at its published
+      grain (one row per source row) from per-state {ST}_POP_ESTN_UNIT.csv, because aggregating it
+      would defeat its purpose.
+
+    dimensions:
+      type:
+        - fia_pop_estn_unit
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: cn
+        type: string
+        nullable: true
+        comment: FIA control number (surrogate key), carried as a string because FIA CNs exceed 64-bit range
+      - name: eval_cn
+        type: string
+        nullable: true
+        comment: Evaluation control number — FK to fia_pop_evaluations
+      - name: rscd
+        type: integer
+        nullable: true
+      - name: evalid
+        type: integer
+        nullable: true
+        comment: Evaluation identifier (state + year + evaluation type)
+      - name: estn_unit
+        type: integer
+        nullable: true
+      - name: estn_unit_descr
+        type: string
+        nullable: true
+      - name: statecd
+        type: integer
+        nullable: true
+        comment: FIA state code
+      - name: arealand_eu
+        type: double
+        nullable: true
+      - name: areatot_eu
+        type: double
+        nullable: true
+      - name: area_used
+        type: double
+        nullable: true
+      - name: area_source
+        type: string
+        nullable: true
+      - name: p1pntcnt_eu
+        type: integer
+        nullable: true
+      - name: p1source
+        type: integer
+        nullable: true
+      - name: created_date
+        type: string
+        nullable: true
+      - name: modified_date
+        type: string
+        nullable: true
+
+    freshness:
+      type: etag
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaArchiveTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_pop_estn_unit/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_pop_estn_unit
+        catalogType: hadoop
+        overwritePartitions: true
+
+  - name: fia_pop_eval_grp
+    pattern: "type=fia_pop_eval_grp/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Evaluation group: the set of evaluations that together form one reportable inventory cycle
+      for a state (EVAL_GRP, e.g. 'AK2023'). Carried at its published grain (one row per source
+      row) from per-state {ST}_POP_EVAL_GRP.csv, because aggregating it would defeat its purpose.
+
+    dimensions:
+      type:
+        - fia_pop_eval_grp
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: cn
+        type: string
+        nullable: true
+        comment: FIA control number (surrogate key), carried as a string because FIA CNs exceed 64-bit range
+      - name: rscd
+        type: integer
+        nullable: true
+      - name: eval_grp
+        type: integer
+        nullable: true
+      - name: eval_grp_descr
+        type: string
+        nullable: true
+      - name: statecd
+        type: integer
+        nullable: true
+        comment: FIA state code
+      - name: notes
+        type: string
+        nullable: true
+      - name: created_date
+        type: string
+        nullable: true
+      - name: modified_date
+        type: string
+        nullable: true
+
+    freshness:
+      type: etag
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaArchiveTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_pop_eval_grp/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_pop_eval_grp
+        catalogType: hadoop
+        overwritePartitions: true
+
+  - name: fia_pop_eval_attribute
+    pattern: "type=fia_pop_eval_attribute/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Maps an evaluation to the attributes it supports, so a consumer can tell which estimates a
+      given EVALID is valid for. Carried at its published grain (one row per source row) from per-
+      state {ST}_POP_EVAL_ATTRIBUTE.csv, because aggregating it would defeat its purpose.
+
+    dimensions:
+      type:
+        - fia_pop_eval_attribute
+      state: *all_fia_state_abbrs
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: cn
+        type: string
+        nullable: true
+        comment: FIA control number (surrogate key), carried as a string because FIA CNs exceed 64-bit range
+      - name: eval_cn
+        type: string
+        nullable: true
+        comment: Evaluation control number — FK to fia_pop_evaluations
+      - name: attribute_nbr
+        type: integer
+        nullable: true
+      - name: statecd
+        type: integer
+        nullable: true
+        comment: FIA state code
+      - name: created_date
+        type: string
+        nullable: true
+      - name: modified_date
+        type: string
+        nullable: true
+
+    freshness:
+      type: etag
+    source:
+      type: http
+      url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
+      method: GET
+      parallel: 4
+      response:
+        format: json
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.FiaArchiveTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fia_pop_eval_attribute/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: fia_pop_eval_attribute
+        catalogType: hadoop
+        overwritePartitions: true
+
   - name: fia_pop_evaluations
     pattern: "type=fia_pop_evaluations/*.parquet"
     partitions:
@@ -1344,6 +1834,96 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 3
+
+  # ---------------------------------------------------------------------------
+  # PILT COUNTY PAYMENTS — DOI Payments in Lieu of Taxes (per-state, per-year HTML)
+  # ---------------------------------------------------------------------------
+  - name: pilt_county_payments
+    # Freshness gate: pilt.doi.gov has no Last-Modified/ETag on the per-state HTML page, so
+    # this hashes the response body post-fetch to skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    pattern: "type=pilt_county_payments/year=*/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      DOI Payments in Lieu of Taxes (PILT) — federal payments to local governments for
+      tax-exempt federal land within their boundaries, one row per (fiscal_year,
+      state_code, area_name). Counterpart to onrr_revenues (federal mineral-revenue
+      sharing): PILT compensates for the property-tax base federal land removes,
+      independent of resource extraction. area_type is derived from the source
+      label's own COUNTY/PARISH/BOROUGH/TOWN/... wording (null when the label
+      carries none, e.g. DC/Guam/the Virgin Islands, each a single territory-wide
+      row) rather than assumed from the state, since some states mix area types
+      (Vermont's table has both towns and county-level subtotal rows). No bulk
+      export exists; one fetch per (fiscal_yr, state_code) returns that state's
+      full county list. Source: pilt.doi.gov/counties.cfm.
+
+    dimensions:
+      type:
+        - pilt_county_payments
+      year: *pilt_year_range
+      state_code: *pilt_states
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year of the payment (FY1999-present; PK component)
+      - name: state_code
+        type: string
+        nullable: false
+        comment: USPS state/territory code fetched (PK component)
+      - name: area_name
+        type: string
+        nullable: false
+        comment: County/parish/borough/town/territory label as published (PK component)
+      - name: area_type
+        type: string
+        nullable: true
+        comment: COUNTY/PARISH/BOROUGH/TOWN/CITY/... parsed from area_name; null when unrecognized
+      - name: payment_dollars
+        type: bigint
+        nullable: true
+        comment: PILT payment for the area (USD)
+      - name: total_acres
+        type: bigint
+        nullable: true
+        comment: Total federal acres in the area used to compute the payment
+
+    source:
+      type: http
+      url: "https://pilt.doi.gov/counties.cfm?fiscal_yr={year}&state_code={state_code}"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.PiltCountyPaymentsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pilt_county_payments/year=*/state=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: pilt_county_payments
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # VA FACILITIES - Veterans Health Administration facility roster (HIFLD)
