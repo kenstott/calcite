@@ -242,8 +242,15 @@ public class EtlPipelineCoverageTest {
 
     assertNotNull(result);
     assertEquals("empty_pipeline", result.getPipelineName());
-    // All 1 combinations already processed => 0 needed => marks complete
-    assertEquals(1, result.getSkippedBatches());
+    // The single combination is dispatched and its fetch fails: the config's host
+    // (api.example.com) does not resolve, so the batch ends in UnknownHostException. That is a
+    // TRANSPORT failure — nothing was reached, so nothing was learned about the data — and it is
+    // counted as a failed batch, not a skipped one. This assertion previously read
+    // `assertEquals(1, result.getSkippedBatches())`, which passed only because an unresolvable
+    // host fell through to the apiError default of SKIP; the run then reported a clean pass over
+    // data it never retrieved. See determineErrorAction's transport-failure branch.
+    assertEquals(0, result.getSkippedBatches());
+    assertEquals(1, result.getFailedBatches());
     assertEquals(0, result.getTotalRows());
   }
 

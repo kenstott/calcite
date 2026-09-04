@@ -2627,8 +2627,29 @@ public class EtlPipeline {
   /**
    * Determines the error action based on the exception type.
    */
-  private EtlPipelineConfig.ErrorHandlingConfig.ErrorAction determineErrorAction(
+  private static EtlPipelineConfig.ErrorHandlingConfig.ErrorAction determineErrorAction(
       Throwable e, EtlPipelineConfig.ErrorHandlingConfig errorHandling) {
+
+    // A transport failure is not an API answer. Nothing was reached, so nothing was learned about
+    // the data — treat it as transient (retry, then surface) rather than letting it fall through
+    // to the apiError default, which is SKIP. Classifying "the host refused the connection" as
+    // "skip this unit" is how a whole feed going dark reports as a clean run: every FIA state
+    // unit skipped on `Connection reset` and lands finished "0 rows, 0 successful, 0 failed,
+    // 51 skipped". Checked by exception TYPE across the cause chain, because these carry no
+    // HTTP status and their messages are JDK-worded ("Connection reset", "Read timed out").
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      if (t instanceof java.net.UnknownHostException
+          || t instanceof java.net.ConnectException
+          || t instanceof java.net.NoRouteToHostException
+          || t instanceof java.net.SocketTimeoutException
+          || t instanceof javax.net.ssl.SSLException
+          || t instanceof java.net.SocketException) {
+        return errorHandling.getTransientErrorAction();
+      }
+      if (t == t.getCause()) {
+        break;
+      }
+    }
 
     String message = e.getMessage();
     if (message == null) {
