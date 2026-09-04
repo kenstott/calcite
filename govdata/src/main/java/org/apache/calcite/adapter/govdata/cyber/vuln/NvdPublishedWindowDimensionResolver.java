@@ -86,9 +86,8 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
   private static final DateTimeFormatter NVD_DT_FMT =
       DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
 
-  /** Default earliest NVD published year. The NVD CVE list starts in 1999 but
-   *  meaningful CVSS-scored entries begin around 2002. */
-  public static final int DEFAULT_START_YEAR = 2002;
+  /** Default earliest NVD published year. The NVD CVE list starts in 1999. */
+  public static final int DEFAULT_START_YEAR = 1999;
 
   /** Default tip period (days before today that are treated as the rolling tip). */
   public static final int DEFAULT_TIP_DAYS = 90;
