@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.hadoop.HadoopTables;
 
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -147,6 +149,48 @@ public class CommitPerPartitionMultiChunkTest {
     assertTrue(committedRecords() >= 2L,
         "an interrupted run must keep partitions it finished, so they have to be committed "
             + "before commit() is ever called");
+  }
+
+  /**
+   * A partition is displaced once and added to thereafter: the first commit carrying files for it
+   * is a replace, every later one an append. Re-replacing with the partition's whole cumulative
+   * file list would also read correctly here, but it re-registers DataFile handles for objects
+   * this run committed earlier — and compaction reclaims those once it rewrites a partition, so
+   * the live snapshot ends up naming deleted objects. Asserting the operation sequence is what
+   * keeps that from creeping back.
+   */
+  @Test public void replacesAPartitionOnceThenAppends() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_replace_once");
+    warehouseDir.mkdirs();
+    writer = new IcebergMaterializationWriter(storageProvider,
+        warehouseDir.getAbsolutePath(), null);
+    writer.initialize(config(warehouseDir, "replace_once_table", true));
+
+    Map<String, String> partition = partition("east");
+    writer.writeBatch(rows(1, 2), partition);
+    writer.writeBatch(rows(3, 4), partition);
+    writer.writeBatch(rows(5, 6), partition);
+    writer.commit();
+
+    Table table = new HadoopTables(new Configuration()).load(writer.getTableLocation());
+    List<String> operations = new ArrayList<>();
+    for (Snapshot snapshot : table.snapshots()) {
+      operations.add(snapshot.operation());
+    }
+    assertFalse(operations.isEmpty(), "expected at least one snapshot");
+    // On a fresh table the opening replace-partitions deletes nothing, so Iceberg records it as
+    // an append; what matters is that no LATER commit removes files, which is what re-committing
+    // a partition's cumulative list would do.
+    int deletingSnapshots = 0;
+    for (Snapshot snapshot : table.snapshots()) {
+      String deleted = snapshot.summary().get("deleted-data-files");
+      if (deleted != null && Integer.parseInt(deleted) > 0) {
+        deletingSnapshots++;
+      }
+    }
+    assertEquals(0, deletingSnapshots,
+        "no commit may delete a file this run already committed; operations=" + operations);
+    assertEquals(6, committedRecords(), "every row survives the replace-then-append sequence");
   }
 
   private static Map<String, String> partition(String region) {

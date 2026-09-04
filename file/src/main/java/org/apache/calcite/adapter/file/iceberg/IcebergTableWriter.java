@@ -1499,7 +1499,11 @@ public class IcebergTableWriter {
     if (desired.equals(table.properties().get(SORT_ORDER_PROPERTY))) {
       return;
     }
-    table.updateProperties().set(SORT_ORDER_PROPERTY, desired).commit();
+    // A properties commit is a metadata commit like any other: it moves the catalog's
+    // version-hint pointer, which is non-atomic on the Hadoop/filesystem catalog. Left unlocked
+    // it can interleave with the compaction and expire-snapshots that run either side of it and
+    // leave the live snapshot naming a file those already reclaimed.
+    underCommitLock(() -> table.updateProperties().set(SORT_ORDER_PROPERTY, desired).commit());
     LOGGER.info("Recorded declared sort order [{}] on {}", desired, table.name());
   }
 

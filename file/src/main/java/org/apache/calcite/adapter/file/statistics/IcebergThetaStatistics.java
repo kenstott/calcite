@@ -241,7 +241,11 @@ public final class IcebergThetaStatistics {
           update.removeStatistics(old.snapshotId());
         }
       }
-      update.commit();
+      // A statistics commit moves the catalog's version-hint pointer like any other metadata
+      // commit, and this one runs right after compaction/expire-snapshots — exactly the
+      // interleaving CrossProcessCommitLock exists to prevent.
+      org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock.runExclusive(
+          table.location(), update::commit);
       LOGGER.info("Published column statistics: {} blobs ({} carried forward, {} partitions "
           + "written) for snapshot {}", written.size(), carried.size(), byPartition.size(),
           snapshot.snapshotId());
@@ -407,7 +411,10 @@ public final class IcebergThetaStatistics {
       StatisticsFile statsFile =
           new GenericStatisticsFile(snapshot.snapshotId(), statisticsPath, fileSize, footerSize,
               written);
-      table.updateStatistics().setStatistics(snapshot.snapshotId(), statsFile).commit();
+      org.apache.iceberg.UpdateStatistics measured =
+          table.updateStatistics().setStatistics(snapshot.snapshotId(), statsFile);
+      org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock.runExclusive(
+          table.location(), measured::commit);
       LOGGER.info("Published measured column statistics: {} columns for snapshot {}",
           written.size(), snapshot.snapshotId());
     } catch (Exception e) {

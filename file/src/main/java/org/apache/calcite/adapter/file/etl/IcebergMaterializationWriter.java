@@ -172,9 +172,17 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private int maxBufferedRows = DEFAULT_MAX_BUFFERED_ROWS;
   /** Commit each batch's partition as that batch completes — see MaterializeOptionsConfig. */
   private boolean commitPerPartition;
-  /** Every data file written per partition this run — a re-commit must carry all of them. */
+  /** Every data file written per partition this run, in write order. */
   private final Map<String, List<org.apache.iceberg.DataFile>> filesByPartition =
       new LinkedHashMap<String, List<org.apache.iceberg.DataFile>>();
+  /**
+   * Partitions already displaced by a replace-partitions commit this run. The first commit
+   * carrying a file for a partition replaces it (dropping the previous run's data); every commit
+   * after that appends, so a file this run already committed is never named again.
+   */
+  private final Set<String> replacedPartitions = new HashSet<String>();
+  /** How many of each partition's files have been committed, so a commit sends only the new ones. */
+  private final Map<String, Integer> committedPerPartition = new HashMap<String, Integer>();
   private long totalCommittedFiles = 0;
   /** Iceberg partition column names — buffer key uses only these, not all dimension variables. */
   private Set<String> icebergPartitionColumns = Collections.emptySet();
@@ -1379,7 +1387,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       added.append(col.getName());
     }
     if (any) {
-      update.commit();
+      // Schema evolution is a metadata commit too — same version-hint hazard as the property and
+      // statistics commits, so it takes the same lock.
+      org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock.runExclusive(
+          table.location(), update::commit);
       table.refresh();
       LOGGER.info("Evolved Iceberg table '{}': added column(s) [{}], existing rows preserved "
           + "(deferred-schema, data-inferred)", deferredTargetTableId, added);
@@ -1419,23 +1430,48 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (overwritePartitions) {
       // replacePartitionsDataFiles fully replaces whatever partitions its files touch — it does
       // not merge with a prior commit's files for the same partition. A run whose volume crosses
-      // COMMIT_FILE_THRESHOLD more than once (intermediate commit, then another intermediate or
-      // the final commit) would otherwise call this per chunk, each chunk's replace silently
-      // dropping the previous chunk's files for any partition both chunks touched. Committing
-      // every partition's full cumulative file list (tracked in filesByPartition, see
-      // flushPartition) instead of just this call's `files` argument makes every commit a
-      // superset of the table's true current state, so it's correct and idempotent regardless of
-      // how many times or in what grouping a partition gets flushed across the run.
-      List<org.apache.iceberg.DataFile> cumulative = new ArrayList<org.apache.iceberg.DataFile>();
-      for (List<org.apache.iceberg.DataFile> forPartition : filesByPartition.values()) {
-        cumulative.addAll(forPartition);
+      // COMMIT_FILE_THRESHOLD more than once would otherwise have each chunk's replace silently
+      // drop the previous chunk's files for any partition both chunks touched.
+      //
+      // The answer is to replace a partition ONCE — the first commit that carries a file for it,
+      // which is what displaces the previous run's data — and to APPEND every file for that
+      // partition after that. Re-committing the partition's whole cumulative file list instead
+      // would also be correct against a still-intact table, but it re-registers DataFile handles
+      // for objects this run committed earlier, and those are not guaranteed to still exist:
+      // compaction rewrites a partition's small files into one and the superseded originals are
+      // reclaimed, so a later cumulative commit can put the live snapshot back to referencing
+      // deleted objects — a dangling reference that reads as 404 rather than as a failure.
+      // Appending only what has not been committed yet never names an old file again.
+      List<org.apache.iceberg.DataFile> toReplace = new ArrayList<org.apache.iceberg.DataFile>();
+      List<org.apache.iceberg.DataFile> toAppend = new ArrayList<org.apache.iceberg.DataFile>();
+      for (Map.Entry<String, List<org.apache.iceberg.DataFile>> entry
+          : filesByPartition.entrySet()) {
+        String partitionKey = entry.getKey();
+        List<org.apache.iceberg.DataFile> forPartition = entry.getValue();
+        int alreadyCommitted = committedPerPartition.containsKey(partitionKey)
+            ? committedPerPartition.get(partitionKey).intValue() : 0;
+        if (alreadyCommitted >= forPartition.size()) {
+          continue;
+        }
+        if (replacedPartitions.add(partitionKey)) {
+          toReplace.addAll(forPartition);
+        } else {
+          toAppend.addAll(forPartition.subList(alreadyCommitted, forPartition.size()));
+        }
+        committedPerPartition.put(partitionKey, Integer.valueOf(forPartition.size()));
       }
       long commitStart = System.currentTimeMillis();
-      tableWriter.replacePartitionsDataFiles(cumulative);
-      totalCommittedFiles = cumulative.size();
+      if (!toReplace.isEmpty()) {
+        tableWriter.replacePartitionsDataFiles(toReplace);
+      }
+      if (!toAppend.isEmpty()) {
+        tableWriter.bulkCommitDataFiles(toAppend);
+      }
+      totalCommittedFiles += toReplace.size() + toAppend.size();
       long elapsed = System.currentTimeMillis() - commitStart;
-      LOGGER.info("Replace-partitions committed {} files ({} passed to this call) in {}ms "
-          + "({} total committed)", cumulative.size(), total, elapsed, totalCommittedFiles);
+      LOGGER.info("Overwrite commit: replaced {} file(s), appended {} file(s) ({} passed to this "
+          + "call) in {}ms ({} total committed)", toReplace.size(), toAppend.size(), total,
+          elapsed, totalCommittedFiles);
       return;
     }
     int chunkSize = COMMIT_FILE_THRESHOLD > 0 ? COMMIT_FILE_THRESHOLD : 1000;
@@ -2851,7 +2887,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       if (rowCount > 0) {
         update.set("etl.last_rows_written_ts", nowIso);
       }
-      update.commit();
+      // Under the same commit lock as every other metadata commit — see
+      // CrossProcessCommitLock: the filesystem catalog's version-hint pointer is not atomic, so
+      // an unlocked properties commit can interleave with compaction/expire-snapshots and leave
+      // the live snapshot naming a file those already reclaimed.
+      org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock.runExclusive(
+          table.location(), update::commit);
       LOGGER.info("Stored ETL properties in Iceberg table: configHash={}, signature={}",
           configHash, dimensionSignature);
     } catch (Exception e) {
@@ -2892,7 +2933,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         LOGGER.debug("Storing {} column comments in Iceberg properties", columnComments.size());
       }
 
-      update.commit();
+      org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock.runExclusive(
+          table.location(), update::commit);
       LOGGER.info("Stored table metadata in Iceberg table properties");
     } catch (Exception e) {
       LOGGER.warn("Failed to store table metadata in Iceberg properties: {}", e.getMessage());

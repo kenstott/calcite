@@ -39,10 +39,18 @@ import java.util.Collections;
  * {@code metadata/version-hint.text} holds the current version number {@code N}, and the table
  * metadata lives at {@code metadata/v{N}.metadata.json}. On commit we read version {@code N},
  * write {@code v{N+1}.metadata.json}, read it back to confirm it is durably present and
- * parseable, then overwrite the version hint. This is a plain read-write-verify-write (no
- * atomic rename / compare-and-swap): {@link CrossProcessCommitLock} already serializes commits
- * to one committer per table per host, so no optimistic-concurrency check is required. The
- * read-back is what a compare-and-swap store would get for free — without it, a client-side
+ * parseable, then overwrite the version hint. This is a plain read-write-verify-write with no
+ * atomic rename or compare-and-swap, so {@code commit} carries its own concurrency checks.
+ *
+ * <p>{@link CrossProcessCommitLock} serializes commits to one committer per table per host, but
+ * serialization is not sufficient on its own and this class must not rely on it: a committer
+ * holding metadata read before another commit landed will simply wait its turn for the lock and
+ * then write {@code v{N+1}} from that stale base, overwriting the other commit's metadata and
+ * reverting the table to the older snapshot. So {@code commit} rejects a stale base outright,
+ * the way Iceberg's own {@code HadoopTableOperations} does, and re-reads the version hint to
+ * catch a writer on another host that the host-scoped lock cannot see.
+ *
+ * <p>The read-back is what a compare-and-swap store would get for free — without it, a client-side
  * write that returns successfully but isn't yet durably readable (or a crash between the PUT
  * request and its response) leaves version-hint.text free to advance onto a file that doesn't
  * exist, only surfacing later as a table that silently "won't load".
@@ -98,6 +106,39 @@ public class S3FileIOTableOperations implements TableOperations {
   private static final long SLOW_STEP_MS = 3000;
 
   @Override public void commit(TableMetadata base, TableMetadata metadata) {
+    final String hintPath = location + "/metadata/version-hint.text";
+
+    // Stale-base guard. Every stock TableOperations opens with this check -- Iceberg's own
+    // HadoopTableOperations throws "Cannot commit changes based on stale table metadata" -- and
+    // this implementation did not have it. Serializing commits does not substitute for it: a
+    // committer holding metadata it read before someone else's commit will simply wait its turn
+    // for the lock and then write v{version+1} from that stale base, silently reverting the table
+    // to the older snapshot instead of failing. When the reverted-past commit was a compaction
+    // whose superseded data files expireSnapshots has since reclaimed, the resulting current
+    // snapshot references files that no longer exist. Throwing here instead turns that into a
+    // CommitFailedException, which Iceberg answers by refreshing and re-applying the change.
+    //
+    // Identity, not equals: refresh() installs a new TableMetadata instance, so holding the
+    // previous instance is precisely the condition being detected.
+    if (base != current()) {
+      throw new CommitFailedException(
+          "Cannot commit changes based on stale table metadata for %s", location);
+    }
+
+    // Cross-host guard, standing in for the compare-and-swap this store cannot do. The check
+    // above only sees commits made through this JVM's own TableOperations instance, and
+    // CrossProcessCommitLock is host-scoped, so re-read the pointer immediately before writing:
+    // if it has moved off the version being based on, another writer advanced the table and
+    // v{next} would overwrite their metadata. On creation (base == null) both sides are -1, and
+    // a hint that already exists means someone else created the table first.
+    String onDiskHint = readVersionHint(hintPath);
+    int onDiskVersion = onDiskHint == null ? -1 : Integer.parseInt(onDiskHint);
+    if (onDiskVersion != version) {
+      throw new CommitFailedException(
+          "Cannot commit to %s: version-hint is at v%d but this commit is based on v%d",
+          location, onDiskVersion, version);
+    }
+
     int previous = version;
     int next = (base == null) ? 0 : version + 1;
     String metadataLocation = location + "/metadata/v" + next + ".metadata.json";
@@ -136,7 +177,6 @@ public class S3FileIOTableOperations implements TableOperations {
 
       step = "write version-hint.text";
       stepStartNanos = System.nanoTime();
-      String hintPath = location + "/metadata/version-hint.text";
       PositionOutputStream out = io.newOutputFile(hintPath).createOrOverwrite();
       try {
         out.write(String.valueOf(next).getBytes(StandardCharsets.UTF_8));
