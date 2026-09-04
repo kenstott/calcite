@@ -174,4 +174,53 @@ public class McpServerReservedWordRepairTest {
         String out = quote("SELECT value FROM t WHERE s = 'oops");
         assertTrue(out.contains("'oops"), "the tail must not be dropped: " + out);
     }
+
+    /**
+     * The candidate set above is built from real catalog COLUMN names (see
+     * {@code reservedColumnWords()} in McpServer, which intersects the SQL parser's own
+     * reserved-word list against {@code queryableColumnNames()}). A reserved word used only as
+     * a computed ALIAS -- {@code AVG(x) AS trailing}, say -- is never a catalog column, so no
+     * static list built that way, however long, could ever have caught it. Falling through to
+     * {@link McpServer#isReservedWord(String)} directly (rather than gating on the catalog-
+     * derived {@code candidates} set alone) catches this whole class, not just this one word.
+     */
+    @Test void quotesAReservedWordAliasThatIsNeverACatalogColumn() {
+        assertTrue(McpServer.isReservedWord("trailing"), "trailing");
+        assertFalse(CANDIDATES.contains("trailing"),
+            "precondition: trailing is not a catalog column in this test's candidate set");
+        assertEquals("SELECT AVG(x) AS \"trailing\" FROM t",
+            quote("SELECT AVG(x) AS trailing FROM t"));
+    }
+
+    // ── LIMIT + FETCH FIRST conflict ─────────────────────────────────────────
+
+    @Test void stripsLimitWhenFetchFirstIsAlsoPresent() {
+        // Observed live: a caller defaulted to Postgres-style LIMIT out of habit while also
+        // following this tool's own "Add FETCH FIRST N ROWS ONLY" guidance, producing exactly
+        // this combination -- a certain parse failure in every dialect this server serves.
+        assertEquals("SELECT * FROM t FETCH FIRST 500 ROWS ONLY",
+            McpServer.stripRedundantLimitClause(
+                "SELECT * FROM t LIMIT 5 FETCH FIRST 500 ROWS ONLY"));
+    }
+
+    @Test void stripsLimitRegardlessOfClauseOrder() {
+        assertEquals("SELECT * FROM t FETCH FIRST 500 ROWS ONLY ",
+            McpServer.stripRedundantLimitClause(
+                "SELECT * FROM t FETCH FIRST 500 ROWS ONLY LIMIT 5"));
+    }
+
+    @Test void leavesSqlAloneWhenOnlyLimitIsPresent() {
+        String sql = "SELECT * FROM t LIMIT 5";
+        assertEquals(sql, McpServer.stripRedundantLimitClause(sql));
+    }
+
+    @Test void leavesSqlAloneWhenOnlyFetchFirstIsPresent() {
+        String sql = "SELECT * FROM t FETCH FIRST 500 ROWS ONLY";
+        assertEquals(sql, McpServer.stripRedundantLimitClause(sql));
+    }
+
+    @Test void leavesSqlAloneWhenNeitherIsPresent() {
+        String sql = "SELECT * FROM t";
+        assertEquals(sql, McpServer.stripRedundantLimitClause(sql));
+    }
 }
