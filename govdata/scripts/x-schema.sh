@@ -31,39 +31,28 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if [ -f "$GOVDATA_ROOT/.env.prod" ]; then
-  set -a
-  # CRLF-tolerant: see parallel/common.sh's load_env for why (Windows-edited env files).
-  # shellcheck disable=SC1090
-  source <(tr -d '\r' < "$GOVDATA_ROOT/.env.prod")
-  set +a
-fi
+# Same env + classpath handling as every other ETL entry point. load_env sources .env.prod but
+# PRESERVES a caller's exported overrides -- GOVDATA_PARQUET_DIR above all, so this sweep can be
+# pointed at the DQ bucket for a rehearsal instead of always writing prod. A hand-rolled
+# `set -a; source .env.prod` (what this script used to do) has .env.prod stomp those overrides,
+# which silently sent every run at production regardless of what the caller asked for.
+# shellcheck disable=SC1090
+source "$GOVDATA_ROOT/scripts/parallel/common.sh"
+load_env
 
-# Mirrors parallel/common.sh's resolve_classpath (not sourced directly -- this script has no
-# other dependency on the worker-pool machinery, so a duplicate few lines beats pulling that
-# whole file in). GOVDATA_JAR overrides for testing a private build without touching the shared
-# jar a pool might be running concurrently.
-if [ -n "${GOVDATA_JAR:-}" ]; then
-  JAR=$(echo $GOVDATA_JAR | head -1)
-else
-  JAR=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata.jar" 2>/dev/null | head -1)
-  if [ -z "$JAR" ]; then
-    JAR=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata-*-SNAPSHOT.jar" 2>/dev/null | head -1)
-  fi
-fi
-if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
-  echo "ERROR: no govdata jar found under $GOVDATA_ROOT/build/libs (set GOVDATA_JAR to override)" >&2
-  exit 1
-fi
+# resolve_classpath honours GOVDATA_JAR, so a private build can be exercised without touching the
+# shared jar a pool may be running from.
+JAR=$(resolve_classpath) || exit 1
 
 : "${CALCITE_TRACKER_PG_URL:?CALCITE_TRACKER_PG_URL not set -- required to reach vc_staging}"
 
 echo "[x-schema] sweeping every registered source into vc_staging (jar: $JAR)"
-java -cp "$JAR" org.apache.calcite.adapter.govdata.ref.ChunkOrganizer
-if [ $? -ne 0 ]; then
+# `if !` rather than a trailing `$?` test: under `set -e` a failing java aborts the script before
+# the test is ever reached, so the explicit message was unreachable.
+if ! "$GOVDATA_JAVA_BIN" -cp "$JAR" org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then
   echo "ERROR: ChunkOrganizer failed" >&2
   exit 1
 fi
 
 echo "[x-schema] building entity bridges across all schemas (jar: $JAR)"
-exec java -cp "$JAR" org.apache.calcite.adapter.govdata.ref.EntityBridgeOrganizer
+exec "$GOVDATA_JAVA_BIN" -cp "$JAR" org.apache.calcite.adapter.govdata.ref.EntityBridgeOrganizer
