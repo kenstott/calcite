@@ -2046,13 +2046,17 @@ partitionedTables:
       No name matching, no match rate, no candidate review. The resolve_entity tool is
       for the other case — a person handed you one name and you need its keys.
 
-      One row per real-world org known to any org-type registry source, whether or not
-      it cross-matched GLEIF/EIN — an org identified only in patents.patent_assignees
-      (never resolved) still gets a row here, with lei left null. Nullable FK columns
-      point at each source's natural key; a "_confidence" sibling column
-      (high | low | null) accompanies every FK. Several FKs (patents_assignee_id,
-      fmcsa_dot_number) are lossy many-to-one in practice — this table carries one
-      representative value; query entity_org_bridge for the complete set.
+      One row per SOURCE MENTION, not per real-world org: a company whose patents are
+      split across three assignee_ids gets three rows, all sharing one
+      canonical_entity_id and canonical_name, each carrying a different
+      patents_assignee_id. Identity columns (canonical_name, lei, sec_cik) are resolved
+      across the whole org and repeated on every one of its rows, so a cross-source
+      predicate still matches on a single row — and now returns every key a source holds
+      for that org rather than one arbitrary representative. COUNT rows here and you are
+      counting mentions; COUNT DISTINCT canonical_entity_id to count organisations.
+      An org identified only in patents.patent_assignees (never resolved) still gets a
+      row, with lei left null. Nullable FK columns point at each source's natural key; a
+      "_confidence" sibling column (high | low | null) accompanies every FK.
 
     columns:
       - name: canonical_entity_id
@@ -2087,7 +2091,11 @@ partitionedTables:
       - name: patents_assignee_id
         type: string
         nullable: true
-        comment: Lossy, many-to-one — see table comment
+        comment: >
+          PatentsView assignee_id. Its disambiguation is imperfect, so one company can
+          hold several — measured 5,224 companies split across 13,650 ids, one holding
+          78. Each gets its own row (see this table's grain), so joining
+          patents.patent_assignees on this column reaches all of a company's patents.
       - name: patents_assignee_id_confidence
         type: string
         nullable: true

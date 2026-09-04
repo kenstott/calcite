@@ -1331,6 +1331,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
     private final ResultSetIterator src;
     private final List<OrgSource> orgSources;
     private Map<String, Object> lookahead;
+    /** Output rows for the group most recently reduced, drained one per next() call. */
+    private final List<Map<String, Object>> pending = new ArrayList<Map<String, Object>>();
     private long count;
 
     PivotOrgIterator(Connection conn, List<OrgSource> orgSources) throws SQLException {
@@ -1351,26 +1353,50 @@ public class EntityBridgeListener implements TableLifecycleListener {
     }
 
     @Override public boolean hasNext() {
-      return lookahead != null;
+      return !pending.isEmpty() || lookahead != null;
     }
 
     @Override public Map<String, Object> next() {
       if (!hasNext()) {
         throw new NoSuchElementException();
       }
+      if (pending.isEmpty()) {
+        buildNextGroup();
+      }
+      count++;
+      return pending.remove(0);
+    }
+
+    /**
+     * Reduces one contiguous {@code canonical_entity_id} group into its output rows.
+     *
+     * <p>Grain is one row per source mention, per entity-resolution-plan.md: "a canonical org
+     * with two patents_assignee_id matches gets two rows sharing the same canonical_entity_id,
+     * each with a different patents_assignee_id value". Folding the group into a single row
+     * instead forces a choice among a source's several keys, and the ones not chosen become
+     * unreachable — measured at 8,426 patent assignee_ids dropped across 5,224 companies, one
+     * of them losing 77 of its 78. The identity fields (canonical_name/lei/sec_cik) are still
+     * reduced across the whole group and repeated on every row, so a mention row carries both
+     * its own source key and the org's resolved identity; a cross-source predicate like
+     * {@code sec_cik IS NOT NULL AND patents_assignee_id IS NOT NULL} still matches, and now
+     * returns every assignee rather than one.
+     *
+     * <p>The group is buffered because the identity fields are only known after scanning it.
+     * That is bounded by the widest entity, not the table: measured max 8,161 mentions, mean
+     * 4.6. The OOM that motivated the streaming reduce came from DuckDB holding an aggregate
+     * accumulator per in-progress group across every pivoted column, which this still avoids.
+     */
+    private void buildNextGroup() {
       Object groupId = lookahead.get("canonical_entity_id");
       String gleifName = null;
       String longestRaw = null;
       String lei = null;
       String secCik = null;
-      Map<String, String> perSourceKey = new HashMap<String, String>();
-      Map<String, String> perSourceConf = new HashMap<String, String>();
-      // Defect Register B2-4: when more than one source_key maps to the same (canonical
-      // entity, canonical_column) -- a lossy many-to-one FK, e.g. patents_assignee_id -- prefer
-      // the one with the most support (measured: Schlumberger's real id carries 10,227 patents,
-      // the one previously linked carried 1) instead of whichever row happens to come last in
-      // result order.
-      Map<String, Long> perSourceSupport = new HashMap<String, Long>();
+      // Keyed by canonical_column + ' ' + source_key: distinct source keys are distinct
+      // mentions and each earns its own row, but the SAME key seen twice is one mention and
+      // must not multiply rows. Where a duplicate does occur, the higher support_count wins
+      // (Defect Register B2-4's ranking, now applied only to true duplicates).
+      Map<String, Map<String, Object>> mentions = new LinkedHashMap<String, Map<String, Object>>();
 
       while (lookahead != null && groupId.equals(lookahead.get("canonical_entity_id"))) {
         Map<String, Object> row = lookahead;
@@ -1391,29 +1417,52 @@ public class EntityBridgeListener implements TableLifecycleListener {
           secCik = rowCik;
         }
         String canonicalColumn = (String) row.get("canonical_column");
-        if (canonicalColumn != null) {
+        String sourceKey = (String) row.get("source_key");
+        if (canonicalColumn != null && sourceKey != null) {
           Number rowSupportNum = (Number) row.get("support_count");
           long rowSupport = rowSupportNum != null ? rowSupportNum.longValue() : 0L;
-          Long bestSupport = perSourceSupport.get(canonicalColumn);
-          if (bestSupport == null || rowSupport > bestSupport) {
-            perSourceKey.put(canonicalColumn, (String) row.get("source_key"));
-            perSourceConf.put(canonicalColumn, (String) row.get("match_confidence"));
-            perSourceSupport.put(canonicalColumn, rowSupport);
+          String dedupKey = canonicalColumn + ' ' + sourceKey;
+          Map<String, Object> prior = mentions.get(dedupKey);
+          if (prior == null || rowSupport > ((Number) prior.get("support")).longValue()) {
+            Map<String, Object> m = new HashMap<String, Object>();
+            m.put("column", canonicalColumn);
+            m.put("key", sourceKey);
+            m.put("confidence", row.get("match_confidence"));
+            m.put("support", Long.valueOf(rowSupport));
+            mentions.put(dedupKey, m);
           }
         }
         advanceLookahead();
       }
 
+      String canonicalName = gleifName != null ? gleifName : longestRaw;
+      if (mentions.isEmpty()) {
+        // An org known only through a source with no canonical column still gets its row here,
+        // carrying identity alone — "still gets a row here, with lei left null".
+        pending.add(identityRow(groupId, canonicalName, lei, secCik));
+        return;
+      }
+      for (Map<String, Object> m : mentions.values()) {
+        Map<String, Object> result = identityRow(groupId, canonicalName, lei, secCik);
+        String col = (String) m.get("column");
+        result.put(col, m.get("key"));
+        result.put(col + "_confidence", m.get("confidence"));
+        pending.add(result);
+      }
+    }
+
+    /** A row carrying the group's identity with every per-source column still null. */
+    private Map<String, Object> identityRow(Object groupId, String canonicalName, String lei,
+        String secCik) {
       Map<String, Object> result = new LinkedHashMap<String, Object>();
       result.put("canonical_entity_id", groupId);
-      result.put("canonical_name", gleifName != null ? gleifName : longestRaw);
+      result.put("canonical_name", canonicalName);
       result.put("lei", lei);
       result.put("sec_cik", secCik);
       for (OrgSource s : orgSources) {
-        result.put(s.canonicalColumn, perSourceKey.get(s.canonicalColumn));
-        result.put(s.canonicalColumn + "_confidence", perSourceConf.get(s.canonicalColumn));
+        result.put(s.canonicalColumn, null);
+        result.put(s.canonicalColumn + "_confidence", null);
       }
-      count++;
       return result;
     }
 
