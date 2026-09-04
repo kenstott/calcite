@@ -84,6 +84,41 @@ public class McpServer {
     // Telemetry opt-in state loaded from ~/.askamerica/telemetry.json, refreshed on set.
     private static volatile boolean telemetryOptIn = loadTelemetryOptIn();
 
+    // Studies account, loaded from ~/.askamerica/account.json, refreshed on register.
+    private static volatile Account ACCOUNT = loadAccount();
+
+    /** A registered Studies account, bound to this machine's engine API key. */
+    private static final class Account {
+        final String name;
+        final String org;
+        final String studiesUrl;
+
+        Account(String name, String org, String studiesUrl) {
+            this.name = name;
+            this.org = org;
+            this.studiesUrl = studiesUrl;
+        }
+    }
+
+    // The most recently built publish_report page this session — the stdio server is one
+    // process per client session, so process lifetime IS session lifetime, matching the
+    // same reasoning LAST_CHART_PNG below relies on. upload_report ships whatever this
+    // holds; it takes no payload of its own.
+    private static volatile LastReport LAST_REPORT;
+
+    /** The report built by the most recent publish_report call, ready for upload_report. */
+    private static final class LastReport {
+        final String title;
+        final String question;
+        final String html;
+
+        LastReport(String title, String question, String html) {
+            this.title = title;
+            this.question = question;
+            this.html = html;
+        }
+    }
+
     static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
@@ -313,7 +348,7 @@ public class McpServer {
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "web_fetch"));
+            "web_fetch", "register", "upload_report", "mysite"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -584,7 +619,9 @@ public class McpServer {
             + "## QUERY MECHANICS\n\n"
             + "- Call list_tables(schema) before querying. Add FETCH FIRST N ROWS ONLY when "
             + "exploring; omit the limit for analytical/aggregation queries so all matching "
-            + "rows process (client-side cap: default 500, max 5000).\n"
+            + "rows process (client-side cap: default 500, max 5000). Never write LIMIT n -- "
+            + "this is the ONLY row-limiting syntax this SQL dialect accepts; a statement "
+            + "carrying both LIMIT and FETCH FIRST always fails to parse.\n"
             + "- **VIEW JOIN PUSHDOWN.** A normalized VIEW over a much larger base table (e.g. "
             + "sec.financial_facts = financial_line_items LEFT JOIN filing_contexts) may not "
             + "push your filter through the join before it scans — the symptom is a query that "
@@ -1894,6 +1931,37 @@ public class McpServer {
             + "naming a table or document you never opened.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
 
+        ObjectNode registerProps = MAPPER.createObjectNode();
+        registerProps.set("name", prop("string",
+            "Display name to publish reports under, e.g. 'Jane Ortiz' or 'Ortiz Policy Lab'."));
+        registerProps.set("org", prop("string",
+            "Optional organization name shown alongside the display name."));
+        tools.add(
+            tool("register",
+            "Create (or update) a Studies account bound to this engine's own API key, so "
+            + "upload_report has somewhere to publish to. Call this once before the first "
+            + "upload_report; safe to call again later to change the display name or org. "
+            + "Returns the account's public Studies page link — save it, since it will not be "
+            + "shown again automatically (use mysite to look it up if lost).",
+            schema(registerProps, new String[]{"name"})));
+
+        tools.add(
+            tool("upload_report",
+            "Publish the report most recently built by publish_report to the caller's Studies "
+            + "page — durably, under their registered name, unlike publish_report's local link "
+            + "which dies with this process. Takes no arguments: it always uploads whatever "
+            + "publish_report last built in this session. Requires register to have been called "
+            + "first (errors otherwise); also errors if publish_report has not been called yet "
+            + "this session. The uploaded report cannot be edited afterward — only deleted, from "
+            + "the account's own Studies page once logged in there.",
+            schema(MAPPER.createObjectNode(), new String[]{})));
+
+        tools.add(
+            tool("mysite",
+            "Look up the caller's public Studies page link, e.g. after losing the one register "
+            + "returned. Errors if register has not been called yet.",
+            schema(MAPPER.createObjectNode(), new String[]{})));
+
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
         reportProps.set(
@@ -2892,6 +2960,8 @@ public class McpServer {
                         srcs,
                         args.has("footnote") ? args.get("footnote").asText(null) : null,
                         args.has("byline") ? args.get("byline").asText(null) : null, flts);
+                    LAST_REPORT = new LastReport(rTitle, coverage.path("question").asText(null),
+                        html);
                     String evalReportNote = "";
                     if (EVAL_MODE && args.has("run_subpath")) {
                         // The http://127.0.0.1/... link below is only reachable while this
@@ -2936,6 +3006,26 @@ public class McpServer {
                     String summaryText = secs.isEmpty()
                         ? "" : ReportPage.sectionPlainText(secs.get(0).html);
                     text = summaryText.isEmpty() ? linkLine : summaryText + "\n\n" + linkLine;
+                    break;
+                }
+                case "register": {
+                    String regName = args.path("name").asText(null);
+                    String regOrg = args.has("org") ? args.get("org").asText(null) : null;
+                    log.println("[askamerica-mcp] tool=register name=" + regName);
+                    text = registerAccount(regName, regOrg);
+                    break;
+                }
+                case "upload_report": {
+                    log.println("[askamerica-mcp] tool=upload_report");
+                    text = uploadReport();
+                    break;
+                }
+                case "mysite": {
+                    log.println("[askamerica-mcp] tool=mysite");
+                    Account acct = ACCOUNT;
+                    text = acct == null
+                        ? "Not registered yet — call register first."
+                        : "Studies page: " + acct.studiesUrl;
                     break;
                 }
                 case "compose_dashboard": {
@@ -4345,7 +4435,16 @@ public class McpServer {
         java.util.List<String> quoted) {
         StringBuilder out = new StringBuilder(sql.length() + 16);
         java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
-        String prev = "SELECT";
+        // Seeded empty, not "SELECT": that seed only ever mattered for whatever token the loop
+        // reaches AFTER processing the statement's own opening keyword, at which point `prev`
+        // has already been overwritten with that keyword's own text (see the update at the
+        // bottom of the loop) -- it never legitimately describes the very first token itself.
+        // Seeding "SELECT" here meant the literal word SELECT, at position 0, was treated as
+        // sitting in select-list position relative to itself, which was harmless only because
+        // "select" was never a catalog column; generalizing the reserved-word check beyond the
+        // catalog (see isReservedWord below) surfaced it immediately, quoting every query's own
+        // opening keyword into `"select"` ... FROM ..., a parse failure at position 1.
+        String prev = "";
         String prevPrev = "";
         int i = 0;
         while (i < sql.length()) {
@@ -4376,8 +4475,16 @@ public class McpServer {
                 }
                 boolean isCall = k < sql.length() && sql.charAt(k) == '(';
                 boolean opensWindowFrame = "(".equals(prev) && "OVER".equals(prevPrev);
-                if (candidates.contains(lower) && !isCall && !opensWindowFrame
-                    && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
+                // candidates (real catalog columns) is checked first because it's a cheap set
+                // lookup and covers the common case; isReservedWord (a SqlParser call) only
+                // runs for the tokens that reach this point, so falling through to it costs
+                // nothing extra on the vastly more common non-reserved-word token. Generalizing
+                // beyond "known catalog column" to "any word this parser reserves" catches a
+                // reserved word used as a COMPUTED ALIAS too (e.g. `AVG(x) AS trailing`) --
+                // "trailing" is never a catalog column anywhere, so the catalog-only check could
+                // never have caught it, no matter how long a static list was maintained by hand.
+                if ((candidates.contains(lower) || isReservedWord(lower)) && !isCall
+                    && !opensWindowFrame && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
                     out.append('"').append(lower).append('"');
                     seen.add(lower);
                 } else {
@@ -4561,11 +4668,40 @@ public class McpServer {
         return runSqlRows(sql, limit).toString();
     }
 
+    /**
+     * Strips a caller-written {@code LIMIT n} when a {@code FETCH FIRST ... ROWS ONLY} clause
+     * is ALSO present in the same statement -- a combination no SQL dialect this server serves
+     * accepts, so it always fails to parse. Returns {@code sql} unchanged when only one (or
+     * neither) clause is present.
+     *
+     * <p>Observed live: a caller trained on Postgres-style {@code LIMIT} defaulted to it out of
+     * habit while ALSO following this tool's own "Add FETCH FIRST N ROWS ONLY" guidance,
+     * producing {@code "... LIMIT 5 FETCH FIRST 500 ROWS ONLY"} -- two conflicting caps, neither
+     * negotiable with the other. {@code FETCH FIRST} is kept (it is the syntax this dialect's
+     * own guidance teaches, and what {@link #runSqlRows}'s own auto-append also uses), and the
+     * {@code LIMIT} clause is removed rather than burning a round trip on a parse failure that
+     * is certain in advance.
+     */
+    static String stripRedundantLimitClause(String sql) {
+        String lower = sql.toLowerCase(java.util.Locale.ROOT);
+        if (!lower.contains("fetch first") || !lower.contains(" limit ")) {
+            return sql;
+        }
+        String stripped = sql.replaceAll("(?i)\\bLIMIT\\s+\\d+\\b\\s*", "");
+        if (!stripped.equals(sql)) {
+            LAST_REPAIR_NOTICE.set(
+                "Both a LIMIT clause and a FETCH FIRST ... ROWS ONLY clause were present in "
+                + "the same statement -- only one row-limiting clause is allowed. The LIMIT "
+                + "clause was removed and the statement ran as: " + stripped);
+        }
+        return stripped;
+    }
+
     /** As {@link #runSqlOn} but hands back the rows themselves, so a caller that needs to
      *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
      *  serialized form is identical either way. */
     private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
-        String effective = sql;
+        String effective = stripRedundantLimitClause(sql);
         String lower = effective.toLowerCase();
         if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
             effective = effective.replaceAll(";\\s*$", "")
@@ -7880,6 +8016,156 @@ public class McpServer {
             if (c != null) {
                 c.disconnect();
             }
+        }
+    }
+
+    /**
+     * Binds a display name/org to this machine's engine API key via POST
+     * /v1/studies/register, and caches the result at ~/.askamerica/account.json so
+     * later sessions don't need to register again.
+     */
+    private static String registerAccount(String name, String org) {
+        String apiKey = UsageMetering.resolveApiKey(null);
+        if (apiKey == null || apiKey.isEmpty()) {
+            return "No engine API key is configured — register needs the same key used to "
+                + "connect to askamerica, since a Studies account is bound to it.";
+        }
+        HttpURLConnection c = null;
+        try {
+            String payload = "{\"name\":" + jsonStr(name) + ",\"org\":" + jsonStr(org) + "}";
+            URL url = java.net.URI.create(apiBase() + "/v1/studies/register").toURL();
+            c = (HttpURLConnection) url.openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(10000);
+            c.setReadTimeout(15000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("X-API-Key", apiKey);
+            OutputStream os = c.getOutputStream();
+            try {
+                os.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } finally {
+                os.close();
+            }
+            int code = c.getResponseCode();
+            if (code >= 200 && code < 300) {
+                JsonNode resp = MAPPER.readTree(c.getInputStream());
+                String studiesUrl = resp.path("studiesUrl").asText(null);
+                Account acct = new Account(name, org, studiesUrl);
+                persistAccount(acct);
+                ACCOUNT = acct;
+                log.println("[askamerica-mcp] register succeeded (HTTP " + code + ")");
+                return "Registered. Studies page: " + studiesUrl;
+            }
+            log.println("[askamerica-mcp] register rejected: HTTP " + code);
+            return "Could not register (HTTP " + code + "). Nothing was saved — please retry.";
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] register error: " + e.getMessage());
+            return "Could not register: " + e.getMessage() + ". Please retry.";
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
+        }
+    }
+
+    /**
+     * Uploads the report most recently built by publish_report (see {@link #LAST_REPORT})
+     * to the caller's Studies page via POST /v1/studies/reports. Takes no arguments of its
+     * own — there is exactly one thing to upload, whatever publish_report last built.
+     */
+    private static String uploadReport() {
+        Account acct = ACCOUNT;
+        if (acct == null) {
+            return "Not registered yet — call register first, then upload_report.";
+        }
+        LastReport report = LAST_REPORT;
+        if (report == null) {
+            return "No report has been published yet this session — call publish_report first, "
+                + "then upload_report.";
+        }
+        String apiKey = UsageMetering.resolveApiKey(null);
+        if (apiKey == null || apiKey.isEmpty()) {
+            return "No engine API key is configured — upload_report needs the same key used to "
+                + "connect to askamerica.";
+        }
+        HttpURLConnection c = null;
+        try {
+            String payload = "{\"title\":" + jsonStr(report.title)
+                + ",\"question\":" + jsonStr(report.question)
+                + ",\"html\":" + jsonStr(report.html) + "}";
+            URL url = java.net.URI.create(apiBase() + "/v1/studies/reports").toURL();
+            c = (HttpURLConnection) url.openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(10000);
+            c.setReadTimeout(30000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("X-API-Key", apiKey);
+            OutputStream os = c.getOutputStream();
+            try {
+                os.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } finally {
+                os.close();
+            }
+            int code = c.getResponseCode();
+            if (code >= 200 && code < 300) {
+                JsonNode resp = MAPPER.readTree(c.getInputStream());
+                String reportUrl = resp.path("url").asText(null);
+                log.println("[askamerica-mcp] upload_report succeeded (HTTP " + code + ")");
+                return "Uploaded: " + reportUrl;
+            }
+            if (code == 401 || code == 403) {
+                log.println("[askamerica-mcp] upload_report rejected: HTTP " + code);
+                return "Upload rejected (HTTP " + code + ") — the API key is invalid or has "
+                    + "been revoked. Do not retry; the account holder needs a new key.";
+            }
+            log.println("[askamerica-mcp] upload_report failed: HTTP " + code);
+            return "Could not upload (HTTP " + code + "). Nothing was published — please retry.";
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] upload_report error: " + e.getMessage());
+            return "Could not upload: " + e.getMessage() + ". Please retry.";
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
+        }
+    }
+
+    private static void persistAccount(Account acct) {
+        try {
+            java.io.File dir =
+                new java.io.File(System.getProperty("user.home"), ".askamerica");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            java.io.File f = new java.io.File(dir, "account.json");
+            java.util.Map<String, String> data = new java.util.LinkedHashMap<>();
+            data.put("name", acct.name);
+            data.put("org", acct.org);
+            data.put("studiesUrl", acct.studiesUrl);
+            MAPPER.writeValue(f, data);
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] register persist failed: " + e.getMessage());
+        }
+    }
+
+    private static Account loadAccount() {
+        try {
+            java.io.File f = new java.io.File(
+                System.getProperty("user.home"), ".askamerica/account.json");
+            if (!f.exists()) {
+                return null;
+            }
+            JsonNode node = MAPPER.readTree(f);
+            String studiesUrl = node.path("studiesUrl").asText(null);
+            if (studiesUrl == null || studiesUrl.isEmpty()) {
+                return null;
+            }
+            return new Account(node.path("name").asText(null), node.path("org").asText(null),
+                studiesUrl);
+        } catch (Exception e) {
+            return null;
         }
     }
 
