@@ -357,16 +357,35 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
     return m.find() ? m.group() : null;
   }
 
+  // EFFDATE holds a full prose sentence (e.g. "This AD is effective February 6, 2024. The
+  // Director ... approved ... as of February 6, 2024."), not a bare date -- parseLongDate's
+  // exact-string SimpleDateFormat match never fits the sentence, so the date must be located
+  // within the text instead. The nearest month-day-year phrase after the word "effective" is
+  // the actual effective date; other dates in the sentence (incorporation-by-reference approval,
+  // comment deadlines) consistently appear elsewhere relative to that keyword.
+  private static final Pattern ISO_DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+  private static final Pattern MONTH_DAY_YEAR_PATTERN = Pattern.compile(
+      "(?i)\\b((?:January|February|March|April|May|June|July|August|September|October|"
+      + "November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\.?)\\s+(\\d{1,2}),?\\s+(\\d{4})\\b");
+  private static final Pattern EFFECTIVE_KEYWORD_PATTERN = Pattern.compile("(?i)effective");
+
   private String extractDateText(String text) {
     if (text == null) {
       return null;
     }
-    // Prefer ISO format if present
-    Matcher iso = Pattern.compile("\\d{4}-\\d{2}-\\d{2}").matcher(text);
+    Matcher iso = ISO_DATE_PATTERN.matcher(text);
     if (iso.find()) {
       return iso.group();
     }
-    return parseLongDate(text);
+    Matcher keyword = EFFECTIVE_KEYWORD_PATTERN.matcher(text);
+    int searchFrom = keyword.find() ? keyword.end() : 0;
+    Matcher date = MONTH_DAY_YEAR_PATTERN.matcher(text);
+    boolean found = date.find(searchFrom) || (searchFrom > 0 && date.find(0));
+    if (!found) {
+      return null;
+    }
+    String month = date.group(1).replaceAll("\\.$", "");
+    return parseLongDate(month + " " + date.group(2) + " " + date.group(3));
   }
 
   private String parseLongDate(String text) {
