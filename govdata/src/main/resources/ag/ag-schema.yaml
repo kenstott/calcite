@@ -639,6 +639,235 @@ partitionedTables:
       iceberg: *nass_iceberg
 
   # ---------------------------------------------------------------------------
+  # RMA_CAUSE_OF_LOSS — Cause of Loss, state/county/crop/cause/month of loss
+  # ---------------------------------------------------------------------------
+  # One bulk pipe-delimited zip per year (colsom_{year}.zip, stable URL, 1989+).
+  # Streamed by RmaCauseOfLossTransformer (no per-request cap; multi-million rows/yr).
+  # This is a materially finer grain than rma_crop_insurance's Summary of Business
+  # file: that file has no cause-of-loss dimension at all (it is the plain state/
+  # county/crop Summary of Business extract), while this file adds cause_of_loss
+  # (peril), stage, and month of loss, letting indemnities be isolated to a single
+  # peril (e.g. drought) instead of all perils combined.
+  - name: rma_cause_of_loss
+    # Same reissue behavior as rma_crop_insurance — both are RMA Summary of Business
+    # extracts and crop-year totals keep moving after the year closes as indemnities
+    # settle over subsequent seasons. See rma_crop_insurance above for the window
+    # rationale; the same 5-year depth applies here.
+    lookbackPeriods: 5
+    # Freshness gate: USDA RMA republishes this file periodically. A Last-Modified
+    # probe skips the re-download and re-materialize on unchanged runs (fails open —
+    # a null token just re-fetches).
+    freshness:
+      type: last_modified
+    pattern: "type=rma_cause_of_loss/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA RMA Cause of Loss — crop insurance experience by state, county, crop,
+      insurance plan, coverage category, growth stage, cause of loss (peril), and
+      month of loss. Policies, acres, liability, premium, subsidy, indemnity, and
+      loss ratio broken out per peril (e.g. Drought, Excess Moisture/Precip/Rain,
+      Hail, Freeze) — the field rma_crop_insurance's Summary of Business extract
+      does not carry. Use this table, not rma_crop_insurance, to attribute
+      indemnities to a specific cause; sum indemnity_amount across causes for a
+      state/county/crop/year and it reconciles to rma_crop_insurance's total.
+      Unlike rma_crop_insurance, RMA does not publish a quantity unit (quantity_type)
+      for this file's acreage/production fields. Joins to geo.counties via
+      county_fips and to disasters storm/drought tables by county+year for
+      loss attribution.
+
+    dimensions:
+      type:
+        - rma_cause_of_loss
+      year: *ag_year_range
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Commodity (crop insurance) year — partition column
+      - name: state_fips
+        type: string
+        source: state_fips
+        nullable: true
+        comment: 2-digit state FIPS (FK to geo.states.state_fips)
+      - name: state_abbr
+        type: string
+        source: state_abbr
+        nullable: true
+        comment: USPS state abbreviation
+      - name: county_code
+        type: string
+        source: county_code
+        nullable: true
+        comment: 3-digit county code within state
+      - name: county_fips
+        type: string
+        source: county_fips
+        nullable: true
+        comment: 5-digit county FIPS (state+county, derived) — FK to geo.counties.county_fips
+      - name: county_name
+        type: string
+        source: county_name
+        nullable: true
+        comment: County name
+      - name: commodity_code
+        type: string
+        source: commodity_code
+        nullable: true
+        comment: RMA commodity code
+      - name: commodity_name
+        type: string
+        source: commodity_name
+        nullable: true
+        comment: Insured crop name
+      - name: insurance_plan_code
+        type: string
+        source: insurance_plan_code
+        nullable: true
+        comment: Insurance plan code
+      - name: insurance_plan_abbr
+        type: string
+        source: insurance_plan_abbr
+        nullable: true
+        comment: Insurance plan abbreviation (YP, APH, RP, ...)
+      - name: coverage_category
+        type: string
+        source: coverage_category
+        nullable: true
+        comment: "Coverage category (A=Buyup, C=CAT, E=Existing, L=Limited)"
+      - name: stage_code
+        type: string
+        source: stage_code
+        nullable: true
+        comment: Crop growth stage at time of loss (RMA Stage Code Listing)
+      - name: cause_of_loss_code
+        type: string
+        source: cause_of_loss_code
+        nullable: true
+        comment: RMA code identifying the peril that caused the loss
+      - name: cause_of_loss_desc
+        type: string
+        source: cause_of_loss_desc
+        nullable: true
+        comment: "Cause-of-loss description (e.g. Drought, Excess Moisture/Precip/Rain, Hail, Freeze)"
+      - name: month_of_loss
+        type: int
+        source: month_of_loss
+        nullable: true
+        comment: Numeric month when the loss occurred
+      - name: month_of_loss_name
+        type: string
+        source: month_of_loss_name
+        nullable: true
+        comment: 3-letter abbreviation of the month when the loss occurred
+      - name: year_of_loss
+        type: int
+        source: year_of_loss
+        nullable: true
+        comment: Calendar year the loss occurred (can differ from the crop/policy year)
+      - name: policies_earning_prem_count
+        type: long
+        source: policies_earning_prem_count
+        nullable: true
+        comment: Policies earning premium (not available for the CLIP plan)
+      - name: policies_indemnified_count
+        type: long
+        source: policies_indemnified_count
+        nullable: true
+        comment: Policies with a reported loss for this cause (not available for the CLIP plan)
+      - name: net_planted_quantity
+        type: double
+        source: net_planted_quantity
+        nullable: true
+        comment: Acres/tons/pounds planted after the insured's share is applied (unit not published)
+      - name: net_endorsed_acres
+        type: double
+        source: net_endorsed_acres
+        nullable: true
+        comment: Acres insured under an endorsement (e.g. SCO, STAX, Margin Protection)
+      - name: liability_amount
+        type: double
+        source: liability_amount
+        nullable: true
+        comment: Maximum dollar amount of insurance for the crop (USD)
+      - name: total_premium_amount
+        type: double
+        source: total_premium_amount
+        nullable: true
+        comment: Premium before subsidy (base premium rate x liability; USD)
+      - name: producer_paid_premium_amount
+        type: double
+        source: producer_paid_premium_amount
+        nullable: true
+        comment: Premium paid by the producer (USD)
+      - name: subsidy_amount
+        type: double
+        source: subsidy_amount
+        nullable: true
+        comment: Federal premium subsidy (USD)
+      - name: state_private_subsidy
+        type: double
+        source: state_private_subsidy
+        nullable: true
+        comment: State/private subsidy (USD)
+      - name: additional_subsidy
+        type: double
+        source: additional_subsidy
+        nullable: true
+        comment: Additional subsidy, e.g. Pandemic Cover Crop Program in 2021-2022 (USD)
+      - name: efa_premium_discount
+        type: double
+        source: efa_premium_discount
+        nullable: true
+        comment: EFA premium discount (USD)
+      - name: net_determined_quantity
+        type: double
+        source: net_determined_quantity
+        nullable: true
+        comment: Acres/tons/pounds lost to damage from this cause, after the insured's share (unit not published)
+      - name: indemnity_amount
+        type: double
+        source: indemnity_amount
+        nullable: true
+        comment: Indemnity paid for this specific peril (USD; signed)
+      - name: loss_ratio
+        type: double
+        source: loss_ratio
+        nullable: true
+        comment: Loss ratio for this cause-of-loss row (indemnity / total premium)
+
+    source:
+      type: http
+      url: "https://pubfs-rma.fpac.usda.gov/pub/Web_Data_Files/Summary_of_Business/cause_of_loss/colsom_{effective_year}.zip"
+      method: GET
+      response:
+        format: json  # ignored: RmaCauseOfLossTransformer streams the zip itself
+
+      # Safe to cache: the year dimension advances, so a new crop year is a new key. A changed
+      # Last-Modified drops the entry before the refetch, so the 5-year lookback still sees a
+      # reissue rather than replaying what the probe just called stale.
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.RmaCauseOfLossTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=rma_cause_of_loss/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+  # ---------------------------------------------------------------------------
   # ERS_FARM_INCOME — USDA ERS Farm Income and Wealth Statistics (bulk CSV)
   # ---------------------------------------------------------------------------
   # One cumulative CSV carries all years; single fetch, partitioned by row year.
