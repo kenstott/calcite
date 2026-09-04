@@ -48,9 +48,16 @@ public class EntityBridgeOrganizer {
     if (parquetDir == null) {
       parquetDir = "s3://govdata-parquet-v1";
     }
+    // Optional: land the four result tables somewhere other than where the sources were read, so
+    // this sweep can be rehearsed against real production inputs without writing to them. Unset
+    // (the normal case) means write where we read.
+    String writeDir = System.getenv("GOVDATA_ENTITY_WRITE_DIR");
+    if (writeDir == null || writeDir.isEmpty()) {
+      writeDir = parquetDir;
+    }
 
     try (Connection pgConn = openPgConnection(jdbcUrl, user, password)) {
-      sweep(pgConn, parquetDir);
+      sweep(pgConn, parquetDir, writeDir);
     }
   }
 
@@ -59,9 +66,14 @@ public class EntityBridgeOrganizer {
    * The listener's logic runs standalone here rather than as a schema lifecycle hook.
    */
   public static void sweep(Connection pgConn, String parquetDir) throws Exception {
+    sweep(pgConn, parquetDir, parquetDir);
+  }
+
+  /** As {@link #sweep(Connection, String)}, reading and writing different directories. */
+  public static void sweep(Connection pgConn, String readDir, String writeDir) throws Exception {
     LOGGER.info("[entity-bridge] sweeping entity resolution across all schemas");
     EntityBridgeListener listener = new EntityBridgeListener();
-    listener.buildBridges(pgConn, parquetDir);
+    listener.buildBridges(pgConn, readDir, writeDir);
     LOGGER.info("[entity-bridge] entity resolution complete");
   }
 

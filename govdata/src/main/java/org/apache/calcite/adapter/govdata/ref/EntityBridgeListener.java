@@ -15,13 +15,20 @@ import org.apache.calcite.adapter.file.etl.EtlResult;
 import org.apache.calcite.adapter.file.etl.MaterializationWriter;
 import org.apache.calcite.adapter.file.etl.MaterializationWriterFactory;
 import org.apache.calcite.adapter.file.etl.MaterializeConfig;
+import org.apache.calcite.adapter.file.etl.SchemaConfig;
 import org.apache.calcite.adapter.file.etl.TableContext;
 import org.apache.calcite.adapter.file.etl.TableLifecycleListener;
+import org.apache.calcite.adapter.file.etl.VariableResolver;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -332,11 +339,29 @@ public class EntityBridgeListener implements TableLifecycleListener {
    * @throws Exception on SQL, I/O, or configuration errors
    */
   public void buildBridges(Connection pgConn, String materializeDir) throws Exception {
+    buildBridges(pgConn, materializeDir, materializeDir);
+  }
+
+  /**
+   * As {@link #buildBridges(Connection, String)}, but writes the four result tables somewhere
+   * other than where the sources were read.
+   *
+   * <p>Reads and writes shared one directory until now, which made this sweep impossible to
+   * rehearse: pointing it at the DQ bucket also pointed every source read there, and the DQ bucket
+   * carries only a subset of them (it has no {@code fec/committees}, for one), so the run died on
+   * the first missing source. Splitting them lets a rehearsal read real production inputs and land
+   * its output somewhere disposable.
+   *
+   * @param readDir where source tables are read from
+   * @param writeDir where entity_org_bridge / canonical_org_entity / the person pair are written
+   */
+  public void buildBridges(Connection pgConn, String readDir, String writeDir) throws Exception {
     String runId = Instant.now().toString();
-    LOGGER.info("EntityBridgeListener: starting entity-resolution build, runId={}", runId);
+    LOGGER.info("EntityBridgeListener: starting entity-resolution build, runId={}, read={}, "
+        + "write={}", runId, readDir, writeDir);
     try (Connection conn = openDuckDb(pgConn)) {
       try {
-        buildBridgesInternal(conn, materializeDir, runId);
+        buildBridgesInternal(conn, readDir, writeDir, runId);
       } catch (Exception e) {
         LOGGER.error("EntityBridgeListener: build failed for runId={}", runId, e);
         throw e;
@@ -344,7 +369,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
     }
   }
 
-  private void buildBridgesInternal(Connection conn, String base, String runId)
+  private void buildBridgesInternal(Connection conn, String base, String writeBase, String runId)
       throws SQLException, IOException {
     createMacros(conn);
     stageGleif(conn, base);
@@ -367,8 +392,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "name_raw AS source_name_raw, name_norm AS source_name_normalized, lei, sec_cik, "
         + "gleif_legal_name, match_method, match_confidence, match_score, '" + esc(runId)
         + "' AS match_run_id FROM all_org_mentions WHERE match_method IS NOT NULL");
-    long orgBridgeRowCount = writeTableBridges("entity_org_bridge", orgBridgeIter);
-    long canonicalOrgRowCount = writeTableBridges("canonical_org_entity", pivotOrg(conn));
+    long orgBridgeRowCount = writeTableBridges("entity_org_bridge", orgBridgeIter, writeBase);
+    long canonicalOrgRowCount = writeTableBridges("canonical_org_entity", pivotOrg(conn), writeBase);
 
     for (int i = 0; i < PERSON_SOURCES.size(); i++) {
       stagePersonSource(conn, base, i, PERSON_SOURCES.get(i));
@@ -381,9 +406,9 @@ public class EntityBridgeListener implements TableLifecycleListener {
       }
     }
     long canonicalPersonRowCount =
-        writeTableBridges("canonical_person_entity", pivotPerson(conn, personBridgeRows));
+        writeTableBridges("canonical_person_entity", pivotPerson(conn, personBridgeRows), writeBase);
 
-    writeTableBridgesSync("entity_person_bridge", personBridgeRows);
+    writeTableBridgesSync("entity_person_bridge", personBridgeRows, writeBase);
 
     LOGGER.info("EntityBridgeListener: complete — entity_org_bridge={}, entity_person_bridge={}, "
         + "canonical_org_entity={}, canonical_person_entity={}", orgBridgeRowCount,
@@ -1059,7 +1084,10 @@ public class EntityBridgeListener implements TableLifecycleListener {
   private static void configureS3FromEnv(Connection conn) throws SQLException {
     String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
     String secretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
-    String endpoint = System.getenv("S3_ENDPOINT");
+    // AWS_ENDPOINT_OVERRIDE is the object-store endpoint variable everywhere else — .env.prod,
+    // ChunkOrganizer alongside this class, GovDataDriver, StorageProviderFactory. S3_ENDPOINT is
+    // set by nothing and resolved to null, so this whole path failed to reach storage.
+    String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
     String region = System.getenv("AWS_REGION");
     if (region == null || region.isEmpty()) {
       region = "auto";
@@ -1107,28 +1135,136 @@ public class EntityBridgeListener implements TableLifecycleListener {
   // Write-out (legacy lifecycle-hook methods and standalone orchestrator methods)
   // ========================================================================
 
-  /** Standalone streaming write (for buildBridges orchestrator path). */
-  private static long writeTableBridges(String tableName, CloseableRowIterator rows)
-      throws IOException {
-    String materializeDir = System.getenv("GOVDATA_PARQUET_DIR");
-    if (materializeDir == null) {
-      materializeDir = "s3://govdata-parquet-v1";
+  /**
+   * Standalone streaming write (for the {@link #buildBridges} orchestrator path).
+   *
+   * <p>Builds the target table's writer from ref-schema.yaml rather than a {@code TableContext},
+   * which the standalone orchestrator has no way to obtain — it holds only a DuckDB connection
+   * and the materialize directory. The lifecycle-hook path's {@link #writeTableStreaming} stays
+   * as-is for callers that do have a context.
+   */
+  private static long writeTableBridges(String tableName, CloseableRowIterator rows,
+      String materializeDir) throws IOException {
+    if (materializeDir == null || materializeDir.isEmpty()) {
+      throw new IOException("EntityBridgeListener: no write directory — cannot write ref."
+          + tableName);
     }
-    String schemaDir = materializeDir + "/ref";
+    MaterializeConfig matConfig = standaloneMaterializeConfig(tableName);
+    StorageProvider storageProvider = StorageProviderFactory.createFromUrl(materializeDir);
+    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
+        matConfig, storageProvider, materializeDir + "/ref");
+    writer.initialize(matConfig);
     try {
-      long count = rows.count();
-      LOGGER.info("EntityBridgeListener: prepared {} rows for ref.{}", count, tableName);
-      rows.close();
-      return count;
+      writer.writeBatch(rows, Collections.<String, String>emptyMap());
+      writer.commit();
     } finally {
       rows.close();
+      writer.close();
+    }
+    long count = rows.count();
+    LOGGER.info("EntityBridgeListener: wrote {} rows to ref.{}", count, tableName);
+    return count;
+  }
+
+  /** Standalone non-streaming write (for the {@link #buildBridges} orchestrator path). */
+  private static void writeTableBridgesSync(String tableName, List<Map<String, Object>> rows,
+      String materializeDir) throws IOException {
+    writeTableBridges(tableName, new ListRowIterator(rows), materializeDir);
+  }
+
+  /** Adapts an in-memory row list to the streaming write path. */
+  private static final class ListRowIterator implements CloseableRowIterator {
+    private final Iterator<Map<String, Object>> src;
+    private long count;
+
+    ListRowIterator(List<Map<String, Object>> rows) {
+      this.src = rows.iterator();
+    }
+
+    @Override public boolean hasNext() {
+      return src.hasNext();
+    }
+
+    @Override public Map<String, Object> next() {
+      count++;
+      return src.next();
+    }
+
+    @Override public long count() {
+      return count;
+    }
+
+    @Override public void close() {
     }
   }
 
-  /** Standalone non-streaming write (for buildBridges orchestrator path). */
-  private static void writeTableBridgesSync(String tableName, List<Map<String, Object>> rows)
+  /**
+   * Reads one ref table's materialize config straight from the bundled schema YAML, with
+   * {@code ${VAR}} placeholders resolved the same way the pipeline resolves them.
+   *
+   * <p>Deliberately reads the table's own YAML block rather than going through
+   * {@link SchemaConfig#fromMap}: that method returns only the schema's <em>ETL pipelines</em>,
+   * and it drops any table that declares neither a {@code source} nor enabled {@code hooks}.
+   * All four tables written here are source-less, and the two bridge tables have their hooks
+   * disabled because this sweep — not the per-table lifecycle — is what populates them. So they
+   * are absent from {@code getTables()} by design, and looking for them there can only fail.
+   */
+  private static MaterializeConfig standaloneMaterializeConfig(String tableName)
       throws IOException {
-    LOGGER.info("EntityBridgeListener: wrote {} rows to ref.{}", rows.size(), tableName);
+    MaterializeConfig mat =
+        EtlPipelineConfig.materializeFromTableMap(refTableMap(tableName));
+    if (mat == null) {
+      throw new IOException("EntityBridgeListener: ref." + tableName
+          + " has no materialize block in ref-schema.yaml");
+    }
+    return mat;
+  }
+
+  /** Finds one table's raw definition in the bundled ref schema. */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> refTableMap(String tableName) throws IOException {
+    Map<String, Object> schema = refSchemaMap();
+    Object tables = schema.get("partitionedTables");
+    if (!(tables instanceof List)) {
+      tables = schema.get("tables");
+    }
+    if (tables instanceof List) {
+      for (Object entry : (List<Object>) tables) {
+        if (entry instanceof Map
+            && tableName.equals(((Map<String, Object>) entry).get("name"))) {
+          return (Map<String, Object>) entry;
+        }
+      }
+    }
+    throw new IOException("EntityBridgeListener: table ref." + tableName
+        + " not found in ref-schema.yaml");
+  }
+
+  private static volatile Map<String, Object> refSchemaMapCache;
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> refSchemaMap() throws IOException {
+    Map<String, Object> cached = refSchemaMapCache;
+    if (cached != null) {
+      return cached;
+    }
+    try (InputStream is =
+             EntityBridgeListener.class.getResourceAsStream("/ref/ref-schema.yaml")) {
+      if (is == null) {
+        throw new IOException("EntityBridgeListener: /ref/ref-schema.yaml not on the classpath");
+      }
+      ByteArrayOutputStream buf = new ByteArrayOutputStream();
+      byte[] chunk = new byte[8192];
+      int n;
+      while ((n = is.read(chunk)) > 0) {
+        buf.write(chunk, 0, n);
+      }
+      String yaml = VariableResolver.resolveEnvVars(
+          new String(buf.toByteArray(), StandardCharsets.UTF_8));
+      Map<String, Object> map = (Map<String, Object>) new Yaml().load(yaml);
+      refSchemaMapCache = map;
+      return map;
+    }
   }
 
   private static void writeTable(TableContext context, String tableName,

@@ -324,25 +324,8 @@ public class EtlPipelineConfig {
       builder.columns(ColumnConfig.fromList((List<?>) columnsObj));
     }
 
-    Map<String, Object> materializeMap = toMap(map.get("materialize"));
+    Map<String, Object> materializeMap = withPropagatedComments(map);
     if (materializeMap != null) {
-      // Propagate table comment from table level to materialize config
-      Object tableComment = map.get("comment");
-      if (tableComment instanceof String && !materializeMap.containsKey("tableComment")) {
-        materializeMap = new LinkedHashMap<>(materializeMap);
-        materializeMap.put("tableComment", tableComment);
-      }
-
-      // Extract column comments from columns array and propagate to materialize config
-      if (!materializeMap.containsKey("columnComments") && columnsObj instanceof List) {
-        Map<String, String> columnComments = extractColumnComments((List<?>) columnsObj);
-        if (!columnComments.isEmpty()) {
-          materializeMap = materializeMap instanceof LinkedHashMap
-              ? materializeMap : new LinkedHashMap<>(materializeMap);
-          materializeMap.put("columnComments", columnComments);
-        }
-      }
-
       builder.materialize(MaterializeConfig.fromMap(materializeMap));
     }
 
@@ -406,6 +389,62 @@ public class EtlPipelineConfig {
     }
 
     return builder.build();
+  }
+
+  /**
+   * Builds a table's materialize config straight from its YAML block.
+   *
+   * <p>For callers that hold a table's definition but cannot turn it into an
+   * {@code EtlPipelineConfig}: {@link #fromMap} requires a {@code source}, so a source-less table
+   * — one a sweep or a lifecycle hook populates rather than a fetch — cannot go through it. Such
+   * a table still has a materialize target, and it has to be resolved exactly as every other
+   * table's is, comments and declared columns included; hence this shares {@code fromMap}'s
+   * implementation rather than restating it.
+   *
+   * @param tableMap one table's YAML block
+   * @return its materialize config, or null if it declares no materialize block
+   */
+  public static MaterializeConfig materializeFromTableMap(Map<String, Object> tableMap) {
+    Map<String, Object> materializeMap = withPropagatedComments(tableMap);
+    if (materializeMap == null) {
+      return null;
+    }
+    Object columnsObj = tableMap.get("columns");
+    List<ColumnConfig> columns = columnsObj instanceof List
+        ? ColumnConfig.fromList((List<?>) columnsObj) : null;
+    Object nameObj = tableMap.get("name");
+    return MaterializeConfig.withTableDefaults(MaterializeConfig.fromMap(materializeMap),
+        nameObj instanceof String ? (String) nameObj : null, columns);
+  }
+
+  /**
+   * Returns a table's materialize block with the table-level comment and its columns' comments
+   * folded in, or null if it has no materialize block. The block itself always wins.
+   *
+   * @param tableMap one table's YAML block
+   * @return the materialize map to build from, or null
+   */
+  private static Map<String, Object> withPropagatedComments(Map<String, Object> tableMap) {
+    Map<String, Object> materializeMap = toMap(tableMap.get("materialize"));
+    if (materializeMap == null) {
+      return null;
+    }
+    Object tableComment = tableMap.get("comment");
+    if (tableComment instanceof String && !materializeMap.containsKey("tableComment")) {
+      materializeMap = new LinkedHashMap<>(materializeMap);
+      materializeMap.put("tableComment", tableComment);
+    }
+
+    Object columnsObj = tableMap.get("columns");
+    if (!materializeMap.containsKey("columnComments") && columnsObj instanceof List) {
+      Map<String, String> columnComments = extractColumnComments((List<?>) columnsObj);
+      if (!columnComments.isEmpty()) {
+        materializeMap = materializeMap instanceof LinkedHashMap
+            ? materializeMap : new LinkedHashMap<>(materializeMap);
+        materializeMap.put("columnComments", columnComments);
+      }
+    }
+    return materializeMap;
   }
 
   /**

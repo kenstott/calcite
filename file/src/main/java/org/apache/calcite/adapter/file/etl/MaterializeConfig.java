@@ -254,13 +254,38 @@ public class MaterializeConfig {
    */
   public static MaterializeConfig withTableDefaults(MaterializeConfig materializeConfig,
       EtlPipelineConfig tableConfig) {
+    if (tableConfig == null) {
+      return materializeConfig;
+    }
+    return withTableDefaults(materializeConfig, tableConfig.getName(), tableConfig.getColumns());
+  }
+
+  /**
+   * As {@link #withTableDefaults(MaterializeConfig, EtlPipelineConfig)}, but taking the two
+   * defaults directly.
+   *
+   * <p>A source-less table — one a sweep or a hook populates rather than a fetch — cannot be
+   * built into an {@link EtlPipelineConfig} at all, since that requires a source. Its materialize
+   * target still has to be resolved the same way as every other table's, so the defaults are
+   * accepted on their own here.
+   *
+   * @param materializeConfig the config to fill in; returned unchanged if already complete
+   * @param tableName default name, used when the materialize block names no target
+   * @param tableColumns the table's declared columns, used when the materialize block declares
+   *     none
+   * @return a config with name/columns filled in, or {@code materializeConfig} itself if nothing
+   *     needed filling
+   */
+  public static MaterializeConfig withTableDefaults(MaterializeConfig materializeConfig,
+      String tableName, List<ColumnConfig> tableColumns) {
     if (materializeConfig == null) {
       return null;
     }
     boolean needsName = (materializeConfig.getName() == null || materializeConfig.getName().isEmpty())
-        && (materializeConfig.getTargetTableId() == null || materializeConfig.getTargetTableId().isEmpty());
+        && (materializeConfig.getTargetTableId() == null || materializeConfig.getTargetTableId().isEmpty())
+        && tableName != null && !tableName.isEmpty();
     boolean needsColumns = (materializeConfig.getColumns() == null || materializeConfig.getColumns().isEmpty())
-        && tableConfig.getColumns() != null && !tableConfig.getColumns().isEmpty();
+        && tableColumns != null && !tableColumns.isEmpty();
     if (!needsName && !needsColumns) {
       return materializeConfig;
     }
@@ -270,9 +295,9 @@ public class MaterializeConfig {
         .targetTableId(materializeConfig.getTargetTableId())
         .output(materializeConfig.getOutput())
         .partition(materializeConfig.getPartition())
-        .columns(needsColumns ? tableConfig.getColumns() : materializeConfig.getColumns())
+        .columns(needsColumns ? tableColumns : materializeConfig.getColumns())
         .options(materializeConfig.getOptions())
-        .name(needsName ? tableConfig.getName() : materializeConfig.getName())
+        .name(needsName ? tableName : materializeConfig.getName())
         .iceberg(materializeConfig.getIceberg())
         .tableComment(materializeConfig.getTableComment())
         .columnComments(materializeConfig.getColumnComments())
