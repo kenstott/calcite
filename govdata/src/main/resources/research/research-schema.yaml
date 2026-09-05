@@ -577,11 +577,23 @@ partitionedTables:
       - name: rd_field
         type: string
         nullable: true
-        comment: S&E field (row label of the expenditure question); "All R&D fields" for totals
+        comment: >
+          S&E field (row label of the expenditure question) — a two-level rollup:
+          'All' is the institution grand total, then a broad field (e.g. 'Life
+          sciences, all') and its detailed sub-fields (e.g. 'Life sciences, health
+          sciences') both appear as separate rows. Summing across rd_field for one
+          institution/funding_source without filtering to a single level multiplies
+          the total; filter to rd_field='All' for an institution-level total.
       - name: funding_source
         type: string
         nullable: true
-        comment: Federal for the federal-agency question; otherwise the nonfederal source (Institution / State & local / Business / Nonprofit / All other)
+        comment: >
+          Federal for the federal-agency question; otherwise the nonfederal source
+          (Institution funds / State and local government / Business / Nonprofit
+          organziations / All other sources), or 'Total nonfederal' — NCSES's own
+          sum of those five nonfederal sources, which does NOT include Federal. The
+          true grand total per institution/rd_field is 'Total nonfederal' plus the row
+          where funding_source='Federal' AND federal_agency='Total'.
       - name: federal_agency
         type: string
         nullable: true
@@ -691,14 +703,22 @@ views:
       institution_count, for rows with a resolved state_fips. This is the
       R&D-spend half of the patents-per-R&D-dollar productivity ratio — join to
       patents.patent_assignees (grant counts by state_fips × grant_year) to
-      compute innovation input ÷ output.
+      compute innovation input ÷ output. Sums only each institution's two true
+      totals — funding_source='Federal' AND federal_agency='Total', plus
+      funding_source='Total nonfederal' — filtered to rd_field='All', since the
+      base table's rd_field and funding_source columns are both rollup
+      hierarchies (see nsf_herd_by_institution's own comments); summing every row
+      would multiply the total by the field/source fan-out.
     sql: >
       SELECT
         h.year,
         h.state_fips,
-        SUM(h.rd_expenditure_usd_thousand)                                        AS rd_expenditure_usd_thousand,
-        SUM(CASE WHEN h.funding_source = 'Federal' THEN h.rd_expenditure_usd_thousand ELSE 0 END) AS federal_rd_usd_thousand,
+        SUM(CASE WHEN (h.funding_source = 'Federal' AND h.federal_agency = 'Total')
+                    OR h.funding_source = 'Total nonfederal'
+                 THEN h.rd_expenditure_usd_thousand ELSE 0 END)                   AS rd_expenditure_usd_thousand,
+        SUM(CASE WHEN h.funding_source = 'Federal' AND h.federal_agency = 'Total'
+                 THEN h.rd_expenditure_usd_thousand ELSE 0 END)                   AS federal_rd_usd_thousand,
         COUNT(DISTINCT h.institution)                                             AS institution_count
       FROM nsf_herd_by_institution h
-      WHERE h.state_fips IS NOT NULL
+      WHERE h.state_fips IS NOT NULL AND h.rd_field = 'All'
       GROUP BY h.year, h.state_fips

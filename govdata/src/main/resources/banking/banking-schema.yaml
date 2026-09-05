@@ -138,6 +138,15 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
+  # FFIEC CRA aggregate/disclosure flat files begin with activity year 1996 and are
+  # released the following calendar year (2024 activity data was published Oct 2025);
+  # dataLag: 1 keeps the last-year window aligned with what's actually on FFIEC.
+  cra_year_range: &cra_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1996}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+
   # 50 states + DC + Puerto Rico (same set as housing's hmda_states; YAML anchors do not
   # cross files, so the values are duplicated here).
   banking_states: &banking_states
@@ -1317,6 +1326,184 @@ partitionedTables:
         incrementalKeys: [cycle]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # CRA SMALL BUSINESS LENDING — FFIEC CRA Aggregate flat file A1-1
+  # (Small Business Loans by County -- Originations)
+  # ---------------------------------------------------------------------------
+  - name: cra_small_business_lending
+    pattern: "type=cra_small_business_lending/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Community Reinvestment Act aggregate small-business lending, from FFIEC's
+      2024 Aggregate flat file table A1-1 ("Small Business Loans by County --
+      Originations"). One record per (activity_year, state, county, msa_md,
+      census_tract, income_group_total, report_level) reporting the number and
+      dollar volume of small-business loans originated in that geography-and-
+      income cell across all reporting institutions, broken out by loan-size
+      bucket (<$100k, $100k-$250k, $250k-$1M) and separately for loans made to
+      small businesses with gross annual revenues under $1M. Grain is set by
+      report_level: NULL rows are the tract-x-income-group subtotals, '100'
+      rows are the county-x-income-group totals, '200' rows are the county
+      totals across all income groups, and '210' rows are the MSA/MD totals.
+      Loan amounts arrive in thousands of USD from the source and are carried
+      through unchanged. Joins to geo.counties via county_fips. Source:
+      ffiec.gov/sites/default/files/data/cra/flat-files/{yy}exp_aggr.zip
+      (one ZIP per activity year, extracting the cra{year}_Aggr_A11.dat
+      fixed-width member; 145-char record layout parsed directly by
+      CraSmallBusinessLendingTransformer — see that class for why this table
+      cannot use the shared file/etl HTTP+FIXED_WIDTH path).
+
+    dimensions:
+      type:
+        - cra_small_business_lending
+      year: *cra_year_range
+
+    # Column names/types here match CraSmallBusinessLendingTransformer's output map
+    # keys directly (no `expression: 'src."..."'` indirection) — a
+    # StreamingResponseTransformer's rows are the final row shape, same as
+    # ncua_branch_locations above.
+    columns:
+      - name: activity_year
+        type: integer
+        nullable: true
+        comment: CRA reporting (activity) year
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: >
+          2-digit state FIPS code with leading zero, or blank for totals across
+          all states
+      - name: county_code
+        type: string
+        nullable: true
+        comment: >
+          3-digit within-state county FIPS code (concat state_fips + this to
+          get the 5-digit county_fips), or blank for totals across all counties
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: >
+          5-digit state+county FIPS derived from state_fips || county_code (FK
+          to geo.counties.county_fips); NULL on total rows that span all
+          counties in a state or MSA
+      - name: msa_md
+        type: string
+        nullable: true
+        comment: >
+          5-digit MSA/MD code as defined by OMB (right-justified with leading
+          zeros), or 'NA' for tracts outside any MSA/MD
+      - name: census_tract
+        type: string
+        nullable: true
+        comment: >
+          Census tract number as reported by the Census Bureau (e.g. '0301.01'),
+          or blank for rows that are totals across all tracts in the county or
+          MSA/MD
+      - name: split_county
+        type: string
+        nullable: true
+        comment: >
+          'Y' if this row's tract is split by an MSA/MD boundary, 'N' if not,
+          blank on total rows
+      - name: population_classification
+        type: string
+        nullable: true
+        comment: >
+          'S' for counties with <500,000 population, 'L' for >=500,000, blank
+          on total rows
+      - name: income_group_total
+        type: string
+        nullable: true
+        comment: >
+          Median-family-income bucket of the tract, kept as string because the
+          field mixes fine-grained deciles (values '1'-'15', with '1' meaning
+          <10% of MFI and '14' meaning MFI unknown) with coarse tiers ('101'
+          Low, '102' Moderate, '103' Middle, '104' Upper, '105' Income Not
+          Known, '106' Tract Not Known); blank on total rows
+      - name: report_level
+        type: string
+        nullable: true
+        comment: >
+          Grain marker: '100' = income-group total within a county, '200' =
+          county total across all income groups, '210' = MSA/MD total, blank =
+          tract-x-income-group subtotal (the finest grain, one row per (state,
+          county, census_tract, income_group_total))
+      - name: loans_lt_100k_count
+        type: long
+        nullable: true
+        comment: Number of small-business loans originated with amount at origination < $100,000
+      - name: loans_lt_100k_amount
+        type: long
+        nullable: true
+        comment: Total dollar amount of small-business loans originated with amount at origination < $100,000 (USD thousands)
+      - name: loans_100k_to_250k_count
+        type: long
+        nullable: true
+        comment: Number of small-business loans originated with amount at origination >= $100,000 and < $250,000
+      - name: loans_100k_to_250k_amount
+        type: long
+        nullable: true
+        comment: Total dollar amount of small-business loans originated with amount at origination >= $100,000 and < $250,000 (USD thousands)
+      - name: loans_250k_to_1m_count
+        type: long
+        nullable: true
+        comment: Number of small-business loans originated with amount at origination >= $250,000 and < $1,000,000
+      - name: loans_250k_to_1m_amount
+        type: long
+        nullable: true
+        comment: Total dollar amount of small-business loans originated with amount at origination >= $250,000 and < $1,000,000 (USD thousands)
+      - name: loans_to_small_biz_lt_1m_rev_count
+        type: long
+        nullable: true
+        comment: Number of loans originated to small businesses with gross annual revenues < $1,000,000 (subset of the above counts by loan size)
+      - name: loans_to_small_biz_lt_1m_rev_amount
+        type: long
+        nullable: true
+        comment: Total dollar amount of loans originated to small businesses with gross annual revenues < $1,000,000 (USD thousands; subset of the amount-by-loan-size columns above)
+
+    source:
+      type: http
+      # Two-digit year in the URL — 96exp_aggr.zip through 24exp_aggr.zip.
+      # {year_short} is the file-adapter's built-in 2-digit rendering of the
+      # combination's year (effective_year when dataLag is set, else year).
+      # This host's Cloudflare gate fingerprints the TLS/HTTP client itself
+      # (confirmed live: java.net.HttpURLConnection gets a 403 challenge page
+      # regardless of headers; java.net.http.HttpClient over HTTP/2 does not),
+      # so the actual fetch is done by CraSmallBusinessLendingTransformer
+      # (below), which reads these headers via RequestContext rather than
+      # HttpSource applying them — see that class's doc for the full story.
+      url: "https://www.ffiec.gov/sites/default/files/data/cra/flat-files/{year_short}exp_aggr.zip"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        Accept: "*/*"
+        Accept-Language: "en-US,en;q=0.9"
+      # No rawCache: block — like ncua_branch_locations above, a
+      # StreamingResponseTransformer opens its own connection and HttpSource
+      # returns before its rawCache path ever runs, so it would be a no-op here.
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.CraSmallBusinessLendingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cra_small_business_lending/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: cra_small_business_lending
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1412,6 +1599,19 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_abbr]
+
+  cra_small_business_lending:
+    # No natural single-column primary key — CRA aggregates carry rows at four
+    # nested grains distinguished only by report_level and blanks in the geo
+    # keys. The finest grain is (activity_year, state_fips, county_code,
+    # census_tract, income_group_total) with report_level NULL; totals repeat
+    # the same (year, state, county) with census_tract or income_group_total
+    # blanked and report_level filled in — so a single-column PK is inappropriate.
+    foreignKeys:
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
 
   consumer_complaints:
     primaryKey: [complaint_id]

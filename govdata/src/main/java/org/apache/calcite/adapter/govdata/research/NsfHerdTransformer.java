@@ -55,8 +55,16 @@ import java.util.zip.ZipInputStream;
  *       {@code federal_agency}=column.</li>
  *   <li><b>"Nonfederal expenditures by field and source"</b> — {@code row}=S&amp;E field,
  *       {@code column}=nonfederal source ⇒ {@code funding_source}=column,
- *       {@code federal_agency}=null.</li>
+ *       {@code federal_agency}=null. This question's own {@code column="Total"} is the sum
+ *       of the five nonfederal sources only (it does not include Federal); relabeled to
+ *       {@code funding_source="Total nonfederal"} so it can't be mistaken for a grand
+ *       total — the true grand total is that value plus the row where
+ *       {@code funding_source='Federal' AND federal_agency='Total'}.</li>
  * </ul>
+ * {@code rd_field} is itself a two-level rollup ("All" ⊃ a broad field like "Life sciences,
+ * all" ⊃ a detailed field like "Life sciences, health sciences") — summing
+ * {@code rd_expenditure_usd_thousand} across rows for one institution/funding_source without
+ * filtering to a single {@code rd_field} level multiplies the total.
  * Dollar values are in <b>thousands</b> (HERD PUF convention). {@code state_fips} is derived
  * from the USPS {@code inst_state_code}; an unmapped non-blank postal code fails loudly
  * (project rule #6 — never default to a placeholder FIPS). {@code ipeds_unitid} is passed
@@ -232,7 +240,11 @@ public class NsfHerdTransformer implements StreamingResponseTransformer {
         out.put("funding_source", "Federal");
         out.put("federal_agency", colLabel);
       } else {
-        out.put("funding_source", colLabel);
+        // NCSES's own "Total" column on this question is the sum of the five nonfederal
+        // sources only -- it excludes Federal entirely. Passed through as bare "Total" it
+        // reads as a grand total; disambiguate so a caller can't mistake it for one (the
+        // true grand total is this value plus funding_source='Federal' AND federal_agency='Total').
+        out.put("funding_source", "Total".equals(colLabel) ? "Total nonfederal" : colLabel);
         out.put("federal_agency", null);
       }
       out.put("rd_expenditure_usd_thousand", amount);
