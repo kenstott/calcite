@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.82.0](https://github.com/kenstott/calcite/compare/engine-v0.81.0...engine-v0.82.0) (2026-09-05)
+
+
+### Features
+
+* **askamerica-engine:** teach web_fetch gzip decompression, POST, and browser headers ([85000c1](https://github.com/kenstott/calcite/commit/85000c15c798b88c3ae1ab68c9a788c9e301f508))
+* **askamerica/engine:** add campaign-money channel recipe ([4e4123e](https://github.com/kenstott/calcite/commit/4e4123e260b67c0afd4697635e754a65cb5f8675))
+* **askamerica/engine:** add outcome-coverage and exclusion-delta recipes ([5fcc1b6](https://github.com/kenstott/calcite/commit/5fcc1b6cf1d3e27d134600c29b1461bf08f20068))
+* **askamerica/engine:** add recipe for checking local-revenue backfill before reporting a state-aid cut as a net loss ([b53bafb](https://github.com/kenstott/calcite/commit/b53bafb9991165fcd2f9f2ecd2d17664045366ea))
+* **askamerica/engine:** add register/upload_report/mysite MCP tools for durable Studies publishing ([f342a70](https://github.com/kenstott/calcite/commit/f342a7073fc46583182fd02988701827356e4ab1))
+* **askamerica/engine:** consolidate fetch tools into web_fetch, extend recipes, fix credential-refresh error visibility ([b0aeb37](https://github.com/kenstott/calcite/commit/b0aeb373b1275503a6a6d355b87f60f2ca30502b))
+* **askamerica/engine:** make the find_recipe mandate reach the caller via diagnostics ([6069d74](https://github.com/kenstott/calcite/commit/6069d743e39a2e107863650afd69a60af8be759f))
+* **askamerica/engine:** require the zero-order table alongside the multivariate model ([1b818ac](https://github.com/kenstott/calcite/commit/1b818ace92fb6367d76048f23061294242d0c291))
+* **askamerica/engine:** teach grain-unavailability disclosure and before/after window symmetry ([b986b85](https://github.com/kenstott/calcite/commit/b986b8583779ef4daca6527ec5689b15c38d1532))
+* **askamerica/engine:** teach grain-unavailability disclosure and before/after window symmetry ([aaff1d5](https://github.com/kenstott/calcite/commit/aaff1d5fb2f0ebd22396547543c4b017e2a1ef54))
+* **govdata/ag:** add rma_cause_of_loss table for peril-attributed indemnities ([b219e66](https://github.com/kenstott/calcite/commit/b219e66f84118e235df0efe05c4d89a18af12140))
+* **govdata/banking:** add banking.cra_small_business_lending (FFIEC CRA A1-1) ([5d4fa7e](https://github.com/kenstott/calcite/commit/5d4fa7e9d8fe55d6dc95db0529e58065c2476544))
+* **govdata/housing:** add building_permits_place, Census BPS at place grain ([7c0bc87](https://github.com/kenstott/calcite/commit/7c0bc878b816b8af07f16a8588ebae465a7609ac))
+* **govdata/lands:** carry the FIA stratification tables at published grain ([c4f8c96](https://github.com/kenstott/calcite/commit/c4f8c96a5c7c7acba33b91d44c41beb0ffca8f73))
+* **govdata:** surface observed coverage in catalog table descriptions ([9dfd007](https://github.com/kenstott/calcite/commit/9dfd007d6ab7a8eaf5a486a7392a106048e9277e))
+
+
+### Bug Fixes
+
+* **askamerica/charts:** a shrunk font-size attribute was silently overridden by the shared stylesheet ([6e6c018](https://github.com/kenstott/calcite/commit/6e6c0181aa003bf22837fd69dfbf03d83545887c))
+* **askamerica/charts:** stop bold panel titles clipping when the browser's font renders wider than AWT's ([bb13eb5](https://github.com/kenstott/calcite/commit/bb13eb5a8201ceef999d622c3a7baeb7a319bcb3))
+* **askamerica/engine:** fit stat-tile panel labels to their tile width ([2087111](https://github.com/kenstott/calcite/commit/208711136d6ef2e3cf76f4cb5c921a6ed5c494e7))
+* **askamerica/engine:** reach disparities questions from the outcome-coverage recipe ([e19e80e](https://github.com/kenstott/calcite/commit/e19e80e02dab3b514612166eae6509b7bdf4eacf))
+* **askamerica/engine:** repoint QuestionGuidanceTest at the post-truncation-fix usage guide ([c823ab9](https://github.com/kenstott/calcite/commit/c823ab9e037ae68d4ef5d761a4d1c1afe4c55a64))
+* **askamerica/engine:** repoint the contrastive-exemplars integration test at the post-truncation-fix location ([22d107c](https://github.com/kenstott/calcite/commit/22d107ca9bd7c66edfe6ac5394b82a7b018acd57))
+* **cyber-vuln:** lower NVD start year floor from 2002 to 1999 for complete historical backfill ([5a0fbee](https://github.com/kenstott/calcite/commit/5a0fbeefea12719f894dac9b96cf4346bcd6bf8d))
+* **file/etl,govdata/health:** stop paginated JSON tables collapsing to one all-null row ([a9d56d1](https://github.com/kenstott/calcite/commit/a9d56d1ce8e755114014891465b63a5d0b63d012))
+* **file/etl:** align a multi-member ZIP's CSV rows by column name ([682271c](https://github.com/kenstott/calcite/commit/682271c3eefb2db6371250596197704cb46da035))
+* **file/etl:** classify transport failures as transient, not skippable ([f9ad64c](https://github.com/kenstott/calcite/commit/f9ad64cc708345ea4ab9f93a6a1bfb69bd1f1889))
+* **file/etl:** count a parallel batch that died as a failed batch ([7815a50](https://github.com/kenstott/calcite/commit/7815a50cb1354affa94808c18aaad54ada6b1330))
+* **file/iceberg:** reject commits built on stale table metadata ([c317712](https://github.com/kenstott/calcite/commit/c317712204eefa029309cac21028d873cc2276b3))
+* **file/iceberg:** S3FileIOTableOperations must treat wrapped NotFoundException as absent ([e5518cb](https://github.com/kenstott/calcite/commit/e5518cb9dab880ee0de0193d62c8834387d3fc25))
+* **file:** the Postgres tracker never implemented period completion, so every lookback was inert ([fa0b6f9](https://github.com/kenstott/calcite/commit/fa0b6f9e5152c9c7f3e4babeafbf3d9a6829c317))
+* **govdata,core:** wire up TRY_CAST so it validates and pushes down to DuckDB ([316cb7a](https://github.com/kenstott/calcite/commit/316cb7ac30f9d59cc7caeb13e9aee0e9ff04e548))
+* **govdata/cftc:** add missing schemaName key ([be89ac1](https://github.com/kenstott/calcite/commit/be89ac16bf730b3204c8e989be9df66caa30b69d))
+* **govdata/econ:** correct year partition type for BEA quarterly tables ([ac76d20](https://github.com/kenstott/calcite/commit/ac76d2085eb9ae602a872211038587a51745d745))
+* **govdata/edu:** derive state_fips on pre-FY2022 F-33 files, and detect the delimiter ([cbabbae](https://github.com/kenstott/calcite/commit/cbabbae4b30e7fe4dd48c57e70aac10ce92332fb))
+* **govdata/energy:** describe eia_fossil_fuel_production as crude-only (D-023) ([1d2a1ff](https://github.com/kenstott/calcite/commit/1d2a1ffcbe1ce06905d79825f9114af3a099085b))
+* **govdata/energy:** find the EIA-861 operational sheet, and size headers across the block ([916a5b7](https://github.com/kenstott/calcite/commit/916a5b7295f48d3a475b75b315aad1881f7fbc45))
+* **govdata/fedregister:** parse EFFDATE prose sentences ([73ccb6e](https://github.com/kenstott/calcite/commit/73ccb6efdb67a3d84415882eac36f48aef82735f))
+* **govdata/fiscal:** read the pre-2017 F-33 record layout, and stream it ([e83a2b8](https://github.com/kenstott/calcite/commit/e83a2b87b8ab2440157023a13eaecc24b44e49e1))
+* **govdata/health:** check worker table coverage against the schema ([9b35a63](https://github.com/kenstott/calcite/commit/9b35a634180a6c3182ba8cc1d6b536ab6db5244d))
+* **govdata/health:** dispatch cms_nursing_home, which no worker group ran ([b298074](https://github.com/kenstott/calcite/commit/b298074b8a589c3df52a3cbb6081c9c74f317ac5))
+* **govdata/health:** drop medicaid_drug_utilization's inert year fan-out and filter ([73176af](https://github.com/kenstott/calcite/commit/73176af81a335ca57b6dff4688caacea2fb9b202))
+* **govdata/health:** partition cdc_brfss by year so a run stops wiping other years ([8d51f61](https://github.com/kenstott/calcite/commit/8d51f618c6b0e31f8c97ae5e3fb92dbda9c6490f))
+* **govdata/lands:** correct the FIA OWNGRPCD domain, which hid all private forest ([f93fecd](https://github.com/kenstott/calcite/commit/f93fecd331b2455a7ba39de309803c576bb5629c))
+* **govdata/lands:** fix PILT area parsing and add live coverage test ([5bf40e8](https://github.com/kenstott/calcite/commit/5bf40e89f06f82e98e9d6b9edb81bedf32ef8d6f))
+* **govdata/ref:** actually write the entity bridge tables ([619bcf3](https://github.com/kenstott/calcite/commit/619bcf354b7ed40c62e9c27ec1c13c28d80d52cd))
+* **govdata/ref:** canonical_org_entity is one row per source mention, not per org ([b630645](https://github.com/kenstott/calcite/commit/b6306457f2ab48325248b93731f9ee4bbd09563c))
+* **govdata/research:** disambiguate HERD's nonfederal-only 'Total' rollup (D-160, D-196) ([21260a4](https://github.com/kenstott/calcite/commit/21260a4fb0fbe30a534e323241ef2c162a4b1ab9))
+* **govdata/scripts:** don't let a non-integer year value crash --all-schemas ([3ef971c](https://github.com/kenstott/calcite/commit/3ef971c21f32318d024ba9f540c77062a0bf873f))
+* **govdata/scripts:** give x-schema.sh the standard env and classpath handling ([c62fb00](https://github.com/kenstott/calcite/commit/c62fb00bc388ab883f3b2d60fd75cdbb581bf177))
+* **govdata/scripts:** resolve the PG tracker namespace per schema, not per bucket ([76beb78](https://github.com/kenstott/calcite/commit/76beb78fca91f767b88273dc4afd43c1cf399d1e))
+* **govdata/weather:** stop CDO's trace flag becoming negative precipitation ([a74c5c3](https://github.com/kenstott/calcite/commit/a74c5c3c340e2304bdb5a0792b2a22679100bde2))
+* **scripts,govdata:** a requeued pool slot could never launch; quieten SEC FYE warnings ([dc3d952](https://github.com/kenstott/calcite/commit/dc3d9529cd1be6c6d09c38f5280e6e3fb9be863a))
+* **scripts:** let the SEC pool slots run concurrently ([5103b95](https://github.com/kenstott/calcite/commit/5103b95e40966654bdb6173ab7f94c3126c679b6))
+
 ## [0.81.0](https://github.com/kenstott/calcite/compare/engine-v0.80.0...engine-v0.81.0) (2026-09-01)
 
 
