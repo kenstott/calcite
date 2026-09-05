@@ -1025,13 +1025,13 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
-  # EIA FOSSIL FUEL PRODUCTION - Crude oil and natural gas production
+  # EIA CRUDE OIL PRODUCTION (petroleum/crd/crpdn) - single-endpoint, crude only
   # ---------------------------------------------------------------------------
   - name: eia_fossil_fuel_production
     # 36 periods = 3 YEARS of monthly data. EIA-914 re-estimates the two prior months every month,
-    # and the annual PSA (Aug) restates up to 10 prior years of oil production, the NGA (Oct) two
-    # prior years of gas. EIA considers a state final "prior to two calendar years back", so 2
-    # years sat exactly on that boundary with no margin; 3 covers it.
+    # and the annual PSA (Aug) restates up to 10 prior years of oil production. EIA considers a
+    # state final "prior to two calendar years back", so 2 years sat exactly on that boundary
+    # with no margin; 3 covers it.
     # https://www.eia.gov/petroleum/production/pdf/eia914revisionpolicy.pdf
     lookbackPeriods: 36
     freshness:
@@ -1047,11 +1047,12 @@ partitionedTables:
       checkedAt: "2026-09-05T14:46:44Z"
     partitions: *standard_partitions_monthly
     comment: >
-      EIA API v2 petroleum crude oil production by state and month. The transformer
-      also fetches the EIA natural gas production summary endpoint internally and unions
-      both series into the output, so each partition contains both crude oil and natural
-      gas rows distinguished by the fuel_type column. One row per EIA area + fuel type +
-      process + year-month. Cross-references geo.states via state_abbr.
+      EIA API v2 petroleum crude oil production by state and month. Source is a single
+      endpoint (petroleum/crd/crpdn); every fuel_type value is 'Crude Oil' or
+      'ANS Crude Oil'. Natural gas production is not included — the EIA natural
+      gas production summary lives at a separate endpoint (natural-gas/prod/sum) that
+      this table does not fetch; use eia_natural_gas_price for gas market data. One
+      row per EIA area + process + year-month. Cross-references geo.states via state_abbr.
 
     dimensions:
       type:
@@ -1076,7 +1077,7 @@ partitionedTables:
       - name: fuel_type
         type: string
         nullable: false
-        comment: Fuel type ('crude_oil' or 'natural_gas')
+        comment: Fuel type — 'Crude Oil' or 'ANS Crude Oil' (Alaska North Slope). Never natural gas; this table's single source is the petroleum crude endpoint.
       - name: process_code
         type: string
         nullable: true
@@ -1097,14 +1098,11 @@ partitionedTables:
         type: string
         nullable: true
         comment: >
-          EIA API v2 series identifier. Composite key built by EIA from the endpoint's facets —
-          for crude oil production it encodes area plus process (e.g. the state's crude oil
-          production series); the human-readable label is in series_description on the same row,
-          and the decoded parts are in eia_area_code, state_abbr, fuel_type, and process_code.
-          This table is long-format: one row per (series_id, year, month), and it unions crude oil
-          with natural gas production, so ALWAYS filter on series_id or fuel_type before
-          aggregating — production_unit differs between fuels. Enumerate with
-          SELECT DISTINCT series_id, series_description.
+          EIA API v2 series identifier. Composite key built by EIA from the endpoint's facets:
+          area plus process (e.g. the state's crude oil field production series). The
+          human-readable label is in series_description on the same row, and the decoded parts
+          are in eia_area_code, state_abbr, and process_code. This table is long-format: one row
+          per (series_id, year, month). Enumerate with SELECT DISTINCT series_id, series_description.
       - name: series_description
         type: string
         nullable: true

@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <ul>
  *   <li>eia_electricity_generation — monthly generation by state/fuel/sector</li>
  *   <li>eia_electricity_prices — annual retail electricity prices by state/sector</li>
- *   <li>eia_fossil_fuel_production — monthly crude oil and natural gas production</li>
+ *   <li>eia_fossil_fuel_production — monthly crude oil production by state</li>
  *   <li>eia_state_energy_consumption — annual SEDS consumption by state/MSN</li>
  *   <li>eia_natural_gas_storage — weekly underground storage by region</li>
  *   <li>eia_petroleum_stocks — weekly petroleum product stocks by PADD</li>
