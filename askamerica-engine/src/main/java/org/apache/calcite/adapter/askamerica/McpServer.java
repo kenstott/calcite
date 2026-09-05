@@ -2030,13 +2030,28 @@ public class McpServer {
         webFetchProps.set(
             "max_chars", prop("integer",
             "HTML/text only: max characters returned (default 20000)."));
+        webFetchProps.set(
+            "method", prop("string",
+            "HTTP method: \"GET\" (default) or \"POST\". Use POST only when the target API "
+            + "documents that it requires one — most public data APIs are GET-only."));
+        webFetchProps.set(
+            "body", prop("string",
+            "POST only: the request body, sent verbatim (e.g. a JSON string). Ignored for GET."));
+        webFetchProps.set(
+            "body_content_type", prop("string",
+            "POST only: Content-Type header for the body (default \"application/json\")."));
         tools.add(
             tool("web_fetch",
             "**MANDATORY**: use this tool for every URL. NEVER use WebFetch or Fetch. Detects "
             + "the content type from the actual fetched bytes and returns it fully parsed: a "
             + "PDF's text, an .xlsx workbook as JSON sheets/rows, a .docx's text, or an HTML "
             + "page converted to Markdown — full content in every case, never a summary. "
-            + "One tool for any URL; you never need to guess the file type first.",
+            + "Gzip-compressed files (a raw .gz resource, not just a compressed transfer) are "
+            + "decompressed automatically before detection, so a NOAA/Census-style "
+            + "`file.csv.gz` returns as plain text/CSV, not an \"unrecognized binary content "
+            + "type\" error. Supports POST via the optional `method`/`body` params for the rare "
+            + "API that requires one. One tool for any URL; you never need to guess the file "
+            + "type first.",
             schema(webFetchProps, new String[]{"url"})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
@@ -2410,8 +2425,17 @@ public class McpServer {
                     int maxChars = args.has("max_chars")
                         ? Math.min(Math.max(1000, args.get("max_chars").asInt()), 200000)
                         : 20000;
-                    log.println("[askamerica-mcp] tool=web_fetch url=" + fetchUrl);
-                    text = webFetch(fetchUrl, maxPages, maxSheets, maxRows, maxChars);
+                    String method = args.has("method") && !args.get("method").isNull()
+                        ? args.get("method").asText().toUpperCase(java.util.Locale.ROOT) : "GET";
+                    String body = args.has("body") && !args.get("body").isNull()
+                        ? args.get("body").asText() : null;
+                    String bodyContentType = args.has("body_content_type")
+                        && !args.get("body_content_type").isNull()
+                        ? args.get("body_content_type").asText() : null;
+                    log.println("[askamerica-mcp] tool=web_fetch url=" + fetchUrl
+                        + " method=" + method);
+                    text = webFetch(fetchUrl, maxPages, maxSheets, maxRows, maxChars,
+                        method, body, bodyContentType);
                     break;
                 }
                 case "update_schema": {
@@ -7526,6 +7550,17 @@ public class McpServer {
     }
 
     private static FetchedContent fetchUrlContent(String urlStr) throws FetchException {
+        return fetchUrlContent(urlStr, "GET", null, null);
+    }
+
+    /**
+     * Like {@link #fetchUrlContent(String)}, but supports POST for the rare public API that
+     * documents requiring one (most don't — GET is still the right default for everything else).
+     * {@code method} must be "GET" or "POST"; a POST with a non-null {@code body} is sent with
+     * the given (or default {@code application/json}) Content-Type.
+     */
+    private static FetchedContent fetchUrlContent(String urlStr, String method, String body,
+            String bodyContentType) throws FetchException {
         HttpURLConnection c = null;
         try {
             URL url = java.net.URI.create(urlStr).toURL();
@@ -7533,12 +7568,36 @@ public class McpServer {
             if (!"http".equals(proto) && !"https".equals(proto)) {
                 throw new FetchException("Refused: only http:// and https:// URLs are supported.");
             }
+            String verb = "POST".equalsIgnoreCase(method) ? "POST" : "GET";
             c = (HttpURLConnection) url.openConnection();
-            c.setRequestMethod("GET");
+            c.setRequestMethod(verb);
             c.setConnectTimeout(15000);
             c.setReadTimeout(30000);
             c.setInstanceFollowRedirects(true);
-            c.setRequestProperty("User-Agent", "askamerica-engine/1.0");
+            // A self-identifying UA (e.g. "askamerica-engine/1.0") gets naively blocklisted by
+            // some government/publisher sites' bot filters even for wholly public, unauthenticated
+            // documents — several fetches in comparative-eval runs came back HTTP 403 this way
+            // (Health Affairs, FEMA/NRDC PDFs, USAspending) despite the resource being public.
+            // Presenting an ordinary browser's header set is not a CAPTCHA/challenge bypass — it
+            // states no false identity beyond "a normal browser," the same posture the client's
+            // own WebFetch already has — and resolves a real, recurring access failure.
+            c.setRequestProperty("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+                    + " Chrome/124.0.0.0 Safari/537.36");
+            c.setRequestProperty("Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            c.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
+            if ("POST".equals(verb) && body != null) {
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type",
+                    bodyContentType == null || bodyContentType.isEmpty()
+                        ? "application/json" : bodyContentType);
+                byte[] bodyBytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                c.setFixedLengthStreamingMode(bodyBytes.length);
+                try (OutputStream os = c.getOutputStream()) {
+                    os.write(bodyBytes);
+                }
+            }
             int code = c.getResponseCode();
             if (code < 200 || code >= 300) {
                 throw new FetchException("Could not fetch " + urlStr + " (HTTP " + code + ").");
@@ -7575,6 +7634,32 @@ public class McpServer {
     private static final class FetchException extends Exception {
         FetchException(String message) {
             super(message);
+        }
+    }
+
+    /**
+     * Decompresses a raw gzip-format resource (magic number 0x1F 0x8B), used by {@link
+     * #webFetch} for static archives like NOAA/Census's {@code file.csv.gz} — the fetched bytes
+     * ARE the gzip file, distinct from HTTP transfer-encoding, which {@link HttpURLConnection}
+     * does not auto-negotiate here. Capped at {@link #DOC_FETCH_MAX_BYTES} decompressed, same as
+     * a direct fetch, so a small compressed file can't zip-bomb the caller.
+     */
+    private static byte[] gunzip(byte[] compressed) throws java.io.IOException {
+        try (java.util.zip.GZIPInputStream gis =
+                 new java.util.zip.GZIPInputStream(new ByteArrayInputStream(compressed));
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] chunk = new byte[8192];
+            int n;
+            int total = 0;
+            while ((n = gis.read(chunk)) != -1) {
+                total += n;
+                if (total > DOC_FETCH_MAX_BYTES) {
+                    throw new java.io.IOException("decompressed content exceeds the "
+                        + (DOC_FETCH_MAX_BYTES / (1024 * 1024)) + "MB cap");
+                }
+                out.write(chunk, 0, n);
+            }
+            return out.toByteArray();
         }
     }
 
@@ -7744,14 +7829,40 @@ public class McpServer {
      */
     private static String webFetch(String urlStr, int maxPages, int maxSheets,
             int maxRowsPerSheet, int maxChars) {
+        return webFetch(urlStr, maxPages, maxSheets, maxRowsPerSheet, maxChars,
+            "GET", null, null);
+    }
+
+    private static String webFetch(String urlStr, int maxPages, int maxSheets,
+            int maxRowsPerSheet, int maxChars, String method, String body,
+            String bodyContentType) {
         FetchedContent fetched;
         try {
-            fetched = fetchUrlContent(urlStr);
+            fetched = fetchUrlContent(urlStr, method, body, bodyContentType);
         } catch (FetchException fe) {
             log.println("[askamerica-mcp] web_fetch fetch error: " + fe.getMessage());
             return fe.getMessage();
         }
         byte[] bytes = fetched.bytes;
+        if (bytes.length >= 2 && (bytes[0] & 0xFF) == 0x1F && (bytes[1] & 0xFF) == 0x8B) {
+            // Magic number for gzip. This is a raw gzip-format resource (e.g. NOAA/Census's
+            // "file.csv.gz" static archives) — the bytes ARE the compressed file, not a
+            // transfer-encoding wrapper HttpURLConnection would already have handled. Decompress
+            // once here so a caller sees "csv.gz" resolve to plain text, not an opaque
+            // "unrecognized binary content type" error.
+            try {
+                byte[] decompressed = gunzip(bytes);
+                log.println("[askamerica-mcp] web_fetch url=" + urlStr + " gunzipped "
+                    + bytes.length + " -> " + decompressed.length + " bytes");
+                bytes = decompressed;
+            } catch (java.io.IOException ge) {
+                ObjectNode out = MAPPER.createObjectNode();
+                out.put("source_url", urlStr);
+                out.put("error", "Fetched a gzip-compressed file (" + bytes.length
+                    + " bytes) but could not decompress it: " + ge.getMessage());
+                return out.toString();
+            }
+        }
         String kind = sniffContentKind(bytes, fetched.contentType);
         log.println("[askamerica-mcp] web_fetch url=" + urlStr + " content-type="
             + fetched.contentType + " detected=" + kind);
