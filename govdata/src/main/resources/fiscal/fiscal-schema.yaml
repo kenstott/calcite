@@ -2806,6 +2806,381 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # BROADBAND RECONNECT AWARDS — USAspending spending_by_award (CFDA 10.752, snapshot)
+  # ---------------------------------------------------------------------------
+  - name: broadband_reconnect_awards
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=broadband_reconnect_awards/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      USDA ReConnect (CFDA 10.752) award-level broadband infrastructure grants and
+      loan-grant combinations — one row per award, with recipient, dollar amount,
+      performance period, and recipient location (county-grain via county_fips).
+      A full crawl each run (not year-partitioned): the award-search endpoint has
+      no reliable date-filter parameter that matches how award records are dated
+      (obligation vs. performance-start vary by award), and the whole result set
+      is small enough (low hundreds of awards) that a full refresh is cheap.
+      Closes the ReConnect third of the "federal broadband award geography"
+      sourcing gap — BEAD is the sibling broadband_bead_state_allocations table
+      (state-grain only); RDOF/CAF-II are FCC/USAC-administered, not CFDA awards,
+      so they aren't reachable through this endpoint at all (CAF-II location data
+      is instead sourced from USAC's own open-data platform, see
+      broadband_caf_deployment_locations). Source:
+      api.usaspending.gov/api/v2/search/spending_by_award/ (program_numbers
+      filter, award types 02/03/04/05 — grants only, no contracts/loans in this
+      program).
+
+    dimensions:
+      type:
+        - broadband_reconnect_awards
+      cfda_number:
+        type: list
+        values: ["10.752"]
+
+    columns:
+      - name: cfda_number
+        type: string
+        nullable: false
+        comment: CFDA/Assistance Listing number (10.752 = USDA ReConnect)
+      - name: award_id
+        type: string
+        nullable: false
+        comment: USAspending award identifier (PK)
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: Award recipient (utility, cooperative, municipality, tribal entity, etc.)
+      - name: award_amount
+        type: double
+        nullable: true
+        comment: Award amount (USD)
+      - name: start_date
+        type: string
+        nullable: true
+        comment: Period-of-performance start date (YYYY-MM-DD)
+      - name: end_date
+        type: string
+        nullable: true
+        comment: Period-of-performance end date (YYYY-MM-DD)
+      - name: awarding_agency
+        type: string
+        nullable: true
+        comment: Awarding federal agency (USDA Rural Utilities Service)
+      - name: description
+        type: string
+        nullable: true
+        comment: Award description as filed by the awarding agency
+      - <<: *state_abbr_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: Recipient county name as reported by USAspending
+      - name: city_name
+        type: string
+        nullable: true
+        comment: Recipient city
+      - name: zip5
+        type: string
+        nullable: true
+        comment: Recipient 5-digit ZIP
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_award/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAwardSearchProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=broadband_reconnect_awards/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: broadband_reconnect_awards
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # BROADBAND BEAD STATE ALLOCATIONS — USAspending spending_by_award (CFDA 11.035, snapshot)
+  # ---------------------------------------------------------------------------
+  - name: broadband_bead_state_allocations
+    freshness:
+      type: hash
+    pattern: "type=broadband_bead_state_allocations/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NTIA Broadband Equity, Access, and Deployment program (CFDA 11.035) prime
+      grant awards — one row per state/territory broadband office, since BEAD's
+      federal award record is state-grain only: each state gets one lump-sum
+      grant which it then sub-awards to individual ISPs by county/project area,
+      and those sub-awards are not themselves federal-award records reachable
+      from this endpoint (confirmed live: this table has on the order of 56
+      rows, one per state/territory/DC, not the thousands a county-level table
+      would have). Useful for state-level BEAD allocation totals; does NOT
+      close the county-grain half of the "federal broadband award geography"
+      sourcing gap — see broadband_reconnect_awards and
+      broadband_caf_deployment_locations for the two programs with real
+      sub-state grain. Source:
+      api.usaspending.gov/api/v2/search/spending_by_award/ (program_numbers
+      filter, award types 02/03/04/05).
+
+    dimensions:
+      type:
+        - broadband_bead_state_allocations
+      cfda_number:
+        type: list
+        values: ["11.035"]
+
+    columns:
+      - name: cfda_number
+        type: string
+        nullable: false
+        comment: CFDA/Assistance Listing number (11.035 = NTIA BEAD)
+      - name: award_id
+        type: string
+        nullable: false
+        comment: USAspending award identifier (PK)
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: Award recipient (state/territory broadband office or commission)
+      - name: award_amount
+        type: double
+        nullable: true
+        comment: Award amount (USD)
+      - name: start_date
+        type: string
+        nullable: true
+        comment: Period-of-performance start date (YYYY-MM-DD)
+      - name: end_date
+        type: string
+        nullable: true
+        comment: Period-of-performance end date (YYYY-MM-DD)
+      - name: awarding_agency
+        type: string
+        nullable: true
+        comment: Awarding federal agency (NTIA)
+      - name: description
+        type: string
+        nullable: true
+        comment: Award description as filed by NTIA
+      - <<: *state_abbr_column
+      - name: city_name
+        type: string
+        nullable: true
+        comment: Recipient (state broadband office) city
+      - name: zip5
+        type: string
+        nullable: true
+        comment: Recipient 5-digit ZIP
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_award/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAwardSearchProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=broadband_bead_state_allocations/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: broadband_bead_state_allocations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # BROADBAND CAF DEPLOYMENT LOCATIONS — USAC opendata Socrata (delta by filing year)
+  # ---------------------------------------------------------------------------
+  - name: broadband_caf_deployment_locations
+    pattern: "type=broadband_caf_deployment_locations/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FCC Connect America Fund Phase II (CAF-II) subsidized broadband buildout —
+      one row per deployed location (near-address grain: lat/long, street
+      address, and 15-digit census_block, whose first 5 digits are the county
+      FIPS), filed annually by the carrier as it completes buildout milestones.
+      Sourced from USAC's own open-data platform (opendata.usac.org, dataset
+      r59r-rpip — the same underlying "CAF Map" data usaspending itself can't
+      reach, since CAF-II is an FCC/USAC Universal Service Fund disbursement,
+      not a CFDA federal-assistance award), filtered to fund_type IN ('CAF II',
+      'CAF II Auc') — this dataset also carries ACAM/ACAM II/CAF-BLS/RBE/AK
+      Plan rows for other high-cost programs, out of scope here. RDOF rows do
+      not yet appear in this feed (RDOF winners are still mid-buildout under a
+      10-year plan; only carrier-level disbursement/location-count totals exist
+      for RDOF today, not individual addresses) — closes the CAF-II third of
+      the "federal broadband award geography" sourcing gap, not RDOF. ~4.8M
+      rows across 2015-2025 (2016-2021 the heaviest reporting years). Joins to
+      geo.counties by taking the first 5 digits of census_block.
+
+    dimensions:
+      type:
+        - broadband_caf_deployment_locations
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+
+    columns:
+      - name: fund_type
+        type: string
+        nullable: true
+        expression: 'src."fund_type"'
+        comment: "'CAF II' (annual model-based support) or 'CAF II Auc' (Auction 903 support)"
+      - name: study_area_code
+        type: string
+        nullable: true
+        expression: 'src."study_area_code"'
+        comment: Carrier's FCC study area code (operating territory identifier)
+      - name: holding_company
+        type: string
+        nullable: true
+        expression: 'src."holding_company"'
+        comment: Parent holding company
+      - name: carrier
+        type: string
+        nullable: true
+        expression: 'src."carrier"'
+        comment: Reporting carrier/operating company name
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."latitude" AS DOUBLE)'
+        comment: Deployed location latitude
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."longitude" AS DOUBLE)'
+        comment: Deployed location longitude
+      - name: deployment_address
+        type: string
+        nullable: true
+        expression: 'src."deployment_address"'
+        comment: Street address of the deployed location
+      - name: deployment_city
+        type: string
+        nullable: true
+        expression: 'src."deployment_city"'
+      - <<: *state_abbr_column
+        name: deployment_state
+        expression: 'src."deployment_state"'
+      - name: deployment_zip_code
+        type: string
+        nullable: true
+        expression: 'src."deployment_zip_code"'
+      - name: deployment_date
+        type: string
+        nullable: true
+        expression: 'src."deployment_date"'
+        comment: Date the location was reported as built out (may be a filing-period marker, not a literal construction date)
+      - name: census_block
+        type: string
+        nullable: true
+        expression: 'src."census_block"'
+        comment: 15-digit Census block GEOID; first 5 digits are the county FIPS (FK to geo.counties)
+      - name: locations_deployed
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."locations_deployed" AS INTEGER)'
+        comment: Location count for this row (almost always 1; occasionally >1 for a multi-unit filing)
+      - name: speed_tier
+        type: string
+        nullable: true
+        expression: 'src."speed_tier"'
+        comment: "Reported speed tier (e.g. '25 Mbps/3 Mbps')"
+      - name: technology
+        type: string
+        nullable: true
+        expression: 'src."technology"'
+      - name: filing_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."filing_year" AS INTEGER)'
+        comment: Year the carrier filed this deployment record
+
+    source:
+      type: http
+      url: "https://opendata.usac.org/resource/r59r-rpip.json"
+      method: GET
+      parameters:
+        "$where": "fund_type in('CAF II','CAF II Auc') AND filing_year='{year}'"
+        "$limit": "50000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 50000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=broadband_caf_deployment_locations/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: broadband_caf_deployment_locations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # SSA OASDI/SSI BENEFITS BY COUNTY — statcomps XLSX via Wayback (delta by year)
   # ---------------------------------------------------------------------------
   - name: ssa_benefits_by_geography

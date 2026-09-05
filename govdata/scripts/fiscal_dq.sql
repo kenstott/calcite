@@ -559,6 +559,160 @@ FROM (SELECT COUNT(*) AS n
   WHERE value_type = 'SINGLE');
 
 -- ─────────────────────────────────────────────────────────────
+-- broadband_reconnect_awards (USDA ReConnect CFDA 10.752 awards; snapshot)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_reconnect_awards', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_reconnect_awards', allow_moved_paths := true));
+
+-- T2: row_count. Confirmed live 5 Sep 2026: 145 awards across all ReConnect rounds.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_reconnect_awards', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END, n, 50, 'Expected >=50 award rows (145 confirmed live 5 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_reconnect_awards', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_reconnect_awards', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — cfda_number is a real constant (this table is single-CFDA by
+-- design), excluded alongside the partition column.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_reconnect_awards', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_reconnect_awards', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'cfda_number')));
+
+-- awarding_agency is a real constant (USDA Rural Utilities Service runs ReConnect
+-- alone), excluded alongside the partition/CFDA columns.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_reconnect_awards', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_reconnect_awards', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'cfda_number', 'awarding_agency')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_reconnect_awards', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL award_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_reconnect_awards', allow_moved_paths := true)
+  WHERE award_id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- broadband_bead_state_allocations (NTIA BEAD CFDA 11.035 awards; snapshot)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_bead_state_allocations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_bead_state_allocations', allow_moved_paths := true));
+
+-- T2: row_count. One prime grant per state/territory/DC; confirmed live 5 Sep 2026 at 63.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_bead_state_allocations', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END, n, 50, 'Expected >=50 state/territory rows (63 confirmed live 5 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_bead_state_allocations', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_bead_state_allocations', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_bead_state_allocations', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_bead_state_allocations', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'cfda_number')));
+
+-- awarding_agency is a real constant (NTIA runs BEAD alone), excluded alongside the
+-- partition/CFDA columns.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_bead_state_allocations', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_bead_state_allocations', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'cfda_number', 'awarding_agency')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_bead_state_allocations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL award_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_bead_state_allocations', allow_moved_paths := true)
+  WHERE award_id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- broadband_caf_deployment_locations (USAC CAF-II deployment locations; delta by filing year)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_caf_deployment_locations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true));
+
+-- T2: row_count. Year-partitioned; per-year counts vary widely (4 in 2015's partial
+-- first year to 1.3M in 2020's peak reporting year) — 1000 is a conservative floor
+-- that even a sparse DQ-window year clears.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_caf_deployment_locations', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 rows per year (year-partitioned; production spans 2015-2025)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — fund_type is a real constant (this table is CAF-II-only by
+-- design; other_technology/latency/overlapping_locations are legitimately rare and
+-- may be all-null within a single-year DQ window, not a defect).
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_caf_deployment_locations', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'fund_type')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_caf_deployment_locations', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'fund_type')));
+
+-- T6: pk_nulls. No natural single-column PK (a given census_block can carry multiple
+-- filing-year rows); census_block is the geographic join key and must always be present.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_caf_deployment_locations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL census_block rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true)
+  WHERE census_block IS NULL);
+
+-- T7: census_block is always the full 15-digit GEOID (state+county+tract+block),
+-- confirmed live 5 Sep 2026 (0 malformed rows across 2024-2025) — a shorter/malformed
+-- value would break the county_fips derivation (first 5 digits) documented in the
+-- table's schema comment.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_caf_deployment_locations', 'T7_census_block_shape',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'census_block rows not exactly 15 digits'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true)
+  WHERE LENGTH(census_block) <> 15);
+
+-- T7b: fund_type scoped to the 2 documented CAF-II variants.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_caf_deployment_locations', 'T7_fund_type_scope',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'warn' END, n, 2,
+  'Distinct fund_type values found (expect exactly 2: CAF II / CAF II Auc)'
+FROM (SELECT COUNT(DISTINCT fund_type) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail
