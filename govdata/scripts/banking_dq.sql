@@ -581,6 +581,102 @@ SELECT 'banking', 'ncua_branch_locations', 'cycle_count',
 FROM (SELECT COUNT(DISTINCT cycle) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/ncua_branch_locations', allow_moved_paths := true));
 
 -- ============================================================================
+-- cra_small_business_lending (FFIEC CRA aggregate A1-1 - small biz originations
+-- by county/tract/income group; partitions: type, year; ~29 years 1996-2024)
+-- ============================================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'banking', 'cra_small_business_lending', 'existence',
+  CASE WHEN n = 0 THEN 'fail' ELSE 'pass' END,
+  n, 1, 'row count'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true));
+
+-- T2: row_count. A recent year holds ~100K A1-1 records (activity year 2024:
+-- 100,498 rows across ~3,100 counties x ~14 MFI buckets x tract level plus
+-- county/MSA totals); earlier years are sparser. 25K is a conservative
+-- per-partition floor that older years (1996-2004, smaller CRA reporter
+-- universe) can also clear.
+INSERT INTO dq_results
+SELECT 'banking', 'cra_small_business_lending', 'row_count',
+  CASE WHEN n < 25000 THEN 'fail' ELSE 'pass' END,
+  n, 25000, 'Expected >=25,000 rows per year (year-partitioned; production spans 1996-2024)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'banking', 'cra_small_business_lending', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true))
+  WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')
+);
+
+-- T5: all_same_value — activity_year is genuinely constant within any single-year
+-- partition, so exclude it (real constant, not a defect). Same for the two
+-- source-constant discriminators loan_type=4 (Small Business) and
+-- action_taken_type=1 (Originations), which A1-1's spec fixes for every row.
+-- split_county is also excluded: per the FFIEC spec it is 'Y' only for a county
+-- newly split by an OMB MSA/MD boundary change that year — most years have zero
+-- such counties, so a single-year DQ window legitimately seeing only 'N' is
+-- expected, not evidence of a broken feed (confirmed: activity year 2024 has
+-- 96,798 'N' rows and 0 'Y' rows).
+INSERT INTO dq_results
+SELECT 'banking', 'cra_small_business_lending', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true))
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'activity_year', 'split_county')
+);
+
+-- T6: pk_nulls. No single-column PK, but every row below the MSA/MD-total grain
+-- must at minimum name a state FIPS. report_level='210' rows are MSA/MD totals,
+-- which by the FFIEC spec span multiple states/counties and so correctly carry
+-- blank state/county (confirmed: all 417 NULL-state_fips rows in activity year
+-- 2024 are report_level=210) — excluded here rather than treated as a defect.
+INSERT INTO dq_results
+SELECT 'banking', 'cra_small_business_lending', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  n, 0, 'NULL state_fips outside MSA/MD-total (report_level=210) rows'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true)
+  WHERE (state_fips IS NULL OR state_fips = '') AND report_level <> '210'
+);
+
+-- T7: report_level takes the four documented shapes (NULL for tract-x-income-group
+-- rows, '100' income-group totals, '200' county totals, '210' MSA/MD totals).
+INSERT INTO dq_results
+SELECT 'banking', 'cra_small_business_lending', 'expected_values',
+  CASE WHEN n < 3 THEN 'warn' ELSE 'pass' END,
+  n, 3, 'distinct non-null report_level values (expect 100 / 200 / 210)'
+FROM (
+  SELECT COUNT(DISTINCT report_level) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true)
+  WHERE report_level IS NOT NULL AND report_level <> ''
+);
+
+-- T7b: county-total rows carry a resolvable county_fips joinable to geo.counties.
+-- report_level '200' is the county-total grain; on those rows both state_fips and
+-- county_code must be populated and the derived county_fips must be 5 chars.
+INSERT INTO dq_results
+SELECT 'banking', 'cra_small_business_lending', 'county_fips_shape',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  n, 0, 'county-total rows (report_level=200) whose county_fips is not 5 chars'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/cra_small_business_lending', allow_moved_paths := true)
+  WHERE report_level = '200' AND (county_fips IS NULL OR LENGTH(county_fips) <> 5)
+);
+
+-- ============================================================================
 -- Final results
 -- ============================================================================
 SELECT schema, tbl AS table_name, test, status, value, threshold, detail
