@@ -246,18 +246,45 @@ public final class S3FileIOTables {
     return null;
   }
 
+  // A version-hint written moments ago by this same JVM (table just created, or just
+  // dropped-and-recreated via IcebergCatalogManager.createTable()) can read back as absent on
+  // S3-compatible stores with read-after-write lag. exists() and
+  // S3FileIOTableOperations.readVersionHint(String) already treat NotFoundException /
+  // NoSuchKeyException as "not there yet" for exactly this reason; this bounded retry gives the
+  // same transient lag a chance to clear before this method concludes the table is genuinely
+  // absent, matching load()'s contract that the table already exists by the time it is called.
+  private static final int VERSION_HINT_MAX_ATTEMPTS = 5;
+  private static final long VERSION_HINT_RETRY_DELAY_MS = 100;
+
   private static String readVersionHint(FileIO io, String root) {
     String hintPath = root + "/metadata/version-hint.text";
-    try (InputStream is = io.newInputFile(hintPath).newStream();
-         BufferedReader reader =
-             new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-      String line = reader.readLine();
-      if (line == null || line.trim().isEmpty()) {
-        throw new IllegalStateException("Empty Iceberg version-hint.text at " + hintPath);
+    int attempts = 0;
+    while (true) {
+      attempts++;
+      try (InputStream is = io.newInputFile(hintPath).newStream();
+           BufferedReader reader =
+               new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+        String line = reader.readLine();
+        if (line == null || line.trim().isEmpty()) {
+          throw new IllegalStateException("Empty Iceberg version-hint.text at " + hintPath);
+        }
+        return line.trim();
+      } catch (NotFoundException
+          | software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
+        if (attempts >= VERSION_HINT_MAX_ATTEMPTS) {
+          throw new RuntimeException("Iceberg version-hint.text not found at " + hintPath
+              + " after " + attempts + " attempts", notFound);
+        }
+        try {
+          Thread.sleep(VERSION_HINT_RETRY_DELAY_MS * attempts); // Exponential backoff
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException(
+              "Interrupted while retrying Iceberg version-hint.text read at " + hintPath, ie);
+        }
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to read Iceberg version-hint.text at " + hintPath, e);
       }
-      return line.trim();
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to read Iceberg version-hint.text at " + hintPath, e);
     }
   }
 
