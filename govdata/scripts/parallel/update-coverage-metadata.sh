@@ -186,6 +186,11 @@ FROM iceberg_scan('s3://${BUCKET}/${schema}/${tbl}', allow_moved_paths=true);
       echo "  SKIP $tbl — query returned no rows"
       continue
     fi
+    if ! [[ "$mn" =~ ^-?[0-9]+$ ]]; then
+      echo "  SKIP $tbl — 'year' column holds non-integer values (e.g. \"$mn\"); this table's"
+      echo "         year partition is a composite label (e.g. YYYY:QN), not observedCoverage's plain year"
+      continue
+    fi
     mx="$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["mx"])')"
     dc="$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["dc"])')"
     n="$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["n"])')"
