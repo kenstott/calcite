@@ -16,6 +16,8 @@
 #
 # ============================================================================
 
+schemaName: "${SCHEMA_NAME:cftc}"
+
 # EQUITIES daily files uncompress to ~500 MB each; a full 2024+ ingest (one fetch per
 # asset_class/day) far exceeds the 60-min default worker cap. Read by the pool's
 # get_timeout_config (common.sh) from this source YAML; not consumed by the ETL.
