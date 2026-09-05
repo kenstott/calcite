@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -130,7 +131,7 @@ public final class GovDataCatalog {
       ObjectNode to = MAPPER.createObjectNode();
       to.put("name", name);
       to.put("type", type);
-      putText(to, "comment", t.get("comment"));
+      putComment(to, t.get("comment"), t.get("observedCoverage"));
       putCoverage(to, t, schemaLag);
       ArrayNode cols = MAPPER.createArrayNode();
       JsonNode columns = t.get("columns");
@@ -233,5 +234,52 @@ public final class GovDataCatalog {
         o.put(field, s);
       }
     }
+  }
+
+  /**
+   * Put the table's {@code comment}, with the {@code observedCoverage} block (if present)
+   * appended as a trailing sentence. Both live in the same YAML entry, so a caller reading
+   * the description sees the empirically observed year range and row count without a
+   * separate lookup — no query-time computation, just surfacing what
+   * {@code update-coverage-metadata.sh} already wrote.
+   */
+  private static void putComment(ObjectNode o, JsonNode commentNode, JsonNode observedCoverage) {
+    String comment = collapse(commentNode);
+    String coverage = observedCoverageSummary(observedCoverage);
+    String combined = comment.isEmpty() ? coverage
+        : coverage.isEmpty() ? comment : comment + " " + coverage;
+    if (!combined.isEmpty()) {
+      o.put("comment", combined);
+    }
+  }
+
+  private static String collapse(JsonNode n) {
+    return (n == null || n.isNull()) ? "" : n.asText("").replaceAll("\\s+", " ").trim();
+  }
+
+  private static String observedCoverageSummary(JsonNode oc) {
+    if (oc == null || !oc.isObject() || !oc.hasNonNull("minYear") || !oc.hasNonNull("maxYear")) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder("Observed coverage: ")
+        .append(oc.get("minYear").asInt()).append('–').append(oc.get("maxYear").asInt());
+    if (oc.hasNonNull("distinctYears")) {
+      int years = oc.get("distinctYears").asInt();
+      sb.append(" (").append(years).append(years == 1 ? " year" : " years");
+      if (oc.hasNonNull("contiguous")) {
+        sb.append(oc.get("contiguous").asBoolean() ? ", contiguous" : ", gaps");
+      }
+      sb.append(')');
+    }
+    if (oc.hasNonNull("rowCount")) {
+      sb.append(", ").append(String.format(Locale.ROOT, "%,d", oc.get("rowCount").asLong()))
+          .append(" rows");
+    }
+    if (oc.hasNonNull("checkedAt")) {
+      String checkedAt = oc.get("checkedAt").asText("");
+      int t = checkedAt.indexOf('T');
+      sb.append(" (checked ").append(t > 0 ? checkedAt.substring(0, t) : checkedAt).append(')');
+    }
+    return sb.append('.').toString();
   }
 }
