@@ -245,10 +245,23 @@ public class S3FileIOTableOperations implements TableOperations {
         return null;
       }
       return line.trim();
-    // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal (S3
-    // key not found) as "no table yet"; other failures below are surfaced instead of being
-    // silently treated as absence, which would make commit() think it's creating a brand
-    // new table (version 0) and overwrite an existing one's metadata history.
+    // fallback-guard: allow catches only the canonical "definitely absent" signals (S3 key not
+    // found, in both wrappings this stack can produce) as "no table yet"; other failures below
+    // are surfaced instead of being silently treated as absence, which would make commit() think
+    // it's creating a brand new table (version 0) and overwrite an existing one's metadata
+    // history. Both exception types below are the SAME underlying "key not found" condition,
+    // just wrapped differently depending on call path: newInputFile(...).newStream() (used here)
+    // returns Iceberg's own S3InputStream, which catches the SDK's NoSuchKeyException internally
+    // and rethrows it as org.apache.iceberg.exceptions.NotFoundException before it ever reaches
+    // this method — so the raw SDK exception is never actually observable through this code
+    // path, only Iceberg's wrapped one. The direct SDK catch is kept for any caller reached via
+    // a different S3FileIO code path that skips that wrapping. Same fix as in
+    // S3FileIOTables#tableExists; without it a first-ever create against a truly absent table
+    // fails at commit() -> current() -> refresh() before it can write version 0.
+    } catch (org.apache.iceberg.exceptions.NotFoundException notFound) {
+      LOGGER.debug("readVersionHint: {} absent (NotFoundException) — treating as no table yet",
+          hintPath);
+      return null;
     } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
       LOGGER.debug("readVersionHint: {} absent (NoSuchKeyException) — treating as no table yet",
           hintPath);
