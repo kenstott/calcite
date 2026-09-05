@@ -538,6 +538,16 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
+        # Hard floor, independent of GOVDATA_START_YEAR: HERD replaced an earlier,
+        # methodologically incompatible survey (the Academic R&D Expenditures Survey,
+        # 1972-2009) in FY2010 — herd2008.csv/herd2009.csv exist on NCSES's site but use
+        # a different questionnaire structure (e.g. "Federal expenditures by S&E field
+        # and agency" vs. this table's "Federal expenditures by field and agency"), so
+        # NsfHerdTransformer correctly emits zero rows for them rather than silently
+        # reinterpreting incompatible fields. A caller-set GOVDATA_START_YEAR below 2010
+        # (e.g. for a wider multi-schema historical pull) would otherwise make this
+        # table's declared coverage claim years it can never actually hold.
+        minYear: 2010
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 2
 
