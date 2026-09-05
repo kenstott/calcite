@@ -804,9 +804,10 @@ partitionedTables:
       checkedAt: "2026-09-05T14:44:01Z"
     partitions: *standard_partitions
     comment: >
-      National monthly CPI-U (all items and core, less food and energy) plus PPI final demand
-      finished goods — 3 index series (base period 1982-84=100), national level only, not rates.
-      For sub-national CPI breakdowns see regional_cpi (4 Census regions) and metro_cpi (20 metro areas).
+      National monthly CPI-U (all items, core less food and energy, and water/sewerage
+      maintenance) plus PPI final demand finished goods — 4 index series (base period
+      1982-84=100), national level only, not rates. For sub-national CPI breakdowns see
+      regional_cpi (4 Census regions) and metro_cpi (20 metro areas).
     # Columns match BLS API response fields (series > data array)
     columns:
       - name: series
@@ -814,9 +815,10 @@ partitionedTables:
         nullable: true
         comment: >
           BLS series identifier. This table is long-format: one row per (series, period), and it
-          mixes CPI with PPI, so ALWAYS filter on series. The 3 series loaded are:
+          mixes CPI with PPI, so ALWAYS filter on series. The 4 series loaded are:
           CUUR0000SA0 CPI-U, U.S. city average, all items, not seasonally adjusted (1982-84=100);
           CUUR0000SA0L1E CPI-U core, all items less food and energy, not seasonally adjusted;
+          CUUR0000SEHG02 CPI-U Water and sewerage maintenance, U.S. city average, NSA;
           WPUFD49207 PPI final demand, finished goods.
           All are index levels, not rates — compute inflation as a period-over-period change.
       - name: year
@@ -861,10 +863,12 @@ partitionedTables:
         endyear: {year}
         registrationkey:
           type: auth
-      seriesList:  # BLS series codes to fetch
+      seriesList:  # BLS series codes to fetch (LEGACY BLOCK — inert; the live request body is
+        # source.body.seriesid below, kept in sync here for reference only)
         - "CUUR0000SA0"
         - "CUUR0000SA0L1E"
         - "WPUFD49207"
+        - "CUUR0000SEHG02"
       rateLimit:  # BLS API limits: 500 daily queries, 25/series per query
         minIntervalMs: 1100  # Wait time between requests
         maxRetries: 3
@@ -880,10 +884,12 @@ partitionedTables:
       headers:
         Content-Type: "application/json"
       body:
-        seriesid:  # BLS series codes - inlined for HttpSource
+        seriesid:  # BLS series codes - inlined for HttpSource (this is the LIVE request body;
+          # variables don't support lists, so it can't be templated from seriesList above)
           - "CUUR0000SA0"     # CPI All Urban Consumers
           - "CUUR0000SA0L1E"  # CPI All Items Less Food and Energy
           - "WPUFD49207"      # PPI Finished Goods
+          - "CUUR0000SEHG02"  # CPI Water and sewerage maintenance (U.S. city average, NSA)
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
