@@ -4717,7 +4717,7 @@ partitionedTables:
         - name: type
           type: VARCHAR
         - name: year
-          type: INTEGER
+          type: VARCHAR
     comment: >
       State-level personal income and its components, at quarterly cadence, from all 6 active
       BEA SQINC tables, for all 50 states + DC. For the annual version see state_personal_income;
@@ -4845,7 +4845,7 @@ partitionedTables:
         - name: type
           type: VARCHAR
         - name: year
-          type: INTEGER
+          type: VARCHAR
     comment: >
       State-level GDP, at quarterly cadence, from all 5 active BEA SQGDP tables, for all 50
       states + DC. For the annual version see state_gdp; for county/MSA-level GDP see
