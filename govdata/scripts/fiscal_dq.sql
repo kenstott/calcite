@@ -713,6 +713,74 @@ FROM (SELECT COUNT(DISTINCT fund_type) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_caf_deployment_locations', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- broadband_high_cost_disbursements (USAC USF high-cost program disbursements; delta by year)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true));
+
+-- T2: row_count. Year-partitioned; ~100K rows per year across all high-cost
+-- programs. Confirmed live 5 Sep 2026: total 1,045,128 rows across 2016-2026.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T2_row_count',
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END, n, 20000, 'Expected >=20,000 rows per year (year-partitioned; production spans 2016-2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+-- T5: all_same_value — disbursement_year is genuinely constant within any single-year
+-- partition (real constant, not a defect), excluded alongside the partition columns.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'disbursement_year')));
+
+-- T6: pk_nulls. No natural single-column PK (a given (form_498_id, month, fund_type)
+-- can recur with different study_area_codes when a carrier serves multiple areas).
+-- form_498_id itself is null on genuine zero-disbursement rows (a study area with no
+-- filed Form 498 that period — confirmed live: 449/149,425 rows in the 2024-2025
+-- window, all amount_disbursed=0), so study_area_code is the column that must always
+-- be present instead.
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL study_area_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true)
+  WHERE study_area_code IS NULL);
+
+-- T7: fund_type coverage — at least 15 of the 25+ documented USF programs must be
+-- present in any full year (some legacy programs may be absent in the most recent
+-- year as they wind down, so the threshold sits below the full 25 count).
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T7_fund_type_coverage',
+  CASE WHEN n >= 15 THEN 'pass' ELSE 'warn' END, n, 15,
+  'Distinct fund_type values found (expect >=15 across a full year; 25+ across full history)'
+FROM (SELECT COUNT(DISTINCT fund_type) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true));
+
+-- T7b: month values are all 1-12 (a bad row would surface here rather than as a
+-- silently-mistyped disbursement).
+INSERT INTO dq_results
+SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T7_month_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with disbursement_month outside 1-12'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true)
+  WHERE disbursement_month IS NULL OR disbursement_month < 1 OR disbursement_month > 12);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

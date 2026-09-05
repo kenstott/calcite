@@ -3181,6 +3181,134 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # BROADBAND HIGH COST DISBURSEMENTS — USAC opendata Socrata (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: broadband_high_cost_disbursements
+    pattern: "type=broadband_high_cost_disbursements/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Federal Universal Service Fund high-cost-program disbursements at
+      Eligible Telecommunication Carrier (ETC) x month grain, from USAC's own
+      open-data platform (opendata.usac.org, dataset w6qn-gx72). Covers every
+      current-generation high-cost program's dollar flows to individual
+      carriers by month: RDOF, CAF-II (annual + Auction 903), ACAM/ACAM-II,
+      CAF-BLS (Broadband Loop Support), the Alaska Plan, RBE (Rural
+      Broadband Experiments), and legacy programs (HCL, HCM, ICLS, IAS,
+      Mobility I, LSS, SNA) still paying out on prior obligations. Together
+      with fiscal.broadband_caf_deployment_locations (CAF-II served
+      addresses), fiscal.broadband_reconnect_awards (USDA ReConnect), and
+      fiscal.broadband_bead_state_allocations (NTIA BEAD) this is the fourth
+      broadband-program table &mdash; carrier/state grain, not the
+      county/tract grain the "federal broadband award geography" gap
+      originally asked for (RDOF has no address-level source publicly
+      available today; winners are still mid-buildout under a 10-year plan).
+      Joins to sibling broadband tables by study_area_code. Source:
+      opendata.usac.org/resource/w6qn-gx72.json.
+
+    dimensions:
+      type:
+        - broadband_high_cost_disbursements
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2016}"
+        minYear: 2016
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+
+    columns:
+      - name: form_498_id
+        type: string
+        nullable: true
+        expression: 'src."form_498_id"'
+        comment: >
+          Carrier's USAC Form 498 filer identifier (payee identifier). NULL on
+          genuine zero-disbursement rows for a study area with no filed Form
+          498 that period (amount_disbursed=0 on every such row) —
+          study_area_code, not this column, is the identifier guaranteed
+          present on every row.
+      - name: study_area_code
+        type: string
+        nullable: true
+        expression: 'src."study_area_code"'
+        comment: FCC study area code (join key to broadband_caf_deployment_locations.study_area_code)
+      - name: study_area_name
+        type: string
+        nullable: true
+        expression: 'src."study_area_name"'
+        comment: Study area / operating company name
+      - <<: *state_abbr_column
+        name: state
+        expression: 'src."state"'
+      - name: disbursement_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."year" AS INTEGER)'
+        comment: Calendar year of disbursement (matches partition year; kept as a real column for filtering across years)
+      - name: disbursement_month
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."month" AS INTEGER)'
+        comment: Calendar month of disbursement (1-12)
+      - name: fund_type
+        type: string
+        nullable: true
+        expression: 'src."fund_type"'
+        comment: >
+          USF high-cost program code. Current-generation broadband programs:
+          RDOF (Rural Digital Opportunity Fund), CAFII (CAF Phase II annual
+          model-based), CAFII AUC (CAF Phase II Auction 903), ACAM /
+          ACAMII / EACAM (Alternative Connect America Cost Model),
+          CAF-BLS/BLS (Broadband Loop Support), AK PLAN (Alaska Plan), RBE
+          (Rural Broadband Experiments). Legacy programs still paying out:
+          HCL/HCM/ICC/ICLS/IAS/IS/LSS/Mobility I/SNA/SVS/FHCS/CACM. Also PR
+          Fixed/PR Mobile/USVI Fixed/USVI Mobile for the territories.
+      - name: amount_disbursed
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."amount_disbursed" AS DOUBLE)'
+        comment: Monthly disbursement to this carrier under this program (USD)
+
+    source:
+      type: http
+      url: "https://opendata.usac.org/resource/w6qn-gx72.json"
+      method: GET
+      parameters:
+        "$where": "year='{year}'"
+        "$limit": "50000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 50000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=broadband_high_cost_disbursements/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: broadband_high_cost_disbursements
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # SSA OASDI/SSI BENEFITS BY COUNTY — statcomps XLSX via Wayback (delta by year)
   # ---------------------------------------------------------------------------
   - name: ssa_benefits_by_geography
