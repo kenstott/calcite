@@ -603,6 +603,185 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # FDA DRUG SHORTAGES HISTORY — Wayback Machine captures of FDA's own CSV export
+  # (D-181 remainder): fda_drug_shortages is a live-feed snapshot only — FDA purges
+  # resolved shortages from the public feed six months after resolution, so it carries
+  # no real multi-year history. ASPE's Jan 2025 data brief is PDF-only (no downloadable
+  # dataset) and HealthData.gov/openFDA both just point back at the same 6-month-purged
+  # feed — both dead ends, ruled out. The Wayback Machine holds ~99 point-in-time
+  # captures of accessdata.fda.gov's own CSV export back to Oct 2019 (confirmed live via
+  # the CDX index, served as text/csv); this table materializes one row per
+  # (snapshot_date, generic_name, presentation, initial_posting_date) from those captures.
+  # ==========================================================================
+  - name: fda_drug_shortages_history
+    pattern: "type=fda_drug_shortages_history"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: snapshot_date
+          type: VARCHAR
+
+    comment: >
+      Point-in-time history of FDA's drug shortage list, reconstructed from Wayback
+      Machine captures of accessdata.fda.gov's own CSV export (the live-feed
+      fda_drug_shortages table cannot answer "what did the shortage list look like on
+      date X" — FDA purges resolved shortages ~6 months after resolution). One row per
+      (snapshot_date, generic_name, presentation, initial_posting_date); the same
+      generic_name recurs across snapshots as its episode moves through
+      Current -> To Be Discontinued -> Resolved, and multiple presentations of the same
+      generic_name coexist within one snapshot. snapshot_date is the Wayback capture
+      date, not the shortage's own update/change date (both are carried as separate
+      columns). status values are canonicalized (the source's own export mixes
+      "To be Discontinued"/"To Be Discontinued" casing across snapshots — both map to
+      "To Be Discontinued" here). The captured timestamp set is fixed (~99 Wayback
+      captures spanning Oct 2019 - Jul 2026 as of onboarding), not an open-ended crawl;
+      new captures require appending to the snapshot_ts dimension's literal value list.
+
+    columns:
+      - name: snapshot_date
+        type: string
+        nullable: false
+        comment: Wayback capture date (yyyy-MM-dd), derived from the capture timestamp — PK part 1
+      - name: generic_name
+        type: string
+        nullable: false
+        comment: PK part 2
+      - name: presentation
+        type: string
+        nullable: false
+        comment: Strength/form/package description — PK part 3 (disambiguates multiple presentations of one generic_name)
+      - name: initial_posting_date
+        type: string
+        nullable: true
+        comment: MM/DD/YYYY when this shortage episode was first posted — PK part 4
+      - name: company_name
+        type: string
+        nullable: true
+      - name: contact_info
+        type: string
+        nullable: true
+      - name: update_type
+        type: string
+        nullable: true
+        comment: e.g. New, Revised, Reverified
+      - name: update_date
+        type: string
+        nullable: true
+        comment: MM/DD/YYYY of the most recent update to this episode as of this snapshot
+      - name: availability
+        type: string
+        nullable: true
+      - name: related_info
+        type: string
+        nullable: true
+      - name: resolved_note
+        type: string
+        nullable: true
+      - name: reason_for_shortage
+        type: string
+        nullable: true
+      - name: therapeutic_category
+        type: string
+        nullable: true
+      - name: status
+        type: string
+        nullable: true
+        comment: Canonicalized to Current, To Be Discontinued, or Resolved
+      - name: change_date
+        type: string
+        nullable: true
+        comment: MM/DD/YYYY
+      - name: discontinued_date
+        type: string
+        nullable: true
+        comment: MM/DD/YYYY; null unless status is a discontinuation
+      - name: generic_name_note
+        type: string
+        nullable: true
+      - name: generic_name_link
+        type: string
+        nullable: true
+      - name: company_info_link
+        type: string
+        nullable: true
+        comment: Rarely populated in the source export — legitimately sparse, not a pipeline defect (DQ T4/T5 warn)
+      - name: availability_link
+        type: string
+        nullable: true
+        comment: Rarely populated in the source export — legitimately sparse, not a pipeline defect (DQ T4/T5 warn)
+      - name: related_info_link
+        type: string
+        nullable: true
+      - name: resolved_note_link
+        type: string
+        nullable: true
+        comment: Rarely populated in the source export — legitimately sparse, not a pipeline defect (DQ T4/T5 warn)
+      - name: discontinued_note_link
+        type: string
+        nullable: true
+
+    source:
+      type: http
+      # Each capture's `id_` suffix returns the exact archived response body (no Wayback
+      # banner/rewriting) as originally served — confirmed live as text/csv.
+      url: "https://web.archive.org/web/{snapshot_ts}id_/https://www.accessdata.fda.gov/scripts/drugshortages/Drugshortages.cfm"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDrugShortagesHistoryResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_drug_shortages_history
+      # Fixed, non-continuous set of Wayback CDX captures for this URL (confirmed live via
+      # the CDX index, filter=statuscode:200, collapse=digest) — not a yearRange, matching
+      # this project's own "published-year set is fixed" list-dimension convention (see
+      # DimensionIterator's census-economic-tables comment). Each capture is immutable once
+      # taken, so appending new timestamps here is the only way to pick up future captures.
+      snapshot_ts:
+        type: list
+        values: ["20191020223457","20191229133343","20200402141259","20200612221316","20200708223130","20200715070433","20200815030018","20200824135454",
+                 "20200915015918","20200927124226","20200930052515","20201011200247","20201017153840","20201026031128","20201030022459","20201030172525",
+                 "20201110180625","20201119182835","20201121013542","20210117172441","20210318220545","20210412231811","20210512154440","20210521181651",
+                 "20210802225733","20210827175452","20211006104425","20211020020022","20211130013632","20221004081320","20221006172748","20230113175930",
+                 "20230127014503","20230302122414","20230325083656","20230328034327","20230514144504","20231114132359","20231207131346","20231221203447",
+                 "20240112120713","20240116152001","20240124124141","20240205140119","20240228154547","20240301121510","20240328112646","20240403114611",
+                 "20240408005731","20240409021019","20240507160447","20240515141942","20240608002130","20240612153922","20240716214442","20240718090200",
+                 "20240929090309","20241125154116","20250108084621","20250117164601","20250202072325","20250205172954","20250211143238","20250220045101",
+                 "20250221184104","20250226160306","20250317042942","20250318150416","20250608003122","20250611121721","20250703062424","20250803065017",
+                 "20251209213305","20251216230527","20260114161309","20260120155945","20260121110301","20260212113624","20260224103932","20260302070803",
+                 "20260316034037","20260323070704","20260330070727","20260406071200","20260413071009","20260420071014","20260427070722","20260504070703",
+                 "20260511071651","20260518070819","20260525074420","20260601070801","20260608082654","20260615070712","20260622070717","20260629070703",
+                 "20260706070913","20260713071010","20260720070705"]
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type, snapshot_date]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # COUNTY HEALTH RANKINGS — Premature Death (YPLL/100k), nation/state/county, current-era
   # ==========================================================================
   - name: chr_premature_death
@@ -5360,6 +5539,12 @@ constraints:
       - columns: [application_number]
         targetTable: fda_drug_approvals
         targetColumns: [application_number]
+
+  fda_drug_shortages_history:
+    # One row per generic_name+presentation shortage line within one Wayback snapshot;
+    # initial_posting_date disambiguates recurring episodes the same way it does for the
+    # live-feed fda_drug_shortages table.
+    primaryKey: [type, snapshot_date, generic_name, presentation, initial_posting_date]
 
   chr_premature_death:
     primaryKey: [type, fips_code]
