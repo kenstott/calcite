@@ -659,17 +659,18 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
   WHERE activity_year IS NOT NULL AND (activity_year < 2010 OR activity_year > YEAR(CURRENT_DATE)));
 
 -- ─────────────────────────────────────────────────────────────
--- TABLE: phmsa_hazardous_liquid_mileage (PHMSA F 7000-1.1 annual report Part A-E, 2017-2024, snapshot)
+-- TABLE: phmsa_hazardous_liquid_mileage (PHMSA F 7000-1.1 annual report Part A-E, 2010-present, snapshot)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T1_existence',
   CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true));
 
--- T2: row_count. ~800-900 operators/commodities per year x 8 years (2017-2024).
+-- T2: row_count. Confirmed live 6 Sep 2026: 9,629 operator/commodity rows across 2010-2024
+-- (492/yr in 2010 rising to ~715-720/yr by 2021-2024).
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T2_row_count',
-  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END, n, 5000, 'Expected >=5,000 rows across 2017-2024 (~800-900 operator/commodity rows per year)'
+  CASE WHEN n >= 8500 THEN 'pass' ELSE 'fail' END, n, 8500, 'Expected >=8,500 rows across 2010-2024 (9,629 confirmed live 6 Sep 2026)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true));
 
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true) LIMIT 3;
@@ -698,12 +699,13 @@ SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true)
   WHERE operator_id IS NULL);
 
--- T7: report_year within the documented 2017-2024 window (Part A-E CSVs only; 2010-2016 XLSX-only years not ingested).
+-- T7: report_year within the documented 2010-2024 window (Part A-E CSVs for 2017+, whole-workbook
+-- XLSX for 2010-2016, both merged by the responseTransformer into one table).
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T7_year_range',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2017, 2024]'
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2010, 2024]'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true)
-  WHERE report_year IS NOT NULL AND (report_year < 2017 OR report_year > 2024));
+  WHERE report_year IS NOT NULL AND (report_year < 2010 OR report_year > 2024));
 
 -- T8: total_miles is populated and non-negative for the vast majority of rows (the
 -- per-mile normalization field this table exists to carry).
@@ -776,17 +778,18 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
   WHERE activity_year IS NOT NULL AND (activity_year < 2010 OR activity_year > YEAR(CURRENT_DATE)));
 
 -- ─────────────────────────────────────────────────────────────
--- TABLE: phmsa_gas_distribution_mileage (PHMSA F 7100.1-1 annual report, 2017-2024, snapshot)
+-- TABLE: phmsa_gas_distribution_mileage (PHMSA F 7100.1-1 annual report, 2010-present, snapshot)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T1_existence',
   CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true));
 
--- T2: row_count. Confirmed live 6 Sep 2026: 11,695 operator/commodity rows across 2017-2024.
+-- T2: row_count. Confirmed live 6 Sep 2026: 22,035 operator/commodity rows across
+-- 2010-2024 (~1,435-1,499/year, fairly flat the whole span).
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T2_row_count',
-  CASE WHEN n >= 8000 THEN 'pass' ELSE 'fail' END, n, 8000, 'Expected >=8,000 rows across 2017-2024 (11,695 confirmed live 6 Sep 2026)'
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END, n, 20000, 'Expected >=20,000 rows across 2010-2024 (22,035 confirmed live 6 Sep 2026)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true));
 
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true) LIMIT 3;
@@ -827,12 +830,13 @@ FROM (
   )
 );
 
--- T7: report_year within the documented 2017-2024 window (2010-2016 XLSX-only years not ingested).
+-- T7: report_year within the documented 2010-2024 window (per-year CSVs for 2017+,
+-- whole-workbook XLSX for 2010-2016, both merged by the responseTransformer).
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T7_year_range',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2017, 2024]'
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2010, 2024]'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true)
-  WHERE report_year IS NOT NULL AND (report_year < 2017 OR report_year > 2024));
+  WHERE report_year IS NOT NULL AND (report_year < 2010 OR report_year > 2024));
 
 -- T8: total_miles is populated and non-negative for the vast majority of rows.
 INSERT INTO dq_results
@@ -904,17 +908,18 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
   WHERE activity_year IS NOT NULL AND (activity_year < 2010 OR activity_year > YEAR(CURRENT_DATE)));
 
 -- ─────────────────────────────────────────────────────────────
--- TABLE: phmsa_gas_transmission_mileage (PHMSA F 7100.2-1 annual report Part A-D, 2017-2024, snapshot)
+-- TABLE: phmsa_gas_transmission_mileage (PHMSA F 7100.2-1 annual report Part A-D, 2010-present, snapshot)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T1_existence',
   CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true));
 
--- T2: row_count. Confirmed live 6 Sep 2026: 11,187 operator/commodity rows across 2017-2024.
+-- T2: row_count. Confirmed live 6 Sep 2026: 19,667 operator/commodity rows across
+-- 2010-2024 (1,091/yr in 2010 rising to ~1,450-1,465/yr by 2022-2024).
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T2_row_count',
-  CASE WHEN n >= 8000 THEN 'pass' ELSE 'fail' END, n, 8000, 'Expected >=8,000 rows across 2017-2024 (11,187 confirmed live 6 Sep 2026)'
+  CASE WHEN n >= 19000 THEN 'pass' ELSE 'fail' END, n, 19000, 'Expected >=19,000 rows across 2010-2024 (19,667 confirmed live 6 Sep 2026)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true));
 
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true) LIMIT 3;
@@ -955,12 +960,13 @@ FROM (
   )
 );
 
--- T7: report_year within the documented 2017-2024 window (2010-2016 XLSX-only years not ingested).
+-- T7: report_year within the documented 2010-2024 window (Part A-D CSVs for 2017+,
+-- whole-workbook XLSX for 2010-2016, both merged by the responseTransformer).
 INSERT INTO dq_results
 SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T7_year_range',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2017, 2024]'
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2010, 2024]'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true)
-  WHERE report_year IS NOT NULL AND (report_year < 2017 OR report_year > 2024));
+  WHERE report_year IS NOT NULL AND (report_year < 2010 OR report_year > 2024));
 
 -- T8: total_miles is populated and non-negative for the vast majority of rows.
 INSERT INTO dq_results
