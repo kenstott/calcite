@@ -15,7 +15,13 @@
 #   - USAspending by agency          — /api/v2/spending/   (UsaSpendingAgencyProvider)
 #   - USAspending by state           — /api/v2/search/spending_by_geography/ (UsaSpendingStateProvider)
 #   - USAspending by county          — /api/v2/search/spending_by_geography/ (UsaSpendingCountyProvider)
+#   - USAspending entitlement spend  — /api/v2/search/spending_by_geography/ (UsaSpendingEntitlementProvider)
 #   - SBA 7(a) & 504 loan approvals  — data.sba.gov DKAN CSV (SbaLoansProvider)
+#   - Census Annual Survey of State Government Tax Collections (STC) —
+#     api.census.gov/data/timeseries/govsstatetax, ITEM_CODE=T41 only
+#     (Corporation Net Income Taxes; declarative HTTP+JSON, one fetch per state
+#     per year — this endpoint does not support the for=state:* wildcard,
+#     confirmed live)
 #
 # Design (project rules): one ETL table = one upstream source, tall (one row per
 # geography/entity x year). Every table uses a DataProvider hook because none of
@@ -211,6 +217,76 @@ dimension_values:
     type: range
     start: "${GOVDATA_START_YEAR:2012}"
     end: "${GOVDATA_END_YEAR:2024}"
+
+  # Census STC (state_corporate_income_tax_collections) timeseries API: confirmed
+  # live 2026-09-06 the published range is 2016-2025 (time=2015 and time=2026 both
+  # 204 no-content); 2025 is already posted, so dataLag: 1 off the current year
+  # reaches it without a hardcoded end year.
+  state_corp_tax_year_range: &state_corp_tax_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2016}"
+    minYear: 2016
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+    descending: true
+
+  # 50 states + DC FIPS codes -- the govsstatetax timeseries API has no
+  # for=state:* wildcard support (confirmed live: every combination of
+  # ITEM_CODE filter, get= field list, and for=state:* returned HTTP 204 with
+  # no body; a single explicit state FIPS always works), so each state is
+  # fetched individually. Same list as census-schema.yaml's all_state_fips.
+  all_state_fips: &all_state_fips
+    - '01'  # Alabama
+    - '02'  # Alaska
+    - '04'  # Arizona
+    - '05'  # Arkansas
+    - '06'  # California
+    - '08'  # Colorado
+    - '09'  # Connecticut
+    - '10'  # Delaware
+    - '11'  # District of Columbia
+    - '12'  # Florida
+    - '13'  # Georgia
+    - '15'  # Hawaii
+    - '16'  # Idaho
+    - '17'  # Illinois
+    - '18'  # Indiana
+    - '19'  # Iowa
+    - '20'  # Kansas
+    - '21'  # Kentucky
+    - '22'  # Louisiana
+    - '23'  # Maine
+    - '24'  # Maryland
+    - '25'  # Massachusetts
+    - '26'  # Michigan
+    - '27'  # Minnesota
+    - '28'  # Mississippi
+    - '29'  # Missouri
+    - '30'  # Montana
+    - '31'  # Nebraska
+    - '32'  # Nevada
+    - '33'  # New Hampshire
+    - '34'  # New Jersey
+    - '35'  # New Mexico
+    - '36'  # New York
+    - '37'  # North Carolina
+    - '38'  # North Dakota
+    - '39'  # Ohio
+    - '40'  # Oklahoma
+    - '41'  # Oregon
+    - '42'  # Pennsylvania
+    - '44'  # Rhode Island
+    - '45'  # South Carolina
+    - '46'  # South Dakota
+    - '47'  # Tennessee
+    - '48'  # Texas
+    - '49'  # Utah
+    - '50'  # Vermont
+    - '51'  # Virginia
+    - '53'  # Washington
+    - '54'  # West Virginia
+    - '55'  # Wisconsin
+    - '56'  # Wyoming
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -2794,6 +2870,113 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # ENTITLEMENT SPENDING BY STATE — /api/v2/search/spending_by_geography/,
+  # filtered per fiscal year to specific entitlement-program CFDA/assistance-
+  # listing numbers (delta by FY)
+  # ---------------------------------------------------------------------------
+  - name: entitlement_spending_by_state
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=entitlement_spending_by_state/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Social Security and Medicare spending by place-of-performance state x fiscal
+      year, isolated by CFDA/assistance-listing number rather than derived from
+      usaspending_by_state's award-type totals — the entitlement-program
+      counterpart to that table and to ssa_benefits_by_geography (which carries
+      SSA's own county-grain administrative beneficiary/program detail but lags
+      further due to its Wayback-archive dependency). One row per state x program
+      x fiscal year: social_security_retirement (CFDA 96.002, SSA Old-Age and
+      Survivors Insurance), medicare_hospital_insurance (CFDA 93.773, Medicare
+      Part A), medicare_supplementary_medical_insurance (CFDA 93.774, Medicare
+      Part B) — one POST per program per fiscal year against
+      filters.program_numbers, same endpoint and geo_layer=state scope as
+      usaspending_by_state. Social Security's per-state totals reflect the
+      beneficiary's actual state. The two Medicare programs inherit the same
+      place-of-performance distortion documented on usaspending_by_state's
+      obligated_amount_excl_loans_excl_cms_admin column: CMS-funded awards report
+      place of performance at the Medicare Administrative Contractor's location,
+      not the beneficiary's, so states hosting a MAC (e.g. ND/Noridian, MN, IN,
+      KY, PA, SC, CT) show implausibly large totals relative to population —
+      confirmed live at FY2025 scale for both Medicare programs here. Not an
+      import defect; use ssa_benefits_by_geography or a per-capita/population
+      -normalized read for a beneficiary-state view of Medicare spending. Joins
+      to geo.state_ref via state_abbr. Source:
+      api.usaspending.gov/api/v2/search/spending_by_geography/.
+
+    dimensions:
+      type:
+        - entitlement_spending_by_state
+      year: *usaspending_year_range
+
+    columns:
+      - <<: *state_abbr_column
+        nullable: false
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name
+      - name: program
+        type: string
+        nullable: false
+        comment: >
+          social_security_retirement (CFDA 96.002), medicare_hospital_insurance
+          (CFDA 93.773), or medicare_supplementary_medical_insurance (CFDA 93.774)
+      - name: cfda_number
+        type: string
+        nullable: false
+        comment: CFDA / assistance-listing number the row's program_numbers filter used
+      - name: obligated_amount
+        type: double
+        nullable: true
+        comment: >
+          Aggregated obligations for the fiscal year (USD) for this program,
+          place of performance. See table comment for the Medicare
+          Administrative Contractor place-of-performance caveat.
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_geography/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      # The provider POSTs through this cache, keyed per request (endpoint + CFDA
+      # number + body), so each program's query per fiscal year is issued once.
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingEntitlementProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=entitlement_spending_by_state/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: entitlement_spending_by_state
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # SBA 7(a) & 504 LOAN APPROVALS — data.sba.gov DKAN CSV (snapshot per program)
   # ---------------------------------------------------------------------------
   - name: sba_loan_approvals
@@ -3925,6 +4108,104 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # CENSUS STC STATE CORPORATE INCOME TAX COLLECTIONS — govsstatetax timeseries
+  # API, ITEM_CODE=T41 only (delta by year, one fetch per state per year)
+  # ---------------------------------------------------------------------------
+  - name: state_corporate_income_tax_collections
+    pattern: "type=state_corporate_income_tax_collections/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Census Bureau Annual Survey of State Government Tax Collections (STC),
+      ITEM_CODE=T41 ("Corporation Net Income Taxes") only — do not confuse
+      with T40 (individual income tax; confirmed live, CA 2024 T40 =
+      $123.1B vs T41 = $41.4B). One row per state x tax year, 50 states + DC
+      (no territories — confirmed live: for=state:72 (Puerto Rico) returns no
+      data). collections_thousands is in THOUSANDS of dollars and is NULL
+      (not zero) for a state with no general corporate net income tax that
+      year — confirmed live for 2024: Texas, Nevada, Washington, and Wyoming
+      are NULL; South Dakota has no broad corporate income tax but its
+      financial-institution franchise tax IS captured under T41 and returns a
+      real value ($60.7M for 2024), so "NULL" means "no T41-classified tax,"
+      not "no state tax revenue at all." Source (per state per year):
+      api.census.gov/data/timeseries/govsstatetax — this endpoint's
+      for=state:* wildcard is unsupported (confirmed live: every combination
+      of ITEM_CODE filter, get= field list, and for=state:* returned HTTP 204
+      with no body across the published 2016-2025 range), so each state is
+      fetched with an explicit FIPS code. GOVTYPE and AGG_DESC are requested
+      in the URL but not materialized as columns: both are constant for this
+      item code (GOVTYPE=002 state government, AGG_DESC=STC017) and the API
+      silently 204s the whole query if either is dropped from get= alongside
+      an ITEM_CODE filter (confirmed live) — they stay in the URL as required
+      request parameters only.
+
+    dimensions:
+      type:
+        - state_corporate_income_tax_collections
+      year: *state_corp_tax_year_range
+      state_fips: *all_state_fips
+
+    columns:
+      - <<: *state_fips_column
+        expression: 'LPAD(CAST(src."state" AS VARCHAR), 2, ''0'')'
+        nullable: false
+      - name: state_name
+        type: string
+        nullable: true
+        expression: 'src."NAME"'
+        comment: State name, as published (Census STC NAME field)
+      - name: geo_id
+        type: string
+        nullable: true
+        expression: 'src."GEO_ID"'
+        comment: Census geography identifier, e.g. 0400000US06 for California
+      - name: collections_thousands
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."AMOUNT" AS BIGINT)'
+        comment: >
+          Corporation net income tax (ITEM_CODE=T41) collections for the
+          fiscal year, in THOUSANDS of dollars (Census STC AMOUNT field,
+          label "Amount ($1,000)"). NULL for a state with no T41-classified
+          tax that year (see table comment), not a missing observation.
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/govsstatetax?get=NAME,AMOUNT,GEO_ID,GOVTYPE,AGG_DESC&time={effective_year}&ITEM_CODE=T41&for=state:{state_fips}&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+        # Census returns a 2D array - CensusResponseTransformer handles conversion
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=state_corporate_income_tax_collections/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: state_corporate_income_tax_collections
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # DOL WHD STATE MINIMUM WAGE HISTORY — single-page snapshot, multi-year output
   # ---------------------------------------------------------------------------
   - name: state_minimum_wage_history
@@ -4162,6 +4443,17 @@ constraints:
         targetTable: congressional_districts
         targetColumns: [cd_fips]
 
+  # state_abbr, not state_fips: USAspending's geo_layer=state shape_code is the
+  # USPS state abbreviation (same as usaspending_by_state/usaspending_by_district),
+  # not a FIPS code -- matches the established convention for this endpoint.
+  entitlement_spending_by_state:
+    primaryKey: [year, state_abbr, program]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
   sba_loan_approvals:
     foreignKeys:
       - columns: [borrower_state]
@@ -4215,6 +4507,14 @@ constraints:
       # No FK on county_fips: valid only for county-level units (gov_type_code=1);
       # state-level rows carry a non-county placeholder there, so a blanket FK
       # would misrepresent the contract for 5 of the 6 gov_type_code values.
+
+  state_corporate_income_tax_collections:
+    primaryKey: [year, state_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   state_minimum_wage_history:
     primaryKey: [year, jurisdiction_name]

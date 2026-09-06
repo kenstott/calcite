@@ -3,9 +3,11 @@
 -- Schema: fiscal
 -- Tables: soi_income_by_zip, soi_income_by_county, county_migration_flows,
 --         exempt_org_master, exempt_org_990, usaspending_by_agency,
---         usaspending_by_state, sba_loan_approvals, ssa_benefits_by_geography,
---         ssa_benefits_by_geography_acs, govt_finance_by_unit,
---         state_minimum_wage_history
+--         usaspending_by_state, usaspending_by_district,
+--         entitlement_spending_by_state, sba_loan_approvals,
+--         ssa_benefits_by_geography, ssa_benefits_by_geography_acs,
+--         govt_finance_by_unit, state_minimum_wage_history,
+--         state_corporate_income_tax_collections
 -- All tables are Iceberg; reads via iceberg_scan (single-nested path).
 -- T4/T5 exclude partition columns ('type' for all; also 'year' or 'program' where present).
 -- Large tables carry dqRowLimit and sample in DQ mode; T2 thresholds reflect the sample.
@@ -346,6 +348,77 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/u
       WHERE cd_fips NOT SIMILAR TO '[0-9]{4}');
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: entitlement_spending_by_state (USAspending, CFDA-filtered; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true));
+
+-- ~56 states/territories x 3 programs per fiscal year
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END, n, 100, 'Expected >=100 state-program-year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_abbr/program rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true)
+      WHERE state_abbr IS NULL OR program IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, state_abbr, program) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, state_abbr, program, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true)
+  GROUP BY year, state_abbr, program HAVING COUNT(*) > 1));
+
+-- program must be one of the three CFDA-coded entitlement programs this table covers
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T7_program_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with unexpected program value'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true)
+      WHERE program NOT IN ('social_security_retirement', 'medicare_hospital_insurance',
+                             'medicare_supplementary_medical_insurance'));
+
+-- Sanity check: a large state's Social Security total should be tens of billions of
+-- dollars for its most recent fiscal year, not near-zero (confirmed live: CA FY2025
+-- Social Security Retirement Insurance = $127.5B).
+INSERT INTO dq_results
+SELECT 'fiscal', 'entitlement_spending_by_state', 'T8_expected_values',
+  CASE WHEN amt >= 1e10 THEN 'pass' ELSE 'fail' END, COALESCE(amt, 0), 1e10,
+  'CA social_security_retirement obligated_amount for most recent year (expect >= $10B)'
+FROM (
+  SELECT MAX(CASE WHEN year = (
+      SELECT MAX(year) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true)
+      WHERE state_abbr = 'CA' AND program = 'social_security_retirement')
+    THEN obligated_amount END) AS amt
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/entitlement_spending_by_state', allow_moved_paths := true)
+  WHERE state_abbr = 'CA' AND program = 'social_security_retirement');
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: sba_loan_approvals (SBA FOIA; partition cols: type, program)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
@@ -554,6 +627,72 @@ SELECT 'fiscal', 'govt_finance_by_unit', 'T7_gov_type_coverage',
   'Distinct gov_type_code values found (expect all 6: state/county/city/township/special district/school district)'
 FROM (SELECT COUNT(DISTINCT gov_type_code) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: state_corporate_income_tax_collections (Census STC govsstatetax
+-- timeseries API, ITEM_CODE=T41 only; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_corporate_income_tax_collections', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_corporate_income_tax_collections', allow_moved_paths := true));
+
+-- 51 (50 states + DC) x N years; a full-range run covers 2016-current (10+
+-- years), but a scoped DQ run may cover far fewer years, so the floor is one
+-- year's worth (51 rows), not the full-range expectation.
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_corporate_income_tax_collections', 'T2_row_count',
+  CASE WHEN n >= 51 THEN 'pass' ELSE 'fail' END, n, 51, 'Expected >=51 state rows (>=1 year, DQ-scoped)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_corporate_income_tax_collections', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_corporate_income_tax_collections', allow_moved_paths := true) LIMIT 3;
+
+-- collections_thousands is expected to carry real NULLs (states with no T41-
+-- classified tax that year), so 100%-null would only occur if every state
+-- were unmapped — a real defect. Excluded from the "all_null" NOT IN list
+-- like every other data column; only type/year are exempted as partitions.
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_corporate_income_tax_collections', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_corporate_income_tax_collections', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_corporate_income_tax_collections', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_corporate_income_tax_collections', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_corporate_income_tax_collections', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL/duplicate (year, state_fips) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+    SELECT year, state_fips, COUNT(*) AS dup_count
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_corporate_income_tax_collections', allow_moved_paths := true)
+    GROUP BY year, state_fips
+    HAVING year IS NULL OR state_fips IS NULL OR COUNT(*) > 1
+  ));
+
+-- Expected-value sanity check: California's T41 collections should be a
+-- plausible multi-billion-dollar figure, not near-zero or absurdly large.
+-- Confirmed live 2026-09-06: CA 2024 = $41.4B (41,408,314 thousand).
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_corporate_income_tax_collections', 'T7_ca_magnitude_sane',
+  CASE WHEN n BETWEEN 5000000 AND 100000000 THEN 'pass' ELSE 'fail' END, n, 41408314,
+  'California collections_thousands for its latest available year (expect $5B-$100B range)'
+FROM (
+  SELECT collections_thousands AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_corporate_income_tax_collections', allow_moved_paths := true)
+  WHERE state_fips = '06'
+  ORDER BY year DESC
+  LIMIT 1
+);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: state_minimum_wage_history (DOL WHD state minimum wage history; partition cols: type, year)
