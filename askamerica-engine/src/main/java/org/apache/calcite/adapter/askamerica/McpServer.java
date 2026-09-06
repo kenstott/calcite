@@ -4499,6 +4499,19 @@ public class McpServer {
                 }
                 boolean isCall = k < sql.length() && sql.charAt(k) == '(';
                 boolean opensWindowFrame = "(".equals(prev) && "OVER".equals(prevPrev);
+                // D-180: a word that is itself one of IDENTIFIER_POSITION_TOKENS is always
+                // syntax, never a column reference, no matter what precedes it -- that set is
+                // exactly the vocabulary of keywords that mark the position AFTER them as an
+                // identifier (SELECT, WHERE, BY, AS, DISTINCT, ...), so a member appearing in the
+                // "current token" slot is doing its own grammatical job, not sitting in the slot
+                // it marks. Without this guard, COUNT(DISTINCT geo_name) was misread as: "(" is
+                // an identifier-position trigger (true everywhere else, e.g. foo(order)), DISTINCT
+                // is a real SQL reserved word (isReservedWord("distinct") is true), so DISTINCT
+                // itself got quoted into COUNT("distinct" geo_name) -- invalid SQL, since it was
+                // never a candidate column, just an aggregate keyword one token after an opening
+                // paren.
+                boolean isPositionMarkerKeyword =
+                    IDENTIFIER_POSITION_TOKENS.contains(ident.toUpperCase(java.util.Locale.ROOT));
                 // candidates (real catalog columns) is checked first because it's a cheap set
                 // lookup and covers the common case; isReservedWord (a SqlParser call) only
                 // runs for the tokens that reach this point, so falling through to it costs
@@ -4508,7 +4521,8 @@ public class McpServer {
                 // "trailing" is never a catalog column anywhere, so the catalog-only check could
                 // never have caught it, no matter how long a static list was maintained by hand.
                 if ((candidates.contains(lower) || isReservedWord(lower)) && !isCall
-                    && !opensWindowFrame && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
+                    && !opensWindowFrame && !isPositionMarkerKeyword
+                    && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
                     out.append('"').append(lower).append('"');
                     seen.add(lower);
                 } else {

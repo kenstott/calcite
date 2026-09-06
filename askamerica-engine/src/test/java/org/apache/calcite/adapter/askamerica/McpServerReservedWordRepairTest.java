@@ -192,6 +192,25 @@ public class McpServerReservedWordRepairTest {
             quote("SELECT AVG(x) AS trailing FROM t"));
     }
 
+    // ── D-180: DISTINCT inside COUNT(DISTINCT col) must never be quoted ────────
+
+    @Test void doesNotQuoteDistinctInsideCountDistinct() {
+        // D-180: DISTINCT is itself a member of IDENTIFIER_POSITION_TOKENS (it marks the
+        // position after it as identifier position) and is also a real SQL reserved word, so
+        // it was being misread as a column reference sitting right after the "(" that opens
+        // COUNT(...) -- "(" is a legitimate identifier-position trigger everywhere else, e.g.
+        // foo(order) -- producing invalid SQL: COUNT("distinct" geo_name).
+        assertEquals("SELECT COUNT(DISTINCT geo_name) FROM t",
+            quote("SELECT COUNT(DISTINCT geo_name) FROM t"));
+    }
+
+    @Test void stillQuotesAReservedColumnImmediatelyAfterDistinct() {
+        // The fix must not go too far the other way: DISTINCT itself is never quoted, but a
+        // genuine reserved-word column right after it still needs the repair.
+        assertEquals("SELECT COUNT(DISTINCT \"year\") FROM t",
+            quote("SELECT COUNT(DISTINCT year) FROM t"));
+    }
+
     // ── LIMIT + FETCH FIRST conflict ─────────────────────────────────────────
 
     @Test void stripsLimitWhenFetchFirstIsAlsoPresent() {
