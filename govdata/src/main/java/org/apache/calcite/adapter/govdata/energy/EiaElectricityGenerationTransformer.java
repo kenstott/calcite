@@ -52,6 +52,12 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
       Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
           "90", "94", "95", "96", "97", "98", "99")));
 
+  /** The EIA v2 API reports total-consumption-btu and consumption-for-eg-btu in units of
+   * "million MMBtu" (confirmed via each row's own total-consumption-btu-units /
+   * consumption-for-eg-btu-units sibling field) while this table's columns are documented in
+   * plain MMBtu, so the raw API value must be scaled up to match. */
+  private static final double MILLION_MMBTU_TO_MMBTU = 1_000_000d;
+
   @Override
   public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -152,14 +158,14 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
 
         Double fuelTotal = getDouble(row, "total-consumption-btu");
         if (fuelTotal != null) {
-          out.put("fuel_consumed_total_mmbtu", fuelTotal);
+          out.put("fuel_consumed_total_mmbtu", fuelTotal * MILLION_MMBTU_TO_MMBTU);
         } else {
           out.putNull("fuel_consumed_total_mmbtu");
         }
 
         Double fuelEg = getDouble(row, "consumption-for-eg-btu");
         if (fuelEg != null) {
-          out.put("fuel_consumed_for_eg_mmbtu", fuelEg);
+          out.put("fuel_consumed_for_eg_mmbtu", fuelEg * MILLION_MMBTU_TO_MMBTU);
         } else {
           out.putNull("fuel_consumed_for_eg_mmbtu");
         }
