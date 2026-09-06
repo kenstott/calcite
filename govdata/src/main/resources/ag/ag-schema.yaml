@@ -297,7 +297,7 @@ partitionedTables:
         # treats an `error` body (e.g. exceeds limit=50000) as a hard failure.
       rateLimit:
         requestsPerSecond: 1.0
-        retryOn: [429, 503]
+        retryOn: [429, 500, 503]
         maxRetries: 3
         # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
         # state/year with no COUNTY-grain FIELD CROPS records — confirmed live for AK, CT, HI,
@@ -393,7 +393,7 @@ partitionedTables:
         format: json
       rateLimit:
         requestsPerSecond: 1.0
-        retryOn: [429, 503]
+        retryOn: [429, 500, 503]
         maxRetries: 3
         # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
         # state/year with no COUNTY-grain INVENTORY records — same NASS behavior confirmed
