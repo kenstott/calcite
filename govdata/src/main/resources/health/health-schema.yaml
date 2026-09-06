@@ -3681,8 +3681,10 @@ partitionedTables:
       County-level death counts and rates for drug overdose, suicide, homicide, and firearm
       injury, from CDC's Mapping Injury, Overdose, and Violence (MIOV) tool. Both yearly and
       trailing-twelve-month periods. Currently updated. Complements cdc_county_overdose_deaths
-      with suicide/homicide/firearm categories and both crude and model-smoothed rates. Counts
-      of 1-9 are suppressed for privacy (see count_sup).
+      with suicide/homicide/firearm categories. Counts of 1-9 are suppressed for privacy (see
+      count_sup); when suppressed, rate is NULL (the source has no crude estimate) and rate_m
+      flags that a Bayesian small-area model was used instead, with its credible interval in
+      rate_m_ci.
     columns:
       - name: geoid
         comment: "County FIPS code"
@@ -3713,17 +3715,20 @@ partitionedTables:
         type: VARCHAR
         nullable: true
       - name: rate
-        comment: "Crude death rate per 100,000 population"
-        type: VARCHAR
+        comment: "Crude death rate per 100,000 population; NULL when suppressed (see rate_m) rather than the source's -999 sentinel"
+        type: DOUBLE
         nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."rate" AS DOUBLE) <= -900 THEN NULL ELSE TRY_CAST(src."rate" AS DOUBLE) END'
       - name: rate_m
-        comment: "Model-based (smoothed) death rate per 100,000 population, used when the crude rate is unreliable due to small counts"
-        type: VARCHAR
+        comment: "True when the crude rate was suppressed and CDC substituted a Bayesian small-area model estimate (source field is a 0/1 flag, not a rate, despite its name)"
+        type: BOOLEAN
         nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."rate_m" AS DOUBLE) = 1 THEN TRUE WHEN TRY_CAST(src."rate_m" AS DOUBLE) = 0 THEN FALSE ELSE NULL END'
       - name: rate_m_ci
-        comment: "Confidence interval for the model-based rate"
+        comment: "Credible interval for the model-based estimate when rate_m is true; NULL otherwise (source's -999 sentinel is mapped to NULL)"
         type: VARCHAR
         nullable: true
+        expression: 'CASE WHEN src."rate_m_ci" = ''-999'' THEN NULL ELSE src."rate_m_ci" END'
       - name: ttm_date_range
         comment: "Date range covered when period is trailing-twelve-months"
         type: VARCHAR
