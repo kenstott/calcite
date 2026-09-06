@@ -25,24 +25,48 @@ import java.io.IOException;
  *
  * <p>{@code ""} (escaped quote inside a quoted field) counts as two quotes and
  * therefore preserves quote parity — no special-case handling needed.
+ *
+ * <p>The quote-parity check only makes sense when the source's own dialect actually
+ * uses {@code "} as an RFC4180 quote character. A source that quotes with something
+ * else (e.g. a single quote) and merely contains stray literal {@code "} characters
+ * in free text — an apostrophe mistyped as a double quote, an inch mark — has no
+ * notion of quote parity: joining lines on an odd count there merges two unrelated
+ * records into one and desyncs every column for both. Such sources must read via
+ * {@link #readRecord(BufferedReader, boolean)} with {@code quoted = false}, which
+ * disables the multi-line join entirely.
  */
 public final class CsvRecordReader {
 
   private CsvRecordReader() { }
 
   /**
-   * Reads the next complete CSV/TSV record. Returns {@code null} at end of stream.
+   * Reads the next complete CSV/TSV record, treating {@code "} as this source's
+   * RFC4180 quote character. Returns {@code null} at end of stream.
    *
    * @param reader source reader
    * @return a single record (possibly spanning multiple physical lines joined by
    *     {@code '\n'}), or {@code null} if EOF reached before any data
    */
   public static String readRecord(BufferedReader reader) throws IOException {
+    return readRecord(reader, true);
+  }
+
+  /**
+   * Reads the next complete CSV/TSV record. Returns {@code null} at end of stream.
+   *
+   * @param reader source reader
+   * @param quoted whether {@code "} is this source's RFC4180 quote character; when
+   *               {@code false}, every physical line is returned as its own record
+   * @return a single record (possibly spanning multiple physical lines joined by
+   *     {@code '\n'} when {@code quoted} is true), or {@code null} if EOF reached
+   *     before any data
+   */
+  public static String readRecord(BufferedReader reader, boolean quoted) throws IOException {
     String line = reader.readLine();
     if (line == null) {
       return null;
     }
-    if (!hasOddQuotes(line)) {
+    if (!quoted || !hasOddQuotes(line)) {
       return line;
     }
     StringBuilder sb = new StringBuilder(line);

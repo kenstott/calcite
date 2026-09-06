@@ -2817,10 +2817,14 @@ partitionedTables:
       FHWA's own precomputed bridge_condition (Good/Fair/Poor) and lowest_rating summary
       fields, location, year built/reconstructed, traffic, and improvement-cost fields
       (bridge/roadway/total, plus year_of_imp) for federal-spending comparisons. The
-      "delimited" national file uses a single-quote text qualifier that this table does
-      not strip (isQuoted only supports RFC4180 double-quote parsing) — a handful of
-      free-text columns (e.g. features_desc, facility_carried) carry literal leading/
-      trailing single quotes; harmless for the numeric/coded columns this table curates.
+      "delimited" national file uses a single-quote text qualifier, not RFC4180 double
+      quote, so source.response.quoted is false: a handful of free-text columns (e.g.
+      features_desc, facility_carried) carry literal leading/trailing single quotes
+      that this table does not strip — harmless for the numeric/coded columns this
+      table curates — and any stray literal " in free text (an apostrophe mistyped as
+      one, an inch mark) is read as ordinary text instead of an RFC4180 quote, which
+      would otherwise merge that record with the next line and desync every column
+      in both.
       decimal_latitude/decimal_longitude are computed from the source's packed
       DDMMSS.ss / DDDMMSS.ss fields (Items 16/17) using length-relative substring
       extraction (minutes/seconds anchored to the end of the string, degrees to
@@ -3023,6 +3027,12 @@ partitionedTables:
       response:
         format: csv
         hasHeader: true
+        # The delimited file's real text qualifier is a single quote, not RFC4180
+        # double-quote (see the bridges comment above). A handful of free-text fields
+        # carry a stray literal " (an apostrophe mistyped as one, an inch mark) with no
+        # quoting meaning at all; with the RFC4180 default, an odd count of those merges
+        # that physical line with the next one and desyncs every column for both rows.
+        quoted: false
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 503]

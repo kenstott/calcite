@@ -922,7 +922,7 @@ public class HttpSource implements DataSource {
           csvConn = cs.conn;
           csvReader = new BufferedReader(new InputStreamReader(cs.stream, StandardCharsets.UTF_8));
           // Read the header as a complete record (in case header itself has quoted multi-line cell)
-          csvHeaderLine = CsvRecordReader.readRecord(csvReader);
+          csvHeaderLine = CsvRecordReader.readRecord(csvReader, config.getResponse().isQuoted());
           if (csvHeaderLine == null) {
             hasMore = false;
             return false;
@@ -936,8 +936,13 @@ public class HttpSource implements DataSource {
         int linesRead = 0;
         String line;
         // Use CsvRecordReader so quoted multi-line fields (e.g. patent summaries, FDA
-        // adverse event narratives, clinical trial descriptions) are not truncated.
-        while (linesRead < batchSize && (line = CsvRecordReader.readRecord(csvReader)) != null) {
+        // adverse event narratives, clinical trial descriptions) are not truncated. Sources
+        // whose real dialect doesn't quote with " (config.response.quoted = false) skip the
+        // multi-line join — a stray literal " in free text would otherwise merge two
+        // unrelated records and desync every column for both.
+        boolean quotedDialect = config.getResponse().isQuoted();
+        while (linesRead < batchSize
+            && (line = CsvRecordReader.readRecord(csvReader, quotedDialect)) != null) {
           batchSb.append(line).append("\n");
           linesRead++;
         }

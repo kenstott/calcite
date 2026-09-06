@@ -13,11 +13,15 @@ package org.apache.calcite.adapter.file.etl;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
-/** Unit tests for {@link CsvRecordReader#splitFields}. */
+/** Unit tests for {@link CsvRecordReader#splitFields} and {@link CsvRecordReader#readRecord}. */
 @Tag("unit")
 public class CsvRecordReaderTest {
 
@@ -66,5 +70,33 @@ public class CsvRecordReaderTest {
 
   @Test void emptyQuotedField() {
     assertEquals(java.util.Arrays.asList("a", "", "c"), split("\"a\", \"\", \"c\""));
+  }
+
+  private static BufferedReader reader(String text) {
+    return new BufferedReader(new StringReader(text));
+  }
+
+  @Test void quotedDialect_joinsGenuineMultiLineQuotedField() throws IOException {
+    // RFC4180 dialect (default/true): an odd double-quote count means the record
+    // continues on the next physical line, joined with '\n'.
+    BufferedReader r = reader("a,\"b\nstill b\",c\nnext,row,here\n");
+    assertEquals("a,\"b\nstill b\",c", CsvRecordReader.readRecord(r, true));
+    assertEquals("next,row,here", CsvRecordReader.readRecord(r, true));
+    assertNull(CsvRecordReader.readRecord(r, true));
+  }
+
+  @Test void singleQuoteDialect_strayDoubleQuoteDoesNotMergeRecords() throws IOException {
+    // Non-RFC4180 dialect (quoted=false), e.g. NBI bridges: '...' is the real text
+    // qualifier and a literal " (mistyped apostrophe, inch mark) has no quoting
+    // meaning. Each physical line must stay its own record even with an odd count.
+    BufferedReader r = reader("01,'B\"HAM SOUTHERN RAILROAD',x\n02,'NEXT BRIDGE',y\n");
+    assertEquals("01,'B\"HAM SOUTHERN RAILROAD',x", CsvRecordReader.readRecord(r, false));
+    assertEquals("02,'NEXT BRIDGE',y", CsvRecordReader.readRecord(r, false));
+    assertNull(CsvRecordReader.readRecord(r, false));
+  }
+
+  @Test void noArgOverload_defaultsToQuotedTrue() throws IOException {
+    BufferedReader r = reader("a,\"b\nstill b\",c\n");
+    assertEquals("a,\"b\nstill b\",c", CsvRecordReader.readRecord(r));
   }
 }
