@@ -2244,7 +2244,13 @@ partitionedTables:
       - name: outlet_type
         type: string
         nullable: true
-        comment: C_OUT_TY (CE=Central, BR=Branch, BS=Bookmobile Stop, BM=Bookmobile)
+        comment: >
+          C_OUT_TY (CE=Central, BR=Branch, BS=Bookmobile Stop, BM=Bookmobile). One known
+          source-data anomaly: library_id='MO0004-037' ("Library By Mail") carries
+          outlet_type='MO' in year=2019 only (every other year for this outlet reads
+          'BM') -- confirmed present verbatim in IMLS's own FY2019 raw file
+          (C_OUT_TY column, not a positional/mapping error on our side), not corrected
+          here since there is no better field to derive the true value from.
       - name: address
         type: string
         nullable: true

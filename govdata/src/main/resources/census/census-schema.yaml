@@ -4621,7 +4621,10 @@ partitionedTables:
       private ownership). One row per state x quarter x demographic cell. Ingested from the
       per-state bulk CSV rather than the per-quarter API: one file carries that state's whole
       history, so a release costs 51 fetches instead of ~4,700, and every published measure and
-      suppression flag is retained rather than a five-variable projection.
+      suppression flag is retained rather than a five-variable projection. Payroll is entirely
+      NULL (sPayroll=5) in every row as of R2021Q4 onward -- Census permanently suppressed QWI
+      Total Payroll measures for privacy protection and redirects users to BLS QCEW instead; this
+      is a source-side omission, not an ingestion gap.
     dimensions:
       type:
         - qwi
