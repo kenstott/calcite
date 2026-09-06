@@ -351,7 +351,7 @@ load. The 4 source-characteristic warns are unchanged from prior runs.
 |-------|------|-------|
 | gleif_entities | 3,313,968 | Full GLEIF golden copy (~3.2M global LEI records) |
 | gleif_relationships | — | Added 2026-07-31, after this DQ run — 482,824 rows on first ingest |
-| gleif_cik_mapping | 121,474 | LEI→CIK bridge; filtered to SEC registrants (RA000602) |
+| gleif_cik_mapping | 121,474 | LEI→CIK bridge; filtered to SEC registrants (RA000665) |
 | sec_company_tickers | 10,354 | Active US exchange-listed SEC filers from EDGAR company_tickers.json |
 | figi_instruments | 184,221 | OpenFIGI instruments for 9,290 of 10,354 SEC tickers (1,064 tickers had no FIGI match) |
 

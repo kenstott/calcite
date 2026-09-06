@@ -288,10 +288,10 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/glei
       WHERE lei IS NULL);
 
 INSERT INTO dq_results
--- Null CIKs are expected: private/exempt funds tagged RA000602 but exempt from EDGAR
+-- Null CIKs are expected: private/exempt funds tagged RA000665 but exempt from EDGAR
 SELECT 'ref', 'gleif_cik_mapping', 'T6_pk_cik_nulls',
   'pass',
-  n, 0, 'NULL cik rows — expected: private/exempt funds (3(c)(1)/3(c)(7)) tagged RA000602 but exempt from EDGAR and therefore have no CIK. Schema-valid per LEI-CDF 3.1 (RegistrationAuthorityEntityID is optional)'
+  n, 0, 'NULL cik rows — expected: private/exempt funds (3(c)(1)/3(c)(7)) tagged RA000665 (SEC EDGAR) but exempt from EDGAR and therefore have no CIK. Schema-valid per LEI-CDF 3.1 (RegistrationAuthorityEntityID is optional)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_cik_mapping', allow_moved_paths := true)
       WHERE cik IS NULL);
 

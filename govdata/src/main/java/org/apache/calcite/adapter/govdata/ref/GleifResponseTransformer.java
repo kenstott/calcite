@@ -155,7 +155,9 @@ public class GleifResponseTransformer implements ResponseTransformer {
       JsonNode legalForm = entity.path("legalForm");
       flat.put("entity_legal_form", legalForm.path("id").asText(""));
 
-      // Registration authority (links to SEC CIK via RA000602)
+      // Registration authority (links to SEC CIK only when the id is RA000665 / SEC EDGAR;
+      // most other authorities, e.g. RA000602 Delaware, carry that jurisdiction's own
+      // business-registry number here instead)
       JsonNode registrationAuthority = entity.path("registrationAuthority");
       flat.put("registration_authority_id",
           registrationAuthority.path("id").asText(""));

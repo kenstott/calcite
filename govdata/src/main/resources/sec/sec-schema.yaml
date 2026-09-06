@@ -1830,10 +1830,11 @@ views:
       is unpadded (GLEIF's own convention) while filing_metadata.cik is 10-digit
       zero-padded (SEC's convention); the join normalizes with LPAD. GLEIF's
       SEC-authority CIK bridge covers only entities GLEIF has registered under
-      registration_authority_id='RA000602' — a minority of SEC filers, so
-      lei/legal_name/headquarters_* are legitimately NULL for most companies
-      (confirmed: even large filers like Apple have no GLEIF LEI record under
-      this authority), not a join defect.
+      registration_authority_id='RA000665' (SEC EDGAR) — a minority of SEC
+      filers, so lei/legal_name/headquarters_* are legitimately NULL for most
+      companies, not a join defect. A company incorporated outside Delaware
+      (e.g. Apple in California, Microsoft in Washington) commonly has no
+      RA000665 record in GLEIF at all, even though it is a real SEC filer.
     sql: >
       SELECT
         fm.cik,

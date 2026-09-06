@@ -151,10 +151,14 @@ partitionedTables:
       golden copy CSV — entity registration details, jurisdiction, legal form,
       HQ/registered addresses, and registration authority links. The
       registration_authority_entity_id field contains the SEC CIK number for
-      entities registered with RA000602 (SEC). Append-only changelog: one row
-      per LEI per publish in which it changed, with last_update as the history
-      axis; use the current_gleif_entities view for the latest row per LEI.
-      Source: GLEIF Golden Copy (goldencopy.gleif.org).
+      entities registered with RA000665 (SEC EDGAR); most other registration
+      authorities carry that jurisdiction's own business-registry number instead
+      (e.g. RA000602, Delaware Division of Corporations), so this column is only
+      a CIK when registration_authority_id is actually RA000665 — see
+      gleif_cik_mapping, which applies that filter. Append-only changelog: one
+      row per LEI per publish in which it changed, with last_update as the
+      history axis; use the current_gleif_entities view for the latest row per
+      LEI. Source: GLEIF Golden Copy (goldencopy.gleif.org).
 
     columns:
       - *lei_column
@@ -178,7 +182,7 @@ partitionedTables:
       - name: registration_authority_id
         type: string
         nullable: true
-        comment: Registration authority identifier (e.g., RA000602 for SEC)
+        comment: Registration authority identifier (e.g., RA000665 for SEC EDGAR; RA000602 is Delaware Division of Corporations, the most common non-SEC value for US entities)
         source: Entity.RegistrationAuthority.RegistrationAuthorityID
       - name: registration_authority_entity_id
         type: string
@@ -283,10 +287,10 @@ partitionedTables:
     comment: >
       Bridge table mapping GLEIF LEI codes to SEC CIK numbers (lei, cik,
       legal_name, entity_status). Derived from the GLEIF golden copy CSV
-      filtered where registration_authority_id = 'RA000602' (SEC). Current
-      snapshot only, overwritten each run — unlike gleif_entities, which keeps
-      an append-only change history. Provides fast LEI <-> CIK lookups without
-      scanning the full GLEIF dataset.
+      filtered where registration_authority_id = 'RA000665' (SEC EDGAR).
+      Current snapshot only, overwritten each run — unlike gleif_entities,
+      which keeps an append-only change history. Provides fast LEI <-> CIK
+      lookups without scanning the full GLEIF dataset.
 
     columns:
       - *lei_column
@@ -308,7 +312,7 @@ partitionedTables:
       extractPattern: "*.csv"
       rowFilter:
         column: Entity.RegistrationAuthority.RegistrationAuthorityID
-        pattern: "^RA000602$"
+        pattern: "^RA000665$"
       response:
         format: csv
       rateLimit:
@@ -2627,7 +2631,7 @@ constraints:
         targetSchema: "${SEC_SCHEMA_NAME:sec}"
         targetTable: filings
         targetColumns: [cik]
-        comment: Links GLEIF entities registered with SEC (RA000602) to SEC filings
+        comment: Links GLEIF entities registered with SEC (RA000665) to SEC filings
       - columns: [headquarters_country]
         targetTable: countries
         targetColumns: [iso_alpha2]
