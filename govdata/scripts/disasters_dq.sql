@@ -296,6 +296,74 @@ FROM (SELECT AVG(CASE WHEN geometry_wkt IS NOT NULL THEN 1.0 ELSE 0.0 END) AS pc
       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_perimeters', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: wildfire_risk_by_county (static snapshot, new 5 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true));
+
+-- 3,144 US counties/equivalents in the source workbook's Counties sheet
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T2_row_count',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END, n, 3000, 'Expected ~3144 county rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true) WHERE county_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true)
+  GROUP BY county_fips HAVING COUNT(*) > 1));
+
+-- county_fips must be a well-formed 5-digit FIPS code (catches the GEOID
+-- leading-zero-stripping bug the transformer works around via GEOIDFQ)
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T7_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with malformed (non-5-digit) county_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true)
+      WHERE county_fips NOT SIMILAR TO '[0-9]{5}');
+
+-- exposure fractions and percentile ranks must fall in [0,1]
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_risk_by_county', 'T7_fraction_bounds',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with an exposure fraction or rank outside [0,1]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_risk_by_county', allow_moved_paths := true)
+      WHERE (buildings_fraction_minimal_exposure IS NOT NULL AND (buildings_fraction_minimal_exposure < 0 OR buildings_fraction_minimal_exposure > 1))
+         OR (buildings_fraction_indirect_exposure IS NOT NULL AND (buildings_fraction_indirect_exposure < 0 OR buildings_fraction_indirect_exposure > 1))
+         OR (buildings_fraction_direct_exposure IS NOT NULL AND (buildings_fraction_direct_exposure < 0 OR buildings_fraction_direct_exposure > 1))
+         OR (burn_probability_state_rank IS NOT NULL AND (burn_probability_state_rank < 0 OR burn_probability_state_rank > 1))
+         OR (burn_probability_national_rank IS NOT NULL AND (burn_probability_national_rank < 0 OR burn_probability_national_rank > 1))
+         OR (risk_state_rank IS NOT NULL AND (risk_state_rank < 0 OR risk_state_rank > 1))
+         OR (risk_national_rank IS NOT NULL AND (risk_national_rank < 0 OR risk_national_rank > 1)));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

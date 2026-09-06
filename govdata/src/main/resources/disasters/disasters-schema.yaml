@@ -1051,6 +1051,122 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  - name: wildfire_risk_by_county
+    # USFS Wildfire Risk to Communities (WRC) publishes one county-summary workbook per
+    # release (~annually), not a continuous series — a freshness-gated snapshot re-fetched
+    # and overwritten whenever USFS updates the file, matching the energy.ev_charging_stations
+    # pattern rather than wildfire_perimeters' incident-level shape.
+    freshness:
+      type: hash
+    pattern: "type=wildfire_risk_by_county/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      USFS Wildfire Risk to Communities (WRC) county-level summary — one row per county,
+      from the workbook's own "Counties" sheet (3,144 rows, one per US county/equivalent).
+      Forward-looking hazard/exposure measures, not after-the-fact burn perimeters (see
+      wildfire_perimeters for those). Metrics are building-fraction-based
+      (buildings_fraction_minimal/indirect/direct_exposure), not raw Census housing-unit
+      counts — the closest federal equivalent to a "housing-unit risk" statistic, but a
+      building-count proxy rather than a literal housing-unit statistic. burn_probability_*
+      and risk_*_rank are state/national percentile ranks (0-1), not raw probabilities.
+      Complements disasters.wildfire_perimeters (which records only fires that already
+      happened) with a genuinely forward-looking hazard measure. Joins to geo.counties via
+      county_fips. Source: wildfirerisk.org (official USFS product, mandated by the 2018
+      Consolidated Appropriations Act; hosted off the .fs.usda.gov domain, same acceptable
+      pattern already used for housing.hud_subsidized_housing).
+
+    dimensions:
+      type:
+        - wildfire_risk_by_county
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name with state suffix, e.g. "Autauga County, AL"
+      - name: total_buildings
+        type: long
+        nullable: true
+        comment: Total building count in the county (WRC's own building inventory)
+      - name: buildings_fraction_minimal_exposure
+        type: double
+        nullable: true
+        comment: Fraction (0-1) of county buildings in the Minimal wildfire Exposure zone
+      - name: buildings_fraction_indirect_exposure
+        type: double
+        nullable: true
+        comment: >
+          Fraction (0-1) of county buildings in the Indirect wildfire Exposure zone
+          (exposed to ember cast / radiant heat from a nearby fire, not direct flame contact)
+      - name: buildings_fraction_direct_exposure
+        type: double
+        nullable: true
+        comment: Fraction (0-1) of county buildings in the Direct wildfire Exposure zone
+      - name: burn_probability_state_rank
+        type: double
+        nullable: true
+        comment: Annual burn probability, percentile rank (0-1) within the county's state
+      - name: burn_probability_national_rank
+        type: double
+        nullable: true
+        comment: Annual burn probability, percentile rank (0-1) nationally
+      - name: risk_state_rank
+        type: double
+        nullable: true
+        comment: Risk to structures (burn probability x exposure x building value), percentile rank (0-1) within state
+      - name: risk_national_rank
+        type: double
+        nullable: true
+        comment: Risk to structures, percentile rank (0-1) nationally
+
+    # WRC's download URL embeds its publish date and changes on each annual release
+    # (confirmed live 5 Sep 2026: wrc_download_20260415.xlsx, prior release was
+    # wrc_download_202505.xlsx). No query-string discovery endpoint this codebase's
+    # urlResolver mechanism can use directly (wildfirerisk.org's own
+    # wp-json/wp/v2/media?search=wrc_download&per_page=1&orderby=date&order=desc returns a
+    # JSON ARRAY, not the single-object shape urlResolver expects) — re-verify this URL via
+    # that endpoint's source_url field if it ever 404s, same caveat class as the CFTC COT
+    # Socrata resource ID and lands.va_facilities' ArcGIS FeatureServer.
+    source:
+      type: http
+      url: "https://wildfirerisk.org/wp-content/uploads/2026/04/wrc_download_20260415.xlsx"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # WildfireRiskByCountyTransformer re-downloads the XLSX and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.WildfireRiskByCountyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=wildfire_risk_by_county/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: wildfire_risk_by_county
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1155,6 +1271,18 @@ constraints:
 
   wildfire_perimeters:
     primaryKey: [incident_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  wildfire_risk_by_county:
+    primaryKey: [county_fips]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
