@@ -195,7 +195,15 @@ partitionedTables:
         type: string
         nullable: true
         source: "Cleared"
-        comment: "Y=cleared, N=not cleared, I=not applicable (source 'Cleared' field; may be NULL)"
+        comment: >
+          Y=centrally cleared (per CFTC/DTCC CDE data element #1). Almost never seen in this
+          table: Y is reported only on the CCP-facing "beta"/"gamma" novation legs created when
+          a swap clears, and those legs are explicitly excluded from Part 43 public real-time
+          dissemination ("Not Disseminated" per the CFTC Technical Specification's clearing
+          novation example) — this file carries only the original "alpha" transaction.
+          N=not centrally cleared (bilateral). I=Intent to clear — the alpha transaction is
+          planned for submission to clearing; most I rows do go on to clear, but that outcome
+          is recorded on a separate, non-disseminated transaction, not by amending this row.
       - name: mandatory_clearing_indicator
         type: boolean
         nullable: true
@@ -917,7 +925,13 @@ partitionedTables:
         type: string
         nullable: true
         source: "Settlement location"
-        comment: Settlement location/CCP (e.g. CME, LCH, ICE)
+        comment: >
+          Not a CCP/clearinghouse field. Per CFTC/DTCC CDE data element #90, this is the ISO
+          3166 (alpha-2) country code disambiguating an offshore currency from its onshore ISO
+          4217 code (e.g. CNY traded offshore in Hong Kong is reported as notional_currency=CNY
+          plus settlement_location=HK). Only applicable — and only required — when a leg's
+          notional currency is an offshore currency; genuinely blank on the vast majority of
+          rows, and never a CCP name.
       - name: collateralisation_category
         type: string
         nullable: true
@@ -1379,8 +1393,11 @@ views:
       Interest rate swaps filtered view. Covers vanilla IRS, OIS (SOFR, EFFR), basis swaps,
       cross-currency swaps, and swaptions in the RATES asset class. Key columns: fixed_rate_leg1/leg2
       (coupon as decimal), floating_rate_reset_freq_period_leg1 (EXPI=at-expiry OIS,
-      MNTH=monthly reset), settlement_location (LCH, CME, etc.), upi_underlier_name
-      (e.g. 'USD-SOFR-COMPOUND'). Filter action_type = 'NEWT' for new executions only.
+      MNTH=monthly reset), settlement_location (offshore-currency jurisdiction — an ISO 3166
+      country code, populated only when a leg's currency is offshore; not a CCP field),
+      upi_underlier_name (e.g. 'USD-SOFR-COMPOUND'). Filter action_type = 'NEWT' for new
+      executions only. This table cannot support CCP/clearer concentration analysis — see
+      clearing_activity's comment for why.
 
   - name: credit_default_swaps
     type: view
@@ -1390,7 +1407,9 @@ views:
       (CDX.NA.IG, CDX.NA.HY, iTraxx). Key columns: spread_leg1 (running spread in bps),
       fixed_rate_leg1 (standard coupon — typically 100bps IG or 500bps HY), underlying_asset_name
       (reference entity or index name), underlier_id_leg1 (ISIN or index identifier).
-      Filter action_type = 'NEWT' AND cleared = 'Y' for cleared index CDS activity.
+      cleared = 'Y' will not isolate cleared index CDS activity — see clearing_activity's
+      comment: the CCP-facing leg that carries cleared='Y' is excluded from Part 43 public
+      dissemination, so almost no row here ever has it, regardless of true clearing status.
 
   - name: fx_derivatives
     type: view
@@ -1430,22 +1449,31 @@ views:
       (number of swap events), total_usd_notional (USD-equivalent notional — uses leg1 if
       USD, leg2 if not; approximate for cross-currency), cleared_count (cleared='Y') /
       uncleared_count (cleared='N').
-      Primary dashboard for market activity monitoring, clearing adoption rates, and
-      daily volume surveillance. Filter action_type = 'NEWT' for execution-only volumes.
-      For cleared volume broken out by CCP (settlement_location) instead of by
-      action_type, see clearing_activity.
+      Primary dashboard for market activity monitoring and daily volume surveillance.
+      Filter action_type = 'NEWT' for execution-only volumes. cleared_count/uncleared_count
+      are NOT a clearing-adoption rate: cleared='Y' is reported only on the CCP-facing
+      novation leg of a cleared swap, and Part 43 explicitly excludes that leg from public
+      dissemination, so cleared_count is structurally near-zero here regardless of how much
+      volume actually clears — see clearing_activity's comment for the source-level reason.
 
   - name: clearing_activity
     type: view
     sql: "SELECT trade_date, asset_class, settlement_location, COUNT(*) AS cleared_trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 ELSE notional_amount_leg1 END) AS total_notional FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE cleared = 'Y' AND action_type = 'NEWT' GROUP BY trade_date, asset_class, settlement_location"
     comment: >
-      Cleared swap activity by CCP. Columns: trade_date, asset_class, settlement_location
-      (CCP name — LCH, CME, ICE), cleared_trade_count, total_notional (raw sum of
-      notional_amount_leg1 in its native currency — not USD-normalized, unlike
-      swap_activity's total_usd_notional). Covers only cleared (cleared='Y'),
-      newly-executed (action_type='NEWT') trades; for activity across all action
-      types and cleared/uncleared status, grouped by action_type instead of CCP,
-      see swap_activity.
+      Despite the name, this is NOT usable for CCP concentration analysis, for every asset
+      class, by design of CFTC's Part 43 public dissemination rules — not an ETL defect.
+      settlement_location is an offshore-currency jurisdiction code (ISO 3166), never a CCP
+      name, so grouping by it does not identify a clearer. Separately, cleared='Y' is reported
+      only on the CCP-facing "beta"/"gamma" novation leg created when a swap actually clears
+      (CFTC/DTCC CDE data element #1), and that leg is explicitly marked "Not Disseminated" in
+      CFTC's own Technical Specification — this table, sourced entirely from the public
+      dissemination feed, never receives it. The result is near-zero rows here regardless of
+      real clearing volume. No field in the Part 43 public dissemination feed identifies the
+      CCP (that's CDE data element #2, "Central counterparty," which is itself not disseminated
+      whenever cleared != 'Y'); CCP concentration requires an external source (e.g. CCPView,
+      BIS, FSB). Columns: trade_date, asset_class, settlement_location, cleared_trade_count,
+      total_notional (raw sum of notional_amount_leg1 in its native currency — not
+      USD-normalized, unlike swap_activity's total_usd_notional).
 
 # ============================================================================
 # END OF SCHEMA
@@ -1463,6 +1491,8 @@ views:
 #   - weekends/holidays: no file published; 403 skipped cleanly via skipOn
 #   - Notional amounts in source CSV have comma thousands separators —
 #     DuckDB auto_detect handles these correctly
-#   - Cleared field: Y=cleared, N=not cleared, I=not applicable (may be NULL)
+#   - Cleared field: Y=centrally cleared (CCP-facing novation leg — excluded from Part 43
+#     public dissemination, so almost never seen here), N=not cleared, I=Intent to clear
+#     (the disseminated alpha leg of a swap headed for clearing)
 #   - action_type NEWT=new, AMND=amendment, TERM=termination,
 #     CORR=correction, EROR=error, NOVA=novation
