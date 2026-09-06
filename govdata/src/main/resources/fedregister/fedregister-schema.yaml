@@ -24,8 +24,11 @@ comment: >
   2010 to present by default (start year configurable via GOVDATA_START_YEAR). Key
   cross-reference fields: cfr_references (links to affected CFR titles/parts by
   industry), rin (Regulatory Identifier Number — tracks rulemaking lifecycle from
-  NPRM to final rule), docket_ids (links to regulations.gov comment dockets). Single
-  table in this schema: see fr_documents for the full column list.
+  NPRM to final rule), docket_ids (links to regulations.gov comment dockets). Two
+  tables in this schema: fr_documents (full document metadata from govinfo.gov bulk
+  XML) and fr_significance (OIRA EO 12866 economic-significance flag per document,
+  sourced directly from the Federal Register API's own JSON field — join to
+  fr_documents on document_number). See each table for its full column list.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -64,6 +67,18 @@ dimension_values:
   fr_months: &fr_months
     type: list
     values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    descending: true
+
+  # Zero-padded month for fr_significance's date-range query params (see that table's source
+  # comment for why: the Federal Register API's page-based pagination hard-caps at 10000 items
+  # per query — confirmed live, HTTP 400 "Pagination limit exceeded" past page 10 at per_page=1000
+  # — so a whole-year window (~25k docs) silently truncates. Monthly windowing (~2-3k docs/month)
+  # stays well under that ceiling. A separate anchor from fr_months (used by fr_documents, whose
+  # custom dataProviderClass parses "month" as an int and ignores this string formatting) so this
+  # change carries zero risk to that already-populated production table.
+  fr_months_padded: &fr_months_padded
+    type: list
+    values: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
     descending: true
 
 # ============================================================================
@@ -184,6 +199,97 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # FR_SIGNIFICANCE — OIRA EO 12866 economic-significance flag, one row per document
+  # ---------------------------------------------------------------------------
+  # D-052: fr_documents' source (govinfo.gov bulk XML) carries no significance marker,
+  # but the Federal Register API's own JSON documents.json endpoint returns a native
+  # `significant` boolean per document (confirmed live: fields[]=significant returns
+  # true/false/null; conditions[significant]=1 filters to significant docs only) — no
+  # reginfo.gov XML crawl or new RIN-based join logic needed. Kept as its own table
+  # rather than a new column on fr_documents: fr_documents already has production
+  # rows, and a column added directly to that table's `columns:` list would change
+  # its Iceberg schema on the next write, which IcebergMaterializationWriter reconciles
+  # via drop-and-recreate-with-purge on a schema mismatch. A separate table sourced
+  # from a different endpoint is also consistent with the schema's one-table-per-source
+  # rule. Join to fr_documents on document_number.
+  #
+  # Windowed by year+month (not year alone): confirmed live that
+  # api.federalregister.gov's page-based pagination hard-caps at 10000 items per query
+  # (HTTP 400 "Pagination limit exceeded. No more than 10000 items can be requested at
+  # a time" past page 10 at per_page=1000) — a full year runs ~25-30k documents, which
+  # silently truncated to exactly 10000 rows in initial testing. Monthly windows
+  # (~2-3k documents each) stay well under that ceiling.
+  - name: fr_significance
+    pattern: "year=*/month=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_year
+        - *partition_month
+    comment: >
+      OIRA EO 12866 economic-significance determination per Federal Register
+      document, sourced directly from the Federal Register API's own `significant`
+      JSON field (https://www.federalregister.gov/api/v1/documents.json) — not
+      present in fr_documents' govinfo.gov bulk-XML source. true = economically
+      significant under EO 12866 (subject to OMB/OIRA regulatory review), false =
+      not significant, NULL = not yet classified by the API (common for very
+      recent documents — treat as unknown, not false). Join to fr_documents on
+      document_number to filter significant vs. routine rules.
+
+    dimensions:
+      year: *fr_year_range
+      month: *fr_months_padded
+
+    columns:
+      - name: document_number
+        type: string
+        comment: Federal Register document number (e.g., 2026-07234); joins to fr_documents.document_number
+      - name: publication_date
+        type: string
+        nullable: true
+        comment: Publication date (YYYY-MM-DD)
+      - name: significant
+        type: boolean
+        nullable: true
+        comment: OIRA EO 12866 economic-significance flag (true/false/null — see table comment)
+
+    source:
+      type: http
+      url: "https://www.federalregister.gov/api/v1/documents.json?conditions[publication_date][gte]={year}-{month}-01&conditions[publication_date][lte]={year}-{month}-{month_end}&fields[]=document_number&fields[]=publication_date&fields[]=significant"
+      method: GET
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: PAGE
+          pageParam: page
+          limitParam: per_page
+          pageSize: 1000
+          countPath: count
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      rawCache:
+        enabled: false
+
+    materialize:
+      format: iceberg
+      partition:
+        columns: [year, month]
+      output:
+        pattern: "year={year}/month={month}/"
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -191,3 +297,28 @@ partitionedTables:
 constraints:
   fr_documents:
     primaryKey: [document_number]
+  fr_significance:
+    primaryKey: [document_number]
+    foreignKeys:
+      - columns: [document_number]
+        targetTable: fr_documents
+        targetColumns: [document_number]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: fr_documents_significance
+    comment: >
+      fr_documents enriched with the OIRA EO 12866 significance flag from
+      fr_significance (D-052), joined on document_number. LEFT JOIN so documents
+      not yet classified by the Federal Register API (or not yet ingested into
+      fr_significance) still appear, with significant = NULL.
+    sql: >
+      SELECT
+        d.*,
+        s.significant
+      FROM fr_documents d
+      LEFT JOIN fr_significance s ON d.document_number = s.document_number
