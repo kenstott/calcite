@@ -98,9 +98,14 @@ dimension_values:
 
   # NOAA finalizes prior years ~3 months after year-end; current year is
   # provisional and refreshed. dataLag 0 (current-year file exists and is useful).
+  # Floor is 2004, not the global GOVDATA_START_YEAR default: NOAA's own bulk
+  # Storm Events CSV archive (ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/)
+  # publishes per-year files back to 1950, with reliable county-level
+  # attribution across all event types from the early 1990s onward and
+  # certainly complete by 2004.
   storm_year_range: &storm_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
+    start: "${GOVDATA_START_YEAR:2004}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
