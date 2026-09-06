@@ -4423,6 +4423,57 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Absolute ceiling on a plausible Form 4 per-share price, in dollars. No confirmed real
+   * equity or debt-conversion price has ever exceeded this level; a filed value above it is
+   * unreliable regardless of context and is nulled rather than propagated.
+   */
+  private static final double MAX_PLAUSIBLE_PRICE_PER_SHARE = 50_000_000.0;
+
+  /**
+   * Below this filed price, no further check is applied — every real per-share price in the
+   * data, including Berkshire Hathaway Class A, can only be confused with an aggregate-value
+   * artifact once it is implausibly large on its own.
+   */
+  private static final double SUSPECT_PRICE_PER_SHARE_FLOOR = 10_000.0;
+
+  /**
+   * Range an ordinary per-share stock price falls in. Used only to test the aggregate-value
+   * hypothesis below, not as a bound on a filed price by itself.
+   */
+  private static final double ORDINARY_SHARE_PRICE_MIN = 0.01;
+  private static final double ORDINARY_SHARE_PRICE_MAX = 10_000.0;
+
+  /**
+   * Parses a raw XBRL price string, returning {@code null} in place of a value this parser
+   * cannot treat as a genuine per-unit price:
+   *
+   * <ul>
+   *   <li>a debt-denominated security's face value (see {@link #isDebtDenominatedSecurity});
+   *   <li>a magnitude beyond {@link #MAX_PLAUSIBLE_PRICE_PER_SHARE}; or
+   *   <li>a filed value above {@link #SUSPECT_PRICE_PER_SHARE_FLOOR} that, divided by this same
+   *       transaction's share count, lands back in an ordinary per-share price range — evidence
+   *       the filer entered the transaction's aggregate dollar value rather than a per-unit
+   *       price in this field.
+   * </ul>
+   */
+  private Double parsePlausiblePricePerShare(String price, String securityTitle, Double sharesTransacted) {
+    if (price == null || price.isEmpty() || isDebtDenominatedSecurity(securityTitle)) {
+      return null;
+    }
+    double parsed = Double.parseDouble(price);
+    if (parsed > MAX_PLAUSIBLE_PRICE_PER_SHARE) {
+      return null;
+    }
+    if (parsed > SUSPECT_PRICE_PER_SHARE_FLOOR && sharesTransacted != null && sharesTransacted > 0) {
+      double impliedUnitPrice = parsed / sharesTransacted;
+      if (impliedUnitPrice >= ORDINARY_SHARE_PRICE_MIN && impliedUnitPrice <= ORDINARY_SHARE_PRICE_MAX) {
+        return null;
+      }
+    }
+    return parsed;
+  }
+
+  /**
    * Add non-derivative transactions for a specific reporting owner.
    */
   private void addNonDerivativeTransactions(Document doc, String cik, String filingType, String filingDate,
@@ -4452,13 +4503,15 @@ public class XbrlToParquetConverter implements FileConverter {
       // Transaction details
       data.put("transaction_date", getElementText(trans, "transactionDate", "value"));
       data.put("transaction_code", getElementText(trans, "transactionCode"));
-      data.put("security_title", getElementText(trans, "securityTitle", "value"));
+      String secTitle = getElementText(trans, "securityTitle", "value");
+      data.put("security_title", secTitle);
 
       String shares = getElementText(trans, "transactionShares", "value");
-      data.put("shares_transacted", shares != null ? Double.parseDouble(shares) : null);
+      Double sharesValue = shares != null ? Double.parseDouble(shares) : null;
+      data.put("shares_transacted", sharesValue);
 
       String price = getElementText(trans, "transactionPricePerShare", "value");
-      data.put("price_per_share", price != null ? Double.parseDouble(price) : null);
+      data.put("price_per_share", parsePlausiblePricePerShare(price, secTitle, sharesValue));
 
       String sharesAfter = getElementText(trans, "sharesOwnedFollowingTransaction", "value");
       data.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
@@ -4571,7 +4624,8 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("security_title", secTitle != null ? secTitle + " (Derivative)" : "Option/Warrant (Derivative)");
 
       String shares = getElementText(trans, "transactionShares", "value");
-      data.put("shares_transacted", shares != null ? Double.parseDouble(shares) : null);
+      Double sharesValue = shares != null ? Double.parseDouble(shares) : null;
+      data.put("shares_transacted", sharesValue);
 
       // For derivatives, use conversion/exercise price if available
       String price = getElementText(trans, "transactionPricePerShare", "value");
@@ -4579,15 +4633,12 @@ public class XbrlToParquetConverter implements FileConverter {
         price = getElementText(trans, "conversionOrExercisePrice", "value");
       }
 
-      // For debt-denominated derivatives (Convertible Notes, Exchangeable Notes, etc.),
-      // the transactionShares field contains principal/face value in dollars, not actual shares.
-      // Setting price_per_share to null prevents downstream aggregations from multiplying
-      // principal * price to create invalid "implied proceeds" values (fixes D-099).
-      Double priceValue = null;
-      if (price != null && !price.isEmpty() && !isDebtDenominatedSecurity(secTitle)) {
-        priceValue = Double.parseDouble(price);
-      }
-      data.put("price_per_share", priceValue);
+      // Debt-denominated derivatives (Convertible Notes, Exchangeable Notes, etc.) report
+      // principal/face value in transactionShares, not an actual share count, so no per-unit
+      // price applies. A handful of other filings put an aggregate dollar amount rather than
+      // a genuine per-share price directly in these fields; parsePlausiblePricePerShare nulls
+      // both cases rather than propagate a value that isn't a real per-unit price.
+      data.put("price_per_share", parsePlausiblePricePerShare(price, secTitle, sharesValue));
 
       String sharesAfter = getElementText(trans, "sharesOwnedFollowingTransaction", "value");
       data.put("shares_owned_after", sharesAfter != null ? Double.parseDouble(sharesAfter) : null);
@@ -4664,15 +4715,11 @@ public class XbrlToParquetConverter implements FileConverter {
 
       data.put("shares_transacted", null);
 
-      // For derivative holdings, get conversion/exercise price
+      // For derivative holdings, get conversion/exercise price. Debt-denominated derivatives
+      // and implausible aggregate-value artifacts are nulled by parsePlausiblePricePerShare
+      // rather than propagated as a real per-unit price.
       String price = getElementText(holding, "conversionOrExercisePrice", "value");
-      // For debt-denominated derivatives (Convertible Notes, Exchangeable Notes, etc.),
-      // set price_per_share to null to prevent invalid "implied proceeds" calculations (fixes D-099).
-      Double priceValue = null;
-      if (price != null && !price.isEmpty() && !isDebtDenominatedSecurity(secTitle)) {
-        priceValue = Double.parseDouble(price);
-      }
-      data.put("price_per_share", priceValue);
+      data.put("price_per_share", parsePlausiblePricePerShare(price, secTitle, null));
 
       String shares = getElementText(holding, "sharesOwnedFollowingTransaction", "value");
       data.put("shares_owned_after", shares != null ? Double.parseDouble(shares) : null);
