@@ -42,7 +42,9 @@ import java.util.NoSuchElementException;
  * one bounded page at a time and yielding rows lazily (memory stays O(page)). Each feature's Esri
  * ring geometry is converted to simplified WKT plus a centroid via {@link EsriGeometryConverter}
  * (the project's JTS stack). ArcGIS {@code f=json} date fields are epoch-millis; {@code fire_year}
- * and the date columns derive from {@code attr_FireDiscoveryDateTime}.
+ * and the date columns derive from {@code attr_FireDiscoveryDateTime}. Land ownership/jurisdiction
+ * ({@code landowner_kind}, {@code landowner_category}, {@code jurisdictional_agency}) come straight
+ * from the source's own {@code attr_POOLandowner*}/{@code attr_POOJurisdictionalAgency} fields.
  */
 public class WfigsPerimeterStreamingTransformer implements StreamingResponseTransformer {
 
@@ -59,7 +61,8 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
       "OBJECTID", "poly_IRWINID", "attr_UniqueFireIdentifier", "attr_IncidentName",
       "attr_FireDiscoveryDateTime", "attr_ContainmentDateTime", "attr_FireCause",
       "attr_IncidentTypeCategory", "attr_IncidentSize", "attr_FinalAcres",
-      "attr_POOState", "attr_POOFips", "poly_GISAcres");
+      "attr_POOState", "attr_POOFips", "poly_GISAcres",
+      "attr_POOLandownerKind", "attr_POOLandownerCategory", "attr_POOJurisdictionalAgency");
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
@@ -164,6 +167,9 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
     row.put("state_fips", countyFips != null ? countyFips.substring(0, 2) : null);
     row.put("county_fips", countyFips);
     row.put("poo_state", text(a, "attr_POOState"));
+    row.put("landowner_kind", text(a, "attr_POOLandownerKind"));
+    row.put("landowner_category", text(a, "attr_POOLandownerCategory"));
+    row.put("jurisdictional_agency", text(a, "attr_POOJurisdictionalAgency"));
 
     row.put("fire_cause", text(a, "attr_FireCause"));
     row.put("incident_type_category", text(a, "attr_IncidentTypeCategory"));

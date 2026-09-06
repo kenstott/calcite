@@ -955,11 +955,15 @@ partitionedTables:
     comment: >
       NIFC WFIGS Interagency wildfire perimeters — one row per fire perimeter
       (~39k features) with a simplified WGS84 perimeter polygon (geometry_wkt),
-      gis_acres/final_acres burned area, and fire_cause (Human / Natural /
-      Undetermined). Snapshot table with no year partition (refreshed via
-      overwritePartitions); fire_year is derived from the fire discovery date.
-      Joins to geo.counties via county_fips (from point-of-origin FIPS) and to
-      nfip_claims for post-fire flood exposure. Source:
+      gis_acres/final_acres burned area, fire_cause (Human / Natural /
+      Undetermined), and point-of-origin land ownership (landowner_kind:
+      Federal / Private / Other; landowner_category: USFS, BLM, NPS, BIA,
+      State, Tribal, City, County, etc.) and jurisdictional_agency — enabling
+      federal-vs-nonfederal burn comparisons directly from this table. Snapshot
+      table with no year partition (refreshed via overwritePartitions);
+      fire_year is derived from the fire discovery date. Joins to geo.counties
+      via county_fips (from point-of-origin FIPS) and to nfip_claims for
+      post-fire flood exposure. Source:
       WFIGS_Interagency_Perimeters/FeatureServer/0.
 
     dimensions:
@@ -997,6 +1001,27 @@ partitionedTables:
         type: string
         nullable: true
         comment: Point-of-origin state (2-char abbreviation)
+      - name: landowner_kind
+        type: string
+        nullable: true
+        comment: >
+          Point-of-origin land ownership, top-level (Federal / Private / Other),
+          from WFIGS attr_POOLandownerKind — the field a federal-vs-nonfederal
+          wildfire comparison should filter/group on.
+      - name: landowner_category
+        type: string
+        nullable: true
+        comment: >
+          Point-of-origin land ownership, agency-level detail (USFS, BLM, NPS,
+          BIA, State, Private, Tribal, City, County, DOD, BOR, DOE, USFWS, etc.),
+          from WFIGS attr_POOLandownerCategory.
+      - name: jurisdictional_agency
+        type: string
+        nullable: true
+        comment: >
+          Agency with fire-management jurisdiction at point of origin (may
+          differ from landowner_category under cooperative protection
+          agreements), from WFIGS attr_POOJurisdictionalAgency.
       - name: fire_cause
         type: string
         nullable: true
