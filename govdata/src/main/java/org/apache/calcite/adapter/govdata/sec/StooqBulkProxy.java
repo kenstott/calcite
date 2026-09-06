@@ -405,7 +405,7 @@ public class StooqBulkProxy {
         // exactly one (the latest-starting window — the most-recently-active filer at that date) via
         // QUALIFY. adjusted_close=close (Stooq bulk is already split-adjusted). Partition by year.
         String copySql = "COPY ( SELECT "
-            + "COALESCE(tn.cik, '') AS cik, "
+            + "tn.cik AS cik, "
             + "t.\"<TICKER>\" AS ticker, "
             + "strftime(strptime(t.\"<DATE>\", '%Y%m%d'), '%Y-%m-%d') AS date, "
             + "TRY_CAST(t.\"<OPEN>\" AS DOUBLE) AS open, "

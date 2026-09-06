@@ -1768,6 +1768,44 @@ views:
         ('us-gaap:ShareBasedCompensation', 'stock_based_compensation', 'cash_flow')
       ) AS ca(xbrl_concept, canonical_name, metric_category)
         ON li.concept = ca.xbrl_concept
+      WHERE li.concept IN (
+        'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax',
+        'us-gaap:Revenues',
+        'us-gaap:SalesRevenueNet',
+        'us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax',
+        'us-gaap:SalesRevenueGoodsNet',
+        'us-gaap:SalesRevenueServicesNet',
+        'us-gaap:GrossProfit',
+        'us-gaap:OperatingIncomeLoss',
+        'us-gaap:NetIncomeLoss',
+        'us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic',
+        'us-gaap:IncomeLossFromContinuingOperations',
+        'us-gaap:CostOfRevenue',
+        'us-gaap:CostOfGoodsAndServicesSold',
+        'us-gaap:CostOfGoodsSold',
+        'us-gaap:ResearchAndDevelopmentExpense',
+        'us-gaap:SellingGeneralAndAdministrativeExpense',
+        'us-gaap:OperatingExpenses',
+        'us-gaap:EarningsPerShareBasic',
+        'us-gaap:EarningsPerShareDiluted',
+        'us-gaap:Assets',
+        'us-gaap:AssetsCurrent',
+        'us-gaap:Liabilities',
+        'us-gaap:LiabilitiesCurrent',
+        'us-gaap:StockholdersEquity',
+        'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+        'us-gaap:CashAndCashEquivalentsAtCarryingValue',
+        'us-gaap:CashCashEquivalentsAndShortTermInvestments',
+        'us-gaap:LongTermDebt',
+        'us-gaap:LongTermDebtNoncurrent',
+        'us-gaap:NetCashProvidedByUsedInOperatingActivities',
+        'us-gaap:NetCashProvidedByUsedInInvestingActivities',
+        'us-gaap:NetCashProvidedByUsedInFinancingActivities',
+        'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment',
+        'us-gaap:CapitalExpendituresIncurredButNotYetPaid',
+        'us-gaap:DepreciationDepletionAndAmortization',
+        'us-gaap:ShareBasedCompensation'
+      )
 
   - name: company_financial_profile
     comment: >

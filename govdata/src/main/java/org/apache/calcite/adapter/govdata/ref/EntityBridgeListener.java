@@ -1018,7 +1018,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
   private static void stageGleifCikMapping(Connection conn, String base) throws SQLException {
     execute(conn,
         "CREATE OR REPLACE TEMP TABLE gleif_cik AS "
-        + "SELECT lei, cik FROM iceberg_scan('" + loc(base, "ref", "gleif_cik_mapping")
+        + "SELECT lei, LPAD(cik, 10, '0') AS cik FROM iceberg_scan('"
+        + loc(base, "ref", "gleif_cik_mapping")
         + "', allow_moved_paths=true) WHERE lei IS NOT NULL AND cik IS NOT NULL");
   }
 
