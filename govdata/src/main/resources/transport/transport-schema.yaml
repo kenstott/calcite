@@ -1384,6 +1384,134 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # FHWA PAVEMENT ROUGHNESS — Highway Statistics HM-64 XLSX (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: pavement_roughness
+    # FHWA publishes HM-64 as 4 sheets (Rural/Urban x Interstate/Other), each with one or
+    # more side-by-side road-class blocks sharing an identical 10-column IRI-roughness
+    # layout. Confirmed live 2026-09-06: 2023 and 2024 are the only years under a
+    # consistent .xlsx path (.../<year>/xls/hm64.xlsx); older years intermittently use a
+    # bare .xls extension instead and 2021 has no file under either extension at all (a
+    # genuine FHWA-side publication gap, not sourced here). A literal year list — not a
+    # yearRange — reflects that fixed, non-contiguous publication history; extending
+    # backward past 2023 (handling the .xls years and the 2021 gap) is a follow-up
+    # sourcing task, not attempted in this build.
+    freshness:
+      type: last_modified
+    pattern: "type=pavement_roughness/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FHWA Highway Statistics table HM-64 — functional-system road mileage by measured
+      pavement roughness (International Roughness Index bucket), broken out by area type
+      (rural/urban) and road class (interstate, other freeways & expressways, other
+      principal arterial, minor arterial — the last reported for rural only). FHWA
+      publishes HM-64 only as a merged multi-header, multi-block Excel workbook (4 sheets,
+      one or more 10-column road-class blocks per sheet), so a ResponseTransformer parses
+      the fixed HM-64 layout and derives state_fips. Joins to geo.states via state_fips.
+      Source: fhwa.dot.gov/policyinformation/statistics/{year}/xls/hm64.xlsx.
+
+    dimensions:
+      type:
+        - pavement_roughness
+      year:
+        - "2023"
+        - "2024"
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name (footnote markers stripped)
+      - name: area_type
+        type: string
+        nullable: false
+        comment: "'rural' or 'urban'"
+      - name: road_class
+        type: string
+        nullable: false
+        comment: "interstate, other_freeways_expressways, other_principal_arterial, or minor_arterial (rural only)"
+      - name: miles_not_reported
+        type: double
+        nullable: true
+        comment: Miles with no measured roughness on record
+      - name: miles_iri_under_60
+        type: double
+        nullable: true
+        comment: Miles with IRI < 60 inches/mile
+      - name: miles_iri_60_94
+        type: double
+        nullable: true
+        comment: Miles with IRI 60-94 inches/mile
+      - name: miles_iri_95_119
+        type: double
+        nullable: true
+        comment: Miles with IRI 95-119 inches/mile
+      - name: miles_iri_120_144
+        type: double
+        nullable: true
+        comment: Miles with IRI 120-144 inches/mile
+      - name: miles_iri_145_170
+        type: double
+        nullable: true
+        comment: Miles with IRI 145-170 inches/mile
+      - name: miles_iri_171_194
+        type: double
+        nullable: true
+        comment: Miles with IRI 171-194 inches/mile
+      - name: miles_iri_195_220
+        type: double
+        nullable: true
+        comment: Miles with IRI 195-220 inches/mile
+      - name: miles_iri_over_220
+        type: double
+        nullable: true
+        comment: Miles with IRI > 220 inches/mile
+      - name: miles_total_reported
+        type: double
+        nullable: true
+        comment: Total miles with measured roughness on record
+
+    source:
+      type: http
+      url: "https://www.fhwa.dot.gov/policyinformation/statistics/{year}/xls/hm64.xlsx"
+      method: GET
+      # Transformer re-downloads the URL as raw bytes and parses with POI; the
+      # text body handed in is ignored (binary XLSX corrupts under UTF-8 decode).
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FhwaPavementRoughnessTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pavement_roughness/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: pavement_roughness
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # FMCSA MOTOR CARRIER CENSUS — DOT Socrata az4n-8mr2 bulk CSV (snapshot)
   # ---------------------------------------------------------------------------
   - name: fmcsa_carriers
@@ -3217,6 +3345,14 @@ constraints:
 
   vehicle_registrations:
     primaryKey: [year, state_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  pavement_roughness:
+    primaryKey: [year, state_fips, area_type, road_class]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"

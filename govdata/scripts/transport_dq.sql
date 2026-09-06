@@ -327,6 +327,60 @@ SELECT 'transport', 'vehicle_registrations', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/vehicle_registrations', allow_moved_paths := true) WHERE state_fips IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: pavement_roughness (FHWA HM-64; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'pavement_roughness', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'pavement_roughness', 'T2_row_count',
+  CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END, n, 500,
+  'Expected >=500 rows (51 states/territories x 7 area/road-class combos x 2 years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'pavement_roughness', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'pavement_roughness', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'pavement_roughness', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_fips/area_type/road_class rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true)
+  WHERE state_fips IS NULL OR area_type IS NULL OR road_class IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'pavement_roughness', 'T7_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, state_fips, area_type, road_class) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, state_fips, area_type, road_class, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true)
+  GROUP BY year, state_fips, area_type, road_class HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'transport', 'pavement_roughness', 'T8_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'area_type values outside {rural, urban}'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/pavement_roughness', allow_moved_paths := true)
+  WHERE area_type NOT IN ('rural', 'urban'));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 -- ============================================================================
