@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class ClinicalTrialConditionsResponseTransformer extends AbstractClinicalTrialsResponseTransformer {
 
   @Override
-  protected void flattenStudy(JsonNode ps, ArrayNode out) {
+  protected void flattenStudy(JsonNode study, JsonNode ps, ArrayNode out) {
     String nctId = nestedText(ps, "identificationModule.nctId");
     if (nctId == null) {
       return;

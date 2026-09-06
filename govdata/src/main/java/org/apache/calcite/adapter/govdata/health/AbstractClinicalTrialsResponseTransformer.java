@@ -57,7 +57,7 @@ public abstract class AbstractClinicalTrialsResponseTransformer
 
       for (JsonNode study : records) {
         JsonNode ps = study.path("protocolSection");
-        flattenStudy(ps, out);
+        flattenStudy(study, ps, out);
       }
 
       return out.toString();
@@ -83,7 +83,7 @@ public abstract class AbstractClinicalTrialsResponseTransformer
     JsonNode study = MAPPER.valueToTree(source);
     JsonNode ps = study.path("protocolSection");
     ArrayNode out = MAPPER.createArrayNode();
-    flattenStudy(ps, out);
+    flattenStudy(study, ps, out);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(out.size());
     for (JsonNode node : out) {
       @SuppressWarnings("unchecked")
@@ -93,7 +93,13 @@ public abstract class AbstractClinicalTrialsResponseTransformer
     return rows;
   }
 
-  protected abstract void flattenStudy(JsonNode protocolSection, ArrayNode out);
+  /**
+   * @param study the raw per-study element (siblings of {@code protocolSection} such as the
+   *     top-level {@code hasResults} flag live here, not under {@code protocolSection})
+   * @param protocolSection {@code study.protocolSection} — the node most fields come from
+   * @param out output array to append the study's row(s) to
+   */
+  protected abstract void flattenStudy(JsonNode study, JsonNode protocolSection, ArrayNode out);
 
   protected static void put(ObjectNode row, String key, Object value) {
     if (value == null) {
@@ -166,6 +172,14 @@ public abstract class AbstractClinicalTrialsResponseTransformer
       return value.asInt();
     }
     return null;
+  }
+
+  protected static Boolean asBoolean(JsonNode node, String field) {
+    if (node == null) {
+      return null;
+    }
+    JsonNode value = node.path(field);
+    return value.isMissingNode() || value.isNull() ? null : value.asBoolean();
   }
 
   protected static String truncate(String value, int maxLength) {

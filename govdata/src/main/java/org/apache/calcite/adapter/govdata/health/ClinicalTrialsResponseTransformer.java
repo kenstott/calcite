@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class ClinicalTrialsResponseTransformer extends AbstractClinicalTrialsResponseTransformer {
 
   @Override
-  protected void flattenStudy(JsonNode ps, ArrayNode out) {
+  protected void flattenStudy(JsonNode study, JsonNode ps, ArrayNode out) {
     ObjectNode row = MAPPER.createObjectNode();
 
     // identificationModule
@@ -53,6 +53,10 @@ public class ClinicalTrialsResponseTransformer extends AbstractClinicalTrialsRes
     JsonNode descModule = ps.path("descriptionModule");
     String briefSummary = text(descModule, "briefSummary");
     put(row, "brief_summary", truncate(briefSummary, 2000));
+
+    // hasResults is a top-level field on the study element (sibling of protocolSection),
+    // not nested inside any protocolSection module — verified live against the v2 API.
+    put(row, "has_results", asBoolean(study, "hasResults"));
 
     put(row, "type", "clinical_trials");
     out.add(row);

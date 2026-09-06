@@ -886,6 +886,17 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health
       WHERE funder_type IS NOT NULL
         AND funder_type NOT IN ('INDUSTRY', 'NIH', 'OTHER_GOV', 'FED', 'INDIV', 'NETWORK', 'RRCF', 'STATE', 'UNKNOWN', 'OTHER'));
 
+-- T8: has_results reporting rate sanity (registry-wide rate is ~13-20%; a DQ-sample rate
+-- outside a wide 1-60% band signals the field mapping broke, not normal sample variance)
+INSERT INTO dq_results
+SELECT 'health', 'clinical_trials', 'T8_has_results_rate',
+  CASE WHEN pct BETWEEN 1.0 AND 60.0 THEN 'pass' ELSE 'warn' END,
+  pct, 0, 'Percent of sampled studies with has_results = true'
+FROM (
+  SELECT 100.0 * SUM(CASE WHEN has_results THEN 1 ELSE 0 END) / COUNT(*) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/clinical_trials', allow_moved_paths := true)
+);
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: clinical_trial_conditions
 -- ─────────────────────────────────────────────────────────────
