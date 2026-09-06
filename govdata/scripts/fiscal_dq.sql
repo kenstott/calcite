@@ -292,6 +292,60 @@ SELECT 'fiscal', 'usaspending_by_state', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_state', allow_moved_paths := true) WHERE state_abbr IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: usaspending_by_district (USAspending; partition cols: type, year; new 5 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_by_district', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true));
+
+-- ~441-442 districts per year (435 numbered + at-large/DC/territories)
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_by_district', 'T2_row_count',
+  CASE WHEN n >= 400 THEN 'pass' ELSE 'fail' END, n, 400, 'Expected >=400 district-year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_by_district', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_by_district', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_by_district', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL cd_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true) WHERE cd_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_by_district', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, cd_fips) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, cd_fips, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true)
+  GROUP BY year, cd_fips HAVING COUNT(*) > 1));
+
+-- cd_fips must be a well-formed 4-digit code (state FIPS + district number)
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_by_district', 'T7_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with malformed (non-4-digit) cd_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true)
+      WHERE cd_fips NOT SIMILAR TO '[0-9]{4}');
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: sba_loan_approvals (SBA FOIA; partition cols: type, program)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
