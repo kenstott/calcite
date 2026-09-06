@@ -1052,6 +1052,72 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/s
       WHERE employment IS NOT NULL AND employment < 0);
 
 -- ============================================================================
+-- federal_outlays_by_function (OMB Historical Table 3.2, new 5 Sep 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_function', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_function', allow_moved_paths := true) LIMIT 1));
+
+-- 20 budget functions x FY1962-2031 (70 years, TQ transition-quarter column excluded) = 1400
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_function', 'row_count',
+  CASE WHEN n >= 1300 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1300',
+  CASE WHEN n >= 1300 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_function', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_function', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_function', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_function', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_function', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
+
+-- function_code must be one of OMB's 20 canonical top-level budget-function codes
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_function', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with function_code outside OMB''s 20 canonical codes'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_function', allow_moved_paths := true)
+      WHERE function_code NOT IN ('050','150','250','270','300','350','370','400','450','500',
+                                   '550','570','600','650','700','750','800','900','920','950'));
+
+-- exactly 20 distinct functions per year, every year present exactly once per function
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_function', 'pk_shape',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'years without exactly 20 distinct function_code rows'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT year, COUNT(DISTINCT function_code) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_function', allow_moved_paths := true)
+  GROUP BY year HAVING COUNT(DISTINCT function_code) <> 20));
+
+-- Social Security (650) and Medicare (570) FY2024 should each be well over $100B —
+-- a sanity floor that would catch the header-column-misalignment class of bug the
+-- 1976 TQ transition-quarter column risks (an off-by-one column shift after 1976
+-- would silently substitute an adjacent, still-plausible-looking year's figure).
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_function', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'FY2024 rows for function 570 or 650 below $100,000M (sanity floor)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_function', allow_moved_paths := true)
+      WHERE year = 2024 AND function_code IN ('570','650') AND outlays_millions < 100000);
+
+-- ============================================================================
 -- RESULTS SUMMARY
 -- ============================================================================
 

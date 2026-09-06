@@ -3804,6 +3804,99 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- FEDERAL OUTLAYS BY BUDGET FUNCTION ---
+  - name: federal_outlays_by_function
+    pattern: "type=federal_outlays_by_function/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    freshness:
+      type: last_modified
+    comment: >
+      OMB Historical Table 3.2 ("Outlays by Function and Subfunction") — federal outlays
+      broken out by OMB's 20 canonical budget-function codes (050 National Defense, 570
+      Medicare, 650 Social Security, 900 Net Interest, etc.), FY1962-2031 (recent years are
+      OMB's own budget-cycle actuals; later years are the President's Budget estimates, see
+      is_estimate). Closes the gap left by fiscal.usaspending_by_state/county/district
+      (place-of-performance geography, not function) and this schema's own federal_debt/
+      treasury_yields (debt levels and borrowing cost, not spending composition) — none of
+      those answer "how much of federal spending is Social Security vs. defense vs. net
+      interest." One row per (year, function); each function's total is OMB's own explicit
+      "Total, <Function>" rollup row where one exists, or the function's sole subfunction row
+      when OMB omits a redundant Total line for a single-subfunction function (Medicare,
+      Social Security). Subfunction-level detail (e.g. 051 Department of Defense-Military)
+      is not ingested here — a follow-up sourcing task if a future question needs finer
+      grain. Values in current-dollar millions, not inflation-adjusted. Source: OMB's
+      Historical Tables page (whitehouse.gov/omb/historical-tables/); the download URL
+      embeds the current budget cycle and changes annually — re-derive it from that landing
+      page's own hist03z2 link if this table's source URL ever 404s, same caveat class as
+      disasters.wildfire_risk_by_county's WRC download.
+
+    dimensions:
+      type:
+        - federal_outlays_by_function
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year
+      - name: is_estimate
+        type: boolean
+        nullable: false
+        comment: >
+          True for years beyond the budget cycle's own actuals (OMB's "estimate"-suffixed
+          columns — the President's Budget projection, not a measured outlay)
+      - name: function_code
+        type: string
+        nullable: false
+        comment: 3-digit OMB budget-function code (e.g. "050", "570", "650", "900")
+      - name: function_name
+        type: string
+        nullable: false
+        comment: OMB's own function name (e.g. "National Defense", "Medicare", "Social Security")
+      - name: outlays_millions
+        type: double
+        nullable: true
+        comment: >
+          Outlays in current-dollar millions for this function/year; null where OMB's own
+          cell is a placeholder ("..........") rather than a figure, not coerced to zero
+
+    source:
+      type: http
+      url: "https://www.whitehouse.gov/wp-content/uploads/2026/04/hist03z2_fy2027.xlsx"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # FederalOutlaysByFunctionTransformer re-downloads the XLSX and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FederalOutlaysByFunctionTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=federal_outlays_by_function/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: federal_outlays_by_function
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   # --- WORLD INDICATORS ---
   - name: world_indicators
     freshness:
@@ -7875,6 +7968,11 @@ constraints:
       - type
       - frequency
       - year
+
+  federal_outlays_by_function:
+    primaryKey:
+      - year
+      - function_code
 
   world_indicators:
     primaryKey:
