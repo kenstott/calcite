@@ -135,17 +135,22 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
   }
 
   /**
-   * NASS publishes in-season forecast vintages (reference_period_desc "YEAR - AUG/SEP/OCT/
-   * NOV FORECAST") alongside each year's final annual estimate ("YEAR") for the same
-   * (commodity, state, year, statisticcat_desc, unit_desc) key -- without this filter a
-   * naive aggregation double/triple/quintuple counts the same underlying figure. Weekly
-   * ("WEEK #nn") and monthly condition/progress reference periods are a different,
-   * legitimately multi-row measure and are not affected by this pattern.
+   * NASS publishes in-season vintage estimates alongside each year's final annual estimate
+   * ("YEAR") for the same (commodity, state, year, statisticcat_desc, domain_desc, class_desc,
+   * unit_desc) key -- without this filter a naive aggregation double/triple/quintuple counts
+   * the same underlying figure. Two independent vintage families use this "YEAR - X" pattern:
+   * in-season crop forecasts for YIELD/PRODUCTION ("YEAR - AUG/SEP/OCT/NOV FORECAST") and
+   * acreage-survey vintages for AREA PLANTED/HARVESTED ("YEAR - JAN/MAR/JUN/AUG/SEP/OCT/DEC
+   * ACREAGE" -- Prospective Plantings, June Acreage, and later revisions). Weekly ("WEEK #nn")
+   * and monthly condition/progress reference periods are a different, legitimately multi-row
+   * measure and are not affected by this pattern.
    */
   private boolean isForecastVintage(JsonNode record) {
     String referencePeriod = getTextValue(record, "reference_period_desc");
-    return referencePeriod != null
-        && referencePeriod.startsWith("YEAR - ") && referencePeriod.endsWith(" FORECAST");
+    if (referencePeriod == null || !referencePeriod.startsWith("YEAR - ")) {
+      return false;
+    }
+    return referencePeriod.endsWith(" FORECAST") || referencePeriod.endsWith(" ACREAGE");
   }
 
   private ObjectNode transformRecord(JsonNode record) {
