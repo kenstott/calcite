@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.energy;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
+import org.apache.calcite.adapter.govdata.geo.CountyFipsByNameLookup;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -253,6 +254,16 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     putMapField(out, "utility_name", plant, "Utility Name");
     putMapField(out, "state_abbr", plant, "State");
     putMapField(out, "county_name", plant, "County");
+    // EIA-860 reports the county as free-text (state abbreviation + county name) and
+    // never carries a native FIPS code — derive it via exact match against the
+    // Census-sourced crosswalk; a name the crosswalk cannot resolve stays null rather
+    // than being guessed.
+    String countyFips = CountyFipsByNameLookup.lookup(plant.get("State"), plant.get("County"));
+    if (countyFips != null) {
+      out.put("county_fips", countyFips);
+    } else {
+      out.putNull("county_fips");
+    }
     putMapField(out, "latitude", plant, "Latitude");
     putMapField(out, "longitude", plant, "Longitude");
     putMapField(out, "nerc_region", plant, "NERC Region");
