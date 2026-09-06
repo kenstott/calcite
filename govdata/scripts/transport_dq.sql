@@ -717,6 +717,262 @@ FROM (
 );
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: phmsa_gas_distribution_incidents (PHMSA F 7100.1 accident reports, 2010-present, snapshot)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_incidents', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true));
+
+-- T2: row_count. Confirmed live 6 Sep 2026: 1,550 incident reports 2010-present.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_incidents', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1,000 reports (1,550 confirmed live 6 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_incidents', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_incidents', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+-- T6: pk_nulls + pk_dupes on report_number.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_incidents', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL report_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true)
+  WHERE report_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_incidents', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate report_number rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT report_number, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true)
+    GROUP BY report_number HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: activity_year within the documented 2010-present window.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_incidents', 'T7_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with activity_year outside [2010, current year]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_incidents', allow_moved_paths := true)
+  WHERE activity_year IS NOT NULL AND (activity_year < 2010 OR activity_year > YEAR(CURRENT_DATE)));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: phmsa_gas_distribution_mileage (PHMSA F 7100.1-1 annual report, 2017-2024, snapshot)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true));
+
+-- T2: row_count. Confirmed live 6 Sep 2026: 11,695 operator/commodity rows across 2017-2024.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T2_row_count',
+  CASE WHEN n >= 8000 THEN 'pass' ELSE 'fail' END, n, 8000, 'Expected >=8,000 rows across 2017-2024 (11,695 confirmed live 6 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+-- T6: pk_nulls + pk_dupes on report_number (an operator can file multiple commodity rows per year).
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL report_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true)
+  WHERE report_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate report_number rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT report_number, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true)
+    GROUP BY report_number HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: report_year within the documented 2017-2024 window (2010-2016 XLSX-only years not ingested).
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T7_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2017, 2024]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true)
+  WHERE report_year IS NOT NULL AND (report_year < 2017 OR report_year > 2024));
+
+-- T8: total_miles is populated and non-negative for the vast majority of rows.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_distribution_mileage', 'T8_total_miles_populated',
+  CASE WHEN pct >= 90.0 THEN 'pass' ELSE 'warn' END, pct, 90.0,
+  'Percent of rows with a non-null, non-negative total_miles'
+FROM (
+  SELECT 100.0 * SUM(CASE WHEN total_miles IS NOT NULL AND total_miles >= 0 THEN 1 ELSE 0 END) / COUNT(*) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_distribution_mileage', allow_moved_paths := true)
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: phmsa_gas_transmission_incidents (PHMSA F 7100.2 accident reports, 2010-present, snapshot)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_incidents', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true));
+
+-- T2: row_count. Confirmed live 6 Sep 2026: 1,996 incident reports 2010-present.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_incidents', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1,000 reports (1,996 confirmed live 6 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_incidents', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_incidents', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+-- T6: pk_nulls + pk_dupes on report_number.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_incidents', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL report_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true)
+  WHERE report_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_incidents', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate report_number rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT report_number, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true)
+    GROUP BY report_number HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: activity_year within the documented 2010-present window.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_incidents', 'T7_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with activity_year outside [2010, current year]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_incidents', allow_moved_paths := true)
+  WHERE activity_year IS NOT NULL AND (activity_year < 2010 OR activity_year > YEAR(CURRENT_DATE)));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: phmsa_gas_transmission_mileage (PHMSA F 7100.2-1 annual report Part A-D, 2017-2024, snapshot)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true));
+
+-- T2: row_count. Confirmed live 6 Sep 2026: 11,187 operator/commodity rows across 2017-2024.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T2_row_count',
+  CASE WHEN n >= 8000 THEN 'pass' ELSE 'fail' END, n, 8000, 'Expected >=8,000 rows across 2017-2024 (11,187 confirmed live 6 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+-- T6: pk_nulls + pk_dupes on report_number (an operator can file multiple commodity rows per year).
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL report_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true)
+  WHERE report_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate report_number rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT report_number, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true)
+    GROUP BY report_number HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: report_year within the documented 2017-2024 window (2010-2016 XLSX-only years not ingested).
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T7_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2017, 2024]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true)
+  WHERE report_year IS NOT NULL AND (report_year < 2017 OR report_year > 2024));
+
+-- T8: total_miles is populated and non-negative for the vast majority of rows.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_gas_transmission_mileage', 'T8_total_miles_populated',
+  CASE WHEN pct >= 90.0 THEN 'pass' ELSE 'warn' END, pct, 90.0,
+  'Percent of rows with a non-null, non-negative total_miles'
+FROM (
+  SELECT 100.0 * SUM(CASE WHEN total_miles IS NOT NULL AND total_miles >= 0 THEN 1 ELSE 0 END) / COUNT(*) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_gas_transmission_mileage', allow_moved_paths := true)
+);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: rail_service_performance (STB EP 724; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
