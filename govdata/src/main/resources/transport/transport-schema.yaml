@@ -2808,8 +2808,12 @@ partitionedTables:
     # representative cross-section. Acceptable for a smoke test; prod ignores the cap.
     dqRowLimit: 20000
     comment: >
-      FHWA National Bridge Inventory — one row per bridge on public roads, per annual
-      data-year snapshot. Deck/superstructure/substructure condition ratings (0-9, N),
+      FHWA National Bridge Inventory — one row per raw NBI record per annual data-year
+      snapshot, NOT one row per bridge: the source file commingles primary bridge
+      records, culvert records, and border/jointly-owned-structure secondary records
+      under one row shape (see record_type). Filter to record_type='1' to match
+      FHWA's own published national bridge count. Deck/superstructure/substructure
+      condition ratings (0-9, N),
       FHWA's own precomputed bridge_condition (Good/Fair/Poor) and lowest_rating summary
       fields, location, year built/reconstructed, traffic, and improvement-cost fields
       (bridge/roadway/total, plus year_of_imp) for federal-spending comparisons. The
@@ -2845,6 +2849,20 @@ partitionedTables:
         nullable: false
         expression: 'src."STRUCTURE_NUMBER_008"'
         comment: Structure number, unique within state — PK component
+      - name: record_type
+        type: string
+        nullable: true
+        expression: 'src."RECORD_TYPE_005A"'
+        comment: >
+          NBI Item 5A: '1'=primary bridge inventory record, '2'=culvert record,
+          a letter (A-Z)=secondary/reference record for a border or jointly-owned
+          structure (see OTHER_STATE_CODE_098A/OTHR_STATE_STRUC_NO_099, not yet
+          carried through). This table's raw source file (fhwa.dot.gov/bridge/nbi)
+          commingles all three kinds under one row shape; FHWA's own published
+          national bridge count (e.g. 623,218 for 2024) counts record_type='1'
+          only — WHERE record_type='1' reproduces that figure to within 0.1%.
+          Confirmed live: culverts + secondary records account for the ~117K-row
+          gap between this table's raw COUNT(*) and FHWA's headline total.
       - name: county_code
         type: string
         nullable: true
@@ -3250,9 +3268,12 @@ partitionedTables:
       total_miles (Part D) and mileage-by-installation-decade (Part E) — the fields this
       warehouse needs. Confirmed identical column layout across 2017-2024 (the years the
       source publishes as separate Part-CSVs; extractPattern merges all matching entries
-      into one table). 2010-2016 exist only as whole-workbook XLSX files with a
-      differently-shaped layout and are not ingested here — a follow-up sourcing task,
-      not attempted in this pass.
+      into one table). 2010-2016 exist only as whole-workbook XLSX files (one per year,
+      sheet "HL AR Part A to E") rather than separate Part-CSVs, but confirmed live to
+      carry the exact same 88-column header as the 2017+ era — a
+      PhmsaHazardousLiquidMileageHistoricalTransformer responseTransformer parses those
+      years via POI and appends them to the 2017+ CSV text extractPattern already
+      produces, so this table now covers 2010-present.
 
     dimensions:
       type:
@@ -3356,6 +3377,14 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
+
+    hooks:
+      # extractPattern above runs first and only ever sees the 2017+ "Part A to E.csv"
+      # entries; this transformer receives that already-merged text and appends
+      # 2010-2016 rows parsed from the same ZIP's whole-workbook XLSX files (re-fetched
+      # by this class directly, since extractPattern's merge already happened by the
+      # time a responseTransformer runs).
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.PhmsaHazardousLiquidMileageHistoricalTransformer"
 
     materialize:
       format: iceberg
@@ -3592,10 +3621,17 @@ partitionedTables:
       Landfill Gas, Synthetic Gas, Hydrogen Gas), so report_number — not
       operator_id + report_year — is the unique key. total_services (individual
       customer service-line count) has no analog in the hazardous-liquid table; gas
-      distribution systems are sized by service count as well as main mileage. Only
-      2017-2024 is loaded; 2010-2016 exist only as whole-workbook XLSX files with a
-      differently-shaped layout, same caveat as phmsa_hazardous_liquid_mileage, not
-      ingested here.
+      distribution systems are sized by service count as well as main mileage.
+      2010-2016 exist only as whole-workbook XLSX files (one per year, single sheet
+      "GD AR <year>") rather than separate per-year CSVs; a
+      PhmsaGasDistributionMileageHistoricalTransformer responseTransformer parses those
+      years via POI and appends them to the 2017+ CSV text extractPattern already
+      produces, so this table now covers 2010-present. Confirmed live: the 2010-2014
+      workbooks (237 cols) carry no COMMODITY field at all — it was only added starting
+      with the 2015 workbook (278 cols, matching the 2017+ header exactly) — so
+      commodity is NULL for 2010-2014 rows rather than guessed; every other target field
+      (including report_number as a clean unique key) is present for the whole
+      2010-2016 span.
 
     dimensions:
       type:
@@ -3681,6 +3717,14 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
+
+    hooks:
+      # extractPattern above runs first and only ever sees the 2017+ "GD AR <year>.csv"
+      # entries; this transformer receives that already-merged text and appends
+      # 2010-2016 rows parsed from the same ZIP's whole-workbook XLSX files (re-fetched
+      # by this class directly, since extractPattern's merge already happened by the
+      # time a responseTransformer runs).
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.PhmsaGasDistributionMileageHistoricalTransformer"
 
     materialize:
       format: iceberg
@@ -3925,9 +3969,14 @@ partitionedTables:
       but the same defect), requiring the same OPERATOR_ID rowFilter. An operator can
       file more than one commodity row per year (Natural Gas, Landfill Gas, Hydrogen
       Gas, and assorted "Other Gas-*" industrial gases), so report_number is the unique
-      key, not operator_id + report_year. Only 2017-2024 is loaded; 2010-2016 exist only
-      as whole-workbook XLSX files with a differently-shaped layout, same caveat as
-      phmsa_hazardous_liquid_mileage, not ingested here.
+      key, not operator_id + report_year. 2010-2016 exist only as whole-workbook XLSX
+      files (one per year, sheet "GT AR Part A to D") rather than separate per-year
+      Part-CSVs; a PhmsaGasTransmissionMileageHistoricalTransformer responseTransformer
+      parses those years via POI and appends them to the 2017+ CSV text extractPattern
+      already produces, so this table now covers 2010-present. Confirmed live: the
+      2010-2011 workbooks carry only 116 columns (vs. 154 for 2012+), but every target
+      field this table ingests is present for the whole 2010-2016 span — the narrower
+      layout only drops columns this table never used anyway.
 
     dimensions:
       type:
@@ -4017,6 +4066,14 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
+
+    hooks:
+      # extractPattern above runs first and only ever sees the 2017+ "Part A to D.csv"
+      # entries; this transformer receives that already-merged text and appends
+      # 2010-2016 rows parsed from the same ZIP's whole-workbook XLSX files (re-fetched
+      # by this class directly, since extractPattern's merge already happened by the
+      # time a responseTransformer runs).
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.PhmsaGasTransmissionMileageHistoricalTransformer"
 
     materialize:
       format: iceberg
