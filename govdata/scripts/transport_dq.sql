@@ -493,6 +493,123 @@ SELECT 'transport', 'bts_port_teu', 'T7_teu_plausible',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_port_teu', allow_moved_paths := true)
       WHERE teu IS NOT NULL AND (teu < 1000 OR teu > 2000000));
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: phmsa_hazardous_liquid_incidents (PHMSA F 7000-1 accident reports, 2010-present, snapshot)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_incidents', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true));
+
+-- T2: row_count. Confirmed live 5 Sep 2026: 5,850 accident reports 2010-present.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_incidents', 'T2_row_count',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END, n, 3000, 'Expected >=3,000 reports (5,850 confirmed live 5 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_incidents', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_incidents', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+-- T6: pk_nulls + pk_dupes on report_number.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_incidents', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL report_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true)
+  WHERE report_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_incidents', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate report_number rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT report_number, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true)
+    GROUP BY report_number HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: activity_year within the documented 2010-present window.
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_incidents', 'T7_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with activity_year outside [2010, current year]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_incidents', allow_moved_paths := true)
+  WHERE activity_year IS NOT NULL AND (activity_year < 2010 OR activity_year > YEAR(CURRENT_DATE)));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: phmsa_hazardous_liquid_mileage (PHMSA F 7000-1.1 annual report Part A-E, 2017-2024, snapshot)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true));
+
+-- T2: row_count. ~800-900 operators/commodities per year x 8 years (2017-2024).
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END, n, 5000, 'Expected >=5,000 rows across 2017-2024 (~800-900 operator/commodity rows per year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL operator_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true)
+  WHERE operator_id IS NULL);
+
+-- T7: report_year within the documented 2017-2024 window (Part A-E CSVs only; 2010-2016 XLSX-only years not ingested).
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T7_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with report_year outside [2017, 2024]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true)
+  WHERE report_year IS NOT NULL AND (report_year < 2017 OR report_year > 2024));
+
+-- T8: total_miles is populated and non-negative for the vast majority of rows (the
+-- per-mile normalization field this table exists to carry).
+INSERT INTO dq_results
+SELECT 'transport', 'phmsa_hazardous_liquid_mileage', 'T8_total_miles_populated',
+  CASE WHEN pct >= 90.0 THEN 'pass' ELSE 'warn' END, pct, 90.0,
+  'Percent of rows with a non-null, non-negative total_miles'
+FROM (
+  SELECT 100.0 * SUM(CASE WHEN total_miles IS NOT NULL AND total_miles >= 0 THEN 1 ELSE 0 END) / COUNT(*) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true)
+);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

@@ -2777,6 +2777,347 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # PHMSA HAZARDOUS LIQUID PIPELINE INCIDENTS — DOT open-data bulk file (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: phmsa_hazardous_liquid_incidents
+    # Freshness gate: PHMSA republishes this one whole-history file as incidents are
+    # filed/corrected, no meaningful Last-Modified. Hashes the response body post-fetch
+    # to skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    pattern: "type=phmsa_hazardous_liquid_incidents/*.parquet"
+    comment: >
+      PHMSA hazardous liquid pipeline accident reports (Form PHMSA F 7000-1), one row
+      per accident, January 2010-present. phmsa.dot.gov itself 403s automated fetches;
+      this pulls the identical bulk file from data.transportation.gov's open-data
+      catalog instead — the catalog entry (resource 27nc-rsge) is a Socrata "href"
+      pointer, not a queryable Socrata table, so the fetch targets its file attachment
+      directly rather than the Socrata row API. Curated to a subset of the source's
+      ~650 columns (safety outcome, cost, cause, and identity fields — not the full
+      forensic investigation detail). Confirmed live: this snapshot is already
+      deduplicated to one row per REPORT_NUMBER (no repeated SUPPLEMENTAL_NUMBER
+      revisions), unlike the multi-supplemental versioning PHMSA's other endpoints can
+      carry. For per-mile safety-rate normalization, join to
+      phmsa_hazardous_liquid_mileage on operator_id + report_year. Only the 2010-present
+      era is loaded; PHMSA also publishes three earlier eras (1986-2001, 2004-2009,
+      pre-1986) under an incompatible pre-2010 form revision, not ingested here.
+
+    dimensions:
+      type:
+        - phmsa_hazardous_liquid_incidents
+
+    columns:
+      - name: report_number
+        type: string
+        nullable: false
+        expression: 'src."REPORT_NUMBER"'
+        comment: PHMSA report number (PK)
+      - name: report_received_date
+        type: string
+        nullable: true
+        expression: 'src."REPORT_RECEIVED_DATE"'
+      - name: activity_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."IYEAR" AS INTEGER)'
+        comment: Year of the incident (IYEAR)
+      - name: report_type
+        type: string
+        nullable: true
+        expression: 'src."REPORT_TYPE"'
+      - name: operator_id
+        type: string
+        nullable: true
+        expression: 'src."OPERATOR_ID"'
+        comment: PHMSA operator identifier — join key to phmsa_hazardous_liquid_mileage.operator_id
+      - name: operator_name
+        type: string
+        nullable: true
+        expression: 'src."NAME"'
+      - name: operator_state_abbr
+        type: string
+        nullable: true
+        expression: 'src."OPERATOR_STATE_ABBREVIATION"'
+        comment: 2-letter USPS state code of the operator's address (not necessarily the incident location)
+      - name: local_datetime
+        type: string
+        nullable: true
+        expression: 'src."LOCAL_DATETIME"'
+        comment: Local date/time the incident occurred
+      - name: location_latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."LOCATION_LATITUDE" AS DOUBLE)'
+      - name: location_longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."LOCATION_LONGITUDE" AS DOUBLE)'
+      - name: onshore_state_abbr
+        type: string
+        nullable: true
+        expression: 'src."ONSHORE_STATE_ABBREVIATION"'
+        comment: 2-letter USPS state code of the incident location (onshore incidents only)
+      - name: onshore_county_name
+        type: string
+        nullable: true
+        expression: 'src."ONSHORE_COUNTY_NAME"'
+      - name: on_off_shore
+        type: string
+        nullable: true
+        expression: 'src."ON_OFF_SHORE"'
+      - name: commodity_released_type
+        type: string
+        nullable: true
+        expression: 'src."COMMODITY_RELEASED_TYPE"'
+      - name: system_part_involved
+        type: string
+        nullable: true
+        expression: 'src."SYSTEM_PART_INVOLVED"'
+      - name: unintentional_release_bbls
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."UNINTENTIONAL_RELEASE_BBLS" AS DOUBLE)'
+      - name: intentional_release_bbls
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."INTENTIONAL_RELEASE_BBLS" AS DOUBLE)'
+      - name: recovered_bbls
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."RECOVERED_BBLS" AS DOUBLE)'
+      - name: fatalities_total
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."FATAL" AS INTEGER)'
+        comment: Total fatalities (PHMSA's own precomputed sum across employee/contractor/emergency-responder/general-public)
+      - name: injuries_total
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."INJURE" AS INTEGER)'
+        comment: Total injuries (PHMSA's own precomputed sum across employee/contractor/emergency-responder/general-public)
+      - name: ignite_ind
+        type: string
+        nullable: true
+        expression: 'src."IGNITE_IND"'
+      - name: explode_ind
+        type: string
+        nullable: true
+        expression: 'src."EXPLODE_IND"'
+      - name: cause
+        type: string
+        nullable: true
+        expression: 'src."CAUSE"'
+        comment: PHMSA root-cause category (e.g. CORROSION, MATERIAL/WELD/EQUIP FAILURE, INCORRECT OPERATION, NATURAL FORCE DAMAGE, EXCAVATION DAMAGE, OTHER OUTSIDE FORCE DAMAGE, ALL OTHER CAUSES)
+      - name: cause_details
+        type: string
+        nullable: true
+        expression: 'src."CAUSE_DETAILS"'
+      - name: est_cost_oper_paid
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."EST_COST_OPER_PAID" AS DOUBLE)'
+        comment: Estimated cost of operator-paid public/private property damage (USD)
+      - name: est_cost_prop_damage
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."EST_COST_PROP_DAMAGE" AS DOUBLE)'
+      - name: est_cost_emergency
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."EST_COST_EMERGENCY" AS DOUBLE)'
+      - name: est_cost_environmental
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."EST_COST_ENVIRONMENTAL" AS DOUBLE)'
+      - name: est_cost_other
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."EST_COST_OTHER" AS DOUBLE)'
+      - name: pipe_facility_type
+        type: string
+        nullable: true
+        expression: 'src."PIPE_FACILITY_TYPE"'
+
+    source:
+      type: http
+      url: "https://data.transportation.gov/api/views/27nc-rsge/files/1d547e17-2be1-4a32-9958-a1d5a946ade9"
+      method: GET
+      # This dataset's Socrata catalog entry is an "href" pointer (external file), not a
+      # queryable table — the URL above is the actual bulk-file attachment endpoint,
+      # confirmed stable (fixed assetId), not the Socrata row API.
+      extractPattern: "*.txt"
+      response:
+        format: csv
+        hasHeader: true
+        delimiter: "\t"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=phmsa_hazardous_liquid_incidents/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: phmsa_hazardous_liquid_incidents
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # PHMSA HAZARDOUS LIQUID PIPELINE MILEAGE — DOT open-data bulk file (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: phmsa_hazardous_liquid_mileage
+    freshness:
+      type: hash
+    pattern: "type=phmsa_hazardous_liquid_mileage/*.parquet"
+    comment: >
+      PHMSA hazardous liquid pipeline operators' annual report (Form PHMSA F 7000-1.1),
+      Part A (operator identity) through Part E (pipe-age distribution) fields, one row
+      per (report_year, operator, commodity) — the per-mile normalization denominator
+      for phmsa_hazardous_liquid_incidents (join on operator_id + report_year). Same
+      data.transportation.gov bulk-file route as the incidents table (catalog resource
+      aemm-7pyq, an "href" pointer; this fetches its file attachment directly). The
+      source ZIP splits each year's annual report into ~11 "Part" CSVs (Part A-E, F-G,
+      H, I, ... R); only the Part A-E file is ingested here, since it alone carries
+      total_miles (Part D) and mileage-by-installation-decade (Part E) — the fields this
+      warehouse needs. Confirmed identical column layout across 2017-2024 (the years the
+      source publishes as separate Part-CSVs; extractPattern merges all matching entries
+      into one table). 2010-2016 exist only as whole-workbook XLSX files with a
+      differently-shaped layout and are not ingested here — a follow-up sourcing task,
+      not attempted in this pass.
+
+    dimensions:
+      type:
+        - phmsa_hazardous_liquid_mileage
+
+    columns:
+      - name: report_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."REPORT_YEAR" AS INTEGER)'
+      - name: report_number
+        type: string
+        nullable: true
+        expression: 'src."REPORT_NUMBER"'
+      - name: operator_id
+        type: string
+        nullable: true
+        expression: 'src."OPERATOR_ID"'
+        comment: PHMSA operator identifier — join key to phmsa_hazardous_liquid_incidents.operator_id
+      - name: operator_name
+        type: string
+        nullable: true
+        expression: 'src."PARTA2NAMEOFCOMP"'
+      - name: operator_state_abbr
+        type: string
+        nullable: true
+        expression: 'src."PARTA4STATE"'
+        comment: 2-letter USPS state code of the operator's address
+      - name: commodity
+        type: string
+        nullable: true
+        expression: 'src."PARTA5COMMODITY"'
+      - name: hca_miles_onshore
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTBHCAONSHORE" AS DOUBLE)'
+        comment: Miles in High Consequence Areas, onshore (Part B)
+      - name: hca_miles_offshore
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTBHCAOFFSHORE" AS DOUBLE)'
+      - name: hca_miles_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTBHCATOTAL" AS DOUBLE)'
+      - name: total_miles
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTDTOTALMILES" AS DOUBLE)'
+        comment: Total regulated pipeline miles operated (Part D) — the per-mile safety-rate denominator
+      - name: total_miles_onshore
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTDONTOTAL" AS DOUBLE)'
+      - name: total_miles_offshore
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTDOFFTOTAL" AS DOUBLE)'
+      - name: miles_installed_pre_1940
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTEPRE40TOTAL" AS DOUBLE)'
+      - name: miles_installed_2010s
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTE2010TOTAL" AS DOUBLE)'
+      - name: miles_installed_2020s
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTE2020TOTAL" AS DOUBLE)'
+      - name: miles_installation_year_unknown
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PARTEUNKNTOTAL" AS DOUBLE)'
+      - name: report_submission_type
+        type: string
+        nullable: true
+        expression: 'src."REPORT_SUBMISSION_TYPE"'
+        comment: "e.g. INITIAL, AMENDED — later amended reports for the same (report_year, operator) supersede earlier ones; not deduplicated here"
+
+    source:
+      type: http
+      url: "https://data.transportation.gov/api/views/aemm-7pyq/files/c44b6747-7e3a-45a5-9108-14d1a7a863a1"
+      method: GET
+      # Matches every "... Part A to E.csv" entry across all years in the zip and merges
+      # them into one CSV stream (shared identical header across 2017-2024).
+      extractPattern: "*Part A to E.csv"
+      response:
+        format: csv
+        hasHeader: true
+      # The 2020-2024 source files carry scattered comma-only padding lines (94-103 per
+      # year, confirmed live) — not truly empty (so the parser's blank-line skip doesn't
+      # catch them), just every field blank. Requires OPERATOR_ID to be non-empty to
+      # drop them rather than materializing them as all-NULL rows.
+      rowFilter:
+        column: OPERATOR_ID
+        pattern: '.+'
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=phmsa_hazardous_liquid_mileage/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: phmsa_hazardous_liquid_mileage
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
