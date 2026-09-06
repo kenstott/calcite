@@ -523,11 +523,14 @@ partitionedTables:
       institution microdata (herd{year}.csv, a tall EAV file). Projects the two
       R&D-expenditure question families: "Federal expenditures by field and
       agency" (funding_source=Federal, federal_agency=column) and "Nonfederal
-      expenditures by field and source" (funding_source=column). Values in USD
-      thousands. Carries the IPEDS UnitID crosswalk into edu and state_fips into
-      geo; the finest-grained NCSES table (institution grain). For the state×year
-      rollup used in the patents-per-R&D-dollar productivity join, see
-      research_herd_rd_by_state_year.
+      expenditures by field and source" (funding_source=column). 2008-2009 use
+      NCSES's predecessor questionnaire (different question text, no per-field
+      nonfederal-by-source cross-tab); NsfHerdTransformer maps both vintages into
+      this same shape (see its class javadoc). Values in USD thousands. Carries
+      the IPEDS UnitID crosswalk into edu (2010+ only — not published pre-2010)
+      and state_fips into geo; the finest-grained NCSES table (institution
+      grain). For the state×year rollup used in the patents-per-R&D-dollar
+      productivity join, see research_herd_rd_by_state_year.
 
     # HERD survey year is published ~14 months after fiscal-year end; the newest
     # available data year lags the current publish year by ~2 → iterate the publish
@@ -537,17 +540,17 @@ partitionedTables:
         - nsf_herd_by_institution
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
-        # Hard floor, independent of GOVDATA_START_YEAR: HERD replaced an earlier,
-        # methodologically incompatible survey (the Academic R&D Expenditures Survey,
-        # 1972-2009) in FY2010 — herd2008.csv/herd2009.csv exist on NCSES's site but use
-        # a different questionnaire structure (e.g. "Federal expenditures by S&E field
-        # and agency" vs. this table's "Federal expenditures by field and agency"), so
-        # NsfHerdTransformer correctly emits zero rows for them rather than silently
-        # reinterpreting incompatible fields. A caller-set GOVDATA_START_YEAR below 2010
-        # (e.g. for a wider multi-schema historical pull) would otherwise make this
-        # table's declared coverage claim years it can never actually hold.
-        minYear: 2010
+        start: "${GOVDATA_START_YEAR:2008}"
+        # Hard floor, independent of GOVDATA_START_YEAR: herd2008.csv/herd2009.csv are the
+        # tail of NCSES's predecessor questionnaire (before the FY2010 HERD restructure) and
+        # use different question text and columns than 2010+ (e.g. "Federal expenditures by
+        # S&E field and agency" vs. "Federal expenditures by field and agency", and no
+        # per-field nonfederal-by-source cross-tab). NsfHerdTransformer maps both vintages
+        # into this table's shape (see its class javadoc). Years before 2008 use a further
+        # incompatible structure and are not mapped; a caller-set GOVDATA_START_YEAR below
+        # 2008 would otherwise make this table's declared coverage claim years it can never
+        # actually hold.
+        minYear: 2008
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 2
 
