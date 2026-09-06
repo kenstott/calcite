@@ -4454,6 +4454,22 @@ public class McpServer {
      * {@code OVER}" is enough: it was firing this exact word wrong for {@code RANK() OVER
      * ("order" BY x)}, breaking every window function whenever the same query also referenced an
      * unrelated reserved-word column elsewhere.
+     *
+     * <p>A third position needs the same kind of paren-context tracking, one level deeper: the
+     * word directly after {@code AS} inside {@code CAST(expr AS type)} names a TYPE, not a
+     * column being defined, but {@code AS} is (correctly) in {@link #IDENTIFIER_POSITION_TOKENS}
+     * for the far more common {@code SELECT x AS alias} case, and common type names
+     * ({@code DATE}, {@code VARCHAR}, ...) are themselves reserved words. D-150: this quoted the
+     * type right out of {@code CAST(x AS DATE)} into {@code CAST(x AS "date")}, which then fails
+     * to resolve as a type at all. Excluding every type name unconditionally would overcorrect:
+     * {@code date} is a genuine reserved-word column in this warehouse
+     * ({@code sec.stock_prices.date}) that still needs quoting in ordinary position, and
+     * {@code SELECT x AS date} deliberately aliasing to a reserved word is no different from
+     * {@code SELECT x AS trailing} above. The distinguishing fact is not the word but where the
+     * enclosing {@code (} came from, so {@code castParens} tracks -- across arbitrary nesting,
+     * since a CAST's own expression can itself contain parens that must fully close before its
+     * {@code AS type} is reached -- whether the innermost still-open paren was opened directly by
+     * {@code CAST}. Only then does {@code AS} mark a type position instead of an identifier one.
      */
     static String quoteBareReservedColumns(String sql, java.util.Set<String> candidates,
         java.util.List<String> quoted) {
@@ -4470,6 +4486,13 @@ public class McpServer {
         // opening keyword into `"select"` ... FROM ..., a parse failure at position 1.
         String prev = "";
         String prevPrev = "";
+        // Per-paren-depth record of whether that paren was opened directly by CAST, so a type
+        // name nested arbitrarily deep in CAST(...AS type) is recognized while an unrelated
+        // AS-alias elsewhere is not -- see the class doc above. Local to one call, so nothing
+        // leaks between statements or between separate CTEs in the same statement (D-150's
+        // "breaks across CTEs" symptom traced to this same AS/type-name confusion recurring in
+        // whichever CTE happened to contain the CAST, not to any state surviving between CTEs).
+        java.util.ArrayDeque<Boolean> castParens = new java.util.ArrayDeque<>();
         int i = 0;
         while (i < sql.length()) {
             char c = sql.charAt(i);
@@ -4512,6 +4535,11 @@ public class McpServer {
                 // paren.
                 boolean isPositionMarkerKeyword =
                     IDENTIFIER_POSITION_TOKENS.contains(ident.toUpperCase(java.util.Locale.ROOT));
+                // D-150: AS directly inside a still-open CAST( ... ) names the target TYPE, not
+                // an identifier -- see the class doc above for why this can't be a static
+                // exclusion list the way isPositionMarkerKeyword is.
+                boolean isCastTypePosition =
+                    "AS".equals(prev) && !castParens.isEmpty() && castParens.peek();
                 // candidates (real catalog columns) is checked first because it's a cheap set
                 // lookup and covers the common case; isReservedWord (a SqlParser call) only
                 // runs for the tokens that reach this point, so falling through to it costs
@@ -4521,7 +4549,7 @@ public class McpServer {
                 // "trailing" is never a catalog column anywhere, so the catalog-only check could
                 // never have caught it, no matter how long a static list was maintained by hand.
                 if ((candidates.contains(lower) || isReservedWord(lower)) && !isCall
-                    && !opensWindowFrame && !isPositionMarkerKeyword
+                    && !opensWindowFrame && !isPositionMarkerKeyword && !isCastTypePosition
                     && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
                     out.append('"').append(lower).append('"');
                     seen.add(lower);
@@ -4535,6 +4563,11 @@ public class McpServer {
             }
             out.append(c);
             if (!Character.isWhitespace(c)) {
+                if (c == '(') {
+                    castParens.push("CAST".equals(prev));
+                } else if (c == ')' && !castParens.isEmpty()) {
+                    castParens.pop();
+                }
                 prevPrev = prev;
                 prev = String.valueOf(c);
             }

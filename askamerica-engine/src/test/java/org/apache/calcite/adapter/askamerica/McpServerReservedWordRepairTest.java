@@ -211,6 +211,73 @@ public class McpServerReservedWordRepairTest {
             quote("SELECT COUNT(DISTINCT year) FROM t"));
     }
 
+    // ── D-150: CAST(...AS DATE) type names must never be quoted ────────────────
+
+    @Test void doesNotQuoteTypeNameInsideCastChain() {
+        // D-150: DATE and VARCHAR are themselves SQL reserved words, and AS is (correctly) in
+        // IDENTIFIER_POSITION_TOKENS for the SELECT x AS alias case, so CAST(x AS DATE) was
+        // misread the same way DISTINCT was in D-180: DATE looked like an identifier sitting in
+        // the position AS marks, producing CAST(x AS "date") -- invalid, since "date" then fails
+        // to resolve as a type at all.
+        assertEquals(
+            "SELECT CAST(CAST(filing_date AS DATE) AS VARCHAR) AS fdate FROM t",
+            quote("SELECT CAST(CAST(filing_date AS DATE) AS VARCHAR) AS fdate FROM t"));
+    }
+
+    @Test void quotesReservedColumnsAlongsideAnUnrelatedCastDateChain() {
+        // The original D-150 repro: a reserved-word column (date/close) still needs quoting in
+        // its own SELECT-list position even though the same statement also contains a
+        // CAST(...AS DATE) chain whose DATE/VARCHAR must NOT be quoted. This is the single
+        // statement that most directly reproduces the register's "Unknown identifier 'date'"
+        // report, minus the CTE wrapping -- confirming the two concerns (real column vs. cast
+        // type) are handled independently within one statement.
+        assertEquals(
+            "SELECT \"date\", \"close\", CAST(CAST(filing_date AS DATE) AS VARCHAR) AS fdate "
+                + "FROM t",
+            quote("SELECT date, close, CAST(CAST(filing_date AS DATE) AS VARCHAR) AS fdate "
+                + "FROM t"));
+    }
+
+    @Test void doesNotQuoteCastTypeNameAcrossCtes() {
+        // D-150's reported shape: the CAST(...AS DATE) chain lives in a SECOND CTE, joined
+        // against a first CTE that references genuine reserved-word columns (date, close) from
+        // sec.stock_prices. Confirmed live (see doesNotQuoteTypeNameInsideCastChain, which
+        // reproduces the identical DATE/VARCHAR mis-quoting with no CTE at all) that the CTE
+        // wrapping is incidental to the original repro, not a separate cross-CTE state-reset
+        // bug: quoteBareReservedColumns processes one statement top-to-bottom with no state that
+        // could leak between CTEs, so the same AS/CAST-context tracking that fixes the
+        // single-statement case fixes this shape too, unchanged.
+        assertEquals(
+            "WITH prices AS (SELECT cik, \"date\", \"close\" FROM sec.stock_prices), "
+                + "other AS (SELECT cik, CAST(CAST(filing_date AS DATE) AS VARCHAR) AS fdate "
+                + "FROM sec.filing_metadata) "
+                + "SELECT p.cik, p.\"date\", p.\"close\", o.fdate FROM prices p "
+                + "JOIN other o ON p.cik=o.cik",
+            quote("WITH prices AS (SELECT cik, date, close FROM sec.stock_prices), "
+                + "other AS (SELECT cik, CAST(CAST(filing_date AS DATE) AS VARCHAR) AS fdate "
+                + "FROM sec.filing_metadata) "
+                + "SELECT p.cik, p.date, p.close, o.fdate FROM prices p "
+                + "JOIN other o ON p.cik=o.cik"));
+    }
+
+    @Test void stillQuotesAGenuineReservedWordAliasThatIsNotATypeName() {
+        // Guard against overcorrecting: the fix must only suppress quoting for a word sitting
+        // directly inside an open CAST(...) paren, not for every word after AS everywhere.
+        // "order" is a real reserved-word alias target with no CAST in sight and must still be
+        // quoted exactly as before D-150's fix.
+        assertEquals("SELECT x AS \"order\" FROM t",
+            quote("SELECT x AS order FROM t"));
+    }
+
+    @Test void stillQuotesADateColumnReferenceOutsideAnyCast() {
+        // Guard against the opposite overcorrection: DATE/VARCHAR must only be spared inside an
+        // open CAST(...) paren. A bare reference to the genuine "date" column on
+        // sec.stock_prices, with no CAST anywhere in the statement, must still be quoted -- this
+        // is the exact column the D-150 repro was trying to select in the first place.
+        assertEquals("SELECT \"date\", \"close\" FROM sec.stock_prices",
+            quote("SELECT date, close FROM sec.stock_prices"));
+    }
+
     // ── LIMIT + FETCH FIRST conflict ─────────────────────────────────────────
 
     @Test void stripsLimitWhenFetchFirstIsAlsoPresent() {
