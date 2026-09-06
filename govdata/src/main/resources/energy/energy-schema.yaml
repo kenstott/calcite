@@ -677,6 +677,92 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # EIA SERVICE TERRITORY - EIA-861 utility-to-county crosswalk (Service_Territory file,
+  # bundled in the same annual ZIP archive as eia_utility_annual)
+  # ---------------------------------------------------------------------------
+  - name: eia_service_territory
+    # Same archive as eia_utility_annual; re-posted corrections after the October final
+    # (see eia_utility_annual above). https://www.eia.gov/electricity/data/eia861/
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=eia_service_territory/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA-861 utility-to-county service-territory crosswalk. One row per utility +
+      state + county the utility reported serving in that year (a multi-state or
+      multi-county utility has one row per county). Sourced from the "Counties_States"
+      sheet of the Service_Territory file in the same annual EIA-861 ZIP archive that
+      eia_utility_annual downloads (Counties_States covers the 50 states + DC; the
+      sibling Counties_Territories sheet is out of scope, matching this schema's
+      existing 50-states+DC convention). Does not carry a per-county customer count or
+      sales split — EIA-861 does not publish one — so this table is a service-territory
+      *membership* list, not a weighted allocation; see eia_electricity_demand_by_county
+      for the county-grain demand apportionment built from it.
+      Cross-references geo.state_ref via state_abbr; joins eia_utility_annual via
+      (utility_id, report_year).
+
+    dimensions:
+      type:
+        - eia_service_territory
+      year: *eia_utility_years
+
+    columns:
+      - name: utility_id
+        type: integer
+        nullable: false
+        comment: EIA utility identifier (links to eia_utility_annual)
+      - name: report_year
+        type: integer
+        nullable: false
+        comment: Report year
+      - name: utility_name
+        type: string
+        nullable: true
+        comment: Utility company name
+      - name: short_form_filer
+        type: boolean
+        nullable: true
+        comment: Whether the utility filed the EIA-861 short form (less-detailed survey)
+      - <<: *state_abbr_column
+      - name: county_name
+        type: string
+        nullable: false
+        comment: >
+          County name as reported by EIA (no 'County'/'Parish'/'Borough' suffix, e.g.
+          'Vermilion' not 'Vermilion Parish'). Not a FIPS code — join to geo.counties by
+          name prefix match if a county_fips is needed (see
+          eia_electricity_demand_by_county for a worked example).
+
+    source:
+      type: http
+      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{effective_year}.zip"
+      method: GET
+      parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia861ServiceTerritoryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_service_territory/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_service_territory
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
   # EIA POWER PLANTS - EIA-860 Annual Electric Generator Report
   # ---------------------------------------------------------------------------
   - name: eia_power_plants
@@ -2324,6 +2410,17 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_abbr]
 
+  eia_service_territory:
+    primaryKey: [utility_id, report_year, state_abbr, county_name]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [utility_id]
+        targetTable: eia_utility_annual
+        targetColumns: [utility_id]
+
   eia_power_plants:
     primaryKey: [plant_id, generator_id, report_year]
     foreignKeys:
@@ -2498,6 +2595,65 @@ views:
         WHERE operating_status IN ('OP','SB','OS','RE')
         GROUP BY utility_id, report_year
       ) p ON u.utility_id = p.utility_id AND u.report_year = p.report_year
+
+  # --------------------------------------------------------------------------
+  # Inter-domain views (require geo schema)
+  # --------------------------------------------------------------------------
+
+  - name: eia_electricity_demand_by_county
+    comment: >
+      County-grain electricity demand apportioned from EIA-861 utility-level sales
+      (eia_utility_annual) using the EIA-861 Service_Territory utility-to-county
+      crosswalk (eia_service_territory). EIA-861 does not publish a per-county
+      customer count or sales split within a utility's service territory, so each
+      utility's customer counts, sales, and revenue are divided evenly across the N
+      counties in its service-territory list for that year — a naive equal-split
+      apportionment, not a per-county measurement. A utility with a single-county
+      territory gets an exact (unsplit) figure for that county; a multi-county
+      utility blurs real variation across its territory (a large city and a rural
+      county served by the same utility get identical apportioned demand). Where
+      more than one utility serves the same county, sum this view's rows for that
+      county to get a total. county_fips is a best-effort join to the latest TIGER
+      vintage of geo.counties (prefix match on EIA's un-suffixed county name against
+      geo's 'X County'/'X Parish'/etc. name) and is null where no vintage match is
+      found — treat it as an enrichment, not a guaranteed key.
+      Requires the geo schema present in the same Calcite model.
+    sql: >
+      WITH latest_counties AS (
+        SELECT county_fips, state_fips, county_name
+        FROM geo.counties
+        WHERE year = (SELECT MAX(year) FROM geo.counties)
+      ),
+      territory_counts AS (
+        SELECT report_year, utility_id, COUNT(*) AS county_count
+        FROM energy.eia_service_territory
+        GROUP BY report_year, utility_id
+      )
+      SELECT
+        st.report_year,
+        st.utility_id,
+        u.utility_name,
+        st.state_abbr,
+        st.county_name,
+        gc.county_fips                                                      AS county_fips,
+        tc.county_count,
+        u.customers_total / CAST(tc.county_count AS DOUBLE)                 AS customers_total,
+        u.sales_residential_mwh / tc.county_count                           AS sales_residential_mwh,
+        u.sales_commercial_mwh / tc.county_count                            AS sales_commercial_mwh,
+        u.sales_industrial_mwh / tc.county_count                            AS sales_industrial_mwh,
+        u.sales_transportation_mwh / tc.county_count                        AS sales_transportation_mwh,
+        u.sales_total_mwh / tc.county_count                                 AS sales_total_mwh,
+        u.revenue_total_thousand / tc.county_count                          AS revenue_total_thousand
+      FROM energy.eia_service_territory st
+      JOIN territory_counts tc
+        ON tc.report_year = st.report_year AND tc.utility_id = st.utility_id
+      JOIN energy.eia_utility_annual u
+        ON u.report_year = st.report_year AND u.utility_id = st.utility_id
+      LEFT JOIN geo.state_ref sr
+        ON sr.state_abbr = st.state_abbr
+      LEFT JOIN latest_counties gc
+        ON gc.state_fips = sr.state_fips
+        AND UPPER(gc.county_name) LIKE UPPER(st.county_name) || '%'
 
   - name: capacity_pipeline
     comment: >
