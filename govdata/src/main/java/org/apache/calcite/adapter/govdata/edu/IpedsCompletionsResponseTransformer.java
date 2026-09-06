@@ -90,7 +90,13 @@ public class IpedsCompletionsResponseTransformer implements StreamingResponseTra
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
-    String yearStr = context.getDimensionValues().get("year");
+    // The downloaded ZIP is named after effective_year (year - dataLag) per the source URL
+    // template, so the CSV entry inside it is also stamped with effective_year, not the raw
+    // dimension year; fall back to year when no lag is configured (effective_year absent).
+    String yearStr = context.getDimensionValues().get("effective_year");
+    if (yearStr == null || yearStr.isEmpty()) {
+      yearStr = context.getDimensionValues().get("year");
+    }
 
     File tempZip = IpedsFinancialsResponseTransformer.downloadToTemp(context.getUrl());
     ZipEntry entry = findCsvEntry(new ZipFile(tempZip), yearStr);
