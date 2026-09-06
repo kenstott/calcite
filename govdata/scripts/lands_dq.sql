@@ -1043,6 +1043,87 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/fi
       WHERE state_fips IS NULL OR eval_cn IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: padus_federal_fee_lands (static snapshot; USGS PAD-US federal-fee layer)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'padus_federal_fee_lands', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true));
+
+-- T2: row_count (live-confirmed 5,361 federal-fee polygons)
+INSERT INTO dq_results
+SELECT 'lands', 'padus_federal_fee_lands', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'Expected ~5,361 federal-fee-land polygon rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'lands', 'padus_federal_fee_lands', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'lands', 'padus_federal_fee_lands', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T6: pk_nulls (padus_id NOT NULL)
+INSERT INTO dq_results
+SELECT 'lands', 'padus_federal_fee_lands', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL padus_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true)
+      WHERE padus_id IS NULL);
+
+-- T7: pk_dupes (padus_id unique)
+INSERT INTO dq_results
+SELECT 'lands', 'padus_federal_fee_lands', 'T7_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate padus_id rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT padus_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true)
+    GROUP BY padus_id HAVING COUNT(*) > 1
+  )
+);
+
+-- T8: geometry_present
+INSERT INTO dq_results
+SELECT 'lands', 'padus_federal_fee_lands', 'T8_geometry_present',
+  CASE WHEN pct >= 0.90 THEN 'pass' ELSE 'warn' END,
+  pct, 0.90, 'Fraction of rows with non-null geometry_wkt'
+FROM (SELECT AVG(CASE WHEN geometry_wkt IS NOT NULL THEN 1.0 ELSE 0.0 END) AS pct
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

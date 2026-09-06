@@ -2076,6 +2076,107 @@ partitionedTables:
         compactionMinFiles: 5
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # PADUS FEDERAL FEE LANDS — USGS GAP Analysis Project PAD-US (streaming: resultOffset + geometry)
+  # ---------------------------------------------------------------------------
+  - name: padus_federal_fee_lands
+    pattern: "type=padus_federal_fee_lands/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      USGS GAP Analysis Project's authoritative federal-fee-land layer
+      (Federal_Fee_Managers_Authoritative_PADUS, part of PAD-US) — one row per
+      federal-fee-land polygon (~5,361 features) with owning/managing agency
+      (own_type/own_name, mang_type/mang_name), designation_type, state_abbr,
+      acres, and a simplified WGS84 boundary polygon (geometry_wkt). Federal-fee
+      ownership only (not the full multi-hundred-thousand-polygon PAD-US
+      inventory across all ownership classes — state/tribal/local/NGO/private
+      land is out of scope here). No county_fips column; assigning per-county
+      ownership shares requires a spatial join (DuckDB ST_Intersects) against
+      geo.counties, which is a natural follow-up view, not done at ingest time.
+      Snapshot table with no year partition (refreshed via overwritePartitions).
+      Closes the "no geometry / no ownership column" gap for
+      national_forests/blm_field_offices/nps_units (D-054) and gives
+      disasters.wildfire_perimeters a federal-fee-land layer to compute
+      federal-vs-nonfederal wildfire exposure against (D-176). Source:
+      Federal_Fee_Managers_Authoritative_PADUS/FeatureServer/0 (official USGS
+      GAP Analysis Project ArcGIS org, item v01gqwM5QqNysAAi).
+
+    dimensions:
+      type:
+        - padus_federal_fee_lands
+
+    columns:
+      - name: padus_id
+        type: string
+        nullable: false
+        comment: Surrogate PK derived from the service's OBJECTID (PADUS-<OBJECTID>)
+      - name: own_type
+        type: string
+        nullable: true
+        comment: Owner type code (FED/TRIB/STAT/DIST/LOC/NGO/PVT/JNT/UNK/TERR/DESG)
+      - name: own_name
+        type: string
+        nullable: true
+        comment: Owning agency or entity name (e.g., 'Bureau of Land Management')
+      - name: mang_type
+        type: string
+        nullable: true
+        comment: Managing entity type code (general depiction of federal land manager)
+      - name: mang_name
+        type: string
+        nullable: true
+        comment: Managing agency name (e.g., 'BLM', 'USFS', 'DOD')
+      - name: designation_type
+        type: string
+        nullable: true
+        comment: Designation/protection category (e.g., 'MIL', 'NWR', 'NF')
+      - name: unit_name
+        type: string
+        nullable: true
+        comment: Named unit (e.g., 'Yosemite National Park')
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-character state abbreviation
+      - name: acres
+        type: double
+        nullable: true
+        comment: GIS-calculated parcel area in acres
+      - <<: *geometry_wkt_column
+
+    source:
+      type: http
+      url: "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Federal_Fee_Managers_Authoritative_PADUS/FeatureServer/0/query"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.PadusFederalFeeLandsStreamingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=padus_federal_fee_lands/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: padus_federal_fee_lands
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2199,6 +2300,14 @@ constraints:
 
   va_facilities:
     primaryKey: [station_number]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  padus_federal_fee_lands:
+    primaryKey: [padus_id]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo

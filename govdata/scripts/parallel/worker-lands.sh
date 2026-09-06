@@ -99,7 +99,7 @@ case "$MODE" in
     START=${GOVDATA_START_YEAR:-2010}
     END=$((INCREMENTAL_YEAR - 1))
     run_lands_model "lands-once-static" \
-      '"national_forests", "nps_units", "blm_field_offices"' "$START" "$END"
+      '"national_forests", "nps_units", "blm_field_offices", "padus_federal_fee_lands"' "$START" "$END"
     run_lands_model "lands-once-inventory" \
       '"forest_inventory"' "$START" "$END"
     run_lands_model "lands-once-metrics" \
@@ -130,7 +130,7 @@ case "$MODE" in
     if [ "$MODE" = "historical" ]; then
       # Full manual/`all` backfill: also do the non-period tables (the per-year pool slots do not).
       run_lands_model "lands-historical-static" \
-        '"national_forests", "nps_units", "blm_field_offices"' "$START" "$END"
+        '"national_forests", "nps_units", "blm_field_offices", "padus_federal_fee_lands"' "$START" "$END"
       run_lands_model "lands-historical-inventory" \
         '"forest_inventory"' "$START" "$END"
       run_lands_model "lands-historical-metrics" \
@@ -155,6 +155,10 @@ case "$MODE" in
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "blm_field_offices"; then
       run_lands_model "lands-daily-blm" \
         '"blm_field_offices"' "$START"
+    fi
+    if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "padus_federal_fee_lands"; then
+      run_lands_model "lands-daily-padus" \
+        '"padus_federal_fee_lands"' "$START"
     fi
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "timber_sales"; then
       run_lands_model "lands-daily-timber" \
