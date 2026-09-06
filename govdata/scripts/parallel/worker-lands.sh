@@ -99,7 +99,7 @@ case "$MODE" in
     START=${GOVDATA_START_YEAR:-2010}
     END=$((INCREMENTAL_YEAR - 1))
     run_lands_model "lands-once-static" \
-      '"national_forests", "nps_units", "blm_field_offices", "padus_federal_fee_lands"' "$START" "$END"
+      '"national_forests", "nps_units", "blm_field_offices", "padus_federal_fee_lands", "va_facilities"' "$START" "$END"
     run_lands_model "lands-once-inventory" \
       '"forest_inventory"' "$START" "$END"
     run_lands_model "lands-once-metrics" \
@@ -127,6 +127,15 @@ case "$MODE" in
       '"nps_visitation"' "$START" "$END"
     run_lands_model "lands-historical-revenues" \
       '"onrr_revenues"' "$START" "$END"
+    # va_facilities: snapshot table, no year dimension, same shape as the "once" static tables --
+    # but unlike those, it must also run on this year-range path (not gated on MODE="historical"
+    # exactly), since force-reprocess.sh always computes a numeric year-range slot for lands
+    # (e.g. "2010-2026"), never the literal "historical" string, so a scoped
+    # `force-reprocess.sh --schema lands --tables va_facilities` would otherwise never reach it.
+    # Cheap to re-run (~1,046 rows via one ArcGIS FeatureServer pull); the ETL pipeline's own
+    # freshness/skip-if-materialized logic makes a redundant per-year-slot touch a fast no-op.
+    run_lands_model "lands-historical-va-facilities" \
+      '"va_facilities"' "$START" "$END"
     if [ "$MODE" = "historical" ]; then
       # Full manual/`all` backfill: also do the non-period tables (the per-year pool slots do not).
       run_lands_model "lands-historical-static" \
@@ -159,6 +168,10 @@ case "$MODE" in
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "padus_federal_fee_lands"; then
       run_lands_model "lands-daily-padus" \
         '"padus_federal_fee_lands"' "$START"
+    fi
+    if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "va_facilities"; then
+      run_lands_model "lands-daily-va-facilities" \
+        '"va_facilities"' "$START"
     fi
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "timber_sales"; then
       run_lands_model "lands-daily-timber" \
