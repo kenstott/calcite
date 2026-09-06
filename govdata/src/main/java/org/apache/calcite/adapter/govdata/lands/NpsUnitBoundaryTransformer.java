@@ -31,7 +31,10 @@ import org.slf4j.LoggerFactory;
  * the returned geometry does not change the attribute. Web Mercator inflates area by
  * {@code 1/cos(lat)^2}, so a raw conversion understates every unit and is wrong by 5-6x at
  * Alaska latitudes; this is corrected using the geometry's mean vertex latitude (recovered
- * via the inverse Mercator projection) before converting to acres.
+ * via the inverse Mercator projection) before converting to acres. The query separately
+ * requests {@code outSR=4326} for the {@code geometry.rings} themselves (an independent
+ * knob from the Shape__Area attribute above), so the boundary polygon captured into
+ * {@code geometry_wkt} via {@link PadusGeometryConverter} is already WGS84 degrees.
  * {@code GIS_ACRES}, {@code DATE_EST}, and {@code COUNTY_FIPS} are not available on any
  * layer of this FeatureServer.
  * <pre>
@@ -98,6 +101,7 @@ public class NpsUnitBoundaryTransformer implements ResponseTransformer {
         row.put("state_abbr", textOrNull(attrs, "STATE"));
         row.put("region", textOrNull(attrs, "REGION"));
         row.put("gross_acres", sqMetersToAcres(attrs, feature.path("geometry")));
+        row.put("geometry_wkt", PadusGeometryConverter.convert(feature.path("geometry")));
         result.add(row);
       }
 

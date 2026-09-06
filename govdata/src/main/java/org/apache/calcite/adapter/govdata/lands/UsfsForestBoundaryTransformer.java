@@ -26,7 +26,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Input: ArcGIS query JSON from {@code EDW_ForestSystemBoundaries_01/MapServer/0/query}.
  * The MapServer returns lowercase field names. {@code STATE} and {@code PROCLAIMED_ACRES}
- * are no longer available in this endpoint.
+ * are no longer available in this endpoint. The query requests {@code outSR=4326} so the
+ * returned {@code geometry.rings} are already WGS84 degrees; {@link PadusGeometryConverter}
+ * converts them to simplified WKT.
  * <pre>
  * {
  *   "features": [
@@ -36,7 +38,8 @@ import org.slf4j.LoggerFactory;
  *         "forestname": "Angeles National Forest",
  *         "region": "05",
  *         "gis_acres": 694516.4
- *       }
+ *       },
+ *       "geometry": { "rings": [ [ [x, y], [x, y], ... ] ] }
  *     }
  *   ]
  * }
@@ -83,6 +86,7 @@ public class UsfsForestBoundaryTransformer implements ResponseTransformer {
         row.put("forest_name", textOrNull(attrs, "forestname"));
         row.put("region", textOrNull(attrs, "region"));
         row.put("gross_acres", doubleOrNull(attrs, "gis_acres"));
+        row.put("geometry_wkt", PadusGeometryConverter.convert(feature.path("geometry")));
         result.add(row);
       }
 

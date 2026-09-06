@@ -146,6 +146,12 @@ partitionedTables:
       USDA Forest Service National Forest and Grassland unit boundaries. ~175 units
       across 10 USFS regions. Reference/dimension table — FK target for
       timber_sales.forest_code via forest_id. Updated annually post-fire-season (October).
+      geometry_wkt carries the unit's own WGS84 boundary polygon, sourced from the same
+      ArcGIS query at ingest time (no separate spatial join needed to plot or intersect
+      an individual forest); for federal-fee ownership share by county across all
+      agencies, use lands.padus_federal_fee_lands / lands.county_federal_fee_land_share
+      instead, since PAD-US's own_type/mang_name lets that dataset be filtered or
+      compared across USFS, BLM, and NPS in one place.
 
     dimensions:
       type:
@@ -168,6 +174,7 @@ partitionedTables:
         type: double
         nullable: true
         comment: Total unit area in acres (GIS measurement)
+      - <<: *geometry_wkt_column
 
     # USFS forest boundaries change rarely. The ArcGIS query returns a stable ETag for unchanged
     # data, so an ETag probe skips re-ingest when the boundary set is unchanged instead of
@@ -176,7 +183,7 @@ partitionedTables:
       type: etag
     source:
       type: http
-      url: "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_ForestSystemBoundaries_01/MapServer/0/query?where=1%3D1&outFields=forestnumber%2Cforestname%2Cregion%2Cgis_acres&f=json&resultRecordCount=500"
+      url: "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_ForestSystemBoundaries_01/MapServer/0/query?where=1%3D1&outFields=forestnumber%2Cforestname%2Cregion%2Cgis_acres&returnGeometry=true&outSR=4326&f=json&resultRecordCount=500"
       method: GET
       response:
         format: json
@@ -1488,7 +1495,13 @@ partitionedTables:
       seashores, parkways, and all other NPS-designated units. ~430 units. Reference
       and dimension table; FK target for nps_visitation.unit_code. Joins to geo.states
       and geo.counties for gateway-community economic impact analysis. Updated annually
-      in April following annual report administrative updates.
+      in April following annual report administrative updates. geometry_wkt carries the
+      unit's own WGS84 boundary polygon, sourced from the same ArcGIS query at ingest
+      time; this table still carries no county_fips column of its own (see
+      nps_visitation's comment), so a county-grain join needs a spatial predicate
+      against geometry_wkt (e.g. DuckDB ST_Intersects with geo.counties), following the
+      pattern lands.county_federal_fee_land_share already uses for
+      padus_federal_fee_lands.
 
     dimensions:
       type:
@@ -1523,6 +1536,7 @@ partitionedTables:
           (always returned in the layer's Web Mercator storage SR regardless of outSR) with
           a cos(lat)^2 correction for Mercator's latitude-dependent area inflation, using the
           geometry's mean vertex latitude as the representative point.
+      - <<: *geometry_wkt_column
 
     # NPS unit boundaries change rarely; the service returns a stable Last-Modified, so probe it
     # and skip re-ingest of this (non-period) table when the boundary set is unchanged.
@@ -1530,7 +1544,7 @@ partitionedTables:
       type: last_modified
     source:
       type: http
-      url: "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query?where=1%3D1&outFields=UNIT_CODE%2CUNIT_NAME%2CUNIT_TYPE%2CSTATE%2CREGION%2CShape__Area&f=json&resultRecordCount=1000"
+      url: "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query?where=1%3D1&outFields=UNIT_CODE%2CUNIT_NAME%2CUNIT_TYPE%2CSTATE%2CREGION%2CShape__Area&returnGeometry=true&outSR=4326&f=json&resultRecordCount=1000"
       method: GET
       response:
         format: json
@@ -1665,7 +1679,11 @@ partitionedTables:
       district offices that manage federal subsurface mineral rights, grazing
       allotments, and surface use permits. ~150 field offices. Primarily useful as
       a geographic reference for joining extractive industry activity to SEC filings
-      and FEC oil/gas sector donor geography. Updated annually in June.
+      and FEC oil/gas sector donor geography. Updated annually in June. geometry_wkt
+      is the office's own point location only (this table's source layer carries
+      point geometry, not the administrative boundary polygon — see the column
+      comment); for a federal-fee land boundary/ownership polygon to spatially join
+      against counties or fire perimeters, use lands.padus_federal_fee_lands instead.
 
     dimensions:
       type:
@@ -1689,10 +1707,18 @@ partitionedTables:
         type: string
         nullable: true
         comment: 2-character state abbreviation (e.g., 'UT', 'WY')
+      - name: geometry_wkt
+        type: string
+        nullable: true
+        comment: >
+          Office location as WGS84 WKT POINT — this FeatureServer layer (0) carries only the
+          office's point location, not its administrative boundary polygon (that lives on
+          separate per-level layers of the same service: 1=state, 2=district, 3=field,
+          4=other, joinable by the same office_code/ADM_UNIT_CD but not fetched here).
 
     source:
       type: http
-      url: "https://gis.blm.gov/arcgis/rest/services/admin_boundaries/BLM_Natl_AdminUnit_Generalized/FeatureServer/0/query?where=1%3D1&outFields=ADM_UNIT_CD%2CADMU_NAME%2CBLM_ORG_TYPE%2CADMIN_ST&f=json&resultRecordCount=500"
+      url: "https://gis.blm.gov/arcgis/rest/services/admin_boundaries/BLM_Natl_AdminUnit_Generalized/FeatureServer/0/query?where=1%3D1&outFields=ADM_UNIT_CD%2CADMU_NAME%2CBLM_ORG_TYPE%2CADMIN_ST&returnGeometry=true&outSR=4326&f=json&resultRecordCount=500"
       method: GET
       response:
         format: json
@@ -2094,10 +2120,15 @@ partitionedTables:
       ownership shares requires a spatial join (DuckDB ST_Intersects) against
       geo.counties, which is a natural follow-up view, not done at ingest time.
       Snapshot table with no year partition (refreshed via overwritePartitions).
-      Closes the "no geometry / no ownership column" gap for
-      national_forests/blm_field_offices/nps_units (D-054) and gives
-      disasters.wildfire_perimeters a federal-fee-land layer to compute
-      federal-vs-nonfederal wildfire exposure against (D-176). Source:
+      Answers the per-county, cross-agency federal-fee-ownership-share need behind
+      D-054 in one place — own_type/mang_name lets a query filter or compare
+      ownership across USFS, BLM, NPS, and other federal managers without joining
+      three separately-sourced tables. national_forests and nps_units now also
+      carry their own geometry_wkt (their unit's own boundary polygon, captured
+      directly at ingest); blm_field_offices carries only a point location (see
+      its column comment). Also gives disasters.wildfire_perimeters a
+      federal-fee-land layer to compute federal-vs-nonfederal wildfire exposure
+      against (D-176). Source:
       Federal_Fee_Managers_Authoritative_PADUS/FeatureServer/0 (official USGS
       GAP Analysis Project ArcGIS org, item v01gqwM5QqNysAAi).
 
@@ -2491,9 +2522,13 @@ views:
       `geometry` column, latest TIGER vintage year) with DuckDB spatial
       (ST_Intersects/ST_Intersection/ST_Area over WGS84 WKT — both sources use
       SRID 4326, no reprojection needed). Answers D-054's actual ask (a
-      per-county federal-ownership computation) via this derived view — it does
-      NOT retrofit geometry or county_fips onto national_forests, blm_field_offices,
-      or nps_units themselves; those three tables remain non-spatial. Pre-filters
+      per-county, cross-agency federal-ownership computation) via this derived
+      view rather than by joining national_forests/blm_field_offices/nps_units
+      individually — those three now carry their own geometry_wkt too
+      (polygon for national_forests/nps_units, point-only for
+      blm_field_offices), but PAD-US's own_type/mang_name is what lets this
+      view compare ownership across all three agencies (plus others) in one
+      pass. Pre-filters
       the county x parcel cross product by state (geo.state_ref) before the
       spatial predicate, since an unfiltered ~3,144 x ~5,356 join is too slow for
       interactive use (hours); the state-pruned join runs in roughly a minute
