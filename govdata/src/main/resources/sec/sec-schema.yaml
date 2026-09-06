@@ -653,7 +653,7 @@ partitionedTables:
       - name: effective_date
         type: string
         nullable: true
-        expression: 'COALESCE(src."period_instant", src."period_end")'
+        expression: 'COALESCE("period_instant", "period_end")'
         comment: >
           Unified recency anchor for instant and duration contexts, so a caller sorting or
           filtering by recency doesn't need to know the two are mutually exclusive.
