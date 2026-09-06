@@ -1118,6 +1118,100 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/f
       WHERE year = 2024 AND function_code IN ('570','650') AND outlays_millions < 100000);
 
 -- ============================================================================
+-- ces_revision_vintages (BLS CES vintage-data product, new 6 Sep 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true) LIMIT 1));
+
+-- 4 series (total nonfarm, total private, goods-producing, service-providing) x 2
+-- (SA/NSA) x 273 releases (May 2003-present) x up to 73 melted reference months
+-- (window bound, see table/transformer comment) = ~159,432 at full scope; a lower
+-- floor tolerates GOVDATA_START_YEAR-style DQ scoping if ever applied to this table.
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '100000',
+  CASE WHEN n >= 100000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');  -- single-table-type partition: type is expected constant
+
+-- series_id must be one of the 8 known CES/CEU series this table is scoped to
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series_id outside the 8 scoped CES/CEU series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true)
+      WHERE series_id NOT IN ('CES0000000001','CEU0000000001','CES0500000001','CEU0500000001',
+                               'CES0600000001','CEU0600000001','CES0700000001','CEU0700000001'));
+
+-- Employment level must be non-negative, EXCEPT BLS's own "-1" sentinel: confirmed live
+-- in the source ZIP for the Sep/Oct 2025 reference months at time of their first (Oct
+-- 2025) release, across every one of this table's series, consistent with a federal
+-- shutdown withholding a normal preliminary estimate. Any negative value other than
+-- -1 is a real defect (e.g. a column-misalignment bug), not a known BLS convention.
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where value is negative and not BLS''s own -1 "not yet available" sentinel'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true)
+      WHERE value IS NOT NULL AND value < -1);
+
+-- PK shape: (series_id, release_year, release_month, reference_year, reference_month)
+-- must be unique — each release should contribute exactly one value per reference month.
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'pk_shape',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  '(series_id, release_year, release_month, reference_year, reference_month) combinations with duplicate rows'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT series_id, release_year, release_month, reference_year, reference_month, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true)
+  GROUP BY series_id, release_year, release_month, reference_year, reference_month
+  HAVING COUNT(*) > 1));
+
+-- Revision-magnitude sanity: across different releases' values for the SAME series +
+-- reference_period, the spread should stay within a generous noise floor. Real CES
+-- revisions (including the annual February benchmark) run well under 3% in this
+-- table's own history (confirmed: worst observed ~2.8%, goods-producing NSA Dec 2009);
+-- a 15% floor is loose enough to never trip on a real revision while still catching a
+-- structural bug (e.g. a header/column misalignment) that would produce a much larger
+-- swing. Excludes BLS's own -1 "not yet available" sentinel (see the expected_values
+-- check above) so that known placeholder doesn't inflate the spread. WARN, not FAIL —
+-- this is a heuristic, not a hard invariant.
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages', 'revision_magnitude',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  CAST(bad AS VARCHAR), '0',
+  '(series_id, reference_period) groups where (max-min)/avg value across releases exceeds 15%'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT series_id, reference_year, reference_month,
+    (MAX(value) - MIN(value)) / NULLIF(AVG(value), 0) AS spread_ratio
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages', allow_moved_paths := true)
+  WHERE value > -1
+  GROUP BY series_id, reference_year, reference_month
+  HAVING COUNT(*) > 1
+) t WHERE spread_ratio > 0.15);
+
+-- ============================================================================
 -- RESULTS SUMMARY
 -- ============================================================================
 

@@ -3897,6 +3897,150 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # --- CES REVISION VINTAGES (BLS CES vintage-data product, new 6 Sep 2026) ---
+  - name: ces_revision_vintages
+    pattern: "type=ces_revision_vintages/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    # Freshness gate: BLS returns a real ETag on cesvinall.zip (confirmed live via
+    # `curl -sI`) — a cheap pre-download probe skips the whole ZIP re-download and
+    # re-parse when the underlying archive hasn't changed since BLS's last monthly
+    # Employment Situation release.
+    freshness:
+      type: etag
+    comment: >
+      BLS's own CES revision-vintage product (cesvinall.zip: "as originally published"
+      vintages for every monthly Employment Situation release since May 2003) — the
+      revision/vintage history that employment_statistics does not carry (each row there
+      is only the CURRENT, most-revised value; this table lets a caller see what a series
+      looked like as first published vs. after subsequent revisions). One row per (series,
+      release, reference_period): release_year/release_month identify which monthly
+      Employment Situation release this vintage snapshot is from; reference_year/
+      reference_month identify which data month the value describes; value is that
+      release's published estimate for that data month (thousands of employees, CES
+      convention). Comparing rows with the same series_id + reference_period across
+      different release_period values shows the revision path for that data month —
+      including the annual February benchmark revision, which is simply a jump in value
+      for prior-year reference months between the January and February releases; no
+      second QCEW source is needed to see it. PARTIAL/SCOPED BUILD BY DESIGN, in two
+      ways: (1) series scope — the source ZIP carries 113 CES industry codes (226 SA/NSA
+      files); only 4 are loaded — total nonfarm (CES/CEU0000000001), total private
+      (CES/CEU0500000001), goods-producing (CES/CEU0600000001), and service-providing
+      (CES/CEU0700000001) — not the 58+ deeper industry-detail series. (2) reference-
+      period window — BLS's own file melts to the FULL 1939-present history in every
+      release row (1000+ columns), but reference months more than a few years old are
+      permanently frozen (never revised again) by the time they age out of BLS's own
+      benchmark-revision reach, so repeating them in every subsequent vintage is pure
+      duplication with zero revision signal; each release here keeps only its most
+      recent 73 reference months (~6 years) — see CesRevisionVintagesTransformer javadoc
+      for the exact windowing logic. Widening either scope later only requires editing
+      that transformer's target-code set / window size, not re-deriving the source.
+      series_id is reconstructed from the ZIP's filename industry_code (see column
+      comment) since the file itself never spells out the full BLS series ID.
+
+    dimensions:
+      type:
+        - ces_revision_vintages
+
+    columns:
+      - name: series_id
+        type: string
+        nullable: false
+        comment: >
+          Reconstructed BLS series ID: CES (seasonally adjusted) or CEU (not seasonally
+          adjusted) + 6-digit industry_code + data-type suffix "0001" (all employees,
+          thousands). One of CES0000000001/CEU0000000001 (total nonfarm),
+          CES0500000001/CEU0500000001 (total private), CES0600000001/CEU0600000001
+          (goods-producing), CES0700000001/CEU0700000001 (service-providing).
+      - name: seasonally_adjusted
+        type: boolean
+        nullable: false
+        comment: True for the CES-prefixed (SA) series, false for the CEU-prefixed (NSA) series
+      - name: industry_code
+        type: string
+        nullable: false
+        comment: >
+          Raw 6-digit CES industry/supersector code from the source ZIP's filename
+          (e.g. "000000" total nonfarm, "050000" total private) — the input series_id
+          was reconstructed from.
+      - name: release_year
+        type: integer
+        nullable: false
+        comment: Year of the monthly Employment Situation release this vintage snapshot is from
+      - name: release_month
+        type: integer
+        nullable: false
+        comment: Month (1-12) of the monthly Employment Situation release this vintage snapshot is from
+      - name: release_period
+        type: date
+        nullable: true
+        comment: release_year/release_month as a first-of-month date, for convenient range filtering/ordering
+        expression: "release_year || '-' || LPAD(CAST(release_month AS VARCHAR), 2, '0') || '-01'"
+      - name: reference_year
+        type: integer
+        nullable: false
+        comment: Year of the data (reference) month this value describes
+      - name: reference_month
+        type: integer
+        nullable: false
+        comment: Month (1-12) of the data (reference) month this value describes
+      - name: reference_period
+        type: date
+        nullable: true
+        comment: reference_year/reference_month as a first-of-month date, for convenient range filtering/ordering
+        expression: "reference_year || '-' || LPAD(CAST(reference_month AS VARCHAR), 2, '0') || '-01'"
+      - name: value
+        type: double
+        nullable: true
+        comment: >
+          As-published employment level for this vintage (thousands of employees, CES
+          convention — same units as employment_statistics' CES0000000001/CES0500000001).
+          BLS's own source file uses -1 as a "not yet available" sentinel for a handful
+          of rows (confirmed live: every series' Sep/Oct 2025 reference months, as first
+          published in the Oct 2025 release, consistent with a federal shutdown) — that
+          -1 is preserved verbatim (not nulled or guessed), matching every other value in
+          this column being exactly BLS's own published figure. Filter WHERE value > -1
+          (or use a later release_period, where BLS replaces it with a real estimate) for
+          arithmetic use.
+
+    source:
+      type: http
+      url: "https://www.bls.gov/web/empsit/cesvinall.zip"
+      method: GET
+      headers:
+        # download.bls.gov/www.bls.gov 403s fake-browser/blank User-Agents; requires a
+        # self-identifying UA (same convention as this schema's other bulk BLS fetches).
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # CesRevisionVintagesTransformer re-downloads the ZIP bytes and emits JSON
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.CesRevisionVintagesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ces_revision_vintages/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: ces_revision_vintages
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   # --- WORLD INDICATORS ---
   - name: world_indicators
     freshness:
@@ -7738,6 +7882,16 @@ constraints:
         targetTable: fred_indicators
         targetColumns:
           - series
+
+  # BLS CES revision-vintage history. No cross-schema FK: series_id is reconstructed
+  # from the source ZIP's own industry_code, not looked up against another table.
+  ces_revision_vintages:
+    primaryKey:
+      - series_id
+      - release_year
+      - release_month
+      - reference_year
+      - reference_month
 
   inflation_metrics:
     primaryKey:
