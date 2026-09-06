@@ -4,6 +4,7 @@
 -- Tables: soi_income_by_zip, soi_income_by_county, county_migration_flows,
 --         exempt_org_master, exempt_org_990, usaspending_by_agency,
 --         usaspending_by_state, usaspending_by_district,
+--         usaspending_recipients_by_district,
 --         entitlement_spending_by_state, sba_loan_approvals,
 --         ssa_benefits_by_geography, ssa_benefits_by_geography_acs,
 --         govt_finance_by_unit, state_minimum_wage_history,
@@ -346,6 +347,84 @@ SELECT 'fiscal', 'usaspending_by_district', 'T7_fips_format',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with malformed (non-4-digit) cd_fips'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true)
       WHERE cd_fips NOT SIMILAR TO '[0-9]{4}');
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: usaspending_recipients_by_district (USAspending; partition cols: type, year; new 6 Sep 2026)
+-- Top 100 recipients by district x fiscal year -- one call per (year, district)
+-- against spending_by_category/recipient/, scoped by default to 2 recent fiscal years.
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true));
+
+-- Up to 100 recipients x ~441-442 districts per year; a district with fewer than
+-- 100 distinct recipients yields fewer rows, so this is a loose floor, not exact.
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T2_row_count',
+  CASE WHEN n >= 400 THEN 'pass' ELSE 'fail' END, n, 400, 'Expected >=400 district-year-rank rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true) LIMIT 3;
+
+-- recipient_id/uei/duns are expected to be all-null only for the narrow
+-- MULTIPLE RECIPIENTS aggregate rows, never for the whole table -- excluded from
+-- the blanket all-null-cols check below via the WHERE clause on cnt, not a column
+-- exclusion, since a real all-null column here would still be a defect.
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL cd_fips or rank rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true)
+      WHERE cd_fips IS NULL OR rank IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, cd_fips, rank) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, cd_fips, rank, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true)
+  GROUP BY year, cd_fips, rank HAVING COUNT(*) > 1));
+
+-- cd_fips must be a well-formed 4-digit code (state FIPS + district number)
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T7_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with malformed (non-4-digit) cd_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true)
+      WHERE cd_fips NOT SIMILAR TO '[0-9]{4}');
+
+-- rank must fall within the documented 1-100 top-N cut
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T8_rank_domain',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with rank outside 1-100'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true)
+      WHERE rank < 1 OR rank > 100);
+
+-- Sanity check: a known large federal contractor/grantee should appear as rank 1
+-- somewhere in the table for a recent year (matches the live-tested PA-04 result:
+-- AmerisourceBergen Drug Corp topped that district's FY2025 recipient ranking).
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_recipients_by_district', 'T9_expected_values',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END, n, 1, 'Rows with rank=1 and obligated_amount > 0'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_recipients_by_district', allow_moved_paths := true)
+      WHERE rank = 1 AND obligated_amount > 0);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: entitlement_spending_by_state (USAspending, CFDA-filtered; partition cols: type, year)

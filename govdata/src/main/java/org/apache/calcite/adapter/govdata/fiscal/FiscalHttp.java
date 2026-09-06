@@ -117,6 +117,45 @@ final class FiscalHttp {
     return conn;
   }
 
+  /**
+   * Opens a POST connection like {@link #openPostJson}, but retries with exponential backoff
+   * (2s, 4s, 8s, 16s, 32s -- up to {@link #RETRYABLE_MAX_ATTEMPTS} attempts) on 429/500/502/503/504
+   * and on connection-level failures (no HTTP status at all -- {@code SocketException},
+   * {@code EOFException}, etc.), which api.usaspending.gov was confirmed live to return
+   * intermittently under the sustained per-item call volume a district-fan-out provider makes
+   * (hundreds of POSTs/year). A non-2xx status outside that retryable set (400/401/403/404) is
+   * NOT retried -- it indicates a real request problem, not a transient one, and retrying it
+   * forever would only mask a bug.
+   */
+  static HttpURLConnection openPostJsonWithRetry(String url, String jsonBody) throws IOException {
+    IOException lastFailure = null;
+    for (int attempt = 1; attempt <= RETRYABLE_MAX_ATTEMPTS; attempt++) {
+      try {
+        return openPostJson(url, jsonBody);
+      } catch (IOException e) {
+        String msg = e.getMessage();
+        boolean retryable = msg == null || !msg.startsWith("HTTP ")
+            || msg.contains("HTTP 429") || msg.contains("HTTP 500") || msg.contains("HTTP 502")
+            || msg.contains("HTTP 503") || msg.contains("HTTP 504");
+        if (!retryable || attempt == RETRYABLE_MAX_ATTEMPTS) {
+          throw e;
+        }
+        lastFailure = e;
+        long backoffMs = 2000L << (attempt - 1);
+        LOGGER.warn("Retryable POST failure (attempt {}/{}), backing off {}ms: {}",
+            attempt, RETRYABLE_MAX_ATTEMPTS, backoffMs, msg);
+        try {
+          Thread.sleep(backoffMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while backing off POST " + url, ie);
+        }
+      }
+    }
+    // Unreachable: the loop always returns or throws on its final attempt.
+    throw lastFailure;
+  }
+
   /** Reads an input stream fully into a UTF-8 string. */
   static String readAll(InputStream in) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();

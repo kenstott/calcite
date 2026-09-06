@@ -175,6 +175,19 @@ dimension_values:
     dataLag: 1
     descending: true
 
+  # usaspending_recipients_by_district makes one API call per (year, district) --
+  # 442x heavier per year than usaspending_by_district's 3-calls/year. Default
+  # scope is deliberately narrow (2 recent fiscal years) rather than reusing
+  # usaspending_year_range's full 2018-present default; GOVDATA_START_YEAR still
+  # overrides for a wider backfill.
+  usaspending_recipient_district_year_range: &usaspending_recipient_district_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2024}"
+    minYear: 2018
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+    descending: true
+
   # SBA 7(a) vs 504 program fan-out; one CSV per program covers many years.
   sba_programs: &sba_programs
     type: list
@@ -2870,6 +2883,138 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # USASPENDING RECIPIENTS BY DISTRICT — /api/v2/search/spending_by_category/
+  # recipient/, filtered per (fiscal year, congressional district) via
+  # place_of_performance_locations
+  # ---------------------------------------------------------------------------
+  - name: usaspending_recipients_by_district
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=usaspending_recipients_by_district/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Top 100 recipients by obligated dollar amount for each place-of-performance
+      congressional district x fiscal year — the recipient/contractor-name
+      counterpart to usaspending_by_district, deferred from that table's build as
+      "materially heavier" until a cheaper mechanism was confirmed live: USAspending's
+      spending_by_category/recipient endpoint accepts a place_of_performance_locations
+      filter shaped {country, state, district_current} and returns a server-side
+      pre-aggregated, pre-ranked (descending by amount) recipient list in a single
+      unpaginated call per district/year -- no per-award pagination needed, unlike
+      UsaSpendingAwardSearchProvider's mechanism for the broadband_*_awards tables.
+      SCOPE: exactly the top 100 recipients per district per year, matching the API's
+      own page-size ceiling (limit=100 is the max; 500 is rejected as "above max
+      '100'") -- not an attempt at every recipient in a district. A district with
+      concentrated spending is fully captured; one with many small, dispersed
+      recipients below the 100th rank is not. An aggregate "MULTIPLE RECIPIENTS" row
+      (null recipient_id/uei/duns) appears in most districts for sub-reporting-
+      threshold transactions USAspending itself buckets together, and is kept as a
+      real ranked row. recipient_duns is the endpoint's "code" field (9-digit legacy
+      DUNS-shaped identifier); recipient_uei is USAspending's own UEI when known;
+      recipient_id is USAspending's internal recipient hash (present even when
+      DUNS/UEI are not, except for the MULTIPLE RECIPIENTS aggregate). cd_fips matches
+      geo.congressional_districts.cd_fips exactly, decoded the same way as
+      usaspending_by_district. YEAR SCOPE: defaults to the 2 most recent complete
+      fiscal years (usaspending_recipient_district_year_range), narrower than
+      usaspending_by_district's 2018-present default -- this table makes one API call
+      per (year, district) versus that table's 3 calls per year total, so a full
+      2018-present backfill is ~442x heavier; GOVDATA_START_YEAR overrides for a wider
+      backfill when wanted. Joins to geo.congressional_districts via cd_fips. Source:
+      api.usaspending.gov/api/v2/search/spending_by_category/recipient/ (plus one
+      spending_by_geography call per year to enumerate current districts, matching
+      usaspending_by_district's own district list rather than a hard-coded one).
+
+    dimensions:
+      type:
+        - usaspending_recipients_by_district
+      year: *usaspending_recipient_district_year_range
+
+    columns:
+      - name: cd_fips
+        type: string
+        nullable: false
+        comment: 4-digit congressional district code (state FIPS + district number), matches geo.congressional_districts.cd_fips
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation, decoded from USAspending's display_name
+      - name: district_number
+        type: string
+        nullable: true
+        comment: >
+          District number as text (e.g. "04"); "00" means an at-large single-district
+          state, "98" means a non-voting delegate district (DC, Puerto Rico, Guam,
+          U.S. Virgin Islands, American Samoa, Northern Mariana Islands)
+      - name: rank
+        type: integer
+        nullable: false
+        comment: Position (1-100) in USAspending's own descending-by-amount recipient ranking for this district/year
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: >
+          Recipient/contractor name as reported by USAspending; "MULTIPLE RECIPIENTS"
+          is USAspending's own aggregate bucket for sub-reporting-threshold transactions
+      - name: recipient_id
+        type: string
+        nullable: true
+        comment: USAspending's internal recipient hash identifier (e.g. "edc402f7-...-C"); null for the MULTIPLE RECIPIENTS aggregate
+      - name: recipient_uei
+        type: string
+        nullable: true
+        comment: SAM.gov Unique Entity Identifier (12-character alphanumeric), when known
+      - name: recipient_duns
+        type: string
+        nullable: true
+        comment: Legacy 9-digit DUNS-shaped identifier (USAspending's "code" field), when known
+      - name: obligated_amount
+        type: double
+        nullable: true
+        comment: Aggregated obligations for this recipient in this district/fiscal year (USD), all award types
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_category/recipient/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      # The provider POSTs through this cache, keyed per request (endpoint + label +
+      # body), so each district/year call is issued once and a changed body re-keys.
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingDistrictRecipientsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_recipients_by_district/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_recipients_by_district
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # ENTITLEMENT SPENDING BY STATE — /api/v2/search/spending_by_geography/,
   # filtered per fiscal year to specific entitlement-program CFDA/assistance-
   # listing numbers (delta by FY)
@@ -4437,6 +4582,14 @@ constraints:
 
   usaspending_by_district:
     primaryKey: [year, cd_fips]
+    foreignKeys:
+      - columns: [cd_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: congressional_districts
+        targetColumns: [cd_fips]
+
+  usaspending_recipients_by_district:
+    primaryKey: [year, cd_fips, rank]
     foreignKeys:
       - columns: [cd_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
