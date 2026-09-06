@@ -1854,6 +1854,134 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- STATE OCCUPATION EMPLOYMENT (science/engineering headcount) ---
+  - name: state_occupation_employment
+    # BLS OEWS publishes one reference year per release (methodology/geography can shift
+    # year to year, so it is not a continuous time series the way SM/QCEW are) — a
+    # freshness-gated snapshot re-fetched and overwritten whenever BLS updates the file,
+    # not a year-partitioned history. Confirmed live: oe.data.1.AllData currently carries
+    # only reference year 2025 for every series, including these three occupation codes.
+    freshness:
+      type: hash
+    pattern: "type=state_occupation_employment/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      BLS Occupational Employment and Wage Statistics (OEWS) state-level employment
+      headcount for science/engineering occupations, cross-industry (not seasonally
+      adjusted). Covers 3 SOC codes: 17-0000 (Architecture and Engineering Occupations),
+      19-0000 (Life, Physical, and Social Science Occupations), and 15-1252 (Software
+      Developers, the one Computer Occupations code that fits "scientist/engineer" —
+      Computer Occupations as a whole (15-1xxx) is not, since it includes many
+      non-engineering roles). Closes the gap left by patents.patent_grants (inventor
+      location only, excludes non-inventing R&D staff and academic researchers) and
+      research.nsf_herd_by_institution (dollars, not headcount): this is real state-level
+      occupation-count data, the true denominator a research-workforce-concentration
+      question needs. One row per (state, occupation) per published reference year;
+      small state x occupation cells may be suppressed by BLS (row absent, not zero).
+
+    dimensions:
+      type:
+        - state_occupation_employment
+
+    # BLS OE-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    # Series ID layout (25 chars): OE + seasonal(1) + areatype(1) + area_code(7) +
+    # industry_code(6) + occupation_code(6) + datatype_code(2). This ingest is filtered to
+    # areatype S (state), industry_code 000000 (cross-industry), datatype 01 (employment).
+    columns:
+      - name: series
+        type: string
+        nullable: false
+        comment: >
+          BLS OEWS series identifier (PK), 25 characters: OEUS + area_code(7, state FIPS
+          padded to 7 digits, e.g. 0100000 for Alabama) + industry_code(6, always 000000
+          here) + occupation_code(6) + datatype_code(2, always 01 here). Decode with
+          state_fips/occupation_code/occupation_name below rather than re-parsing this.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: OEWS reference year (single most-recently-published year; see table comment)
+        source: year
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: 2-digit state FIPS code, derived from series positions 5-6
+        expression: "SUBSTRING(series, 5, 2)"
+      - name: occupation_code
+        type: string
+        nullable: true
+        comment: 6-digit SOC code, derived from series positions 18-23
+        expression: "SUBSTRING(series, 18, 6)"
+      - name: occupation_name
+        type: string
+        nullable: true
+        comment: SOC occupation name for occupation_code
+        expression: "CASE SUBSTRING(series, 18, 6) WHEN '170000' THEN 'Architecture and Engineering Occupations' WHEN '190000' THEN 'Life, Physical, and Social Science Occupations' WHEN '151252' THEN 'Software Developers' ELSE NULL END"
+      - name: employment
+        type: double
+        nullable: true
+        comment: >
+          Total employment headcount for the occupation in the state, across all
+          industries (BLS OEWS datatype 01, not seasonally adjusted — OEWS has no
+          seasonal-adjustment concept, it is an annual survey).
+        source: value
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
+
+    # Bulk flat-file source, same mechanism as state_industry/metro_industry (sm.data.1.AllData):
+    # BLS publishes the entire OE-program series set as TSV with no key and no daily limit,
+    # avoiding the ~500/day cap on the registered api.bls.gov path. Confirmed live 5 Sep 2026:
+    # rowFilter matches 160 rows (54 state-level areas x 3 occupations, minus 2 suppressed cells).
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/oe/oe.data.1.AllData"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      # OEUS (state areatype) + industry_code 000000 (cross-industry) + occupation_code
+      # 170000/190000/151252 + datatype 01 (employment). Trailing .* tolerates the fixed-width
+      # whitespace padding BLS pads series_id to in this TSV.
+      rowFilter:
+        column: series_id
+        pattern: '^OEUS\d{7}000000(170000|190000|151252)01.*$'
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=state_occupation_employment/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
   # --- STATE WAGES ---
   - name: state_wages
     pattern: "type=state_wages/frequency=*/year=*/state_wages.parquet"

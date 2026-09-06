@@ -185,6 +185,7 @@ SELECT 'trade_exports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'trade_imports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',          allow_moved_paths := true) LIMIT 1;
 SELECT 'labor_productivity'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',     allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1;
+SELECT 'state_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1;
 
 -- ============================================================================
 -- T4: ALL-NULL COLUMNS — no column should be 100% NULL
@@ -997,6 +998,58 @@ SELECT 'econ', 'trade_by_state', 'geo_level_domain',
   'rows with geo_level outside (world, bloc, continent, country)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_by_state', allow_moved_paths := true)
       WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
+
+-- ============================================================================
+-- state_occupation_employment (BLS OEWS science/engineer headcount, new 5 Sep 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1));
+
+-- 54 state-level areas x 3 occupations = 162 possible rows; small-count cells can be
+-- suppressed by BLS, so the floor is set a little below the live-confirmed 160.
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'row_count',
+  CASE WHEN n >= 150 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '150',
+  CASE WHEN n >= 150 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('footnotes');  -- footnotes is legitimately empty on nearly every row
+
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year');  -- single-reference-year snapshot: year is expected constant
+
+-- occupation_code must be one of the 3 codes this table is scoped to
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with occupation_code outside (170000, 190000, 151252)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
+      WHERE occupation_code NOT IN ('170000', '190000', '151252'));
+
+-- employment headcount must be non-negative
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where employment headcount is negative'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
+      WHERE employment IS NOT NULL AND employment < 0);
 
 -- ============================================================================
 -- RESULTS SUMMARY
