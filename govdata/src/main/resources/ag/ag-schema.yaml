@@ -740,12 +740,18 @@ partitionedTables:
         type: string
         source: stage_code
         nullable: true
-        comment: Crop growth stage at time of loss (RMA Stage Code Listing)
+        comment: >
+          Crop growth stage at time of loss (RMA Stage Code Listing). Blank/null for
+          plans with no crop growth stage (e.g. WFRP, DO, TDO, AQDOL, and some
+          HIP-WI commodity rows) — confirmed live, not a parsing gap.
       - name: cause_of_loss_code
         type: string
         source: cause_of_loss_code
         nullable: true
-        comment: RMA code identifying the peril that caused the loss
+        comment: >
+          RMA code identifying the peril that caused the loss. "XX" (All Other
+          Causes) is an annual rollup of minor perils with no specific month/year
+          of loss -- see month_of_loss/year_of_loss.
       - name: cause_of_loss_desc
         type: string
         source: cause_of_loss_desc
@@ -755,7 +761,10 @@ partitionedTables:
         type: int
         source: month_of_loss
         nullable: true
-        comment: Numeric month when the loss occurred
+        comment: >
+          Numeric month when the loss occurred; 0 for the cause_of_loss_code="XX"
+          (All Other Causes) annual rollup, which carries no specific month/year
+          of loss.
       - name: month_of_loss_name
         type: string
         source: month_of_loss_name
@@ -765,7 +774,11 @@ partitionedTables:
         type: int
         source: year_of_loss
         nullable: true
-        comment: Calendar year the loss occurred (can differ from the crop/policy year)
+        comment: >
+          Calendar year the loss occurred (can differ from the crop/policy year, since
+          the same crop-year/month-of-loss combination gets restated in later
+          settlement years) — part of the row's natural key alongside month_of_loss.
+          Null for the cause_of_loss_code="XX" (All Other Causes) annual rollup.
       - name: policies_earning_prem_count
         type: long
         source: policies_earning_prem_count
@@ -1396,6 +1409,52 @@ constraints:
       - coverage_category
       - delivery_type
       - coverage_level
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+        comment: RMA state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  rma_cause_of_loss:
+    # One row per state x county x crop x plan x coverage category x growth stage
+    # x cause of loss x month/year of loss, per commodity year. year_of_loss is
+    # required in the key (not just month_of_loss): the same crop year/month-of-loss
+    # combination reappears in multiple year_of_loss settlements as indemnities are
+    # restated in later seasons -- confirmed live (e.g. crop year 2023, county
+    # 48437, month_of_loss=2 recurs with year_of_loss 2023/2024/2025/2026, each a
+    # distinct row). stage_code and year_of_loss are both part of the key but are
+    # legitimately null -- stage_code for plans/commodities with no crop growth
+    # stage, year_of_loss (with month_of_loss=0) for the cause_of_loss_code="XX"
+    # (All Other Causes) annual rollup (see the column comments). SQL NULL is not
+    # self-equal, so two null-valued rows never collide as duplicates under this
+    # key; the DQ null check in ag_dq.sql excludes both columns accordingly. A
+    # residual, confirmed-live RMA source quirk (cause_of_loss_code 47 carries two
+    # label variants -- "Hurricane" / "Hurricane (HIP-WI only)." -- for otherwise
+    # identical key values under insurance_plan_code=37/commodity_code=9999 rows)
+    # means true row-level uniqueness additionally requires cause_of_loss_desc;
+    # ag_dq.sql's T6_pk_dupes check includes it even though it is not part of this
+    # declared key.
+    primaryKey:
+      - year
+      - state_fips
+      - county_fips
+      - commodity_code
+      - insurance_plan_code
+      - coverage_category
+      - stage_code
+      - cause_of_loss_code
+      - month_of_loss
+      - year_of_loss
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
