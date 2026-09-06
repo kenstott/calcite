@@ -2594,7 +2594,12 @@ partitionedTables:
           value at the lender/servicer's place of performance rather than the
           borrower's, which inflates obligated_amount for states with large loan
           servicers; this figure is a truer measure of spending actually landing
-          in the state.
+          in the state. Under the Federal Credit Reform Act, a loan award's obligated
+          amount is its estimated subsidy cost, re-estimated annually, and a downward
+          reestimate or negative subsidy can make a state/year's net loan-type
+          obligation negative; when that happens, this figure is arithmetically
+          larger than obligated_amount, since excluding a negative-valued subset
+          raises the total rather than lowering it.
       - name: obligated_amount_excl_loans_excl_cms_admin
         type: double
         nullable: true
@@ -2708,7 +2713,12 @@ partitionedTables:
           value at the lender/servicer's place of performance rather than the
           borrower's, which inflates obligated_amount for counties with large loan
           servicers; this figure is a truer measure of spending actually landing
-          in the county.
+          in the county. Under the Federal Credit Reform Act, a loan award's obligated
+          amount is its estimated subsidy cost, re-estimated annually, and a downward
+          reestimate or negative subsidy can make a county/year's net loan-type
+          obligation negative; when that happens, this figure is arithmetically
+          larger than obligated_amount, since excluding a negative-valued subset
+          raises the total rather than lowering it.
       - name: obligated_amount_excl_loans_excl_cms_admin
         type: double
         nullable: true
@@ -2830,7 +2840,12 @@ partitionedTables:
           value at the lender/servicer's place of performance rather than the
           borrower's, which inflates obligated_amount for districts with large loan
           servicers; this figure is a truer measure of spending actually landing
-          in the district.
+          in the district. Under the Federal Credit Reform Act, a loan award's
+          obligated amount is its estimated subsidy cost, re-estimated annually, and
+          a downward reestimate or negative subsidy can make a district/year's net
+          loan-type obligation negative; when that happens, this figure is
+          arithmetically larger than obligated_amount, since excluding a
+          negative-valued subset raises the total rather than lowering it.
       - name: obligated_amount_excl_loans_excl_cms_admin
         type: double
         nullable: true
