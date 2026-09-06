@@ -51,13 +51,14 @@ import java.util.function.Consumer;
  *   structure needed for a flat blob column).</li>
  * </ul>
  *
- * <p>This class does the organizing only -- embeddings are a separate, later, time-boxed stage
- * that reads {@code vc_staging} directly (there is deliberately no {@code ref.vectorized_chunks}
- * Iceberg table for it to read instead: {@code chunk_text} only ever needs to travel alongside an
- * embedding row for result display/citation, never as an independently queryable dataset, so
- * materializing it separately would just be a second, driftable copy of the same rows with no
- * consumer of its own). Java's job stops at organizing text into chunk rows in PG; it never
- * touches embeddings.
+ * <p>This class does the organizing only -- embeddings are a separate, later, time-boxed stage.
+ * {@link #sweep} lands chunks in {@code vc_staging} (Postgres) and then, via {@link
+ * #materializeToIceberg}, copies the whole table to {@code ref.vectorized_chunks} (Iceberg,
+ * partitioned by {@code source_schema}): the queryable, shareable data lake table where
+ * embeddings actually run (via {@code vss-local.py}) and where star-schema joins back to all 23
+ * source tables happen, entirely within Iceberg. {@code vc_staging} itself stays transient
+ * processing storage, not a second query surface. Java's job stops at organizing text into chunk
+ * rows; it never touches embeddings.
  *
  * <p>Chunking ({@link #sweep}) organizes text into rows and lands them in {@code vc_staging}/
  * {@code vc_tombstones} (see {@code govdata/scripts/sql/vc_schema.sql}). Each source row is a
@@ -69,10 +70,10 @@ import java.util.function.Consumer;
  * set -- always the WHOLE parent's chunk set, never a partial chunk-level upsert, which is what
  * makes a content-addressed chunk key unnecessary here (see vc_schema.sql's design note).
  *
- * <p>{@code vc_staging}'s durability is a plain {@code pg_dump} backup to object storage (see
- * {@code govdata/scripts/vc_pg_dump.sh}), not an Iceberg copy -- chunking is cheap and
- * deterministic from source tables, so the backup exists purely to avoid redoing that work after
- * a PG loss, not because the data is otherwise irreplaceable.
+ * <p>{@code vc_staging}'s own durability (independent of the Iceberg materialization above) is a
+ * plain {@code pg_dump} backup to object storage (see {@code govdata/scripts/vc_pg_dump.sh}) --
+ * chunking is cheap and deterministic from source tables, so the backup exists purely to avoid
+ * redoing that work after a PG loss, not because the data is otherwise irreplaceable.
  *
  * <p><b>Not wired into any schema's {@code hooks.tableLifecycleListener} -- this is a standalone
  * job, invoked only via {@link #main}/{@link #sweep} by {@code x-schema.sh} on its own schedule.

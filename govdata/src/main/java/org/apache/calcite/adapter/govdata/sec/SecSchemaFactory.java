@@ -237,17 +237,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
 
-    // SEC tables are populated by DocumentETLProcessor, not standard ETL
-    // Use isEnabled hook to skip standard ETL processing for most tables.
-    // Exception: vectorized_chunks needs hooks enabled for GPU bulk generation.
+    // SEC tables are populated by DocumentETLProcessor, not standard ETL.
+    // Use isEnabled hook to skip standard ETL processing for every table. (The old
+    // vectorized_chunks table had a carve-out here for GPU bulk generation; that table was
+    // removed from sec-schema.yaml when SEC chunking centralized into ref.vectorized_chunks
+    // via ChunkOrganizer's cross-schema sweep -- see SecSchemaFactory's class javadoc.)
     builder.isEnabled("*", context -> {
       String tableName = context.getTableName();
-      // Allow vectorized_chunks through - it needs table hooks for GPU embedding generation
-      if ("vectorized_chunks".equals(tableName)) {
-        LOGGER.debug("Allowing table hooks for '{}' - GPU bulk generation enabled", tableName);
-        return true;
-      }
-      // Skip ETL processing for other tables - populated by DocumentETLProcessor
       LOGGER.debug("Skipping standard ETL for table '{}' - populated by DocumentETLProcessor",
           tableName);
       return false;
@@ -515,10 +511,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         }
       }
 
-      // If vectorization is enabled in config, mark as PROCESSED_WITH_VECTORS even if no
-      // vectorized files were created (e.g., no text content to vectorize).
-      // This prevents re-checking on every run.
-      boolean vectorizationEnabled = isVectorizedChunksEnabled();
+      // SEC no longer generates its own vectorized chunks (that table and its per-schema writer
+      // were removed when chunking centralized into ref.vectorized_chunks via ChunkOrganizer's
+      // cross-schema sweep), so this is always false.
+      boolean vectorizationEnabled = false;
 
       String fileTypes = (hasVectorized || vectorizationEnabled) ? "PROCESSED_WITH_VECTORS" : "PROCESSED";
       String entryPrefix = cik + "|" + accession + "|";
@@ -855,7 +851,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
           // Create document tracker using SecFilingCache (tracker-only decisions)
           final SecFilingCache cache = this.filingCache;
-          final boolean vectorizationEnabled = isVectorizedChunksEnabled();
+          // Always false: SEC no longer generates its own vectorized chunks (see the
+          // isEnabled hook above and isVectorizedChunksEnabled's removal).
+          final boolean vectorizationEnabled = false;
           ProcessedDocumentTracker documentTracker = cache != null
               ? new ProcessedDocumentTracker() {
                 @Override public boolean isProcessed(String cik, String accession, String formType) {
@@ -994,8 +992,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               LOGGER.info("Force-reprocessing {} accession(s): {}", forceAccessions.size(),
                   forceAccessions);
             }
+            // vectorizationEnabled is always false here — see the isEnabled hook above.
             List<EdgarFullIndexCache.IndexEntry> filtered = (cache != null)
-                ? cache.filterUnprocessed(allEntries, isVectorizedChunksEnabled(),
+                ? cache.filterUnprocessed(allEntries, false,
                     chunksBackfill, forceAccessions)
                 : allEntries;
             List<DocumentETLProcessor.AccessionRef> activeAccessions =
@@ -2201,8 +2200,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       Class<?> clazz = Class.forName(
           "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
 
-      // Check if vectorization is enabled via YAML table config for vectorized_chunks
-      boolean enableVectorization = isVectorizedChunksEnabled();
+      // SEC no longer generates its own vectorized chunks (removed from sec-schema.yaml when
+      // chunking centralized into ref.vectorized_chunks via ChunkOrganizer's cross-schema
+      // sweep), so this is always false.
+      boolean enableVectorization = false;
       LOGGER.info("Creating XbrlToParquetConverter with enableVectorization={}", enableVectorization);
 
       // Try constructor with StorageProvider and enableVectorization
@@ -2243,7 +2244,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
     if (enabledObj instanceof String) {
       String enabledStr = (String) enabledObj;
-      // Handle environment variable syntax like "${ENABLE_VECTORIZATION:true}"
+      // Handle environment variable syntax like "${VAR_NAME:true}"
       if (enabledStr.startsWith("${") && enabledStr.endsWith("}")) {
         String varSpec = enabledStr.substring(2, enabledStr.length() - 1);
         int colonIdx = varSpec.indexOf(':');
@@ -2310,46 +2311,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     return true; // Unexpected type, assume relevant
-  }
-
-  /**
-   * Checks if the vectorized_chunks table is enabled in sec-schema.yaml.
-   * This provides a single source of truth for vectorization enablement.
-   *
-   * @return true if vectorized_chunks table is enabled in YAML
-   */
-  @SuppressWarnings("unchecked")
-  private boolean isVectorizedChunksEnabled() {
-    try (InputStream is = getClass().getResourceAsStream("/sec/sec-schema.yaml")) {
-      if (is == null) {
-        return false;
-      }
-
-      org.yaml.snakeyaml.LoaderOptions loaderOptions = new org.yaml.snakeyaml.LoaderOptions();
-      loaderOptions.setMaxAliasesForCollections(500);
-      org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(loaderOptions);
-      Map<String, Object> config = yaml.load(is);
-
-      Object tablesObj = config.get("partitionedTables");
-      if (!(tablesObj instanceof List)) {
-        return false;
-      }
-
-      for (Object tableObj : (List<?>) tablesObj) {
-        if (!(tableObj instanceof Map)) {
-          continue;
-        }
-        Map<String, Object> tableConfig = (Map<String, Object>) tableObj;
-        String tableName = (String) tableConfig.get("name");
-
-        if ("vectorized_chunks".equals(tableName)) {
-          return isTableEnabled(tableConfig);
-        }
-      }
-    } catch (Exception e) {
-      LOGGER.debug("Failed to check vectorized_chunks enabled status: {}", e.getMessage());
-    }
-    return false;
   }
 
   /**
@@ -2675,7 +2636,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       // Quick check: if ALL filings are already processed, skip the entire CIK
-      boolean vectorizationEnabled = isVectorizedChunksEnabled();
+      // Always false: SEC no longer generates its own vectorized chunks.
+      boolean vectorizationEnabled = false;
       if (filingsToDownload.size() > 0) {
         boolean allFilingsProcessed = true;
         for (FilingToDownload filing : filingsToDownload) {
@@ -3011,8 +2973,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return;
       }
 
-      // Use unified cache with self-healing
-      boolean vectorizationEnabled = isVectorizedChunksEnabled();
+      // Use unified cache with self-healing.
+      // Always false: SEC no longer generates its own vectorized chunks.
+      boolean vectorizationEnabled = false;
       ProcessingDecision decision = filingCache.checkFiling(cik, accession, form, filingDate, vectorizationEnabled);
 
       if (!decision.shouldProcess()) {
@@ -3497,8 +3460,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           String secParquetDirPath = govdataParquetDir;
 
           if (secParquetDirPath != null) {
-            // Check if vectorization is enabled via YAML config
-            boolean enableVectorization = isVectorizedChunksEnabled();
+            // Always false: SEC no longer generates its own vectorized chunks.
+            boolean enableVectorization = false;
 
             XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
 

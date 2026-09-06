@@ -358,9 +358,10 @@ partitionedTables:
       10-K (annual report with audited financials), 10-Q (quarterly report),
       8-K (current report of a material event), DEF 14A (proxy statement for shareholder
       meetings), and Form 3/4/5 (insider trading). This table does not carry 8-K item codes
-      (which event a given 8-K reports — earnings, M&A, executive changes, etc.); those are
-      queryable as `section` on vectorized_chunks where source_type='8k_item', derived from
-      the filing text by XbrlToParquetConverter's item-header regex.
+      (which event a given 8-K reports — earnings, M&A, executive changes, etc.); that
+      classification is not currently exposed in any queryable table (the item-header regex
+      that used to derive it fed the old per-schema vectorized_chunks writer, removed when SEC
+      chunking centralized into ref.vectorized_chunks via ChunkOrganizer's cross-schema sweep).
       Use for: identifying available filings, filtering by company/date/type, joining to
       other SEC tables, and tracking filing history.
 
@@ -743,8 +744,10 @@ partitionedTables:
       company's financial condition, results of operations, and known risks/uncertainties.
       Use for: sentiment analysis, risk factor monitoring, NLP-based insights, comparing
       management tone across periods, and identifying forward-looking statements.
-      For a pre-chunked, embedding-ready version of this same text, see vectorized_chunks
-      (source_type='mda_paragraph').
+      For a pre-chunked, embedding-ready version of this same text, see
+      ref.vectorized_chunks (source_table='mda_sections') — populated by ChunkOrganizer's
+      cross-schema sweep, not by this schema's own ETL; source_type there is 'row_concat'
+      like every other ChunkOrganizer contributor, not a per-content label.
 
     columns:
       - *cik_column
@@ -1441,7 +1444,9 @@ partitionedTables:
       for the Q&A portion. Use for: earnings surprise analysis, guidance tracking,
       management commentary on results, and correlating announcements with stock price
       movements. For a pre-chunked, embedding-ready version of this same text, see
-      vectorized_chunks (source_type='earnings').
+      ref.vectorized_chunks (source_table='earnings_transcripts') — populated by
+      ChunkOrganizer's cross-schema sweep, not by this schema's own ETL; source_type there
+      is 'row_concat' like every other ChunkOrganizer contributor, not a per-content label.
 
     columns:
       - *cik_column

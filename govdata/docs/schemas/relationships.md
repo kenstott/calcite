@@ -197,15 +197,6 @@ erDiagram
         bigint volume
     }
 
-    vectorized_chunks {
-        string cik PK
-        string accession_number PK
-        string chunk_id PK
-        string source_type
-        string chunk_text
-        array embedding
-    }
-
     GEO_states {
         string state_fips PK
         string state_abbr UK
@@ -220,7 +211,6 @@ erDiagram
     insider_transactions }o--|| filing_metadata : "cik, accession_number"
     earnings_transcripts }o--|| filing_metadata : "cik, accession_number"
     stock_prices }o--|| filing_metadata : "cik"
-    vectorized_chunks }o--|| filing_metadata : "cik, accession_number"
     filing_metadata }o--|| GEO_states : "state_of_incorporation → state_abbr"
 ```
 
@@ -962,7 +952,12 @@ erDiagram
 
 ## Table Inventory
 
-### SEC Schema (9 tables)
+### SEC Schema (8 tables)
+
+Text-bearing tables (`mda_sections`, `risk_factor_sections`, `earnings_transcripts`) also
+contribute to `ref/vectorized_chunks`, a cross-schema data-lake location populated by
+`ChunkOrganizer`'s standalone sweep — not a table of this schema, so it is not listed below.
+See `docs/schemas/sec.md`'s "Search and Analytics Tables" note.
 
 | Table | Primary Key | Foreign Keys | Description |
 |-------|-------------|--------------|-------------|
@@ -974,7 +969,6 @@ erDiagram
 | `insider_transactions` | `cik, accession_number, reporting_person_cik, security_title, transaction_code` | → `filing_metadata` | Form 3/4/5 insider trades |
 | `earnings_transcripts` | `cik, accession_number, section_type, paragraph_number` | → `filing_metadata` | 8-K earnings content |
 | `stock_prices` | `ticker, date` | → `filing_metadata.cik` | Daily OHLCV price data |
-| `vectorized_chunks` | `cik, accession_number, chunk_id` | → `filing_metadata` | Semantic text chunks with embeddings |
 
 ### GEO Schema (32 tables)
 

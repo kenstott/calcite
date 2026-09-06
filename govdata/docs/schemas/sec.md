@@ -89,20 +89,6 @@ erDiagram
         DOUBLE order
     }
 
-    vectorized_chunks {
-        VARCHAR cik PK,FK
-        VARCHAR accession_number PK,FK
-        VARCHAR chunk_id PK
-        VARCHAR source_type
-        VARCHAR chunk_text
-        VARCHAR enriched_text
-        ARRAY embedding
-        VARCHAR exhibit_number FK
-        VARCHAR speaker_name
-        VARCHAR speaker_role
-        INTEGER paragraph_number FK
-    }
-
     filing_metadata ||--o{ financial_line_items : "has facts"
     filing_metadata ||--o{ filing_contexts : "defines contexts"
     filing_metadata ||--o{ mda_sections : "contains MD&A"
@@ -110,10 +96,13 @@ erDiagram
     filing_metadata ||--o{ insider_transactions : "has insider trades"
     filing_metadata ||--o{ stock_prices : "has prices"
     filing_metadata ||--o{ xbrl_relationships : "has relationships"
-    filing_metadata ||--o{ vectorized_chunks : "has chunks"
     filing_contexts ||--o{ financial_line_items : "context for facts"
-    earnings_transcripts ||--o{ vectorized_chunks : "vectorized for search"
 ```
+
+`mda_sections`, `risk_factor_sections`, and `earnings_transcripts` are also contributors to
+`ref/vectorized_chunks`, a cross-schema data-lake location populated by `ChunkOrganizer`'s
+standalone sweep job (not part of this schema's own ETL) — see the "Search and Analytics
+Tables" note below.
 
 ## Architecture Note: FileSchema Delegation
 
@@ -308,46 +297,17 @@ XBRL linkbase relationships from 10-K and 10-Q filings showing how financial con
 
 ### Search and Analytics Tables
 
-#### `vectorized_chunks`
-Primary key: `(cik, accession_number, chunk_id)`
-
-Semantic text chunks from SEC filings with embeddings for similarity search. Includes:
-- **MD&A paragraphs** from 10-K and 10-Q filings
-- **Footnotes** extracted from XBRL
-- **Insider form remarks** from Form 4 filings
-- **Earnings transcripts** from 8-K filings (with speaker attribution)
-
-Text is chunked, enriched with context tags and cross-references, then normalized for temporal/monetary consistency. Earnings chunks can be joined back to `earnings_transcripts` via `accession_number` + `paragraph_number`.
-
-| Column | Type | Nullable | Description |
-|--------|------|----------|-------------|
-| cik | VARCHAR | No | Central Index Key (FK → filing_metadata) |
-| accession_number | VARCHAR | No | EDGAR accession (FK → filing_metadata) |
-| year | INTEGER | No | Filing year for Iceberg partitioning |
-| chunk_id | VARCHAR | No | Unique identifier for this chunk |
-| source_type | VARCHAR | No | Origin type (mda_paragraph, footnote, risk_factor, earnings) |
-| section | VARCHAR | Yes | Parent section (e.g., 'Item 7', 'Note 1') |
-| sequence | INTEGER | No | Order within parent section |
-| filing_date | VARCHAR | No | Date of filing (ISO 8601 format) |
-| chunk_text | VARCHAR | No | Original text chunk before enrichment |
-| enriched_text | VARCHAR | No | Normalized text with context tags, cross-references, and standardized temporal/monetary expressions |
-| embedding | ARRAY\<DOUBLE\> | Yes | 384-dim all-MiniLM-L6-v2 embedding of enriched_text via DuckDB quackformers |
-| content_type | VARCHAR | Yes | Content classification (paragraph, table, list, heading, mixed) |
-| financial_concepts | VARCHAR | Yes | Comma-separated list of referenced financial concepts |
-| exhibit_number | VARCHAR | Yes | Exhibit number (for earnings source_type, links to earnings_transcripts) |
-| speaker_name | VARCHAR | Yes | Speaker name for Q&A earnings sections |
-| speaker_role | VARCHAR | Yes | Role/title of speaker (CEO, CFO, Analyst, etc.) |
-| paragraph_number | INTEGER | Yes | Original paragraph number in earnings_transcripts for traceability |
-
-**Text Enrichment Pipeline:**
-1. **SemanticTextChunker** - Splits text into semantic units
-2. **SecTextVectorizer** - Adds context tags and cross-references
-3. **TextNormalizer** - Standardizes temporal/monetary expressions:
-   - `"Q1 2024"` → `"2024-Q1"`
-   - `"$5.2 million"` → `"$5,200,000"`
-   - `"prior year"` → `"FY2023"`
-
-The original text is preserved in `chunk_text`; enriched version in `enriched_text`.
+SEC no longer materializes its own semantic-search table. `mda_sections`, `risk_factor_sections`,
+and `earnings_transcripts` are ordinary contributors to `ref/vectorized_chunks`, chunked by
+`ChunkOrganizer`'s cross-schema sweep (a standalone job, not part of this schema's own ETL run)
+alongside every other participating schema. Rows carry `source_schema='sec'` /
+`source_table=<mda_sections|risk_factor_sections|earnings_transcripts>`, `source_type='row_concat'`
+(the same discriminator every ChunkOrganizer contributor gets, not a per-content label like the
+old `mda_paragraph`/`footnote`/`earnings` values), plus FK columns back to each source row's
+primary key for star-schema joins. This is a partitioned-Parquet data-lake location, not a table
+declared in `ref-schema.yaml` — it is read directly via DuckDB (`vss-local.py`, the embedding
+pipeline) rather than through this adapter's own SQL schema. See `ref/ChunkOrganizer.java`'s
+class javadoc for the current column list and design.
 
 ## Views
 
@@ -471,14 +431,18 @@ ORDER BY i.transaction_date DESC;
 
 ### Semantic Search
 ```sql
--- Find chunks similar to a query (using DuckDB vector similarity)
+-- Run directly against DuckDB (see vss-local.py) against the ref/vectorized_chunks Parquet
+-- location, not through this adapter's SQL schema -- vectorized_chunks is a cross-schema
+-- data-lake path now, populated by ChunkOrganizer's sweep, not by this schema's own ETL. See
+-- the "Search and Analytics Tables" note above.
 SELECT
   cik,
   accession_number,
   chunk_text,
   array_cosine_similarity(embedding, embed('revenue growth guidance')) as similarity
-FROM vectorized_chunks
-WHERE embedding IS NOT NULL
+FROM read_parquet('.../ref/vectorized_chunks/**/*.parquet', hive_partitioning=1)
+WHERE source_schema = 'sec'
+  AND embedding IS NOT NULL
 ORDER BY similarity DESC
 LIMIT 10;
 ```

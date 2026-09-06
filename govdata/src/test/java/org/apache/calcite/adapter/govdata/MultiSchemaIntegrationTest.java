@@ -442,11 +442,9 @@ public class MultiSchemaIntegrationTest {
           + "WHERE numeric_value IS NOT NULL "
           + "LIMIT 5");
 
-      // Test 5c: SEC vectorized_chunks query
-      allPassed &= testQuery(stmt, "SEC vectorized_chunks query",
-          "SELECT cik, accession_number, source_type, chunk_id "
-          + "FROM \"SEC\".vectorized_chunks "
-          + "LIMIT 5");
+      // Test 5c removed: it queried "SEC".vectorized_chunks, a per-schema Iceberg table that no
+      // longer exists -- SEC chunking centralized into ref.vectorized_chunks via
+      // ChunkOrganizer's cross-schema sweep, a separate standalone job.
 
       // Test 6: Multi-schema count query
       allPassed &= testQuery(stmt, "Multi-schema analytical query",
@@ -486,13 +484,9 @@ public class MultiSchemaIntegrationTest {
           + "WHERE l.numeric_value IS NOT NULL "
           + "LIMIT 10");
 
-      // Test 8c: SEC filing_metadata with vectorized_chunks join
-      allPassed &= testQuery(stmt, "SEC filing_metadata + vectorized_chunks join",
-          "SELECT f.company_name, f.filing_type, v.source_type, v.chunk_id "
-          + "FROM \"SEC\".filing_metadata f "
-          + "INNER JOIN \"SEC\".vectorized_chunks v "
-          + "  ON f.cik = v.cik AND f.accession_number = v.accession_number "
-          + "LIMIT 10");
+      // Test 8c removed: it joined "SEC".vectorized_chunks, a per-schema Iceberg table that no
+      // longer exists -- SEC chunking centralized into ref.vectorized_chunks via
+      // ChunkOrganizer's cross-schema sweep, a separate standalone job.
 
       // =========================================================================
       // COMPLEX FILTER TESTS

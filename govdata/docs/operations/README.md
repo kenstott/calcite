@@ -290,6 +290,16 @@ Day 10  Complete corpus → switch to: ./run-pool.sh daily  (run every day going
 
 ## Embeddings & VSS Cache
 
+**This section predates two later redesigns and is out of date beyond the correction below —
+treat the commands here as historical, not as the current runbook.** Text chunking is no
+longer SEC-specific or GPU-based: `ChunkOrganizer`'s cross-schema sweep chunks every
+participating schema's contributors (SEC's `mda_sections`, `risk_factor_sections`,
+`earnings_transcripts` among them) into `ref/vectorized_chunks`, a partitioned-Parquet
+data-lake location (not an Iceberg table), and `vss-local.sh`/`vss-local.py` (CPU-based;
+see their own headers) replaced `vss-gpu-runner.sh` (now a dormant no-op) and the
+per-source-schema GPU embedding flow described below. Confirm the current invocation
+against `vss-local.sh`'s own `usage()` before relying on this section.
+
 SEC 10-K/10-Q text chunks are stored in the `vectorized_chunks` Iceberg table and embedded
 using the `snowflake-arctic-embed-xs` model (384 dimensions). A DuckDB HNSW index file
 (`chunks_vss.duckdb`) is then built from those embeddings and uploaded to S3/R2 for
