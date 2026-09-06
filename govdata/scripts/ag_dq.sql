@@ -37,13 +37,18 @@ FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_production', allow_moved_paths := true))
     WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
 INSERT INTO dq_results
+-- sector_desc/group_desc are excluded: this table is intentionally scoped to NASS's Crop
+-- Production report (CROPS/FIELD CROPS only, e.g. corn/soybeans/wheat/cotton) — constant
+-- across every year in production, not an ingestion gap. source_desc is NOT excluded here:
+-- it is genuinely single-valued only within a narrow DQ sample window that happens to land
+-- on a non-Census-of-Agriculture year; production holds both SURVEY and CENSUS values.
 SELECT 'ag', 'nass_crop_production', 'T5_all_same_value',
   CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
   CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
 FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
   FROM (SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_production', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'sector_desc', 'group_desc')));
 INSERT INTO dq_results
 SELECT 'ag', 'nass_crop_production', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
