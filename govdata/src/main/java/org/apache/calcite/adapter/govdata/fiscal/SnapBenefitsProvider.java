@@ -64,12 +64,16 @@ import java.util.zip.ZipInputStream;
  * with just the state name in column A (and every other tracked column blank)
  * starts a block, followed by 12 monthly rows ({@code "Oct 2023"} ..
  * {@code "Sep 2024"}) and then a {@code "Total"} fiscal-year rollup row (emitted
- * here as month=null). The value-column order is NOT stable across vintages:
- * FY89-FY19 is Household, Persons, Cost/Household, Cost/Person, Cost; FY20+ is
- * Household, Persons, Cost, Cost/Household, Cost/Person — {@link #buildRow}
- * branches on the {@code newLayout} flag, set from the entry's file extension.
- * Not-yet-reported months in the current FY carry the literal string
- * {@code "--"} in every numeric cell.
+ * here as month=null). The value-column order is NOT stable across vintages,
+ * and the break does NOT align with the {@code .xls}/{@code .xlsx} file-format
+ * switch: FY89-FY14 is Household, Persons, Cost/Household, Cost/Person, Cost;
+ * starting FY2015 — still published as legacy {@code .xls} through FY2019,
+ * retitled "... - Public Data" — the order changes to Household, Persons,
+ * Cost, Cost/Household, Cost/Person, which then carries unchanged into the
+ * FY2020+ {@code .xlsx} files. {@link #buildRow} branches on the
+ * {@code newLayout} flag, set from {@link #NEW_LAYOUT_START_YEAR}, not the
+ * entry's file extension. Not-yet-reported months in the current FY carry the
+ * literal string {@code "--"} in every numeric cell.
  *
  * <p>The source has no FIPS or USPS-abbreviation column anywhere, only the
  * English state name as the block header — {@link #STATE_FIPS} resolves it (the
@@ -87,6 +91,15 @@ public class SnapBenefitsProvider implements DataProvider {
 
   /** Matches a per-fiscal-year workbook entry inside the zip, e.g. {@code FY24.xlsx}. */
   private static final Pattern FY_ENTRY = Pattern.compile("^FY(\\d{2})\\.xlsx?$");
+
+  /**
+   * First fiscal year using the "Cost, Cost/Household, Cost/Person" column order. USDA
+   * switched the workbook's value-column order at FY2015 while still publishing legacy
+   * {@code .xls} (BIFF) files through FY2019 — the "Public Data" retitled version of the
+   * workbook already carries the FY2020+ {@code .xlsx} order two vintages before the file
+   * format itself changes, so the column order is keyed on fiscal year, not file extension.
+   */
+  private static final int NEW_LAYOUT_START_YEAR = 2015;
 
   /** Matches a monthly data row's label, e.g. {@code "Oct 2023"}. */
   private static final Pattern MONTH_ROW = Pattern.compile(
@@ -115,7 +128,7 @@ public class SnapBenefitsProvider implements DataProvider {
         int twoDigit = Integer.parseInt(m.group(1));
         // The zip goes back to FY89, not just FY00 — 89-99 is 1900s, 00-.. is 2000s.
         int fiscalYear = (twoDigit >= 89 ? 1900 : 2000) + twoDigit;
-        boolean newLayout = entry.getName().toLowerCase(Locale.ROOT).endsWith(".xlsx");
+        boolean newLayout = fiscalYear >= NEW_LAYOUT_START_YEAR;
         byte[] entryBytes = readBytes(zin);
         parseWorkbook(entryBytes, fiscalYear, newLayout, rows, unknownNames);
       }
@@ -188,8 +201,9 @@ public class SnapBenefitsProvider implements DataProvider {
 
   private Map<String, Object> buildRow(String state, int fiscalYear, Integer month, Row row,
       boolean newLayout) {
-    // FY00-19 (.xls): Household(1), Persons(2), Cost/Household(3), Cost/Person(4), Cost(5).
-    // FY20+  (.xlsx): Household(1), Persons(2), Cost(3), Cost/Household(4), Cost/Person(5).
+    // FY89-14: Household(1), Persons(2), Cost/Household(3), Cost/Person(4), Cost(5).
+    // FY15+  : Household(1), Persons(2), Cost(3), Cost/Household(4), Cost/Person(5) —
+    //          this order starts at FY2015 while still legacy .xls; see NEW_LAYOUT_START_YEAR.
     Long household = toLong(cell(row, 1));
     Long persons = toLong(cell(row, 2));
     Double cost;

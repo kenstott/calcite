@@ -21,7 +21,7 @@ deferral (not a shortfall).
 | `usaspending_awards` | ⏸ **Deferred (Phase 2)** | intentionally deferred per plan; not a shortfall |
 
 **Extension views beyond the plan (delivered):** `ssa_benefits_by_geography_acs`,
-`soi_income_by_county_year`, `federal_money_by_state_year`, `nonprofit_financials`.
+`soi_income_by_county_year`, `federal_spending_vs_income_tax_by_state_year`, `nonprofit_financials`.
 
 **Not yet built:**
 - `soi_national` — SOI national + corporate historical aggregates. No `SoiNationalProvider`/

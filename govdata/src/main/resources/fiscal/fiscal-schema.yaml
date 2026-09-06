@@ -4018,11 +4018,15 @@ partitionedTables:
   #     no FIPS/abbreviation column anywhere — only the English state name as the
   #     block header — resolved via a hardcoded name->FIPS map (the mirror image
   #     of econ's state_wages FIPS->name map).
-  #   - Column layout is NOT stable across vintages: FY89-FY19 (.xls) order is
-  #     Household, Persons, Cost-Per-Household, Cost-Per-Person, Cost; FY20+
-  #     (.xlsx) order is Household, Persons, Cost, Cost-Per-Household,
-  #     Cost-Per-Person. Selected by file extension, not by re-reading headers per
-  #     workbook (only these 2 layouts were observed across FY89-FY26).
+  #   - Column layout is NOT stable across vintages, and the break does NOT align
+  #     with the .xls/.xlsx file-format switch: FY89-FY14 order is Household,
+  #     Persons, Cost-Per-Household, Cost-Per-Person, Cost; starting FY2015 —
+  #     still legacy .xls through FY2019, retitled "... - Public Data" — the
+  #     order changes to Household, Persons, Cost, Cost-Per-Household,
+  #     Cost-Per-Person, which then carries unchanged into the FY2020+ .xlsx
+  #     files. Selected by fiscal year (SnapBenefitsProvider.NEW_LAYOUT_START_YEAR),
+  #     not file extension — confirmed by reading raw FY14/FY15/FY19/FY20 cells
+  #     directly (only these 2 layouts were observed across FY89-FY26).
   #   - Not-yet-reported months in the current FY are the literal string '--' in
   #     every numeric cell, not blank/null — parsed to SQL NULL.
   - name: snap_benefits_by_geography
@@ -4167,14 +4171,31 @@ partitionedTables:
       notable codes for capital-vs-operating comparisons: E12/F12 (elementary-
       secondary education current operations / construction), E36/F36 (hospitals
       current operations / construction), E61/F61 (parks & recreation current
-      operations / construction). gov_type_code: 0=state, 1=county, 2=city,
+      operations / construction). There is no single item code for "Total
+      Taxes" — T01 is Property Tax specifically (the classification manual's
+      largest single tax category, not an aggregate); a total-taxes figure for
+      a unit or state requires summing every T-prefixed row (T01, T09-T16,
+      T19-T29, T40, T41, T50, T51, T53, T99) grouped by (state_fips, year), or
+      by (state_fips, gov_type_code, year) for a level breakdown — summing T01
+      alone understates total tax revenue by an amount that depends entirely
+      on how heavily that state's governments rely on property tax versus
+      sales/income/other taxes. gov_type_code: 0=state, 1=county, 2=city,
       3=township, 4=special district, 5=independent school district
       (3rd digit of the source ID field). unit_id is that government's unique
       identifier within (state_fips, gov_type_code, county_fips) — not globally
       unique alone. county_fips is the county OR county-type area the unit is
       located in; for state-level rows (gov_type_code=0) this is not a valid
       geo.counties FIPS. amount_thousands is in THOUSANDS of dollars and may be
-      negative (debt retirements, etc.). Source (per year):
+      negative (debt retirements, etc.). This is a stratified sample survey of
+      government units (large governments fully enumerated, smaller ones
+      sampled) even in Census-of-Governments years (2012/2017/2022) — a raw
+      per-state sum over the units present in this table is not guaranteed to
+      equal that state's true total, and for at least some small states this
+      file's own item-code totals (verified against Census's own bundled
+      state-level crosstab file, e.g. NNstatetypepu.txt) are implausible
+      against independently published state totals; treat any state-level
+      dollar aggregate from this table as needing cross-validation against an
+      external published figure before use. Source (per year):
       census.gov/data/datasets/{year}/econ/local/public-use-datasets.html.
     dqRowLimit: 100000
 
@@ -4706,15 +4727,24 @@ views:
       WHERE c.county_fips NOT LIKE '%000'
       GROUP BY c.year, c.state_fips, c.county_fips, c.county_name
 
-  - name: federal_money_by_state_year
+  - name: federal_spending_vs_income_tax_by_state_year
     comment: >
       Places each usaspending_by_state row (state, fiscal year, obligated_amount)
       beside its same-state, same-year SOI total-income-tax figure summed from
-      the soi_income_by_county state-total ('...000') rows — a direct
-      revenue-vs-outlay comparison per state per year. federal_obligations_usd is TOTAL
+      the soi_income_by_county state-total ('...000') rows. federal_obligations_usd is TOTAL
       USAspending obligations across ALL agencies and programs combined — it is NOT broken out
       by awarding agency, CFDA/program, or budget function, so agency-specific federal spending
       (e.g. Department of Education, defense) cannot be isolated from this table.
+      soi_income_tax_thousands is IRS SOI INDIVIDUAL INCOME TAX ONLY — it excludes
+      payroll/FICA, corporate, and excise tax paid by the state's residents and
+      businesses (no state-level payroll/FICA or excise tax table exists anywhere
+      in this warehouse yet; state_corporate_income_tax_collections carries
+      corporate income tax but is not yet part of this join). This view is NOT a
+      federal balance-of-payments (total taxes paid vs. total spending received)
+      comparison — subtracting soi_income_tax_thousands from
+      federal_obligations_usd computes spending against one tax type only, not
+      spending against total federal receipts, and will overstate every state's
+      apparent net position.
     sql: >
       SELECT
         s.year,
