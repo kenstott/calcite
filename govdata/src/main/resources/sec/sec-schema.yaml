@@ -650,6 +650,21 @@ partitionedTables:
         type: string
         nullable: true
         comment: Instant date for point-in-time facts (ISO 8601 format)
+      - name: effective_date
+        type: string
+        nullable: true
+        expression: 'COALESCE(src."period_instant", src."period_end")'
+        comment: >
+          Unified recency anchor for instant and duration contexts, so a caller sorting or
+          filtering by recency doesn't need to know the two are mutually exclusive.
+          period_instant is populated only for point-in-time (balance-sheet) facts; duration
+          facts (most segment/disclosure breakdowns) carry it NULL and populate period_start/
+          period_end instead. Sorting a mixed set by period_instant alone silently buries every
+          duration-context row behind NULL-sorts-first semantics, reading as "coverage stopped
+          here" when it hasn't (see the sec-filing-contexts-mixed-instant-duration-sort recipe).
+          The two source columns are perfectly complementary in production (confirmed live:
+          0 rows with both NULL, 0 rows with both populated), so this COALESCE has no ambiguous
+          case to special-case.
       - name: segment
         type: string
         nullable: true
