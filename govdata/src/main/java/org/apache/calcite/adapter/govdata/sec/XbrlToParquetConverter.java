@@ -5569,6 +5569,12 @@ public class XbrlToParquetConverter implements FileConverter {
     Elements paragraphs = doc.select("p, div");
 
     int paragraphNum = 0;
+    // Only the heading paragraph of a section names it (e.g. "Exhibit 99.3 ... Prepared
+    // Management Remarks") -- the narrative paragraphs that follow don't repeat the phrase, so
+    // classifying each paragraph independently misfiles the whole section as "other". Track the
+    // most recently seen heading and inherit it, the same state-carrying scheme
+    // detectSectionTypeWithState already applies to the primary-document extraction path above.
+    String currentSection = null;
     for (org.jsoup.nodes.Element para : paragraphs) {
       String text = para.text().trim();
 
@@ -5582,6 +5588,11 @@ public class XbrlToParquetConverter implements FileConverter {
 
       paragraphNum++;
 
+      String sectionType = detectSectionTypeWithState(text, currentSection);
+      if (!sectionType.equals("other")) {
+        currentSection = sectionType;
+      }
+
       Map<String, Object> data = new HashMap<>();
       data.put("accession_number", accession);
       data.put("cik", cik);
@@ -5589,7 +5600,7 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("year", Integer.parseInt(filingDate.substring(0, 4)));
       data.put("filing_type", filingType);
       data.put("exhibit_number", detectExhibitNumber(exhibitContent));
-      data.put("section_type", detectSectionType(text));
+      data.put("section_type", sectionType);
       data.put("paragraph_number", paragraphNum);
       data.put("paragraph_text", text);
       data.put("speaker_name", extractSpeaker(text));
@@ -5658,7 +5669,8 @@ public class XbrlToParquetConverter implements FileConverter {
   private String detectSectionType(String text) {
     String lowerText = text.toLowerCase();
 
-    if (lowerText.contains("prepared remarks") || lowerText.contains("opening remarks")) {
+    if (lowerText.contains("prepared remarks") || lowerText.contains("opening remarks")
+        || lowerText.contains("management remarks") || lowerText.contains("prepared statement")) {
       return "prepared_remarks";
     } else if (lowerText.contains("question") || lowerText.contains("answer")) {
       return "q_and_a";
@@ -5671,7 +5683,7 @@ public class XbrlToParquetConverter implements FileConverter {
     return "other";
   }
 
-  private String detectSectionTypeWithState(String text, String currentSection) {
+  String detectSectionTypeWithState(String text, String currentSection) {
     String lowerText = text.toLowerCase();
     boolean isHeading = text.length() < 200 && (lowerText.startsWith("exhibit")
         || lowerText.contains("remarks") || lowerText.contains("q&a")
