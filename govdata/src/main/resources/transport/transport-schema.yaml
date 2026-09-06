@@ -158,6 +158,17 @@ dimension_values:
     dataLag: 1
     descending: true
 
+  # STB EP 724 Rail Service Data covers 2017-present, updated weekly with essentially no
+  # publish lag (verified live 2026-09-06: the newest record's report_period_end_date was
+  # 2 days old). dataLag 0 means year == effective_year; no {effective_year} templating below.
+  ep724_year_range: &ep724_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2017}"
+    minYear: 2017
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+    descending: true
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -3363,6 +3374,159 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # STB EP 724 RAIL SERVICE DATA — Class I weekly service performance (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: rail_service_performance
+    # STB filings are not revised after publication once posted, but the open year keeps
+    # gaining ~52 new weekly rows as filings arrive, and the last weeks of December can post
+    # after the calendar year rolls over (same shape as EIA's WPSR weekly stocks). lookbackPeriods: 2
+    # re-fetches the open year plus the prior year to catch any such late weeks.
+    lookbackPeriods: 2
+    # Freshness gate: the Opendatasoft catalog API export has no meaningful Last-Modified/ETag
+    # for a filtered (where=) query, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=rail_service_performance/year=*/*.parquet"
+    partitions: *standard_partitions
+    dqRowLimit: 50000
+    comment: >
+      STB EP 724 Rail Service Data — weekly Class I railroad service-performance
+      filings required under 49 CFR 1250 (BNSF, CN, CP, CPKC, CSXT, KCS, NS, UP).
+      Long format: one row per (railroad, measure, sub_measure, report week) —
+      average train speed (mph), terminal dwell time (hours), average cars on
+      line, dwell time at origin for unit trains, trains held per day (by
+      cause), cars in revenue service not moved in 48+ hours, grain car orders/
+      loadings/past-due, coal unit train loadings actual vs. planned, and
+      carloads originated/received by commodity category — each measure
+      carries its own units/scale in measure_units/measure_scale, so ALWAYS
+      filter on measure_name_analytics (mixing measures in an aggregate mixes
+      incompatible units, e.g. mph with hours with car counts). sub_measure's
+      meaning depends on the measure: train type, terminal name, region, or
+      commodity. Delta by year; dataLag 0 (year == effective_year, essentially
+      no publish lag). Source:
+      opendata.stb.gov/api/v2/catalog/datasets/ep724-public-data.
+
+    dimensions:
+      type:
+        - rail_service_performance
+      year: *ep724_year_range
+
+    columns:
+      - name: railroad_mark
+        type: string
+        nullable: false
+        comment: Class I railroad AAR reporting mark (BNSF, CN, CP, CPKC, CSXT, KCS, NS, UP) — PK component
+      - name: railroad_name
+        type: string
+        nullable: true
+        comment: Standardized railroad name
+      - name: measure_name_analytics
+        type: string
+        nullable: false
+        comment: >
+          Standardized snake_case measure identifier — PK component. The ~21
+          distinct measures carry incompatible units/scales (see measure_units/
+          measure_scale on the same row); enumerate with SELECT DISTINCT
+          measure_name_analytics, measure_name_full, measure_units.
+      - name: measure_name_full
+        type: string
+        nullable: true
+        comment: Human-readable measure name as filed (e.g. "Average Train Speed")
+      - name: data_element_num
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."data_element_num" AS INTEGER)'
+        comment: STB internal data element number for the measure
+      - name: sub_measure
+        type: string
+        nullable: true
+        comment: >
+          Sub-classification as filed — PK component. Meaning depends on
+          measure_name_analytics: train type (e.g. Grain, Intermodal) for
+          speed / dwell-at-origin measures, terminal name for terminal dwell
+          time, commodity for carloads, cause for train-holding measures.
+      - name: sub_measure_analytics
+        type: string
+        nullable: true
+        comment: Standardized/normalized version of sub_measure
+      - name: fact_value_analytics
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."fact_value_analytics" AS DOUBLE)'
+        comment: Standardized numeric value for the measure (NULL where the filed value was non-numeric, e.g. n/a)
+      - name: measure_units
+        type: string
+        nullable: true
+        comment: Unit of measure (e.g. mph, hours, cars)
+      - name: measure_scale
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."measure_scale" AS INTEGER)'
+        comment: Scale factor applied to fact_value_analytics
+      - name: measure_confidentiality
+        type: string
+        nullable: true
+        comment: Confidentiality designation (e.g. Public)
+      - name: report_period_start_date
+        type: date
+        nullable: false
+        expression: 'TRY_CAST(src."report_period_start_date" AS DATE)'
+        comment: Start date of the weekly reporting period — PK component
+      - name: report_period_end_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(src."report_period_end_date" AS DATE)'
+        comment: End date of the weekly reporting period
+      - name: report_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."report_year" AS INTEGER)'
+        comment: STB filing year (report_year_analytics; a report week can span into an adjacent calendar year)
+      - name: report_collection_frequency
+        type: string
+        nullable: true
+        comment: Filing frequency (weekly)
+
+    source:
+      type: http
+      # Opendatasoft (ODS Explore v2) catalog export API. where= filters to the iteration
+      # year via report_year_analytics; delimiter=, requests comma-separated CSV (the API
+      # defaults to semicolon). Fields with embedded commas (e.g. sub_measure_analytics
+      # terminal names like "JACKSON, MS (CPKC)") are properly RFC4180-quoted by the server
+      # (verified live), so no quoted:false override is needed here (contrast safety_complaints).
+      url: "https://opendata.stb.gov/api/v2/catalog/datasets/ep724-public-data/exports/csv?where=report_year_analytics%3D%27{year}%27&delimiter=%2C"
+      method: GET
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rail_service_performance/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: rail_service_performance
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -3568,6 +3732,9 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+
+  rail_service_performance:
+    primaryKey: [railroad_mark, measure_name_analytics, sub_measure, report_period_start_date]
 
 # ============================================================================
 # VIEWS

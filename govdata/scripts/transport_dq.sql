@@ -5,7 +5,8 @@
 --         airports, transit_ridership, t100_segments, vehicle_registrations
 -- All tables are Iceberg; reads via iceberg_scan (single-nested path).
 -- T4/T5 exclude partition columns ('type' for all; also 'year'/'month' where present).
--- safety_complaints (dqRowLimit 200000), airline_ontime (dqRowLimit 100000) sample in DQ mode.
+-- safety_complaints (dqRowLimit 200000), airline_ontime (dqRowLimit 100000),
+-- rail_service_performance (dqRowLimit 50000) sample in DQ mode.
 
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
 SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
@@ -714,6 +715,65 @@ FROM (
   SELECT 100.0 * SUM(CASE WHEN total_miles IS NOT NULL AND total_miles >= 0 THEN 1 ELSE 0 END) / COUNT(*) AS pct
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/phmsa_hazardous_liquid_mileage', allow_moved_paths := true)
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: rail_service_performance (STB EP 724; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'rail_service_performance', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_service_performance', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END, n, 5000,
+  'Expected >=5000 rows (dqRowLimit caps each year at 50000; years 2017-present)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_service_performance', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_service_performance', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_service_performance', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL railroad_mark/measure_name_analytics/sub_measure/report_period_start_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true)
+  WHERE railroad_mark IS NULL OR measure_name_analytics IS NULL OR sub_measure IS NULL
+    OR report_period_start_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_service_performance', 'T7_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate (railroad_mark, measure_name_analytics, sub_measure, report_period_start_date) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT railroad_mark, measure_name_analytics, sub_measure, report_period_start_date, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true)
+  GROUP BY railroad_mark, measure_name_analytics, sub_measure, report_period_start_date HAVING COUNT(*) > 1));
+
+-- T8: railroad_mark restricted to the 8 Class I carriers STB's EP724 program covers.
+INSERT INTO dq_results
+SELECT 'transport', 'rail_service_performance', 'T8_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'railroad_mark values outside {BNSF, CN, CP, CPKC, CSXT, KCS, NS, UP}'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true)
+  WHERE railroad_mark NOT IN ('BNSF', 'CN', 'CP', 'CPKC', 'CSXT', 'KCS', 'NS', 'UP'));
 
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
