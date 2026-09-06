@@ -818,6 +818,89 @@ partitionedTables:
         batchPartitionColumns: [year]
 
   # ==========================================================================
+  # RISK FACTOR SECTIONS
+  # ==========================================================================
+  # Item 1A (Risk Factors) text from 10-K filings
+  # ==========================================================================
+
+  - name: risk_factor_sections
+    pattern: "year=*/*risk_factors*.parquet"
+    partitions: *sec_partitions
+    hooks:
+      enabled: false
+
+    comment: >
+      Item 1A (Risk Factors) text from 10-K filings. Risk Factors is a required narrative
+      section where management discloses material risks to the business, operations, and
+      financial condition. Use for: risk-disclosure trend analysis, climate/ESG-risk
+      screening, cross-company risk-language comparison, and NLP-based topic clustering.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
+      - name: section
+        type: string
+        nullable: false
+        comment: Item section identifier (always 'Item 1A' today)
+      - name: subsection
+        type: string
+        nullable: true
+        comment: Immediate heading enclosing this chunk (null when no heading context)
+      - name: section_path
+        type: string
+        nullable: true
+        comment: Full heading breadcrumb as ' > '-delimited string for cluster analysis
+      - name: paragraph_continuation
+        type: boolean
+        nullable: true
+        comment: True when this chunk is a continuation of an oversized split element
+      - name: paragraph_number
+        type: int
+        nullable: false
+        comment: Sequential paragraph number within the subsection
+      - *paragraph_text
+      - *footnote_refs
+
+    source:
+      <<: *document_source_defaults
+      extractionType: risk_factors_text
+      documentTypes:
+        - "*.htm"
+        - "*.html"
+      extractionStrategies:
+        - regex_item1a
+        - direct_search
+        - html_element_specific
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type:
+        - "10-K"
+        - "10-K/A"
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      rowBatchSize: 10000
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: risk_factor_sections
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        sortOrder: [cik, accession_number, section, paragraph_number]
+        batchPartitionColumns: [year]
+
+  # ==========================================================================
   # XBRL RELATIONSHIPS
   # ==========================================================================
   # Calculation and presentation linkbase relationships
@@ -1566,6 +1649,13 @@ constraints:
         targetColumns: [cik, accession_number]
 
   mda_sections:
+    primaryKey: [cik, accession_number, section, paragraph_number]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+
+  risk_factor_sections:
     primaryKey: [cik, accession_number, section, paragraph_number]
     foreignKeys:
       - columns: [cik, accession_number]

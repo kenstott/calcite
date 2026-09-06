@@ -480,6 +480,7 @@ public class XbrlToParquetConverter implements FileConverter {
       String metadataPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
       String contextsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_contexts.parquet", cik, uniqueId));
       String mdaPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_mda.parquet", cik, uniqueId));
+      String riskFactorsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_risk_factors.parquet", cik, uniqueId));
       String relationshipsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_relationships.parquet", cik, uniqueId));
 
       // Convert financial facts to Parquet (returns extracted data for reuse by vectorization)
@@ -507,6 +508,12 @@ public class XbrlToParquetConverter implements FileConverter {
       List<Map<String, Object>> mdaData = extractMDAData(doc, cik, filingType, actualFilingDate, accession, sourceFilePath);
       writeMDAToParquetFromData(mdaData, mdaPath);
       outputFiles.add(mdaPath);
+
+      // Extract Item 1A Risk Factors (10-K only; a no-op returning an empty list otherwise)
+      List<Map<String, Object>> riskFactorData =
+          extractRiskFactorData(cik, filingType, actualFilingDate, accession, sourceFilePath);
+      writeRiskFactorsToParquetFromData(riskFactorData, riskFactorsPath);
+      outputFiles.add(riskFactorsPath);
 
       // Extract and write XBRL relationships
       LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
@@ -2728,6 +2735,23 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Write pre-extracted Risk Factors (Item 1A) data to Parquet file.
+   */
+  private void writeRiskFactorsToParquetFromData(List<Map<String, Object>> riskFactorData,
+      String outputPath) throws IOException {
+    if (!riskFactorData.isEmpty()) {
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
+          AbstractSecDataDownloader.loadTableColumns("risk_factor_sections");
+      storageProvider.writeAvroParquet(outputPath, columns, riskFactorData, "RiskFactorSection",
+          "RiskFactorSection");
+      LOGGER.info("Wrote {} Risk Factors chunks to {}", riskFactorData.size(), outputPath);
+    } else {
+      LOGGER.debug("Skipping empty Risk Factors file (reason logged by extractRiskFactorData "
+          + "above): {}", outputPath);
+    }
+  }
+
+  /**
    * Builds a deterministic, extraction-stable chunk_id: {accession}_{section}_{position}.
    * Uses accession, section, and position (not text hash), making chunk_id stable even when
    * text extraction logic changes. This enables true idempotent UPSERT: same logical chunk
@@ -2823,6 +2847,127 @@ public class XbrlToParquetConverter implements FileConverter {
     } catch (Exception e) {
       LOGGER.warn("Failed to extract MD&A from HTML using chunker: {}", e.getMessage(), e);
     }
+  }
+
+  /**
+   * Extract Item 1A (Risk Factors) data from a 10-K HTML document. Mirrors {@link
+   * #extractMDAData} but for the Risk Factors section: HTML-only (Risk Factors is narrative
+   * text, not an XBRL-tagged concept the way some MD&A content is), 10-K only (10-Q's Part II
+   * Item 1A covers only material changes to previously-disclosed risk factors and is often
+   * omitted entirely, so it is out of scope here rather than risking false-positive matches).
+   */
+  private List<Map<String, Object>> extractRiskFactorData(String cik, String filingType,
+      String filingDate, String accession, String sourceFilePath) {
+    List<Map<String, Object>> dataList = new ArrayList<>();
+    if (filingType == null || !(filingType.startsWith("10-K") || filingType.startsWith("10K"))) {
+      return dataList;
+    }
+    String filename = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1);
+    if (!(filename.endsWith(".htm") || filename.endsWith(".html"))) {
+      return dataList;
+    }
+    String accessionNumber = Objects.requireNonNull(accession,
+        "accession missing for CIK " + cik + " — refusing to synthesize a fabricated accession");
+    SemanticTextChunker chunker = SemanticTextChunker.forRiskFactors();
+    extractRiskFactorsWithChunker(sourceFilePath, dataList, cik, accessionNumber, filingDate,
+        chunker);
+
+    if (dataList.isEmpty()) {
+      LOGGER.debug("Extracted 0 Risk Factors paragraphs from {}", sourceFilePath);
+    } else {
+      LOGGER.info("Extracted {} Risk Factors paragraphs from {}", dataList.size(), sourceFilePath);
+    }
+    return dataList;
+  }
+
+  /**
+   * Extract Risk Factors (Item 1A) from HTML using semantic chunking. Finds the Item 1A section
+   * and extracts content using the same section-boundary and content-start heuristics as
+   * {@link #extractMDAWithChunker}.
+   */
+  private void extractRiskFactorsWithChunker(String htmlPath, List<Map<String, Object>> dataList,
+      String cik, String accessionNumber, String filingDate, SemanticTextChunker chunker) {
+    try {
+      org.jsoup.nodes.Document doc;
+      try (InputStream is = storageProvider.openInputStream(htmlPath)) {
+        doc = Jsoup.parse(is, "UTF-8", "");
+      }
+
+      List<MDASection> sections = findRiskFactorSections(doc);
+      // Stop at Item 1B (Unresolved Staff Comments), Item 1C (Cybersecurity, newer filings),
+      // or Item 2 (Properties) when a filer omits 1B/1C entirely.
+      String stopPattern = "(?i)item\\s*(1b|1c|2)\\b";
+
+      for (MDASection section : sections) {
+        List<SemanticTextChunker.Chunk> chunks = chunker.chunkFromElement(
+            section.startElement,
+            stopPattern
+        );
+
+        for (SemanticTextChunker.Chunk chunk : chunks) {
+          if (chunk.getText() == null || chunk.getText().trim().length() < 20) continue;
+          Map<String, Object> data = new HashMap<>();
+          data.put("cik", cik);
+          data.put("accession_number", accessionNumber);
+          data.put("filing_date", filingDate);
+          int year = 0;
+          if (filingDate != null && filingDate.length() >= 4) {
+            try {
+              year = Integer.parseInt(filingDate.substring(0, 4));
+            } catch (NumberFormatException e) {
+              // ignore
+            }
+          }
+          data.put("year", year);
+          data.put("section", section.sectionName);
+          List<String> sectionPath = chunk.getSectionPath();
+          data.put("subsection", sectionPath.isEmpty() ? null : sectionPath.get(sectionPath.size() - 1));
+          data.put("section_path", sectionPath.isEmpty() ? null : String.join(" > ", sectionPath));
+          data.put("paragraph_continuation", chunk.isParagraphContinuation());
+          data.put("paragraph_number", dataList.size() + 1);
+          data.put("paragraph_text", chunk.getText());
+          data.put("footnote_refs", formatFootnoteRefs(chunk.getFootnoteRefs()));
+          dataList.add(data);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to extract Risk Factors from HTML using chunker: {}", e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Finds the Item 1A (Risk Factors) section in a 10-K document. Mirrors the 10-K branch of
+   * {@link #findMDASections}: the same bold-styled-span heading convention SEC filers use for
+   * "Item 7. Management's Discussion and Analysis" applies identically to "Item 1A. Risk
+   * Factors" (confirmed against a live EDGAR 10-K).
+   */
+  private List<MDASection> findRiskFactorSections(org.jsoup.nodes.Document doc) {
+    List<MDASection> sections = new ArrayList<>();
+
+    org.jsoup.select.Elements elements = doc.select("*:matchesOwn((?i)item\\s*1a\\b)");
+    if (elements.isEmpty()) {
+      elements = doc.select("*:matchesOwn((?i)risk\\s+factors)");
+    }
+    if (elements.isEmpty()) {
+      elements = doc.select("td:matchesOwn((?i)item\\s*1a), div:matchesOwn((?i)item\\s*1a)");
+    }
+    for (org.jsoup.nodes.Element element : elements) {
+      String text = element.text();
+      if (!text.matches("(?i).*item\\s*1a\\b.*") && !text.matches("(?i).*risk\\s+factors.*")) {
+        continue;
+      }
+      // Skip table of contents entries
+      if (text.length() < 100
+          && (text.matches("(?i).*page.*") || text.matches(".*\\d+$"))) {
+        continue;
+      }
+      org.jsoup.nodes.Element contentStart = findContentStart(element);
+      if (contentStart != null) {
+        sections.add(new MDASection("Item 1A", contentStart));
+      }
+    }
+
+    return sections;
   }
 
   /**

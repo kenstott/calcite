@@ -181,6 +181,13 @@ public class ChunkOrganizer {
       new RowConcatSource("sec", "mda_sections",
           Arrays.asList("cik", "accession_number", "section", "paragraph_number"),
           Arrays.asList("section", "subsection", "paragraph_text"), null),
+      // Same pre-split-by-SEC's-own-ETL shape as mda_sections above; disabled at the source
+      // (hooks.enabled: false in sec-schema.yaml) until D-178's document-mis-partitioning fix
+      // lands, so this entry is inert (zero completed rows to sweep) until then, not a new
+      // risk on its own.
+      new RowConcatSource("sec", "risk_factor_sections",
+          Arrays.asList("cik", "accession_number", "section", "paragraph_number"),
+          Arrays.asList("section", "subsection", "paragraph_text"), null),
       new RowConcatSource("sec", "earnings_transcripts",
           Arrays.asList("cik", "accession_number", "section_type", "paragraph_number"),
           Arrays.asList("section_type", "speaker_name", "speaker_role", "paragraph_text"),
