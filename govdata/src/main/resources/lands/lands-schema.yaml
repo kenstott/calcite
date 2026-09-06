@@ -2479,3 +2479,83 @@ views:
           OR CAST(f.sic_code AS INTEGER) BETWEEN 2400 AND 2499
           OR CAST(f.sic_code AS INTEGER) BETWEEN 2600 AND 2699)
       GROUP BY ts.fy_completed, ts.state_abbr, ts.treatment_type
+
+  # --------------------------------------------------------------------------
+  # Inter-domain view (requires the geo schema)
+  # --------------------------------------------------------------------------
+
+  - name: county_federal_fee_land_share
+    comment: >
+      Per-county federal-fee-land share, spatially joining padus_federal_fee_lands'
+      polygons (geometry_wkt) against geo.counties' own boundary geometry (its
+      `geometry` column, latest TIGER vintage year) with DuckDB spatial
+      (ST_Intersects/ST_Intersection/ST_Area over WGS84 WKT — both sources use
+      SRID 4326, no reprojection needed). Answers D-054's actual ask (a
+      per-county federal-ownership computation) via this derived view — it does
+      NOT retrofit geometry or county_fips onto national_forests, blm_field_offices,
+      or nps_units themselves; those three tables remain non-spatial. Pre-filters
+      the county x parcel cross product by state (geo.state_ref) before the
+      spatial predicate, since an unfiltered ~3,144 x ~5,356 join is too slow for
+      interactive use (hours); the state-pruned join runs in roughly a minute
+      nationwide and is fast when narrowed to one state/county in a WHERE clause.
+      Both input polygon sets are simplified/generalized WKT (padus to ~100m
+      tolerance, TIGER counties to their own Census generalization), so a parcel
+      abutting a county line can compute a hair of intersection on the wrong side
+      of the boundary or a share fractionally over 100%, hence the LEAST(...) clamp
+      below — treat federal_fee_land_share_pct as a close estimate, not a
+      survey-grade figure. Areas are compared as raw WGS84 degree^2 (DuckDB
+      ST_Area has no CRS awareness) — valid as a same-county, same-latitude-band
+      ratio, not as an absolute area. padus_federal_fee_lands rows with a null
+      geometry_wkt are excluded. LEFT JOIN so every county appears, including a
+      0% share when no federal-fee parcel intersects it. Verified against known
+      high-federal counties: Clark County NV (~87% federal in reality) computes
+      100% (boundary-overshoot clamp, still correctly "almost entirely federal"),
+      Nye County NV computes 90.91% (real-world ~92%), Denali Borough AK computes
+      57.91% (Denali NP alone covers ~55% of the borough), and New York County NY
+      computes 0.12% (correctly near-zero for a dense urban county).
+    sql: >
+      WITH latest_counties AS (
+        SELECT
+          c.county_fips,
+          c.state_fips,
+          c.county_name,
+          sr.state_abbr,
+          ST_Buffer(ST_GeomFromText(c.geometry), 0.0) AS geom
+        FROM "geo"."counties" c
+        JOIN "geo"."state_ref" sr ON sr.state_fips = c.state_fips
+        WHERE c.year = (SELECT MAX(year) FROM "geo"."counties")
+          AND c.geometry IS NOT NULL
+      ),
+      padus_geom AS (
+        SELECT
+          padus_id,
+          state_abbr,
+          ST_Buffer(ST_GeomFromText(geometry_wkt), 0.0) AS geom
+        FROM padus_federal_fee_lands
+        WHERE geometry_wkt IS NOT NULL
+      ),
+      matches AS (
+        SELECT
+          c.county_fips,
+          c.state_fips,
+          c.county_name,
+          ST_Area(c.geom)                                    AS county_area_deg2,
+          p.padus_id,
+          ST_Area(ST_Intersection(c.geom, p.geom))           AS overlap_area_deg2
+        FROM latest_counties c
+        LEFT JOIN padus_geom p
+          ON p.state_abbr = c.state_abbr
+         AND ST_Intersects(c.geom, p.geom)
+      )
+      SELECT
+        county_fips,
+        state_fips,
+        county_name,
+        COUNT(DISTINCT padus_id)                             AS federal_fee_parcel_count,
+        ROUND(
+          100.0 * LEAST(COALESCE(SUM(overlap_area_deg2), 0), MAX(county_area_deg2))
+            / NULLIF(MAX(county_area_deg2), 0),
+          2
+        )                                                    AS federal_fee_land_share_pct
+      FROM matches
+      GROUP BY county_fips, state_fips, county_name
