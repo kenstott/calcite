@@ -28,7 +28,9 @@ public class FdaDrugShortagesResponseTransformer extends AbstractOpenFdaResponse
   protected void flattenRecord(JsonNode record, ObjectNode row) {
     put(row, "package_ndc", text(record, "package_ndc"));
     put(row, "initial_posting_date", text(record, "initial_posting_date"));
-    put(row, "generic_name", text(record, "generic_name"));
+    String genericName = text(record, "generic_name");
+    put(row, "generic_name", genericName);
+    put(row, "generic_name_normalized", GenericNameNormalizer.normalize(genericName));
     put(row, "update_type", text(record, "update_type"));
     put(row, "update_date", text(record, "update_date"));
     put(row, "status", text(record, "status"));

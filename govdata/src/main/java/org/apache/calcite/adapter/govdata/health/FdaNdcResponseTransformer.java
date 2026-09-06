@@ -26,7 +26,9 @@ public class FdaNdcResponseTransformer extends AbstractOpenFdaResponseTransforme
     String productNdc = text(record, "product_ndc");
     put(row, "product_ndc", productNdc);
     put(row, "product_ndc9", NdcNormalizer.fromProductNdc(productNdc));
-    put(row, "generic_name", text(record, "generic_name"));
+    String genericName = text(record, "generic_name");
+    put(row, "generic_name", genericName);
+    put(row, "generic_name_normalized", GenericNameNormalizer.normalize(genericName));
     put(row, "brand_name", text(record, "brand_name"));
     put(row, "brand_name_base", text(record, "brand_name_base"));
     put(row, "labeler_name", text(record, "labeler_name"));

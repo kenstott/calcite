@@ -75,6 +75,17 @@ partitionedTables:
         type: string
         nullable: true
         comment: INN/generic drug name
+      - name: generic_name_normalized
+        type: string
+        nullable: true
+        comment: >
+          Join key to fda_drug_shortages.generic_name_normalized. This table's raw
+          generic_name never includes dosage form, and joins combinations with "and" in
+          source order; fda_drug_shortages embeds the dosage form and joins combinations
+          with ";" in alphabetized order, so a raw or case-insensitive join matches only
+          ~4% of shortage drugs. Both sides derive this column the same way
+          (GenericNameNormalizer): uppercase, strip trailing dosage-form phrase, split
+          combination components, strip each component's salt suffix, sort, rejoin.
       - name: brand_name
         type: string
         nullable: true
@@ -472,6 +483,20 @@ partitionedTables:
       - name: generic_name
         type: string
         nullable: true
+      - name: generic_name_normalized
+        type: string
+        nullable: true
+        comment: >
+          Join key to fda_ndc_products.generic_name_normalized. This table's raw
+          generic_name embeds the dosage form as a trailing word/phrase (e.g. "Atropine
+          Sulfate Injection", even though dosage_form is already a separate column) and
+          joins combinations with ";" in alphabetized order; fda_ndc_products never
+          includes dosage form and joins combinations with "and" in source order, so a
+          raw or case-insensitive join matches only ~4% of shortage drugs. Both sides
+          derive this column the same way (GenericNameNormalizer): uppercase, strip
+          trailing dosage-form phrase, split combination components, strip each
+          component's salt suffix, sort, rejoin. Tested against the full 245-name
+          shortage list: recovers 226 (92.2%), up from 9 raw/case-insensitive.
       - name: update_type
         type: string
         nullable: true
@@ -1065,6 +1090,15 @@ partitionedTables:
         type: string
         nullable: true
         comment: Truncated to 2000 chars
+      - name: has_results
+        type: boolean
+        nullable: true
+        comment: >
+          Whether results have been posted to the study's ClinicalTrials.gov results
+          database (the "reported results" flag, distinct from overall_status/completion
+          dates — a study can be COMPLETED with no results ever posted). Sourced from the
+          top-level `hasResults` field on the API v2 study element (sibling of
+          protocolSection, not nested under it).
 
     source:
       type: http
@@ -4948,6 +4982,7 @@ views:
         t.first_submit_date,
         t.last_update_date,
         t.brief_summary,
+        t.has_results,
         STRING_AGG(DISTINCT c.condition_name,  '; ') AS conditions,
         STRING_AGG(DISTINCT i.intervention_name, '; ') AS interventions
       FROM clinical_trials t
@@ -4957,7 +4992,7 @@ views:
         t.nct_id, t.brief_title, t.overall_status, t.study_type, t.phase,
         t.enrollment_count, t.lead_sponsor, t.funder_type, t.start_date,
         t.primary_completion_date, t.completion_date, t.first_submit_date,
-        t.last_update_date, t.brief_summary
+        t.last_update_date, t.brief_summary, t.has_results
 
   - name: medicaid_drug_spend
     comment: >
