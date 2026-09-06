@@ -1512,6 +1512,123 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # USACE WATERWAY LOCKS — ArcGIS Hub CSV export (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: usace_locks
+    # Freshness gate: ArcGIS Hub CSV export has no meaningful Last-Modified for a live
+    # dataset query, so this hashes the response body post-fetch (fails open on a missing
+    # prior token), matching this schema's own airports table.
+    freshness:
+      type: hash
+    pattern: "type=usace_locks/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      US Army Corps of Engineers navigation lock inventory (Lock Performance Monitoring
+      System master list) — one row per lock chamber, 234 locks nationally, with the year
+      each opened as the age field. No per-lock condition or deferred-maintenance figure is
+      published anywhere (NID's own CONDITION_ASSESSMENT field reads "Not Available" for
+      every USACE navigation dam checked) — only age is sourced here, not condition or
+      backlog. Hosted on ArcGIS Hub under an individual account rather than an official
+      USACE/HIFLD org account; re-verify the URL if it ever 404s, same caveat class as this
+      warehouse's other individually-hosted ArcGIS mirrors (housing.opportunity_zones,
+      lands.va_facilities). Joins to geo.states via state_abbr.
+      Source: opendata.arcgis.com dataset 78ef8693f30b40b980737c561ce6b103_0.
+
+    dimensions:
+      type:
+        - usace_locks
+
+    columns:
+      - name: lock_id
+        type: string
+        nullable: false
+        expression: 'src."NDCCODE"'
+        comment: USACE National Datum/Drainage Code — stable natural key, PK
+      - name: name
+        type: string
+        nullable: true
+        expression: 'src."PMSNAME"'
+      - name: river
+        type: string
+        nullable: true
+        expression: 'src."RIVER"'
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."STATE"'
+        comment: 2-letter USPS state code (FK component to geo.states)
+      - name: division
+        type: string
+        nullable: true
+        expression: 'src."DIVISION"'
+        comment: USACE division code (e.g. LRD, SWD)
+      - name: district
+        type: string
+        nullable: true
+        expression: 'src."DISTRICT"'
+        comment: USACE district code (e.g. LRL, SWL)
+      - name: year_open
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."YEAROPEN" AS INTEGER)'
+        comment: Year the lock opened — the age field this table exists to carry
+      - name: length_ft
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."LENGTH" AS DOUBLE)'
+        comment: Usable chamber length (feet)
+      - name: width_ft
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."WIDTH" AS DOUBLE)'
+        comment: Usable chamber width (feet)
+      - name: lift_ft
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."LIFT" AS DOUBLE)'
+        comment: Normal lift (feet)
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Y" AS DOUBLE)'
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."X" AS DOUBLE)'
+
+    source:
+      type: http
+      url: "https://opendata.arcgis.com/api/v3/datasets/78ef8693f30b40b980737c561ce6b103_0/downloads/data?format=csv&spatialRefId=4326"
+      method: GET
+      response:
+        format: csv
+        hasHeader: true
+        delimiter: ","
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usace_locks/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: usace_locks
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # FMCSA MOTOR CARRIER CENSUS — DOT Socrata az4n-8mr2 bulk CSV (snapshot)
   # ---------------------------------------------------------------------------
   - name: fmcsa_carriers
@@ -3358,6 +3475,14 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+
+  usace_locks:
+    primaryKey: [lock_id]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   fmcsa_carriers:
     primaryKey: [dot_number]

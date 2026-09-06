@@ -381,6 +381,57 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
   WHERE area_type NOT IN ('rural', 'urban'));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: usace_locks (USACE Waterway Locks; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'usace_locks', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_locks', 'T2_row_count',
+  CASE WHEN n >= 200 THEN 'pass' ELSE 'fail' END, n, 200, 'Expected >=200 navigation lock chambers nationally'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_locks', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_locks', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_locks', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL lock_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true) WHERE lock_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_locks', 'T7_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate lock_id rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT lock_id, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true)
+  GROUP BY lock_id HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_locks', 'T8_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'year_open outside plausible [1800, 2026] range'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_locks', allow_moved_paths := true)
+  WHERE year_open IS NOT NULL AND (year_open < 1800 OR year_open > 2026));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 -- ============================================================================
