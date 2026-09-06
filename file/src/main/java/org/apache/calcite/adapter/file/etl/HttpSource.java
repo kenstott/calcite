@@ -235,7 +235,7 @@ public class HttpSource implements DataSource {
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
     this.operatingDirectory = operatingDirectory;
-    this.textualSourceKeys = textualSourceKeys(columns);
+    this.textualSourceKeys = textualSourceKeys(columns, config.getResponse().getRawFields());
     this.bypassRawCache = bypassRawCache;
   }
 
@@ -3147,34 +3147,47 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Collects the fetch-time keys of every column the table declares with a textual type.
+   * Collects the fetch-time keys of every column the table declares with a textual type, plus
+   * any source field the table's {@code response.rawFields:} names explicitly.
    *
    * <p>Fetched rows are keyed by the raw source field name, so a column is indexed under its
    * effective source; its logical name is added too, so a {@code source:} rename still matches
-   * whichever spelling the parser puts in the row.
+   * whichever spelling the parser puts in the row. {@code rawFields} covers the complementary
+   * case — a source field consumed only inside an {@code expression:} string, never itself a
+   * declared column — which otherwise has no way to opt out of numeric inference (see
+   * {@link HttpSourceConfig.ResponseConfig#getRawFields()}).
    *
    * @param columns Declared columns; may be null
-   * @return the textual keys, empty when the table declares no columns
+   * @param rawFields Source field names to always keep verbatim; may be null or empty
+   * @return the textual keys, empty when neither source declares any
    */
-  private static Set<String> textualSourceKeys(List<ColumnConfig> columns) {
-    if (columns == null || columns.isEmpty()) {
+  private static Set<String> textualSourceKeys(List<ColumnConfig> columns,
+      Set<String> rawFields) {
+    boolean noColumns = columns == null || columns.isEmpty();
+    boolean noRawFields = rawFields == null || rawFields.isEmpty();
+    if (noColumns && noRawFields) {
       return Collections.emptySet();
     }
     Set<String> keys = new HashSet<String>();
-    for (ColumnConfig column : columns) {
-      String type = column.getType();
-      if (type == null) {
-        continue;
-      }
-      String normalized = type.trim().toLowerCase(java.util.Locale.ROOT);
-      if (normalized.equals("string") || normalized.equals("varchar")
-          || normalized.equals("char") || normalized.startsWith("varchar(")
-          || normalized.startsWith("char(")) {
-        if (column.getEffectiveSource() != null) {
-          keys.add(column.getEffectiveSource());
+    if (!noRawFields) {
+      keys.addAll(rawFields);
+    }
+    if (!noColumns) {
+      for (ColumnConfig column : columns) {
+        String type = column.getType();
+        if (type == null) {
+          continue;
         }
-        if (column.getName() != null) {
-          keys.add(column.getName());
+        String normalized = type.trim().toLowerCase(java.util.Locale.ROOT);
+        if (normalized.equals("string") || normalized.equals("varchar")
+            || normalized.equals("char") || normalized.startsWith("varchar(")
+            || normalized.startsWith("char(")) {
+          if (column.getEffectiveSource() != null) {
+            keys.add(column.getEffectiveSource());
+          }
+          if (column.getName() != null) {
+            keys.add(column.getName());
+          }
         }
       }
     }

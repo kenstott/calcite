@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.etl;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -532,6 +533,60 @@ public class HttpSourceTest {
     assertNull(response.getColumnNames());
     assertNull(response.getDelimiter());
     assertEquals(HttpSourceConfig.PaginationType.NONE, response.getPagination().getType());
+    assertTrue(response.getRawFields().isEmpty());
+  }
+
+  @Test void testResponseConfigWithRawFields() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "csv");
+    map.put("rawFields", Arrays.asList("LAT_016", "LONG_017"));
+
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.fromMap(map);
+
+    assertEquals(2, response.getRawFields().size());
+    assertTrue(response.getRawFields().contains("LAT_016"));
+    assertTrue(response.getRawFields().contains("LONG_017"));
+  }
+
+  @Test void testResponseConfigWithoutRawFieldsIsEmpty() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "csv");
+
+    HttpSourceConfig.ResponseConfig response = HttpSourceConfig.ResponseConfig.fromMap(map);
+
+    assertTrue(response.getRawFields().isEmpty());
+  }
+
+  /**
+   * A source field named in {@code response.rawFields} must reach the row map exactly as
+   * delivered, never numeric-inferred — this is the fix for the NBI packed lat/long
+   * corruption (transport.bridges decimal_latitude/decimal_longitude): a whole-valued
+   * double re-serializes with a trailing {@code .0} that a length-relative packed-field
+   * decode can't tell apart from real digits, and an all-digit field re-serialized as a
+   * Long drops any leading zero.
+   */
+  @Test void testParseValueHonorsRawFields() throws Exception {
+    Map<String, Object> responseMap = new HashMap<String, Object>();
+    responseMap.put("format", "csv");
+    responseMap.put("rawFields", Arrays.asList("LONG_017"));
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("http://localhost/test")
+        .response(HttpSourceConfig.ResponseConfig.fromMap(responseMap))
+        .build();
+    HttpSource source =
+        new HttpSource(config, (HooksConfig) null, null, null, null, null);
+    try {
+      Method parseValue =
+          HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
+      parseValue.setAccessible(true);
+
+      // A rawFields-listed key keeps the exact source text, even though it looks numeric.
+      assertEquals("087581200", parseValue.invoke(source, "LONG_017", "087581200"));
+      // A key not in rawFields is unaffected: still inferred as usual.
+      assertEquals(87581200L, parseValue.invoke(source, "OTHER_FIELD", "087581200"));
+    } finally {
+      source.close();
+    }
   }
 
   @Test void testHttpSourceConfigPostMethodWithBodyTemplate() {

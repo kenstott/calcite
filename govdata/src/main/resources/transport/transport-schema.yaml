@@ -2828,12 +2828,16 @@ partitionedTables:
       decimal_latitude/decimal_longitude are computed from the source's packed
       DDMMSS.ss / DDDMMSS.ss fields (Items 16/17) using length-relative substring
       extraction (minutes/seconds anchored to the end of the string, degrees to
-      whatever remains at the front) rather than fixed character positions — the
-      upstream CSV staging strips a leading zero from purely-numeric columns (e.g.
-      Item 17 "087341348" arrives as "87341348"), which silently shifts a fixed-position
-      split and was caught live producing -873.68 instead of -87.57 for an Alabama
-      bridge; county_code is zero-padded back to 3 digits for the same reason. The raw
-      LAT_016/LONG_017 fields are not carried through.
+      whatever remains at the front) rather than fixed character positions, so a
+      digit-count change at the front of the field (e.g. a leading zero) doesn't shift
+      the split; county_code is zero-padded back to 3 digits for the same
+      leading-zero-loss reason numeric fields generally have. LAT_016/LONG_017 are also
+      listed in source.response.rawFields to stop the generic CSV ingest from routing
+      them through numeric inference at all — undeclared as their own column, they'd
+      otherwise be parsed as a Long/Double and re-serialized before this expression ever
+      runs, which can append a trailing .0 that length-relative extraction can't
+      distinguish from real digits. The raw LAT_016/LONG_017 fields are not carried
+      through as their own output columns.
       Source: fhwa.dot.gov/bridge/nbi/{year}allstatesallrecsdel.zip (see
       fhwa.dot.gov/bridge/nbi/ascii.cfm).
 
@@ -2894,11 +2898,11 @@ partitionedTables:
           + TRY_CAST(SUBSTRING(TRIM(src."LAT_016"), LENGTH(TRIM(src."LAT_016")) - 3, 4) AS DOUBLE) / 100.0 / 3600.0
         comment: >-
           Decoded from packed NBI Item 16 (DDMMSS.ss). Minutes/seconds are taken from the
-          right end of the string rather than a fixed offset: the upstream CSV staging
-          strips a leading zero from purely-numeric columns (confirmed live — Item 17
-          "087341348" arrives as "87341348"), which a fixed-position SUBSTRING misreads
-          as a shifted degrees/minutes/seconds split. Length-relative extraction gives the
-          same correct value whether or not the leading zero survived.
+          right end of the string rather than a fixed offset, so a leading zero the
+          generic CSV ingest's numeric inference would otherwise strip from a
+          purely-numeric field doesn't shift a fixed-position split. LAT_016 is also
+          listed in source.response.rawFields (see the table comment) so it reaches this
+          expression as the exact source string, not a re-serialized number.
       - name: decimal_longitude
         type: double
         nullable: true
@@ -2909,10 +2913,9 @@ partitionedTables:
         comment: >-
           Decoded from packed NBI Item 17 (DDDMMSS.ss); negated (US bridges are West).
           Length-relative extraction — see decimal_latitude's comment; longitude degrees
-          is normally 3 digits (leading zero for <100°) and is exactly where the upstream
-          leading-zero stripping was caught: a fixed SUBSTRING(1,3) silently read 4 digits
-          of degrees once the zero was gone, producing e.g. -873.68 instead of -87.57 for
-          an Alabama bridge.
+          is normally 3 digits (leading zero for <100°), which is why a fixed
+          SUBSTRING(1,3) isn't safe here. LONG_017 is also listed in
+          source.response.rawFields for the same reason as LAT_016.
       - name: year_built
         type: integer
         nullable: true
@@ -3033,6 +3036,15 @@ partitionedTables:
         # quoting meaning at all; with the RFC4180 default, an odd count of those merges
         # that physical line with the next one and desyncs every column for both rows.
         quoted: false
+        # LAT_016/LONG_017 feed decimal_latitude/decimal_longitude's expression only —
+        # neither is its own declared column — so without this they fall back to the
+        # same numeric inference as any other all-digit field: parsed as a Long/Double
+        # and re-serialized before the expression's own TRY_CAST/SUBSTRING ever runs.
+        # That round-trip can both drop a leading zero and append a trailing .0 to a
+        # whole-valued double, corrupting the packed degrees/minutes/seconds split by
+        # 1-2 digits. Keeping them verbatim text makes the length-relative decode see
+        # exactly what NBI published.
+        rawFields: [LAT_016, LONG_017]
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 503]

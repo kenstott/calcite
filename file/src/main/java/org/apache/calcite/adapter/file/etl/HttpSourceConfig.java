@@ -1042,10 +1042,11 @@ public class HttpSourceConfig {
     private final String delimiter;
     private final String compressed;
     private final boolean quoted;
+    private final Set<String> rawFields;
 
     private ResponseConfig(ResponseFormat format, String dataPath, String errorPath,
         PaginationConfig pagination, boolean hasHeader, String columnNames, String delimiter,
-        String compressed, boolean quoted) {
+        String compressed, boolean quoted, Set<String> rawFields) {
       this.format = format;
       this.dataPath = dataPath;
       this.errorPath = errorPath;
@@ -1055,11 +1056,12 @@ public class HttpSourceConfig {
       this.delimiter = delimiter;
       this.compressed = compressed;
       this.quoted = quoted;
+      this.rawFields = rawFields;
     }
 
     public static ResponseConfig defaults() {
       return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none(),
-          true, null, null, null, true);
+          true, null, null, null, true, Collections.<String>emptySet());
     }
 
     public ResponseFormat getFormat() {
@@ -1126,6 +1128,24 @@ public class HttpSourceConfig {
       return quoted;
     }
 
+    /**
+     * Source field names (as they appear in the raw response, e.g. a CSV header) that must
+     * never be numeric-inferred at ingestion — the value is kept exactly as delivered by the
+     * source, verbatim, no matter what an expression later does with it.
+     *
+     * <p>A field referenced only inside a column's {@code expression:} (never itself declared as
+     * a {@code type: string} column) has no other way to opt out of numeric inference: parsing it
+     * as a {@code Long}/{@code Double} and later re-serializing that number loses information a
+     * fixed-width or packed encoding depends on — a leading zero, or an exact digit count — before
+     * the expression's own {@code TRY_CAST} ever runs. Defaults to empty, matching prior behavior
+     * for every source that doesn't set it.
+     *
+     * @return the set of source field names to keep verbatim; empty if none configured
+     */
+    public Set<String> getRawFields() {
+      return rawFields;
+    }
+
     @SuppressWarnings("unchecked")
     public static ResponseConfig fromMap(Map<String, Object> map) {
       if (map == null) {
@@ -1154,8 +1174,20 @@ public class HttpSourceConfig {
       Object quotedObj = map.get("quoted");
       boolean quoted = quotedObj == null || Boolean.TRUE.equals(quotedObj);
 
+      Object rawFieldsObj = map.get("rawFields");
+      Set<String> rawFields;
+      if (rawFieldsObj instanceof List) {
+        rawFields = new HashSet<String>();
+        for (Object field : (List<Object>) rawFieldsObj) {
+          rawFields.add(String.valueOf(field));
+        }
+        rawFields = Collections.unmodifiableSet(rawFields);
+      } else {
+        rawFields = Collections.emptySet();
+      }
+
       return new ResponseConfig(format, dataPath, errorPath, pagination,
-          hasHeader, columnNames, delimiter, compressed, quoted);
+          hasHeader, columnNames, delimiter, compressed, quoted, rawFields);
     }
   }
 
