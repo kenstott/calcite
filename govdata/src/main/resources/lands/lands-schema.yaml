@@ -1688,7 +1688,6 @@ partitionedTables:
     dimensions:
       type:
         - blm_field_offices
-      year: *lands_year_range
 
     columns:
       - name: office_code
