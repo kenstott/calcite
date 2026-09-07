@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.file.duckdb;
 
 import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexCorrelVariable;
+import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexVisitorImpl;
 import org.apache.calcite.sql.SqlCall;
@@ -19,6 +21,7 @@ import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlWriter;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -259,6 +262,46 @@ public class DuckDBFunctionMapping {
         return null;
       }
       return super.visitCall(call);
+    }
+  }
+
+  /**
+   * True if any expression rooted at {@code node} reads an ARRAY- or MULTISET-typed field
+   * directly off a correlation variable (e.g. {@code $cor0.someArrayCol}). A Project/Filter
+   * with this shape is exactly what {@code UNNEST(STRING_SPLIT(...))} plans to on its
+   * correlated (right) side: a trivial pass-through of the already-split array computed on
+   * the left. Pushing that pass-through down to JDBC requires the correlate value to be
+   * bound as a JDBC {@code PreparedStatement} parameter at execution time (see
+   * {@code ResultSetEnumerable.enumeratorBasedOnPreparedStatement}), and DuckDB's JDBC
+   * driver rejects an ARRAY/MULTISET-typed bind parameter ("Unsupported parameter type").
+   * A correlate field of a scalar type binds fine and is unaffected by this check; only
+   * a collection-typed one is unsafe to push down. Used by {@link DuckDBProjectRule}/
+   * {@link DuckDBFilterRule} to keep that specific shape in Enumerable convention instead,
+   * where the already-computed array value is consumed directly in generated Java code with
+   * no JDBC round trip at all.
+   */
+  public static boolean hasUnbindableCorrelateArrayReference(RexNode node) {
+    CorrelateArrayReferenceVisitor visitor = new CorrelateArrayReferenceVisitor();
+    node.accept(visitor);
+    return visitor.found;
+  }
+
+  private static final class CorrelateArrayReferenceVisitor extends RexVisitorImpl<Void> {
+    private boolean found = false;
+
+    CorrelateArrayReferenceVisitor() {
+      super(true);
+    }
+
+    @Override public Void visitFieldAccess(RexFieldAccess fieldAccess) {
+      if (fieldAccess.getReferenceExpr() instanceof RexCorrelVariable) {
+        SqlTypeName typeName = fieldAccess.getType().getSqlTypeName();
+        if (typeName == SqlTypeName.ARRAY || typeName == SqlTypeName.MULTISET) {
+          found = true;
+          return null;
+        }
+      }
+      return super.visitFieldAccess(fieldAccess);
     }
   }
 

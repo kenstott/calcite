@@ -99,19 +99,25 @@ public class DuckDBConvention extends JdbcConvention {
       planner.addRule(org.apache.calcite.adapter.file.rules.PartitionDistinctRule.INSTANCE);
     }
 
-    // Register all standard JDBC rules for comprehensive pushdown
-    // These will only apply to queries that weren't optimized by statistics-based rules
+    // Register all standard JDBC rules for comprehensive pushdown, EXCEPT the stock
+    // JdbcProjectRule/JdbcFilterRule: DuckDBProjectRule/DuckDBFilterRule below fully
+    // supersede them (same behavior for every Project/Filter the stock rules already
+    // allowed -- DuckDB's dialect returns true from supportsWindowFunctions(), the only
+    // other condition the stock rules check -- plus two DuckDB-specific corrections the
+    // stock rules can't express: allowing a recognized pushdown stub UDF through, and
+    // declining an unbindable correlate-array shape). Registering both the stock and the
+    // DuckDB rule for the same RelNode would leave the stock rule's unguarded conversion
+    // in the search space regardless of which one blocks it, so the stock rule must be
+    // excluded here, not merely outcompeted.
     for (RelOptRule rule : JdbcRules.rules(this)) {
+      if (rule instanceof JdbcRules.JdbcProjectRule || rule instanceof JdbcRules.JdbcFilterRule) {
+        continue;
+      }
       planner.addRule(rule);
     }
 
-    // Stock JdbcProjectRule/JdbcFilterRule (just registered above) unconditionally refuse to
-    // push down a Project/Filter containing ANY user-defined-function call, without consulting
-    // the dialect -- so this project's own DuckDB-pushdown stub UDFs (JSON_EXTRACT,
-    // STRING_SPLIT, ...; see DuckDBFunctionMapping) could never reach DuckDB even though
-    // DuckDBFunctionMapping already knows how to render them. These two rules generalize that
-    // block to allow recognized stub UDFs through while still blocking any other unrecognized
-    // one -- added alongside, not instead of, the stock rules (see their class comments).
+    // See DuckDBProjectRule/DuckDBFilterRule class comments for what each generalizes and
+    // restricts relative to the stock rules excluded above.
     planner.addRule(DuckDBProjectRule.create(this));
     planner.addRule(DuckDBFilterRule.create(this));
 

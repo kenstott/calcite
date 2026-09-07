@@ -44,13 +44,21 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * any other unrecognized UDF, exactly like the stock rule. For a Project with no UDF at all,
  * both rules' predicates are true and either may fire; only this rule fires when a recognized
  * DuckDB stub UDF is present.
+ *
+ * <p>This rule also declines a Project that reads an ARRAY/MULTISET-typed field directly off a
+ * correlation variable (see {@link DuckDBFunctionMapping#hasUnbindableCorrelateArrayReference})
+ * -- the {@code UNNEST(STRING_SPLIT(...))} shape plans to exactly this on its correlated side,
+ * and pushing it to JDBC would require binding that array value as a DuckDB JDBC
+ * {@code PreparedStatement} parameter, which DuckDB's driver rejects. The stock
+ * {@code JdbcProjectRule} has no such guard, so {@link DuckDBConvention} registers this rule
+ * in place of (not alongside) the stock one.
  */
 public class DuckDBProjectRule extends ConverterRule {
   /** Creates a DuckDBProjectRule. */
   public static DuckDBProjectRule create(JdbcConvention out) {
     return Config.INSTANCE
         .withConversion(Project.class,
-            project -> !hasUnsupportedUdf(project),
+            project -> !hasUnsupportedUdf(project) && !hasUnbindableCorrelateArray(project),
             Convention.NONE, out, "DuckDBProjectRule")
         .withRuleFactory(DuckDBProjectRule::new)
         .toRule(DuckDBProjectRule.class);
@@ -64,6 +72,15 @@ public class DuckDBProjectRule extends ConverterRule {
   private static boolean hasUnsupportedUdf(Project project) {
     for (RexNode node : project.getProjects()) {
       if (DuckDBFunctionMapping.hasUnsupportedUserDefinedFunction(node)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean hasUnbindableCorrelateArray(Project project) {
+    for (RexNode node : project.getProjects()) {
+      if (DuckDBFunctionMapping.hasUnbindableCorrelateArrayReference(node)) {
         return true;
       }
     }

@@ -26,14 +26,18 @@ import org.apache.calcite.rel.core.Filter;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * Rule to convert a {@link Filter} to a {@link JdbcRules.JdbcFilter}, registered alongside (not
- * instead of) core Calcite's stock {@code JdbcFilterRule}. Same rationale as
+ * Rule to convert a {@link Filter} to a {@link JdbcRules.JdbcFilter}, registered in place of
+ * (not alongside) core Calcite's stock {@code JdbcFilterRule}. Same rationale as
  * {@link DuckDBProjectRule}: the stock rule blocks a Filter containing ANY user-defined-function
  * call unconditionally, without consulting the dialect, so a WHERE clause referencing one of
  * this project's DuckDB-pushdown stub UDFs (see {@link DuckDBFunctionMapping}) could never push
  * down. This rule allows it through when every UDF the condition calls is one
  * {@link DuckDBFunctionMapping} recognizes, and still blocks any other unrecognized UDF exactly
- * like the stock rule.
+ * like the stock rule. It also declines a condition that reads an ARRAY/MULTISET-typed field
+ * directly off a correlation variable (see
+ * {@link DuckDBFunctionMapping#hasUnbindableCorrelateArrayReference}) for the same reason
+ * {@link DuckDBProjectRule} does -- DuckDB's JDBC driver cannot bind such a value as a
+ * {@code PreparedStatement} parameter.
  */
 public class DuckDBFilterRule extends ConverterRule {
   /** Creates a DuckDBFilterRule. */
@@ -41,7 +45,9 @@ public class DuckDBFilterRule extends ConverterRule {
     return Config.INSTANCE
         .withConversion(Filter.class,
             filter -> !DuckDBFunctionMapping.hasUnsupportedUserDefinedFunction(
-                filter.getCondition()),
+                filter.getCondition())
+                && !DuckDBFunctionMapping.hasUnbindableCorrelateArrayReference(
+                    filter.getCondition()),
             Convention.NONE, out, "DuckDBFilterRule")
         .withRuleFactory(DuckDBFilterRule::new)
         .toRule(DuckDBFilterRule.class);

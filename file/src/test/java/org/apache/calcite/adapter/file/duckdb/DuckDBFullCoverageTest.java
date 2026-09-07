@@ -173,9 +173,9 @@ public class DuckDBFullCoverageTest {
    * {@code DuckDBFilterRule}, both validated but always fell back to the stub's
    * intentional throw at execution, since the stock {@code JdbcProjectRule}/
    * {@code JdbcFilterRule} unconditionally refuse to push down any Project/Filter
-   * containing a user-defined-function call. Does NOT cover {@code UNNEST(STRING_SPLIT(...))}
-   * &mdash; that shape is a Correlate/Uncollect RelNode, not a Project/Filter, and hits a
-   * separate, still-open SQL-generation bug (see the govdata defect register).
+   * containing a user-defined-function call. See
+   * {@link #testUnnestStringSplitExecutesEndToEnd} for the {@code UNNEST(STRING_SPLIT(...))}
+   * shape, which needs a further, separate correction.
    */
   @Test public void testStringSplitPushesDownToDuckDb() throws Exception {
     createCsvFile("agencies.csv",
@@ -217,6 +217,46 @@ public class DuckDBFullCoverageTest {
                    + "WHERE JSON_EXTRACT('{\"a\":1}', '$.a') IS NOT NULL AND doc_id = 2")) {
         assertTrue(rs.next());
         assertEquals("2", rs.getString("doc_id"));
+        assertFalse(rs.next());
+      }
+    }
+  }
+
+  /**
+   * Tests {@code UNNEST(STRING_SPLIT(...))} end to end -- the exact shape D-164 in the
+   * govdata defect register originally reported, splitting a denormalized comma-joined
+   * column into rows. This plans as {@code EnumerableCorrelate} whose correlated (right)
+   * side is a trivial pass-through of the array {@code STRING_SPLIT} already computed on
+   * the left, referenced via the correlation variable (e.g. {@code $cor0.$f2}). Pushing
+   * that pass-through down to JDBC would require DuckDB's JDBC driver to bind that
+   * already-split array as a {@code PreparedStatement} parameter, which it rejects
+   * ("Unsupported parameter type") -- see
+   * {@link DuckDBFunctionMapping#hasUnbindableCorrelateArrayReference}, which keeps this
+   * specific shape in Enumerable convention instead, where the array is consumed directly
+   * from the correlation variable with no further JDBC round trip.
+   */
+  @Test public void testUnnestStringSplitExecutesEndToEnd() throws Exception {
+    createCsvFile("agencies.csv",
+        "doc_id,agency_names\n"
+        + "1,\"Department Of Transportation, Federal Aviation Administration\"\n"
+        + "2,Department Of Energy\n");
+
+    try (Connection conn = createDuckDBConnection()) {
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs =
+               stmt.executeQuery(
+                   "SELECT doc_id, agency FROM files.agencies, "
+                   + "UNNEST(STRING_SPLIT(agency_names, ', ')) AS t(agency) "
+                   + "ORDER BY doc_id, agency")) {
+        assertTrue(rs.next());
+        assertEquals("1", rs.getString("doc_id"));
+        assertEquals("Department Of Transportation", rs.getString("agency"));
+        assertTrue(rs.next());
+        assertEquals("1", rs.getString("doc_id"));
+        assertEquals("Federal Aviation Administration", rs.getString("agency"));
+        assertTrue(rs.next());
+        assertEquals("2", rs.getString("doc_id"));
+        assertEquals("Department Of Energy", rs.getString("agency"));
         assertFalse(rs.next());
       }
     }
