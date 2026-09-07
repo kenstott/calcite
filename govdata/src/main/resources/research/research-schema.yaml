@@ -178,7 +178,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 721
-      checkedAt: "2026-09-05T14:49:17Z"
+      checkedAt: "2026-09-07T14:28:40Z"
     partitions: *standard_partitions
     freshness:
       type: last_modified
