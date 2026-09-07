@@ -227,6 +227,29 @@ class LocalStagingStorageProviderTest {
   }
 
   @Test
+  void testMultiWordTableTypeSuffixKeepsFullName() throws IOException {
+    // risk_factor_sections' per-filing output is named "..._risk_factors.parquet" — the
+    // table-type suffix has two words. Regression for the bug where the batch-grouping regex
+    // only captured the last word ("factors"), so the merged upload was named
+    // "factors_batch_....parquet" instead of "risk_factors_batch_....parquet" and never
+    // matched the table's own "*risk_factors*.parquet" glob pattern at materialization time.
+    String r2Base = "/r2/sec/parquet/year=2024";
+    for (int i = 0; i < 3; i++) {
+      String path = r2Base + "/0000320193_0000320193-24-00012" + i + "_risk_factors.parquet";
+      staging.writeAvroParquet(path, FACTS_SCHEMA,
+          makeRecords(FACTS_SCHEMA, "cik" + i, 1), "RiskFactorSection");
+    }
+
+    staging.flushAll();
+
+    assertEquals(1, countingDelegate.writeFileCallCount.get(),
+        "All 3 risk_factors writes should merge into one delegate write");
+    String uploadedName = countingDelegate.uploadedFiles.get(0).getName();
+    assertTrue(uploadedName.contains("risk_factors_batch"),
+        "Merged filename should preserve the full multi-word table type, got: " + uploadedName);
+  }
+
+  @Test
   void testDifferentYearsFlushSeparately() throws IOException {
     // Same table type but different year partitions → 2 separate groups
     for (int year = 2023; year <= 2024; year++) {

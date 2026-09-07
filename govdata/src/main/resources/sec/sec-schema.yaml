@@ -830,7 +830,7 @@ partitionedTables:
     pattern: "year=*/*risk_factors*.parquet"
     partitions: *sec_partitions
     hooks:
-      enabled: false
+      enabled: true
 
     comment: >
       Item 1A (Risk Factors) text from 10-K filings. Risk Factors is a required narrative

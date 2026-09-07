@@ -83,11 +83,15 @@ public class LocalStagingStorageProvider implements StorageProvider {
   }
 
   /**
-   * Matches the table-type suffix in a per-filing parquet filename.
+   * Matches the table-type suffix in a per-filing parquet filename. The class includes
+   * {@code _} so a multi-word suffix like {@code risk_factors} is captured whole rather than
+   * truncated to its last word — the accession number immediately before the suffix always
+   * contains a {@code -}, which is outside this class and so still bounds the match on the left.
    * Example: {@code 0000320193-24-000006_facts.parquet} → group 1 = {@code facts}
+   * Example: {@code 0000320193-24-000123_risk_factors.parquet} → group 1 = {@code risk_factors}
    */
   private static final Pattern TABLE_TYPE_PATTERN =
-      Pattern.compile("_([a-z0-9]+)\\.parquet$", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("_([a-z0-9_]+)\\.parquet$", Pattern.CASE_INSENSITIVE);
 
   private final StorageProvider delegate;
   private final File stagingDir;
