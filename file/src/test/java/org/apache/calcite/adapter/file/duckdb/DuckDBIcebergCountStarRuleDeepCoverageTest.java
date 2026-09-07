@@ -10,14 +10,14 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
-import org.apache.calcite.adapter.jdbc.JdbcSchema;
-import org.apache.calcite.adapter.jdbc.JdbcTable;
-import org.apache.calcite.adapter.jdbc.JdbcTableScan;
-import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.Filter;
+import org.apache.calcite.rel.core.Join;
+import org.apache.calcite.rel.core.Project;
+import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.util.ImmutableBitSet;
@@ -39,9 +39,9 @@ import static org.mockito.Mockito.*;
  * Deep coverage tests for {@link DuckDBIcebergCountStarRule} targeting 63 missed lines.
  * Focuses on matches() branches (GROUP BY, multiple agg calls, non-COUNT,
  * DISTINCT, arguments), onMatch() path when no table scan found,
- * getDuckDBSchema branches (non-JdbcTableScan, non-DuckDBJdbcSchema),
- * findTableScan recursive and RelSubset handling, createCountStarValues,
- * and the INSTANCE singleton.
+ * the scan-shape whitelist that decides which plan trees a stored count may answer
+ * (single scan, at most one Filter sitting directly on it), onMatch declining a scan that is
+ * not Iceberg-backed, and the INSTANCE singleton.
  */
 @Tag("unit")
 @Execution(ExecutionMode.SAME_THREAD)
@@ -176,93 +176,97 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
     assertFalse(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 
-  // ========== findTableScan ==========
+  // ========== resolveScanShape ==========
 
-  @Test void testFindTableScanNull() throws Exception {
-    Method m =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    m.setAccessible(true);
-
-    assertNull(m.invoke(DuckDBIcebergCountStarRule.INSTANCE, (RelNode) null));
+  @Test void testScanShapeNullInput() throws Exception {
+    assertNull(resolveScanShape(null));
   }
 
-  @Test void testFindTableScanDirectTableScan() throws Exception {
-    Method m =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    m.setAccessible(true);
-
+  @Test void testScanShapeDirectTableScan() throws Exception {
     TableScan scan = mock(TableScan.class);
-    when(scan.getInputs()).thenReturn(Collections.<RelNode>emptyList());
-
-    RelNode result = (RelNode) m.invoke(DuckDBIcebergCountStarRule.INSTANCE, scan);
-    assertSame(scan, result);
+    Object shape = resolveScanShape(scan);
+    assertNotNull(shape);
+    assertSame(scan, field(shape, "scan"));
+    assertNull(field(shape, "filter"), "an unfiltered scan carries no filter");
   }
 
-  @Test void testFindTableScanDeepInTree() throws Exception {
-    Method m =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    m.setAccessible(true);
-
+  @Test void testScanShapeFilterDirectlyOnScan() throws Exception {
     TableScan scan = mock(TableScan.class);
-    when(scan.getInputs()).thenReturn(Collections.<RelNode>emptyList());
+    Filter filter = mock(Filter.class);
+    when(filter.getInput()).thenReturn(scan);
 
-    // Intermediate node
-    RelNode intermediate = mock(RelNode.class);
-    when(intermediate.getInputs()).thenReturn(Collections.singletonList((RelNode) scan));
-
-    // Root node
-    RelNode root = mock(RelNode.class);
-    when(root.getInputs()).thenReturn(Collections.singletonList(intermediate));
-
-    RelNode result = (RelNode) m.invoke(DuckDBIcebergCountStarRule.INSTANCE, root);
-    assertSame(scan, result);
+    Object shape = resolveScanShape(filter);
+    assertNotNull(shape);
+    assertSame(scan, field(shape, "scan"));
+    assertSame(filter, field(shape, "filter"));
   }
 
-  @Test void testFindTableScanNoScanInTree() throws Exception {
-    Method m =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    m.setAccessible(true);
-
-    RelNode leaf = mock(RelNode.class);
-    when(leaf.getInputs()).thenReturn(Collections.<RelNode>emptyList());
-
-    RelNode result = (RelNode) m.invoke(DuckDBIcebergCountStarRule.INSTANCE, leaf);
-    assertNull(result);
-  }
-
-  // ========== getDuckDBSchema ==========
-
-  @Test void testGetDuckDBSchemaNonJdbcScan() throws Exception {
-    Method m =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
-    m.setAccessible(true);
-
-    // Plain TableScan (not JdbcTableScan) => null
+  @Test void testScanShapeProjectAboveFilter() throws Exception {
+    // A Project above the Filter does not renumber the Filter's own input refs, so it is walked
+    // through: this is the shape `SELECT COUNT(*) FROM t WHERE part = 'x'` arrives in.
     TableScan scan = mock(TableScan.class);
-    assertNull(m.invoke(DuckDBIcebergCountStarRule.INSTANCE, scan));
+    Filter filter = mock(Filter.class);
+    when(filter.getInput()).thenReturn(scan);
+    Project project = mock(Project.class);
+    when(project.getInputs()).thenReturn(Collections.<RelNode>singletonList(filter));
+    when(project.getInput(0)).thenReturn(filter);
+
+    Object shape = resolveScanShape(project);
+    assertNotNull(shape);
+    assertSame(scan, field(shape, "scan"));
+    assertSame(filter, field(shape, "filter"));
   }
 
-  @Test void testGetDuckDBSchemaJdbcScanNonDuckDB() throws Exception {
-    Method m =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
-    m.setAccessible(true);
+  @Test void testScanShapeRefusesProjectBetweenFilterAndScan() throws Exception {
+    // Here the Project DOES renumber: the Filter's input refs index the Project's output, not
+    // the scan's columns, so reading them as column names would name the wrong columns.
+    TableScan scan = mock(TableScan.class);
+    Project project = mock(Project.class);
+    when(project.getInputs()).thenReturn(Collections.<RelNode>singletonList(scan));
+    when(project.getInput(0)).thenReturn(scan);
+    Filter filter = mock(Filter.class);
+    when(filter.getInput()).thenReturn(project);
 
-    // JdbcTableScan with a regular JdbcSchema (not DuckDBJdbcSchema) => null
-    JdbcTableScan scan = mock(JdbcTableScan.class);
-    JdbcTable table = mock(JdbcTable.class);
-    JdbcSchema schema = mock(JdbcSchema.class);
+    assertNull(resolveScanShape(filter));
+  }
 
-    // Access the public field directly
-    java.lang.reflect.Field tableField = JdbcTableScan.class.getDeclaredField("jdbcTable");
-    tableField.setAccessible(true);
-    tableField.set(scan, table);
+  @Test void testScanShapeRefusesStackedFilters() throws Exception {
+    TableScan scan = mock(TableScan.class);
+    Filter inner = mock(Filter.class);
+    when(inner.getInput()).thenReturn(scan);
+    Filter outer = mock(Filter.class);
+    when(outer.getInput()).thenReturn(inner);
 
-    java.lang.reflect.Field schemaField = JdbcTable.class.getDeclaredField("jdbcSchema");
-    schemaField.setAccessible(true);
-    schemaField.set(table, schema);
+    assertNull(resolveScanShape(outer));
+  }
 
-    Object result = m.invoke(DuckDBIcebergCountStarRule.INSTANCE, scan);
-    assertNull(result);
+  @Test void testScanShapeRefusesJoin() throws Exception {
+    // A join predicate becomes the join condition rather than a Filter, so only the whitelist
+    // stops a per-table row count from answering COUNT(*) over a join.
+    TableScan left = mock(TableScan.class);
+    TableScan right = mock(TableScan.class);
+    Join join = mock(Join.class);
+    when(join.getInputs()).thenReturn(ImmutableList.<RelNode>of(left, right));
+
+    assertNull(resolveScanShape(join));
+  }
+
+  @Test void testScanShapeRefusesSort() throws Exception {
+    // A Sort with a fetch/offset truncates the row count.
+    TableScan scan = mock(TableScan.class);
+    Sort sort = mock(Sort.class);
+    when(sort.getInputs()).thenReturn(Collections.<RelNode>singletonList(scan));
+    when(sort.getInput()).thenReturn(scan);
+
+    assertNull(resolveScanShape(sort));
+  }
+
+  @Test void testScanShapeRefusesUnknownNode() throws Exception {
+    // An operator the whitelist has never heard of must stop the rule, not default to safe.
+    RelNode unknown = mock(RelNode.class);
+    when(unknown.getInputs()).thenReturn(Collections.<RelNode>emptyList());
+
+    assertNull(resolveScanShape(unknown));
   }
 
   // ========== onMatch: input has no table scan ==========
@@ -282,21 +286,36 @@ class DuckDBIcebergCountStarRuleDeepCoverageTest {
     verify(call, never()).transformTo(any(RelNode.class));
   }
 
-  // ========== createCountStarValues via reflection ==========
-
-  @Test void testCreateCountStarValuesNullOnException() throws Exception {
-    Method m =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("createCountStarValues", Aggregate.class, long.class);
-    m.setAccessible(true);
-
-    // If cluster/typeFactory is null, should return null gracefully
+  @Test void testOnMatchNonDuckDbScan() {
+    // A scan that is not DuckDB-backed is the ordinary case for this rule, which is registered
+    // on every Aggregate: it must decline quietly, not throw.
+    RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate agg = mock(Aggregate.class);
-    RelOptCluster cluster = mock(RelOptCluster.class);
-    when(agg.getCluster()).thenReturn(cluster);
-    when(cluster.getRexBuilder()).thenThrow(new NullPointerException("test"));
+    when(call.rel(0)).thenReturn(agg);
 
-    RelNode result =
-        (RelNode) m.invoke(DuckDBIcebergCountStarRule.INSTANCE, agg, 42L);
-    assertNull(result, "Should return null on exception");
+    TableScan scan = mock(TableScan.class);
+    org.apache.calcite.plan.RelOptTable relOptTable =
+        mock(org.apache.calcite.plan.RelOptTable.class);
+    when(relOptTable.getQualifiedName()).thenReturn(ImmutableList.of("cftc", "cftc_trades"));
+    when(scan.getTable()).thenReturn(relOptTable);
+    when(agg.getInput()).thenReturn(scan);
+
+    DuckDBIcebergCountStarRule.INSTANCE.onMatch(call);
+    verify(call, never()).transformTo(any(RelNode.class));
+  }
+
+  // ========== helpers ==========
+
+  private static Object resolveScanShape(RelNode node) throws Exception {
+    Method m =
+        DuckDBIcebergCountStarRule.class.getDeclaredMethod("resolveScanShape", RelNode.class);
+    m.setAccessible(true);
+    return m.invoke(DuckDBIcebergCountStarRule.INSTANCE, node);
+  }
+
+  private static Object field(Object shape, String name) throws Exception {
+    java.lang.reflect.Field f = shape.getClass().getDeclaredField(name);
+    f.setAccessible(true);
+    return f.get(shape);
   }
 }

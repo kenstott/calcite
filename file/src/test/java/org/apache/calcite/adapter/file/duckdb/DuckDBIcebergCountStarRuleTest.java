@@ -147,6 +147,43 @@ public class DuckDBIcebergCountStarRuleTest {
   }
 
   /**
+   * A filtered COUNT(*) on a table with no Iceberg metadata must be counted, not answered.
+   *
+   * <p>The rule matches a Filter sitting on a scan so it can answer partition predicates from
+   * Iceberg manifests. Nothing here is Iceberg-backed, so there is no partition tuple to settle
+   * the predicate with: the only correct outcome is DuckDB counting the matching rows.
+   */
+  @Test public void testFilteredCountStarWithoutIcebergMetadata() throws Exception {
+    String query =
+        "SELECT COUNT(*) FROM files.\"iceberg_count_test\""
+            + " WHERE \"metric_name\" = 'Metric0'";
+
+    try (Statement stmt = calciteConn.createStatement();
+         ResultSet rs = stmt.executeQuery(query)) {
+      assertTrue(rs.next(), "Should have a result row");
+      // 400 rows cycling through 8 metric names: exactly 50 are Metric0. A rule that answered
+      // from the table total instead would return 400.
+      assertEquals(50, rs.getLong(1),
+          "Filtered COUNT(*) must count the matching rows, not the whole table");
+    }
+  }
+
+  /**
+   * The same for a predicate that matches nothing: the answer is 0, never the table total.
+   */
+  @Test public void testFilteredCountStarMatchingNoRows() throws Exception {
+    String query =
+        "SELECT COUNT(*) FROM files.\"iceberg_count_test\""
+            + " WHERE \"metric_name\" = 'NoSuchMetric'";
+
+    try (Statement stmt = calciteConn.createStatement();
+         ResultSet rs = stmt.executeQuery(query)) {
+      assertTrue(rs.next(), "Should have a result row");
+      assertEquals(0, rs.getLong(1));
+    }
+  }
+
+  /**
    * Verify the rule INSTANCE is properly initialized.
    */
   @Test public void testRuleInstanceExists() throws Exception {

@@ -29,6 +29,12 @@ dependencies {
     // directly (FileSchema.createArrowTable) — not for ParquetTable, which file/ never uses;
     // it has its own independent Parquet support (adapter.file.table.*).
     api(project(":arrow"))
+    // Babel's parser, not core's, reads the SQL of a DuckDB view. Core's parser reserves words
+    // that are ordinary column names in a lake -- `year` and `month` are partition columns on
+    // several govdata tables -- so it cannot read the very views the COUNT(*) rewrite exists for.
+    // Babel is built to parse foreign-dialect SQL, which a DuckDB view definition is.
+    implementation(project(":babel"))
+
     api("org.checkerframework:checker-qual")
 
     implementation("com.google.guava:guava")

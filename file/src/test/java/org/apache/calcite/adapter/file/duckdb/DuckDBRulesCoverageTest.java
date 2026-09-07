@@ -149,70 +149,51 @@ public class DuckDBRulesCoverageTest {
   // DuckDBIcebergCountStarRule - findTableScan (via reflection)
   // ====================================================================
 
-  @Test void testIcebergFindTableScanNull() throws Exception {
-    Method method =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    method.setAccessible(true);
-
-    Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, (RelNode) null);
-    assertNull(result);
+  @Test void testIcebergFindTableScanNull() {
+    assertNull(IcebergScanResolver.findTableScan(null, true));
   }
 
-  @Test void testIcebergFindTableScanDirectMatch() throws Exception {
-    Method method =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    method.setAccessible(true);
-
+  @Test void testIcebergFindTableScanDirectMatch() {
     TableScan mockScan = mock(TableScan.class);
-    Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, mockScan);
-    assertEquals(mockScan, result);
+    assertEquals(mockScan, IcebergScanResolver.findTableScan(mockScan, true));
   }
 
-  @Test void testIcebergFindTableScanInInputTree() throws Exception {
-    Method method =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    method.setAccessible(true);
-
-    // Create a relay node that has a TableScan as input
+  @Test void testIcebergFindTableScanInInputTree() {
     TableScan mockScan = mock(TableScan.class);
     RelNode parent = mock(RelNode.class);
     when(parent.getInputs()).thenReturn(Collections.singletonList((RelNode) mockScan));
 
-    Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, parent);
-    assertEquals(mockScan, result);
+    assertEquals(mockScan, IcebergScanResolver.findTableScan(parent, true));
   }
 
-  @Test void testIcebergFindTableScanNoMatch() throws Exception {
-    Method method =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("findTableScan", RelNode.class);
-    method.setAccessible(true);
-
+  @Test void testIcebergFindTableScanNoMatch() {
     RelNode mockNode = mock(RelNode.class);
     when(mockNode.getInputs()).thenReturn(Collections.<RelNode>emptyList());
 
-    Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, mockNode);
-    assertNull(result);
+    assertNull(IcebergScanResolver.findTableScan(mockNode, true));
+  }
+
+  @Test void testIcebergFindTableScanStopsAtFilter() {
+    // Whole-table answers (a cached row count, a column cardinality) describe the unfiltered
+    // table, so callers that need one ask the resolver to stop at a predicate.
+    TableScan mockScan = mock(TableScan.class);
+    org.apache.calcite.rel.core.Filter filter = mock(org.apache.calcite.rel.core.Filter.class);
+    when(filter.getInputs()).thenReturn(Collections.singletonList((RelNode) mockScan));
+
+    assertNull(IcebergScanResolver.findTableScan(filter, true));
+    assertEquals(mockScan, IcebergScanResolver.findTableScan(filter, false));
   }
 
   // ====================================================================
-  // DuckDBIcebergCountStarRule - getDuckDBSchema (via reflection)
+  // IcebergScanResolver - duckDbSchema
   // ====================================================================
 
-  @Test void testIcebergGetDuckDBSchemaNonJdbcScan() throws Exception {
-    Method method =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
-    method.setAccessible(true);
-
+  @Test void testIcebergGetDuckDBSchemaNonJdbcScan() {
     TableScan mockScan = mock(TableScan.class);
-    Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, mockScan);
-    assertNull(result);
+    assertNull(IcebergScanResolver.duckDbSchema(mockScan));
   }
 
   @Test void testIcebergGetDuckDBSchemaJdbcScanNonDuckDB() throws Exception {
-    Method method =
-        DuckDBIcebergCountStarRule.class.getDeclaredMethod("getDuckDBSchema", TableScan.class);
-    method.setAccessible(true);
-
     JdbcTableScan mockJdbcScan = mock(JdbcTableScan.class);
     JdbcTable mockJdbcTable = mock(JdbcTable.class);
     JdbcSchema mockJdbcSchema = mock(JdbcSchema.class);
@@ -226,27 +207,27 @@ public class DuckDBRulesCoverageTest {
     schemaField.setAccessible(true);
     schemaField.set(mockJdbcTable, mockJdbcSchema);
 
-    Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, mockJdbcScan);
-    assertNull(result);
+    assertNull(IcebergScanResolver.duckDbSchema(mockJdbcScan));
   }
 
   // ====================================================================
   // DuckDBIcebergCountStarRule - createCountStarValues (via reflection)
   // ====================================================================
 
-  @Test void testIcebergCreateCountStarValuesWithPartialMock() throws Exception {
+  @Test void testIcebergCreateCountStarValuesSurfacesAFailure() throws Exception {
     Method method =
         DuckDBIcebergCountStarRule.class.getDeclaredMethod("createCountStarValues", Aggregate.class, long.class);
     method.setAccessible(true);
 
-    // With a partial mock cluster that cannot provide traitSetOf, the method
-    // catches the exception internally and returns null
+    // Building a VALUES node from a BIGINT literal cannot fail against a real cluster, so a
+    // failure here means something is genuinely wrong with the plan being rewritten. It is
+    // raised, not swallowed into a null that would look like an ordinary "rule declined".
     Aggregate mockAggregate = createMockAggregateWithCluster(100L);
 
-    Object result = method.invoke(DuckDBIcebergCountStarRule.INSTANCE, mockAggregate, 100L);
-    // The method catches NPE from EnumerableValues.create due to mock cluster
-    // and returns null (logged as error)
-    assertNull(result);
+    java.lang.reflect.InvocationTargetException raised =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(DuckDBIcebergCountStarRule.INSTANCE, mockAggregate, 100L));
+    assertNotNull(raised.getCause());
   }
 
   // ====================================================================

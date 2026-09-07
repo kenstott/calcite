@@ -84,6 +84,17 @@ public final class DuckDBPendingViews {
   private static final ConcurrentHashMap<String, Set<String>> SQL_VIEW_NAMES =
       new ConcurrentHashMap<>();
 
+  /**
+   * Defining SQL of every YAML view, per database path, keyed by {@code schema.name} lower-cased.
+   *
+   * <p>Separate from {@link #PENDING}, which a view leaves the moment it is created in DuckDB.
+   * This map is the durable record: it is what lets a planner rule ask, at query time, what a view
+   * actually selects — the {@code COUNT(*)} rewrite uses it to see that a view is a partition
+   * filter over an Iceberg table and answer from manifests instead of scanning.
+   */
+  private static final ConcurrentHashMap<String, ConcurrentHashMap<String, String>> SQL_VIEW_DEFS =
+      new ConcurrentHashMap<>();
+
   private DuckDBPendingViews() {}
 
   /** A single deferred view definition. */
@@ -113,9 +124,22 @@ public final class DuckDBPendingViews {
    * Records a SQL view name (from YAML views: section) for a database path.
    * These views are excluded from JDBC metadata (getTables) but remain queryable.
    */
-  static void trackSqlView(String dbPath, String duckdbSchema, String viewName) {
+  static void trackSqlView(String dbPath, String duckdbSchema, String viewName, String viewSql) {
     SQL_VIEW_NAMES.computeIfAbsent(dbPath, k -> ConcurrentHashMap.newKeySet())
         .add(duckdbSchema + "." + viewName);
+    SQL_VIEW_DEFS.computeIfAbsent(dbPath, k -> new ConcurrentHashMap<>())
+        .put(qualified(duckdbSchema, viewName), viewSql);
+  }
+
+  /**
+   * The defining SQL of a YAML view, or null when the name is not one.
+   *
+   * <p>Unlike {@link #createOnDemand} this never touches DuckDB: it answers from what schema
+   * initialization recorded, so a planner rule can inspect a view without creating it.
+   */
+  public static String sqlViewDefinition(String dbPath, String duckdbSchema, String viewName) {
+    ConcurrentHashMap<String, String> defs = SQL_VIEW_DEFS.get(dbPath);
+    return defs == null ? null : defs.get(qualified(duckdbSchema, viewName));
   }
 
   /**
