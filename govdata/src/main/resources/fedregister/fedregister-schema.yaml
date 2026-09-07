@@ -106,7 +106,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 477551
-      checkedAt: "2026-09-05T14:47:29Z"
+      checkedAt: "2026-09-07T14:24:23Z"
     partitions: *year_month_partitions
     comment: >
       All Federal Register documents partitioned by publication year and month.
