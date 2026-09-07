@@ -861,13 +861,16 @@ FROM (
   WHERE enrollment IS NOT NULL AND enrollment NOT IN (-1, -2, -3, -9)
 );
 
--- library_outlets: outlet_type must be one of the four documented PLS codes
+-- library_outlets: outlet_type must be one of the four documented PLS codes, plus the
+-- single confirmed source anomaly 'MO' (library_id='MO0004-037' "Library By Mail",
+-- year=2019 only — verbatim in IMLS's own FY2019 C_OUT_TY column, not a mapping error
+-- on our side; see the outlet_type column comment in edu-schema.yaml for detail).
 INSERT INTO dq_results
 SELECT 'edu', 'library_outlets', 'outlet_type_distribution',
   CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
   CAST(bad AS VARCHAR), '0', vals
 FROM (
-  SELECT SUM(CASE WHEN outlet_type NOT IN ('CE','BR','BS','BM') THEN 1 ELSE 0 END) AS bad,
+  SELECT SUM(CASE WHEN outlet_type NOT IN ('CE','BR','BS','BM','MO') THEN 1 ELSE 0 END) AS bad,
          STRING_AGG(DISTINCT outlet_type, ', ' ORDER BY outlet_type) AS vals
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true)
   WHERE outlet_type IS NOT NULL
