@@ -600,7 +600,9 @@ partitionedTables:
       FBI CDE use of force data by state and year, flattened into generic
       section/category/label rows with a single numeric value that may be a count
       or a percentage (see the value column). One row per state + year + section
-      + category + label.
+      + category + label. The CDE API rejects years before 2019 outright ("Year
+      field cannot be less than 2019"); the schema's 2010 floor is shared with
+      every CDE table but this dataset has no years before 2019 to backfill.
 
     dimensions:
       type:
@@ -1564,7 +1566,9 @@ partitionedTables:
     comment: >
       FBI CDE Law Enforcement Officers Killed and Assaulted (LEOKA) data.
       Totals for officers killed (feloniously and accidentally) and assaulted
-      in the line of duty, by state and year.
+      in the line of duty, by state and year. The CDE API returns a null chart
+      for every state for years before 2020; the schema's 2010 floor is shared
+      with every CDE table but this dataset has no years before 2020 to backfill.
 
     dimensions:
       type:
