@@ -1178,7 +1178,7 @@ partitionedTables:
       distinctYears: 2
       contiguous: true
       rowCount: 14298351
-      checkedAt: "2026-09-05T14:49:49Z"
+      checkedAt: "2026-09-07T14:28:45Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1314,7 +1314,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 26436
-      checkedAt: "2026-09-05T14:49:50Z"
+      checkedAt: "2026-09-07T14:28:47Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
