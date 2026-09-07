@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.govdata.geo;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
@@ -28,6 +29,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -109,12 +111,76 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
 
       List<Map<String, Object>> result = parseTsvFile(extractedFile, tableName, year);
       LOGGER.info("Parsed {} records from Gazetteer for table {}", result.size(), tableName);
+
+      // The Gazetteer files themselves never carry population/housing_units — they are a
+      // geometry/boundary reference product only (POP/HU columns are absent from the source
+      // TSV). Enrich from ACS 5-year estimates, joined by ZCTA or place FIPS code.
+      if ("gazetteer_places".equals(tableName) || "gazetteer_zctas".equals(tableName)) {
+        enrichWithAcsPopulationHousing(result, tableName, Integer.parseInt(year));
+      }
+
       return result.iterator();
 
     } finally {
       if (tempDir != null) {
         deleteDirectory(tempDir);
       }
+    }
+  }
+
+  /**
+   * Enriches parsed Gazetteer records with total population and total housing units from
+   * ACS 5-year estimates, joined by the record's own ZCTA or place FIPS code — the
+   * Gazetteer source has no such columns to carry through.
+   *
+   * <p>Leaves population/housing_units {@code null} (not zero, not fetched-and-guessed)
+   * when {@code CENSUS_API_KEY} is unset or the ACS call fails, or per-row when a given
+   * geography has no ACS match — the same "correctly stays NULL rather than a guess"
+   * contract used by the county_fips crosswalk on {@code energy.eia_power_plants}.
+   */
+  private void enrichWithAcsPopulationHousing(List<Map<String, Object>> records,
+      String tableName, int year) {
+    if (records.isEmpty()) {
+      return;
+    }
+
+    String censusApiKey = VariableResolver.resolveEnvVars("${CENSUS_API_KEY:}");
+    if (censusApiKey.isEmpty()) {
+      LOGGER.warn("CENSUS_API_KEY not set — {} population/housing_units left NULL for "
+          + "year={} (Gazetteer files do not publish population data themselves)",
+          tableName, year);
+      return;
+    }
+
+    String acsCacheDir = storageProvider().resolvePath(cacheBaseDir, "geo/acs_population_housing");
+    CensusApiClient censusClient = new CensusApiClient(censusApiKey, acsCacheDir,
+        Collections.singletonList(year), storageProvider(), year, year);
+
+    String keyField = "gazetteer_zctas".equals(tableName) ? "zcta" : "place_fips";
+    try {
+      Map<String, int[]> popHousing = "gazetteer_zctas".equals(tableName)
+          ? censusClient.getZctaPopulationHousing(year)
+          : censusClient.getPlacePopulationHousing(year);
+
+      int matched = 0;
+      for (Map<String, Object> record : records) {
+        Object keyValue = record.get(keyField);
+        if (keyValue == null) {
+          continue;
+        }
+        int[] popHu = popHousing.get(keyValue.toString());
+        if (popHu != null) {
+          record.put("population", popHu[0]);
+          record.put("housing_units", popHu[1]);
+          matched++;
+        }
+      }
+      LOGGER.info("Enriched {}/{} {} records with ACS population/housing_units (year={})",
+          matched, records.size(), tableName, year);
+    } catch (IOException e) {
+      LOGGER.warn("Failed to fetch ACS population/housing for {} year={}: {} — "
+          + "population/housing_units left NULL for this vintage", tableName, year,
+          e.getMessage());
     }
   }
 

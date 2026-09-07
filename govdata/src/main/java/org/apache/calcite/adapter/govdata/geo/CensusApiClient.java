@@ -999,6 +999,125 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
   }
 
   /**
+   * Gets total population (B01003_001E) and total housing units (B25001_001E) from ACS
+   * 5-year estimates for every ZIP Code Tabulation Area nationwide, for the given year.
+   *
+   * <p>Falls back to progressively earlier ACS vintages when the requested year is not
+   * yet published — ACS 5-year estimates lag their reference year, so a recent vintage
+   * can be requested before the matching release exists.
+   *
+   * @param year ACS vintage year to request first
+   * @return map of 5-digit ZCTA code to a 2-element {@code [population, housingUnits]}
+   *     array; omits any ZCTA the API returns a null cell for
+   * @throws IOException if no vintage within the fallback window returns a response
+   */
+  public Map<String, int[]> getZctaPopulationHousing(int year) throws IOException {
+    return fetchPopulationHousingByGeography(
+        year, "zip%20code%20tabulation%20area:*", "zip code tabulation area", null);
+  }
+
+  /**
+   * Gets total population and total housing units from ACS 5-year estimates for every
+   * incorporated place and census designated place nationwide, for the given year (same
+   * vintage fallback as {@link #getZctaPopulationHousing}).
+   *
+   * @param year ACS vintage year to request first
+   * @return map of 7-digit place FIPS (2-digit state FIPS + 5-digit place code) to
+   *     {@code [population, housingUnits]}
+   * @throws IOException if no vintage within the fallback window returns a response
+   */
+  public Map<String, int[]> getPlacePopulationHousing(int year) throws IOException {
+    return fetchPopulationHousingByGeography(year, "place:*&in=state:*", "place", "state");
+  }
+
+  /**
+   * Shared implementation for {@link #getZctaPopulationHousing} and
+   * {@link #getPlacePopulationHousing}: requests total population and total housing
+   * units at the given geography filter, trying the requested year and then up to two
+   * earlier ACS vintages before giving up.
+   */
+  private Map<String, int[]> fetchPopulationHousingByGeography(int year, String geography,
+      String geoIdColumn, String prefixColumn) throws IOException {
+    IOException lastException = null;
+    for (int tryYear = year; tryYear >= year - 2; tryYear--) {
+      try {
+        JsonNode response = getAcsData(tryYear, "B01003_001E,B25001_001E", geography);
+        Map<String, int[]> result =
+            parsePopulationHousingResponse(response, geoIdColumn, prefixColumn);
+        if (tryYear != year) {
+          LOGGER.info("ACS population/housing for '{}' not published for year {} — used {} "
+              + "vintage instead", geography, year, tryYear);
+        }
+        return result;
+      } catch (IOException e) {
+        lastException = e;
+        LOGGER.debug("ACS vintage {} unavailable for geography '{}': {}", tryYear, geography,
+            e.getMessage());
+      }
+    }
+    throw new IOException(
+        String.format("No ACS population/housing vintage available for geography '%s' "
+            + "within years %d-%d", geography, year - 2, year), lastException);
+  }
+
+  /**
+   * Parses a Census API JSON array response of the form
+   * {@code [[header...], [B01003_001E, B25001_001E, geoIdColumn[, prefixColumn]], ...]}
+   * into a map keyed by geography code — {@code prefixColumn + geoIdColumn} when
+   * {@code prefixColumn} is given (matching a Gazetteer place_fips), or {@code geoIdColumn}
+   * alone otherwise (matching a Gazetteer zcta).
+   */
+  // Package-private (not private) so CensusApiClientPopulationHousingTest can exercise this
+  // pure parsing logic directly, without a live Census API call.
+  Map<String, int[]> parsePopulationHousingResponse(JsonNode response,
+      String geoIdColumn, String prefixColumn) {
+    Map<String, int[]> result = new HashMap<>();
+    if (response == null || !response.isArray() || response.size() < 2) {
+      return result;
+    }
+
+    JsonNode header = response.get(0);
+    int popIdx = -1;
+    int huIdx = -1;
+    int geoIdx = -1;
+    int prefixIdx = -1;
+    for (int i = 0; i < header.size(); i++) {
+      String col = header.get(i).asText();
+      if ("B01003_001E".equals(col)) {
+        popIdx = i;
+      } else if ("B25001_001E".equals(col)) {
+        huIdx = i;
+      } else if (geoIdColumn.equals(col)) {
+        geoIdx = i;
+      } else if (prefixColumn != null && prefixColumn.equals(col)) {
+        prefixIdx = i;
+      }
+    }
+    if (popIdx < 0 || huIdx < 0 || geoIdx < 0 || (prefixColumn != null && prefixIdx < 0)) {
+      LOGGER.warn("Unexpected ACS response header for population/housing lookup: {}", header);
+      return result;
+    }
+
+    for (int i = 1; i < response.size(); i++) {
+      JsonNode row = response.get(i);
+      String pop = row.get(popIdx).asText();
+      String hu = row.get(huIdx).asText();
+      if ("null".equals(pop) || "null".equals(hu)) {
+        continue;
+      }
+      String geoId = row.get(geoIdx).asText();
+      String key = prefixIdx >= 0 ? row.get(prefixIdx).asText() + geoId : geoId;
+      try {
+        result.put(key, new int[] {Integer.parseInt(pop), Integer.parseInt(hu)});
+      } catch (NumberFormatException e) {
+        LOGGER.debug("Skipping non-numeric ACS population/housing value for {}: pop={} hu={}",
+            key, pop, hu);
+      }
+    }
+    return result;
+  }
+
+  /**
    * Remap PEP variables to their ACS equivalents.
    *
    * @param pepVariables Comma-separated PEP variable names (e.g., "POP,POPEST")

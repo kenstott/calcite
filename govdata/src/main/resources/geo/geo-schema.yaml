@@ -2674,12 +2674,16 @@ partitionedTables:
       checkedAt: "2026-09-05T14:48:48Z"
     comment: >
       Census Bureau Gazetteer file for incorporated places and CDPs: place FIPS code,
-      name, place type, land/water area in square miles, centroid latitude/longitude,
-      population estimate, and housing unit count, one row per place per TIGER vintage
-      year — currently starting 2012 in production, not 2010 like the boundary tables
-      in this schema (geo.places etc.); see observedCoverage below for the real floor
-      rather than assuming the two match. Unlike geo.places (boundary polygons only, no population),
-      this table carries population and housing_units but no WKT geometry.
+      name, place type, land/water area in square miles, and centroid latitude/longitude,
+      one row per place per TIGER vintage year — currently starting 2012 in production,
+      not 2010 like the boundary tables in this schema (geo.places etc.); see
+      observedCoverage below for the real floor rather than assuming the two match.
+      Unlike geo.places (boundary polygons only), this table also carries population
+      and housing_units — but the Gazetteer file itself is a geometry/boundary product
+      with no such columns, so both are enriched separately from ACS 5-year estimates
+      (B01003_001E, B25001_001E), joined by place FIPS; a row with no ACS match, or a
+      vintage more than 2 years newer than the latest published ACS 5-year release,
+      correctly carries NULL rather than a guessed value.
 
     columns:
       - name: place_fips
@@ -2714,11 +2718,15 @@ partitionedTables:
       - name: population
         type: int
         nullable: true
-        comment: Population estimate
+        comment: >
+          Total population (ACS 5-year estimate B01003_001E), joined by place_fips;
+          not sourced from the Gazetteer file itself
       - name: housing_units
         type: int
         nullable: true
-        comment: Housing unit count
+        comment: >
+          Total housing units (ACS 5-year estimate B25001_001E), joined by place_fips;
+          not sourced from the Gazetteer file itself
 
     partitions: *crosswalk_partitions
 
@@ -2772,13 +2780,16 @@ partitionedTables:
       checkedAt: "2026-09-05T14:48:49Z"
     comment: >
       Census Bureau Gazetteer file for ZIP Code Tabulation Areas: ZCTA code, land/water
-      area in square miles, centroid latitude/longitude, population estimate, and
-      housing unit count, one row per ZCTA per TIGER vintage year — currently starting
-      2012 in production; see observedCoverage below for the real floor rather than
-      assuming it matches the other TIGER boundary tables' 2010 start.
-      Unlike geo.zctas (boundary polygons only, no population) or geo.zcta_ref (static,
-      non-vintaged reference), this table carries vintage-specific population and
-      housing_units.
+      area in square miles, and centroid latitude/longitude, one row per ZCTA per TIGER
+      vintage year — currently starting 2012 in production; see observedCoverage below
+      for the real floor rather than assuming it matches the other TIGER boundary
+      tables' 2010 start. Unlike geo.zctas (boundary polygons only) or geo.zcta_ref
+      (static, non-vintaged reference), this table also carries population and
+      housing_units — but the Gazetteer file itself is a geometry/boundary product with
+      no such columns, so both are enriched separately from ACS 5-year estimates
+      (B01003_001E, B25001_001E), joined by ZCTA code; a row with no ACS match, or a
+      vintage more than 2 years newer than the latest published ACS 5-year release,
+      correctly carries NULL rather than a guessed value.
 
     columns:
       - name: zcta
@@ -2804,11 +2815,15 @@ partitionedTables:
       - name: population
         type: int
         nullable: true
-        comment: Population estimate
+        comment: >
+          Total population (ACS 5-year estimate B01003_001E), joined by zcta; not
+          sourced from the Gazetteer file itself
       - name: housing_units
         type: int
         nullable: true
-        comment: Housing unit count
+        comment: >
+          Total housing units (ACS 5-year estimate B25001_001E), joined by zcta; not
+          sourced from the Gazetteer file itself
 
     partitions: *crosswalk_partitions
 
