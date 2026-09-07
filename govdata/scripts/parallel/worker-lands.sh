@@ -136,10 +136,19 @@ case "$MODE" in
     # freshness/skip-if-materialized logic makes a redundant per-year-slot touch a fast no-op.
     run_lands_model "lands-historical-va-facilities" \
       '"va_facilities"' "$START" "$END"
+    # blm_field_offices: same "once"-shaped static table as va_facilities above, same reason it
+    # must also run on this year-range path unconditionally (not gated on MODE="historical")  --
+    # force-reprocess.sh always computes a numeric year-range slot for lands, never the literal
+    # "historical" string, so a scoped `force-reprocess.sh --schema lands --tables
+    # blm_field_offices` would otherwise never reach it (confirmed live: dispatched
+    # lands-historical-timber instead and touched blm_field_offices not at all).
+    run_lands_model "lands-historical-blm-field-offices" \
+      '"blm_field_offices"' "$START" "$END"
     if [ "$MODE" = "historical" ]; then
-      # Full manual/`all` backfill: also do the non-period tables (the per-year pool slots do not).
+      # Full manual/`all` backfill: also do the remaining non-period tables (the per-year pool
+      # slots do not; blm_field_offices is now covered unconditionally above).
       run_lands_model "lands-historical-static" \
-        '"national_forests", "nps_units", "blm_field_offices", "padus_federal_fee_lands"' "$START" "$END"
+        '"national_forests", "nps_units", "padus_federal_fee_lands"' "$START" "$END"
       run_lands_model "lands-historical-inventory" \
         '"forest_inventory"' "$START" "$END"
       run_lands_model "lands-historical-metrics" \
