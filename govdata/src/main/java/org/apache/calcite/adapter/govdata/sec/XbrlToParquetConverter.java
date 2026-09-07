@@ -6698,9 +6698,20 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Maximum plausible number of years between a document's extracted fiscal period-end date and
+   * its actual SEC filing date. SEC deadlines require 10-K/10-Q filings within months of period
+   * end, never years, so a wider gap means the extracted date came from an unreliable signal (a
+   * forward-looking XBRL context, a mis-tagged comparative period) rather than this filing's own
+   * reporting period, and must not be trusted to choose a {@code year=} directory partition.
+   */
+  private static final int MAX_PERIOD_END_FILING_YEAR_GAP = 2;
+
+  /**
    * Determine the appropriate year for partitioning based on filing type.
-   * For 10-K/10-Q and their amendments, use fiscal year (from period end date).
-   * For all other filings, use actual filing year (SEC submission date).
+   * For 10-K/10-Q and their amendments, use fiscal year (from period end date), but only when
+   * that period end date is plausibly this filing's own reporting period -- see
+   * {@link #plausiblePeriodEndYear}. For all other filings, and whenever no plausible period-end
+   * date is available, use actual filing year (SEC submission date).
    *
    * @param filingType SEC form type (e.g., "10-K", "10-Q/A")
    * @param actualFilingDate SEC submission date (YYYY-MM-DD)
@@ -6717,18 +6728,62 @@ public class XbrlToParquetConverter implements FileConverter {
         || "10KSB".equals(normalizedType) || "10KSBA".equals(normalizedType)
         || "10QSB".equals(normalizedType) || "10QSBA".equals(normalizedType)) {
       // Prefer periodEndDate passed from caller (extracted by extractPeriodEndDate)
-      if (periodEndDate != null && periodEndDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
-        return periodEndDate.substring(0, 4);
+      String year = plausiblePeriodEndYear(periodEndDate, actualFilingDate);
+      if (year != null) {
+        return year;
       }
+      if (periodEndDate != null) {
+        LOGGER.warn("Period end date {} is implausibly far from filing date {} for a {} filing"
+            + " -- using filing year for year= partitioning instead", periodEndDate,
+            actualFilingDate, filingType);
+      }
+
       // Fall back to document extraction
       String docPeriodEnd = extractPeriodEndDateFromDocument(doc);
-      if (docPeriodEnd != null && docPeriodEnd.matches("\\d{4}-\\d{2}-\\d{2}")) {
-        return docPeriodEnd.substring(0, 4);
+      year = plausiblePeriodEndYear(docPeriodEnd, actualFilingDate);
+      if (year != null) {
+        return year;
+      }
+      if (docPeriodEnd != null) {
+        LOGGER.warn("Document-extracted period end date {} is implausibly far from filing date {}"
+            + " for a {} filing -- using filing year for year= partitioning instead",
+            docPeriodEnd, actualFilingDate, filingType);
       }
     }
 
-    // For all other filing types, use actual filing year (SEC submission date)
+    // For all other filing types, or when no plausible period-end date was found, use actual
+    // filing year (SEC submission date)
     return actualFilingDate.substring(0, 4);
+  }
+
+  /**
+   * Returns {@code candidateDate}'s year (YYYY) when it is within
+   * {@value #MAX_PERIOD_END_FILING_YEAR_GAP} years of {@code actualFilingDate}'s year, or
+   * {@code null} when it is missing, malformed, or implausibly far away -- see
+   * {@link #MAX_PERIOD_END_FILING_YEAR_GAP}. Package-private for direct unit testing.
+   */
+  static String plausiblePeriodEndYear(String candidateDate, String actualFilingDate) {
+    if (candidateDate == null || !candidateDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+      return null;
+    }
+    int filingYear = parseYearOrDefault(actualFilingDate, -1);
+    int candidateYear = Integer.parseInt(candidateDate.substring(0, 4));
+    if (filingYear >= 0 && Math.abs(candidateYear - filingYear) > MAX_PERIOD_END_FILING_YEAR_GAP) {
+      return null;
+    }
+    return candidateDate.substring(0, 4);
+  }
+
+  /** Parses the YYYY prefix of an ISO date, or {@code defaultValue} if absent/unparseable. */
+  private static int parseYearOrDefault(String isoDate, int defaultValue) {
+    if (isoDate == null || isoDate.length() < 4) {
+      return defaultValue;
+    }
+    try {
+      return Integer.parseInt(isoDate.substring(0, 4));
+    } catch (NumberFormatException e) {
+      return defaultValue;
+    }
   }
 
   /**
