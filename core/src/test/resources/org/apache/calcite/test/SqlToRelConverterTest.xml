@@ -1120,6 +1120,29 @@ LogicalAggregate(group=[{}], EXPR$0=[MAX($0)])
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testCorrelatedSubqueryWithDerivedTableProjectingFewerColumns">
+    <Resource name="sql">
+      <![CDATA[select e.deptno, e.ename,
+  (select count(*) from dept d where d.deptno = e.deptno) as dept_count
+from (select deptno, ename from emp) e]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], ENAME=[$1], DEPT_COUNT=[CASE(IS NULL($3), 0:BIGINT, $3)])
+  LogicalJoin(condition=[=($0, $2)], joinType=[left])
+    LogicalProject(DEPTNO=[$7], ENAME=[$1])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+    LogicalProject(DEPTNO=[$0], EXPR$0=[CASE(IS NOT NULL($2), $2, 0)])
+      LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $1)], joinType=[left])
+        LogicalAggregate(group=[{0}])
+          LogicalProject(DEPTNO=[$7], ENAME=[$1])
+            LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+        LogicalAggregate(group=[{0}], EXPR$0=[COUNT()])
+          LogicalProject(DEPTNO=[$0], $f0=[0])
+            LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testCorrelationAggregateGroupSets">
     <Resource name="sql">
       <![CDATA[select sum(e1.empno)

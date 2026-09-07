@@ -4909,7 +4909,30 @@ public class SqlToRelConverter {
       // correlation variables have been normalized in p.r, we should use expressions
       // in p.r instead of the original exprs
       Project project1 = (Project) p.r;
-      r = relBuilder.push(bb.root())
+      // project1.getProjects() are expressions relative to project1's OWN input, which is
+      // not always bb.root(): RelBuilder.project() (used to build "project" above)
+      // transparently merges a new Project into an existing child Project whenever no
+      // correlation id is attached to the call (see RelBuilder.project_()'s "bloat" branch)
+      // -- e.g. when bb.root() is itself a CTE's or derived table's own projection down to
+      // fewer columns than its underlying table. When that merge happened,
+      // project1.getInput() is the grandchild the merged expressions actually reference,
+      // not bb.root(). Reprojecting on bb.root() in that case throws
+      // ArrayIndexOutOfBoundsException out of RelBuilder.project_() as soon as one of
+      // project1's expressions contains a plain field reference past bb.root()'s (narrower)
+      // field count -- exactly the shape of a correlated scalar subquery's own select-list
+      // siblings (ordinary columns carried alongside it) once the subquery's outer relation
+      // is a CTE. Falling back to project1.getInput() only when project1's expressions
+      // actually reference a field beyond bb.root()'s width keeps the common case (e.g. a
+      // correlated subquery whose expression touches no ordinary field of this relation at
+      // all, only correlation variables) exactly as before -- still pushing bb.root(), so an
+      // unrelated, already-merged-away intermediate projection doesn't reappear in the plan.
+      final ImmutableBitSet refs =
+          RelOptUtil.InputFinder.bits(project1.getProjects(), null);
+      final RelNode base =
+          !refs.isEmpty() && refs.length() > bb.root().getRowType().getFieldCount()
+          ? project1.getInput()
+          : bb.root();
+      r = relBuilder.push(base)
           .projectNamed(project1.getProjects(), uniqueFieldNames, true,
               ImmutableSet.of(p.id))
           .build();

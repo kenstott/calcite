@@ -4132,6 +4132,23 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql).withExpand(false).withDecorrelate(false).ok();
   }
 
+  /** Test case for a correlated scalar subquery in a query's select list, alongside
+   * plain column references, where the FROM clause is a derived table (or CTE)
+   * projecting fewer columns than its underlying table. RelBuilder.project() merges
+   * such a derived table's own projection away when building the select list's
+   * Project (its "bloat" branch in project_()), rebasing the select-list expressions
+   * onto the underlying table; convertNonAggregateSelectList's correlation-handling
+   * branch used to always re-project those rebased expressions onto the un-merged,
+   * narrower original relation again, throwing ArrayIndexOutOfBoundsException as soon
+   * as a plain field reference (e.g. e.ename here) exceeded that narrower relation's
+   * field count. Reported against real data as govdata Defect Register D-179. */
+  @Test void testCorrelatedSubqueryWithDerivedTableProjectingFewerColumns() {
+    final String sql = "select e.deptno, e.ename,\n"
+        + "  (select count(*) from dept d where d.deptno = e.deptno) as dept_count\n"
+        + "from (select deptno, ename from emp) e";
+    sql(sql).ok();
+  }
+
   /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-6554">[CALCITE-6554]
    * Nested correlated sub-query in aggregation does not have inner correlation variable bound
