@@ -278,6 +278,33 @@ public class McpServerReservedWordRepairTest {
             quote("SELECT date, close FROM sec.stock_prices"));
     }
 
+    // ── D-206: FROM right after a SELECT * must never be quoted ────────────────
+
+    @Test void doesNotQuoteFromAfterStarWhenAnUnrelatedColumnTripsRepair() {
+        // D-206: FROM is not itself a member of IDENTIFIER_POSITION_TOKENS the way DISTINCT
+        // (D-180) and CAST's type names (D-150) are, so the earlier fixes didn't reach it. But
+        // "*" IS a legitimate identifier-position trigger (e.g. a.*), so a genuine "* FROM"
+        // sequence -- the ordinary tail of any "SELECT foo, * FROM t" -- read FROM as the
+        // identifier the "*" opened, producing invalid SQL: `* "from" t`.
+        //
+        // This never surfaced from a plain SELECT * FROM t, because quoteBareReservedColumns is
+        // only reached once a statement has already failed to parse for some other reason; here
+        // that reason is the genuine bare reserved-word column "state" earlier in the same
+        // select list (confirmed live, same pattern as the other reserved-column repro cases in
+        // this file). The repair walks the entire original statement text, so the unrelated
+        // "* FROM" later in the same query is exposed to the same walk.
+        assertTrue(CANDIDATES.contains("state"), "precondition: state is a column name here");
+        assertEquals("SELECT \"state\", * FROM census.acs1_income",
+            quote("SELECT state, * FROM census.acs1_income"));
+    }
+
+    @Test void stillQuotesAReservedColumnRightAfterStarFrom() {
+        // The fix must not go too far the other way: FROM itself is never quoted, but a genuine
+        // reserved-word column reference elsewhere in the same statement still needs the repair.
+        assertEquals("SELECT * FROM t WHERE \"state\" = 'CA'",
+            quote("SELECT * FROM t WHERE state = 'CA'"));
+    }
+
     // ── LIMIT + FETCH FIRST conflict ─────────────────────────────────────────
 
     @Test void stripsLimitWhenFetchFirstIsAlsoPresent() {

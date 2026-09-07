@@ -4428,6 +4428,26 @@ public class McpServer {
             ",", "(", ".", "=", "<", ">", "+", "-", "*", "/"));
 
     /**
+     * Reserved words that are pure clause syntax and must never be quoted as a column
+     * reference, even though -- unlike {@code DISTINCT} -- none of them is itself a member of
+     * {@link #IDENTIFIER_POSITION_TOKENS}, so the D-180 self-exclusion guard does not reach
+     * them on its own.
+     *
+     * <p>D-206: {@code FROM} sits right after the {@code *} trigger in the ordinary
+     * {@code SELECT * FROM t} shape. {@code *} is (correctly) a legitimate identifier-position
+     * trigger everywhere else (e.g. {@code a.*}, or a genuine multiplication), so a bare
+     * {@code * FROM} sequence read FROM as the identifier the {@code *} opened, producing
+     * {@code SELECT ... * "from" t} -- invalid SQL. This never showed up from a plain
+     * {@code SELECT * FROM t}, because {@link #quoteBareReservedColumns} only runs once a
+     * statement has already failed to parse; it took a statement with a genuine, separate
+     * reserved-word column (D-206 repro: bare {@code state} in the select list) to reach the
+     * repair path at all, at which point the walk covers the entire original statement text and
+     * crosses the unrelated {@code * FROM} later in the same query.
+     */
+    private static final java.util.Set<String> NEVER_IDENTIFIER_KEYWORDS =
+        new java.util.HashSet<>(java.util.Arrays.asList("FROM"));
+
+    /**
      * Double-quotes reserved words used as column references, leaving syntax untouched.
      *
      * <p>Skips string literals and already-quoted names, matches whole words only, and emits
@@ -4533,8 +4553,9 @@ public class McpServer {
                 // itself got quoted into COUNT("distinct" geo_name) -- invalid SQL, since it was
                 // never a candidate column, just an aggregate keyword one token after an opening
                 // paren.
-                boolean isPositionMarkerKeyword =
-                    IDENTIFIER_POSITION_TOKENS.contains(ident.toUpperCase(java.util.Locale.ROOT));
+                String upperIdent = ident.toUpperCase(java.util.Locale.ROOT);
+                boolean isPositionMarkerKeyword = IDENTIFIER_POSITION_TOKENS.contains(upperIdent)
+                    || NEVER_IDENTIFIER_KEYWORDS.contains(upperIdent);
                 // D-150: AS directly inside a still-open CAST( ... ) names the target TYPE, not
                 // an identifier -- see the class doc above for why this can't be a static
                 // exclusion list the way isPositionMarkerKeyword is.
@@ -4557,7 +4578,7 @@ public class McpServer {
                     out.append(ident);
                 }
                 prevPrev = prev;
-                prev = ident.toUpperCase(java.util.Locale.ROOT);
+                prev = upperIdent;
                 i = j;
                 continue;
             }
