@@ -2097,12 +2097,55 @@ public abstract class SqlImplementor {
           return true;
         }
 
+        // A window function's result can never be referenced as a GROUP BY key in SQL --
+        // window functions are evaluated after grouping, in every dialect, so re-emitting
+        // one directly in a GROUP BY clause is invalid regardless of
+        // dialect.supportsNestedAggregations() (that flag governs nesting one aggregate
+        // inside another's argument, a different case, handled above). This also has to be
+        // checked unconditionally, unlike hasNestedAgg/hasNestedWindowedAgg above, because
+        // an Aggregate with an empty AggregateCall list (e.g. RelBuilder.distinct(), or a
+        // decorrelated correlated ORDER BY ... FETCH FIRST 1 ROW ONLY subquery, which
+        // RelDecorrelator rewrites to a windowed FIRST_VALUE Project topped with a
+        // distinct()) has nothing in hasNested's aggregatesArgs to inspect: that helper
+        // only walks AggregateCall argument positions, never the Aggregate's own group set.
+        if (hasWindowedGroupKey(agg)) {
+          return true;
+        }
+
         if (clauses.contains(Clause.GROUP_BY)) {
           // Avoid losing the distinct attribute of inner aggregate.
           return !hasNestedAgg || Aggregate.isNotGrandTotal(agg);
         }
       }
 
+      return false;
+    }
+
+    /** Returns whether any of an {@link Aggregate}'s group keys refers to a select-list
+     * item of this result that is (or contains) a windowed aggregate call -- i.e. the
+     * Aggregate would be grouping directly on a window function's result, which cannot be
+     * expressed in SQL (window functions are computed after GROUP BY is applied). Unlike
+     * {@link #hasNested}, this inspects the Aggregate's group set rather than its
+     * AggregateCalls' argument lists, so it also catches an Aggregate with no
+     * AggregateCalls at all.
+     *
+     * @param aggregate Aggregate node
+     * @return whether any group key is a windowed aggregate in this result's select list */
+    private boolean hasWindowedGroupKey(
+        @UnknownInitialization Result this,
+        Aggregate aggregate) {
+      if (!(node instanceof SqlSelect)) {
+        return false;
+      }
+      final SqlNodeList selectList = ((SqlSelect) node).getSelectList();
+      if (selectList.equals(SqlNodeList.SINGLETON_STAR)) {
+        return false;
+      }
+      for (int key : aggregate.getGroupSet()) {
+        if (key < selectList.size() && containsOver(selectList.get(key))) {
+          return true;
+        }
+      }
       return false;
     }
 

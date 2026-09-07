@@ -1870,6 +1870,46 @@ class RelToSqlConverterTest {
     relFn(relFn).withOracle().ok(expectedOracle);
   }
 
+  /** Test case for D-210 (govdata Defect Register): a plan shaped like
+   * {@link org.apache.calcite.sql2rel.RelDecorrelator}'s rewrite of a correlated
+   * {@code ORDER BY ... FETCH FIRST 1 ROW ONLY} subquery -- a Project computing
+   * {@code FIRST_VALUE(...) OVER (PARTITION BY corVar ORDER BY sortKey)} for each
+   * projected field, topped with {@code distinct()} and NO AggregateCalls at all --
+   * must not re-emit the window function calls directly as GROUP BY keys: SQL forbids
+   * window functions in GROUP BY, under every dialect. Before the fix,
+   * needNewSubQuery's Aggregate branch only inspected AggregateCall argument positions
+   * (via {@code hasNested}), so an Aggregate with an empty AggregateCall list (exactly
+   * what {@code distinct()} produces) went undetected, and the windowed Project was
+   * merged straight into the Aggregate's own SELECT/GROUP BY -- producing e.g.
+   * {@code GROUP BY FIRST_VALUE(...) OVER (...)}, which every SQL dialect rejects
+   * (DuckDB: "LATERAL join cannot contain window functions"). */
+  @Test void testDistinctOfWindowedProjectDoesNotGroupByOverCall() {
+    final Function<RelBuilder, RelNode> relFn = b -> b
+        .scan("EMP")
+        .project(b.field("DEPTNO"), b.field("HIREDATE"), b.field("SAL"))
+        .project(
+            b.aggregateCall(SqlStdOperatorTable.FIRST_VALUE, b.field("SAL"))
+                .over()
+                .orderBy(b.field("HIREDATE"))
+                .partitionBy(b.field("DEPTNO"))
+                .rowsUnbounded()
+                .allowPartial(true)
+                .nullWhenCountZero(false)
+                .as("sal"),
+            b.field("DEPTNO"))
+        .distinct()
+        .build();
+
+    final String expectedSql =
+        "SELECT \"sal\", \"DEPTNO\"\n"
+        + "FROM (SELECT FIRST_VALUE(\"SAL\") OVER (PARTITION BY \"DEPTNO\" "
+        + "ORDER BY \"HIREDATE\" RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) "
+        + "AS \"sal\", \"DEPTNO\"\n"
+        + "FROM \"scott\".\"EMP\") AS \"t\"\n"
+        + "GROUP BY \"sal\", \"DEPTNO\"";
+    relFn(relFn).ok(expectedSql);
+  }
+
   @Test void testSemiJoin() {
     final RelBuilder builder = relBuilder();
     final RelNode root = builder
