@@ -1664,6 +1664,13 @@ partitionedTables:
       downloaded in one unpaginated request and the partition overwritten each
       run, so this is a snapshot. Source:
       data.transportation.gov/api/views/az4n-8mr2/rows.csv?accessType=DOWNLOAD.
+
+      To reach a carrier's cross-schema identity FROM another schema rather than by name,
+      join ref.canonical_org_entity on fmcsa_dot_number = dot_number — that table carries
+      one foreign key per source, so the carrier's LEI/SEC CIK and its dot_number sit in
+      the same row and the join is exact. Matching carrier_name as text (including against
+      sec.filing_metadata) finds the wrong entities and misses carriers filing under a
+      differently-worded name.
     dqRowLimit: 200000
 
     dimensions:
@@ -1680,7 +1687,7 @@ partitionedTables:
         type: string
         nullable: true
         expression: 'src."LEGAL_NAME"'
-        comment: Legal carrier name (fuzzy-join to sec.filing_metadata)
+        comment: Legal carrier name — for the exact cross-schema join use ref.canonical_org_entity.fmcsa_dot_number = dot_number, not a name match
       - name: dba_name
         type: string
         nullable: true
@@ -4568,6 +4575,12 @@ views:
       decoded. n_number is surfaced as the full tail number (N-prefixed). Raw
       per-file detail (addresses, Mode-S codes, dates, kit build, other names)
       stays on faa_aircraft_master; other cross-tabs are sibling views.
+
+      registrant_name is unstructured (no per-registrant id; n_number/unique_id are
+      per-aircraft) for registrant_type != Individual (entity-type registrants).
+      ref.canonical_org_entity carries it as an already-resolved identity
+      (faa_registrant_name, with an LEI when matched); join there on the name rather
+      than re-running a fuzzy match against gleif_entities.legal_name by hand.
     sql: >
       SELECT
         m.n_number,

@@ -1058,6 +1058,13 @@ partitionedTables:
       Use for: tracking insider sentiment, identifying unusual trading patterns, corporate
       governance analysis, and generating buy/sell signals based on insider activity.
 
+      For entity-type reporting persons (an insider that is itself an organization, not
+      an individual), reach this insider's cross-schema identity FROM another schema by
+      joining ref.canonical_org_entity on sec_reporting_person_cik = reporting_person_cik
+      — that table carries one foreign key per source, so the org's LEI and its
+      reporting_person_cik sit in the same row and the join is exact. Matching
+      reporting_person_name as text finds the wrong entities.
+
     columns:
       - *cik_column
       - *accession_number
@@ -1183,6 +1190,12 @@ partitionedTables:
       data — tracks positions of Berkshire Hathaway, Bridgewater, Renaissance, etc.
       Use for: tracking institutional ownership changes, identifying crowded trades,
       monitoring activist accumulation, and building factor models.
+
+      To reach a filing manager's cross-schema identity FROM another schema rather than
+      by name, join ref.canonical_org_entity on sec_manager_cik = manager_cik — that table
+      carries one foreign key per source, so the manager's LEI and its manager_cik sit in
+      the same row and the join is exact. Matching manager_name as text finds the wrong
+      entities and misses managers filing under a differently-worded name.
 
     columns:
       - *cik_column

@@ -1102,6 +1102,12 @@ partitionedTables:
     comment: >
       Faithful landing of USPTO TRCFECO2 owner.csv — applicant/owner identity, one row per
       (serial_no, own_seq). own_addr_state_cd is a 2-letter code, not FIPS — join geo.states.
+
+      To reach a trademark owner's cross-schema identity FROM another schema rather than
+      by name, join ref.canonical_org_entity on patents_trademark_owner_id = own_id — that
+      table carries one foreign key per source, so the owner's LEI/SEC CIK and its own_id
+      sit in the same row and the join is exact. Matching own_name as text finds the wrong
+      entities and misses owners filing under a differently-worded name.
     dimensions:
       type:
         - trademark_owner

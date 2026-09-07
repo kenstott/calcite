@@ -290,7 +290,10 @@ partitionedTables:
       filtered where registration_authority_id = 'RA000665' (SEC EDGAR).
       Current snapshot only, overwritten each run — unlike gleif_entities,
       which keeps an append-only change history. Provides fast LEI <-> CIK
-      lookups without scanning the full GLEIF dataset.
+      lookups without scanning the full GLEIF dataset. entity_org_bridge.sec_cik
+      (EIN-path matches) joins here on cik = sec_cik to reach the LEI — the
+      exact bridge for that column; do not name-match its org against
+      gleif_entities.legal_name.
 
     columns:
       - *lei_column
@@ -1812,7 +1815,11 @@ partitionedTables:
       - name: sec_cik
         type: string
         nullable: true
-        comment: SEC CIK, populated for EIN-path matches via sec.filing_metadata.irs_number
+        comment: >
+          SEC CIK, populated for EIN-path matches via sec.filing_metadata.irs_number. To
+          reach this CIK's GLEIF LEI, join ref.gleif_cik_mapping on cik = sec_cik — that
+          table is the exact bridge (RA000665-filtered GLEIF golden copy); do not
+          name-match sec_cik's org against gleif_entities.legal_name.
       - name: gleif_legal_name
         type: string
         nullable: true
@@ -2068,6 +2075,28 @@ partitionedTables:
       An org identified only in patents.patent_assignees (never resolved) still gets a
       row, with lei left null. Nullable FK columns point at each source's natural key; a
       "_confidence" sibling column (high | low | null) accompanies every FK.
+
+      Consumer tables, each carrying a cross-reference back to its own FK column here:
+      fec.committees (fec_committee_id), sec.insider_transactions (sec_reporting_person_cik),
+      sec.institutional_holdings (sec_manager_cik), patents.patent_assignees
+      (patents_assignee_id), patents.trademark_owner (patents_trademark_owner_id),
+      health.fda_drug_approvals (fda_sponsor_name), health.fda_drug_recalls
+      (fda_drug_recalling_firm), health.fda_device_recalls (fda_device_recalling_firm),
+      health.fda_ndc_products (fda_labeler_name), health.cms_open_payments
+      (cms_paying_entity_name), health.clinical_trials (clinical_trials_nct_id),
+      environment.ghg_facilities (ghg_parent_company_name), energy.eia_utility_annual
+      (eia_utility_id), energy.eia_coal_mines (eia_coal_controller_name,
+      eia_coal_operator_name), transport.fmcsa_carriers (fmcsa_dot_number),
+      transport.faa_aircraft_registry (faa_registrant_name), fiscal.exempt_org_master
+      (exempt_org_ein), fiscal.sba_loan_approvals (sba_borrower_name, sba_lender_name),
+      research.nsf_herd_by_institution (nsf_herd_inst_id), edu.ipeds_institutions
+      (ipeds_unitid). Structured-key sources (a per-row id/CIK/EIN already on the source
+      table — fec_committee_id, sec_reporting_person_cik, sec_manager_cik,
+      patents_assignee_id, patents_trademark_owner_id, eia_utility_id, fmcsa_dot_number,
+      exempt_org_ein, clinical_trials_nct_id, ipeds_unitid) get an exact join here on that
+      id; unstructured sources (name-only, no per-row id) get the fuzzy-resolved identity
+      this table already carries, so a cross-schema link still avoids re-running the fuzzy
+      match by hand.
 
     columns:
       - name: canonical_entity_id

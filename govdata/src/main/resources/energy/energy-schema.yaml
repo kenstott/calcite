@@ -528,6 +528,12 @@ partitionedTables:
       The transformer downloads and parses the annual ZIP archive of XLSX files from EIA.
       Cross-references geo.states via state_abbr.
 
+      To reach a utility's cross-schema identity FROM another schema rather than by name,
+      join ref.canonical_org_entity on eia_utility_id = utility_id — that table carries
+      one foreign key per source, so the utility's LEI/SEC CIK and its utility_id sit in
+      the same row and the join is exact. Matching utility_name as text finds the wrong
+      entities and misses utilities filing under a differently-worded name.
+
     dimensions:
       type:
         - eia_utility
@@ -1951,6 +1957,12 @@ partitionedTables:
       volume in short tons, employee count, annual hours, labor productivity, and
       average seam height (underground mines). The transformer filters by the requested
       year dimension. Cross-references geo.states via state_abbr.
+
+      controller_name and operator_name are unstructured (no per-row id) — mine_id is
+      per-mine, not per-company. ref.canonical_org_entity carries each as an
+      already-resolved identity (eia_coal_controller_name, eia_coal_operator_name,
+      each with an LEI when matched); join there on the name rather than re-running a
+      fuzzy match against gleif_entities.legal_name by hand.
 
     dimensions:
       type:

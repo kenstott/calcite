@@ -59,6 +59,12 @@ partitionedTables:
       medicaid_drug_utilization (ndc = product_ndc). Covers all finished and
       unfinished drug products listed with FDA.
 
+      labeler_name is unstructured (no per-labeler id — product_ndc is per-product, and
+      many products share one labeler). ref.canonical_org_entity carries it as an
+      already-resolved identity (fda_labeler_name, with an LEI when matched); join there
+      on the name rather than re-running a fuzzy match against gleif_entities.legal_name
+      by hand.
+
     columns:
       - name: product_ndc
         type: string
@@ -198,8 +204,11 @@ partitionedTables:
 
     comment: >
       FDA drug approval applications (NDA, BLA, ANDA). One row per application.
-      FK target for fda_ndc_products.application_number. sponsor_name joins
-      (text) to sec schema company facts and ref.gleif_entities.legal_name.
+      FK target for fda_ndc_products.application_number. sponsor_name is unstructured
+      (no per-row id); ref.canonical_org_entity carries it as an already-resolved
+      identity (fda_sponsor_name, with an LEI/SEC CIK when matched) — join there on the
+      name rather than fuzzy-matching sponsor_name against sec company facts or
+      ref.gleif_entities.legal_name by hand.
 
     columns:
       - name: application_number
@@ -209,7 +218,7 @@ partitionedTables:
       - name: sponsor_name
         type: string
         nullable: true
-        comment: Applicant/manufacturer — text FK to sec and ref.gleif_entities
+        comment: Applicant/manufacturer — resolved identity at ref.canonical_org_entity.fda_sponsor_name
       - name: brand_name
         comment: "Brand or trade name of the drug product"
         type: string
@@ -326,6 +335,12 @@ partitionedTables:
       voluntary vs. FDA-mandated origin. Joins to fda_ndc_products only via
       recalling_firm/labeler_name text match — no structural NDC column is present
       in this table.
+
+      recalling_firm is unstructured (no per-row id). ref.canonical_org_entity carries
+      it as an already-resolved identity (fda_drug_recalling_firm, with an LEI when
+      matched, independently resolved from fda_ndc_products.labeler_name's own
+      fda_labeler_name entry) — join there on the name rather than re-running a fuzzy
+      match against gleif_entities.legal_name by hand.
 
     columns:
       - name: recall_number
@@ -1068,6 +1083,12 @@ partitionedTables:
       table has no classification column. Includes product_code (device classification
       code) and k_numbers (510(k) premarket notification numbers).
 
+      recalling_firm is unstructured (no per-row id). ref.canonical_org_entity carries
+      it as an already-resolved identity (fda_device_recalling_firm, with an LEI when
+      matched — the structural twin of fda_drug_recalls' fda_drug_recalling_firm); join
+      there on the name rather than re-running a fuzzy match against
+      gleif_entities.legal_name by hand.
+
     columns:
       - name: cfres_id
         type: string
@@ -1211,6 +1232,13 @@ partitionedTables:
       studies with a last-update-post-date on or after 2020-01-01. Joins to
       clinical_trial_conditions and clinical_trial_interventions (both on nct_id); see
       the trial_full view for a pre-joined denormalized version.
+
+      To reach a trial's lead sponsor's cross-schema identity FROM another schema rather
+      than by name, join ref.canonical_org_entity on clinical_trials_nct_id = nct_id —
+      that table carries one foreign key per source, so the sponsor's LEI/SEC CIK and
+      this trial's nct_id sit in the same row and the join is exact. Matching lead_sponsor
+      as text finds the wrong entities and misses sponsors filing under a
+      differently-worded name.
 
     columns:
       - name: nct_id
@@ -4733,6 +4761,11 @@ partitionedTables:
       CMS Open Payments (Sunshine Act) payments from pharmaceutical/device manufacturers
       to physicians. Bulk CSV downloads from download.cms.gov, one file per program year
       (CY2018+) and payment_type (general/research/ownership), partitioned by both.
+
+      paying_entity_name is unstructured (no per-row id). ref.canonical_org_entity carries
+      it as an already-resolved identity (cms_paying_entity_name, with an LEI/SEC CIK when
+      matched); join there on the name rather than re-running a fuzzy match against
+      gleif_entities.legal_name by hand.
     columns:
       - name: program_year
         comment: "Calendar year the payment/transfer of value was reported"

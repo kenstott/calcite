@@ -719,6 +719,12 @@ partitionedTables:
       ghg_emissions on (facility_id, year) for the emissions themselves;
       frs_id links epa_facilities.
 
+      parent_company is unstructured (no per-row id — facility_id is per-facility, not
+      per-parent-company). ref.canonical_org_entity carries it as an already-resolved
+      identity (ghg_parent_company_name, with an LEI/SEC CIK when matched); join there on
+      the name rather than re-running a fuzzy match against gleif_entities.legal_name by
+      hand.
+
     dimensions:
       type:
         - ghg_facilities

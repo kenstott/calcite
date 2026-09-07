@@ -434,6 +434,12 @@ partitionedTables:
       designation, connected organization, treasurer, and filing frequency.
       Source: cm{YY}.zip bulk download (pipe-delimited, no header).
 
+      To reach a committee's connected organization FROM another schema rather than by
+      name, join ref.canonical_org_entity on fec_committee_id = committee_id — that table
+      carries one foreign key per source, so the org's LEI/SEC CIK and its committee_id
+      sit in the same row and the join is exact. Matching connected_org_name as text finds
+      the wrong entities and misses orgs filing under a differently-worded name.
+
     columns:
       - *committee_id_column
       - *committee_name_column

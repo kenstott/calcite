@@ -532,6 +532,11 @@ partitionedTables:
       grain). For the state×year rollup used in the patents-per-R&D-dollar
       productivity join, see research_herd_rd_by_state_year.
 
+      For 2010+ rows, prefer joining ipeds_unitid directly to edu.ipeds_institutions —
+      it is already on this row. For pre-2010 rows (no ipeds_unitid) or a cross-schema
+      identity beyond edu, join ref.canonical_org_entity on nsf_herd_inst_id = inst_id
+      instead of matching the institution name as text.
+
     # HERD survey year is published ~14 months after fiscal-year end; the newest
     # available data year lags the current publish year by ~2 → iterate the publish
     # year, fetch the effective (data) year's ZIP via {effective_year}.

@@ -2231,6 +2231,12 @@ partitionedTables:
       501(c)(3); ruling_date/tax_period are YYYYMM. Anchors exempt_org_990 on EIN.
       Dollar amounts fold the sign into the value. Source:
       irs.gov/pub/irs-soi/eo{1..4}.csv.
+
+      To reach this org's cross-schema identity FROM another schema rather than by name,
+      join ref.canonical_org_entity on exempt_org_ein = ein — EIN is a second exact-match
+      hub key alongside GLEIF's LEI (sec.filing_metadata.irs_number matches it directly),
+      so the join is exact. Matching org_name as text finds the wrong entities and misses
+      orgs filing under a differently-worded name.
     dqRowLimit: 200000
 
     dimensions:
@@ -3154,8 +3160,14 @@ partitionedTables:
       program is split across several year-range CSVs on the source site (year
       is a data column, not a partition), all streamed and concatenated by
       SbaLoansProvider. Reissued quarterly, so the whole program partition is
-      overwritten each run. Joins to geo.state_ref via borrower_state and to
-      ref by borrower name/EIN. Source: data.sba.gov 7(a)-504 FOIA.
+      overwritten each run. Joins to geo.state_ref via borrower_state.
+      Source: data.sba.gov 7(a)-504 FOIA.
+
+      borrower_name and lender_name are unstructured — this table carries no EIN column,
+      so there is no exact hub-key join. ref.canonical_org_entity carries each as an
+      already-resolved identity (sba_borrower_name, sba_lender_name, each with an LEI when
+      matched); join there on the name rather than re-running a fuzzy match against
+      gleif_entities.legal_name by hand.
     dqRowLimit: 100000
 
     dimensions:
@@ -3167,7 +3179,7 @@ partitionedTables:
       - name: borrower_name
         type: string
         nullable: true
-        comment: Borrower business name (join to ref entity bridge)
+        comment: Borrower business name — resolved identity at ref.canonical_org_entity.sba_borrower_name
       - name: borrower_city
         type: string
         nullable: true

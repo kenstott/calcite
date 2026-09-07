@@ -1035,6 +1035,12 @@ partitionedTables:
       college_scorecard joins via unitid = college_scorecard.id.
       ipeds_completions and ipeds_financials join via unitid.
 
+      To reach an institution's cross-schema identity FROM another schema rather than by
+      name, join ref.canonical_org_entity on ipeds_unitid = unitid — that table carries
+      one foreign key per source, so the institution's LEI/SEC CIK and its unitid sit in
+      the same row and the join is exact. Matching inst_name as text finds the wrong
+      entities and misses institutions filing under a differently-worded name.
+
     columns:
       - name: unitid
         type: int
