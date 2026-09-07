@@ -562,7 +562,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 861886
-      checkedAt: "2026-09-05T14:50:07Z"
+      checkedAt: "2026-09-07T14:29:23Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Month (GSOM) data. Includes temperature
@@ -669,7 +669,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 820959
-      checkedAt: "2026-09-05T14:50:08Z"
+      checkedAt: "2026-09-07T14:29:25Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Year (GSOY) data — annual temperature,
@@ -864,8 +864,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 76072000
-      checkedAt: "2026-09-05T14:50:11Z"
+      rowCount: 96114838
+      checkedAt: "2026-09-07T14:29:31Z"
     partitions: *standard_partitions
     comment: >
       NOAA GHCN-Daily station observations from NCEI annual bulk files
@@ -988,7 +988,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 2744712
-      checkedAt: "2026-09-05T14:50:12Z"
+      checkedAt: "2026-09-07T14:29:33Z"
     partitions: *drought_partitions
     comment: >
       National Drought Monitor weekly county-level drought severity from the USDM API
@@ -1112,7 +1112,7 @@ partitionedTables:
       contiguous: false
       years: [2011, 2012, 2013, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
       rowCount: 3610586
-      checkedAt: "2026-09-05T14:50:15Z"
+      checkedAt: "2026-09-07T14:29:43Z"
     partitions: *hms_partitions
     comment: >
       NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
@@ -1217,7 +1217,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 458519
-      checkedAt: "2026-09-05T14:50:17Z"
+      checkedAt: "2026-09-07T14:29:52Z"
     comment: >
       Raw NOAA HMS smoke plume polygon geometries retained for spatial re-analysis.
       One row per smoke polygon per day. Geometry stored as WKT for direct use with
