@@ -54,6 +54,10 @@ public class VectorFunctionRequirementsTest {
       "VECTOR_NORM",
       "NORMALIZE_VECTOR",
       "TEXT_SIMILARITY",
+      // String-similarity scalars. Not vector UDFs, but they register onto the same schema, so an
+      // exact-set assertion has to include them.
+      "JARO_WINKLER",
+      "JARO_WINKLER_SIMILARITY",
       // Table function added by 19b11f3fe (SEMANTIC_SEARCH over quantized codes). It registers
       // onto the same schema as the scalar UDFs, so an exact-set assertion has to include it.
       "SEMANTIC_SEARCH",
@@ -88,10 +92,10 @@ public class VectorFunctionRequirementsTest {
         "registered function names must match the documented set exactly");
 
     // Exact count.
-    assertEquals(11, EXPECTED_FUNCTION_NAMES.length,
-        "documented set is expected to contain exactly 11 names");
-    assertEquals(11, actual.size(),
-        "schema must expose exactly 11 distinct registered function names");
+    assertEquals(13, EXPECTED_FUNCTION_NAMES.length,
+        "documented set is expected to contain exactly 13 names");
+    assertEquals(13, actual.size(),
+        "schema must expose exactly 13 distinct registered function names");
   }
 
   // ===== FILE-150: exact count + EMBED return policy =====
@@ -101,8 +105,8 @@ public class VectorFunctionRequirementsTest {
   void registeredSetSizeIsExactAndEmbedReturnsCommaSeparatedVarchar() {
     // Exact registered-set size (pinned independently of FILE-093's name assertions).
     SchemaPlus schema = registerOntoFreshSchema();
-    assertEquals(11, schema.getFunctionNames().size(),
-        "schema must expose exactly 11 distinct registered function names");
+    assertEquals(13, schema.getFunctionNames().size(),
+        "schema must expose exactly 13 distinct registered function names");
 
     // EMBED is registered (maps to embedText). NOTE: EMBED is present in the code, so this
     // FILE-150 method asserts both the exact set size AND the EMBED return policy.

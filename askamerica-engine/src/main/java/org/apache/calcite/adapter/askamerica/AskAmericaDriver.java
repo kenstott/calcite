@@ -96,6 +96,14 @@ public class AskAmericaDriver extends BaseDriverWrapper {
         if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
             System.setProperty("duckdb.cache_httpfs.directory", dataDir + "/.duckdb_httpfs_cache");
         }
+        // Where SEMANTIC_SEARCH keeps its local copy of the embedding codes. Pinning it here is
+        // what makes semantic search read local storage instead of re-reading the whole codes
+        // dataset out of the bucket on every question; the file is loaded on first search and
+        // topped up from the bucket on later runs. Under dataDir so it is per-install and gets
+        // removed with everything else the engine writes.
+        if (System.getProperty("calcite.vss.localDb") == null) {
+            System.setProperty("calcite.vss.localDb", dataDir + "/vss-codes.duckdb");
+        }
     }
 
 }
