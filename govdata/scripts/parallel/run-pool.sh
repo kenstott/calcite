@@ -676,6 +676,34 @@ fill_pool() {
       continue
     fi
 
+    # Cap concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers at 3, regardless of
+    # remaining memory budget — SEC's historical slot count (up to 16 years x 3 sub-schemas) can
+    # otherwise dominate admission purely by volume, starving every other schema's historical
+    # backfill of pool slots for as long as SEC has budget-fitting work queued. sec_prices is
+    # deliberately excluded: it's a single bulk-fetch worker (fixed 2010-2026 range regardless of
+    # mode), not part of the per-year CIK-reprocessing volume this cap is protecting against.
+    if [[ "$next_schema" == "sec_primary" || "$next_schema" == "sec_secondary" || "$next_schema" == "sec_13f" ]]; then
+      local _sec_active=0
+      for _active_slot in "${active_slots[@]}"; do
+        local _active_schema="${_active_slot%%:*}"
+        if [[ "$_active_schema" == "sec_primary" || "$_active_schema" == "sec_secondary" || "$_active_schema" == "sec_13f" ]]; then
+          ((_sec_active++)) || true
+        fi
+      done
+      if [ "$_sec_active" -ge 3 ]; then
+        # Requeue at back with backoff, same mechanic as the schema+year conflict case above.
+        local _reject_time=$(($(date +%s) + 30))
+        queue+=("$next_slot:_rejected_until_$_reject_time")
+        ((total++)) || true
+        ((requeue_count++)) || true
+        if [ "$scan_idx" -eq "$queue_idx" ]; then
+          ((queue_idx++)) || true
+        fi
+        ((scan_idx++)) || true
+        continue
+      fi
+    fi
+
     # Skip if this worker's footprint exceeds total budget — can never run on this machine
     if [ "$next_foot_mb" -gt "$budget_mb" ]; then
       log_info "SKIPPING ${next_id}: needs ${next_foot_mb}MB (heap ${next_heap_mb}MB + ${WORKER_NATIVE_MB}MB native) but budget is only ${budget_mb}MB"
