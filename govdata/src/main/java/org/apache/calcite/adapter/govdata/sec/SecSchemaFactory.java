@@ -108,8 +108,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private static final long MAX_RATE_LIMIT_DELAY_MS = 500; // Max: 500ms between requests (2/sec)
   // Periodic table commit: flush + materialize to Iceberg after this many accessions so a
   // killed worker still leaves queryable tables. Override via operand "commitIntervalAccessions"
-  // (declared in sec-schema.yaml); <= 0 disables periodic commit (single final commit).
-  private static final int COMMIT_INTERVAL_ACCESSIONS_DEFAULT = 25000;
+  // (declared in sec-schema.yaml); <= 0 disables periodic commit (single final commit). Kept
+  // below typical per-slot run sizes (sec-schema.yaml's operand default explains why) — this
+  // constant is only the fallback when the operand itself is absent from the model.
+  private static final int COMMIT_INTERVAL_ACCESSIONS_DEFAULT = 2000;
 
   // Dynamic rate limiting
   private final AtomicLong currentRateLimitDelayMs = new AtomicLong(INITIAL_RATE_LIMIT_DELAY_MS);

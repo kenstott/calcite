@@ -43,7 +43,19 @@ cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
 # Periodic table commit: flush + materialize to Iceberg every N accessions so a worker
 # killed mid-run (large years have ~293k accessions) still leaves queryable tables.
 # <= 0 disables periodic commit (single final commit at end of run).
-commitIntervalAccessions: "${SEC_COMMIT_INTERVAL_ACCESSIONS:25000}"
+#
+# Kept well under a single worker slot's typical run size (observed 18k-24k accessions
+# per year-partitioned sec_primary/sec_secondary slot) rather than above it: the
+# per-table Iceberg materialization loop iterates every partitionedTables entry in
+# schema order on every commit, sequentially, and a slot whose accession count never
+# reaches the interval takes the single-final-commit path with no intermediate
+# checkpoint. A worker interrupted anywhere during that one trailing pass — killed,
+# restarted, or simply superseded by the next scheduled run before the loop reaches a
+# table late in schema order — leaves every table from that point on with its staged,
+# already-uploaded batch files sitting in R2 but never promoted into Iceberg, even
+# though nothing about extraction or staging failed. Multiple checkpoints per slot run
+# make forward progress durable instead of all-or-nothing.
+commitIntervalAccessions: "${SEC_COMMIT_INTERVAL_ACCESSIONS:2000}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 refreshInterval: "PT1H"
