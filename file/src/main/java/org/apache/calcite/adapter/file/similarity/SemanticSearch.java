@@ -94,9 +94,17 @@ public final class SemanticSearch {
   // a 64M-row corpus and costs under a second of rerank when it does. A tighter ceiling is worse
   // than it looks: it silently reintroduces the fixed-width problem this sizing exists to fix,
   // just at a higher row count, and recall decays with no signal when it does.
-  private static final int FRACTION_DIVISOR = 64;
+  // Settable, because the whole point of the ratio is to be retuned against a real corpus once
+  // one exists: the 1/64 default comes from k=256 over 225k codes with 8 queries, which is enough
+  // to justify the shape and not enough to pin it for 39M. Retuning it must not need a rebuild.
+  private static final int DEFAULT_FRACTION_DIVISOR = 64;
   private static final int MIN_PREFILTER = 50_000;
   private static final int MAX_PREFILTER = 1_000_000;
+
+  /** Divisor behind both default widths: candidates are corpus/N and probes are centroids/N. */
+  private static int fractionDivisor() {
+    return Math.max(1, Integer.getInteger("calcite.vss.fraction", DEFAULT_FRACTION_DIVISOR));
+  }
 
   /** Cached {@code count(*)} of the codes, so prefilter sizing costs one query per process. */
   private static volatile long corpusSize = -1;
@@ -393,7 +401,7 @@ public final class SemanticSearch {
     if (explicit != null) {
       return Math.max(1, explicit.intValue());
     }
-    return Math.max(1, centroidCount / FRACTION_DIVISOR);
+    return Math.max(1, centroidCount / fractionDivisor());
   }
 
   /**
@@ -405,7 +413,7 @@ public final class SemanticSearch {
    * 3.19M codes with out-of-corpus queries (cosine 0.72-0.76 to their nearest stored chunk, which
    * is what a text query looks like), recall@10 against exhaustive cosine ran 32% at 1,000
    * candidates, 62% at 20,000 and 80% at 50,000 — while query time stayed between 0.18s and 0.26s
-   * throughout, because the cost is the scan, not the width. {@link #FRACTION_DIVISOR} fixes the
+   * throughout, because the cost is the scan, not the width. {@link #fractionDivisor} fixes the
    * share at that 50,000-in-3.19M operating point so recall holds as the corpus grows.
    *
    * <p>The floor matters for small corpora (a width below the corpus size would discard neighbours
@@ -430,7 +438,7 @@ public final class SemanticSearch {
       }
       corpusSize = n;
     }
-    long scaled = n / FRACTION_DIVISOR;
+    long scaled = n / fractionDivisor();
     return (int) Math.max(MIN_PREFILTER, Math.min(MAX_PREFILTER, scaled));
   }
 
