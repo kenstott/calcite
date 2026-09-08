@@ -8,16 +8,22 @@
 #
 # The copy is done PER SCHEMA in fixed-width MODTIME SLICES, oldest→newest, and each
 # schema's sentinel (~/.r2-sync-state/<schema>, an epoch) is advanced after EACH slice that
-# copies cleanly. Per-schema (not one global) sentinels are required because a schema with a
-# live ETL writer is SKIPPED to avoid racing its compaction — a single global boundary would
-# then step over that schema's unsynced files and never come back for them. With its own
-# sentinel, a skipped schema is simply held and resumes from where it was left once idle.
+# copies cleanly. Per-schema (not one global) sentinels let each schema progress at its own
+# pace and let --schemas target/rewind a single schema without affecting the rest.
 # Per-slice stamping also makes progress durable: an errored or killed pass resumes from the
 # last completed slice instead of re-scanning the backlog (the failure mode that let an
 # 11-day backlog wedge indefinitely — one giant --max-age pass that kept erroring out before
 # it ever reached the sentinel write). Slice width is GOVDATA_R2_SYNC_SLICE seconds
 # (default 6h): smaller slices stamp progress more often and bound the retry window a
 # persistent error (e.g. an R2 502) can wedge to one slice.
+#
+# Live ETL writers are not held for or specially detected. A file a writer's own compaction
+# deletes mid-copy surfaces as a source 404; rclone's own --retries already tolerates this
+# (each full retry re-lists the source, so a since-deleted file simply drops out of the next
+# attempt), and any 404 that still reaches this script just fails that slice's sentinel
+# advance like any other transient error — held, retried next pass. The two-pass,
+# pointer-last copy below (never touching version-hint.text until the data pass is clean) is
+# what actually prevents a torn snapshot from reaching R2, independent of writer activity.
 #
 # Cost note (R2 billing): every slice uses --no-traverse so rclone does NOT LIST the R2
 # destination — a full recursive LIST is Class A and paged at 1000 keys/page. Instead it
@@ -106,12 +112,9 @@ BUFFER=120                                # overlap between slices so a file wri
                                           # idempotently skips the re-listed overlap)
 
 # ── Per-schema sync state ──────────────────────────────────────────────────────
-# A single global sentinel cannot coexist with active-writer skipping: if a schema's live
-# subtree is skipped but one global boundary still advances, that schema's files below the
-# boundary (its unsynced backlog + whatever it writes while skipped) get stepped over and
-# never synced. So each schema carries its OWN sentinel — STATE_DIR/<schema> holds the epoch
-# that schema is synced through. An active schema's sentinel is simply held; once it goes
-# idle its backlog is picked up from exactly where it was left.
+# Each schema carries its own sentinel — STATE_DIR/<schema> holds the epoch that schema is
+# synced through — so schemas progress independently and --schemas can target/rewind one
+# without affecting the rest.
 STATE_DIR="${HOME}/.r2-sync-state"
 mkdir -p "$STATE_DIR"
 
@@ -164,31 +167,13 @@ fi
 
 log_info "sync-to-r2: ${#_schemas[@]} schema(s); slice=${SLICE}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 
-# --- Detect schemas with an active ETL writer ----------------------------------------
-# Syncing a live Iceberg table races its own compaction: the writer deletes superseded
-# manifest .avro files mid-copy, so rclone (which listed them a moment earlier) hits a
-# source 404 NoSuchKey — and pass 2 could advance the R2 pointer to a snapshot whose
-# manifests didn't finish uploading, exposing a torn snapshot to R2 readers. So a schema
-# with a live writer is SKIPPED this pass and its sentinel HELD; it resumes from that held
-# sentinel once the writer finishes. See common.sh's detect_active_schemas for the shared
-# liveness check (also used by catchup-sync-r2.sh).
-detect_active_schemas "$SCRIPT_DIR/runs/pids"
-_active_schemas="$ACTIVE_SCHEMAS"
-if [ -n "$_active_schemas" ]; then
-  log_info "sync-to-r2: holding active-writer schema(s) this pass —${_active_schemas}"
-fi
-
 # ── Per-schema slice drain ─────────────────────────────────────────────────────
-# Each idle schema walks its own sentinel forward in modtime slices, oldest→newest, over
-# its own <schema>/ subtree, stamping STATE_DIR/<schema> after EACH clean slice. Active
-# schemas are skipped entirely (sentinel untouched). A failed slice holds that schema's
-# sentinel and drops to the next schema; the pass exits non-zero so run-scheduled retries.
+# Each schema walks its own sentinel forward in modtime slices, oldest→newest, over
+# its own <schema>/ subtree, stamping STATE_DIR/<schema> after EACH clean slice. A failed
+# slice holds that schema's sentinel and drops to the next schema; the pass exits non-zero
+# so run-scheduled retries.
 _fail=0
 for s in "${_schemas[@]}"; do
-  case " $_active_schemas " in
-    *" $s "*) log_info "sync-to-r2: [$s] held (active writer)"; continue ;;
-  esac
-
   _sf="$STATE_DIR/$s"
   _v=""
   [ -f "$_sf" ] && _v=$(cat "$_sf" 2>/dev/null)
@@ -211,19 +196,6 @@ for s in "${_schemas[@]}"; do
 
   _cursor=$_v
   while [ "$_cursor" -lt "$_now" ]; do
-    # Re-check liveness before EVERY slice, not just once at pass start: a schema idle when the
-    # pass began can start a new worker minutes into a long slice-walk (sec's own backlog ran
-    # over an hour per slice before its metadata bloat was pruned) — copying on into that slice
-    # would race the new writer's compaction exactly as the pass-start check exists to prevent.
-    # Held sentinel resumes next pass once the writer clears, same as active-from-the-start.
-    detect_active_schemas "$SCRIPT_DIR/runs/pids"
-    case " $ACTIVE_SCHEMAS " in
-      *" $s "*)
-        log_info "sync-to-r2: [$s] new writer started mid-pass — holding at $(date -u -d "@$_v" +%Y-%m-%dT%H:%MZ)"
-        break
-        ;;
-    esac
-
     _slice_end=$(( _cursor + SLICE ))
     [ "$_slice_end" -gt "$_now" ] && _slice_end=$_now
 
