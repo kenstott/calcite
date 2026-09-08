@@ -535,6 +535,21 @@ def _list_code_files(dataset):
     return [f.strip() for f in r.stdout.splitlines() if f.strip().endswith(".parquet")]
 
 
+def _duplicate_count(con, dataset):
+    """Surplus code rows in a dataset -- rows beyond one per chunk_id, across both shapes.
+
+    Only the chunk_id column is read, which is a few percent of the dataset's bytes, so this is
+    cheap enough to ask on every run."""
+    patterns = [p for p in (f"{dataset}/*.parquet", f"{dataset}/ivf/**/*.parquet")
+                if con.execute("SELECT count(*) FROM glob(?)", [p]).fetchone()[0]]
+    if not patterns:
+        return 0
+    rel = " UNION ALL ".join(
+        f"SELECT chunk_id FROM read_parquet('{p}', union_by_name=true)" for p in patterns)
+    return con.execute(
+        f"SELECT count(*) - count(DISTINCT chunk_id) FROM ({rel})").fetchone()[0]
+
+
 def cmd_compact(con=None, dataset=None, force=False):
     """Fold the flat files a backlog run produced into the IVF-partitioned layout.
 
@@ -568,9 +583,22 @@ def cmd_compact(con=None, dataset=None, force=False):
         # can already be sitting INSIDE a compacted file where a fresh-only merge never sees them.
         merging = files if force else fresh
         if not force and len(fresh) <= COMPACT_MIN_FILES:
-            print(f"[compact] {len(fresh)} new files <= threshold {COMPACT_MIN_FILES} — "
-                  f"nothing to do", flush=True)
-            return
+            # File count is not the only reason to merge. Removing duplicates is a SIDE EFFECT of
+            # merging, so a dataset that never reaches the threshold never dedups -- which is
+            # exactly how ref and cyber_threat carried 396 duplicate codes for weeks on three
+            # files apiece, with no mechanism that would ever have removed them. Merge whenever
+            # duplicates are actually present, whatever the file count.
+            dupes = _duplicate_count(con, dataset)
+            if not dupes:
+                print(f"[compact] {len(fresh)} new files <= threshold {COMPACT_MIN_FILES}, no "
+                      f"duplicates — nothing to do", flush=True)
+                return
+            # Every file, not just the fresh ones: a duplicate can sit wholly inside an already
+            # compacted file, where a fresh-only merge would never see it.
+            merging = files
+            print(f"[compact] {len(fresh)} new files is below the threshold, but {dupes} "
+                  f"duplicate chunk_id(s) are present — merging all {len(files)} to remove them",
+                  flush=True)
         if not merging:
             print("[compact] no files to compact", flush=True)
             return
