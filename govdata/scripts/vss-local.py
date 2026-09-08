@@ -221,7 +221,9 @@ def _codes_relation(con):
     purged for a rebuild, must not take every other schema's codes down with it."""
     parts = []
     for pattern, partitioned in _codes_shapes(con):
-        opts = ", hive_partitioning=1" if partitioned else ""
+        opts = ", union_by_name=true"
+        if partitioned:
+            opts += ", hive_partitioning=1"
         # Codes written before IVF assignment carry no centroid column at all. Selecting it
         # anyway does not fail cleanly -- DuckDB resolves the name to this SELECT's own alias and
         # reports a self-reference -- so its presence is read from footer metadata, which costs no
@@ -229,7 +231,10 @@ def _codes_relation(con):
         has_centroid = partitioned or con.execute(
             "SELECT count(*) FROM parquet_schema(?) WHERE name = 'centroid'",
             [pattern]).fetchone()[0] > 0
-        centroid = "c.centroid::BIGINT" if has_centroid else "-1::BIGINT"
+        # COALESCE, not a bare cast: with union_by_name a file that predates the column
+        # contributes NULL for it, and NULL is not -1 -- it would drop out of the probe's
+        # `centroid = -1` arm and make those codes unreachable once a quantizer is loaded.
+        centroid = "COALESCE(c.centroid, -1)::BIGINT" if has_centroid else "-1::BIGINT"
         parts.append(
             f"SELECT c.chunk_id, c.year, {centroid} AS centroid, "
             f"c.w0, c.w1, c.w2, c.w3, c.w4, c.w5, c.rerank_i8 "
@@ -371,12 +376,20 @@ def _load_centroids(con):
     if _CENTROIDS is not None:
         return _CENTROIDS
     import numpy as np
-    if not con.execute("SELECT count(*) FROM glob(?)", [CENTROIDS_PATH]).fetchone()[0]:
-        print(f"[codes] no centroids at {CENTROIDS_PATH} -- writing centroid=-1 "
-              f"(run ivf-train to enable IVF probing)", flush=True)
-        return None
-    arrow = con.execute(
-        f"SELECT cid, v FROM read_parquet('{CENTROIDS_PATH}') ORDER BY cid").arrow()
+    # Read it and let a missing file say so. glob() cannot be used to test for this: given a path
+    # with no wildcard it reports the path back as a match without checking object storage at all,
+    # so the read 404s immediately afterwards. Only "not there" is swallowed -- a credentials or
+    # endpoint failure must NOT quietly disable IVF assignment and write a corpus full of -1.
+    try:
+        arrow = con.execute(
+            f"SELECT cid, v FROM read_parquet('{CENTROIDS_PATH}') ORDER BY cid").arrow()
+    except Exception as e:
+        msg = str(e)
+        if "404" in msg or "No files found" in msg or "does not exist" in msg:
+            print(f"[codes] no centroids at {CENTROIDS_PATH} -- writing centroid=-1 "
+                  f"(run ivf-train to enable IVF probing)", flush=True)
+            return None
+        raise
     _CENTROIDS = np.stack(
         arrow.column("v").to_numpy(zero_copy_only=False)).astype(np.float32)
     print(f"[codes] loaded {len(_CENTROIDS)} IVF centroids", flush=True)

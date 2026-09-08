@@ -207,7 +207,11 @@ public final class SemanticSearch {
     }
     List<String> selects = new ArrayList<String>();
     if (!flat.isEmpty()) {
-      String centroid = hasCentroidColumn(c, flat) ? "_f.centroid::BIGINT" : "-1::BIGINT";
+      // COALESCE, not a bare cast: union_by_name gives NULL for files written before the
+      // column existed, and NULL is not -1 -- those codes would fall out of the probe's
+      // `centroid = -1` arm and become unreachable the moment a quantizer is loaded.
+      String centroid = hasCentroidColumn(c, flat)
+          ? "COALESCE(_f.centroid, -1)::BIGINT" : "-1::BIGINT";
       selects.add("SELECT _f.chunk_id, " + centroid + " AS centroid, _f.w0, _f.w1, _f.w2, _f.w3,"
           + " _f.w4, _f.w5, _f.rerank_i8 FROM read_parquet([" + quoted(flat)
           + "], union_by_name=true) _f");

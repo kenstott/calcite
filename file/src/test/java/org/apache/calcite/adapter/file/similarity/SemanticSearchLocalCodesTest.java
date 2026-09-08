@@ -376,6 +376,37 @@ public class SemanticSearchLocalCodesTest {
     }
   }
 
+  /** A dataset accumulates files written before AND after IVF assignment existed, so one glob
+   *  spans both schemas. Reading it must unify them rather than binding to whichever file came
+   *  first, and the older rows must land as centroid -1 rather than NULL -- NULL falls out of the
+   *  probe's `centroid = -1` arm and would make those codes unreachable once a quantizer loads. */
+  @Test void searchesAcrossFilesWrittenBeforeAndAfterAssignment() throws Exception {
+    Path oldCodes = tmp.resolve("codes-old.parquet");
+    Path newCodes = tmp.resolve("codes-new.parquet");
+    Path cents = tmp.resolve("centroids.parquet");
+    Random rnd = new Random(8L);
+    List<double[]> centroids = new ArrayList<double[]>();
+    for (int i = 0; i < 8; i++) {
+      centroids.add(vector(rnd));
+    }
+    writeCentroids(cents, centroids);
+    List<double[]> before = writeCodes(oldCodes, "old", 150, 41L);              // no centroid
+    List<double[]> after = writeCodes(newCodes, "new", 150, 42L, centroids);    // centroid
+    System.setProperty("calcite.vss.codes", codesArg(oldCodes, newCodes));
+    System.setProperty("calcite.vss.localDb", tmp.resolve("local.duckdb").toString());
+    String priorCent = System.getProperty("calcite.vss.centroids");
+    System.setProperty("calcite.vss.centroids", cents.toAbsolutePath().toString());
+    try {
+      assertEquals("new12", SemanticSearch.searchVector(after.get(12), 3).get(0)[0],
+          "an assigned row must be found through the probe");
+      SemanticSearch.resetForTesting();
+      assertEquals("old33", SemanticSearch.searchVector(before.get(33), 3).get(0)[0],
+          "an unassigned row from an older file must stay reachable");
+    } finally {
+      restore("calcite.vss.centroids", priorCent);
+    }
+  }
+
   /** Without the property nothing local is built, and search still works by reading the files
    *  directly -- the fallback that keeps standalone and test use unchanged. */
   @Test void worksWithoutALocalDatabase() throws Exception {
