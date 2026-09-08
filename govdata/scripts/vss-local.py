@@ -179,13 +179,44 @@ CODES_SOURCE_SCHEMAS = ("sec", "ref", "fedregister", "cyber_threat", "transport"
                          "disasters", "geo", "officials", "health")
 
 
-def _codes_glob_arg():
-    """Bracketed list of every known codes dataset's glob, for one read_parquet() call spanning
-    all of them -- NOT a bare '*' at the bucket root, which would make DuckDB list every prefix
-    in the entire multi-schema bucket (confirmed live: a multi-minute paginated LIST across
-    unrelated schemas' data, not just the ~4 relevant ones)."""
-    return "[" + ", ".join(
-        f"'{codes_dataset_for(s)}/*.parquet'" for s in CODES_SOURCE_SCHEMAS) + "]"
+# IVF centroids: the coarse quantizer search probes before it looks at any codes. Kept as ONE
+# artifact for the whole corpus, not one per source_schema -- a query is answered from the whole
+# queue, so partitioning the centroid space by source would make every search probe every source.
+CENTROIDS_PATH = os.environ.get(
+    "VSS_CENTROIDS_PATH", f"{PARQUET_BUCKET}/ref/vss_centroids/centroids.parquet")
+IVF_K = int(os.environ.get("VSS_IVF_K", "4096"))
+IVF_TRAIN_SAMPLE = int(os.environ.get("VSS_IVF_TRAIN_SAMPLE", "1000000"))
+IVF_TRAIN_ITERS = int(os.environ.get("VSS_IVF_TRAIN_ITERS", "20"))
+
+
+def _existing_codes_globs(con):
+    """The codes globs that actually have files behind them.
+
+    read_parquet() fails the ENTIRE call if any single glob in its bracketed list matches nothing,
+    so one schema that has never been embedded -- or whose codes were purged for a rebuild -- takes
+    every other schema's codes down with it. glob() returns no rows rather than raising, so the
+    candidates are probed first and only populated prefixes are read. Deduplicated because
+    VSS_CODES_DATASET (tests) maps every schema onto one path, which would otherwise read it once
+    per schema and count every row ten times over."""
+    globs = []
+    for schema in CODES_SOURCE_SCHEMAS:
+        pattern = f"{codes_dataset_for(schema)}/*.parquet"
+        if pattern in globs:
+            continue
+        if con.execute("SELECT count(*) FROM glob(?)", [pattern]).fetchone()[0]:
+            globs.append(pattern)
+    return globs
+
+
+def _codes_glob_arg(con):
+    """Bracketed list of every populated codes dataset, for one read_parquet() call spanning all
+    of them -- NOT a bare '*' at the bucket root, which would make DuckDB list every prefix in the
+    entire multi-schema bucket (confirmed live: a multi-minute paginated LIST across unrelated
+    schemas' data, not just the ~4 relevant ones). None when nothing is coded anywhere yet."""
+    globs = _existing_codes_globs(con)
+    if not globs:
+        return None
+    return "[" + ", ".join(f"'{g}'" for g in globs) + "]"
 
 
 # ── Embedder interface ────────────────────────────────────────────────────────
@@ -291,19 +322,18 @@ def _load_done_for_batch(con):
     to the ids actually in hand keeps only the chunk_id column in play (a few percent of the
     dataset's bytes) and lets the semi-join discard the rest as it streams.
     """
-    try:
-        con.execute(
-            f"CREATE OR REPLACE TEMP TABLE _done AS "
-            f"SELECT DISTINCT c.chunk_id FROM read_parquet({_codes_glob_arg()}) c "
-            f"WHERE c.chunk_id IN (SELECT chunk_id FROM _batch)")
-        return con.execute("SELECT count(*) FROM _done").fetchone()[0]
-    except Exception as e:
-        # First run: no codes dataset exists yet anywhere. Only swallow "no files"; re-raise
-        # anything else (bad creds, endpoint, etc.) so config errors aren't masked.
-        if "No files found" in str(e) or "does not exist" in str(e):
-            con.execute("CREATE OR REPLACE TEMP TABLE _done(chunk_id VARCHAR)")
-            return 0
-        raise
+    codes_arg = _codes_glob_arg(con)
+    if codes_arg is None:
+        # Genuinely nothing coded anywhere yet (first run, or every dataset purged for a rebuild).
+        # Distinct from a read failure, which must NOT land here: silently treating a broken read
+        # as "nothing is coded" re-embeds the entire corpus.
+        con.execute("CREATE OR REPLACE TEMP TABLE _done(chunk_id VARCHAR)")
+        return 0
+    con.execute(
+        f"CREATE OR REPLACE TEMP TABLE _done AS "
+        f"SELECT DISTINCT c.chunk_id FROM read_parquet({codes_arg}) c "
+        f"WHERE c.chunk_id IN (SELECT chunk_id FROM _batch)")
+    return con.execute("SELECT count(*) FROM _done").fetchone()[0]
 
 
 # ── Quantization + write ──────────────────────────────────────────────────────
@@ -588,13 +618,93 @@ def cmd_dedup(source_schema):
     cmd_compact(dataset=dataset, force=True)
 
 
+def cmd_ivf_train(k=IVF_K, sample_rows=IVF_TRAIN_SAMPLE, iters=IVF_TRAIN_ITERS):
+    """Train the IVF coarse quantizer -- k-means over a sample of the coded corpus -- and write
+    the centroids to CENTROIDS_PATH.
+
+    Trained on a SAMPLE rather than the whole corpus, because one Lloyd iteration is
+    O(rows x k x dim): a full-corpus iteration costs about what a full assignment pass costs, and
+    there are `iters` of them. Centroids converge on a sample of a fraction of the size, and the
+    corpus is assigned once against the converged result.
+
+    Seeds from random rows rather than k-means++: at this sample size k-means++'s serial seeding
+    pass costs more than the extra Lloyd iterations plain seeding needs to catch up.
+
+    Vectors are L2-normalised, so a dot product IS cosine similarity and assignment is one matmul.
+    That matters because assignment is the inner loop here and again for every embedded chunk.
+    """
+    import numpy as np
+    import pyarrow as pa
+    con = connect_lake()
+    try:
+        t = time.time()
+        codes_arg = _codes_glob_arg(con)
+        if codes_arg is None:
+            raise SystemExit("no codes exist yet -- run the backlog before training centroids")
+        arrow = con.execute(
+            f"SELECT rerank_i8 FROM read_parquet({codes_arg}) "
+            f"USING SAMPLE {int(sample_rows)} ROWS (reservoir, 20260908)").arrow()
+        X = np.stack(arrow.column("rerank_i8").to_numpy(zero_copy_only=False)).astype(np.float32)
+        norms = np.linalg.norm(X, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        X /= norms
+        print(f"[ivf-train] sampled {len(X)} vectors in {time.time()-t:.1f}s; "
+              f"k={k}, iters={iters}", flush=True)
+        if len(X) < k:
+            raise SystemExit(f"cannot train {k} centroids from {len(X)} sampled vectors")
+
+        rng = np.random.default_rng(20260908)
+        C = X[rng.choice(len(X), size=k, replace=False)].copy()
+        labels = np.empty(len(X), dtype=np.int32)
+        for it in range(iters):
+            t0 = time.time()
+            # Chunked so the (rows x k) similarity matrix stays bounded rather than scaling with
+            # the sample size.
+            for lo in range(0, len(X), 50000):
+                hi = min(lo + 50000, len(X))
+                labels[lo:hi] = np.argmax(X[lo:hi] @ C.T, axis=1)
+            counts = np.bincount(labels, minlength=k)
+            newC = np.empty_like(C)
+            for d in range(C.shape[1]):
+                newC[:, d] = np.bincount(labels, weights=X[:, d], minlength=k)
+            empty = counts == 0
+            newC[~empty] /= counts[~empty, None]
+            # A centroid that captured nothing keeps its previous position: zeroing it would make
+            # it the nearest neighbour of everything at once on the following pass.
+            newC[empty] = C[empty]
+            n = np.linalg.norm(newC, axis=1, keepdims=True)
+            n[n == 0] = 1.0
+            C = newC / n
+            shift = float(counts.max()) / max(1, int(counts[counts > 0].min()))
+            print(f"[ivf-train] iter {it+1}/{iters} {time.time()-t0:.1f}s — "
+                  f"{int(empty.sum())} empty, largest/smallest partition ratio {shift:.0f}x",
+                  flush=True)
+
+        tbl = pa.table({
+            "cid": pa.array(np.arange(k, dtype=np.int32)),
+            "v": pa.FixedSizeListArray.from_arrays(
+                pa.array(C.reshape(-1), type=pa.float32()), DIM),
+        })
+        con.register("_cent", tbl)
+        con.execute(f"COPY _cent TO '{CENTROIDS_PATH}' (FORMAT parquet, COMPRESSION zstd)")
+        con.unregister("_cent")
+        print(f"[ivf-train] wrote {k} centroids -> {CENTROIDS_PATH} "
+              f"(total {time.time()-t:.0f}s)", flush=True)
+    finally:
+        con.close()
+
+
 def cmd_stats():
     """Per-(source_schema, year) counts across every source's codes dataset."""
     con = connect_lake()
     try:
+        codes_arg = _codes_glob_arg(con)
+        if codes_arg is None:
+            print("(no codes dataset yet)")
+            return
         rows = con.execute(
             f"SELECT source_schema, year, count(*) AS codes FROM "
-            f"read_parquet({_codes_glob_arg()}, hive_partitioning=1) "
+            f"read_parquet({codes_arg}, hive_partitioning=1) "
             f"GROUP BY source_schema, year ORDER BY source_schema, year"
         ).fetchall()
     except duckdb.Exception:
@@ -633,6 +743,11 @@ def main():
     p_dedup = sub.add_parser("dedup")
     p_dedup.add_argument("--source-schema", default="sec",
                          help="which codes dataset to force-dedup (default: sec)")
+    p_ivf = sub.add_parser("ivf-train",
+                           help="train the IVF coarse quantizer over a sample of the codes")
+    p_ivf.add_argument("--k", type=int, default=IVF_K)
+    p_ivf.add_argument("--sample-rows", type=int, default=IVF_TRAIN_SAMPLE)
+    p_ivf.add_argument("--iters", type=int, default=IVF_TRAIN_ITERS)
     args = ap.parse_args()
 
     if args.cmd == "backlog":
@@ -643,6 +758,8 @@ def main():
         cmd_compact(dataset=codes_dataset_for(args.source_schema))
     elif args.cmd == "dedup":
         cmd_dedup(args.source_schema)
+    elif args.cmd == "ivf-train":
+        cmd_ivf_train(k=args.k, sample_rows=args.sample_rows, iters=args.iters)
     else:
         ap.error("unknown command")
 
