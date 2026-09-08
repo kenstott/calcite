@@ -24,6 +24,7 @@ public class FileInventory {
   private final boolean hasContexts;
   private final boolean hasRelationships;
   private final boolean hasMda;
+  private final boolean hasRiskFactors;
   private final boolean hasInsider;
   private final boolean hasEarnings;
   private final boolean hasChunks;
@@ -37,6 +38,7 @@ public class FileInventory {
     this.hasContexts = builder.hasContexts;
     this.hasRelationships = builder.hasRelationships;
     this.hasMda = builder.hasMda;
+    this.hasRiskFactors = builder.hasRiskFactors;
     this.hasInsider = builder.hasInsider;
     this.hasEarnings = builder.hasEarnings;
     this.hasChunks = builder.hasChunks;
@@ -66,6 +68,22 @@ public class FileInventory {
 
   public boolean hasMda() {
     return hasMda;
+  }
+
+  /**
+   * Whether Item 1A (Risk Factors) text was extracted for this filing.
+   *
+   * <p>Deliberately absent from {@link FormType#getExpectedOutputs(boolean, String)}, so it never
+   * participates in {@link #isComplete(FormType, boolean, String)}. Item 1A is not universal even
+   * among 10-Ks — smaller reporting companies
+   * are exempt from it — so requiring it would leave those filings permanently incomplete and
+   * reprocessed on every restart, which is the failure {@code getExpectedOutputs(…, items)}
+   * documents for 8-K earnings transcripts. Its purpose here is the staging marker: the
+   * materializer resolves "has this table's source data changed?" from the {@code risk_factors}
+   * marker rather than by listing the year partition.
+   */
+  public boolean hasRiskFactors() {
+    return hasRiskFactors;
   }
 
   public boolean hasInsider() {
@@ -145,7 +163,7 @@ public class FileInventory {
    */
   public boolean hasAnyFiles() {
     return hasMetadata || hasFacts || hasContexts || hasRelationships
-        || hasMda || hasInsider || hasEarnings || hasChunks
+        || hasMda || hasRiskFactors || hasInsider || hasEarnings || hasChunks
         || hasInstitutionalHoldings || hasBeneficialOwnership;
   }
 
@@ -200,6 +218,9 @@ public class FileInventory {
     if (hasMda) {
       present.add("mda");
     }
+    if (hasRiskFactors) {
+      present.add("risk_factors");
+    }
     if (hasInsider) {
       present.add("insider");
     }
@@ -230,6 +251,7 @@ public class FileInventory {
     private boolean hasContexts;
     private boolean hasRelationships;
     private boolean hasMda;
+    private boolean hasRiskFactors;
     private boolean hasInsider;
     private boolean hasEarnings;
     private boolean hasChunks;
@@ -263,6 +285,11 @@ public class FileInventory {
 
     public Builder hasMda(boolean hasMda) {
       this.hasMda = hasMda;
+      return this;
+    }
+
+    public Builder hasRiskFactors(boolean hasRiskFactors) {
+      this.hasRiskFactors = hasRiskFactors;
       return this;
     }
 

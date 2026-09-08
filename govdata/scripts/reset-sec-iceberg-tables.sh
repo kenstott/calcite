@@ -59,6 +59,7 @@ SEC_TABLES=(
     "filing_metadata"
     "financial_line_items"
     "mda_sections"
+    "risk_factor_sections"
     "stock_prices"
     "vectorized_chunks"
     "xbrl_relationships"

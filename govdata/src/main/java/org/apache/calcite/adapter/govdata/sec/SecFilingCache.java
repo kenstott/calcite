@@ -633,6 +633,14 @@ public class SecFilingCache implements AutoCloseable {
     if (inventory.hasMda()) {
       tracker.markComplete(key, "mda", PHASE_STAGING, 1);
     }
+    // The marker name must equal the infix of risk_factor_sections' source pattern
+    // ("year=*/*risk_factors*.parquet"): IcebergMaterializer derives the tracker table it asks for
+    // the source watermark from that infix. Without this marker the lookup misses and the
+    // materializer falls back to recursively listing every year partition under sec/ — hundreds of
+    // thousands of objects, repeated on every periodic commit.
+    if (inventory.hasRiskFactors()) {
+      tracker.markComplete(key, "risk_factors", PHASE_STAGING, 1);
+    }
     if (inventory.hasInsider()) {
       tracker.markComplete(key, "insider", PHASE_STAGING, 1);
     }
@@ -662,6 +670,7 @@ public class SecFilingCache implements AutoCloseable {
         .hasContexts(a.hasContexts() || b.hasContexts())
         .hasRelationships(a.hasRelationships() || b.hasRelationships())
         .hasMda(a.hasMda() || b.hasMda())
+        .hasRiskFactors(a.hasRiskFactors() || b.hasRiskFactors())
         .hasInsider(a.hasInsider() || b.hasInsider())
         .hasEarnings(a.hasEarnings() || b.hasEarnings())
         .hasChunks(a.hasChunks() || b.hasChunks())
@@ -677,6 +686,7 @@ public class SecFilingCache implements AutoCloseable {
         .hasContexts(tables.contains("contexts"))
         .hasRelationships(tables.contains("relationships"))
         .hasMda(tables.contains("mda"))
+        .hasRiskFactors(tables.contains("risk_factors"))
         .hasInsider(tables.contains("insider"))
         .hasEarnings(tables.contains("earnings"))
         .hasChunks(tables.contains("chunks"))

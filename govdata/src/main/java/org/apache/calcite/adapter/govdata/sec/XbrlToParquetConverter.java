@@ -513,7 +513,15 @@ public class XbrlToParquetConverter implements FileConverter {
       List<Map<String, Object>> riskFactorData =
           extractRiskFactorData(cik, filingType, actualFilingDate, accession, sourceFilePath);
       writeRiskFactorsToParquetFromData(riskFactorData, riskFactorsPath);
-      outputFiles.add(riskFactorsPath);
+      // Reported only when a file was actually written. writeRiskFactorsToParquetFromData skips
+      // the write for an empty extraction — every 10-Q and 8-K, and any 10-K whose filer is a
+      // smaller reporting company exempt from Item 1A — and this list is what
+      // SecSchemaFactory#buildInventoryFromOutputFiles turns into the filing's staging markers.
+      // Reporting a path with no object behind it would record a risk_factors marker for filings
+      // that produced no risk factors.
+      if (!riskFactorData.isEmpty()) {
+        outputFiles.add(riskFactorsPath);
+      }
 
       // Extract and write XBRL relationships
       LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
