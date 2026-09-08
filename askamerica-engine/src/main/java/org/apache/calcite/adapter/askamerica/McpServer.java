@@ -1087,9 +1087,6 @@ public class McpServer {
             "How many chunks to return. Default 10, capped at 50. Ask for more than you need: "
             + "the top hits are frequently boilerplate, so a short list can contain no real "
             + "match at all."));
-        semProps.set("include_text", prop("boolean",
-            "Return the chunk text and filing metadata alongside each hit (default true). "
-            + "Set false for ids and scores only, which is much faster."));
         tools.add(
             tool("semantic_search",
             "Search the FILING TEXT by meaning rather than by keyword — MD&A, risk factors, "
@@ -1097,15 +1094,19 @@ public class McpServer {
             + "cyber_threat. Use this instead of a LIKE over chunk_text: wording varies "
             + "('unauthorized access', 'threat actor', 'security event' all describe one thing) "
             + "and a keyword misses every phrasing you did not think of. Returns chunk_id, a "
-            + "cosine score, and by default the text and filing metadata, so a caller can read "
-            + "what matched. NOT a catalog search — use search_catalog to find TABLES. "
+            + "cosine score, and the source coordinates each hit came from — source_schema, "
+            + "source_table and source_key. It does NOT return the text: read it from the source "
+            + "table with query, which is the authority on it, using source_key to pick the row "
+            + "(source_key holds that table's key columns joined by ':'). Hits with "
+            + "source_resolved=false carry an older id that names no table; you cannot resolve "
+            + "those, so do not guess. NOT a catalog search — use search_catalog to find TABLES. "
             + "IMPORTANT: proximity is not occurrence. A passage saying a company MAY suffer an "
             + "event scores as highly as one saying it DID, because the difference is modality, "
             + "not topic. Read the returned text and decide; do not treat a high score as "
             + "evidence the thing happened.\n\n"
             + "RECOMMENDED PATTERN — semantic recall, literal exclusion, EVERY schema this covers: "
-            + "ask for more chunks than you need (a high k), then filter the returned text "
-            + "yourself for the false-positive shape specific to what you searched — the wide net "
+            + "ask for more chunks than you need (a high k), fetch the source rows, then filter "
+            + "them yourself for the false-positive shape specific to what you searched — the wide net "
             + "of meaning always needs a second, literal pass, and what you are filtering FOR "
             + "changes by domain: in sec, hedging language ('may', 'could', 'in the event of', "
             + "'risk of', 'if we were to') separates actual occurrence from risk-factor "
@@ -2504,12 +2505,8 @@ public class McpServer {
                     }
                     int semK = args.has("k") && !args.get("k").isNull()
                         ? Math.min(Math.max(1, args.get("k").asInt()), 50) : 10;
-                    boolean semText = !args.has("include_text")
-                        || args.get("include_text").isNull()
-                        || args.get("include_text").asBoolean(true);
-                    log.println("[askamerica-mcp] tool=semantic_search k=" + semK
-                        + " text=" + semText);
-                    text = semanticSearch(semQ, semK, semText);
+                    log.println("[askamerica-mcp] tool=semantic_search k=" + semK);
+                    text = semanticSearch(semQ, semK);
                     diagnostics = semanticSearchDiagnostics();
                     break;
                 }
@@ -5058,19 +5055,45 @@ public class McpServer {
      * search, then look up each {@code chunk_id} — is the step a caller skips, and skipping it
      * means ranking passages nobody read.
      */
-    private static String semanticSearch(String query, int k, boolean includeText)
-            throws Exception {
+    private static String semanticSearch(String query, int k) throws Exception {
         String q = sqlStr(query.trim());
-        if (!includeText) {
-            return runSqlOn("SELECT chunk_id, score FROM TABLE(SEMANTIC_SEARCH(" + q + ", " + k
-                + ")) ORDER BY score DESC", k);
+        ArrayNode rows = runSqlRows("SELECT chunk_id, score FROM TABLE(SEMANTIC_SEARCH(" + q
+            + ", " + k + ")) ORDER BY score DESC", k);
+        for (JsonNode row : rows) {
+            annotateChunkSource((ObjectNode) row);
         }
-        return runSqlOn(
-            "SELECT s.chunk_id, s.score, v.cik, v.filing_date, v.source_type, v.section, "
-            + "SUBSTRING(v.chunk_text, 1, 600) AS text "
-            + "FROM TABLE(SEMANTIC_SEARCH(" + q + ", " + k + ")) s "
-            + "LEFT JOIN sec.vectorized_chunks v ON v.chunk_id = s.chunk_id "
-            + "ORDER BY s.score DESC", k);
+        return rows.toString();
+    }
+
+    /**
+     * Splits a chunk_id into the source coordinates it already encodes, so a caller can go read
+     * the original row rather than a copy of it.
+     *
+     * <p>A chunk is a retrieval unit, not a record: the authority on its text is the source table
+     * it came from, which is in the lake and documented. chunk_id is
+     * {@code <source_schema>:<source_table>:<stringified_fk>:<sequence>} and the fk itself
+     * contains colons, so the schema and table come off the front and the sequence off the back
+     * -- never a plain split on ':'.
+     *
+     * <p>Ids that do not carry those coordinates are marked unresolved rather than guessed at.
+     * SEC chunks embedded before chunking centralised use an older
+     * {@code <accession>_<section>_<n>} form that names no table, and inventing one for them
+     * would send a caller to the wrong place.
+     */
+    private static void annotateChunkSource(ObjectNode row) {
+        String id = row.path("chunk_id").asText("");
+        int first = id.indexOf(':');
+        int second = first < 0 ? -1 : id.indexOf(':', first + 1);
+        int last = id.lastIndexOf(':');
+        if (first < 0 || second < 0 || last <= second) {
+            row.put("source_resolved", false);
+            return;
+        }
+        row.put("source_resolved", true);
+        row.put("source_schema", id.substring(0, first));
+        row.put("source_table", id.substring(first + 1, second));
+        row.put("source_key", id.substring(second + 1, last));
+        row.put("chunk_sequence", id.substring(last + 1));
     }
 
     /**
@@ -5092,7 +5115,7 @@ public class McpServer {
             + "for 'ransomware attack disrupted operations' were both forward-looking boilerplate, "
             + "at 0.874 and 0.846. The difference is modality ('possible', 'may') versus a dated "
             + "past-tense event, and embeddings encode topic, so no score threshold separates "
-            + "them. Read the returned text and classify each hit yourself. Where a structural "
+            + "them. Read each hit's source row and classify it yourself. Where a structural "
             + "filter exists — a form type, a filing section — prefer it for defining a "
             + "population and use this to characterise what you found, not to find it.");
         ObjectNode inner = MAPPER.createObjectNode();
