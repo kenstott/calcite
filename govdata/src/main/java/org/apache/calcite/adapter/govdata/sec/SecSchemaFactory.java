@@ -1151,25 +1151,35 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    */
   @SuppressWarnings("unchecked")
   /**
-   * Decides whether materialization can trust the ETL pass's own record of what it wrote, and
-   * always drains that record so it cannot carry into a later pass.
+   * Returns the ETL pass's own record of the source files it uploaded, draining it so it cannot
+   * carry into a later pass.
    *
-   * <p>Returns the uploaded paths only when the pass finished without failures. The list has to
-   * account for every unabsorbed source file, not merely the ones this pass happened to write —
-   * and a pass that failed partway cannot promise that, so the caller gets {@code null} and
-   * materialization goes back to listing the partition, which is what finds files an earlier run
-   * left behind. Callers that never ran a pass at all pass {@code null} without asking.
+   * <p>The record is a complete account of what this pass wrote, and a failed document does not
+   * make it incomplete: a document that failed produced no parquet, so there is nothing of its to
+   * absorb. Failure count was previously used to decide that the record could not be trusted, and
+   * the caller then rediscovered source files by listing the year partition instead. That was the
+   * wrong signal, and an expensive one — a single failed document out of twenty thousand sent
+   * every table to a recursive LIST of its year partition, ~35 minutes each under pool
+   * concurrency, which is more than the 12-hour scheduling window has to spare once SEC extraction
+   * has taken its 6-10 hours.
    *
-   * <p>An empty list is not the same as {@code null}: it means a pass ran cleanly and wrote
-   * nothing, so there is genuinely nothing to absorb and listing would only confirm it.
+   * <p>What the record genuinely does not cover is source files an <em>earlier</em> pass uploaded
+   * but never materialized — the residue of a run that was killed, timed out against its window,
+   * or crashed between upload and commit. That gap is unrelated to this pass's failure count: a
+   * pass with zero failures has exactly the same blind spot. Reconciling it is a deliberate
+   * operation, not a side effect of a failure — run materialization with no CIKs configured, which
+   * leaves the staged list null and puts every table back on the listing path on purpose.
+   *
+   * <p>An empty list still means "a pass ran and wrote nothing", which is materially different
+   * from {@code null}, "no pass ran, so discover by listing".
    */
   private static List<String> stagedFilesFor(
       DocumentETLProcessor.DocumentETLResult result, LocalStagingStorageProvider stagingProvider) {
     List<String> uploaded = stagingProvider.drainUploadedPaths();
     if (result.getDocumentsFailed() > 0) {
-      LOGGER.info("ETL pass reported {} failed documents — materializing via partition listing so "
-          + "any source file left unabsorbed is still picked up", result.getDocumentsFailed());
-      return null;
+      LOGGER.info("ETL pass reported {} failed documents; they produced no source files, so the "
+          + "pass's own record of {} uploaded files is still complete for what it wrote",
+          result.getDocumentsFailed(), uploaded.size());
     }
     LOGGER.info("ETL pass uploaded {} source files — materializing those without listing partitions",
         uploaded.size());
@@ -1178,9 +1188,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * @param stagedSourceFiles Source files the just-completed ETL pass uploaded, letting each table
-   *     skip the partition LIST it would otherwise need to rediscover them. Pass {@code null}
-   *     whenever that set cannot be vouched for — no ETL pass ran, or one ran and failed partway —
-   *     so materialization falls back to listing and still picks up anything left unabsorbed.
+   *     skip the partition LIST it would otherwise need to rediscover them. Pass {@code null} only
+   *     when no ETL pass ran — the no-CIK, materialization-only path — so every table discovers by
+   *     listing and picks up source files an earlier interrupted run left unabsorbed. A pass that
+   *     ran always has a usable record, failures included; see {@link #stagedFilesFor}.
    */
   private void materializeStagingFilesToIceberg(Map<String, Object> operand, String secParquetDir,
       List<String> stagedSourceFiles) {
