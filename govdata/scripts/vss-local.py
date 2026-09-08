@@ -563,34 +563,62 @@ def cmd_compact(con=None, dataset=None, force=False):
     con = con or connect_lake()
     try:
         files = _list_code_files(dataset)
-        if not force and len(files) <= COMPACT_MIN_FILES:
-            print(f"[compact] {len(files)} new files <= threshold {COMPACT_MIN_FILES} — "
+        fresh = [f for f in files if not f.startswith("codes-compact-")]
+        # force merges everything, compacted files included -- what dedup needs, since duplicates
+        # can already be sitting INSIDE a compacted file where a fresh-only merge never sees them.
+        merging = files if force else fresh
+        if not force and len(fresh) <= COMPACT_MIN_FILES:
+            print(f"[compact] {len(fresh)} new files <= threshold {COMPACT_MIN_FILES} — "
                   f"nothing to do", flush=True)
             return
-        if not files:
+        if not merging:
             print("[compact] no files to compact", flush=True)
             return
         part = f"{dataset}/ivf"
-        src = "[" + ", ".join(f"'{dataset}/{f}'" for f in files) + "]"
+        src = "[" + ", ".join(f"'{dataset}/{f}'" for f in merging) + "]"
+        # union_by_name, because these files span every format the dataset has ever held: written
+        # before the centroid column existed and after. Without it read_parquet binds to one
+        # file's schema and the column vanishes mid-merge.
+        has_centroid = con.execute(
+            "SELECT count(*) FROM parquet_schema(?) WHERE name = 'centroid'",
+            [f"{dataset}/*.parquet"]).fetchone()[0] > 0
+        centroid_expr = "COALESCE(c.centroid, -1)::BIGINT" if has_centroid else "-1::BIGINT"
+        keep = ""
         have_part = con.execute(
             "SELECT count(*) FROM glob(?)", [f"{part}/**/*.parquet"]).fetchone()[0]
-        keep = ""
-        if have_part:
+        if have_part and not force:
             keep = (f" AND chunk_id NOT IN "
                     f"(SELECT chunk_id FROM read_parquet('{part}/**/*.parquet'))")
-        print(f"[compact] folding {len(files)} flat files into {part} "
-              f"({'append' if have_part else 'new'}) ...", flush=True)
+        deduped = (
+            f"SELECT chunk_id, year, centroid, w0, w1, w2, w3, w4, w5, rerank_i8 FROM ("
+            f"SELECT c.chunk_id, c.year, {centroid_expr} AS centroid, c.w0, c.w1, c.w2, c.w3,"
+            f" c.w4, c.w5, c.rerank_i8,"
+            f" row_number() OVER (PARTITION BY c.chunk_id) AS _rn "
+            f"FROM read_parquet({src}, union_by_name=true) c) WHERE _rn = 1{keep}")
+
+        # Partition only when there is something to partition BY. Before a quantizer exists every
+        # code is -1, and writing them into a single centroid=-1 directory is churn that buys no
+        # pruning -- and worse, freezes them into a partition a probe must always read, where a
+        # flat file can simply be reassigned and partitioned later.
+        assigned = con.execute(
+            f"SELECT coalesce(max(centroid), -1) FROM ({deduped})").fetchone()[0]
+        tag = time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
+        if assigned < 0:
+            target = f"{dataset}/codes-compact-{tag}.parquet"
+            opts = "FORMAT parquet, COMPRESSION zstd"
+            shape = "flat (no centroids assigned yet)"
+        else:
+            target = part
+            opts = ("FORMAT parquet, COMPRESSION zstd, PARTITION_BY (centroid)"
+                    + (", APPEND" if have_part else ""))
+            shape = f"partitioned ({'append' if have_part else 'new'})"
+        print(f"[compact] merging {len(merging)} files -> {shape} ...", flush=True)
         t = time.time()
-        con.execute(
-            f"COPY (SELECT * EXCLUDE (_rn) FROM "
-            f"(SELECT *, row_number() OVER (PARTITION BY chunk_id) AS _rn "
-            f"FROM read_parquet({src})) WHERE _rn = 1{keep}) "
-            f"TO '{part}' (FORMAT parquet, COMPRESSION zstd, PARTITION_BY (centroid)"
-            + (", APPEND" if have_part else "") + ")")
+        con.execute(f"COPY ({deduped}) TO '{target}' ({opts})")
         base = _rclone_path(dataset)
         for f in files:
             subprocess.run(["rclone", "deletefile", f"{base}/{f}"], capture_output=True, text=True)
-        print(f"[compact] done in {time.time()-t:.0f}s — {len(files)} files folded in", flush=True)
+        print(f"[compact] done in {time.time()-t:.0f}s — {len(merging)} files merged", flush=True)
     finally:
         if own:
             con.close()
