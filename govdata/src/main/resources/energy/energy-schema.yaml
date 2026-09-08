@@ -259,7 +259,7 @@ partitionedTables:
       contiguous: false
       years: [2016, 2017, 2026]
       rowCount: 521873
-      checkedAt: "2026-09-08T23:11:49Z"
+      checkedAt: "2026-09-08T23:39:35Z"
     # DQ sample cap (GOVDATA_DQ mode): ~120k rows/year (state × source × sector × 12 months),
     # fetched per-year (backfill_period: annual) via ~24 paginated EIA API pages. Cap each
     # year's sample so DQ stops paginating early; prod loads everything.
@@ -413,7 +413,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 7068
-      checkedAt: "2026-09-08T23:11:51Z"
+      checkedAt: "2026-09-08T23:39:37Z"
     partitions: *standard_partitions
     comment: >
       EIA API v2 retail electricity sales data, fetched at annual frequency (the source URL
@@ -518,7 +518,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 37649
-      checkedAt: "2026-09-08T23:11:53Z"
+      checkedAt: "2026-09-08T23:39:39Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 861 annual electric utility survey. Covers all electric utilities, retail
@@ -700,7 +700,7 @@ partitionedTables:
       contiguous: false
       years: [2013, 2014, 2023]
       rowCount: 35625
-      checkedAt: "2026-09-08T23:11:54Z"
+      checkedAt: "2026-09-08T23:39:40Z"
     partitions: *standard_partitions
     comment: >
       EIA-861 utility-to-county service-territory crosswalk. One row per utility +
@@ -793,7 +793,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 264539
-      checkedAt: "2026-09-08T23:11:57Z"
+      checkedAt: "2026-09-08T23:39:42Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 860 annual electric generator inventory. One row per generator (plant +
@@ -998,7 +998,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 345484
-      checkedAt: "2026-09-08T23:11:59Z"
+      checkedAt: "2026-09-08T23:39:45Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 860M monthly generator inventory snapshot for December of each year.
@@ -1143,7 +1143,7 @@ partitionedTables:
       distinctYears: 21
       contiguous: true
       rowCount: 20640
-      checkedAt: "2026-09-08T23:12:04Z"
+      checkedAt: "2026-09-08T23:39:50Z"
     partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 petroleum crude oil production by state and month. Source is a single
@@ -1480,7 +1480,7 @@ partitionedTables:
       contiguous: false
       years: [2016, 2017, 2026]
       rowCount: 24355
-      checkedAt: "2026-09-08T23:12:05Z"
+      checkedAt: "2026-09-08T23:39:52Z"
     partitions: *standard_partitions
     comment: >
       EIA API v2 weekly petroleum product stocks. Covers crude oil and refined products
@@ -1697,7 +1697,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026]
       rowCount: 203250
-      checkedAt: "2026-09-08T23:12:06Z"
+      checkedAt: "2026-09-08T23:39:53Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 814 monthly crude oil import survey. The transformer iterates all 12
@@ -1828,7 +1828,7 @@ partitionedTables:
       contiguous: false
       years: [2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026]
       rowCount: 303065
-      checkedAt: "2026-09-08T23:12:11Z"
+      checkedAt: "2026-09-08T23:39:59Z"
     partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 petroleum refinery process data in tall format. One row per EIA area +
@@ -1954,7 +1954,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 42474
-      checkedAt: "2026-09-08T23:12:12Z"
+      checkedAt: "2026-09-08T23:40:01Z"
     partitions: *standard_partitions
     comment: >
       MSHA MinesProdYearly coal mine production data (pipe-delimited CSV ZIP). The
