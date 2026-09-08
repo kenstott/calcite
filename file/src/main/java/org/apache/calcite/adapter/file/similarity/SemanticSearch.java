@@ -61,7 +61,7 @@ import java.util.List;
  * <p>No launcher config is required: S3 access is handed in by the file adapter via
  * {@link #configure} (it reuses the same credentials/endpoint the adapter already resolved), and
  * the codes locations default to every schema in {@link #DEFAULT_SOURCE_SCHEMAS} — each source
- * schema's codes live under its own bucket-rooted prefix (see {@link #defaultCodesArg}), so
+ * schema's codes live under its own bucket-rooted prefix (see {@link #defaultCodesGlobs}), so
  * search spans all of them, not just {@code sec}. All of the following are optional overrides
  * (system properties — file/ code must not read the environment):
  * <ul>
@@ -126,10 +126,15 @@ public final class SemanticSearch {
   // source_schema=ref (see vss-local.py's codes_dataset_for()) -- not a shared parent
   // directory, so one glob cannot span multiple schemas.
   private static List<String> defaultCodesGlobs() {
-    List<String> globs = new ArrayList<String>(DEFAULT_SOURCE_SCHEMAS.size());
+    List<String> globs = new ArrayList<String>(DEFAULT_SOURCE_SCHEMAS.size() * 2);
     for (String schema : DEFAULT_SOURCE_SCHEMAS) {
-      globs.add("s3://govdata-parquet-v1/" + schema + "/vectorized_chunk_codes/source_schema="
-          + schema + "/*.parquet");
+      String dataset = "s3://govdata-parquet-v1/" + schema + "/vectorized_chunk_codes/"
+          + "source_schema=" + schema;
+      // Both shapes a codes dataset holds: the flat tail of recent embed flushes, and the
+      // centroid-partitioned set compaction folds them into (vss-local.py's cmd_compact).
+      // Reading only the first would silently lose everything already compacted.
+      globs.add(dataset + "/*.parquet");
+      globs.add(dataset + "/ivf/**/*.parquet");
     }
     return globs;
   }
@@ -161,16 +166,20 @@ public final class SemanticSearch {
     return globs.isEmpty() ? defaultCodesGlobs() : globs;
   }
 
-  /** {@code read_parquet()} takes a bracketed list of globs when several are in play. */
-  private static String codesArg(List<String> globs) {
-    StringBuilder sb = new StringBuilder("[");
+  /** A {@code read_parquet(...)} call over every glob in play.
+   *
+   * <p>{@code union_by_name} is required, not cosmetic: compaction encodes {@code centroid} into
+   * the directory path, so a partitioned file does not carry that column while a flat tail file
+   * does. Matching positionally across the two shapes fails on the differing column sets. */
+  private static String readCodes(List<String> globs) {
+    StringBuilder sb = new StringBuilder("read_parquet([");
     for (int i = 0; i < globs.size(); i++) {
       if (i > 0) {
         sb.append(", ");
       }
       sb.append('\'').append(globs.get(i)).append('\'');
     }
-    return sb.append(']').toString();
+    return sb.append("], union_by_name=true)").toString();
   }
 
   // S3 access captured from the file adapter's own resolved config (see configure()), so the
@@ -323,7 +332,7 @@ public final class SemanticSearch {
     try {
       long[] w = packBits(v);
       Connection c = connection();
-      String src = localReady ? LOCAL_TABLE : "read_parquet(" + codesArg(codesGlobs()) + ")";
+      String src = localReady ? LOCAL_TABLE : readCodes(codesGlobs());
       int prefilter = prefilterWidth(c, src);
 
       StringBuilder ham = new StringBuilder();
@@ -468,7 +477,7 @@ public final class SemanticSearch {
         st.execute("DROP TABLE IF EXISTS " + LOCAL_TABLE);
         st.execute("DELETE FROM " + LOCAL_SOURCE_TABLE);
         st.execute("CREATE TABLE " + LOCAL_TABLE + " AS SELECT chunk_id, w0, w1, w2, w3, w4, w5,"
-            + " rerank_i8 FROM read_parquet(" + codesArg(globs) + ")");
+            + " rerank_i8 FROM " + readCodes(globs));
         st.execute("INSERT INTO " + LOCAL_SOURCE_TABLE + " SELECT file FROM _vss_remote");
         LOGGER.info("SEMANTIC_SEARCH loaded the codes locally ({} files)", globs.size());
       } else {
@@ -481,7 +490,7 @@ public final class SemanticSearch {
         }
         if (!missing.isEmpty()) {
           st.execute("INSERT INTO " + LOCAL_TABLE + " SELECT chunk_id, w0, w1, w2, w3, w4, w5,"
-              + " rerank_i8 FROM read_parquet(" + codesArg(missing) + ")");
+              + " rerank_i8 FROM " + readCodes(missing));
           st.execute("INSERT INTO " + LOCAL_SOURCE_TABLE + " SELECT file FROM _vss_remote "
               + "WHERE file NOT IN (SELECT file FROM " + LOCAL_SOURCE_TABLE + ")");
           LOGGER.info("SEMANTIC_SEARCH added {} new codes files locally", missing.size());

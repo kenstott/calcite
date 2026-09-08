@@ -189,34 +189,45 @@ IVF_TRAIN_SAMPLE = int(os.environ.get("VSS_IVF_TRAIN_SAMPLE", "1000000"))
 IVF_TRAIN_ITERS = int(os.environ.get("VSS_IVF_TRAIN_ITERS", "20"))
 
 
-def _existing_codes_globs(con):
-    """The codes globs that actually have files behind them.
+def _codes_shapes(con):
+    """Every populated codes location, as (pattern, is_partitioned) pairs.
 
-    read_parquet() fails the ENTIRE call if any single glob in its bracketed list matches nothing,
-    so one schema that has never been embedded -- or whose codes were purged for a rebuild -- takes
-    every other schema's codes down with it. glob() returns no rows rather than raising, so the
-    candidates are probed first and only populated prefixes are read. Deduplicated because
-    VSS_CODES_DATASET (tests) maps every schema onto one path, which would otherwise read it once
-    per schema and count every row ten times over."""
-    globs = []
+    A dataset holds two shapes: the flat tail of recent flushes, and the centroid-partitioned set
+    compaction folds them into (see cmd_compact). Deduplicated because VSS_CODES_DATASET (tests)
+    maps every schema onto one path, which would otherwise read it once per schema."""
+    seen = []
     for schema in CODES_SOURCE_SCHEMAS:
-        pattern = f"{codes_dataset_for(schema)}/*.parquet"
-        if pattern in globs:
-            continue
-        if con.execute("SELECT count(*) FROM glob(?)", [pattern]).fetchone()[0]:
-            globs.append(pattern)
-    return globs
+        dataset = codes_dataset_for(schema)
+        for pattern, partitioned in ((f"{dataset}/*.parquet", False),
+                                     (f"{dataset}/ivf/**/*.parquet", True)):
+            if pattern in [p for p, _ in seen]:
+                continue
+            if con.execute("SELECT count(*) FROM glob(?)", [pattern]).fetchone()[0]:
+                seen.append((pattern, partitioned))
+    return seen
 
 
-def _codes_glob_arg(con):
-    """Bracketed list of every populated codes dataset, for one read_parquet() call spanning all
-    of them -- NOT a bare '*' at the bucket root, which would make DuckDB list every prefix in the
-    entire multi-schema bucket (confirmed live: a multi-minute paginated LIST across unrelated
-    schemas' data, not just the ~4 relevant ones). None when nothing is coded anywhere yet."""
-    globs = _existing_codes_globs(con)
-    if not globs:
+def _codes_relation(con):
+    """A SQL relation spanning every populated codes shape, or None when nothing is coded yet.
+
+    Deliberately a UNION of per-shape reads rather than one read_parquet over a bracketed list of
+    both. A flat tail file has no centroid= component in its path while a compacted one does, and
+    hive partitioning refuses to span that ("Hive partition mismatch"); on top of that the tail
+    carries centroid as a real column while the partitioned set has it inferred from the path as
+    BIGINT. Each shape is read on its own terms and projected onto one column list.
+
+    read_parquet also fails its ENTIRE call if any single glob matches nothing, which is why the
+    shapes are probed with glob() first -- a schema that was never embedded, or whose codes were
+    purged for a rebuild, must not take every other schema's codes down with it."""
+    parts = []
+    for pattern, partitioned in _codes_shapes(con):
+        parts.append(
+            "SELECT chunk_id, year, centroid::BIGINT AS centroid, w0, w1, w2, w3, w4, w5, "
+            f"rerank_i8 FROM read_parquet('{pattern}'"
+            + (", hive_partitioning=1" if partitioned else "") + ")")
+    if not parts:
         return None
-    return "[" + ", ".join(f"'{g}'" for g in globs) + "]"
+    return "(" + " UNION ALL ".join(parts) + ")"
 
 
 # ── Embedder interface ────────────────────────────────────────────────────────
@@ -322,8 +333,8 @@ def _load_done_for_batch(con):
     to the ids actually in hand keeps only the chunk_id column in play (a few percent of the
     dataset's bytes) and lets the semi-join discard the rest as it streams.
     """
-    codes_arg = _codes_glob_arg(con)
-    if codes_arg is None:
+    codes_rel = _codes_relation(con)
+    if codes_rel is None:
         # Genuinely nothing coded anywhere yet (first run, or every dataset purged for a rebuild).
         # Distinct from a read failure, which must NOT land here: silently treating a broken read
         # as "nothing is coded" re-embeds the entire corpus.
@@ -331,12 +342,49 @@ def _load_done_for_batch(con):
         return 0
     con.execute(
         f"CREATE OR REPLACE TEMP TABLE _done AS "
-        f"SELECT DISTINCT c.chunk_id FROM read_parquet({codes_arg}) c "
+        f"SELECT DISTINCT c.chunk_id FROM {codes_rel} c "
         f"WHERE c.chunk_id IN (SELECT chunk_id FROM _batch)")
     return con.execute("SELECT count(*) FROM _done").fetchone()[0]
 
 
 # ── Quantization + write ──────────────────────────────────────────────────────
+_CENTROIDS = None
+
+
+def _load_centroids(con):
+    """The trained IVF centroid matrix, or None when none has been trained yet.
+
+    Cached for the process: every flush assigns against it, and re-reading it per batch would
+    dominate the assignment it exists for. None is a normal state, not an error -- codes written
+    before any training simply carry centroid -1 and a probe has to read them unconditionally
+    until a later compaction folds them in."""
+    global _CENTROIDS
+    if _CENTROIDS is not None:
+        return _CENTROIDS
+    import numpy as np
+    if not con.execute("SELECT count(*) FROM glob(?)", [CENTROIDS_PATH]).fetchone()[0]:
+        print(f"[codes] no centroids at {CENTROIDS_PATH} -- writing centroid=-1 "
+              f"(run ivf-train to enable IVF probing)", flush=True)
+        return None
+    arrow = con.execute(
+        f"SELECT cid, v FROM read_parquet('{CENTROIDS_PATH}') ORDER BY cid").arrow()
+    _CENTROIDS = np.stack(
+        arrow.column("v").to_numpy(zero_copy_only=False)).astype(np.float32)
+    print(f"[codes] loaded {len(_CENTROIDS)} IVF centroids", flush=True)
+    return _CENTROIDS
+
+
+def _assign_centroids(X, C):
+    """Nearest centroid per row. Both sides are L2-normalised, so the dot product IS cosine and
+    the whole assignment is one matmul -- chunked only to bound the (rows x k) intermediate."""
+    import numpy as np
+    out = np.empty(len(X), dtype=np.int32)
+    for lo in range(0, len(X), 50000):
+        hi = min(lo + 50000, len(X))
+        out[lo:hi] = np.argmax(X[lo:hi] @ C.T, axis=1)
+    return out
+
+
 def _pack_codes(X):
     """(n,384) unit float32 -> (W:(n,6) uint64 sign-bit code, I8:(n,384) int8 rerank)."""
     import numpy as np
@@ -346,7 +394,7 @@ def _pack_codes(X):
     return W, I8
 
 
-def _write_codes(con, ids, schemas, yrs, W, I8, label):
+def _write_codes(con, ids, schemas, yrs, cids, W, I8, label):
     """Append one parquet file of codes per source_schema present in this batch -- the queue is
     one unified thing, but physical storage stays Hive-partitioned by source_schema (same layout
     as ref.vectorized_chunks itself: one table, partitioned, not one table per source). Returns
@@ -362,6 +410,12 @@ def _write_codes(con, ids, schemas, yrs, W, I8, label):
         tbl = pa.table({
             "chunk_id": pa.array([ids[i] for i in idx], pa.string()),
             "year": pa.array(np.asarray([yrs[i] for i in idx], dtype=np.int32)),
+            # Which IVF partition this code belongs to. -1 until centroids exist; compaction is
+            # what later folds these flat files into centroid= directories a probe can skip.
+            # int64 deliberately: compaction encodes this into the path, and hive partitioning
+            # reads a bare integer key back as BIGINT -- writing int32 here makes a read spanning
+            # the flat tail and the partitioned set fail on the type mismatch.
+            "centroid": pa.array(np.asarray([cids[i] for i in idx], dtype=np.int64)),
             "w0": pa.array(np.ascontiguousarray(W[idx, 0])),
             "w1": pa.array(np.ascontiguousarray(W[idx, 1])),
             "w2": pa.array(np.ascontiguousarray(W[idx, 2])),
@@ -391,7 +445,8 @@ def _embed_and_write(con, todo, label, max_seconds=None):
     if total == 0:
         return 0, None, set()
     emb = make_embedder()
-    ids, schemas, yrs, Ws, I8s = [], [], [], [], []
+    centroids = _load_centroids(con)
+    ids, schemas, yrs, Cs, Ws, I8s = [], [], [], [], [], []
     buffered = 0
     flush_idx = 0
     done = 0
@@ -399,12 +454,13 @@ def _embed_and_write(con, todo, label, max_seconds=None):
     touched = set()
 
     def _flush():
-        nonlocal ids, schemas, yrs, Ws, I8s, buffered, flush_idx
+        nonlocal ids, schemas, yrs, Cs, Ws, I8s, buffered, flush_idx
         if not ids:
             return
-        touched.update(_write_codes(con, ids, schemas, yrs, np.concatenate(Ws),
-                                     np.concatenate(I8s), f"{label}-{flush_idx:04d}"))
-        ids, schemas, yrs, Ws, I8s = [], [], [], [], []
+        touched.update(_write_codes(con, ids, schemas, yrs, np.concatenate(Cs),
+                                     np.concatenate(Ws), np.concatenate(I8s),
+                                     f"{label}-{flush_idx:04d}"))
+        ids, schemas, yrs, Cs, Ws, I8s = [], [], [], [], [], []
         buffered = 0
         flush_idx += 1
 
@@ -412,6 +468,10 @@ def _embed_and_write(con, todo, label, max_seconds=None):
         batch = todo[done:done + BATCH]
         X = np.asarray(emb.embed([r[3] for r in batch]), dtype=np.float32)
         W, I8 = _pack_codes(X)
+        # Assigned here, while the float vectors are still in hand: doing it later would mean
+        # re-reading the whole codes dataset back out of the lake to assign it.
+        Cs.append(_assign_centroids(X, centroids) if centroids is not None
+                  else np.full(len(X), -1, dtype=np.int32))
         ids.extend(r[0] for r in batch)
         schemas.extend(r[1] for r in batch)
         yrs.extend(int(r[2]) for r in batch)
@@ -454,25 +514,26 @@ def _list_code_files(dataset):
 
 
 def cmd_compact(con=None, dataset=None, force=False):
-    """Merge the codes dataset's accumulated small files, once there are more than
-    COMPACT_MIN_FILES of them (or unconditionally when force=True). The consolidated file is
-    written to a .compact/ staging key (outside the flat *.parquet glob), moved into place, then
-    the merged sources are deleted — so the query glob never sees a half-written file.
+    """Fold the flat files a backlog run produced into the IVF-partitioned layout.
 
-    Only the files a backlog run produced are read and rewritten; anything already carrying the
-    codes-compact- prefix is left in place and merely consulted. Compaction therefore costs what
-    has arrived since the last one, not a rewrite of the entire dataset each time the file count
-    trips the threshold -- which is the same work whether one new file or fifteen triggered it,
-    and grows with the corpus rather than with the change.
+    Codes are WRITTEN flat -- one file per flush per source_schema -- because partitioning at
+    write time would shard every flush across every centroid: a 100,000-row flush over 4,096
+    partitions is 24 rows a file. Compaction is where they become centroid= directories a probe
+    can skip, which is the same small-files-then-merge step this always was, with the layout
+    change folded into it.
 
-    The merge keeps one row per chunk_id (arbitrary pick among duplicates -- they're re-encodings
-    of the same chunk_text, so any is as good as any other): overlapping backlog runs can each
-    code the same not-yet-`_done`-visible chunk before either commits. Rows already present in a
-    file being left in place are dropped here for the same reason, since that file is not itself
-    being rewritten to remove them.
+    The dataset therefore has two shapes at once: a small unpartitioned tail of recent flushes,
+    and the partitioned set under ivf/. A search reads its probed partitions PLUS the whole tail,
+    since nothing yet says which partitions the tail's rows belong to.
 
-    force=True merges everything, compacted files included -- what cmd_dedup needs for duplicates
-    that already ended up inside one.
+    One row per chunk_id survives (an arbitrary pick among duplicates -- they are re-encodings of
+    the same chunk_text, so any is as good as any other): overlapping backlog runs can each code
+    the same not-yet-`_done`-visible chunk before either commits. Rows already in the partitioned
+    set are dropped rather than appended, for the same reason.
+
+    A crash between the append and the deletes leaves a chunk in both shapes. That is harmless
+    rather than corrupting: the duplicate carries identical codes, so it can only ever score
+    identically to itself, and the next compaction drops it.
     """
     if dataset is None:
         raise ValueError("cmd_compact requires an explicit dataset (which source_schema's codes)")
@@ -480,40 +541,34 @@ def cmd_compact(con=None, dataset=None, force=False):
     con = con or connect_lake()
     try:
         files = _list_code_files(dataset)
-        compacted = [f for f in files if f.startswith("codes-compact-")]
-        fresh = [f for f in files if not f.startswith("codes-compact-")]
-        merging = files if force else fresh
-        if not force and len(fresh) <= COMPACT_MIN_FILES:
-            print(f"[compact] {len(fresh)} new files <= threshold {COMPACT_MIN_FILES} — "
+        if not force and len(files) <= COMPACT_MIN_FILES:
+            print(f"[compact] {len(files)} new files <= threshold {COMPACT_MIN_FILES} — "
                   f"nothing to do", flush=True)
             return
-        if not merging:
+        if not files:
             print("[compact] no files to compact", flush=True)
             return
-        tag = time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
-        staged = f"{dataset}/.compact/codes-compact-{tag}.parquet"
-        final = f"{dataset}/codes-compact-{tag}.parquet"
-        src = "[" + ", ".join(f"'{dataset}/{f}'" for f in merging) + "]"
+        part = f"{dataset}/ivf"
+        src = "[" + ", ".join(f"'{dataset}/{f}'" for f in files) + "]"
+        have_part = con.execute(
+            "SELECT count(*) FROM glob(?)", [f"{part}/**/*.parquet"]).fetchone()[0]
         keep = ""
-        if not force and compacted:
-            prior = "[" + ", ".join(f"'{dataset}/{f}'" for f in compacted) + "]"
-            keep = f" AND chunk_id NOT IN (SELECT chunk_id FROM read_parquet({prior}))"
-        print(f"[compact] merging {len(merging)} files (deduped by chunk_id), "
-              f"{len(files) - len(merging)} left in place ...", flush=True)
+        if have_part:
+            keep = (f" AND chunk_id NOT IN "
+                    f"(SELECT chunk_id FROM read_parquet('{part}/**/*.parquet'))")
+        print(f"[compact] folding {len(files)} flat files into {part} "
+              f"({'append' if have_part else 'new'}) ...", flush=True)
         t = time.time()
         con.execute(
             f"COPY (SELECT * EXCLUDE (_rn) FROM "
             f"(SELECT *, row_number() OVER (PARTITION BY chunk_id) AS _rn "
             f"FROM read_parquet({src})) WHERE _rn = 1{keep}) "
-            f"TO '{staged}' (FORMAT parquet, COMPRESSION zstd)")
-        subprocess.run(["rclone", "moveto", _rclone_path(staged), _rclone_path(final)],
-                       capture_output=True, text=True, check=True)
+            f"TO '{part}' (FORMAT parquet, COMPRESSION zstd, PARTITION_BY (centroid)"
+            + (", APPEND" if have_part else "") + ")")
         base = _rclone_path(dataset)
-        for f in merging:
+        for f in files:
             subprocess.run(["rclone", "deletefile", f"{base}/{f}"], capture_output=True, text=True)
-        subprocess.run(["rclone", "purge", _rclone_path(f"{dataset}/.compact")],
-                       capture_output=True, text=True)
-        print(f"[compact] done in {time.time()-t:.0f}s — {len(merging)} files -> 1", flush=True)
+        print(f"[compact] done in {time.time()-t:.0f}s — {len(files)} files folded in", flush=True)
     finally:
         if own:
             con.close()
@@ -638,11 +693,11 @@ def cmd_ivf_train(k=IVF_K, sample_rows=IVF_TRAIN_SAMPLE, iters=IVF_TRAIN_ITERS):
     con = connect_lake()
     try:
         t = time.time()
-        codes_arg = _codes_glob_arg(con)
-        if codes_arg is None:
+        codes_rel = _codes_relation(con)
+        if codes_rel is None:
             raise SystemExit("no codes exist yet -- run the backlog before training centroids")
         arrow = con.execute(
-            f"SELECT rerank_i8 FROM read_parquet({codes_arg}) "
+            f"SELECT rerank_i8 FROM {codes_rel} "
             f"USING SAMPLE {int(sample_rows)} ROWS (reservoir, 20260908)").arrow()
         X = np.stack(arrow.column("rerank_i8").to_numpy(zero_copy_only=False)).astype(np.float32)
         norms = np.linalg.norm(X, axis=1, keepdims=True)
@@ -695,28 +750,34 @@ def cmd_ivf_train(k=IVF_K, sample_rows=IVF_TRAIN_SAMPLE, iters=IVF_TRAIN_ITERS):
 
 
 def cmd_stats():
-    """Per-(source_schema, year) counts across every source's codes dataset."""
+    """Per-source_schema code counts, split by shape so the size of the uncompacted tail -- the
+    part every search has to read whatever it probes -- is visible rather than inferred."""
     con = connect_lake()
     try:
-        codes_arg = _codes_glob_arg(con)
-        if codes_arg is None:
-            print("(no codes dataset yet)")
-            return
-        rows = con.execute(
-            f"SELECT source_schema, year, count(*) AS codes FROM "
-            f"read_parquet({codes_arg}, hive_partitioning=1) "
-            f"GROUP BY source_schema, year ORDER BY source_schema, year"
-        ).fetchall()
-    except duckdb.Exception:
-        print("(no codes dataset yet)")
+        total = 0
+        seen = set()
+        for schema in CODES_SOURCE_SCHEMAS:
+            dataset = codes_dataset_for(schema)
+            if dataset in seen:
+                continue
+            seen.add(dataset)
+            counts = {}
+            for label, pattern, hive in (("tail", f"{dataset}/*.parquet", False),
+                                         ("partitioned", f"{dataset}/ivf/**/*.parquet", True)):
+                if not con.execute("SELECT count(*) FROM glob(?)", [pattern]).fetchone()[0]:
+                    counts[label] = 0
+                    continue
+                counts[label] = con.execute(
+                    f"SELECT count(*) FROM read_parquet('{pattern}'"
+                    + (", hive_partitioning=1" if hive else "") + ")").fetchone()[0]
+            n = counts["tail"] + counts["partitioned"]
+            if n:
+                print(f"  {schema:<14} codes={n}  partitioned={counts['partitioned']}  "
+                      f"tail={counts['tail']}")
+            total += n
+        print(f"  TOTAL codes={total}")
+    finally:
         con.close()
-        return
-    total = 0
-    for schema, y, c in rows:
-        print(f"  source_schema={schema}  year={y}  codes={c}")
-        total += c
-    print(f"  TOTAL codes={total}")
-    con.close()
 
 
 def _default_max_seconds():
