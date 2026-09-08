@@ -254,7 +254,7 @@ partitionedTables:
       distinctYears: 32
       contiguous: true
       rowCount: 3390223
-      checkedAt: "2026-09-08T23:04:03Z"
+      checkedAt: "2026-09-08T23:33:49Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats field-crop statistics — production, area planted, area
@@ -353,7 +353,7 @@ partitionedTables:
       distinctYears: 32
       contiguous: true
       rowCount: 818044
-      checkedAt: "2026-09-08T23:04:05Z"
+      checkedAt: "2026-09-08T23:33:50Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats livestock and poultry inventory head counts by county and
@@ -447,7 +447,7 @@ partitionedTables:
       distinctYears: 31
       contiguous: true
       rowCount: 3798354
-      checkedAt: "2026-09-08T23:04:09Z"
+      checkedAt: "2026-09-08T23:33:53Z"
     partitions: *nass_partitions
     comment: >
       USDA RMA Summary of Business — crop insurance experience by state, county,
@@ -667,7 +667,7 @@ partitionedTables:
       contiguous: false
       years: [2016, 2017, 2025]
       rowCount: 365207
-      checkedAt: "2026-09-08T23:04:10Z"
+      checkedAt: "2026-09-08T23:33:54Z"
     partitions: *nass_partitions
     comment: >
       USDA RMA Cause of Loss — crop insurance experience by state, county, crop,
@@ -907,7 +907,7 @@ partitionedTables:
       distinctYears: 117
       contiguous: true
       rowCount: 468214
-      checkedAt: "2026-09-08T23:04:12Z"
+      checkedAt: "2026-09-08T23:33:55Z"
     partitions: *nass_partitions
     comment: >
       USDA ERS Farm Income and Wealth Statistics by state and US total: cash
@@ -1033,7 +1033,7 @@ partitionedTables:
       contiguous: false
       years: [2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
       rowCount: 942472
-      checkedAt: "2026-09-08T23:04:15Z"
+      checkedAt: "2026-09-08T23:33:56Z"
     partitions: *nass_partitions
     comment: >
       USDA FSA program and conservation payments aggregated by county, program,
@@ -1148,7 +1148,7 @@ partitionedTables:
       distinctYears: 28
       contiguous: true
       rowCount: 9562214
-      checkedAt: "2026-09-08T23:04:18Z"
+      checkedAt: "2026-09-08T23:33:58Z"
     partitions: *nass_partitions
     comment: >
       USGS NAWQA Pesticide National Synthesis Project estimated annual agricultural
