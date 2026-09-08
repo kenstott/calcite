@@ -126,7 +126,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 32853
-      checkedAt: "2026-09-08T23:07:55Z"
+      checkedAt: "2026-09-08T23:35:55Z"
     partitions: *standard_partitions
     comment: >
       Canonical FEMA disaster-declaration record. One row per
@@ -264,7 +264,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 404509
-      checkedAt: "2026-09-08T23:07:56Z"
+      checkedAt: "2026-09-08T23:35:56Z"
     partitions: *standard_partitions
     comment: >
       FEMA Public Assistance grants to state/local governments and nonprofits
@@ -402,7 +402,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 30853
-      checkedAt: "2026-09-08T23:07:57Z"
+      checkedAt: "2026-09-08T23:35:57Z"
     partitions: *standard_partitions
     comment: >
       FEMA Hazard Mitigation Assistance projects (program_area: HMGP, BRIC,
@@ -537,7 +537,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1009346
-      checkedAt: "2026-09-08T23:07:59Z"
+      checkedAt: "2026-09-08T23:35:59Z"
     partitions: *standard_partitions
     comment: >
       Paid NFIP flood-insurance claims — amount_paid_building,
@@ -679,7 +679,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 1053000
-      checkedAt: "2026-09-08T23:08:00Z"
+      checkedAt: "2026-09-08T23:36:00Z"
     partitions: *standard_partitions
     dqRowLimit: 50000
     comment: >
@@ -822,7 +822,7 @@ partitionedTables:
       distinctYears: 23
       contiguous: true
       rowCount: 1416916
-      checkedAt: "2026-09-08T23:08:02Z"
+      checkedAt: "2026-09-08T23:36:01Z"
     partitions: *standard_partitions
     comment: >
       NOAA NCEI Storm Events Database — one row per storm event detail record
