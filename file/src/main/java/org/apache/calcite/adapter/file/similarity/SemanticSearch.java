@@ -85,10 +85,18 @@ public final class SemanticSearch {
 
   // Prefilter sizing -- see prefilterWidth(). The divisor pins the candidates-to-corpus ratio at
   // the measured 50,000-in-3.19M operating point (80% recall@10); the floor keeps small corpora
-  // from being trimmed for nothing, and the ceiling bounds stage-2 rerank on a very large one.
+  // from being trimmed for nothing.
+  //
+  // The ceiling exists only to bound stage-2 rerank, and it is set from the measured cost of
+  // widening rather than picked defensively: on a 3.19M corpus, query time ran 0.386s at 50,000
+  // candidates and 1.168s at 1,000,000 -- about 0.82us per additional candidate, against a scan
+  // that dominates until the width is enormous. At a million it therefore binds no earlier than
+  // a 64M-row corpus and costs under a second of rerank when it does. A tighter ceiling is worse
+  // than it looks: it silently reintroduces the fixed-width problem this sizing exists to fix,
+  // just at a higher row count, and recall decays with no signal when it does.
   private static final int FRACTION_DIVISOR = 64;
   private static final int MIN_PREFILTER = 50_000;
-  private static final int MAX_PREFILTER = 250_000;
+  private static final int MAX_PREFILTER = 1_000_000;
 
   /** Cached {@code count(*)} of the codes, so prefilter sizing costs one query per process. */
   private static volatile long corpusSize = -1;
