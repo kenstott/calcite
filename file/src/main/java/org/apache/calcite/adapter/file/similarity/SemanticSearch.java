@@ -108,6 +108,11 @@ public final class SemanticSearch {
   // they are loaded once into a persistent DuckDB under calcite.vss.localDb and searched there.
   private static final String LOCAL_TABLE = "vss_codes";
   private static final String LOCAL_SOURCE_TABLE = "vss_codes_source";
+  private static final String LOCAL_CENTROIDS = "vss_centroids";
+
+  /** How many centroids the loaded coarse quantizer has; 0 when none is trained, which turns the
+   *  probe off and leaves the search a full scan. */
+  private static volatile int centroidCount;
 
   /** True once {@link #LOCAL_TABLE} is populated and searches should read it instead of S3. */
   private static volatile boolean localReady;
@@ -166,20 +171,68 @@ public final class SemanticSearch {
     return globs.isEmpty() ? defaultCodesGlobs() : globs;
   }
 
-  /** A {@code read_parquet(...)} call over every glob in play.
-   *
-   * <p>{@code union_by_name} is required, not cosmetic: compaction encodes {@code centroid} into
-   * the directory path, so a partitioned file does not carry that column while a flat tail file
-   * does. Matching positionally across the two shapes fails on the differing column sets. */
-  private static String readCodes(List<String> globs) {
-    StringBuilder sb = new StringBuilder("read_parquet([");
-    for (int i = 0; i < globs.size(); i++) {
+  private static String quoted(List<String> paths) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < paths.size(); i++) {
       if (i > 0) {
         sb.append(", ");
       }
-      sb.append('\'').append(globs.get(i)).append('\'');
+      sb.append('\'').append(paths.get(i)).append('\'');
     }
-    return sb.append("], union_by_name=true)").toString();
+    return sb.toString();
+  }
+
+  /**
+   * A relation over the given code paths, projected onto one column list.
+   *
+   * <p>The two shapes cannot be read together. A compacted path carries {@code centroid} in its
+   * directory name and needs hive partitioning to see it; a flat path carries it as a column, or
+   * not at all when it predates IVF assignment. Hive partitioning refuses to span paths whose
+   * partition structure differs ("Hive partition mismatch"), so each shape is read on its own
+   * terms and unioned.
+   *
+   * <p>Codes with no centroid are reported as -1, which the probe reads unconditionally: an
+   * unassigned code has no partition to be skipped by, and dropping it would silently shrink the
+   * searchable corpus to whatever happened to be embedded after centroids existed.
+   */
+  private static String selectCodes(Connection c, List<String> paths) throws SQLException {
+    List<String> flat = new ArrayList<String>();
+    List<String> part = new ArrayList<String>();
+    for (String path : paths) {
+      if (path.contains("/ivf/")) {
+        part.add(path);
+      } else {
+        flat.add(path);
+      }
+    }
+    List<String> selects = new ArrayList<String>();
+    if (!flat.isEmpty()) {
+      String centroid = hasCentroidColumn(c, flat) ? "centroid::BIGINT" : "-1::BIGINT";
+      selects.add("SELECT chunk_id, " + centroid + " AS centroid, w0, w1, w2, w3, w4, w5,"
+          + " rerank_i8 FROM read_parquet([" + quoted(flat) + "], union_by_name=true)");
+    }
+    if (!part.isEmpty()) {
+      selects.add("SELECT chunk_id, centroid::BIGINT AS centroid, w0, w1, w2, w3, w4, w5,"
+          + " rerank_i8 FROM read_parquet([" + quoted(part) + "], hive_partitioning=1)");
+    }
+    StringBuilder sb = new StringBuilder("(");
+    for (int i = 0; i < selects.size(); i++) {
+      if (i > 0) {
+        sb.append(" UNION ALL ");
+      }
+      sb.append(selects.get(i));
+    }
+    return sb.append(")").toString();
+  }
+
+  /** Whether these parquet files carry a {@code centroid} column at all -- read from footer
+   *  metadata, so it costs no scan. Codes written before IVF assignment do not. */
+  private static boolean hasCentroidColumn(Connection c, List<String> paths) throws SQLException {
+    try (Statement st = c.createStatement();
+         ResultSet rs = st.executeQuery("SELECT count(*) FROM parquet_schema([" + quoted(paths)
+             + "]) WHERE name = 'centroid'")) {
+      return rs.next() && rs.getLong(1) > 0;
+    }
   }
 
   // S3 access captured from the file adapter's own resolved config (see configure()), so the
@@ -203,6 +256,7 @@ public final class SemanticSearch {
       Connection c = duck;
       duck = null;
       localReady = false;
+      centroidCount = 0;
       corpusSize = -1;
       if (c != null) {
         try {
@@ -288,6 +342,55 @@ public final class SemanticSearch {
   }
 
   /**
+   * Loads the IVF coarse quantizer, if one has been trained.
+   *
+   * <p>Absent centroids are a normal state, not a failure: the corpus has to be embedded before
+   * it can be clustered, so early codes are written unassigned and every search is a full scan
+   * until training catches up. {@link #centroidCount} of 0 is what turns the probe off.
+   */
+  private static void loadCentroids(Connection c, Statement st) {
+    String path = System.getProperty("calcite.vss.centroids",
+        "s3://govdata-parquet-v1/ref/vss_centroids/centroids.parquet").trim();
+    centroidCount = 0;
+    try {
+      try (ResultSet rs = st.executeQuery("SELECT count(*) FROM glob('" + esc(path) + "')")) {
+        if (!rs.next() || rs.getLong(1) == 0) {
+          LOGGER.info("SEMANTIC_SEARCH: no IVF centroids at {} -- searching every partition",
+              path);
+          return;
+        }
+      }
+      st.execute("CREATE OR REPLACE TABLE " + LOCAL_CENTROIDS + " AS SELECT cid::BIGINT AS cid,"
+          + " v FROM read_parquet('" + esc(path) + "')");
+      try (ResultSet rs = st.executeQuery("SELECT count(*) FROM " + LOCAL_CENTROIDS)) {
+        centroidCount = rs.next() ? (int) rs.getLong(1) : 0;
+      }
+      LOGGER.info("SEMANTIC_SEARCH loaded {} IVF centroids", centroidCount);
+    } catch (Exception e) {
+      centroidCount = 0;
+      LOGGER.warn("SEMANTIC_SEARCH could not load IVF centroids; searching every partition: {}",
+          e.getMessage());
+    }
+  }
+
+  /**
+   * How many centroids a query probes.
+   *
+   * <p>Recall follows the probed SHARE of the corpus, not the probe count, so this is a fraction
+   * of the centroid count rather than a constant -- the same reason {@link #prefilterWidth} is a
+   * fraction of the corpus. Measured against exhaustive cosine on real codes with k=256 and
+   * out-of-corpus queries: probing 4 of 256 (1/64) read 2.21% of the corpus for 97.5% recall@10,
+   * and 2 of 256 read 1.03% for 87.5%. The 1/64 operating point is the one encoded here.
+   */
+  private static int probeWidth() {
+    Integer explicit = Integer.getInteger("calcite.vss.nprobe");
+    if (explicit != null) {
+      return Math.max(1, explicit.intValue());
+    }
+    return Math.max(1, centroidCount / FRACTION_DIVISOR);
+  }
+
+  /**
    * How many Hamming candidates stage 2 reranks, as a share of the corpus rather than a constant.
    *
    * <p>Recall depends on the ratio of candidates to corpus, not on the candidate count, so a fixed
@@ -332,7 +435,7 @@ public final class SemanticSearch {
     try {
       long[] w = packBits(v);
       Connection c = connection();
-      String src = localReady ? LOCAL_TABLE : readCodes(codesGlobs());
+      String src = localReady ? LOCAL_TABLE : selectCodes(c, codesGlobs());
       int prefilter = prefilterWidth(c, src);
 
       StringBuilder ham = new StringBuilder();
@@ -361,12 +464,27 @@ public final class SemanticSearch {
       // Carrying rerank_i8 through the stage-1 top-N instead (one pass, which reads and sorts
       // the whole column) measured 3.9s against 0.19s+1.2s remote, and 0.46s against 0.19s
       // local, on a 3.2M-row corpus.
-      String sql = "WITH prefilter AS ("
+      // IVF probe: rank the centroids against the query and look only inside the nearest few
+      // partitions, instead of computing a Hamming distance for every code in the corpus.
+      // centroid = -1 is always included -- those codes were embedded before any quantizer was
+      // trained, so they belong to no partition and skipping them would quietly shrink the
+      // searchable corpus. With no centroids loaded this collapses to the full scan it replaces.
+      String probeCte = "";
+      String restrict = "";
+      if (centroidCount > 0) {
+        probeCte = "probe AS (SELECT cid FROM " + LOCAL_CENTROIDS + " ORDER BY "
+            + "list_cosine_similarity(" + qv + "::DOUBLE[], v::DOUBLE[]) DESC LIMIT "
+            + probeWidth() + "), ";
+        restrict = " WHERE centroid = -1 OR centroid IN (SELECT cid FROM probe)";
+      }
+      String scan = "(SELECT * FROM " + src + " _s" + restrict + ")";
+
+      String sql = "WITH " + probeCte + "prefilter AS ("
           + "SELECT chunk_id, (" + ham + ") AS hd "
-          + "FROM " + src + " ORDER BY hd LIMIT " + prefilter + ") "
+          + "FROM " + scan + " ORDER BY hd LIMIT " + prefilter + ") "
           + "SELECT c.chunk_id, "
           + "list_cosine_similarity(" + qv + "::DOUBLE[], c.rerank_i8::DOUBLE[]) AS score "
-          + "FROM " + src + " c SEMI JOIN prefilter p ON p.chunk_id = c.chunk_id "
+          + "FROM " + scan + " c SEMI JOIN prefilter p ON p.chunk_id = c.chunk_id "
           + "ORDER BY score DESC LIMIT " + Math.max(1, k);
 
       List<Object[]> out = new ArrayList<>();
@@ -376,8 +494,9 @@ public final class SemanticSearch {
           out.add(new Object[]{rs.getString(1), rs.getDouble(2)});
         }
       }
-      LOGGER.debug("SEMANTIC_SEARCH returned {} rows (prefilter {}, source {})",
-          out.size(), prefilter, localReady ? "local" : "remote");
+      LOGGER.debug("SEMANTIC_SEARCH returned {} rows (prefilter {}, probe {}/{}, source {})",
+          out.size(), prefilter, centroidCount > 0 ? probeWidth() : 0, centroidCount,
+          localReady ? "local" : "remote");
       return out;
     } catch (Exception e) {
       throw new RuntimeException("SEMANTIC_SEARCH failed: " + e.getMessage(), e);
@@ -476,8 +595,8 @@ public final class SemanticSearch {
       if (!haveTable || retired > 0) {
         st.execute("DROP TABLE IF EXISTS " + LOCAL_TABLE);
         st.execute("DELETE FROM " + LOCAL_SOURCE_TABLE);
-        st.execute("CREATE TABLE " + LOCAL_TABLE + " AS SELECT chunk_id, w0, w1, w2, w3, w4, w5,"
-            + " rerank_i8 FROM " + readCodes(globs));
+        st.execute("CREATE TABLE " + LOCAL_TABLE + " AS SELECT * FROM "
+            + selectCodes(c, globs));
         st.execute("INSERT INTO " + LOCAL_SOURCE_TABLE + " SELECT file FROM _vss_remote");
         LOGGER.info("SEMANTIC_SEARCH loaded the codes locally ({} files)", globs.size());
       } else {
@@ -489,16 +608,18 @@ public final class SemanticSearch {
           }
         }
         if (!missing.isEmpty()) {
-          st.execute("INSERT INTO " + LOCAL_TABLE + " SELECT chunk_id, w0, w1, w2, w3, w4, w5,"
-              + " rerank_i8 FROM " + readCodes(missing));
+          st.execute("INSERT INTO " + LOCAL_TABLE + " SELECT * FROM "
+              + selectCodes(c, missing));
           st.execute("INSERT INTO " + LOCAL_SOURCE_TABLE + " SELECT file FROM _vss_remote "
               + "WHERE file NOT IN (SELECT file FROM " + LOCAL_SOURCE_TABLE + ")");
           LOGGER.info("SEMANTIC_SEARCH added {} new codes files locally", missing.size());
         }
       }
+      loadCentroids(c, st);
       localReady = true;
     } catch (Exception e) {
       localReady = false;
+      centroidCount = 0;
       LOGGER.warn("SEMANTIC_SEARCH could not load the codes locally; falling back to reading "
           + "object storage on every query: {}", e.getMessage());
     }

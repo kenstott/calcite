@@ -98,6 +98,13 @@ public class SemanticSearchLocalCodesTest {
    *  returns the vectors it encoded so a test can search for one of them. */
   private List<double[]> writeCodes(Path file, String idPrefix, int n, long seed)
       throws Exception {
+    return writeCodes(file, idPrefix, n, seed, null);
+  }
+
+  /** As above; when {@code centroids} is given, each row is tagged with its nearest one, which is
+   *  what compaction would otherwise encode into the partition path. */
+  private List<double[]> writeCodes(Path file, String idPrefix, int n, long seed,
+      List<double[]> centroids) throws Exception {
     Random rnd = new Random(seed);
     List<double[]> vectors = new ArrayList<double[]>(n);
     StringBuilder values = new StringBuilder();
@@ -120,12 +127,17 @@ public class SemanticSearchLocalCodesTest {
         long q = Math.round(v[i] / I8_SCALE * 127.0);
         values.append(Math.max(-127, Math.min(127, q)));
       }
-      values.append("]::TINYINT[").append(DIM).append("])");
+      values.append("]::TINYINT[").append(DIM).append("]");
+      if (centroids != null) {
+        values.append(',').append(nearest(v, centroids));
+      }
+      values.append(')');
     }
     try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
          Statement st = c.createStatement()) {
       st.execute("CREATE TABLE t(chunk_id VARCHAR, w0 UBIGINT, w1 UBIGINT, w2 UBIGINT,"
-          + " w3 UBIGINT, w4 UBIGINT, w5 UBIGINT, rerank_i8 TINYINT[" + DIM + "])");
+          + " w3 UBIGINT, w4 UBIGINT, w5 UBIGINT, rerank_i8 TINYINT[" + DIM + "]"
+          + (centroids != null ? ", centroid BIGINT" : "") + ")");
       st.execute("INSERT INTO t VALUES " + values);
       st.execute("COPY t TO '" + file.toAbsolutePath() + "' (FORMAT parquet)");
     }
@@ -271,6 +283,97 @@ public class SemanticSearchLocalCodesTest {
 
     assertEquals(250, hits.size(), "every row should survive the prefilter on a small corpus");
     assertEquals("a17", hits.get(0)[0], "the searched-for row must still rank first");
+  }
+
+  /** Index of the centroid with the highest dot product -- both sides are unit vectors here, so
+   *  that is cosine, matching how vss-local.py assigns. */
+  private static int nearest(double[] v, List<double[]> centroids) {
+    int best = 0;
+    double bestDot = Double.NEGATIVE_INFINITY;
+    for (int i = 0; i < centroids.size(); i++) {
+      double dot = 0;
+      for (int d = 0; d < DIM; d++) {
+        dot += v[d] * centroids.get(i)[d];
+      }
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  private void writeCentroids(Path file, List<double[]> centroids) throws Exception {
+    StringBuilder values = new StringBuilder();
+    for (int i = 0; i < centroids.size(); i++) {
+      if (i > 0) {
+        values.append(',');
+      }
+      values.append('(').append(i).append(",[");
+      for (int d = 0; d < DIM; d++) {
+        if (d > 0) {
+          values.append(',');
+        }
+        values.append(centroids.get(i)[d]);
+      }
+      values.append("]::FLOAT[").append(DIM).append("])");
+    }
+    try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+         Statement st = c.createStatement()) {
+      st.execute("CREATE TABLE cent(cid BIGINT, v FLOAT[" + DIM + "])");
+      st.execute("INSERT INTO cent VALUES " + values);
+      st.execute("COPY cent TO '" + file.toAbsolutePath() + "' (FORMAT parquet)");
+    }
+  }
+
+  /** With a quantizer loaded the search probes only the nearest partitions, so it must still
+   *  return the row it is searching for -- that row's own partition is by definition the nearest.
+   *  This is the whole point of the IVF layout: same answer, a fraction of the codes examined. */
+  @Test void findsTheRowThroughAnIvfProbe() throws Exception {
+    Path codes = tmp.resolve("codes-a.parquet");
+    Path cents = tmp.resolve("centroids.parquet");
+    Random rnd = new Random(5L);
+    List<double[]> centroids = new ArrayList<double[]>();
+    for (int i = 0; i < 8; i++) {
+      centroids.add(vector(rnd));
+    }
+    writeCentroids(cents, centroids);
+    List<double[]> vectors = writeCodes(codes, "a", 400, 21L, centroids);
+    System.setProperty("calcite.vss.codes", codesArg(codes));
+    System.setProperty("calcite.vss.localDb", tmp.resolve("local.duckdb").toString());
+    String priorCent = System.getProperty("calcite.vss.centroids");
+    System.setProperty("calcite.vss.centroids", cents.toAbsolutePath().toString());
+    try {
+      List<Object[]> hits = SemanticSearch.searchVector(vectors.get(23), 5);
+      assertEquals("a23", hits.get(0)[0], "the searched-for row must survive the probe");
+      assertTrue((Double) hits.get(0)[1] > 0.999, "self-match should still score ~1.0");
+    } finally {
+      restore("calcite.vss.centroids", priorCent);
+    }
+  }
+
+  /** Codes predating any quantizer carry no centroid at all. They must stay searchable, or
+   *  training a quantizer would silently drop everything embedded before it. */
+  @Test void stillFindsCodesThatPredateTheQuantizer() throws Exception {
+    Path codes = tmp.resolve("codes-old.parquet");
+    Path cents = tmp.resolve("centroids.parquet");
+    Random rnd = new Random(6L);
+    List<double[]> centroids = new ArrayList<double[]>();
+    for (int i = 0; i < 8; i++) {
+      centroids.add(vector(rnd));
+    }
+    writeCentroids(cents, centroids);
+    List<double[]> vectors = writeCodes(codes, "a", 200, 31L);   // no centroid column
+    System.setProperty("calcite.vss.codes", codesArg(codes));
+    System.setProperty("calcite.vss.localDb", tmp.resolve("local.duckdb").toString());
+    String priorCent = System.getProperty("calcite.vss.centroids");
+    System.setProperty("calcite.vss.centroids", cents.toAbsolutePath().toString());
+    try {
+      List<Object[]> hits = SemanticSearch.searchVector(vectors.get(9), 5);
+      assertEquals("a9", hits.get(0)[0], "unassigned codes must remain reachable");
+    } finally {
+      restore("calcite.vss.centroids", priorCent);
+    }
   }
 
   /** Without the property nothing local is built, and search still works by reading the files
