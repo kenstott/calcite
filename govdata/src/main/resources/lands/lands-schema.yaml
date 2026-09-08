@@ -229,7 +229,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 34000
-      checkedAt: "2026-09-08T23:17:54Z"
+      checkedAt: "2026-09-08T23:43:48Z"
     partitions: *standard_partitions
     comment: >
       USDA Forest Service timber harvest activities from FACTS EDW. One row per
@@ -1596,7 +1596,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 28224
-      checkedAt: "2026-09-08T23:17:56Z"
+      checkedAt: "2026-09-08T23:43:49Z"
     partitions: *standard_partitions
     comment: >
       National Park Service monthly visitation statistics from the IRMA Statistics
