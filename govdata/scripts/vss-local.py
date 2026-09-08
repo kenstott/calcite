@@ -108,34 +108,52 @@ if not MEM_LIMIT:
         "one-size-fits-all default with a shared pool running other jobs concurrently)")
 TEMP_DIR = os.environ.get("VSS_TEMP_DIR", "/var/tmp/govdata/vss_tmp_duck")
 
-# ONE watermark for the ONE queue: ref.vectorized_chunks is a single table holding chunks from
-# every source, so there is exactly one backlog and exactly one resume position, not one per
-# source_schema. It is just the chunk_id of the last chunk this process actually finished
-# embedding -- the chunks scan and the codes write both walk chunk_id in the same ascending
-# order, so "we got through here" is always a safe place to resume, whether a run drained
-# everything or stopped at --max-seconds. It advances after every run, never gated on the whole
-# backlog being exhaustively drained first.
+# ONE watermark for the ONE queue: vc_staging is a single table holding chunks from every
+# source, so there is exactly one backlog and exactly one resume position, not one per
+# source_schema. The position is the (updated_at, chunk_id) of the last chunk this process got
+# through, and the queue walks vc_staging in that same order.
+#
+# updated_at leads, NOT chunk_id, and that ordering is the whole point. chunk_id begins with the
+# source_schema name, so ordering by it makes the queue walk the schemas alphabetically and stop
+# at the last one; a chunk staged afterwards for any earlier-sorting schema sorts BELOW the
+# watermark and can never be selected again, because the watermark filter is applied before the
+# `_done` anti-join can vouch for it. updated_at is monotonic in staging-write order, so newly
+# staged and re-chunked rows always land above the watermark no matter which source they belong
+# to. chunk_id breaks ties, since one insert batch stamps many rows with the same updated_at and
+# a bare `updated_at >` would skip the remainder of whichever timestamp a run stopped inside.
 #
 # The `_done` anti-join stays as a safety net on top of this: a crash between writing a codes
 # file and saving the watermark just gets re-scanned and found already-coded next run, never
 # double-embedded. No watermark file (first run) means start of the queue.
 WATERMARK_DIR = os.environ.get("VSS_WATERMARK_DIR", os.path.join(GOVDATA_HOME, ".vss-watermarks"))
-WATERMARK_PATH = os.path.join(WATERMARK_DIR, "chunk_id_watermark")
+WATERMARK_PATH = os.path.join(WATERMARK_DIR, "staged_watermark")
 
 
 def _load_watermark():
+    """(updated_at, chunk_id) to resume after, or None to start from the beginning of the queue.
+
+    Deliberately a different filename from the chunk_id-only watermark this replaces: a stale
+    file from that scheme carries no updated_at and must not be silently reinterpreted as one.
+    Its absence just means "start from the beginning", which the `_done` anti-join makes cheap.
+    """
     try:
         with open(WATERMARK_PATH) as f:
-            return f.read().strip() or None
+            raw = f.read().strip()
     except FileNotFoundError:
         return None
+    if not raw:
+        return None
+    updated_at, _, chunk_id = raw.partition("\t")
+    if not chunk_id:
+        return None
+    return int(updated_at), chunk_id
 
 
-def _save_watermark(chunk_id):
+def _save_watermark(updated_at, chunk_id):
     os.makedirs(WATERMARK_DIR, exist_ok=True)
     tmp = WATERMARK_PATH + ".tmp"
     with open(tmp, "w") as f:
-        f.write(chunk_id)
+        f.write(f"{int(updated_at)}\t{chunk_id}")
     os.replace(tmp, WATERMARK_PATH)
 
 
@@ -262,16 +280,22 @@ def attach_pg(con):
     con.execute(f"ATTACH '{dsn}' AS pg (TYPE postgres, READ_ONLY)")
 
 
-def _load_done(con, dataset=None):
-    """Temp table `_done` of already-coded chunk_ids across EVERY source's codes dataset (a
-    bracketed list of each known dataset's own glob -- one queue needs one combined view of
-    what's already coded, not a per-schema one). `dataset`, when passed, narrows to a single
-    dataset's own glob (used by compact/dedup, which do operate one physical dataset at a time)."""
-    codes_arg = f"'{dataset}/*.parquet'" if dataset else _codes_glob_arg()
+def _load_done_for_batch(con):
+    """Temp table `_done`: which of `_batch`'s chunk_ids already have codes, across EVERY
+    source's codes dataset (one queue needs one combined view of what's already coded, not a
+    per-schema one).
+
+    Scoped to the batch on purpose. A DISTINCT over every coded chunk_id in the lake answers the
+    same question but costs a full pass over the whole codes dataset, and materialises every id
+    in it, on every run -- work proportional to the corpus for a batch-sized decision. Restricting
+    to the ids actually in hand keeps only the chunk_id column in play (a few percent of the
+    dataset's bytes) and lets the semi-join discard the rest as it streams.
+    """
     try:
         con.execute(
             f"CREATE OR REPLACE TEMP TABLE _done AS "
-            f"SELECT DISTINCT chunk_id FROM read_parquet({codes_arg})")
+            f"SELECT DISTINCT c.chunk_id FROM read_parquet({_codes_glob_arg()}) c "
+            f"WHERE c.chunk_id IN (SELECT chunk_id FROM _batch)")
         return con.execute("SELECT count(*) FROM _done").fetchone()[0]
     except Exception as e:
         # First run: no codes dataset exists yet anywhere. Only swallow "no files"; re-raise
@@ -326,11 +350,12 @@ def _write_codes(con, ids, schemas, yrs, W, I8, label):
 
 
 def _embed_and_write(con, todo, label, max_seconds=None):
-    """Embed every (chunk_id, source_schema, yr, chunk_text) in `todo` -- ALREADY in ascending
-    chunk_id order, the one queue's scan order -- quantize, and write codes, flushing every
-    FLUSH_ROWS so memory stays flat and each flush is durable. Stops early if max_seconds
-    elapses; the remainder is picked up next run from wherever this one actually got to.
-    Returns (rows actually embedded, chunk_id of the last one, set of schemas touched)."""
+    """Embed every (chunk_id, source_schema, yr, chunk_text, updated_at) in `todo` -- ALREADY in
+    ascending (updated_at, chunk_id) order, the one queue's scan order -- quantize, and write
+    codes, flushing every FLUSH_ROWS so memory stays flat and each flush is durable. Stops early
+    if max_seconds elapses; the remainder is picked up next run from wherever this one actually
+    got to. Returns (rows actually embedded, (updated_at, chunk_id) of the last one, set of
+    schemas touched)."""
     import numpy as np
     total = len(todo)
     if total == 0:
@@ -375,8 +400,8 @@ def _embed_and_write(con, todo, label, max_seconds=None):
             break
     _flush()
     print(f"[{label}] complete: coded {done} chunks this run", flush=True)
-    last_chunk_id = todo[done - 1][0] if done > 0 else None
-    return done, last_chunk_id, touched
+    last_pos = (todo[done - 1][4], todo[done - 1][0]) if done > 0 else None
+    return done, last_pos, touched
 
 
 def _run_label(prefix):
@@ -399,45 +424,66 @@ def _list_code_files(dataset):
 
 
 def cmd_compact(con=None, dataset=None, force=False):
-    """Merge the codes dataset's many small files into one, once it exceeds COMPACT_MIN_FILES
-    (or unconditionally when force=True). The consolidated file is written to a .compact/
-    staging key (outside the flat *.parquet glob), moved into place, then the sources are
-    deleted — so the query glob never sees a half-written file. The merge keeps one row per
-    chunk_id (arbitrary pick among duplicates -- they're re-encodings of the same chunk_text,
-    so any is as good as any other): overlapping backlog runs can each code the same
-    not-yet-`_done`-visible chunk before either commits, and without this the duplicates would
-    only ever be merged together, never removed, growing every compaction."""
+    """Merge the codes dataset's accumulated small files, once there are more than
+    COMPACT_MIN_FILES of them (or unconditionally when force=True). The consolidated file is
+    written to a .compact/ staging key (outside the flat *.parquet glob), moved into place, then
+    the merged sources are deleted — so the query glob never sees a half-written file.
+
+    Only the files a backlog run produced are read and rewritten; anything already carrying the
+    codes-compact- prefix is left in place and merely consulted. Compaction therefore costs what
+    has arrived since the last one, not a rewrite of the entire dataset each time the file count
+    trips the threshold -- which is the same work whether one new file or fifteen triggered it,
+    and grows with the corpus rather than with the change.
+
+    The merge keeps one row per chunk_id (arbitrary pick among duplicates -- they're re-encodings
+    of the same chunk_text, so any is as good as any other): overlapping backlog runs can each
+    code the same not-yet-`_done`-visible chunk before either commits. Rows already present in a
+    file being left in place are dropped here for the same reason, since that file is not itself
+    being rewritten to remove them.
+
+    force=True merges everything, compacted files included -- what cmd_dedup needs for duplicates
+    that already ended up inside one.
+    """
     if dataset is None:
         raise ValueError("cmd_compact requires an explicit dataset (which source_schema's codes)")
     own = con is None
     con = con or connect_lake()
     try:
         files = _list_code_files(dataset)
-        if not force and len(files) <= COMPACT_MIN_FILES:
-            print(f"[compact] {len(files)} files <= threshold {COMPACT_MIN_FILES} — nothing to do",
-                  flush=True)
+        compacted = [f for f in files if f.startswith("codes-compact-")]
+        fresh = [f for f in files if not f.startswith("codes-compact-")]
+        merging = files if force else fresh
+        if not force and len(fresh) <= COMPACT_MIN_FILES:
+            print(f"[compact] {len(fresh)} new files <= threshold {COMPACT_MIN_FILES} — "
+                  f"nothing to do", flush=True)
             return
-        if not files:
+        if not merging:
             print("[compact] no files to compact", flush=True)
             return
         tag = time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
         staged = f"{dataset}/.compact/codes-compact-{tag}.parquet"
         final = f"{dataset}/codes-compact-{tag}.parquet"
-        print(f"[compact] merging {len(files)} files (deduped by chunk_id) ...", flush=True)
+        src = "[" + ", ".join(f"'{dataset}/{f}'" for f in merging) + "]"
+        keep = ""
+        if not force and compacted:
+            prior = "[" + ", ".join(f"'{dataset}/{f}'" for f in compacted) + "]"
+            keep = f" AND chunk_id NOT IN (SELECT chunk_id FROM read_parquet({prior}))"
+        print(f"[compact] merging {len(merging)} files (deduped by chunk_id), "
+              f"{len(files) - len(merging)} left in place ...", flush=True)
         t = time.time()
         con.execute(
             f"COPY (SELECT * EXCLUDE (_rn) FROM "
             f"(SELECT *, row_number() OVER (PARTITION BY chunk_id) AS _rn "
-            f"FROM read_parquet('{dataset}/*.parquet')) WHERE _rn = 1) "
+            f"FROM read_parquet({src})) WHERE _rn = 1{keep}) "
             f"TO '{staged}' (FORMAT parquet, COMPRESSION zstd)")
         subprocess.run(["rclone", "moveto", _rclone_path(staged), _rclone_path(final)],
                        capture_output=True, text=True, check=True)
         base = _rclone_path(dataset)
-        for f in files:
+        for f in merging:
             subprocess.run(["rclone", "deletefile", f"{base}/{f}"], capture_output=True, text=True)
         subprocess.run(["rclone", "purge", _rclone_path(f"{dataset}/.compact")],
                        capture_output=True, text=True)
-        print(f"[compact] done in {time.time()-t:.0f}s — {len(files)} files -> 1", flush=True)
+        print(f"[compact] done in {time.time()-t:.0f}s — {len(merging)} files -> 1", flush=True)
     finally:
         if own:
             con.close()
@@ -446,46 +492,88 @@ def cmd_compact(con=None, dataset=None, force=False):
 # ── Commands ──────────────────────────────────────────────────────────────────
 def cmd_backlog(max_rows, max_seconds):
     """PRIMARY job: one queue over the WHOLE vc_staging table's un-coded delta (every
-    source_schema together, ascending chunk_id order), time-boxed and resumable via the one
-    chunk_id watermark -- if time runs out, the rest picks up next run from wherever this one
+    source_schema together, in (updated_at, chunk_id) order), time-boxed and resumable via the
+    one watermark -- if time runs out, the rest picks up next run from wherever this one
     actually got to."""
     con = connect_lake()
     attach_pg(con)
-    coded = _load_done(con)
 
     watermark = _load_watermark()
-    watermark_clause = ""
     if watermark:
-        watermark_clause = f"AND s.chunk_id > '{watermark.replace(chr(39), chr(39)*2)}'\n          "
-        print(f"[backlog] {coded} chunks already coded; resuming after {watermark} ...",
+        print(f"[backlog] resuming after updated_at={watermark[0]} chunk_id={watermark[1]} ...",
               flush=True)
     else:
-        print(f"[backlog] {coded} chunks already coded; "
-              f"no watermark yet — starting from the beginning of the queue ...", flush=True)
+        print("[backlog] no watermark yet — starting from the beginning of the queue ...",
+              flush=True)
     t = time.time()
+
+    # The ORDER BY and LIMIT execute INSIDE Postgres -- postgres_query passes the statement
+    # through verbatim -- so idx_vc_staging_resume (scripts/sql/vc_schema.sql) serves them as an
+    # index range scan that stops as soon as max_rows rows are found, making the fetch cost
+    # proportional to the batch rather than to the table. Selecting through a DuckDB-side join
+    # to _done instead leaves the sort and limit ABOVE that join, where all Postgres is asked
+    # for is an unselective range filter -- which it answers with a full sequential scan of the
+    # whole table however many indexes exist, because most of the table qualifies whenever
+    # embedding is running behind chunking.
+    pg_where = "chunk_text IS NOT NULL AND length(chunk_text) > 10"
+    if watermark:
+        pg_where += (" AND (updated_at, chunk_id) > (" + str(int(watermark[0])) + ", '"
+                     + watermark[1].replace("'", "''") + "')")
     con.execute(f"""
-        CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.chunk_id, s.source_schema, COALESCE(s.year, 0) AS yr, s.chunk_text
-        FROM pg."{PG_NAMESPACE}".vc_staging s
-        LEFT JOIN _done d ON d.chunk_id = s.chunk_id
-        WHERE d.chunk_id IS NULL
-          {watermark_clause}AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
-        ORDER BY s.chunk_id
-        LIMIT {int(max_rows)}
+        CREATE OR REPLACE TEMP TABLE _batch AS
+        SELECT * FROM postgres_query('pg', $$
+            SELECT chunk_id, source_schema, COALESCE(year, 0) AS yr, chunk_text, updated_at
+            FROM "{PG_NAMESPACE}".vc_staging
+            WHERE {pg_where}
+            ORDER BY updated_at, chunk_id
+            LIMIT {int(max_rows)}
+        $$)
     """)
-    todo = con.execute("SELECT chunk_id, source_schema, yr, chunk_text FROM _todo").fetchall()
+    fetched = con.execute("SELECT count(*) FROM _batch").fetchone()[0]
+    batch_end = con.execute(
+        "SELECT updated_at, chunk_id FROM _batch "
+        "ORDER BY updated_at DESC, chunk_id DESC LIMIT 1").fetchone()
+    already = _load_done_for_batch(con)
+
+    # _done remains the safety net it has always been -- a crash between writing a codes file
+    # and saving the watermark leaves chunks coded but not yet skipped -- so it filters the
+    # batch AFTER the limit rather than deciding what the batch is.
+    con.execute("""
+        CREATE OR REPLACE TEMP TABLE _todo AS
+        SELECT b.chunk_id, b.source_schema, b.yr, b.chunk_text, b.updated_at
+        FROM _batch b LEFT JOIN _done d ON d.chunk_id = b.chunk_id
+        WHERE d.chunk_id IS NULL
+        ORDER BY b.updated_at, b.chunk_id
+    """)
+    todo = con.execute(
+        "SELECT chunk_id, source_schema, yr, chunk_text, updated_at FROM _todo").fetchall()
     total = len(todo)
-    tail = " (cap hit — more remain for next run)" if total >= max_rows else " (drains the backlog)"
-    print(f"[backlog] taking {total} un-coded chunks{tail} — scan {time.time()-t:.1f}s",
-          flush=True)
-    if total == 0:
+    tail = (" (cap hit — more remain for next run)" if fetched >= max_rows
+            else " (drains the backlog)")
+    print(f"[backlog] fetched {fetched}, {already} already coded, {total} to embed{tail} — "
+          f"scan {time.time()-t:.1f}s", flush=True)
+    if fetched == 0:
         print("[backlog] nothing to do — fully caught up", flush=True)
         con.close()
         return
-    done, last_chunk_id, touched = _embed_and_write(con, todo, _run_label("backlog"),
-                                                     max_seconds=max_seconds)
-    if last_chunk_id is not None:
-        _save_watermark(last_chunk_id)
+    if total == 0:
+        # Every row this batch returned was already coded. The watermark still has to clear the
+        # batch, or the next run fetches and discards exactly these rows again and never moves.
+        _save_watermark(batch_end[0], batch_end[1])
+        print(f"[backlog] whole batch already coded — watermark advanced past {batch_end[1]}",
+              flush=True)
+        con.close()
+        return
+    done, last_pos, touched = _embed_and_write(con, todo, _run_label("backlog"),
+                                               max_seconds=max_seconds)
+    # A batch carried to completion clears to its own end, not to the last row embedded: rows the
+    # anti-join dropped can sort above that one, and resuming below them would re-fetch the same
+    # already-coded rows every run. A run cut short by --max-seconds resumes exactly where it
+    # stopped instead.
+    if done == total:
+        _save_watermark(batch_end[0], batch_end[1])
+    elif last_pos is not None:
+        _save_watermark(last_pos[0], last_pos[1])
     for schema in touched:
         cmd_compact(con, dataset=codes_dataset_for(schema))  # no-op below the threshold
     con.close()

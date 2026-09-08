@@ -65,6 +65,24 @@ CREATE TABLE IF NOT EXISTS :"ns".vc_staging (
 CREATE INDEX IF NOT EXISTS idx_vc_staging_updated_at
   ON :"ns".vc_staging (source_schema, source_table, updated_at);
 
+-- The embedding backlog (vss-local.py) walks the un-coded delta in (updated_at, chunk_id) order
+-- and resumes with `(updated_at, chunk_id) > (<watermark>)`, sending that ORDER BY and its LIMIT
+-- to Postgres verbatim so this index answers the batch as a range scan that stops once the batch
+-- is full. idx_vc_staging_updated_at cannot serve it: that one leads with source_schema and
+-- source_table, so a queue-wide scan ordered by updated_at alone cannot range over it, and the
+-- only remaining plan is a full scan of the whole table -- on every run, because most of the
+-- table qualifies whenever embedding is running behind chunking.
+--
+-- The resume key leads with updated_at rather than chunk_id because chunk_id begins with the
+-- source_schema name: ordering by it walks the schemas alphabetically, and a chunk staged later
+-- for an earlier-sorting schema then sorts permanently below the watermark. updated_at is
+-- monotonic in staging-write order, so anything newly staged is always above it.
+--
+-- Applied CONCURRENTLY on an existing populated table; this plain form is for a from-scratch
+-- build, where the table is empty and the lock is irrelevant.
+CREATE INDEX IF NOT EXISTS idx_vc_staging_resume
+  ON :"ns".vc_staging (updated_at, chunk_id);
+
 -- Every removal — a parent_hash-changed re-chunk or an explicit vc_remove.sh call — lands here
 -- first. applied_at stays NULL until the sync step commits the matching Iceberg equality-delete;
 -- only then is the tombstone considered drained (retained for a while after for auditability,
