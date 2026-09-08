@@ -221,10 +221,19 @@ def _codes_relation(con):
     purged for a rebuild, must not take every other schema's codes down with it."""
     parts = []
     for pattern, partitioned in _codes_shapes(con):
+        opts = ", hive_partitioning=1" if partitioned else ""
+        # Codes written before IVF assignment carry no centroid column at all. Selecting it
+        # anyway does not fail cleanly -- DuckDB resolves the name to this SELECT's own alias and
+        # reports a self-reference -- so its presence is read from footer metadata, which costs no
+        # scan. Partitioned files always have it, from the path.
+        has_centroid = partitioned or con.execute(
+            "SELECT count(*) FROM parquet_schema(?) WHERE name = 'centroid'",
+            [pattern]).fetchone()[0] > 0
+        centroid = "c.centroid::BIGINT" if has_centroid else "-1::BIGINT"
         parts.append(
-            "SELECT chunk_id, year, centroid::BIGINT AS centroid, w0, w1, w2, w3, w4, w5, "
-            f"rerank_i8 FROM read_parquet('{pattern}'"
-            + (", hive_partitioning=1" if partitioned else "") + ")")
+            f"SELECT c.chunk_id, c.year, {centroid} AS centroid, "
+            f"c.w0, c.w1, c.w2, c.w3, c.w4, c.w5, c.rerank_i8 "
+            f"FROM read_parquet('{pattern}'{opts}) c")
     if not parts:
         return None
     return "(" + " UNION ALL ".join(parts) + ")"

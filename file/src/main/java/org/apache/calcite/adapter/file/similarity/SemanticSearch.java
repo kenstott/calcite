@@ -207,13 +207,15 @@ public final class SemanticSearch {
     }
     List<String> selects = new ArrayList<String>();
     if (!flat.isEmpty()) {
-      String centroid = hasCentroidColumn(c, flat) ? "centroid::BIGINT" : "-1::BIGINT";
-      selects.add("SELECT chunk_id, " + centroid + " AS centroid, w0, w1, w2, w3, w4, w5,"
-          + " rerank_i8 FROM read_parquet([" + quoted(flat) + "], union_by_name=true)");
+      String centroid = hasCentroidColumn(c, flat) ? "_f.centroid::BIGINT" : "-1::BIGINT";
+      selects.add("SELECT _f.chunk_id, " + centroid + " AS centroid, _f.w0, _f.w1, _f.w2, _f.w3,"
+          + " _f.w4, _f.w5, _f.rerank_i8 FROM read_parquet([" + quoted(flat)
+          + "], union_by_name=true) _f");
     }
     if (!part.isEmpty()) {
-      selects.add("SELECT chunk_id, centroid::BIGINT AS centroid, w0, w1, w2, w3, w4, w5,"
-          + " rerank_i8 FROM read_parquet([" + quoted(part) + "], hive_partitioning=1)");
+      selects.add("SELECT _p.chunk_id, _p.centroid::BIGINT AS centroid, _p.w0, _p.w1, _p.w2,"
+          + " _p.w3, _p.w4, _p.w5, _p.rerank_i8 FROM read_parquet([" + quoted(part)
+          + "], hive_partitioning=1) _p");
     }
     StringBuilder sb = new StringBuilder("(");
     for (int i = 0; i < selects.size(); i++) {
