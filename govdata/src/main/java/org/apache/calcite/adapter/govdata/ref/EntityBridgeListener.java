@@ -1155,6 +1155,45 @@ public class EntityBridgeListener implements TableLifecycleListener {
    * and the materialize directory. The lifecycle-hook path's {@link #writeTableStreaming} stays
    * as-is for callers that do have a context.
    */
+  /**
+   * A storage provider for the standalone sweep's write target.
+   *
+   * <p>{@link StorageProviderFactory#createFromUrl} deliberately refuses an {@code s3://} URL —
+   * it has no credentials to build an S3 client from. The lifecycle-hook write path gets those
+   * from its {@code TableContext}; this standalone orchestrator has none, so — exactly as the
+   * sibling {@code ChunkOrganizer} standalone job and {@code createForGovDataCache} both do — it
+   * reads {@code AWS_*} from the environment (the sanctioned infra-layer source outside a schema
+   * ETL run) and builds a credentialed S3 provider through {@code createFromType}. Non-S3 targets
+   * (a local dir for a DQ-bucket rehearsal) keep the URL path.
+   *
+   * <p>Without this, the whole sweep fails at the first bridge-table write with "S3 storage
+   * requires explicit credentials" — which is why the standalone write path had never actually
+   * completed against production, even after the row-discard fix in 619bcf354: it never ran.
+   */
+  private static StorageProvider standaloneStorageProvider(String materializeDir) {
+    if (!materializeDir.startsWith("s3://")) {
+      return StorageProviderFactory.createFromUrl(materializeDir);
+    }
+    Map<String, Object> s3Config = new HashMap<String, Object>();
+    String keyId = System.getenv("AWS_ACCESS_KEY_ID");
+    String secret = System.getenv("AWS_SECRET_ACCESS_KEY");
+    String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+    String region = System.getenv("AWS_REGION");
+    if (keyId == null || keyId.isEmpty() || secret == null || secret.isEmpty()) {
+      throw new IllegalStateException("EntityBridgeListener: writing to " + materializeDir
+          + " needs AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in the environment "
+          + "(the standalone sweep has no TableContext to source credentials from).");
+    }
+    s3Config.put("accessKeyId", keyId);
+    s3Config.put("secretAccessKey", secret);
+    if (endpoint != null && !endpoint.isEmpty()) {
+      s3Config.put("endpoint", endpoint);
+    }
+    s3Config.put("region", (region != null && !region.isEmpty()) ? region : "auto");
+    s3Config.put("directory", materializeDir);
+    return StorageProviderFactory.createFromType("s3", s3Config);
+  }
+
   private static long writeTableBridges(String tableName, CloseableRowIterator rows,
       String materializeDir) throws IOException {
     if (materializeDir == null || materializeDir.isEmpty()) {
@@ -1162,7 +1201,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
           + tableName);
     }
     MaterializeConfig matConfig = standaloneMaterializeConfig(tableName);
-    StorageProvider storageProvider = StorageProviderFactory.createFromUrl(materializeDir);
+    StorageProvider storageProvider = standaloneStorageProvider(materializeDir);
     MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
         matConfig, storageProvider, materializeDir + "/ref");
     writer.initialize(matConfig);
