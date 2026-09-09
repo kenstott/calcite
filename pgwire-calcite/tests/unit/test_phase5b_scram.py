@@ -20,6 +20,7 @@ import base64
 import hashlib
 import hmac
 import os
+import shutil
 import subprocess
 import time
 
@@ -71,8 +72,11 @@ def test_scram_exchange_rejects_wrong_password():
     assert ok is False and server_final is None
 
 
-@pytest.mark.skipif(not os.path.exists("/usr/bin/psql"), reason="psql not available")
 def test_scram_end_to_end_with_psql(tmp_path):
+    # psql is a real dependency of this gate, not an optional extra: find it on PATH
+    # (homebrew, /usr/pgsql-*/bin, /usr/bin) rather than probing one hardcoded path.
+    psql = shutil.which("psql")
+    assert psql, "psql is required for the SCRAM end-to-end gate; install postgresql-client"
     store = AccountStore(tmp_path / "accounts.json")
     store.add("alice", "s3cret")
     provider = LocalAccountsProvider(store, scram_wire=True)
@@ -82,7 +86,7 @@ def test_scram_end_to_end_with_psql(tmp_path):
     try:
         env = dict(os.environ, PGPASSWORD="s3cret")
         out = subprocess.run(
-            ["/usr/bin/psql", f"host=127.0.0.1 port={port} user=alice dbname=calcite",
+            [psql, f"host=127.0.0.1 port={port} user=alice dbname=calcite",
              "-tAc", "SELECT 1"],
             capture_output=True, text=True, env=env, timeout=20,
         )
@@ -90,7 +94,7 @@ def test_scram_end_to_end_with_psql(tmp_path):
         assert out.stdout.strip() == "1", out.stdout + out.stderr
         # wrong password -> SCRAM fails
         bad = subprocess.run(
-            ["/usr/bin/psql", f"host=127.0.0.1 port={port} user=alice dbname=calcite",
+            [psql, f"host=127.0.0.1 port={port} user=alice dbname=calcite",
              "-tAc", "SELECT 1"],
             capture_output=True, text=True, env=dict(os.environ, PGPASSWORD="wrong"), timeout=20,
         )
