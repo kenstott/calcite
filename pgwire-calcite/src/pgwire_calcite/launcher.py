@@ -48,11 +48,17 @@ def build_state(backend=None, auth: str = "none", users: dict | None = None) -> 
     return st
 
 
-def _build_ssl_ctx(certfile: str | None, keyfile: str | None) -> ssl.SSLContext | None:
+def _build_ssl_ctx(
+    certfile: str | None, keyfile: str | None, mtls_auth=None
+) -> ssl.SSLContext | None:
     if not certfile or not keyfile:
         return None
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    if mtls_auth is not None:
+        from pgwire_calcite.mtls import apply_to_context
+
+        apply_to_context(ctx, mtls_auth)
     return ctx
 
 
@@ -67,8 +73,17 @@ def serve(
     auth_provider=None,
     authz_grants=None,
     database: str = "postgres",
+    client_ca: str | None = None,
+    mtls_mode: str | None = None,
+    mtls_bind_principal: bool | None = None,
 ) -> server_mod.CalciteServer:
-    """Install state and start the server thread. Returns the server (non-blocking)."""
+    """Install state and start the server thread. Returns the server (non-blocking).
+
+    ``client_ca``/``mtls_mode``/``mtls_bind_principal`` configure opt-in mutual TLS
+    (PGWIRE_CALCITE_CLIENT_CA / _MTLS_MODE / _MTLS_BIND_PRINCIPAL when left None); mTLS is
+    off unless a CA is configured either way. Only meaningful with ``certfile``/``keyfile``
+    also set — mTLS needs a server certificate to negotiate TLS in the first place.
+    """
     # Set the catalog/database name reported to clients (current_database, pg_database,
     # information_schema) BEFORE catalog population reads it. Single source of truth,
     # kept in sync with schema_registry.database below.
@@ -98,8 +113,19 @@ def serve(
             install_catalog(server_mod.state, ctx, column_types)
         except Exception as exc:  # child not ready / no metadata -> serve without catalog
             log.warning("catalog over bridge unavailable: %s", exc)
-    ssl_ctx = _build_ssl_ctx(certfile, keyfile)
-    srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx)
+    from pgwire_calcite.mtls import resolve_client_auth
+
+    mtls_auth = resolve_client_auth(client_ca, mtls_mode, mtls_bind_principal)
+    ssl_ctx = _build_ssl_ctx(certfile, keyfile, mtls_auth=mtls_auth)
+    if mtls_auth is not None and ssl_ctx is None:
+        # A client CA with no server certificate configured can mean only one thing: TLS
+        # itself never gets negotiated, so the mTLS policy could never apply. Refusing to
+        # start is better than serving connections the operator believes are verified.
+        raise ValueError(
+            "mTLS client CA is configured but no --tls-cert/--tls-key (or certfile/keyfile) "
+            "was given; a server certificate is required to negotiate TLS at all"
+        )
+    srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth)
     return srv
 
 
@@ -179,6 +205,26 @@ def main(argv: list | None = None) -> int:
     )
     parser.add_argument("--tls-cert", default=None)
     parser.add_argument("--tls-key", default=None)
+    parser.add_argument(
+        "--client-ca",
+        default=None,
+        help="PEM bundle of CA(s) trusted to sign client certificates; enables mutual TLS "
+        "(env PGWIRE_CALCITE_CLIENT_CA). Opt-in; requires --tls-cert/--tls-key.",
+    )
+    parser.add_argument(
+        "--mtls-mode",
+        choices=["required", "optional"],
+        default=None,
+        help="'required' (default once --client-ca is set) or 'optional' "
+        "(env PGWIRE_CALCITE_MTLS_MODE)",
+    )
+    parser.add_argument(
+        "--mtls-bind-principal",
+        action="store_true",
+        default=None,
+        help="require the client certificate's common name to equal the startup user "
+        "(env PGWIRE_CALCITE_MTLS_BIND_PRINCIPAL)",
+    )
     parser.add_argument("--log-level", default="INFO")
     parser.add_argument(
         "--extension",
@@ -234,6 +280,9 @@ def main(argv: list | None = None) -> int:
         backend=backend,
         auth_provider=auth_provider,
         database=args.database,
+        client_ca=args.client_ca,
+        mtls_mode=args.mtls_mode,
+        mtls_bind_principal=args.mtls_bind_principal,
     )
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
