@@ -42,7 +42,7 @@ def test_bridge_executes_query(child):
     port, _ = child
     b = BridgeBackend(port=port)
     r = b.execute_sql("SELECT count(*) AS n FROM EMPS", "u")
-    assert list(r.rows) == [(10,)]
+    assert list(r.iter_rows()) == [(10,)]
     assert r.column_names == ["N"]
 
 
@@ -52,7 +52,7 @@ def test_bridge_streams_large_result_over_socket(child):
     r = b.execute_sql(
         "SELECT count(*) AS n FROM (SELECT e1.EMPNO FROM EMPS e1, EMPS e2, EMPS e3, EMPS e4) t", "u"
     )
-    assert list(r.rows) == [(10000,)]
+    assert list(r.iter_rows()) == [(10000,)]
 
 
 def test_bridge_join_aggregate(child):
@@ -63,7 +63,7 @@ def test_bridge_join_aggregate(child):
         "GROUP BY d.DNAME ORDER BY d.DNAME",
         "u",
     )
-    assert list(r.rows) == [("ACCOUNTING", 2), ("RESEARCH", 3), ("SALES", 5)]
+    assert list(r.iter_rows()) == [("ACCOUNTING", 2), ("RESEARCH", 3), ("SALES", 5)]
 
 
 def test_bridge_ready(child):
@@ -84,7 +84,7 @@ def test_bridge_error_is_surfaced(child):
     port, _ = child
     b = BridgeBackend(port=port)
     with pytest.raises(RuntimeError) as exc:
-        list(b.execute_sql("SELECT * FROM no_such_table_xyz", "u").rows)
+        list(b.execute_sql("SELECT * FROM no_such_table_xyz", "u").iter_rows())
     assert "calcite" in str(exc.value).lower()
 
 
@@ -95,7 +95,7 @@ def test_bridge_reconnects_after_calcite_recycle(calcite_backend):
     srv = serve_calcite_child(calcite_backend, host="127.0.0.1", port=port)
     time.sleep(0.1)
     b = BridgeBackend(port=port, connect_retries=5, connect_backoff=0.1)
-    assert list(b.execute_sql("SELECT 1 AS n", "u").rows) == [(1,)]
+    assert list(b.execute_sql("SELECT 1 AS n", "u").iter_rows()) == [(1,)]
     # recycle: stop the child...
     srv.shutdown()
     srv.server_close()
@@ -104,7 +104,7 @@ def test_bridge_reconnects_after_calcite_recycle(calcite_backend):
     srv2 = serve_calcite_child(calcite_backend, host="127.0.0.1", port=port)
     time.sleep(0.1)
     try:
-        assert list(b.execute_sql("SELECT 2 AS n", "u").rows) == [(2,)]
+        assert list(b.execute_sql("SELECT 2 AS n", "u").iter_rows()) == [(2,)]
     finally:
         srv2.shutdown()
         srv2.server_close()
@@ -145,7 +145,7 @@ def test_real_calcite_child_subprocess():
                 break
         assert ready, "child did not report ready"
         b = BridgeBackend(port=port, connect_retries=5)
-        assert list(b.execute_sql("SELECT count(*) AS n FROM EMPS", "u").rows) == [(10,)]
+        assert list(b.execute_sql("SELECT count(*) AS n FROM EMPS", "u").iter_rows()) == [(10,)]
     finally:
         proc.terminate()
         try:

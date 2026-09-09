@@ -164,10 +164,10 @@ class CalciteBackend:
             # closed (client disconnect / LIMIT-few cancels the query).
             from pgwire_calcite import arrow_bridge
 
-            names, labels, rows = arrow_bridge.stream_query(
+            names, labels, batches = arrow_bridge.stream_query_batches(
                 self._conn, self._lock, calcite_sql, self._batch_size
             )
-            return QueryResult(rows=rows, column_names=names, column_types=labels)
+            return QueryResult(column_names=names, column_types=labels, row_batches=batches)
         # Materialized path (direct/programmatic use, tests): typed JDBC row reads.
         with self._lock:
             stmt = self._conn.createStatement()
