@@ -2520,7 +2520,18 @@ views:
       polygons (geometry_wkt) against geo.counties' own boundary geometry (its
       `geometry` column, latest TIGER vintage year) with DuckDB spatial
       (ST_Intersects/ST_Intersection/ST_Area over WGS84 WKT — both sources use
-      SRID 4326, no reprojection needed). Answers D-054's actual ask (a
+      SRID 4326, no reprojection needed). Both geometry sets are run through
+      ST_CollectionExtract(ST_MakeValid(ST_Buffer(g, 0.0)), 3) before any overlay,
+      because PAD-US ships genuinely invalid multipolygons — 14 of the ~5,356
+      federal-fee parcels fail ST_IsValid, with self-intersections and repeated
+      vertices left by upstream generalization — and GEOS overlay requires valid,
+      noded input. Each step earns its place: ST_Buffer(g, 0.0) is the only one of
+      the three that repairs all 14 (ST_MakeValid alone throws on every one of
+      them, and ST_ReducePrecision throws on invalid input, so it cannot lead);
+      ST_MakeValid then nodes the buffered linework, which buffering alone does not
+      guarantee; and ST_CollectionExtract(..., 3) keeps only the polygonal
+      components, since ST_MakeValid may return a mixed-dimension collection that
+      ST_Intersection rejects outright. Answers D-054's actual ask (a
       per-county, cross-agency federal-ownership computation) via this derived
       view rather than by joining national_forests/blm_field_offices/nps_units
       individually — those three now carry their own geometry_wkt too
@@ -2554,7 +2565,7 @@ views:
           c.state_fips,
           c.county_name,
           sr.state_abbr,
-          ST_Buffer(ST_GeomFromText(c.geometry), 0.0) AS geom
+          ST_CollectionExtract(ST_MakeValid(ST_Buffer(ST_GeomFromText(c.geometry), 0.0)), 3) AS geom
         FROM "geo"."counties" c
         JOIN "geo"."state_ref" sr ON sr.state_fips = c.state_fips
         WHERE c.year = (SELECT MAX(year) FROM "geo"."counties")
@@ -2564,7 +2575,7 @@ views:
         SELECT
           padus_id,
           state_abbr,
-          ST_Buffer(ST_GeomFromText(geometry_wkt), 0.0) AS geom
+          ST_CollectionExtract(ST_MakeValid(ST_Buffer(ST_GeomFromText(geometry_wkt), 0.0)), 3) AS geom
         FROM padus_federal_fee_lands
         WHERE geometry_wkt IS NOT NULL
       ),
