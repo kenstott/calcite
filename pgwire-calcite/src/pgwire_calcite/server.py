@@ -185,20 +185,48 @@ def _infer_bvtype(rows: list[tuple], col_idx: int) -> BVType:
 
 
 class CalciteQueryResult(BVQueryResult):
-    """Adapts a pgwire_calcite QueryResult (backend or catalog) to buenavista's ABC."""
+    """Adapts a pgwire_calcite QueryResult (backend or catalog) to buenavista's ABC.
+
+    Rows are pulled lazily (PGW-020): a streaming result's batches are drained only
+    as buenavista emits DataRow messages, so a large result never fully materializes
+    and CommandComplete's count is what buenavista counted on the way out. The wire
+    protocol needs column types up front (RowDescription precedes DataRow); those
+    come from JDBC ResultSetMetaData. Only when metadata is insufficient (Calcite
+    reports ANY/OTHER, surfaced as an empty label by ``normalize.stream_type_label``)
+    is exactly ONE batch buffered to infer from data — a bounded peek, never the
+    whole result.
+
+    The batch iterator owns the JDBC statement, the Arrow allocator and the backend
+    lock. :meth:`close` releases them, and is called on normal completion, on an
+    early stop, and by the handler when the client disconnects mid-stream (PGW-022).
+    """
 
     def __init__(self, result: TrinoResult, original_sql: str = ""):
         super().__init__()
-        self._rows = result.rows
         self._cols = result.column_names
         self._status = _tag_from_sql(original_sql)
-        if result.column_types:
+        # Materialized results (catalog intercept, session commands, non-streaming
+        # backends) arrive as a single batch; streaming backends hand over a lazy
+        # batch iterator instead. Both are consumed the same way below.
+        self._batch_iter: Iterator[list] = (
+            result.row_batches if result.row_batches is not None else iter([list(result.rows)])
+        )
+        self._head: list | None = None
+        self._closed = False
+        ctypes = result.column_types
+        if not ctypes or any(not t for t in ctypes):
+            self._head = next(self._batch_iter, [])
+        # The peeked batch (if any) becomes the first pending batch, so the peek costs
+        # nothing at the wire: no row is read twice and none is dropped.
+        self._pending: list = list(self._head or [])
+        self._pending_idx = 0
+        if ctypes:
             self._types = [
-                _duckdb_type_to_bvtype(t) if t else _infer_bvtype(self._rows, i)
-                for i, t in enumerate(result.column_types)
+                _duckdb_type_to_bvtype(t) if t else _infer_bvtype(self._head or [], i)
+                for i, t in enumerate(ctypes)
             ]
         else:
-            self._types = [_infer_bvtype(self._rows, i) for i in range(len(self._cols))]
+            self._types = [_infer_bvtype(self._head or [], i) for i in range(len(self._cols))]
 
     def has_results(self) -> bool:
         return len(self._cols) > 0
@@ -210,7 +238,38 @@ class CalciteQueryResult(BVQueryResult):
         return (self._cols[index], self._types[index])
 
     def rows(self) -> Iterator[list]:
-        return iter(self._rows)  # type: ignore[return-value]
+        """Yield rows one batch at a time, resumably.
+
+        Position lives on the result, not on this generator, so an Execute row limit
+        (portal suspension) can abandon the generator and a later Execute on the same
+        portal picks up at the next unsent row instead of replaying from the start.
+        Exactly one batch is resident at a time. Exhausting the source releases it
+        here; an abandoned stream is released by the session (see CalciteSession).
+        """
+        while True:
+            if self._pending_idx < len(self._pending):
+                row = self._pending[self._pending_idx]
+                self._pending_idx += 1
+                yield row
+                continue
+            if self._closed:
+                return
+            batch = next(self._batch_iter, None)
+            if batch is None:  # source exhausted -> its own finally has released
+                self.close()
+                return
+            self._pending, self._pending_idx = batch, 0
+
+    def close(self) -> None:
+        """Release the underlying statement, Arrow allocator and backend lock. Idempotent."""
+        if self._closed:
+            return
+        self._closed = True
+        self._head = None
+        self._pending, self._pending_idx = [], 0
+        close = getattr(self._batch_iter, "close", None)
+        if close is not None:
+            close()
 
     def status(self) -> str:
         return self._status or "OK"
@@ -220,12 +279,28 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def __init__(self) -> None:
         super().__init__()
         self.role_id: str | None = None
+        # The streaming result of the statement currently in flight. A wire session
+        # runs one statement at a time, so starting the next one (or ending the
+        # session — including on a client disconnect mid-stream) releases the JDBC
+        # statement, Arrow allocator and backend lock the previous result held
+        # (PGW-022). Portal suspension does not come through here: buenavista
+        # replays the cached result without re-executing.
+        self._open_result: CalciteQueryResult | None = None
 
     def cursor(self):
         return None
 
     def close(self):
-        pass
+        self._release_open_result()
+
+    def _release_open_result(self) -> None:
+        result, self._open_result = self._open_result, None
+        if result is not None:
+            result.close()
+
+    def _track(self, result: "CalciteQueryResult") -> "CalciteQueryResult":
+        self._open_result = result
+        return result
 
     def in_transaction(self) -> bool:
         return False
@@ -239,6 +314,8 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
 
         # Session / transaction commands: accepted and acknowledged, no real
         # transaction isolation (PGW-004). Empty result -> command tag from SQL.
+        self._release_open_result()
+
         if _TXN_TAG_RE.match(stripped):
             return CalciteQueryResult(TrinoResult(), stripped)
 
@@ -263,7 +340,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
                     result.column_names,
                     result.rows[:3] if result.rows else [],
                 )
-                return CalciteQueryResult(result, stripped)
+                return self._track(CalciteQueryResult(result, stripped))
 
         # Per-role authorization (PGW-045): reject out-of-grant relations before
         # execution — enforced on the same grants that filter discovery.
@@ -284,7 +361,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             log.warning("[PGWIRE] EXCEPTION sql=%r", stripped[:300], exc_info=True)
             raise RuntimeError(str(exc)) from exc
 
-        return CalciteQueryResult(result, stripped)
+        return self._track(CalciteQueryResult(result, stripped))
 
 
 class CalciteConnection(Connection):
@@ -319,6 +396,18 @@ class CalciteConnection(Connection):
 
 class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
     """Extends BuenaVistaHandler with TLS, cleartext auth, and catalog intercept."""
+
+    #: Set in handle_startup; read by finish(), which socketserver always runs.
+    _ctx: BVContext | None = None
+
+    def finish(self) -> None:
+        ctx = self._ctx
+        self._ctx = None
+        try:
+            if ctx is not None:
+                ctx.session.close()
+        finally:
+            super().finish()
 
     def _send_pg_error(self, severity: str, sqlstate: str, message: str) -> None:
         buf = BVBuffer()
@@ -392,6 +481,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 "[PGWIRE] connect params: %s", {k: v for k, v in params.items() if k != "password"}
             )
             ctx = BVContext(conn.create_session(), None, params)
+            # Kept for finish(): buenavista's handle() only releases the session on a
+            # clean exit, and a client that vanishes mid-stream can break the pipe on
+            # its error path before that runs — which would strand the session's open
+            # JDBC statement, Arrow allocator and backend lock (PGW-022).
+            self._ctx = ctx
             # Trust mode: authenticate immediately with no password challenge, so a
             # plain `psql host=… user=… dbname=…` connects like any client. A
             # pluggable provider (Phase 5b) decides via requires_password; else the

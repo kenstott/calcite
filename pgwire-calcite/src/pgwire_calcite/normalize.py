@@ -128,6 +128,23 @@ def duckdb_label(sql_type: str) -> str:
     return type_mapping(sql_type).duckdb
 
 
+#: JDBC type names that carry no usable type information: Calcite reports these for
+#: dynamic/untyped expressions. They are NOT unknown-types-defaulted-to-text — the
+#: real pg type has to be read off the data, so the streaming path reports them as
+#: "" and the wire layer buffers exactly one batch to infer (PGW-020).
+OPAQUE_SQL_TYPES = frozenset({"ANY", "OTHER", "NULL", "JAVA_OBJECT", "STRUCT"})
+
+
+def is_opaque(sql_type: str) -> bool:
+    """True when ResultSetMetaData gives no usable type for this column."""
+    return _strip_type(sql_type) in OPAQUE_SQL_TYPES
+
+
+def stream_type_label(sql_type: str) -> str:
+    """Type label for a streamed column: "" when metadata is insufficient."""
+    return "" if is_opaque(sql_type) else duckdb_label(sql_type)
+
+
 def pg_oid(sql_type: str) -> int:
     return type_mapping(sql_type).pg_oid
 

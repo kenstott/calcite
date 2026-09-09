@@ -69,7 +69,7 @@ def _columns_from_metadata(rs) -> Tuple[List[str], List[str]]:
     md = rs.getMetaData()
     n = int(md.getColumnCount())
     names = [normalize.pg_column_label(str(md.getColumnLabel(i))) for i in range(1, n + 1)]
-    labels = [normalize.duckdb_label(str(md.getColumnTypeName(i))) for i in range(1, n + 1)]
+    labels = [normalize.stream_type_label(str(md.getColumnTypeName(i))) for i in range(1, n + 1)]
     return names, labels
 
 
@@ -135,15 +135,51 @@ def stream_ipc_batches(
     return names, labels, _ipc_gen()
 
 
-def rows_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[tuple]:
-    """Decode a stream of per-batch Arrow IPC bytes into Python row tuples."""
+def batches_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[List[tuple]]:
+    """Decode per-batch Arrow IPC bytes into batches of Python row tuples.
+
+    Batch granularity is preserved (rather than flattened to rows) so the wire layer
+    can bound resident memory to one batch and, when a column type must be inferred
+    from data, buffer exactly one batch before sending RowDescription (PGW-020).
+
+    Closing this generator closes ``ipc_batches`` too, so an early stop propagates
+    down to the JDBC statement cancel/close in ``stream_ipc_batches`` (PGW-022).
+    """
     import pyarrow as pa
 
-    for ipc in ipc_batches:
-        table = pa.ipc.open_stream(ipc).read_all()
-        pydata = [col.to_pylist() for col in table.columns]
-        for r in range(table.num_rows):
-            yield tuple(col[r] for col in pydata)
+    try:
+        for ipc in ipc_batches:
+            table = pa.ipc.open_stream(ipc).read_all()
+            pydata = [col.to_pylist() for col in table.columns]
+            yield [tuple(col[r] for col in pydata) for r in range(table.num_rows)]
+    finally:
+        # Generator protocol: the producers here are always generators; closing them
+        # explicitly makes release deterministic instead of refcount-timed.
+        close = getattr(ipc_batches, "close", None)
+        if close is not None:
+            close()
+
+
+def rows_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[tuple]:
+    """Decode a stream of per-batch Arrow IPC bytes into Python row tuples."""
+    for batch in batches_from_ipc(ipc_batches):
+        yield from batch
+
+
+def stream_query_batches(
+    conn,
+    lock,
+    sql: str,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> Tuple[List[str], List[str], Iterator[List[tuple]]]:
+    """Execute ``sql`` and return (column_names, duckdb_labels, batch_generator).
+
+    This is the shape the wire layer wants: one batch of at most ``batch_size`` rows
+    is resident at a time, and the first batch can be peeked for type inference
+    without draining the result.
+    """
+    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size)
+    return names, labels, batches_from_ipc(ipc)
 
 
 def stream_query(

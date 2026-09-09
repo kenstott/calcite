@@ -255,11 +255,10 @@ class BridgeBackend:
                     break
                 yield b
 
-        def _rows():
+        def _batches():
             try:
-                for row in arrow_bridge.rows_from_ipc(_ipc_iter()):
-                    yield row
+                yield from arrow_bridge.batches_from_ipc(_ipc_iter())
             finally:
                 sock.close()
 
-        return QueryResult(rows=_rows(), column_names=names, column_types=labels)
+        return QueryResult(column_names=names, column_types=labels, row_batches=_batches())
