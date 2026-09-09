@@ -535,22 +535,111 @@ def _list_code_files(dataset):
     return [f.strip() for f in r.stdout.splitlines() if f.strip().endswith(".parquet")]
 
 
+def _ensure_pg(con):
+    """Attach vc_staging's database once per connection; attaching twice raises."""
+    already = con.execute(
+        "SELECT count(*) FROM duckdb_databases() WHERE database_name = 'pg'").fetchone()[0]
+    if not already:
+        attach_pg(con)
+
+
+def _orphans_are_certain(con, dataset, source_schema):
+    """Whether this dataset provably holds orphans, decided from two counts.
+
+    The removal itself needs every staged chunk_id for the schema, and that pull is priced by the
+    SCHEMA rather than by how many codes there are: transport took 6m53s to establish it had no
+    orphans at all, and patents would spend ~38 minutes pulling 23.5M ids to check 1,068 codes.
+    Paying that on every compaction, almost always to find nothing, is what this avoids.
+
+    More codes than staged chunks means orphans MUST exist -- there is nowhere else the surplus
+    could come from. The converse does not hold: a schema can be below its staged count and still
+    carry orphans, if retired ids were outnumbered by new ones. So this gate is deliberately not a
+    proof of absence, and vss-dq's orphans check remains the authority; when it reports orphans a
+    forced compaction removes them regardless of this gate."""
+    try:
+        codes = con.execute(
+            f"SELECT count(*) FROM {_codes_id_relation(con, dataset)}").fetchone()[0]
+    except Exception:
+        return False
+    try:
+        _ensure_pg(con)
+        escaped = source_schema.replace("'", "''")
+        staged = con.execute(f"""
+            SELECT * FROM postgres_query('pg', $PGQ$
+                SELECT count(*) FROM "{PG_NAMESPACE}".vc_staging
+                WHERE source_schema = '{escaped}'
+            $PGQ$)""").fetchone()[0]
+    except Exception:
+        return False
+    return codes > staged
+
+
+def _load_staged_ids(con, source_schema):
+    """Temp table `_staged_ids` holding every chunk_id vc_staging currently has for one schema,
+    or None when that cannot be established.
+
+    Scoped to a single schema so the pull is bounded by whatever is being compacted -- 16k ids for
+    ref against 10.4M for sec -- rather than the whole 39M table.
+
+    None means "unknown", and must never be read as "nothing is staged". An unreachable, failed or
+    empty staging read looks identical to every code being orphaned, and acting on that would
+    delete the entire dataset. Every caller treats None as "skip orphan removal"."""
+    if not PG_URL:
+        return None
+    try:
+        _ensure_pg(con)
+        escaped = source_schema.replace("'", "''")
+        con.execute(f"""
+            CREATE OR REPLACE TEMP TABLE _staged_ids AS
+            SELECT * FROM postgres_query('pg', $PGQ$
+                SELECT chunk_id FROM "{PG_NAMESPACE}".vc_staging
+                WHERE source_schema = '{escaped}'
+            $PGQ$)""")
+        n = con.execute("SELECT count(*) FROM _staged_ids").fetchone()[0]
+    except Exception as e:
+        print(f"[compact] cannot read staging for {source_schema} ({e}) — skipping orphan "
+              f"removal", flush=True)
+        return None
+    if n == 0:
+        print(f"[compact] staging reports zero chunks for {source_schema} — skipping orphan "
+              f"removal rather than treating every code as orphaned", flush=True)
+        return None
+    return n
+
+
+def _codes_id_relation(con, dataset):
+    """chunk_ids across both of a dataset's shapes, or None when it holds nothing."""
+    patterns = [p for p in (f"{dataset}/*.parquet", f"{dataset}/ivf/**/*.parquet")
+                if con.execute("SELECT count(*) FROM glob(?)", [p]).fetchone()[0]]
+    if not patterns:
+        return None
+    return "(" + " UNION ALL ".join(
+        f"SELECT chunk_id FROM read_parquet('{p}', union_by_name=true)" for p in patterns) + ")"
+
+
+def _orphan_count(con, dataset):
+    """Codes whose chunk_id vc_staging no longer has. Requires _staged_ids to be populated."""
+    rel = _codes_id_relation(con, dataset)
+    if rel is None:
+        return 0
+    return con.execute(
+        f"SELECT count(*) FROM {rel} c WHERE NOT EXISTS "
+        f"(SELECT 1 FROM _staged_ids s WHERE s.chunk_id = c.chunk_id)").fetchone()[0]
+
+
 def _duplicate_count(con, dataset):
     """Surplus code rows in a dataset -- rows beyond one per chunk_id, across both shapes.
 
     Only the chunk_id column is read, which is a few percent of the dataset's bytes, so this is
     cheap enough to ask on every run."""
-    patterns = [p for p in (f"{dataset}/*.parquet", f"{dataset}/ivf/**/*.parquet")
-                if con.execute("SELECT count(*) FROM glob(?)", [p]).fetchone()[0]]
-    if not patterns:
+    rel = _codes_id_relation(con, dataset)
+    if rel is None:
         return 0
-    rel = " UNION ALL ".join(
-        f"SELECT chunk_id FROM read_parquet('{p}', union_by_name=true)" for p in patterns)
     return con.execute(
-        f"SELECT count(*) - count(DISTINCT chunk_id) FROM ({rel})").fetchone()[0]
+        f"SELECT count(*) - count(DISTINCT chunk_id) FROM {rel}").fetchone()[0]
 
 
-def cmd_compact(con=None, dataset=None, force=False):
+def cmd_compact(con=None, dataset=None, force=False, source_schema=None):
     """Fold the flat files a backlog run produced into the IVF-partitioned layout.
 
     Codes are WRITTEN flat -- one file per flush per source_schema -- because partitioning at
@@ -582,6 +671,19 @@ def cmd_compact(con=None, dataset=None, force=False):
         # force merges everything, compacted files included -- what dedup needs, since duplicates
         # can already be sitting INSIDE a compacted file where a fresh-only merge never sees them.
         merging = files if force else fresh
+
+        # Orphans: codes whose chunk_id vc_staging no longer holds. They are NOT duplicates --
+        # each is a distinct id with one code -- so dedup can never remove them, and there is no
+        # tombstone trail to follow either: ref's 10,415 orphans have zero rows in vc_tombstones.
+        # vc_staging is the only source of truth for what should exist, whatever way a chunk_id
+        # came to disappear, so the removal is an anti-join against it.
+        orphans = 0
+        drop_orphans = False
+        if source_schema and (force or _orphans_are_certain(con, dataset, source_schema)):
+            if _load_staged_ids(con, source_schema) is not None:
+                orphans = _orphan_count(con, dataset)
+                drop_orphans = True
+
         if not force and len(fresh) <= COMPACT_MIN_FILES:
             # File count is not the only reason to merge. Removing duplicates is a SIDE EFFECT of
             # merging, so a dataset that never reaches the threshold never dedups -- which is
@@ -589,16 +691,16 @@ def cmd_compact(con=None, dataset=None, force=False):
             # files apiece, with no mechanism that would ever have removed them. Merge whenever
             # duplicates are actually present, whatever the file count.
             dupes = _duplicate_count(con, dataset)
-            if not dupes:
+            if not dupes and not orphans:
                 print(f"[compact] {len(fresh)} new files <= threshold {COMPACT_MIN_FILES}, no "
-                      f"duplicates — nothing to do", flush=True)
+                      f"duplicates or orphans — nothing to do", flush=True)
                 return
-            # Every file, not just the fresh ones: a duplicate can sit wholly inside an already
-            # compacted file, where a fresh-only merge would never see it.
+            # Every file, not just the fresh ones: a duplicate or an orphan can sit wholly inside
+            # an already compacted file, where a fresh-only merge would never see it.
             merging = files
             print(f"[compact] {len(fresh)} new files is below the threshold, but {dupes} "
-                  f"duplicate chunk_id(s) are present — merging all {len(files)} to remove them",
-                  flush=True)
+                  f"duplicate and {orphans} orphaned chunk_id(s) are present — merging all "
+                  f"{len(files)} to remove them", flush=True)
         if not merging:
             print("[compact] no files to compact", flush=True)
             return
@@ -617,6 +719,8 @@ def cmd_compact(con=None, dataset=None, force=False):
         if have_part and not force:
             keep = (f" AND chunk_id NOT IN "
                     f"(SELECT chunk_id FROM read_parquet('{part}/**/*.parquet'))")
+        if drop_orphans:
+            keep += " AND chunk_id IN (SELECT chunk_id FROM _staged_ids)"
         deduped = (
             f"SELECT chunk_id, year, centroid, w0, w1, w2, w3, w4, w5, rerank_i8 FROM ("
             f"SELECT c.chunk_id, c.year, {centroid_expr} AS centroid, c.w0, c.w1, c.w2, c.w3,"
@@ -738,7 +842,7 @@ def cmd_backlog(max_rows, max_seconds):
     elif last_pos is not None:
         _save_watermark(last_pos[0], last_pos[1])
     for schema in touched:
-        cmd_compact(con, dataset=codes_dataset_for(schema))  # no-op below the threshold
+        cmd_compact(con, dataset=codes_dataset_for(schema), source_schema=schema)
     con.close()
 
 
@@ -748,7 +852,7 @@ def cmd_dedup(source_schema):
     files by a prior un-deduped compact, so the normal threshold-gated path would report
     'nothing to do' despite duplicates still being present."""
     dataset = codes_dataset_for(source_schema)
-    cmd_compact(dataset=dataset, force=True)
+    cmd_compact(dataset=dataset, force=True, source_schema=source_schema)
 
 
 def cmd_ivf_train(k=IVF_K, sample_rows=IVF_TRAIN_SAMPLE, iters=IVF_TRAIN_ITERS):
@@ -894,7 +998,8 @@ def main():
     elif args.cmd == "stats":
         cmd_stats()
     elif args.cmd == "compact":
-        cmd_compact(dataset=codes_dataset_for(args.source_schema))
+        cmd_compact(dataset=codes_dataset_for(args.source_schema),
+                    source_schema=args.source_schema)
     elif args.cmd == "dedup":
         cmd_dedup(args.source_schema)
     elif args.cmd == "ivf-train":
