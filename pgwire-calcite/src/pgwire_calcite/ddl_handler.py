@@ -78,14 +78,20 @@ class DdlHandler:  # REQ-042, REQ-060
 
     def handle(self, ctx, sql: str) -> str:  # REQ-042, REQ-060
         """Execute DDL and return the PG command-complete tag."""
-        import provisa.pgwire.ddl_handler as _m
+        import pgwire_calcite.ddl_handler as _m
+        import pgwire_calcite.server as _srv
 
-        state = _m.state  # type: ignore[assignment]
+        state = _m.state if _m.state is not None else _srv.state  # type: ignore[assignment]
         if state is None:
-            from provisa.api.app import state  # type: ignore[assignment]
+            raise RuntimeError("Server state not initialized")
 
         role_id = ctx.session.role_id
-        role = state.roles.get(role_id) or {}
+        if role_id not in state.roles:
+            # No silent empty-capability fallback (Phase 3 hardening): an unknown role must
+            # be refused loudly, not treated as one with no capabilities that then fails the
+            # capability check for the same reason a stale/mistyped role_id would.
+            raise PermissionError(f"Unknown role {role_id!r}")
+        role = state.roles[role_id]
         caps = role.get("capabilities") or []
         if "ddl" not in caps:
             raise PermissionError(f"Role {role_id!r} lacks 'ddl' capability")
@@ -228,12 +234,13 @@ def _register_ddl_object(
     schema: str,
     kind: str,
 ) -> None:
-    import provisa.pgwire.ddl_handler as _m
+    import pgwire_calcite.ddl_handler as _m
+    import pgwire_calcite.server as _srv
 
-    state = _m.state  # type: ignore[assignment]
+    state = _m.state if _m.state is not None else _srv.state  # type: ignore[assignment]
     if state is None:
-        from provisa.api.app import state  # type: ignore[assignment]
-    from provisa.compiler.sql_gen import TableMeta
+        raise RuntimeError("Server state not initialized")
+    from pgwire_calcite.compiler.sql_gen import TableMeta
 
     ctx = state.contexts.get(role_id)
     if ctx is None:

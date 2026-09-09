@@ -48,6 +48,8 @@ from buenavista.postgres import (
     ServerResponse,
 )
 
+from pgwire_calcite.auth import is_personal_access_token
+from pgwire_calcite.throttle import LockedOut, login_throttle, subject_key, throttled_auth
 from pgwire_calcite.types import QueryResult as TrinoResult
 
 log = logging.getLogger(__name__)
@@ -82,6 +84,22 @@ _DDL_RE = re.compile(
 
 
 state = None  # module-level reference; set by the launcher, replaced by tests via patch()
+
+
+def _authenticate_credential(provider, username: str, password: str) -> Optional[str]:
+    """Validate one credential against *provider*, deciding once whether it presents as a
+    bearer secret (a PAT-shaped string, or any provider whose password field always carries a
+    token, e.g. OIDC) or a basic password — and never retrying the other interpretation
+    (Phase 3 hardening; mirrors provisa's pgwire ``_validate_credential``/REQ-1263 rule).
+
+    pgwire carries no scheme field, so a bearer-shaped secret presented to a provider that
+    does not accept bearer credentials is refused outright rather than run through that
+    provider's password check.
+    """
+    bearer = is_personal_access_token(password) or getattr(provider, "accepts_bearer", False)
+    if bearer and not getattr(provider, "accepts_bearer", False):
+        return None
+    return provider.authenticate(username, password)
 
 
 def _pg_literal(v) -> str:
@@ -450,6 +468,28 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         """
         super().handle_post_auth(ctx)
 
+    def _send_lockout(self, locked: LockedOut) -> None:
+        # A lockout ends the connection, so it is a FATAL ErrorResponse with SQLSTATE 28000
+        # (invalid_authorization_specification); ``_send_pg_notice`` is for post-auth messages.
+        self._send_pg_error("FATAL", "28000", str(locked))
+
+    def _assert_peer_binding(self, username: str) -> None:
+        """Bind the TLS client certificate to the startup packet's user, when configured
+        (PGWIRE_CALCITE_MTLS_BIND_PRINCIPAL, Phase 3 hardening).
+
+        A plaintext connection has no peer certificate to inspect; ``mtls_auth`` is None
+        unless a client CA was configured, so the check is a no-op there. The socket is the
+        wrapped one — ``handle_startup`` replaced ``self.request`` during the SSLRequest
+        exchange.
+        """
+        from pgwire_calcite.mtls import assert_principal_binding
+
+        auth = getattr(self.server, "mtls_auth", None)
+        if auth is None or not auth.bind_principal:
+            return
+        peer_cert = self.request.getpeercert() if isinstance(self.request, ssl.SSLSocket) else None
+        assert_principal_binding(auth, peer_cert, username)
+
     def handle_startup(self, conn: Connection) -> Optional[BVContext]:  # type: ignore[override]
         msglen = self.r.read_uint32() - 4
         code = self.r.read_uint32()
@@ -498,7 +538,22 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 _provider = (_st.auth_config or {}).get("provider", "none") if _st else "none"
                 trust = _provider == "none" or (_st is not None and not _st.auth_middleware_active)
             if trust:
-                role = _prov.authenticate(params.get("user", ""), "") if _prov is not None else params.get("user", "")
+                username = params.get("user", "")
+                # Trust mode presents no password, so there is nothing to guess and no
+                # throttle to apply here; a misconfigured provider is still answered on
+                # the wire rather than dropping the socket (Phase 3 hardening).
+                try:
+                    role = _prov.authenticate(username, "") if _prov is not None else username
+                except ValueError as exc:
+                    self._send_pg_error(
+                        "FATAL", "28P01", f"pgwire auth provider unavailable: {exc}"
+                    )
+                    return None
+                try:
+                    self._assert_peer_binding(username)
+                except PermissionError as exc:
+                    self._send_pg_error("FATAL", "28000", str(exc))
+                    return None
                 ctx.session.role_id = role  # type: ignore[attr-defined]
                 self.send_authentication_ok()
                 self.handle_post_auth(ctx)
@@ -533,6 +588,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
     def _handle_sasl(self, ctx: BVContext, payload: bytes, provider) -> None:
         username = ctx.params.get("user", "")
         if getattr(self, "_scram", None) is None:
+            try:
+                login_throttle().check(subject_key(username))
+            except LockedOut as locked:
+                self._send_lockout(locked)
+                return
             # SASLInitialResponse: mechanism cstring + int32 len + client-first-message
             idx = payload.index(0)
             rest = payload[idx + 1 :]
@@ -553,11 +613,24 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             return
         # SASLResponse: client-final-message
         client_final = payload.rstrip(b"\x00").decode("utf-8")
+        subject = subject_key(username)
+        try:
+            login_throttle().check(subject)
+        except LockedOut as locked:
+            self._send_lockout(locked)
+            return
         ok, server_final = self._scram.verify_final(client_final)
         if not ok:
+            login_throttle().record_failure(subject)
             self._send_pg_error(
                 "FATAL", "28P01", f'password authentication failed for user "{username}"'
             )
+            return
+        login_throttle().record_success(subject)
+        try:
+            self._assert_peer_binding(username)
+        except PermissionError as exc:
+            self._send_pg_error("FATAL", "28000", str(exc))
             return
         self._send_auth_msg(12, (server_final or "").encode("utf-8"))  # SASLFinal
         ctx.session.role_id = username  # type: ignore[attr-defined]
@@ -583,13 +656,32 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
 
         # Pluggable provider path (Phase 5b): the provider verifies the password
         # (e.g. LocalAccountsProvider against SCRAM-SHA-256 verifiers at rest).
+        # Brute-force throttling (Phase 3 hardening) and the bearer-vs-basic decision
+        # (PGWIRE_CALCITE_PAT_PREFIX / OIDC) apply here, uniformly, on every provider.
         _prov = getattr(_state, "auth_provider", None)
         if _prov is not None:
-            role = _prov.authenticate(username, password)
+            subject = subject_key(username)
+            try:
+                role = throttled_auth(
+                    lambda: _authenticate_credential(_prov, username, password), subject=subject
+                )
+            except LockedOut as locked:
+                self._send_lockout(locked)
+                return
+            except ValueError as exc:
+                self._send_pg_error(
+                    "FATAL", "28P01", f"pgwire auth provider unavailable: {exc}"
+                )
+                return
             if role is None:
                 self._send_pg_error(
                     "FATAL", "28P01", f'password authentication failed for user "{username}"'
                 )
+                return
+            try:
+                self._assert_peer_binding(username)
+            except PermissionError as exc:
+                self._send_pg_error("FATAL", "28000", str(exc))
                 return
             ctx.session.role_id = role  # type: ignore[attr-defined]
             self.send_authentication_ok()
@@ -613,10 +705,25 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             )
             return
 
-        if not _state.check_password(username, password):
+        subject = subject_key(username)
+        try:
+            ok = throttled_auth(
+                lambda: username if _state.check_password(username, password) else None,
+                subject=subject,
+            )
+        except LockedOut as locked:
+            self._send_lockout(locked)
+            return
+        if ok is None:
             self._send_pg_error(
                 "FATAL", "28P01", f'password authentication failed for user "{username}"'
             )
+            return
+
+        try:
+            self._assert_peer_binding(username)
+        except PermissionError as exc:
+            self._send_pg_error("FATAL", "28000", str(exc))
             return
 
         ctx.session.role_id = username  # type: ignore[attr-defined]
@@ -804,6 +911,7 @@ class CalciteServer(BuenaVistaServer):  # PGW-001
         server_address: tuple[str, int],
         conn: CalciteConnection,
         ssl_ctx: ssl.SSLContext | None = None,
+        mtls_auth=None,
     ) -> None:
         socketserver.ThreadingTCPServer.__init__(self, server_address, CalciteHandler)  # type: ignore[arg-type]
         self.conn = conn
@@ -812,6 +920,9 @@ class CalciteServer(BuenaVistaServer):  # PGW-001
         self.ctxts: dict = {}
         self.auth = None
         self.ssl_ctx = ssl_ctx
+        # Client-certificate policy (PGWIRE_CALCITE_CLIENT_CA, Phase 3 hardening); None means
+        # mTLS is off. Read by CalciteHandler._assert_peer_binding.
+        self.mtls_auth = mtls_auth
 
     def verify_request(self, request, client_address) -> bool:
         del request, client_address
@@ -823,11 +934,14 @@ def start_pgwire_server(
     port: int,
     ssl_ctx: ssl.SSLContext | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
+    mtls_auth=None,
 ) -> CalciteServer:
     """Start the pgwire server in a daemon thread. Returns the server instance.
 
     ``loop`` is retained for a future async backend but is optional; the Phase 0
-    stub and Phase 1 embedded-JDBC backends execute synchronously.
+    stub and Phase 1 embedded-JDBC backends execute synchronously. ``mtls_auth`` is a
+    ``pgwire_calcite.mtls.ClientAuth`` (or None) already applied to ``ssl_ctx`` by the
+    caller; it is carried onto the server for principal-binding checks post-handshake.
     """
     global _loop
     with _loop_lock:
@@ -844,7 +958,7 @@ def start_pgwire_server(
         logging.getLogger("buenavista").setLevel(logging.DEBUG)
 
     conn = CalciteConnection()
-    server = CalciteServer((host, port), conn, ssl_ctx=ssl_ctx)
+    server = CalciteServer((host, port), conn, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth)
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     log.info("[PGWIRE] listening on %s:%d (TLS=%s)", host, port, ssl_ctx is not None)

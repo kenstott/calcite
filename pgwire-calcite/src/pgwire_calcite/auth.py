@@ -36,6 +36,19 @@ from typing import Dict, Optional
 _SCRAM_HASH = "sha256"
 _DEFAULT_ITERATIONS = 4096
 
+# Personal access token prefix (Phase 3 hardening, mirrors provisa's ``provisa_pat_``): a bearer
+# secret names itself so a surface can route it without any scheme field on the wire. pgwire
+# carries a startup-packet username and one cleartext secret with no room for one, so the
+# presentation — bearer vs. basic password — is decided once, from what the secret looks like,
+# and never retried under the other interpretation (see ``is_personal_access_token`` and
+# ``credential_is_bearer`` below, used by ``pgwire_calcite.server``).
+PAT_PREFIX = "pgwc_pat_"
+
+
+def is_personal_access_token(secret: str) -> bool:
+    """True when the presented secret is shaped like a pgwire-calcite PAT."""
+    return secret.startswith(PAT_PREFIX)
+
 
 @dataclass(frozen=True)
 class ScramVerifier:
@@ -131,6 +144,14 @@ class AuthProvider:
     def wire_mechanism(self) -> Optional[str]:
         """Wire auth mechanism: None (trust), 'cleartext', or 'SCRAM-SHA-256'."""
         return "cleartext"
+
+    @property
+    def accepts_bearer(self) -> bool:
+        """Whether this provider's password field is a bearer credential (a token), not a
+        basic password. Decided once per provider — never per connection — so a PAT-shaped
+        secret presented to a provider that does not accept bearer credentials is refused
+        outright rather than retried as a password (Phase 3 hardening)."""
+        return False
 
 
 class TrustProvider(AuthProvider):
@@ -229,17 +250,34 @@ class OidcProvider(AuthProvider):
     def authenticate(self, username: str, password: str) -> Optional[str]:
         import jwt
 
+        # Resolving the verification key is a provider-configuration concern, not a
+        # credential judgment: a missing key source, an unresolvable kid, or a JWKS
+        # endpoint that cannot be reached means this provider cannot authenticate anyone
+        # right now (Phase 3 hardening). ValueError propagates out of this method so the
+        # wire layer can answer distinctly from a rejected token — never swallowed into
+        # an indistinguishable "authentication failed".
+        try:
+            key = self._key_for(password)
+        except jwt.PyJWTError:
+            # A malformed token (e.g. an unparsable header) is a rejected credential, not a
+            # provider failure; ValueError from a genuine configuration/lookup problem still
+            # propagates past this except.
+            return None
         try:
             claims = jwt.decode(
                 password,
-                self._key_for(password),
+                key,
                 algorithms=self._algorithms,
                 audience=self._audience,
                 issuer=self._issuer,
             )
-        except Exception:
+        except jwt.PyJWTError:
             return None
         return str(claims.get(self._username_claim) or username or "")
+
+    @property
+    def accepts_bearer(self) -> bool:
+        return True
 
 
 def build_provider(kind: str, store_path: Optional[str] = None, **kwargs) -> AuthProvider:
