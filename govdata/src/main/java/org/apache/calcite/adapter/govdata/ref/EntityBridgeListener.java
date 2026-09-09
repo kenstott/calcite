@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
@@ -442,6 +443,11 @@ public class EntityBridgeListener implements TableLifecycleListener {
 
   private void runOrgSource(Connection conn, String base, OrgSource src) throws SQLException {
     String loc = loc(base, src.schema, src.physicalTable);
+    if (!sourceIsMaterialized(conn, loc)) {
+      LOGGER.warn("EntityBridgeListener org source {}.{}.{}: skipped — not materialized at {}",
+          src.schema, src.physicalTable, src.nameExpr, loc);
+      return;
+    }
     // GROUP BY dedup, not QUALIFY row_number() OVER (...): some sources are enormous with very
     // low cardinality on the name column (cms_open_payments: 76.5M rows -> 3,233 distinct payer
     // names). A window-function rank over the full row set forced DuckDB to materialize/sort all
@@ -647,6 +653,11 @@ public class EntityBridgeListener implements TableLifecycleListener {
   private void stagePersonSource(Connection conn, String base, int idx, PersonSource src)
       throws SQLException {
     String loc = loc(base, src.schema, src.physicalTable);
+    if (!sourceIsMaterialized(conn, loc)) {
+      LOGGER.warn("EntityBridgeListener person source {}.{}: skipped — not materialized at {}",
+          src.schema, src.physicalTable, loc);
+      return;
+    }
     // GROUP BY dedup, matching the org-track fix — see runOrgSource for why QUALIFY
     // row_number() OVER (...) is unsafe here (forces a full-table sort/rank before
     // filtering, which hard-OOM'd on a 76M-row source in the org track).
@@ -1331,6 +1342,40 @@ public class EntityBridgeListener implements TableLifecycleListener {
   private static void execute(Connection conn, String sql) throws SQLException {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute(sql);
+    }
+  }
+
+  /**
+   * True when {@code loc} holds a readable Iceberg table.
+   *
+   * <p>This sweep spans every schema in the warehouse, and a source schema that simply isn't being
+   * processed right now has no table at its location. That is an expected state, not a failure:
+   * before this check, the first such source aborted the entire cross-schema run at
+   * {@code iceberg_scan}, so the bridge tables could never be built while any one of the eight org
+   * sources was absent — confirmed live, where an unmaterialized {@code sec.insider_transactions}
+   * stopped the sweep at source 3 of 8 with every other source healthy. A missing source now
+   * contributes no mentions and is warned about by the caller.
+   *
+   * <p>Deliberately narrow: only the "no Iceberg table here" signatures return false. Any other
+   * SQL failure — a genuine read error against a table that does exist — is rethrown, so this
+   * cannot mask a real defect behind an empty result.
+   */
+  private static boolean sourceIsMaterialized(Connection conn, String loc) throws SQLException {
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("SELECT 1 FROM iceberg_scan('" + esc(loc)
+          + "', allow_moved_paths=true) LIMIT 1");
+      return true;
+    } catch (SQLException e) {
+      String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase(Locale.ROOT);
+      boolean notMaterialized =
+          msg.contains("could not guess iceberg table version")
+          || msg.contains("no such file or directory")
+          || msg.contains("does not exist")
+          || msg.contains("no files found");
+      if (notMaterialized) {
+        return false;
+      }
+      throw e;
     }
   }
 
