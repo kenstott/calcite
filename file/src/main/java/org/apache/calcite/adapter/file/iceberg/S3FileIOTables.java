@@ -59,11 +59,18 @@ public final class S3FileIOTables {
     // version-hint is MUTABLE — read it live, uncached, so snapshot selection is always current.
     String version = readVersionHint(io, root);
     String metadataLocation = root + "/metadata/v" + version + ".metadata.json";
-    // v{N}.metadata.json is immutable, so it is safe to serve from the local cache. This is the
-    // read that serving Calcite's metadata triggers per table — StaticTableOperations fetches it
-    // lazily on first schema()/snapshot() access.
-    StaticTableOperations ops =
-        new StaticTableOperations(metadataLocation, IcebergMetadataCache.wrap(io));
+    // v{N}.metadata.json is fetched live, not cached on disk. The natural read of Iceberg is that
+    // this file is immutable — Iceberg's own writers append v{N+1} on every commit and never
+    // rewrite an existing v{N} — but a drop-and-recreate of a table in this codebase (see
+    // IcebergMaterializationWriter's schema-drift path) deletes every metadata.json and starts
+    // fresh at v0, reusing filenames with different content. That silently breaks any keyed-by-
+    // path disk cache, which is what a prior IcebergMetadataCache used to be: cached entries kept
+    // pointing at old snapshots whose manifest-list avro files were purged in the recreate, and
+    // the resulting HeadObject 404 blew up COUNT(*) planning through this rule on every table
+    // that had ever been recreated. StaticTableOperations reads v{N}.metadata.json exactly once
+    // per table lifetime (lazily on first schema()/snapshot() access) so the direct read is one
+    // small GET per table, and any warm-JVM reuse comes from Iceberg's own in-process memo.
+    StaticTableOperations ops = new StaticTableOperations(metadataLocation, io);
     return new BaseTable(ops, tableName(root));
   }
 

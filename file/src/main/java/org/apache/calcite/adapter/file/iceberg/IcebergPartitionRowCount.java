@@ -20,8 +20,6 @@ import org.apache.iceberg.io.CloseableIterable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Map;
 
@@ -104,11 +102,11 @@ public final class IcebergPartitionRowCount {
    *       overstates the rows actually visible.</li>
    * </ul>
    *
-   * <p>An I/O failure reading the manifests is not one of those cases and is not swallowed: it
-   * propagates, because a metadata read that was supposed to work and did not is a real fault, not
-   * a shape mismatch.
-   *
-   * @throws UncheckedIOException if the manifest list or a manifest file cannot be read
+   * <p>An I/O failure reading the manifests is treated the same way as a shape mismatch — a
+   * warning is logged and the count is declined — because the manifest-list files a snapshot names
+   * can be purged in this codebase's drop-and-recreate path (see IcebergMaterializationWriter),
+   * and the sibling whole-table count-star rewrite handles the same failure by falling back to a
+   * normal scan rather than blowing up planning.
    */
   public static Long countMatching(Table table, Expression predicate) {
     if (table.currentSnapshot() == null) {
@@ -142,9 +140,15 @@ public final class IcebergPartitionRowCount {
     } catch (ValidationException e) {
       LOGGER.debug("Predicate {} does not bind to {}: {}", predicate, table.name(), e.getMessage());
       return null;
-    } catch (IOException e) {
-      throw new UncheckedIOException(
-          "Failed to close the manifest scan for Iceberg table " + table.name(), e);
+    // fallback-guard: allow any manifest read failure to decline the partition-count rewrite so
+    // the query falls through to a normal scan, symmetric with the sibling wholeTableCount path
+    // in DuckDBIcebergCountStarRule. The SdkException family Iceberg's S3FileIO can throw is not
+    // an IOException, so a narrower catch let a 404 on a purged manifest-list avro escape the
+    // planner and fail the whole query.
+    } catch (Exception e) {
+      LOGGER.warn("Manifest read failed for {} ({}): declining the partition COUNT(*) rewrite so "
+          + "the query falls back to a normal scan", table.name(), e.toString());
+      return null;
     }
     return total;
   }

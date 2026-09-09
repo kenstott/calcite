@@ -147,7 +147,11 @@ public final class IcebergSchemaCache {
   // Local file
   // ---------------------------------------------------------------------------------------------
 
-  /** Resolves the cache directory, mirroring {@link IcebergMetadataCache}. */
+  /**
+   * Resolves the cache directory: the system property {@code iceberg.metadata.cache.directory} when
+   * set, else {@code {user.home}/.aperio/.iceberg_metadata_cache}. The directory name still says
+   * "metadata" for backward compatibility with existing on-disk artifacts.
+   */
   static File cacheDir() {
     String configured = System.getProperty("iceberg.metadata.cache.directory");
     File dir = (configured != null && !configured.isEmpty())

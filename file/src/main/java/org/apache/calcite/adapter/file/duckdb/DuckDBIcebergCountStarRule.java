@@ -367,14 +367,23 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
       rowCount = record.rowCount.longValue();
     } else {
       long total = 0L;
+      // fallback-guard: allow any read failure while summing manifests to decline the rewrite,
+      // rather than propagate a runtime exception out of Volcano's rule-application loop and fail
+      // the whole query. Iceberg's manifest read reaches S3 via SdkException-throwing paths, not
+      // just IOException — a NoSuchKeyException on a purged manifest-list avro file is what put
+      // COUNT(*) into ERROR in the register (D-214/215/216/217/218). Returning null here lets
+      // onMatch fall through to a normal DuckDB iceberg scan, which does its own metadata read
+      // and handles the same table correctly.
       try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.FileScanTask> tasks =
           icebergTable.newScan().planFiles()) {
         for (org.apache.iceberg.FileScanTask task : tasks) {
           total += task.file().recordCount();
         }
-      } catch (java.io.IOException e) {
-        throw new java.io.UncheckedIOException(
-            "Failed to close the manifest scan for Iceberg table " + tableLocation, e);
+      } catch (Exception e) {
+        LOGGER.warn("[ICEBERG COUNT*] Manifest read failed for '{}' at '{}' ({}): declining "
+            + "the COUNT(*) rewrite so the query falls back to a normal scan", tableName,
+            tableLocation, e.toString());
+        return null;
       }
       rowCount = total;
     }
