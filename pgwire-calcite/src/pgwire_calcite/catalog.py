@@ -19,6 +19,7 @@ as the query engine so clients can send arbitrary JOINs and WHERE clauses.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import re
 import threading
@@ -31,6 +32,16 @@ log = logging.getLogger(__name__)
 # which uses startup_time for restart detection) get PG-faithful, restart-stable
 # semantics rather than NULL.
 _SERVER_START_ISO = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S+00")
+
+# Monotonic process-lifetime transaction-id counter. Calcite has no real MVCC
+# transaction ids; txid_current() clients only require a stable increasing bigint.
+# A constant makes DataGrip/JDBC read every poll as "the same transaction".
+_TXID_COUNTER = itertools.count(1)
+
+
+def next_txid() -> int:
+    """Return the next monotonic bigint transaction id for txid_current()."""
+    return next(_TXID_COUNTER)
 
 # Catalog/database name reported to clients: current_database(), pg_database.datname,
 # information_schema.*.table_catalog/constraint_catalog, etc. Configurable per pgwire
@@ -65,7 +76,9 @@ _TXN_RE = re.compile(
 )
 
 _SCALAR_FN_RE = re.compile(
-    r"^\s*SELECT\s+(?:pg_catalog\.)?(current_user|session_user|current_database\(\)|current_schema\(\)|version\(\)|pg_backend_pid\(\))\s*$",
+    r"^\s*SELECT\s+(?:pg_catalog\.)?"
+    r"(current_user|session_user|current_database\(\)|current_schema\(\)|version\(\)"
+    r"|pg_backend_pid\(\)|pg_is_in_recovery\(\)|txid_current\(\)|pg_current_xact_id\(\))\s*$",
     re.IGNORECASE,
 )
 
@@ -1183,6 +1196,11 @@ _KNOWN_SETTINGS = {
     "application_name": "",
     "is_superuser": "on",
     "session_authorization": "admin",
+    # PG-14 startup ParameterStatus fields (see PG protocol §54.2). Sourced from
+    # here by CalciteConnection.parameters() so the handshake and SHOW /
+    # current_setting() answer the same values.
+    "default_transaction_read_only": "off",
+    "in_hot_standby": "off",
 }
 
 
@@ -3010,6 +3028,13 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 return new_tbl
         if isinstance(node, exp.Anonymous):
             fn = node.name.lower()
+            if fn == "json_build_object":
+                # DuckDB has no json_build_object; json_object takes the same
+                # alternating key/value argument list.
+                args = node.args.get("expressions", [])
+                return exp.Anonymous(
+                    this="json_object", expressions=[a.transform(_transform) for a in args]
+                )
             if fn == "array_length":
                 args = node.args.get("expressions", [])
                 return exp.Anonymous(this="len", expressions=[args[0]] if args else [exp.null()])
@@ -3088,8 +3113,9 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 return exp.false()
             if "txid_current" in fn or "pg_current_xact_id" in fn:
                 # Transaction id probes (DataGrip's current_txid). No real MVCC txids;
-                # answer a constant so the surrounding CAST/MOD expression evaluates.
-                return exp.Literal.number(1)
+                # answer a monotonically increasing bigint so the surrounding CAST/MOD
+                # expression evaluates AND repeat polls observe forward progress.
+                return exp.Literal.number(next_txid())
             if "pg_is_other_temp_schema" in fn:
                 return exp.false()
             if (
@@ -3273,7 +3299,30 @@ def _handle_scalar(sql: str, role_id: str):
         return QueryResult(rows=[("public",)], column_names=["current_schema"])
     if "pg_backend_pid()" in s:
         return QueryResult(rows=[(0,)], column_names=["pg_backend_pid"])
+    if "pg_is_in_recovery()" in s:
+        # We are never a standby/replica in recovery.
+        return QueryResult(rows=[(False,)], column_names=["pg_is_in_recovery"])
+    if "txid_current()" in s or "pg_current_xact_id()" in s:
+        return QueryResult(rows=[(next_txid(),)], column_names=["txid_current"])
     return None
+
+
+def _handle_txid(sql: str):
+    """Answer the JDBC/DataGrip status probe combining pg_is_in_recovery + txid_current.
+
+    `SELECT CASE WHEN pg_is_in_recovery() THEN NULL ELSE CAST(...txid_current()...) END
+    AS current_txid` resolves to a single-column bigint without reaching an engine.
+    """
+    from pgwire_calcite.types import QueryResult
+
+    lower = sql.lower()
+    if "pg_is_in_recovery" not in lower:
+        return None
+    if "txid_current" not in lower and "pg_current_xact_id" not in lower:
+        return None
+    m = re.search(r"\bAS\s+(\w+)\s*$", sql.strip(), re.IGNORECASE)
+    col = m.group(1) if m else "current_txid"
+    return QueryResult(rows=[(next_txid(),)], column_names=[col], column_types=["BIGINT"])
 
 
 def _handle_current_setting(sql: str):
@@ -3321,6 +3370,14 @@ def answer(sql: str, role_id: str, state):  # REQ-532
 
     if _SCALAR_FN_RE.match(stripped):
         result = _handle_scalar(stripped, role_id)
+        if result is not None:
+            return result
+
+    lower_stripped = stripped.lower()
+    if "pg_is_in_recovery" in lower_stripped and (
+        "txid_current" in lower_stripped or "pg_current_xact_id" in lower_stripped
+    ):
+        result = _handle_txid(stripped)
         if result is not None:
             return result
 
