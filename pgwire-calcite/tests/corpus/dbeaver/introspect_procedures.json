@@ -1,0 +1,10 @@
+{
+  "client": "dbeaver",
+  "phase": "introspect",
+  "sql": "SELECT p.oid, p.proname, p.pronamespace, p.prokind, p.pronargs, p.proretset, format_type(p.prorettype, NULL) AS result_type FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'pg_catalog' ORDER BY p.proname",
+  "captured": false,
+  "expect": {
+    "answered_by": "catalog",
+    "min_phase": 2
+  }
+}

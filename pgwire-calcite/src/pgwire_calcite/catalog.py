@@ -58,6 +58,92 @@ _DATABASE_NAME = "postgres"
 _BTREE_AM_OID = 403
 _SYNTH_BTREE_OPCLASS_OID = 1978
 _DEFAULT_COLLATION_OID = 100
+_PUBLIC_NS_OID = 2200
+
+# _pg_type.typname stores PG's internal type names (int4, bool, varchar, ...). Real
+# format_type() returns the SQL display name (integer, boolean, character varying, ...);
+# SQLAlchemy's PG dialect parses that display name against ischema_names and falls back to
+# NullType — breaking DDL generation and reflection — for any name it doesn't recognize, so
+# the internal names must be mapped before they reach a client.
+_PG_TYPE_DISPLAY_NAMES: dict[str, str] = {
+    "bool": "boolean",
+    "int2": "smallint",
+    "int4": "integer",
+    "int8": "bigint",
+    "float4": "real",
+    "float8": "double precision",
+    "varchar": "character varying",
+    "bpchar": "character",
+    "timestamptz": "timestamp with time zone",
+    "timetz": "time with time zone",
+}
+
+# Real PG relation oids for catalog classes. `'pg_extension'::regclass::oid` must land as a
+# number — _pg_depend.refclassid is INTEGER — so the reg-cast name literal is mapped through
+# this table instead of being stringly cast. DataGrip's RetrieveExtensions/RetrieveDependencies
+# probes join pg_depend on exactly these class oids.
+_CATALOG_CLASS_OIDS: dict[str, int] = {
+    "pg_default_acl": 826,
+    "pg_tablespace": 1213,
+    "pg_type": 1247,
+    "pg_proc": 1255,
+    "pg_class": 1259,
+    "pg_authid": 1260,
+    "pg_database": 1262,
+    "pg_foreign_server": 1417,
+    "pg_user_mapping": 1418,
+    "pg_foreign_data_wrapper": 2328,
+    "pg_am": 2601,
+    "pg_attrdef": 2604,
+    "pg_constraint": 2606,
+    "pg_conversion": 2607,
+    "pg_language": 2612,
+    "pg_largeobject": 2613,
+    "pg_namespace": 2615,
+    "pg_opclass": 2616,
+    "pg_operator": 2617,
+    "pg_rewrite": 2618,
+    "pg_trigger": 2620,
+    "pg_opfamily": 2753,
+    "pg_extension": 3079,
+    "pg_policy": 3256,
+    "pg_statistic_ext": 3381,
+    "pg_collation": 3456,
+    "pg_event_trigger": 3466,
+    "pg_ts_dict": 3600,
+    "pg_ts_config": 3602,
+}
+
+_REG_CAST_TYPES = frozenset(
+    {
+        "regclass",
+        "regtype",
+        "regproc",
+        "regprocedure",
+        "regoper",
+        "regoperator",
+        "regconfig",
+        "regdictionary",
+        "regrole",
+        "regnamespace",
+    }
+)
+
+# Row-count sourcing for pg_class.reltuples (PGW-051). "count" issues one COUNT(*) per table
+# through the backend at catalog-build time (once per memoized catalog, never per query);
+# "off" leaves reltuples at 0, which is PG's "never analyzed" value. Counting is exact but
+# O(tables) full scans, so a deployment over a very large or slow adapter sets "off" via
+# set_row_count_mode(). Only a backend that implements table_row_count() is ever counted.
+_ROW_COUNT_MODES = ("count", "off")
+_ROW_COUNT_MODE = "count"
+
+
+def set_row_count_mode(mode: str) -> None:
+    """Select how pg_class.reltuples is sourced. Called once at startup."""
+    global _ROW_COUNT_MODE
+    if mode not in _ROW_COUNT_MODES:
+        raise ValueError(f"row count mode must be one of {_ROW_COUNT_MODES}, got {mode!r}")
+    _ROW_COUNT_MODE = mode
 
 
 def set_database_name(name: str) -> None:
@@ -1023,14 +1109,20 @@ _PG_TYPE_ROWS = [
     (114, "json", 11, -1, "b", "U", False, 0, False, "i", "x"),
     (700, "float4", 11, 4, "b", "N", False, 0, True, "i", "p"),
     (701, "float8", 11, 8, "b", "N", False, 0, True, "d", "p"),
+    (1042, "bpchar", 11, -1, "b", "S", False, 0, False, "i", "x"),
     (1043, "varchar", 11, -1, "b", "S", False, 0, False, "i", "x"),
     (1082, "date", 11, 4, "b", "D", False, 0, True, "i", "p"),
     (1083, "time", 11, 8, "b", "D", False, 0, True, "d", "p"),
     (1114, "timestamp", 11, 8, "b", "D", False, 0, True, "d", "p"),
     (1184, "timestamptz", 11, 8, "b", "D", False, 0, True, "d", "p"),
+    (1266, "timetz", 11, 12, "b", "D", False, 0, False, "d", "p"),
     (1700, "numeric", 11, -1, "b", "N", False, 0, False, "i", "m"),
     (3802, "jsonb", 11, -1, "b", "U", False, 0, False, "i", "x"),
     (2950, "uuid", 11, 16, "b", "U", False, 0, False, "c", "p"),
+    # Pseudo-type: pg_proc rows projected from Calcite's operator table report `any`
+    # for argument/return types (see function_catalog). Without the row, a client's
+    # pg_proc -> pg_type join drops every function.
+    (2276, "any", 11, 4, "p", "P", False, 0, True, "i", "p"),
 ]
 
 # OID → (attlen, attbyval, attalign, attstorage)
@@ -2820,6 +2912,70 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         )
 
 
+def _populate_pg_extension(db, state) -> None:
+    """Advertise the backend's enabled extension surfaces in pg_extension (PGW-046/051).
+
+    The backend owns the surface list (it is what decides whether an operator lowers), so
+    it is the source of truth here too. A backend that declares no surfaces yields no rows
+    — that is the accurate answer, not a placeholder.
+    """
+    from pgwire_calcite.extensions import pg_extension_rows
+
+    backend = getattr(state, "backend", None)
+    enabled = backend.extensions if backend is not None else frozenset()
+    rows = pg_extension_rows(set(enabled))
+    if not rows:
+        return
+    db.executemany(
+        "INSERT INTO _pg_extension VALUES (?, ?, 10, ?, ?, ?, NULL, NULL)",
+        [(oid, name, _PUBLIC_NS_OID, False, version) for oid, name, version, _c in rows],
+    )
+    # PG keeps an extension's description in pg_description, not in pg_extension; that is
+    # where obj_description(oid, 'pg_extension') and DataGrip's extension node read it.
+    db.executemany(
+        "INSERT INTO _pg_description VALUES (?, 'pg_extension', 0, ?)",
+        [(oid, comment) for oid, _n, _v, comment in rows],
+    )
+
+
+def _fetch_row_counts(ctx, idx: CatalogIndex, backend) -> dict[int, float]:
+    """Real pg_class.reltuples per table, sourced from the backend (PGW-051).
+
+    Runs ONCE per catalog build (the catalog DB is memoized per role and invalidated on
+    DDL / re-populate), never per query. Backends that cannot count — the Phase-0 stub, the
+    bridge backend whose JVM lives in the child — do not implement ``table_row_count`` and
+    contribute nothing, leaving reltuples at 0 (PG's "never analyzed"). Counting is skipped
+    entirely under ``set_row_count_mode("off")``.
+    """
+    if _ROW_COUNT_MODE == "off" or ctx is None or backend is None:
+        return {}
+    counter = getattr(backend, "table_row_count", None)
+    if counter is None:
+        return {}
+    physical = {tm.table_id: (tm.schema_name, tm.table_name) for tm in ctx.tables.values()}
+    counts: dict[int, float] = {}
+    for _cat, _sch, _tname, table_id, toid in idx.tables:
+        schema_name, table_name = physical[table_id]
+        counts[toid] = float(counter(schema_name, table_name))
+    return counts
+
+
+def _populate_function_catalog(db, state) -> None:
+    """Project Calcite's operator table into pg_proc / routines / parameters (PGW-051)."""
+    from pgwire_calcite import function_catalog
+
+    backend = getattr(state, "backend", None)
+    library = getattr(backend, "function_library", None)
+    if library is None:
+        # Only an in-process Calcite backend can read the operator table; the bridge
+        # backend's JVM lives in the child process (harvesting it is a bridge op, not
+        # done here) and the stub backend executes no functions at all.
+        return
+    function_catalog.populate_functions(
+        db, function_catalog.harvest_operators(library()), _DATABASE_NAME
+    )
+
+
 # The catalog metadata (schemas/tables/columns/PKs/FKs) is static for a read-only
 # warehouse — captured once from Calcite into state.contexts at startup and never
 # changed during the process. Building the DuckDB catalog on every introspection
@@ -2867,25 +3023,13 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     db.execute("CREATE MACRO pg_backend_pid() AS 0")
     db.execute("CREATE MACRO age(x) AS 0")
     db.execute("CREATE MACRO quote_ident(x) AS '\"' || replace(x, '\"', '\"\"') || '\"'")
-    db.execute("""CREATE MACRO pg_available_extensions() AS TABLE
-        SELECT CAST(NULL AS VARCHAR) AS name, CAST(NULL AS VARCHAR) AS default_version,
-               CAST(NULL AS VARCHAR) AS installed_version, CAST(NULL AS VARCHAR) AS comment
-        LIMIT 0""")
-    db.execute("""CREATE MACRO pg_available_extension_versions() AS TABLE
-        SELECT CAST(NULL AS VARCHAR) AS name, CAST(NULL AS VARCHAR) AS version,
-               FALSE AS installed, FALSE AS superuser, FALSE AS trusted,
-               FALSE AS relocatable, CAST(NULL AS VARCHAR) AS schema,
-               CAST(NULL AS VARCHAR[]) AS requires, CAST(NULL AS VARCHAR) AS comment
-        LIMIT 0""")
+    # pg_available_extensions()/pg_available_extension_versions() are answered from
+    # _pg_extension by the rewrite (see _rewrite_for_duckdb's TVF branch), not by a macro.
     ctx = state.contexts.get(role_id)
     col_types: dict = state.schema_build_cache.get("column_types", {})
     idx = _build_catalog_index(ctx, col_types)
 
-    # Row counts (pg_class.reltuples) came from a Trino `SHOW STATS FOR` path that this
-    # fork never rewired (state.trino_conn was never provided, so it always yielded {}).
-    # Left at 0 — clients tolerate unknown estimates. A cached Iceberg/DuckDB count can
-    # be sourced here later; it's now cheap since the whole catalog DB is memoized.
-    row_counts: dict = {}
+    row_counts = _fetch_row_counts(ctx, idx, getattr(state, "backend", None))
 
     _populate_is_schemata(db, idx)
     _populate_is_tables(db, idx)
@@ -2913,6 +3057,8 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     raw_tables = state.schema_build_cache.get("tables", []) if state else []
     raw_domains = state.schema_build_cache.get("domains", []) if state else []
     _populate_pg_description(db, idx, raw_tables, raw_domains)
+    _populate_pg_extension(db, state)  # PGW-046: advertise enabled extension surfaces
+    _populate_function_catalog(db, state)  # PGW-051: pg_proc / routines / parameters
     constraint_rows = _populate_pg_constraint(db, ctx, idx)
     _populate_pg_roles_and_database(db, role_id, state)
     _populate_pg_settings(db)
@@ -2920,6 +3066,101 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     _populate_is_constraints(db, constraint_rows, idx)
 
     return db
+
+
+def _pg_type_display_sql(typname_ref: str) -> str:
+    """SQL CASE mapping ``_pg_type.typname`` to PG's SQL display name (PGW-051)."""
+    whens = " ".join(
+        f"WHEN '{internal}' THEN '{display}'"
+        for internal, display in _PG_TYPE_DISPLAY_NAMES.items()
+    )
+    return f"CASE {typname_ref} {whens} ELSE {typname_ref} END"
+
+
+# format_type(typid, typmod) as PG renders it, including the type modifier: varchar/bpchar
+# carry `typmod - 4` characters, numeric packs precision in the high 16 bits and scale in the
+# low 16 bits of `typmod - 4`, and the datetime types carry a fractional-seconds precision that
+# PG prints BEFORE the " with time zone" suffix. A NULL/absent typmod prints the bare display
+# name, which is also what PG does.
+_FORMAT_TYPE_TEMPLATE = """
+SELECT CASE
+    WHEN _ft.typname IN ('varchar', 'bpchar') AND ({mod}) >= 4
+        THEN {display} || '(' || CAST(({mod}) - 4 AS VARCHAR) || ')'
+    WHEN _ft.typname = 'numeric' AND ({mod}) >= 4
+        THEN 'numeric(' || CAST((((({mod}) - 4) >> 16) & 65535) AS VARCHAR)
+             || ',' || CAST(((({mod}) - 4) & 65535) AS VARCHAR) || ')'
+    WHEN _ft.typname IN ('timestamp', 'timestamptz', 'time', 'timetz') AND ({mod}) >= 0
+        THEN replace({display}, ' with time zone', '')
+             || '(' || CAST(({mod}) AS VARCHAR) || ')'
+             || CASE WHEN _ft.typname IN ('timestamptz', 'timetz')
+                     THEN ' with time zone' ELSE '' END
+    ELSE {display}
+END
+FROM _pg_type AS _ft WHERE _ft.oid = ({typid})
+"""
+
+
+def _format_type_subquery(typid_expr, typmod_expr):
+    """Build the scalar subquery that answers ``format_type(typid, typmod)`` (PGW-051)."""
+    import sqlglot
+
+    display = _pg_type_display_sql("_ft.typname")
+    sql = _FORMAT_TYPE_TEMPLATE.format(
+        display=display,
+        mod=typmod_expr.sql(dialect="duckdb"),
+        typid=typid_expr.sql(dialect="duckdb"),
+    )
+    return sqlglot.parse_one(sql, read="duckdb")
+
+
+def _rewrite_pg_cast(node, _transform):
+    """Rewrite a PG-catalog-only cast into a DuckDB-compatible expression (PGW-051).
+
+    Returns the replacement node, or None when the cast needs no rewrite. ``_transform``
+    is the enclosing ``_rewrite_for_duckdb`` walk, needed to recursively rewrite operands
+    this function splices into a brand-new subtree — sqlglot's top-down ``transform``
+    prunes below any node the callback replaces, so an un-transformed operand would
+    otherwise escape the rewrite entirely.
+    """
+    import sqlglot.expressions as exp
+
+    dtype = node.args.get("to")
+    dtype_str = str(dtype).lower() if dtype else ""
+    if dtype_str in _REG_CAST_TYPES:
+        # `'[schema.]name'::regclass` -> unqualified `'name'`. The synthetic pg_description
+        # stores classoid as the short relation name (e.g. 'pg_class'), and DataGrip's comment
+        # queries filter `classoid = 'pg_catalog.pg_class'::regclass`. Map the literal to its
+        # last dotted component so the comparison matches — else every description drops.
+        inner = node.this
+        if isinstance(inner, exp.Literal) and inner.is_string:
+            return exp.Literal.string(inner.this.rsplit(".", 1)[-1])
+        return inner.transform(_transform)
+    if dtype_str in ("oid", "xid", "xid8", "tid", "cid"):
+        # DuckDB has no oid/xid/tid/cid types. Preserve the operand's VALUE by re-casting to
+        # BIGINT instead of dropping it — DataGrip emits `relnamespace = 2215::oid`, and
+        # collapsing to a literal 0 would silently break the predicate. BIGINT covers every
+        # real catalog oid (< 2^31) and interops with the signed columns we store.
+        inner = node.this
+        if isinstance(inner, exp.Cast):
+            # Chained cast (`'pg_extension'::regclass::oid`): the walk visits this outer cast
+            # before the inner one, and sqlglot's exp.cast() builder raises on the not-yet-
+            # rewritten reg type. Rewrite the inner cast first; the return paths below are
+            # already fully transformed, so no further transform is needed.
+            inner = _rewrite_pg_cast(inner, _transform) or inner.transform(_transform)
+        elif isinstance(inner, exp.Literal) and inner.is_string:
+            class_oid = _CATALOG_CLASS_OIDS.get(inner.this.rsplit(".", 1)[-1])
+            if class_oid is not None:
+                return exp.Literal.number(class_oid)
+        else:
+            inner = inner.transform(_transform)
+        if isinstance(inner, exp.Literal) and inner.is_string:
+            class_oid = _CATALOG_CLASS_OIDS.get(inner.this.rsplit(".", 1)[-1])
+            if class_oid is not None:
+                return exp.Literal.number(class_oid)
+        return exp.cast(inner, "BIGINT")
+    if dtype_str == "name":
+        return exp.cast(node.this.transform(_transform), "VARCHAR")
+    return None
 
 
 def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
@@ -2940,31 +3181,10 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
     # ARRAY[a,b]::type[] → ARRAY[a,b] (strip redundant cast; DuckDB infers type)
     sql = _pre_re.sub(r"(ARRAY\[[^\]]*\])::\w+(?:\[\])+", r"\1", sql, flags=_pre_re.IGNORECASE)
 
-    # `'[schema.]name'::regclass` → unqualified `'name'` string. pgwire fakes
-    # pg_description.classoid as the short relation name (e.g. 'pg_class'), and DataGrip's
-    # comment queries filter `classoid = 'pg_catalog.pg_class'::regclass`; map the literal
-    # to its last component so the comparison matches (else all comments drop). Must run
-    # before the generic reg* strip below.
-    sql = _pre_re.sub(
-        r"'(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*)'\s*::\s*regclass\b",
-        r"'\1'",
-        sql,
-        flags=_pre_re.IGNORECASE,
-    )
-
-    # Strip PG-catalog-only scalar type casts DuckDB has no type for (oid/xid/reg*).
-    # DataGrip's introspection binds e.g. `relnamespace = $1::oid`; DuckDB can't equate
-    # `2215::oid` to the integer OID stored in the synthetic catalog, so the predicate
-    # matches NOTHING and the parameterized column query returns zero rows — every column
-    # type renders "unknown". Dropping the cast keeps the underlying integer value so
-    # comparisons work. Array casts (::oid[]) are handled above (word boundary, no '[').
-    sql = _pre_re.sub(
-        r"::\s*(?:oid|xid|xid8|cid|tid|regclass|regtype|regproc|regprocedure|"
-        r"regnamespace|regrole|regoper|regoperator|regconfig|regdictionary)\b(?!\[)",
-        "",
-        sql,
-        flags=_pre_re.IGNORECASE,
-    )
+    # NOTE: the reg*/oid casts are NOT stripped by a regex pre-pass — _rewrite_pg_cast
+    # handles them on the AST, which is the only place a CHAINED cast
+    # ('pg_extension'::regclass::oid, in DataGrip's pg_depend.refclassid join) can be
+    # resolved to the real pg_class oid a text pre-pass cannot produce.
 
     # pg_index's indkey/indoption/indcollation/indclass are int2vector/oidvector — 0-BASED
     # in Postgres. DataGrip's index-introspection query pairs them with
@@ -2990,6 +3210,41 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             # Schema-qualified scalar function used as a TVF (e.g. pg_catalog.pg_indexam_has_property(...) amcanorder).
             # Rewrite to a lateral subquery so DuckDB can parse it.
             if isinstance(node.this, exp.Anonymous):
+                _tvf_name = node.this.name.lower()
+                if _tvf_name in (
+                    "pg_available_extension_versions",
+                    "pg_available_extensions",
+                ):
+                    # No DuckDB counterpart, and the air-gapped build has no real extension
+                    # directory to enumerate. DataGrip's RetrieveExtensions joins these for
+                    # (name, version) rows; serve the surfaces this server actually
+                    # implements, straight out of _pg_extension.
+                    if _tvf_name.endswith("versions"):
+                        _projection = [
+                            exp.alias_(exp.column("extname"), "name"),
+                            exp.alias_(exp.column("extversion"), "version"),
+                            exp.alias_(exp.true(), "installed"),
+                            exp.alias_(exp.false(), "superuser"),
+                            exp.alias_(exp.true(), "trusted"),
+                            exp.alias_(exp.column("extrelocatable"), "relocatable"),
+                        ]
+                    else:
+                        _projection = [
+                            exp.alias_(exp.column("extname"), "name"),
+                            exp.alias_(exp.column("extversion"), "default_version"),
+                            exp.alias_(exp.column("extversion"), "installed_version"),
+                        ]
+                    # PG's comment column comes from the extension control file, which an
+                    # air-gapped build does not have. The surface's own description is in
+                    # pg_description instead (obj_description(oid, 'pg_extension')).
+                    _projection.append(exp.alias_(exp.null(), "comment"))
+                    inner = exp.select(*_projection).from_("_pg_extension")
+                    return exp.Subquery(
+                        this=inner,
+                        alias=exp.TableAlias(
+                            this=exp.Identifier(this=node.alias or _tvf_name, quoted=False)
+                        ),
+                    )
                 fn_result = _transform(node.this)
                 col_name = node.alias if node.alias else node.this.name.lower()
                 if fn_result is node.this:
@@ -3058,17 +3313,18 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             if "pg_encoding_to_char" in fn:
                 return exp.Literal.string("UTF8")
             if "format_type" in fn:
+                # sqlglot prunes the walk below any node this callback replaces, so args[0]
+                # here is still the UNTRANSFORMED original expression (e.g. the schema-
+                # qualified column pg_catalog.pg_attribute.atttypid). Embedding it as-is
+                # skips the db-qualifier strip in the Column branch and DuckDB then fails to
+                # bind it — transform each argument explicitly first.
                 args = node.args.get("expressions", [])
-                typid_expr = args[0] if args else exp.null()
-                subq = (
-                    exp.select(exp.column("typname"))
-                    .from_("_pg_type")
-                    .where(exp.EQ(this=exp.column("oid"), expression=typid_expr))
-                )
-                return exp.Subquery(this=subq)
+                typid_expr = args[0].transform(_transform) if args else exp.null()
+                typmod_expr = args[1].transform(_transform) if len(args) > 1 else exp.null()
+                return exp.Subquery(this=_format_type_subquery(typid_expr, typmod_expr))
             if "obj_description" in fn or "shobj_description" in fn:
                 args = node.args.get("expressions", [])
-                oid_expr = args[0] if args else exp.null()
+                oid_expr = args[0].transform(_transform) if args else exp.null()
                 subq = (
                     exp.select(exp.column("description"))
                     .from_("_pg_description")
@@ -3078,8 +3334,8 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 return exp.Subquery(this=subq)
             if "col_description" in fn:
                 args = node.args.get("expressions", [])
-                oid_expr = args[0] if args else exp.null()
-                attnum_expr = args[1] if len(args) > 1 else exp.null()
+                oid_expr = args[0].transform(_transform) if args else exp.null()
+                attnum_expr = args[1].transform(_transform) if len(args) > 1 else exp.null()
                 subq = (
                     exp.select(exp.column("description"))
                     .from_("_pg_description")
@@ -3203,25 +3459,9 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                     expressions=[arr.transform(_transform), rhs.transform(_transform)],
                 )
         if isinstance(node, exp.Cast):
-            dtype = node.args.get("to")
-            dtype_str = str(dtype).lower() if dtype else ""
-            if dtype_str in (
-                "regclass",
-                "regtype",
-                "regproc",
-                "regprocedure",
-                "regoper",
-                "regoperator",
-                "regconfig",
-                "regdictionary",
-                "regrole",
-                "regnamespace",
-            ):
-                return node.this
-            if dtype_str in ("oid", "xid", "tid", "cid"):
-                return exp.Literal.number(0)
-            if dtype_str == "name":
-                return exp.cast(node.this, "VARCHAR")
+            rewritten_cast = _rewrite_pg_cast(node, _transform)
+            if rewritten_cast is not None:
+                return rewritten_cast
         if isinstance(node, exp.Column):
             if node.name.lower() in ("xmin", "xmax", "cmin", "cmax", "ctid"):
                 return exp.cast(exp.Literal.number(0), "INTEGER")

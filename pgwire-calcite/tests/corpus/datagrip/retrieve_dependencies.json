@@ -1,0 +1,10 @@
+{
+  "client": "datagrip",
+  "phase": "introspect",
+  "sql": "select d.objid, d.refobjid, d.deptype from pg_catalog.pg_depend d where d.refclassid = 'pg_extension'::regclass::oid and d.deptype = 'e'",
+  "captured": false,
+  "expect": {
+    "answered_by": "catalog",
+    "min_phase": 2
+  }
+}
