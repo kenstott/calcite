@@ -32,16 +32,27 @@ from test_phase0_wire import MiniPgClient, _free_port
 # --- PGW-025: OS-agnostic Java launcher entry point --------------------------
 
 def test_java_launcher_starts_python(tmp_path):
+    """The jar is a build artifact (gitignored), so the test provisions it rather
+    than skipping — a skip here would hide a broken launcher on every fresh clone."""
     import pathlib
     import shutil
     import subprocess
     import sys
 
-    if shutil.which("java") is None:
-        pytest.skip("java not available")
-    jar = pathlib.Path(__file__).resolve().parents[2] / "packaging" / "pgwire-launcher.jar"
+    packaging = pathlib.Path(__file__).resolve().parents[2] / "packaging"
+    jar = packaging / "pgwire-launcher.jar"
     if not jar.exists():
-        pytest.skip("pgwire-launcher.jar not built (run packaging/build-launcher.sh)")
+        assert shutil.which("javac"), (
+            "a JDK is required to build pgwire-launcher.jar (PGW-025); "
+            "javac is not on PATH"
+        )
+        build = subprocess.run(
+            ["bash", str(packaging / "build-launcher.sh")],
+            capture_output=True, text=True, timeout=300,
+        )
+        assert build.returncode == 0, build.stderr
+        assert jar.exists(), build.stdout
+    assert shutil.which("java"), "a JRE is required to run pgwire-launcher.jar (PGW-025)"
     out = subprocess.run(
         ["java", f"-Dpgwire.python={sys.executable}", "-jar", str(jar), "--help"],
         capture_output=True, text=True, timeout=30,
