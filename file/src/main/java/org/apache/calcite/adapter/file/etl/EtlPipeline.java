@@ -632,6 +632,22 @@ public class EtlPipeline {
         LOGGER.debug("Memory after_bulk_filter: {}", filterSnap);
       }
 
+      // A declared freshness gate outranks "every combination is already processed". That
+      // conclusion is drawn from per-combo markers alone, and a table whose combos are constant
+      // across runs (a snapshot pinned by a cache-buster dimension, say) can never reopen one — so
+      // taking the early return below would skip it forever, however new the source data is. The
+      // gate itself is the cheap check: it runs a little further down and returns immediately when
+      // the source is UNCHANGED, so falling through here costs one HEAD request and correctly
+      // re-fetches when it reports CHANGED.
+      if (neededCount == 0 && totalBatches > 0 && freshnessConfig != null) {
+        LOGGER.info("All {} combinations already processed, but pipeline '{}' declares a freshness "
+            + "gate — deferring the skip decision to it", totalBatches, pipelineName);
+        neededCount = totalBatches;
+        if (!usePartitionedExpansion) {
+          standardUnprocessedIndices = allIndicesSet(totalBatches);
+        }
+      }
+
       // If all combinations are already processed, mark complete and return
       if (neededCount == 0 && totalBatches > 0) {
         long cachedRowCount = 0;
@@ -1028,7 +1044,15 @@ public class EtlPipeline {
           // single Iceberg partition), partition *existence* only proves some combo in the
           // partition was fetched, not that every combo was — so the shortcut must not
           // apply and per-combo tracking (above) remains the sole authority.
-          if (partCombos.size() == 1 && !existingIcebergPartitions.isEmpty()
+          // Only when the table declares no freshness gate. Where one IS declared it is the
+          // authority on whether the committed data is current, and this shortcut runs downstream
+          // of it: the gate can report CHANGED and this check will still skip the fetch, because
+          // partition *existence* says nothing about currency. On a table whose partition key is
+          // constant across runs (e.g. `type=fda_drug_approvals`) that freezes it at its first
+          // write permanently — confirmed live on the openFDA tables, which reported CHANGED daily
+          // and were skipped here every time, holding a June snapshot for months.
+          if (freshnessConfig == null && partCombos.size() == 1
+              && !existingIcebergPartitions.isEmpty()
               && !icebergPartitionColumns.isEmpty() && !unprocessedIndices.isEmpty()) {
             // Extract the Iceberg partition key from the first unprocessed combo
             Map<String, String> sampleCombo = partCombos.get(unprocessedIndices.iterator().next());
