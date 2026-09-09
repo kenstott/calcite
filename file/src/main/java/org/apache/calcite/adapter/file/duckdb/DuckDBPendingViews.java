@@ -206,6 +206,12 @@ public final class DuckDBPendingViews {
         if (pv == null) {
           return; // not pending: never deferred, or already resolved (by us or another caller)
         }
+        if (pv.lastError != null) {
+          // Already attempted and failed in this cycle. It stays pending so {@link #buildAll} can
+          // retry it, but the lazy per-query path must not re-pay CREATE_VIEW_TIMEOUT_SECONDS on
+          // every reference in the meantime. buildAll clears lastError to force a fresh attempt.
+          return;
+        }
         if (existsInCatalog(conn, duckdbSchema, viewName)) {
           pendingList.remove(pv);
           return;
@@ -222,12 +228,17 @@ public final class DuckDBPendingViews {
         }
         if (err == null) {
           LOGGER.debug("Created deferred view: {}", key);
+          pendingList.remove(pv);
         } else {
+          // Non-fatal by design: the view simply does not appear, rather than the failure
+          // propagating and taking the rest of the schema down with it. Warn so the omission is
+          // still visible. It stays pending — a view that failed on a data problem since fixed
+          // must still be retryable — and {@link #buildAll} drops it only once the whole set has
+          // stopped making progress.
           pv.lastError = err;
-          LOGGER.error("Cannot create view {} — {}. SQL: {}", key, classifyError(err),
+          LOGGER.warn("Cannot create view {} — {}. SQL: {}", key, classifyError(err),
               pv.viewSql.length() > 200 ? pv.viewSql.substring(0, 200) + "..." : pv.viewSql);
         }
-        pendingList.remove(pv);
       }
     } finally {
       inFlight.remove(key);
@@ -247,8 +258,31 @@ public final class DuckDBPendingViews {
     if (pendingList == null) {
       return;
     }
+    // Cycle until the backlog stabilizes. Each pass clears the previous failure so every view gets
+    // a genuine retry, and a view leaves the list only by being created. A pass that creates
+    // nothing means no view still queued can be satisfied by another one in the backlog, so
+    // further passes would repeat identically. The dependency recursion in createOnDemand already
+    // resolves ordering it can see from a missing-reference error; this loop covers what it
+    // cannot — notably a view whose dependency failed earlier in the same pass for a transient
+    // reason (an object store that was briefly unreachable).
+    int remaining = pendingList.size();
+    while (remaining > 0) {
+      for (PendingView pv : new java.util.ArrayList<>(pendingList)) {
+        pv.lastError = null;
+        createOnDemand(dbPath, conn, pv.duckdbSchema, pv.viewName);
+      }
+      int afterPass = pendingList.size();
+      if (afterPass == remaining) {
+        break;
+      }
+      remaining = afterPass;
+    }
+    // Stabilized: whatever is still queued cannot be created. Drop it, naming the cause — the
+    // end-of-attempt reporting that PendingView.lastError exists for.
     for (PendingView pv : new java.util.ArrayList<>(pendingList)) {
-      createOnDemand(dbPath, conn, pv.duckdbSchema, pv.viewName);
+      LOGGER.warn("Dropping view {} — still unresolved after retries: {}",
+          qualified(pv.duckdbSchema, pv.viewName), classifyError(pv.lastError));
+      pendingList.remove(pv);
     }
   }
 
