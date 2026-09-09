@@ -174,17 +174,32 @@ def test_graceful_shutdown_stops_children():
 
 
 def test_real_subprocess_rss_recycle():
-    """Real /proc RSS read + proactive recycle of a memory-hogging child."""
-    import pathlib
+    """Real OS RSS read + proactive recycle of a memory-hogging child.
 
-    if not pathlib.Path("/proc/self/status").exists():
-        pytest.skip("/proc RSS not available on this platform")
-    hog = [sys.executable, "-c", "b=bytearray(120*1024*1024)\nimport time\ntime.sleep(30)"]
+    Runs on every platform: _read_rss_mb uses /proc where it exists and ``ps``
+    where it does not, so there is no host on which this silently does nothing.
+    """
+    # The child must keep *touching* its pages, not merely allocate them: macOS's
+    # memory compressor evicts an idle 120 MiB buffer down to ~15 MiB within a
+    # second, so an allocate-then-sleep child races the compressor and reports an
+    # RSS under the limit. Sweeping one byte per 4 KiB page keeps it resident on
+    # every platform.
+    _HOG = (
+        "import os, sys, time\n"
+        "n = 120 * 1024 * 1024\n"
+        "mv = memoryview(bytearray(os.urandom(n)))\n"
+        "sys.stderr.write('allocated\\n'); sys.stderr.flush()\n"
+        "deadline = time.monotonic() + 30\n"
+        "while time.monotonic() < deadline:\n"
+        "    for off in range(0, n, 4096):\n"
+        "        mv[off] = (mv[off] + 1) & 0xFF\n"
+    )
+    hog = [sys.executable, "-c", _HOG]
     spec = ChildSpec("hog", hog, rss_limit_mb=40, graceful_stop_timeout=3)
     sup = Supervisor([spec], clock=time.monotonic)
     sup.start_all()
     try:
-        time.sleep(1.0)  # let it allocate
+        time.sleep(2.0)  # let it allocate and go resident
         first_pid = sup.state("hog").child.pid
         sup.tick()  # ready
         sup.tick()  # RSS over 40MiB -> recycle

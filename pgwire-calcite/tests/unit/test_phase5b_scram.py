@@ -20,6 +20,7 @@ import base64
 import hashlib
 import hmac
 import os
+import shutil
 import subprocess
 import time
 
@@ -71,7 +72,12 @@ def test_scram_exchange_rejects_wrong_password():
     assert ok is False and server_final is None
 
 
-@pytest.mark.skipif(not os.path.exists("/usr/bin/psql"), reason="psql not available")
+#: A libpq client is what proves the SCRAM wire exchange; find it on PATH
+#: (Homebrew/MacPorts/conda installs are not in /usr/bin).
+_PSQL = shutil.which("psql")
+
+
+@pytest.mark.skipif(_PSQL is None, reason="no libpq client (psql) on PATH")
 def test_scram_end_to_end_with_psql(tmp_path):
     store = AccountStore(tmp_path / "accounts.json")
     store.add("alice", "s3cret")
@@ -82,7 +88,7 @@ def test_scram_end_to_end_with_psql(tmp_path):
     try:
         env = dict(os.environ, PGPASSWORD="s3cret")
         out = subprocess.run(
-            ["/usr/bin/psql", f"host=127.0.0.1 port={port} user=alice dbname=calcite",
+            [_PSQL, f"host=127.0.0.1 port={port} user=alice dbname=calcite",
              "-tAc", "SELECT 1"],
             capture_output=True, text=True, env=env, timeout=20,
         )
@@ -90,7 +96,7 @@ def test_scram_end_to_end_with_psql(tmp_path):
         assert out.stdout.strip() == "1", out.stdout + out.stderr
         # wrong password -> SCRAM fails
         bad = subprocess.run(
-            ["/usr/bin/psql", f"host=127.0.0.1 port={port} user=alice dbname=calcite",
+            [_PSQL, f"host=127.0.0.1 port={port} user=alice dbname=calcite",
              "-tAc", "SELECT 1"],
             capture_output=True, text=True, env=dict(os.environ, PGPASSWORD="wrong"), timeout=20,
         )

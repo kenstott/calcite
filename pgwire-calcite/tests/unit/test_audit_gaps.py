@@ -39,9 +39,19 @@ def test_java_launcher_starts_python(tmp_path):
 
     if shutil.which("java") is None:
         pytest.skip("java not available")
-    jar = pathlib.Path(__file__).resolve().parents[2] / "packaging" / "pgwire-launcher.jar"
+    packaging = pathlib.Path(__file__).resolve().parents[2] / "packaging"
+    jar = packaging / "pgwire-launcher.jar"
     if not jar.exists():
-        pytest.skip("pgwire-launcher.jar not built (run packaging/build-launcher.sh)")
+        # Self-provision the artifact under test rather than skipping: a launcher
+        # that was never built is exactly the regression this test exists to catch.
+        if shutil.which("javac") is None:
+            pytest.skip("no JDK (javac) to build pgwire-launcher.jar")
+        build = subprocess.run(
+            ["bash", str(packaging / "build-launcher.sh")],
+            capture_output=True, text=True, timeout=300,
+        )
+        assert build.returncode == 0, build.stdout + build.stderr
+        assert jar.exists(), build.stdout + build.stderr
     out = subprocess.run(
         ["java", f"-Dpgwire.python={sys.executable}", "-jar", str(jar), "--help"],
         capture_output=True, text=True, timeout=30,

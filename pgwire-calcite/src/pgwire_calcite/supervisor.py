@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
+import pathlib
 import signal
 import subprocess
 import time
@@ -98,16 +99,38 @@ class CrashLoopBreaker:
 
 
 def _read_rss_mb(pid: int) -> Optional[float]:
-    """Resident set size in MiB from /proc (Linux). None if unavailable."""
-    try:
-        with open(f"/proc/{pid}/status", "r", encoding="utf-8") as fh:
-            for line in fh:
+    """Resident set size of ``pid`` in MiB, or None if the process is gone.
+
+    /proc where it exists (Linux), ``ps -o rss=`` elsewhere (macOS/BSD have no
+    /proc). Without the second path the RSS recycle (PGW-034) reads None on every
+    tick on those platforms and silently never fires -- a supervisor that has
+    quietly stopped supervising is worse than one that fails.
+    """
+    status = pathlib.Path(f"/proc/{pid}/status")
+    if status.exists():
+        try:
+            for line in status.read_text(encoding="utf-8").splitlines():
                 if line.startswith("VmRSS:"):
-                    kb = float(line.split()[1])
-                    return kb / 1024.0
-    except (OSError, ValueError, IndexError):
+                    return float(line.split()[1]) / 1024.0  # /proc reports KiB
+        except (OSError, ValueError, IndexError):
+            return None
         return None
-    return None
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "rss=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    line = out.stdout.strip()
+    if out.returncode != 0 or not line:
+        return None  # no such process
+    try:
+        return float(line.split()[0]) / 1024.0  # ps reports KiB too
+    except (ValueError, IndexError):
+        return None
 
 
 class SupervisedChild:
