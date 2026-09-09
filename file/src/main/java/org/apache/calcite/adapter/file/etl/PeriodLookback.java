@@ -27,7 +27,8 @@ import java.util.Set;
  * Resolves which previously-published periods a run should reopen.
  *
  * <p>The lookback walks backwards from the current period over periods the pipeline has
- * <em>actually published</em>, collecting the {@code lookbackPeriods} most recent ones. It performs
+ * <em>actually published</em>, always collecting the head and then as many further periods as
+ * {@code lookbackPeriods} asks for. It performs
  * no lag or calendar-window arithmetic: {@code dataLag} and {@code dataMonthLag} govern what is
  * available to fetch, this governs what is worth re-checking, and the two are independent. Anchoring
  * on published data rather than on the clock means every period in the returned set is one that
@@ -59,13 +60,14 @@ final class PeriodLookback {
   }
 
   /**
-   * Returns the period-value maps for the {@code lookbackPeriods} most recently published periods,
-   * newest first. Empty when the table has published nothing, when no canonical period slot is
-   * declared, or when the lookback is not configured.
+   * Returns the period-value maps for the most recently published periods, newest first: the head
+   * period always, plus further periods when {@code lookbackPeriods} asks for them. Empty when the
+   * table has published nothing or declares no canonical period slot.
    *
    * @param pipelineName schema-qualified pipeline name, as used for period-completion keys
    * @param dimensions the table's dimension configs, read for which period slots are in play
-   * @param lookbackPeriods how many published periods to collect; null or &lt; 1 returns empty
+   * @param lookbackPeriods how many published periods to collect beyond the head; null or
+   *                        &lt; 1 still collects the head period alone
    * @param floorYear lowest year the walk may reach, from the dimension's start / minYear
    * @param tracker source of truth for whether a period was published
    * @return period-value maps to reopen, newest first
@@ -73,9 +75,28 @@ final class PeriodLookback {
   static List<Map<String, String>> resolve(String pipelineName,
       Map<String, DimensionConfig> dimensions, Integer lookbackPeriods, int floorYear,
       IncrementalTracker tracker) {
-    if (lookbackPeriods == null || lookbackPeriods < 1 || tracker == null) {
+    if (tracker == null) {
       return new ArrayList<Map<String, String>>();
     }
+    // An explicit 0 means "ingest once, never revisit" — the only way to say that, and it has to
+    // be said deliberately. It suits a genuinely static source (a code list, a fixed crosswalk)
+    // and is wrong for anything that accrues, so it is opt-in and greppable rather than the
+    // default. Note what it costs to get wrong in the other direction: a reopened head is
+    // re-fetched, and only a declared freshness gate can then turn that into a skip — a HASH gate
+    // is evaluated post-download, and a table with no gate at all re-writes a snapshot every run.
+    if (lookbackPeriods != null && lookbackPeriods == 0) {
+      LOGGER.debug("Lookback for '{}': explicitly disabled (lookbackPeriods: 0) — head not "
+          + "reopened; the table is treated as ingest-once", pipelineName);
+      return new ArrayList<Map<String, String>>();
+    }
+    // Otherwise the head period is always reopened, configured lookback or not. Every other gate
+    // is permanent once a combo is first processed, and a period marker is set as soon as its
+    // combos are all processed — including for a period still in progress, which is the common
+    // case for the newest one. Without this the head freezes at whatever it held when it was
+    // first filled, and a table whose current period keeps accruing (a weekly or monthly series,
+    // say) never picks up the rest of it. `lookbackPeriods` therefore says how far back beyond
+    // the head to reach, not whether the head is looked at.
+    int effectiveLookback = lookbackPeriods == null || lookbackPeriods < 1 ? 1 : lookbackPeriods;
     Set<String> slots = declaredSlots(dimensions);
     if (slots.isEmpty()) {
       // Not period-tracked: periodCompletionKey would be all-NA and every period would collide.
@@ -90,7 +111,7 @@ final class PeriodLookback {
 
     List<Map<String, String>> found = new ArrayList<Map<String, String>>();
     int steps = 0;
-    while (found.size() < lookbackPeriods && steps < MAX_STEPS && year >= floorYear) {
+    while (found.size() < effectiveLookback && steps < MAX_STEPS && year >= floorYear) {
       Map<String, String> period = periodValues(slots, year, sub, grain);
       if (tracker.isPeriodComplete(pipelineName, period)) {
         found.add(period);
@@ -123,7 +144,7 @@ final class PeriodLookback {
           pipelineName, steps, floorYear);
     } else {
       LOGGER.info("Lookback for '{}': reopening {} published period(s) of {} requested "
-          + "(grain={}, {} probes)", pipelineName, found.size(), lookbackPeriods, grain, steps);
+          + "(grain={}, {} probes)", pipelineName, found.size(), effectiveLookback, grain, steps);
     }
     return found;
   }

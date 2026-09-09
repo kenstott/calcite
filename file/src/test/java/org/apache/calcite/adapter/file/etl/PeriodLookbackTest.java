@@ -221,10 +221,33 @@ public class PeriodLookbackTest {
     assertEquals("2011", got.get(0).get("year"));
   }
 
-  @Test void absentLookbackYieldsAnEmptySet() {
+  /**
+   * The head is reopened whether or not a lookback is configured: {@code lookbackPeriods} says how
+   * far back beyond the head to reach, not whether the head is checked at all. Every other gate is
+   * permanent once a combo is processed, so without this a table's newest period would freeze at
+   * whatever it held when it was first filled.
+   */
+  @Test void absentLookbackStillReopensTheHead() {
     PipelineClock.setOverrideForTest(LocalDate.of(2026, 6, 15));
     StubTracker t = new StubTracker(yearKey(2025));
-    assertTrue(PeriodLookback.resolve(PIPE, yearOnly(), null, 2010, t).isEmpty());
+
+    List<Map<String, String>> got =
+        PeriodLookback.resolve(PIPE, yearOnly(), null, 2010, t);
+
+    assertEquals(1, got.size());
+    assertEquals("2025", got.get(0).get("year"));
+  }
+
+  /**
+   * An explicit 0 is the one way to say "ingest once, never revisit", for a genuinely static
+   * source. It is deliberately not the same as absent: the accidental version of this config is
+   * how a table that should accrue ends up frozen, so it has to be asked for.
+   */
+  @Test void explicitZeroLookbackDisablesTheHeadReopen() {
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 6, 15));
+    StubTracker t = new StubTracker(yearKey(2025), yearKey(2024));
+
+    assertTrue(PeriodLookback.resolve(PIPE, yearOnly(), 0, 2010, t).isEmpty());
   }
 
   @Test void oldestYearReportsTheRangeFloorNeededToGenerateTheSet() {
