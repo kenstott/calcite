@@ -392,6 +392,11 @@ public class EtlPipeline {
       // Read once, early: used both by the trailing-window force-reopen (Phase 2, below) and by
       // the freshness skip-gates (Phase 3b / processSingleBatch).
       FreshnessConfig freshnessConfig = config.getFreshness();
+      // Set only when the pipeline-level freshness probe actually ran AND reported the source
+      // CHANGED. A declared freshnessConfig is not the same thing: the probe is skipped for a
+      // templated URL, a non-HttpSource, or a HASH-type gate, and an UNCHANGED verdict returns
+      // from the pipeline before any of the skip paths below are reached.
+      boolean sourceFreshnessChanged = false;
 
       // Completion markers are a *period* concept — a marker means "done for time period T".
       // A non-period table has no T, so completion / self-heal / per-period filtering does not
@@ -776,6 +781,7 @@ public class EtlPipeline {
                 pipelineName,
                 previousToken == null ? "<none>" : previousToken,
                 currentToken == null ? "<null>" : currentToken);
+            sourceFreshnessChanged = true;
           }
           // Capture so we can persist it after a successful commit
           probedFreshnessToken = currentToken;
@@ -1025,6 +1031,22 @@ public class EtlPipeline {
             // markers (a period spans partitions, so completeness can't be decided from
             // one partition's combos), and the per-combo incremental filter above is the
             // authority — keeping partitioned behavior identical to before this change.
+          }
+
+          // A declared freshness gate outranks "every combo in this partition is already
+          // processed", exactly as it does on the standard-expansion path above. Reaching here at
+          // all means the gate reported CHANGED (an UNCHANGED verdict returns from the pipeline
+          // long before this point), and a partition whose combos are constant across runs can
+          // never reopen its own markers -- so honouring the marker here skips the partition
+          // forever no matter what the source does. Confirmed live on health.fda_drug_approvals:
+          // "freshness check CHANGED (prev=2026-09-08, cur=2026-09-09) - proceeding" followed by
+          // "0 rows, 0 successful, 0 failed, 1 skipped", because every combo was already marked.
+          if (unprocessedIndices.isEmpty() && sourceFreshnessChanged) {
+            LOGGER.info("Partition {}/{} ({}={}): all {} combos already processed, but pipeline "
+                + "'{}' declares a freshness gate that reported CHANGED - reprocessing",
+                pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
+                partCombos.size(), pipelineName);
+            unprocessedIndices = allIndicesSet(partCombos.size());
           }
 
           if (unprocessedIndices.isEmpty()) {
