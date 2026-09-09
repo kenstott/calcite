@@ -287,7 +287,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 51550
-      checkedAt: "2026-09-08T23:43:32Z"
+      checkedAt: "2026-09-09T23:58:22Z"
     partitions: *standard_partitions
     comment: >
       Census Building Permits Survey — new privately-owned residential
@@ -419,7 +419,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 340592
-      checkedAt: "2026-09-08T23:43:34Z"
+      checkedAt: "2026-09-09T23:58:24Z"
     partitions: *standard_partitions
     comment: >
       Census Building Permits Survey — new privately-owned residential construction authorized
@@ -662,7 +662,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 47663
-      checkedAt: "2026-09-08T23:43:36Z"
+      checkedAt: "2026-09-09T23:58:25Z"
     partitions: *state_partitions
     comment: >
       HUD Fair Market Rents — 40th-percentile gross rent by bedroom size, used
@@ -779,7 +779,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 500
-      checkedAt: "2026-09-08T23:43:36Z"
+      checkedAt: "2026-09-09T23:58:26Z"
     partitions: *state_partitions
     comment: >
       HUD Income Limits — Area Median Income and the extremely-low (30%),
@@ -875,7 +875,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 15651
-      checkedAt: "2026-09-08T23:43:38Z"
+      checkedAt: "2026-09-09T23:58:27Z"
     partitions: *state_partitions
     comment: >
       HUD Income Limits at county / HUD-metro-area grain — the same 30/50/80%
@@ -986,7 +986,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 19968
-      checkedAt: "2026-09-08T23:43:39Z"
+      checkedAt: "2026-09-09T23:58:28Z"
     partitions: *state_partitions
     comment: >
       Home Mortgage Disclosure Act loan aggregates from the CFPB HMDA Data
@@ -1093,7 +1093,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 52704
-      checkedAt: "2026-09-08T23:43:40Z"
+      checkedAt: "2026-09-09T23:58:29Z"
     partitions: *state_partitions
     comment: >
       HMDA fair-lending breakdown from the CFPB HMDA Data Browser aggregations
@@ -1199,7 +1199,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 136591817
-      checkedAt: "2026-09-08T23:43:46Z"
+      checkedAt: "2026-09-09T23:58:35Z"
     partitions: *state_partitions
     comment: >
       HMDA Loan/Application Register — actual loan-level records from the CFPB
@@ -1589,7 +1589,7 @@ partitionedTables:
       distinctYears: 4
       contiguous: true
       rowCount: 62356
-      checkedAt: "2026-09-08T23:43:47Z"
+      checkedAt: "2026-09-09T23:58:36Z"
     partitions: *standard_partitions
     comment: >
       HUD "A Picture of Subsidized Households" at county × HUD-program grain, from
