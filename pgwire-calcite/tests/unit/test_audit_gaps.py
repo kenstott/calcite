@@ -37,11 +37,22 @@ def test_java_launcher_starts_python(tmp_path):
     import subprocess
     import sys
 
-    if shutil.which("java") is None:
-        pytest.skip("java not available")
-    jar = pathlib.Path(__file__).resolve().parents[2] / "packaging" / "pgwire-launcher.jar"
+    assert shutil.which("java") is not None, "a JRE is required to exercise the PGW-025 launcher"
+    packaging = pathlib.Path(__file__).resolve().parents[2] / "packaging"
+    jar = packaging / "pgwire-launcher.jar"
     if not jar.exists():
-        pytest.skip("pgwire-launcher.jar not built (run packaging/build-launcher.sh)")
+        # Self-provision the artifact rather than skipping: the launcher is part of
+        # what this test asserts, so a missing jar is a build step, not a reason to
+        # report a pass without having run anything.
+        assert shutil.which("javac") is not None, (
+            "a JDK is required to build packaging/pgwire-launcher.jar for this test"
+        )
+        build = subprocess.run(
+            ["bash", str(packaging / "build-launcher.sh")],
+            capture_output=True, text=True, timeout=300,
+        )
+        assert build.returncode == 0, build.stdout + build.stderr
+        assert jar.exists(), build.stdout + build.stderr
     out = subprocess.run(
         ["java", f"-Dpgwire.python={sys.executable}", "-jar", str(jar), "--help"],
         capture_output=True, text=True, timeout=30,
