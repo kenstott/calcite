@@ -15,8 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# x-schema.sh — runs the cross-schema chunk-parsing sweep (ChunkOrganizer.main), the
-# "x-schema" step in the daily -> x-schema -> vss -> historical sequence run-pool.sh drives.
+# x-schema.sh — runs the two cross-schema sweeps: the entity-bridge sweep
+# (EntityBridgeOrganizer.main) and the chunk-parsing sweep (ChunkOrganizer.main), in that order.
+# Together they are the "x-schema" step in the daily -> x-schema -> vss -> historical sequence
+# run-pool.sh drives.
 #
 # One sweep over every registered source (see ChunkOrganizer.java's ROW_CONCAT_SOURCES /
 # DOCUMENT_BLOB_SOURCES) across every schema, including SEC's own mda_sections/
@@ -46,13 +48,38 @@ JAR=$(resolve_classpath) || exit 1
 
 : "${CALCITE_TRACKER_PG_URL:?CALCITE_TRACKER_PG_URL not set -- required to reach vc_staging}"
 
-echo "[x-schema] sweeping every registered source into vc_staging (jar: $JAR)"
+# Optional per-step time box. Unset (the default) means no limit, i.e. unchanged behaviour; set
+# either to a `timeout`-style duration (e.g. 90m) to stop one step from consuming the whole window.
+run_step() {
+  local label="$1" limit="$2" main_class="$3"
+  echo "[x-schema] $label (jar: $JAR)"
+  if [ -n "$limit" ]; then
+    timeout "$limit" "$GOVDATA_JAVA_BIN" -cp "$JAR" "$main_class"
+  else
+    "$GOVDATA_JAVA_BIN" -cp "$JAR" "$main_class"
+  fi
+}
+
+# Entity bridges run FIRST. These two sweeps are independent — EntityBridgeOrganizer reads no
+# vc_staging/chunk output — but they used to run chunks-first in one synchronous script, and the
+# chunk sweep routinely consumed every remaining minute of run-scheduled.sh's window. The outer
+# timeout then killed the whole process tree before the bridge sweep was ever reached, so
+# ref.canonical_org_entity / ref.entity_org_bridge were never rebuilt in ANY scheduled run: the
+# bridge start-of-run line above appears in none of the archived scheduled logs. The bridge sweep
+# is the far shorter of the two, so ordering it first costs the chunk sweep little and stops it
+# being starved indefinitely. Only ChunkOrganizer must precede vss-local.sh, and it still does.
 # `if !` rather than a trailing `$?` test: under `set -e` a failing java aborts the script before
 # the test is ever reached, so the explicit message was unreachable.
-if ! "$GOVDATA_JAVA_BIN" -cp "$JAR" org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then
-  echo "ERROR: ChunkOrganizer failed" >&2
+if ! run_step "building entity bridges across all schemas" \
+    "${GOVDATA_XSCHEMA_BRIDGE_TIMEOUT:-}" \
+    org.apache.calcite.adapter.govdata.ref.EntityBridgeOrganizer; then
+  echo "ERROR: EntityBridgeOrganizer failed" >&2
   exit 1
 fi
 
-echo "[x-schema] building entity bridges across all schemas (jar: $JAR)"
-exec "$GOVDATA_JAVA_BIN" -cp "$JAR" org.apache.calcite.adapter.govdata.ref.EntityBridgeOrganizer
+if ! run_step "sweeping every registered source into vc_staging" \
+    "${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-}" \
+    org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then
+  echo "ERROR: ChunkOrganizer failed" >&2
+  exit 1
+fi
