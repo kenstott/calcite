@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import ssl
 import sys
 import threading
@@ -101,6 +102,28 @@ def serve(
     ssl_ctx = _build_ssl_ctx(certfile, keyfile)
     srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx)
     return srv
+
+
+def install_shutdown_handler(stop: threading.Event) -> None:
+    """Make SIGTERM (and SIGINT) request a clean shutdown instead of a hang.
+
+    Must be called AFTER the backend is constructed: starting the embedded
+    Calcite JVM (JPype -> ``jpype.startJVM``) installs its own native SIGTERM/
+    SIGINT handlers unless ``-Xrs`` is passed, and the JVM's handler otherwise
+    wins (last ``signal.signal``/``sigaction`` call for a given signal replaces
+    any earlier one at the OS level). The Java launcher's shutdown hook sends
+    SIGTERM to this process expecting it to exit and release the listening
+    socket promptly (see ``Launcher.java``); without re-installing our own
+    handler last, the JVM's handler can swallow the signal and this process
+    (and the port) lingers.
+    """
+
+    def _handle(signum, frame):  # noqa: ANN001 - signal handler signature
+        log.info("received signal %s; shutting down", signum)
+        stop.set()
+
+    signal.signal(signal.SIGTERM, _handle)
+    signal.signal(signal.SIGINT, _handle)
 
 
 def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcite_child: str | None = None, extensions=None):
@@ -242,11 +265,19 @@ def main(argv: list | None = None) -> int:
         args.port,
     )
     stop = threading.Event()
+    # Installed AFTER build_backend()/serve() so this wins over any signal
+    # handler the embedded Calcite JVM installed on startup (see
+    # install_shutdown_handler's docstring) -- otherwise SIGTERM from the Java
+    # launcher's shutdown hook can be swallowed and the listening socket stays
+    # bound.
+    install_shutdown_handler(stop)
     try:
         stop.wait()
     except KeyboardInterrupt:
-        log.info("shutting down")
-        srv.shutdown()
+        stop.set()
+    log.info("shutting down")
+    srv.shutdown()
+    srv.server_close()
     return 0
 
 

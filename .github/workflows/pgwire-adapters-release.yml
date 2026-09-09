@@ -96,9 +96,38 @@ jobs:
       - name: Stage standalone CPython + install the shared pgwire server (airgap-ready venv)
         working-directory: pgwire-calcite
         run: |
-          uv python install ${PY_VERSION}
-          uv venv --python ${PY_VERSION} ../bundle/cpython
-          uv pip install --python ../bundle/cpython ./vendor/buenavista ".[oidc]"
+          # Install the interpreter INTO the bundle (not the runner's global
+          # uv-managed location) so the shipped tarball is self-contained: a
+          # `uv python install` outside the bundle leaves cpython/bin/python an
+          # absolute symlink to the runner's own path, which does not exist on
+          # any other machine.
+          uv python install --install-dir ../bundle/python "${PY_VERSION}"
+          find ../bundle/python -maxdepth 1 -type l -delete   # drop uv's version-alias symlink (points outside the bundle; unused at runtime)
+          rm -rf ../bundle/python/.lock ../bundle/python/.temp ../bundle/python/.gitignore
+          PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+          uv venv --python "$PYBIN" ../bundle/cpython
+          # --no-editable: vendor/buenavista is declared `editable = true` in
+          # [tool.uv.sources] (pyproject.toml) for local dev; ship a real install
+          # (an editable install points at this checkout's absolute path, which
+          # will not exist on the machine the bundle is extracted on).
+          uv pip install --python ../bundle/cpython --no-editable ./vendor/buenavista ".[oidc]"
+          # `uv venv` makes cpython/bin/python an ABSOLUTE symlink to $PYBIN.
+          # Rewrite it relative so the whole bundle (cpython/ + python/ together)
+          # is relocatable to any absolute path. pyvenv.cfg's `home` line stays
+          # build-machine-absolute but is harmless: CPython 3.11+'s getpath
+          # derives sys.prefix/home from bin/python's own realpath, not from a
+          # stale pyvenv.cfg home (verified locally by moving a built bundle to
+          # an unrelated path and importing buenavista/pgwire_calcite from it).
+          python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
+          import os, sys
+          target = os.path.realpath(sys.argv[1])
+          venv_bin = sys.argv[2]
+          link = os.path.join(venv_bin, "python")
+          rel = os.path.relpath(target, os.path.realpath(venv_bin))
+          os.remove(link)
+          os.symlink(rel, link)
+          print(f"bin/python -> {rel}")
+          PY
 
       - name: Minimal bundled JRE (jlink)
         run: |
@@ -155,3 +184,96 @@ jobs:
           files: |
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256
+
+  # Proves a just-built bundle actually runs on a clean machine: no repo checkout
+  # venv, no setup-java/setup-uv, nothing but the tarball itself + a psql client.
+  # This is what would have caught the airgapped-bundle relocation defect (an
+  # absolute cpython/bin/python symlink + an editable buenavista install) --
+  # `bundle` only ever ran on the SAME runner/checkout that built the bundle.
+  # Any failing step here fails the workflow run.
+  smoke:
+    needs: bundle
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - { runner: ubuntu-latest, variant: linux-x86_64 }
+          - { runner: macos-14,      variant: macos-arm64 }
+    runs-on: ${{ matrix.os.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle-file-${{ matrix.os.variant }}
+          path: dl
+
+      - name: Install psql client
+        run: |
+          set -euo pipefail
+          if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y postgresql-client
+          elif command -v brew >/dev/null 2>&1; then
+            brew install libpq
+            echo "$(brew --prefix libpq)/bin" >> "$GITHUB_PATH"
+          else
+            echo "no supported package manager to install psql" >&2
+            exit 1
+          fi
+
+      - name: Extract with Python's safe tarfile filter (proves relocatability)
+        run: |
+          set -euo pipefail
+          tar_path="$(ls dl/pgwire-file-*-${{ matrix.os.variant }}.tar.gz)"
+          mkdir -p smoke
+          python3 -c "
+          import sys, tarfile
+          with tarfile.open(sys.argv[1]) as tf:
+              tf.extractall(sys.argv[2], filter='data')
+          " "$tar_path" smoke
+          bundle_dir="$(find smoke -maxdepth 1 -mindepth 1 -type d -name 'pgwire-file-*')"
+          echo "BUNDLE_DIR=$bundle_dir" >> "$GITHUB_ENV"
+
+      - name: Fixture directory (one CSV) for the file adapter's model.json
+        run: |
+          set -euo pipefail
+          # model.json's FileSchemaFactory "directory" operand is "data",
+          # resolved relative to the model file -> seed it there.
+          mkdir -p "$BUNDLE_DIR/model/data"
+          printf 'id,name\n1,alice\n2,bob\n' > "$BUNDLE_DIR/model/data/people.csv"
+
+      - name: Start pgwire-file and wait for the port
+        run: |
+          set -euo pipefail
+          "$BUNDLE_DIR/bin/pgwire-file" --port 5455 --auth trust > smoke-server.log 2>&1 &
+          echo $! > smoke-server.pid
+          for _ in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/5455) 2>/dev/null; then
+              exec 3>&- 3<&-
+              echo "port 5455 is up"
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "pgwire-file never opened port 5455" >&2
+          cat smoke-server.log >&2
+          exit 1
+
+      - name: psql SELECT 1
+        run: |
+          set -euo pipefail
+          psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -c "SELECT 1;"
+
+      - name: Stop pgwire-file
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f smoke-server.pid ]; then
+            kill "$(cat smoke-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Server log
+        if: always()
+        run: cat smoke-server.log || true
