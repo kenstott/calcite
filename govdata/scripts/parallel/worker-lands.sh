@@ -127,6 +127,14 @@ case "$MODE" in
       '"nps_visitation"' "$START" "$END"
     run_lands_model "lands-historical-revenues" \
       '"onrr_revenues"' "$START" "$END"
+    # pilt_county_payments: year+state_code dimensions (one fetch per fiscal year per state), so it
+    # advances with the year-major front exactly like the three tables above. Added to the schema
+    # in c4f8c96a5 without a matching dispatch line here, which left it in no bucket at all — never
+    # dispatched, never materialized, and with no tracker row of any kind to show it had been
+    # missed. Same omission previously fixed for va_facilities (ab35451ef) and blm_field_offices
+    # (9c1d78c6f).
+    run_lands_model "lands-historical-pilt" \
+      '"pilt_county_payments"' "$START" "$END"
     # va_facilities: snapshot table, no year dimension, same shape as the "once" static tables --
     # but unlike those, it must also run on this year-range path (not gated on MODE="historical"
     # exactly), since force-reprocess.sh always computes a numeric year-range slot for lands
@@ -202,6 +210,10 @@ case "$MODE" in
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "onrr_revenues"; then
       run_lands_model "lands-daily-revenues" \
         '"onrr_revenues"' "$START"
+    fi
+    if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "pilt_county_payments"; then
+      run_lands_model "lands-daily-pilt" \
+        '"pilt_county_payments"' "$START"
     fi
     ;;
 
