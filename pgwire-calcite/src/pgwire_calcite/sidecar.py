@@ -164,6 +164,11 @@ class BridgeBackend:
         self._retries = connect_retries
         self._backoff = connect_backoff
 
+    @property
+    def extensions(self) -> frozenset:
+        """Enabled extension surfaces — what pg_extension advertises (PGW-046)."""
+        return frozenset(self._extensions)
+
     def _connect(self) -> socket.socket:
         return socket.create_connection((self._host, self._port), timeout=self._timeout)
 

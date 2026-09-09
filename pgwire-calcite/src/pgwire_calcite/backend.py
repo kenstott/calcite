@@ -45,6 +45,17 @@ class Backend(Protocol):
         """Liveness/readiness gate (Phase 5 readiness-gating hook)."""
         ...
 
+    @property
+    def extensions(self) -> frozenset:
+        """Enabled PG extension surfaces (pgwire_calcite.extensions). The catalog
+        advertises exactly these in pg_extension (PGW-046)."""
+        ...
+
+    # Optional capabilities, discovered with getattr() by the catalog builder because not
+    # every backend can answer them (PGW-051):
+    #   table_row_count(schema, table) -> int   real pg_class.reltuples
+    #   function_library() -> str               Calcite `fun` list, for pg_proc projection
+
 
 class BackendError(RuntimeError):
     """Backend could not execute the statement. Never swallowed silently."""
@@ -66,6 +77,11 @@ class StubBackend:
 
     #: Reported by SELECT version() and used to satisfy DuckDB's >=12 / clients' >=14 gate.
     SERVER_VERSION = "14.0 (pgwire-calcite stub backend, Phase 0)"
+
+    @property
+    def extensions(self) -> frozenset:
+        """The stub lowers no operators, so it declares no extension surfaces."""
+        return frozenset()
 
     def ready(self) -> bool:
         return True
