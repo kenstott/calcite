@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "defaultSchema": "WIDE",
+  "schemas": [
+    {
+      "name": "WIDE",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
+      "operand": {
+        "directory": "widedata",
+        "ephemeralCache": true,
+        "executionEngine": "linq4j"
+      }
+    }
+  ]
+}

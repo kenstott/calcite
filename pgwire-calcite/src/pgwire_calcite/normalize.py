@@ -83,12 +83,18 @@ class TypeMapping:
 # Keyed by an uppercased, size-stripped JDBC/Calcite type name.
 _TYPE_TABLE: Dict[str, TypeMapping] = {
     "BOOLEAN": TypeMapping(16, "bool", "BOOLEAN"),
-    "TINYINT": TypeMapping(21, "int2", "SMALLINT"),
-    "SMALLINT": TypeMapping(21, "int2", "SMALLINT"),
+    # TINYINT/SMALLINT are advertised as int4, not int2: the wire encoder's
+    # narrowest integer BVType is INTEGER (4 bytes), so an int2 OID here would
+    # make binary COPY hand a client 4 bytes under a 2-byte type and misalign
+    # every following field (PGW-016/021). Widening is lossless.
+    "TINYINT": TypeMapping(23, "int4", "INTEGER"),
+    "SMALLINT": TypeMapping(23, "int4", "INTEGER"),
     "INTEGER": TypeMapping(23, "int4", "INTEGER"),
     "INT": TypeMapping(23, "int4", "INTEGER"),
     "BIGINT": TypeMapping(20, "int8", "BIGINT"),
-    "REAL": TypeMapping(700, "float4", "FLOAT"),
+    # REAL is advertised as float8 for the same width reason: BVType.FLOAT encodes
+    # 8 bytes, so a float4 OID would misalign a binary COPY stream (PGW-016/021).
+    "REAL": TypeMapping(701, "float8", "DOUBLE"),
     "FLOAT": TypeMapping(701, "float8", "DOUBLE"),
     "DOUBLE": TypeMapping(701, "float8", "DOUBLE"),
     "DOUBLE PRECISION": TypeMapping(701, "float8", "DOUBLE"),
