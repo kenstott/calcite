@@ -168,11 +168,47 @@ rm -rf "$GOVDATA_DATA_DIR/.aperio" "$GOVDATA_DATA_DIR/.duckdb"
 # ---- classpath: pin a single shaded jar (avoid wildcard picking up stale strays) ----
 # MODEL_VERIFY_JAR overrides jar selection so a PRIVATE build (e.g. sih-govdata-fixes.jar) can be
 # verified without touching the unversioned sih-govdata.jar a running ETL pool is executing.
+# ---- spill directory: must be real disk with room, NOT a RAM-backed tmpfs ----
+# DuckDB spills large probes through java.io.tmpdir. Two ways that goes wrong by default:
+#   - macOS: the default /var/folders/... sits on a volume that runs near-full; when it fills,
+#     DuckDB dies with SIGBUS/SIGSEGV inside FastMemcpy on an mmap'd spill file (reads like a
+#     native bug, is really a full disk).
+#   - WSL / many Linux boxes: /tmp is frequently a tmpfs (RAM-backed), so spilling there consumes
+#     the very RAM the probe is trying to stay under, and a big aggregate OOMs the box.
+# Pick a sane real-disk default per platform when the caller hasn't chosen one. An explicit
+# VERIFY_SPILL_DIR (or a TMPDIR already pointing somewhere real) always wins.
+is_tmpfs() { [[ "$(stat -f -c %T "$1" 2>/dev/null)" == "tmpfs" ]]; }
+if [[ -z "${VERIFY_SPILL_DIR:-}" ]]; then
+    if [[ -n "${TMPDIR:-}" ]] && ! is_tmpfs "$TMPDIR"; then
+        VERIFY_SPILL_DIR="$TMPDIR"                 # caller's TMPDIR is real disk — honour it
+    elif [[ "$(uname -s)" == "Darwin" ]]; then
+        VERIFY_SPILL_DIR="/Volumes/main/tmp"       # macOS: the roomy volume, per skill guidance
+    elif grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+        VERIFY_SPILL_DIR="/var/tmp/model-verify"   # WSL: /var/tmp is ext4 on the VM disk, /tmp is tmpfs
+    else
+        VERIFY_SPILL_DIR="/var/tmp/model-verify"   # generic Linux: /var/tmp survives reboots, rarely tmpfs
+    fi
+fi
+mkdir -p "$VERIFY_SPILL_DIR" 2>/dev/null || true
+if is_tmpfs "$VERIFY_SPILL_DIR"; then
+    echo "WARNING: spill dir $VERIFY_SPILL_DIR is tmpfs (RAM-backed); a large probe may OOM the box." >&2
+    echo "         Set VERIFY_SPILL_DIR to a real-disk path with free space." >&2
+fi
+export TMPDIR="$VERIFY_SPILL_DIR"
+echo "Spill dir:  $VERIFY_SPILL_DIR"
+
 # -Dduckdb.cache_httpfs.disable=true: this run's per-table probes are one-shot (never re-read the
 # same remote file), so cache_httpfs's persistent cache buys nothing here while its per-read
 # exclusion-regex mutex serializes every Parquet page/chunk read across scan threads — a severe
 # bottleneck on large schemas over a WAN endpoint (calcite issue #290). Skip loading it entirely.
+# java.io.tmpdir is forced to the chosen spill dir so the runner JVM spills there even when the
+# caller's JVM_OPTS (or the default below) didn't name one — that omission is the historical
+# SIGBUS/OOM cause this picker exists to prevent.
 JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m -Dduckdb.cache_httpfs.disable=true -Dcalcite.duckdb.memoryLimit=8GB}"
+case " $JVM_OPTS " in
+    *" -Djava.io.tmpdir="*) : ;;                                   # caller already set it — leave it
+    *) JVM_OPTS="$JVM_OPTS -Djava.io.tmpdir=$VERIFY_SPILL_DIR" ;;
+esac
 LIBS="$GOVDATA_HOME/build/libs"
 if [[ -n "${MODEL_VERIFY_JAR:-}" ]]; then
     if [[ ! -f "$MODEL_VERIFY_JAR" ]]; then
