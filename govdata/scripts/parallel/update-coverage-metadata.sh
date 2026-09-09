@@ -183,6 +183,31 @@ FROM iceberg_scan('s3://${BUCKET}/${schema}/${tbl}', allow_moved_paths=true);
     local mn mx dc n yrs_csv
     mn="$(echo "$result" | python3 -c 'import json,sys; d=json.load(sys.stdin)[0]; print(d["mn"])' 2>/dev/null || true)"
     if [[ -z "$mn" || "$mn" == "None" ]]; then
+      # MIN(year) is NULL either because the table is readable but genuinely empty, or because
+      # the query didn't come back usable. Those are different facts and only the first one is
+      # reportable: an empty table has a real, current observedCoverage — zero rows — and saying
+      # nothing leaves the previous non-zero block standing as a claim about data that is no
+      # longer there.
+      local n_empty
+      n_empty="$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["n"])' 2>/dev/null || true)"
+      if [[ "$n_empty" == "0" ]]; then
+        local checked_at_empty
+        checked_at_empty="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        local empty_args=(--file "$yaml" --table "$tbl" --empty --row-count 0
+                          --checked-at "$checked_at_empty")
+        "$DRY_RUN" && empty_args+=(--dry-run)
+        set +e
+        out="$(python3 "$PY_EDITOR" "${empty_args[@]}" 2>&1)"
+        rc=$?
+        set -e
+        case "$rc" in
+          0) echo "  $tbl (0 rows — readable but empty): $out"
+             [[ "$out" == UPDATED:* ]] && changed=true ;;
+          3) echo "  $tbl: no 'pattern:' line — no year partition, skipping" ;;
+          *) echo "  ERROR $tbl: $out" >&2 ;;
+        esac
+        continue
+      fi
       echo "  SKIP $tbl — query returned no rows"
       continue
     fi
