@@ -143,3 +143,33 @@ def pg_column_label(label: str) -> str:
     """Map Calcite's auto-generated expression labels (``EXPR$0``) to the
     PostgreSQL convention (``?column?``), so PG-wire clients see familiar names."""
     return "?column?" if _EXPR_LABEL_RE.match(label or "") else label
+
+
+# --- Simple-query batch splitting -------------------------------------------
+
+
+def split_sql_statements(sql: str) -> list[str]:
+    """Split a batch into statements on TOP-LEVEL semicolons ONLY, statement-aware.
+
+    Uses sqlglot's tokenizer so a ``;`` inside a string literal, quoted identifier,
+    comment, or a dollar-quoted block does NOT mis-split (a naive ``str.split(';')``
+    turns ``SELECT 'a;b'`` into two malformed fragments). Original statement text is
+    preserved (sliced between top-level semicolon tokens, not re-rendered), so the
+    COPY/DDL regex matching in ``handle_query`` sees EXACTLY what executes. Blank
+    fragments (a trailing ``;``) are dropped.
+    """
+    import sqlglot
+
+    tokens = sqlglot.tokenize(sql, read="postgres")
+    stmts: list[str] = []
+    start = 0
+    for tok in tokens:
+        if tok.token_type == sqlglot.TokenType.SEMICOLON:
+            seg = sql[start : tok.start].strip()
+            if seg:
+                stmts.append(seg)
+            start = tok.end + 1
+    tail = sql[start:].strip()
+    if tail:
+        stmts.append(tail)
+    return stmts

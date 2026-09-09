@@ -55,6 +55,18 @@ log = logging.getLogger(__name__)
 _loop: asyncio.AbstractEventLoop | None = None
 _loop_lock = threading.Lock()
 
+# Inline-cast -> PG type OID, for inferring Describe parameter types from `$1::text`.
+_CAST_OID = {
+    "text": 25,
+    "varchar": 25,
+    "int": 23,
+    "int4": 23,
+    "int8": 20,
+    "bigint": 20,
+    "bool": 16,
+    "float8": 701,
+}
+
 _TXN_TAG_RE = re.compile(
     r"^\s*(SET|BEGIN|START\s+TRANSACTION|COMMIT|ROLLBACK|DISCARD|RESET|DEALLOCATE|SAVEPOINT|RELEASE)\b",
     re.IGNORECASE,
@@ -280,17 +292,28 @@ class CalciteConnection(Connection):
         return CalciteSession()
 
     def parameters(self) -> dict[str, str]:
+        # Startup ParameterStatus set. server_version declares PG 14, so we report the
+        # full PG-14 hard-wired set (PG protocol §54.2), including the PG-14 additions
+        # default_transaction_read_only and in_hot_standby. Values are sourced from
+        # _KNOWN_SETTINGS so the handshake and SHOW/current_setting stay consistent
+        # (server_version >= 14 also clears DuckDB's >=12 gate and DBeaver/DataGrip
+        # feature gates -- PGW-001). Casing follows what PG sends.
+        from pgwire_calcite.catalog import _KNOWN_SETTINGS as s
+
         return {
-            # server_version >= 14 clears DuckDB's >=12 gate and DBeaver/DataGrip
-            # feature gates (PGW-001).
-            "server_version": "14.0",
-            "server_encoding": "UTF8",
-            "client_encoding": "UTF8",
-            "DateStyle": "ISO, MDY",
-            "TimeZone": "UTC",
-            "integer_datetimes": "on",
-            "standard_conforming_strings": "on",
-            "IntervalStyle": "postgres",
+            "server_version": s["server_version"],
+            "server_encoding": s["server_encoding"],
+            "client_encoding": s["client_encoding"],
+            "application_name": s["application_name"],
+            "is_superuser": s["is_superuser"],
+            "session_authorization": s["session_authorization"],
+            "DateStyle": s["datestyle"],
+            "IntervalStyle": s["intervalstyle"],
+            "TimeZone": s["timezone"],
+            "integer_datetimes": s["integer_datetimes"],
+            "standard_conforming_strings": s["standard_conforming_strings"],
+            "default_transaction_read_only": s["default_transaction_read_only"],
+            "in_hot_standby": s["in_hot_standby"],
         }
 
 
@@ -312,6 +335,31 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         self.wfile.write(struct.pack("!ci", ServerResponse.ERROR_RESPONSE, len(out) + 4))
         self.wfile.write(out)
         self.wfile.flush()
+
+    def _send_pg_notice(self, message: str) -> None:
+        """Send a NoticeResponse (a non-fatal, out-of-band message) — never touches result rows."""
+        buf = BVBuffer()
+        for field, value in (
+            (b"S", "NOTICE"),
+            (b"V", "NOTICE"),
+            (b"C", "01000"),  # SQLSTATE warning class
+            (b"M", message),
+        ):
+            buf.write_bytes(field)
+            buf.write_string(value)
+        buf.write_bytes(b"\x00")
+        out = buf.get_value()
+        self.wfile.write(struct.pack("!ci", ServerResponse.NOTICE_RESPONSE, len(out) + 4))
+        self.wfile.write(out)
+        self.wfile.flush()
+
+    def handle_post_auth(self, ctx: BVContext) -> None:  # type: ignore[override]
+        """Runs once per connection immediately after AuthenticationOk.
+
+        Anything emitted here must be out-of-band (a NoticeResponse via
+        ``_send_pg_notice``) so query results are never modified or gated.
+        """
+        super().handle_post_auth(ctx)
 
     def handle_startup(self, conn: Connection) -> Optional[BVContext]:  # type: ignore[override]
         msglen = self.r.read_uint32() - 4
@@ -506,24 +554,39 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 self.send_paramter_description([])
                 self.send_no_data()
                 return
-            try:
-                # describe_statement executes with $N→NULL (0-row result) but gives us column schema
-                query_result = ctx.describe_statement(stmt)
-            except Exception as e:
-                self.send_error(e, ctx)
-                return
             indices = {int(m) for m in re.findall(r"\$(\d+)", sql)}
             if "typeinfo_tree" in sql.lower() and indices:
                 # OID 1028 = _oid (oid[]) — asyncpg has a built-in binary codec for this,
                 # so it can encode list(typeoids) and we can decode the binary response.
                 param_oids = [1028]
-                ctx.stmts[stmt] = (sql, param_oids)
             elif "set_config" in sql.lower() and indices:
                 # set_config takes TEXT params; OID 25 prevents asyncpg from looping on OID 0
                 param_oids = [25] * len(indices)
             else:
-                # OID 0 = unspecified: tells client how many params without declaring types
-                param_oids = [0] * max(indices) if indices else ctx.stmts[stmt][1]
+                stored_oids = ctx.stmts[stmt][1]
+                if stored_oids:
+                    param_oids = stored_oids
+                elif indices:
+                    # No Parse-declared OIDs: derive each $N's type from an inline
+                    # cast (`$1::text`). Unmatched placeholders default to int8 --
+                    # OID 0 (unspecified) makes psycopg/asyncpg re-describe forever.
+                    cast_map = {
+                        int(m): _CAST_OID.get(t.lower(), 25)
+                        for m, t in re.findall(r"\$(\d+)::(\w+)", sql)
+                    }
+                    param_oids = [cast_map.get(i, 20) for i in range(1, max(indices) + 1)]
+                else:
+                    param_oids = []
+            # Store the resolved OIDs so describe_statement substitutes typed example
+            # values instead of executing the SQL with unresolved $N placeholders.
+            ctx.stmts[stmt] = (sql, param_oids)
+            try:
+                # describe_statement substitutes typed example values for the $N
+                # placeholders (0-row result) but gives us the column schema.
+                query_result = ctx.describe_statement(stmt)
+            except Exception as e:
+                self.send_error(e, ctx)
+                return
             self.send_paramter_description(param_oids)
             if query_result.has_results():
                 self.send_row_description(query_result)
@@ -562,7 +625,13 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
     def handle_query(self, ctx: BVContext, payload: bytes) -> None:
         decoded = payload.decode("utf-8").rstrip("\x00")
 
-        stmts = [s.strip() for s in decoded.split(";") if s.strip()]
+        # Statement-aware split: a ';' inside a string literal, comment, quoted
+        # identifier or dollar-quoted body must NOT mis-split, so the COPY/DDL regex
+        # matching below sees identical statement boundaries to what executes
+        # (replaces the old naive decoded.split(';')).
+        from pgwire_calcite.normalize import split_sql_statements
+
+        stmts = split_sql_statements(decoded)
         if not stmts:
             self.wfile.write(struct.pack("!ci", ServerResponse.EMPTY_QUERY_RESPONSE, 4))
             self.send_ready_for_query(ctx)
