@@ -12,13 +12,16 @@
 Runs the Calcite child server against the shared JVM backend and drives it through
 BridgeBackend: query execution (incl. a large streamed result over the socket),
 readiness gating, PG-only reject at the bridge, lifecycle decoupling (reconnect
-after the child is recycled), and the full pgwire->bridge->child path.
+after the child is recycled), the full pgwire->bridge->child path, and
+cancellation/statement_timeout across the bridge (PGW-050/051).
 """
 
 from __future__ import annotations
 
+import threading
 import time
 
+import psycopg
 import pytest
 
 from pgwire_calcite import launcher
@@ -206,5 +209,120 @@ def test_pgwire_over_bridge_end_to_end(child):
             ]
         finally:
             c.close()
+    finally:
+        srv.shutdown()
+
+
+# --- cancellation and statement_timeout over the bridge (PGW-050/051) --------
+
+#: A 7-way self cross join over the 10-row EMPS fixture: 10^7 rows through linq4j,
+#: measured at ~156s uncancelled. Any assertion below that finishes in seconds
+#: proves the child actually stopped executing.
+SLOW_SQL = "SELECT count(*) AS n FROM EMPS a, EMPS b, EMPS c, EMPS d, EMPS e, EMPS f, EMPS g"
+
+
+def _wait_for_in_flight(timeout_s: float = 30.0) -> set:
+    """Block until the Calcite child has registered a statement."""
+    from pgwire_calcite.calcite_backend import IN_FLIGHT
+
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        active = IN_FLIGHT.active_sessions()
+        if active:
+            return active
+        time.sleep(0.01)
+    raise AssertionError("no statement reached the child's in-flight registry")
+
+
+def test_bridge_statement_timeout_stops_the_child(child):
+    """statement_timeout is enforced inside the child and comes back as 57014,
+    not as a socket timeout with the child still executing."""
+    from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, QueryCanceled
+
+    port, _ = child
+    b = BridgeBackend(port=port)
+    started = time.monotonic()
+    with pytest.raises(QueryCanceled) as excinfo:
+        list(b.execute_sql(SLOW_SQL, "u", session_key="sess-timeout", timeout_ms=500).iter_rows())
+    assert excinfo.value.sqlstate == "57014"
+    assert str(excinfo.value) == CANCELED_BY_TIMEOUT
+    assert time.monotonic() - started < 60, "the child kept executing past the timeout"
+
+
+def test_bridge_cancel_session_aborts_an_in_flight_query(child):
+    """A cancel crosses the bridge on its own connection while the query's
+    connection is still streaming."""
+    from pgwire_calcite.backend import CANCELED_BY_USER, QueryCanceled
+
+    port, _ = child
+    b = BridgeBackend(port=port)
+    outcome = {}
+
+    def _run():
+        try:
+            list(b.execute_sql(SLOW_SQL, "u", session_key="sess-cancel").iter_rows())
+            outcome["error"] = None
+        except BaseException as exc:  # recorded, asserted on the main thread
+            outcome["error"] = exc
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    _wait_for_in_flight()
+    assert b.cancel_session("sess-cancel", CANCELED_BY_USER) is True
+    t.join(timeout=60)
+    assert not t.is_alive(), "the child kept executing after the cancel"
+    assert isinstance(outcome["error"], QueryCanceled)
+    assert outcome["error"].sqlstate == "57014"
+
+
+def test_bridge_cancel_of_an_idle_session_reports_nothing_in_flight(child):
+    from pgwire_calcite.backend import CANCELED_BY_USER
+
+    port, _ = child
+    assert BridgeBackend(port=port).cancel_session("no-such-session", CANCELED_BY_USER) is False
+
+
+def test_cancel_request_over_the_wire_reaches_the_child(child):
+    """End to end: psycopg's cancel on a pgwire connection served by the bridge
+    backend aborts the statement running in the Calcite child, and the session
+    stays usable afterwards."""
+    port, _ = child
+    backend = BridgeBackend(port=port)
+    wport = _free_port()
+    srv = launcher.serve(host="127.0.0.1", port=wport, auth="none", backend=backend)
+    time.sleep(0.1)
+    try:
+        conn = psycopg.connect(
+            f"host=127.0.0.1 port={wport} user=tester dbname=postgres", autocommit=True
+        )
+        try:
+            failure = {}
+
+            def _run():
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(SLOW_SQL)
+                        cur.fetchall()
+                    failure["error"] = None
+                except BaseException as exc:
+                    failure["error"] = exc
+
+            t = threading.Thread(target=_run, daemon=True)
+            t.start()
+            _wait_for_in_flight()
+            # cancel_safe, not the older cancel(): psycopg's binary pq makes
+            # PQcancel a blocking C call that holds the GIL, so this in-process
+            # server thread could never answer the CancelRequest.
+            conn.cancel_safe(timeout=60)
+            t.join(timeout=120)
+            assert not t.is_alive(), "the child kept executing after the CancelRequest"
+            assert failure["error"] is not None
+            assert getattr(failure["error"], "sqlstate", None) == "57014", failure["error"]
+            # PG keeps a cancelled backend serving
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 AS n")
+                assert cur.fetchall() == [(1,)]
+        finally:
+            conn.close()
     finally:
         srv.shutdown()

@@ -20,14 +20,15 @@ rewired so the execution seam targets Calcite instead of Trino:
 - ``provisa.auth.providers.simple``           -> ``state``-carried trust/cleartext auth
 
 The wire-protocol logic (handshake, extended protocol, describe/execute/query)
-is unchanged from provisa. Catalog intercept and COPY/DDL are copied but not yet
-wired to Calcite (Phases 2 and 4); they are gated behind ``state.catalog_enabled``.
+is unchanged from provisa. The catalog intercept is wired to Calcite metadata and
+gated behind ``state.catalog_enabled``; ``COPY ... TO STDOUT`` is served from the
+same execution seam. DDL has no route here at all — the Calcite model is read-only,
+so a DDL statement is refused with SQLSTATE 0A000 naming the statement kind.
 """
 # Requirements: PGW-001, PGW-002, PGW-003, PGW-004, PGW-007
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import decimal
 import logging
@@ -59,9 +60,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-_loop: asyncio.AbstractEventLoop | None = None
-_loop_lock = threading.Lock()
-
 # Inline-cast -> PG type OID, for inferring Describe parameter types from `$1::text`.
 _CAST_OID = {
     "text": 25,
@@ -80,12 +78,34 @@ _TXN_TAG_RE = re.compile(
 )
 
 _COPY_RE = re.compile(r"^\s*COPY\b", re.IGNORECASE)
+# DDL is rejected, never routed: every schema pgwire-calcite serves comes from the
+# Calcite model (the file/splunk/sharepoint/govdata adapters are read-only), and the
+# execution seam is a query path -- `executeQuery` against a connection no client may
+# mutate. A DDL statement is therefore answered with SQLSTATE 0A000 naming the
+# statement kind instead of being half-executed.
 _DDL_RE = re.compile(
-    r"^\s*(CREATE\s+(TABLE|VIEW|INDEX|UNIQUE\s+INDEX|SEQUENCE|SCHEMA)"
-    r"|ALTER\s+(TABLE|INDEX|SEQUENCE|VIEW)"
-    r"|DROP\s+(TABLE|VIEW|INDEX|SEQUENCE|SCHEMA))\b",
+    r"^\s*(?P<verb>CREATE|ALTER|DROP)\s+(?:OR\s+REPLACE\s+)?"
+    r"(?:TEMP\s+|TEMPORARY\s+)?"
+    r"(?P<object>TABLE|MATERIALIZED\s+VIEW|VIEW|UNIQUE\s+INDEX|INDEX|SEQUENCE|SCHEMA)\b",
     re.IGNORECASE,
 )
+
+
+def _current_backend():
+    """The installed execution backend, or None before the launcher installs state.
+
+    Sessions constructed directly (tests) run without state and have never handed a
+    statement to a backend, so there is nothing to cancel or discard for them.
+    """
+    return state.backend if state is not None else None
+
+
+def _ddl_statement_kind(sql: str) -> Optional[str]:
+    """``"CREATE TABLE"`` and friends for a DDL statement; None when it is not DDL."""
+    m = _DDL_RE.match(sql)
+    if m is None:
+        return None
+    return f"{m.group('verb').upper()} {' '.join(m.group('object').upper().split())}"
 
 
 state: Optional["ServerState"] = None  # module-level reference; set by the launcher, replaced by tests via patch()
@@ -382,10 +402,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         return None
 
     def close(self):
-        from pgwire_calcite.calcite_backend import IN_FLIGHT
-
         self._release_open_result()
-        IN_FLIGHT.discard(self.key)
+        backend = _current_backend()
+        if backend is not None:
+            backend.discard_session(self.key)
 
     def _release_open_result(self) -> None:
         result, self._open_result = self._open_result, None
@@ -426,8 +446,6 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         Transaction verbs (BEGIN/COMMIT/...) reach here too and are acknowledged
         without state, matching the existing no-isolation behaviour (PGW-004).
         """
-        from pgwire_calcite.calcite_backend import IN_FLIGHT
-
         m = _SET_STMT_RE.match(sql)
         if m is not None:
             name, value = m.group(1).lower(), m.group(2)
@@ -455,7 +473,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             if m.group(1).upper() == "ALL":
                 self._reset_settings()
                 self._forget_prepared()
-                IN_FLIGHT.discard(self.key)
+                backend = _current_backend()
+                if backend is not None:
+                    backend.discard_session(self.key)
             elif m.group(1).upper() == "PLANS":
                 self._forget_prepared()
             return
@@ -493,6 +513,16 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         if _TXN_TAG_RE.match(stripped):
             self.apply_session_command(stripped)
             return CalciteQueryResult(TrinoResult(), stripped)
+
+        ddl_kind = _ddl_statement_kind(stripped)
+        if ddl_kind is not None:
+            from pgwire_calcite.backend import PgProtocolError
+
+            raise PgProtocolError(
+                "0A000",
+                f"{ddl_kind} is not supported: pgwire-calcite serves a read-only "
+                "Calcite model; change the model to change the schema",
+            )
 
         if self.role_id is None:
             raise RuntimeError("Not authenticated")
@@ -694,9 +724,14 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             ctx = self.server.ctxts.get(process_id)  # type: ignore[attr-defined]
             if ctx is not None and ctx.secret_key == secret_key:
                 from pgwire_calcite.backend import CANCELED_BY_USER
-                from pgwire_calcite.calcite_backend import IN_FLIGHT
 
-                cancelled = IN_FLIGHT.cancel(str(ctx.session.id), CANCELED_BY_USER)
+                # Through the backend seam, not a process-global registry: with the
+                # sidecar topology the statement runs in the Calcite child and the
+                # cancel has to cross the bridge (PGW-050).
+                backend = _current_backend()
+                if backend is None:
+                    raise RuntimeError("Server state not initialized")
+                cancelled = backend.cancel_session(str(ctx.session.id), CANCELED_BY_USER)
                 log.info(
                     "[PGWIRE] cancel request for pid=%s: %s",
                     process_id,
@@ -1067,24 +1102,6 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                     self._send_pg_error("ERROR", "0A000", str(exc))
                     ctx.mark_error()
                 break
-            if _DDL_RE.match(stmt):
-                from pgwire_calcite.ddl_handler import DdlHandler
-
-                try:
-                    tag = DdlHandler(self).handle(ctx, stmt)
-                    # DDL changed the schema — drop memoized catalog DBs so the next
-                    # introspection rebuilds against the new metadata.
-                    from pgwire_calcite.catalog import invalidate_catalog_cache
-
-                    invalidate_catalog_cache()
-                    self.send_command_complete(f"{tag}\x00")
-                except PermissionError as exc:
-                    self._send_pg_error("ERROR", "42501", str(exc))
-                    ctx.mark_error()
-                except Exception as exc:
-                    self._send_pg_error("ERROR", "0A000", str(exc))
-                    ctx.mark_error()
-                break
             try:
                 from buenavista.core import Extension
 
@@ -1155,20 +1172,15 @@ def start_pgwire_server(
     host: str,
     port: int,
     ssl_ctx: ssl.SSLContext | None = None,
-    loop: asyncio.AbstractEventLoop | None = None,
     mtls_auth=None,
 ) -> CalciteServer:
     """Start the pgwire server in a daemon thread. Returns the server instance.
 
-    ``loop`` is retained for a future async backend but is optional; the Phase 0
-    stub and Phase 1 embedded-JDBC backends execute synchronously. ``mtls_auth`` is a
+    Every backend executes synchronously (embedded JDBC, or a socket round-trip to
+    the Calcite child), so there is no event loop to hand in. ``mtls_auth`` is a
     ``pgwire_calcite.mtls.ClientAuth`` (or None) already applied to ``ssl_ctx`` by the
     caller; it is carried onto the server for principal-binding checks post-handshake.
     """
-    global _loop
-    with _loop_lock:
-        _loop = loop
-
     if os.environ.get("PGWIRE_CALCITE_DEBUG_LOG"):
         _debug_log = os.path.expanduser("~/pgwire_calcite_debug.log")
         _fh = logging.FileHandler(_debug_log)

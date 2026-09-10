@@ -8,8 +8,8 @@
 # permission from the copyright holder.
 
 """Phase 3 hardening: brute-force throttling, provider-unavailable answers, the PAT/bearer
-one-decision rule, opt-in mTLS client-certificate binding, and the no-silent-fallback fixes
-in ddl_handler.py / authz.py.
+one-decision rule, opt-in mTLS client-certificate binding, and the no-silent-fallback fix
+in authz.py.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ from pgwire_calcite.auth import (
     is_personal_access_token,
 )
 from pgwire_calcite.authz import RoleGrants, enforce_query
-from pgwire_calcite.ddl_handler import DdlHandler
 from pgwire_calcite.server import _authenticate_credential
 from pgwire_calcite.throttle import LockedOut, login_throttle, reset_login_throttle, subject_key
 
@@ -328,24 +327,7 @@ def test_mtls_client_ca_without_server_cert_refuses_to_start(tmp_path):
         launcher.serve(host="127.0.0.1", port=_free_port(), auth="none", client_ca=ca_path)
 
 
-# --- Item 5: no silent empty-capability fallback ----------------------------
-
-
-class _Ctx:
-    def __init__(self, role_id):
-        self.session = type("S", (), {"role_id": role_id})()
-
-
-def test_ddl_handler_unknown_role_raises_permission_error(monkeypatch):
-    import pgwire_calcite.server as server_mod
-    from pgwire_calcite.state import ServerState
-    from pgwire_calcite.backend import StubBackend
-
-    server_mod.state = ServerState(backend=StubBackend())
-    server_mod.state.roles = {"admin": {"capabilities": ["ddl"]}}
-    handler = DdlHandler(handler=None)
-    with pytest.raises(PermissionError, match="Unknown role"):
-        handler.handle(_Ctx("nobody"), "CREATE TABLE t (x INT)")
+# --- Item 5: no silent fallback in authz ------------------------------------
 
 
 def test_authz_enforce_query_denies_unparsable_sql():

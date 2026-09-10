@@ -52,6 +52,15 @@ class EchoParamsBackend:
     def ready(self) -> bool:
         return True
 
+    def cancel_session(self, session_key, reason) -> bool:
+        """Test backend: nothing runs long enough to be in flight."""
+        del session_key, reason
+        return False
+
+    def discard_session(self, session_key) -> None:
+        """Test backend: no per-session execution state."""
+        del session_key
+
     def execute_sql(
         self, sql: str, role_id=None, params=None, stream: bool = False, session_key=None, timeout_ms=0
     ):
