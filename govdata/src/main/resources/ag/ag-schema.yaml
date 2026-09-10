@@ -296,9 +296,22 @@ partitionedTables:
         # NassQuickStatsTransformer extracts the top-level `data` array and
         # treats an `error` body (e.g. exceeds limit=50000) as a hard failure.
       rateLimit:
-        requestsPerSecond: 1.0
-        retryOn: [429, 500, 503]
-        maxRetries: 3
+        # NASS sits behind a Microsoft Azure Application Gateway that starts returning
+        # HTTP 403 once this table's fan-out (2 agg_levels x 58 states x ~32 years, roughly
+        # 3,700 requests) has been hammering it for long enough. That 403 is throttling, not
+        # an auth failure: the same key and URL return 200 when tried again later, and every
+        # User-Agent variant 403s alike under load. 403 is therefore listed in retryOn — a
+        # genuinely bad key still fails loudly once retries are exhausted, while a WAF
+        # cooldown clears. requestsPerSecond is parsed as a Java int
+        # (HttpSourceConfig.RateLimitConfig), so it cannot express "less than 1 request/sec"
+        # — a fractional value here silently truncates to 0 and disables throttling
+        # altogether, making the WAF trip sooner. retryBackoffMs is the real lever: it
+        # doubles per attempt (capped at 60s), so 6 retries from 5s spans ~3 minutes, which
+        # is long enough for the gateway to release.
+        requestsPerSecond: 1
+        retryOn: [429, 403, 500, 503]
+        maxRetries: 6
+        retryBackoffMs: 5000
         # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
         # state/year with no COUNTY-grain FIELD CROPS records — confirmed live for AK, CT, HI,
         # MA, ME among others; not a fixed list, varies by year. skipOn:[400] is the same idiom
@@ -392,9 +405,22 @@ partitionedTables:
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 1.0
-        retryOn: [429, 500, 503]
-        maxRetries: 3
+        # NASS sits behind a Microsoft Azure Application Gateway that starts returning
+        # HTTP 403 once this table's fan-out (2 agg_levels x 58 states x ~32 years, roughly
+        # 3,700 requests) has been hammering it for long enough. That 403 is throttling, not
+        # an auth failure: the same key and URL return 200 when tried again later, and every
+        # User-Agent variant 403s alike under load. 403 is therefore listed in retryOn — a
+        # genuinely bad key still fails loudly once retries are exhausted, while a WAF
+        # cooldown clears. requestsPerSecond is parsed as a Java int
+        # (HttpSourceConfig.RateLimitConfig), so it cannot express "less than 1 request/sec"
+        # — a fractional value here silently truncates to 0 and disables throttling
+        # altogether, making the WAF trip sooner. retryBackoffMs is the real lever: it
+        # doubles per attempt (capped at 60s), so 6 retries from 5s spans ~3 minutes, which
+        # is long enough for the gateway to release.
+        requestsPerSecond: 1
+        retryOn: [429, 403, 500, 503]
+        maxRetries: 6
+        retryBackoffMs: 5000
         # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
         # state/year with no COUNTY-grain INVENTORY records — same NASS behavior confirmed
         # live for nass_crop_production above; not a fixed list, varies by year/state.
