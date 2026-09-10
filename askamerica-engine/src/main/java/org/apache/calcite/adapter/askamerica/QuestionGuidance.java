@@ -443,6 +443,20 @@ final class QuestionGuidance {
 
     static final List<Template> TEMPLATES = Collections.unmodifiableList(Arrays.asList(
         new Template(
+            "validate_article",
+            "Check every factual assertion in an article, a pasted passage, or a single claim "
+            + "against the warehouse, and publish a claim-by-claim verdict table.",
+            new String[]{"source"},
+            new String[]{
+                "The article URL, the pasted text, or the single claim to check."},
+            "Validate this: {source}\n\nExtract every factual assertion verbatim, grade the "
+            + "claim rather than its attribution, mark any assertion whose measure no table "
+            + "carries as 'not checkable here', check the rest against the same measure, unit "
+            + "and period in this corpus with both vintages recorded, and publish the result "
+            + "with publish_report's `claims` array so each verdict sits beside the article's "
+            + "figure, the warehouse figure, and the SQL that produced it. Lead the summary "
+            + "with the tally and the assertion that matters most."),
+        new Template(
             "marginal_comparison",
             "Compare two options at the margin on one measured outcome, with an effect size "
             + "and its uncertainty.",

@@ -80,6 +80,8 @@ final class StatsEngine {
                 List<double[]> rows = new ArrayList<>();
                 int totalRows = 0;
                 int droppedForNull = 0;
+                int labelIdx = labelColumnIndex(rs, idx);
+                List<String> droppedLabels = new ArrayList<>();
                 while (rs.next()) {
                     totalRows++;
                     if (totalRows > STATS_MAX_ROWS) {
@@ -99,12 +101,13 @@ final class StatsEngine {
                     }
                     if (hasNull) {
                         droppedForNull++;
+                        noteDropped(droppedLabels, rs, labelIdx, totalRows);
                     } else {
                         rows.add(row);
                     }
                 }
                 return new Extraction(columns, rows.toArray(new double[0][]), totalRows,
-                    droppedForNull);
+                    droppedForNull, droppedLabels);
             } finally {
                 rs.close();
             }
@@ -137,6 +140,7 @@ final class StatsEngine {
                 List<String[]> labelRows = new ArrayList<>();
                 int totalRows = 0;
                 int droppedForNull = 0;
+                List<String> droppedLabels = new ArrayList<>();
                 while (rs.next()) {
                     totalRows++;
                     if (totalRows > STATS_MAX_ROWS) {
@@ -167,13 +171,18 @@ final class StatsEngine {
                     }
                     if (hasNull) {
                         droppedForNull++;
+                        // Name the dropped row by its first label column (entity/cluster) when
+                        // that survived, else by row number.
+                        noteDropped(droppedLabels, rs, labelIdx.length > 0 ? labelIdx[0] : -1,
+                            totalRows);
                     } else {
                         rows.add(row);
                         labelRows.add(labelRow);
                     }
                 }
                 return new LabeledExtraction(numericColumns, rows.toArray(new double[0][]),
-                    labelColumns, labelRows.toArray(new String[0][]), totalRows, droppedForNull);
+                    labelColumns, labelRows.toArray(new String[0][]), totalRows, droppedForNull,
+                    droppedLabels);
             } finally {
                 rs.close();
             }
@@ -189,15 +198,24 @@ final class StatsEngine {
         final String[][] labelRows;
         final int totalRows;
         final int droppedForNull;
+        final List<String> droppedLabels;
 
         LabeledExtraction(String[] numericColumns, double[][] rows, String[] labelColumns,
                 String[][] labelRows, int totalRows, int droppedForNull) {
+            this(numericColumns, rows, labelColumns, labelRows, totalRows, droppedForNull,
+                new ArrayList<String>());
+        }
+
+        LabeledExtraction(String[] numericColumns, double[][] rows, String[] labelColumns,
+                String[][] labelRows, int totalRows, int droppedForNull,
+                List<String> droppedLabels) {
             this.numericColumns = numericColumns;
             this.rows = rows;
             this.labelColumns = labelColumns;
             this.labelRows = labelRows;
             this.totalRows = totalRows;
             this.droppedForNull = droppedForNull;
+            this.droppedLabels = droppedLabels;
         }
 
         double[] column(String name) {
@@ -360,17 +378,66 @@ final class StatsEngine {
 
     /** Column-major-accessible result of {@link #extractColumns}, plus how many source rows
      *  were seen vs. kept after dropping incomplete cases. */
+    /** How many dropped rows are named back to the caller. Enough to see which units left
+     *  the sample (a 51-state panel losing six is the case that motivated this); not so many
+     *  that a 200k-row extraction ships a list nobody reads. */
+    static final int MAX_DROPPED_LABELS = 25;
+
+    /** The first string-typed column NOT among the requested numeric ones — a state name,
+     *  a jurisdiction, a ticker — used to name a dropped row. -1 when the result carries no
+     *  such column, in which case the row number stands in. */
+    static int labelColumnIndex(ResultSet rs, int[] requested) throws SQLException {
+        java.sql.ResultSetMetaData md = rs.getMetaData();
+        java.util.Set<Integer> taken = new java.util.HashSet<>();
+        for (int i : requested) {
+            taken.add(Integer.valueOf(i));
+        }
+        for (int c = 1; c <= md.getColumnCount(); c++) {
+            if (taken.contains(Integer.valueOf(c))) {
+                continue;
+            }
+            int t = md.getColumnType(c);
+            if (t == java.sql.Types.VARCHAR || t == java.sql.Types.CHAR
+                || t == java.sql.Types.LONGVARCHAR || t == java.sql.Types.NVARCHAR) {
+                return c;
+            }
+        }
+        return -1;
+    }
+
+    /** Records which row was dropped, by its label column when there is one and by its
+     *  1-based row number otherwise, capped at {@link #MAX_DROPPED_LABELS}. */
+    static void noteDropped(List<String> droppedLabels, ResultSet rs, int labelIdx,
+            int rowNumber) throws SQLException {
+        if (droppedLabels.size() >= MAX_DROPPED_LABELS) {
+            return;
+        }
+        String label = null;
+        if (labelIdx > 0) {
+            label = rs.getString(labelIdx);
+        }
+        droppedLabels.add(label != null ? label : ("row " + rowNumber));
+    }
+
     static final class Extraction {
         final String[] columns;
         final double[][] rows;   // rows[i] is one observation, in `columns` order
         final int totalRows;
         final int droppedForNull;
+        /** Labels (or row numbers) of the first {@link #MAX_DROPPED_LABELS} dropped rows. */
+        final List<String> droppedLabels;
 
         Extraction(String[] columns, double[][] rows, int totalRows, int droppedForNull) {
+            this(columns, rows, totalRows, droppedForNull, new ArrayList<String>());
+        }
+
+        Extraction(String[] columns, double[][] rows, int totalRows, int droppedForNull,
+                List<String> droppedLabels) {
             this.columns = columns;
             this.rows = rows;
             this.totalRows = totalRows;
             this.droppedForNull = droppedForNull;
+            this.droppedLabels = droppedLabels;
         }
 
         double[] column(String name) {

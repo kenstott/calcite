@@ -868,6 +868,7 @@ final class QuestionDiagnostics {
         geographyLevelMixing(sql, rows, columns, warnings);
         rollupContamination(sql, rows, columns, warnings);
         nameMatchingWithoutResolution(sql, warnings);
+        explicitExclusion(sql, warnings);
 
         ObjectNode out = envelope(warnings);
         ObjectNode diag = (ObjectNode) out.get("diagnostics");
@@ -918,6 +919,100 @@ final class QuestionDiagnostics {
             + "count — especially for a GROUP BY or DISTINCT whose true cardinality can exceed "
             + "the cap. The full count is unknown; add an explicit LIMIT if a sample was "
             + "intended, or aggregate/paginate to see the complete result."));
+    }
+
+    /** Unit names that a question's guidance most often singles out for a with-and-without
+     *  test, so an exclusion of one of them is escalated rather than merely noted. */
+    private static final java.util.regex.Pattern PIVOTAL_UNIT = java.util.regex.Pattern.compile(
+        "(?i)district of columbia|\\bDC\\b|\\bD\\.C\\.|california|texas|new york|florida");
+
+    private static final java.util.regex.Pattern NOT_EQUAL_LITERAL =
+        java.util.regex.Pattern.compile("(?i)([A-Za-z_][A-Za-z0-9_.]*)\\s*(?:<>|!=)\\s*'([^']*)'");
+    private static final java.util.regex.Pattern NOT_IN_LIST =
+        java.util.regex.Pattern.compile("(?i)([A-Za-z_][A-Za-z0-9_.]*)\\s+NOT\\s+IN\\s*\\(([^)]*)\\)");
+    private static final java.util.regex.Pattern IS_NOT_NULL =
+        java.util.regex.Pattern.compile("(?i)([A-Za-z_][A-Za-z0-9_.]*)\\s+IS\\s+NOT\\s+NULL");
+
+    /**
+     * Caller SQL that removes units by hand — {@code <> 'District of Columbia'},
+     * {@code NOT IN (...)}, {@code x IS NOT NULL} on a covariate. Each is a legitimate
+     * modelling choice and an unreported one: measured live, a 51-unit state panel was
+     * regressed on 45 after the caller appended {@code avg_frpl_rate IS NOT NULL AND
+     * jurisdiction_name <> 'District of Columbia'}, and the answer said "45 states" without
+     * saying who was left out or what leaving them out changed. The corpus already carries a
+     * recipe for this (report-what-an-exclusion-changed-not-only-that-you-made-one); this puts
+     * the same rule at the point of use, on the result the exclusion produced.
+     */
+    static void explicitExclusion(String sql, ArrayNode warnings) {
+        if (sql == null) {
+            return;
+        }
+        ArrayNode predicates = MAPPER.createArrayNode();
+        boolean pivotal = false;
+        java.util.regex.Matcher m = NOT_EQUAL_LITERAL.matcher(sql);
+        while (m.find()) {
+            predicates.add(m.group(1) + " <> '" + m.group(2) + "'");
+            pivotal |= PIVOTAL_UNIT.matcher(m.group(2)).find();
+        }
+        m = NOT_IN_LIST.matcher(sql);
+        while (m.find()) {
+            predicates.add(m.group(1) + " NOT IN (" + m.group(2).trim() + ")");
+            pivotal |= PIVOTAL_UNIT.matcher(m.group(2)).find();
+        }
+        m = IS_NOT_NULL.matcher(sql);
+        while (m.find()) {
+            predicates.add(m.group(1) + " IS NOT NULL");
+        }
+        if (predicates.size() == 0) {
+            return;
+        }
+        ObjectNode w = warning("explicit_exclusion", pivotal ? HIGH : CAUTION,
+            "This SQL removes units by hand. Every excluded unit is a modelling decision the "
+            + "reader has to be able to see: name the units these predicates removed, report "
+            + "the headline statistic with and without them, and say what the exclusion "
+            + "changed. Dropping a null-covariate row is still an exclusion — the units with "
+            + "the missing value are not a random subset of the ones you selected."
+            + (pivotal ? " One of the excluded values is a unit questions routinely single "
+                + "out for a with-and-without test; leaving it out silently is the failure "
+                + "that test exists to catch." : ""));
+        w.set("predicates", predicates);
+        w.put("recipe", "report-what-an-exclusion-changed-not-only-that-you-made-one");
+        warnings.add(w);
+    }
+
+    /**
+     * Complete-case filtering changed the sample. Always reported when it happened, with the
+     * units it removed — the share-based {@code broken_field} warning below only fires past
+     * 20%, and six states out of 51 is 12%, which is exactly the case where "which six" is
+     * the whole finding.
+     */
+    private static void sampleAttrition(int totalRows, int dropped, List<String> droppedLabels,
+            ArrayNode warnings) {
+        if (totalRows <= 0 || dropped <= 0) {
+            return;
+        }
+        boolean pivotal = false;
+        ArrayNode names = MAPPER.createArrayNode();
+        if (droppedLabels != null) {
+            for (String l : droppedLabels) {
+                names.add(l);
+                pivotal |= PIVOTAL_UNIT.matcher(l).find();
+            }
+        }
+        ObjectNode w = warning("sample_attrition", pivotal ? CAUTION : INFO,
+            dropped + " of " + totalRows + " rows the SQL returned were dropped because a "
+            + "required column was null, so n is smaller than the query's row count. Name the "
+            + "dropped units in the answer and, if any is one the question singles out, report "
+            + "the result with and without it.");
+        w.put("rows_returned_by_sql", totalRows);
+        w.put("rows_dropped_for_null", dropped);
+        if (names.size() > 0) {
+            w.set("dropped_units", names);
+            if (dropped > names.size()) {
+                w.put("dropped_units_note", "first " + names.size() + " of " + dropped);
+            }
+        }
+        warnings.add(w);
     }
 
     private static void emptyOrLowCoverage(String sql, ArrayNode rows, ArrayNode warnings) {
@@ -974,21 +1069,52 @@ final class QuestionDiagnostics {
             if (cov == null || !cov.has("first_year") || !cov.has("last_year")) {
                 continue;
             }
-            int first = cov.get("first_year").asInt();
-            int last = cov.get("last_year").asInt();
+            int declaredFirst = cov.get("first_year").asInt();
+            int declaredLast = cov.get("last_year").asInt();
+            int first = declaredFirst;
+            int last = declaredLast;
+            String basis = "declared";
+            // The declaration is what the schema INTENDS to hold; a row scan is what it DOES.
+            // Where the scan has finished, it wins: measured live, f33_district_finance
+            // declared 2023-2024 while 2011-2024 were loaded, and this check told a caller
+            // that its 2022 rows "were never ingested" on the same response that carried
+            // 14,105 of them.
+            ObjectNode observed = IngestedYears.observed(parts[0], parts[1],
+                cov.path("column").asText("year"));
+            if (observed != null && "measured".equals(observed.path("status").asText(""))
+                && observed.has("first_year") && observed.has("last_year")) {
+                first = observed.get("first_year").asInt();
+                last = observed.get("last_year").asInt();
+                basis = "observed";
+                if (first != declaredFirst || last != declaredLast) {
+                    ObjectNode stale = warning("coverage_declaration_stale", INFO,
+                        "This table's declared coverage window disagrees with the years "
+                        + "actually loaded. The observed window is used here; the schema "
+                        + "declaration is the one to fix.");
+                    stale.put("table", ref);
+                    stale.put("declared_first_year", declaredFirst);
+                    stale.put("declared_last_year", declaredLast);
+                    stale.put("observed_first_year", first);
+                    stale.put("observed_last_year", last);
+                    warnings.add(stale);
+                }
+            }
             for (Integer y : years) {
                 if (y.intValue() >= first && y.intValue() <= last) {
                     continue;
                 }
                 ObjectNode w = warning("low_coverage", empty ? HIGH : CAUTION,
-                    "The SQL names a year outside this table's declared coverage window. Rows "
-                    + "for it were never ingested, so their absence says nothing about the "
+                    "The SQL names a year outside this table's " + basis + " coverage window. "
+                    + "Rows for it were never ingested, so their absence says nothing about the "
                     + "underlying quantity — report it as not published rather than as zero or "
                     + "as a decline.");
                 w.put("table", ref);
                 w.put("year", y.intValue());
-                w.put("declared_first_year", first);
-                w.put("declared_last_year", last);
+                w.put("window_basis", basis);
+                w.put("first_year", first);
+                w.put("last_year", last);
+                w.put("declared_first_year", declaredFirst);
+                w.put("declared_last_year", declaredLast);
                 warnings.add(w);
             }
         }
@@ -1305,7 +1431,19 @@ final class QuestionDiagnostics {
      */
     static ObjectNode forExtraction(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped) {
+        return forExtraction(sql, covariates, covariateCols, n, totalRows, dropped, null);
+    }
+
+    /** {@link #forExtraction(String, List, double[][], int, int, int)} plus the labels of the
+     *  rows complete-case filtering removed, so the caller is told WHICH units left the
+     *  sample rather than only how many. */
+    static ObjectNode forExtraction(String sql, List<String> covariates,
+            double[][] covariateCols, int n, int totalRows, int dropped,
+            List<String> droppedLabels) {
         ArrayNode warnings = MAPPER.createArrayNode();
+
+        sampleAttrition(totalRows, dropped, droppedLabels, warnings);
+        explicitExclusion(sql, warnings);
 
         if (n > 0 && n <= SMALL_N) {
             ObjectNode w = warning("small_n", CAUTION,

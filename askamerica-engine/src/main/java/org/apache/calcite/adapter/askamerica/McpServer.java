@@ -551,6 +551,33 @@ public class McpServer {
             + "agriculture), transport (NHTSA/BTS/FAA/FTA/FHWA), environment (EPA/USGS), fiscal "
             + "(IRS SOI / USAspending / SBA / SSA).\n\n"
 
+            + "## VALIDATING AN ARTICLE OR A CLAIM\n\n"
+            + "When the user hands you a URL, a pasted article, or a quoted passage and asks "
+            + "whether it holds up — 'validate this', 'fact-check this', 'is this true', 'is this "
+            + "accurate', 'verify this', 'check this article', 'debunk this', 'true or false', "
+            + "'how much of this is right', or simply a link followed by a question mark — that "
+            + "is a VALIDATION, not a research question, and it has its own shape:\n"
+            + "1. Fetch the text (web_fetch for a URL). Extract every assertion of fact as a "
+            + "verbatim sentence. Separate the CLAIM from its ATTRIBUTION: 'officials say "
+            + "unemployment fell' is graded on whether unemployment fell, not on whether "
+            + "officials said it. Skip opinion and prediction; keep numbers, trends, rankings, "
+            + "comparisons and causal claims.\n"
+            + "2. For each assertion, search_catalog for the measure it rests on. Its "
+            + "unmatched_terms tell you which words no table carries: an assertion whose "
+            + "measure is unmatched is 'not checkable here' — say so, never proxy it into a "
+            + "verdict.\n"
+            + "3. Check every checkable assertion against the warehouse: the same measure, the "
+            + "same unit, the same period. Record the article's figure, the warehouse figure, "
+            + "the table, and BOTH vintages. A mismatch where the article cites a release newer "
+            + "than the loaded window is 'stale vintage' — a freshness gap, not a falsehood.\n"
+            + "4. Verdict per assertion: true | mostly true | partially true | mostly false | "
+            + "false | not checkable here | stale vintage. 'Partially true' needs the reason: "
+            + "right direction wrong magnitude, right figure wrong year, true nationally but not "
+            + "for the place named, true for a subgroup presented as the whole.\n"
+            + "5. publish_report with the `claims` array (one entry per assertion) and a "
+            + "summary that leads with the tally and the assertion that matters most. The "
+            + "user asked whether the piece can be trusted; answer that first.\n\n"
+
             + "## WORKFLOW — RESEARCH FIRST, DATA SECOND, IN ORDER\n\n"
             + "Measured, most recently in a 25-run reaudit: the average answer still cites only "
             + "~3.5 distinct external sources against a ~10 target, and connector callers as a "
@@ -1889,6 +1916,18 @@ public class McpServer {
             + "asked of the connector, so the figure is independently re-derivable. Omit both "
             + "sql and tool/params for genuine web sources.");
         pubProps.set("sources", sourcesProp);
+        pubProps.set("claims", prop("array",
+            "For an article or claim validation: one object per assertion, as "
+            + "[{assertion, verdict, article_value, warehouse_value, table, article_vintage, "
+            + "warehouse_vintage, reason, sql}]. `assertion` is the article's sentence "
+            + "VERBATIM (the claim, not its attribution — 'officials say X' is graded on X). "
+            + "`verdict` is one of: true | mostly true | partially true | mostly false | false | "
+            + "not checkable here | stale vintage. `warehouse_value` and `table` are what this "
+            + "corpus says and where; `sql` is the query that produced it. Use 'not checkable "
+            + "here' when search_catalog's unmatched_terms show no table carries the measure, "
+            + "and 'stale vintage' when the article cites a release newer than the loaded "
+            + "window — that is a freshness gap, not a falsehood. Renders as a tallied "
+            + "claim-by-claim table directly under the summary."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -2977,6 +3016,19 @@ public class McpServer {
                         flts.add(new ReportPage.Filter(lbl, cls,
                             fn.has("note") ? fn.get("note").asText(null) : null));
                     }
+                    JsonNode claims = args.path("claims");
+                    if (claims.isArray() && claims.size() > 0) {
+                        ReportPage.Section claimsSec = claimsSection(claims);
+                        if (claimsSec != null) {
+                            // Directly under the summary, where a reader looks first.
+                            secs.add(Math.min(1, secs.size()), claimsSec);
+                        }
+                    }
+                    enforceExclusionDisclosure(secs);
+                    ReportPage.Section appendix = queryAppendix();
+                    if (appendix != null) {
+                        secs.add(appendix);
+                    }
                     String html = ReportPage.render(rTitle, rSub, secs, boardSvg, boardSvgUrl,
                         srcs,
                         args.has("footnote") ? args.get("footnote").asText(null) : null,
@@ -2994,6 +3046,12 @@ public class McpServer {
                         java.io.File reportHtml = new java.io.File(evalDir, "report.html");
                         java.nio.file.Files.write(reportHtml.toPath(),
                             html.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        writeCallLog(evalDir);
+                        if (claims.isArray() && claims.size() > 0) {
+                            java.nio.file.Files.write(new java.io.File(evalDir, "claims.json")
+                                .toPath(), claims.toString()
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        }
                         evalReportNote = " Saved to " + reportHtml + ".";
                     }
                     String url = ArtifactServer.publish(
@@ -3075,6 +3133,9 @@ public class McpServer {
                         dTitle, dSub, dFoot, dBy, panels, cols, dw, dh);
                     chartPng = dash.toPng();
                     chartSvg = dash.toSvg();
+                    if (EVAL_MODE) {
+                        LAST_DASHBOARD_PNG = dash.toPng(2.0);
+                    }
                     int stats = 0;
                     for (DashboardLayout.Panel p : panels) {
                         if ("stat".equals(p.kind)) {
@@ -3214,6 +3275,7 @@ public class McpServer {
             long ms = System.currentTimeMillis() - t0;
             String compact = compactErrorMessage(e);
             log.println("[askamerica-mcp] tool=" + name + " ERROR ms=" + ms + " msg=" + compact);
+            recordCall(name, args, ms, -1, null, compact);
             if (telemetryOptIn && !"set_telemetry".equals(name)) {
                 final String tName = name;
                 final long tMs = ms;
@@ -3284,6 +3346,7 @@ public class McpServer {
         if (chartPng != null && EVAL_MODE) {
             LAST_CHART_PNG = chartPng;
         }
+        recordCall(name, args, ms, rows, diagnostics, null);
         ArrayNode content = MAPPER.createArrayNode();
         if (chartPng != null) {
             ObjectNode imageBlock = MAPPER.createObjectNode();
@@ -3706,11 +3769,55 @@ public class McpServer {
         }
         ObjectNode out = MAPPER.createObjectNode();
         out.set("matches", hits);
+        addUnmatchedTerms(out, query.trim(), hits);
         if (extSources.size() > 0) {
             out.set("external_sources", extSources);
             out.put("external_sources_caveat", ExternalSources.CAVEAT);
         }
         return out.toString();
+    }
+
+    private static final java.util.Set<String> SEARCH_STOPWORDS = new java.util.HashSet<>(
+        java.util.Arrays.asList("the", "and", "for", "with", "from", "that", "this", "into",
+            "over", "per", "rate", "rates", "data", "table", "tables", "state", "states",
+            "county", "counties", "year", "years", "total", "number", "count", "average",
+            "annual", "monthly", "level", "levels", "national", "federal"));
+
+    /**
+     * The words in a search that no hit's name or description contains. A hit list is easy
+     * to read as "the catalog has this" when it only has the neighbours: measured live, a
+     * search for "teacher salary student achievement class size" returned staffing and
+     * spending tables, and the caller built a spend-per-teacher proxy without ever being
+     * told that no table carries a salary. Naming the unmatched word is what turns "proxy"
+     * from a private decision into a stated one.
+     */
+    private static void addUnmatchedTerms(ObjectNode out, String query, ArrayNode hits) {
+        StringBuilder hay = new StringBuilder();
+        for (JsonNode h : hits) {
+            hay.append(' ').append(h.path("table").asText("")).append(' ')
+                .append(h.path("column").asText("")).append(' ')
+                .append(h.path("description").asText(""));
+        }
+        String haystack = hay.toString().toLowerCase(java.util.Locale.ROOT);
+        ArrayNode unmatched = MAPPER.createArrayNode();
+        for (String raw : query.toLowerCase(java.util.Locale.ROOT).split("[^a-z0-9]+")) {
+            if (raw.length() < 4 || SEARCH_STOPWORDS.contains(raw)) {
+                continue;
+            }
+            String stem = raw.endsWith("ies") ? raw.substring(0, raw.length() - 3) + "y"
+                : (raw.endsWith("s") ? raw.substring(0, raw.length() - 1) : raw);
+            if (!haystack.contains(stem)) {
+                unmatched.add(raw);
+            }
+        }
+        if (unmatched.size() > 0) {
+            out.set("unmatched_terms", unmatched);
+            out.put("unmatched_terms_note", "No returned table, column or description "
+                + "contains these words. If a figure the question needs is named by one of "
+                + "them, the corpus may not carry it directly: say so in the answer, and if "
+                + "you build a proxy from what IS here, name it as a proxy and say what it "
+                + "includes that the missing measure would not.");
+        }
     }
 
     /**
@@ -3925,6 +4032,7 @@ public class McpServer {
             return out.toString();
         }
         out.set("observed", IngestedYears.detail(r));
+        addNullShares(out, s, t);
 
         if (declared != null && r.status == null) {
             out.set("missing_vs_declared", IngestedYears.missingVersusDeclared(r,
@@ -3940,6 +4048,65 @@ public class McpServer {
         log.println("[askamerica-mcp] data_coverage " + s + "." + t
             + " status=" + (r.status == null ? "measured" : r.status));
         return out.toString();
+    }
+
+    /**
+     * Share of rows null per column, over the whole table. One aggregate scan, capped at 40
+     * columns. A null-heavy covariate is the quiet way a sample shrinks: a poverty control
+     * with six null jurisdictions turns a 51-state regression into a 45-state one the moment
+     * it enters the model, and nothing about the coverage window says so.
+     */
+    private static void addNullShares(ObjectNode out, String schema, String table) {
+        try {
+            Connection c = getCatalogConnection();
+            java.util.List<String> cols = new ArrayList<>();
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery(
+                     "SELECT column_name FROM information_schema.columns "
+                     + "WHERE lower(table_schema) = '" + schema + "' "
+                     + "AND lower(table_name) = '" + table + "' ORDER BY ordinal_position")) {
+                while (rs.next() && cols.size() < 40) {
+                    cols.add(rs.getString(1));
+                }
+            }
+            if (cols.isEmpty()) {
+                return;
+            }
+            StringBuilder sql = new StringBuilder("SELECT COUNT(*)");
+            for (String col : cols) {
+                sql.append(", COUNT(\"").append(col.replace("\"", "\"\"")).append("\")");
+            }
+            sql.append(" FROM \"").append(schema).append("\".\"").append(table).append('"');
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery(sql.toString())) {
+                if (!rs.next()) {
+                    return;
+                }
+                long total = rs.getLong(1);
+                if (total <= 0) {
+                    return;
+                }
+                ObjectNode shares = MAPPER.createObjectNode();
+                for (int i = 0; i < cols.size(); i++) {
+                    long nonNull = rs.getLong(i + 2);
+                    double share = (total - nonNull) / (double) total;
+                    if (share > 0) {
+                        shares.put(cols.get(i), Math.round(share * 1000.0) / 1000.0);
+                    }
+                }
+                out.put("rows_scanned_for_nulls", total);
+                out.set("null_share_by_column", shares);
+                if (shares.size() > 0) {
+                    out.put("null_share_note", "Share of rows where each column is null; "
+                        + "columns with no nulls are omitted. A column used as a covariate "
+                        + "drops every row where it is null, so a non-zero share here is the "
+                        + "sample attrition a regression on this table will show.");
+                }
+            }
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] null-share scan skipped for " + schema + "." + table
+                + ": " + e.getMessage());
+        }
     }
 
     private static Integer intOrNull(ObjectNode n, String field) {
@@ -4217,6 +4384,14 @@ public class McpServer {
     private static volatile byte[] LAST_CHART_PNG;
 
     /**
+     * The most recent {@code compose_dashboard} render at 2x, kept separately from
+     * {@link #LAST_CHART_PNG}: publish_report returns a 40% thumbnail of its board as the
+     * call's image, and "the last image this process produced" was therefore a 352x258
+     * picture that no reader could use. The saved dashboard.png is this one when it exists.
+     */
+    private static volatile byte[] LAST_DASHBOARD_PNG;
+
+    /**
      * Writes a comparative-eval answer (and, if any, the last chart this process rendered) to
      * disk on behalf of a caller with no filesystem tool of its own. See {@link #EVAL_MODE}.
      *
@@ -4244,13 +4419,286 @@ public class McpServer {
             markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
         String chartNote = "";
-        byte[] chart = LAST_CHART_PNG;
+        byte[] chart = LAST_DASHBOARD_PNG != null ? LAST_DASHBOARD_PNG : LAST_CHART_PNG;
         if (chart != null) {
             java.io.File dashboardPng = new java.io.File(dir, "dashboard.png");
             java.nio.file.Files.write(dashboardPng.toPath(), chart);
             chartNote = " and " + dashboardPng;
         }
-        return "Saved " + agentMd + chartNote + ".";
+        java.io.File calls = writeCallLog(dir);
+        return "Saved " + agentMd + chartNote + (calls == null ? "" : " and " + calls) + ".";
+    }
+
+    // ── Per-process tool-call log ─────────────────────────────────────────────
+
+    /** Every tool call this process has served, oldest first, capped so a runaway session
+     *  cannot grow it without bound. One process serves one client session, so this is the
+     *  session's audit trail: what was asked of the warehouse, in what order, how long it
+     *  took, and what the server warned about. */
+    private static final java.util.List<ObjectNode> CALL_LOG =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<ObjectNode>());
+    private static final int CALL_LOG_MAX = 2000;
+    private static final java.util.concurrent.atomic.AtomicInteger CALL_SEQ =
+        new java.util.concurrent.atomic.AtomicInteger();
+
+    private static void recordCall(String tool, JsonNode args, long ms, int rows,
+            ObjectNode diagnostics, String error) {
+        if (CALL_LOG.size() >= CALL_LOG_MAX) {
+            return;
+        }
+        ObjectNode e = MAPPER.createObjectNode();
+        e.put("seq", CALL_SEQ.incrementAndGet());
+        e.put("ts", java.time.Instant.now().toString());
+        e.put("tool", tool);
+        e.put("ms", ms);
+        if (args != null && args.hasNonNull("sql")) {
+            e.put("sql", args.get("sql").asText());
+        }
+        if (args != null && args.isObject()) {
+            ObjectNode summary = MAPPER.createObjectNode();
+            java.util.Iterator<java.util.Map.Entry<String, JsonNode>> it = args.fields();
+            while (it.hasNext()) {
+                java.util.Map.Entry<String, JsonNode> f = it.next();
+                if ("sql".equals(f.getKey()) || "markdown".equals(f.getKey())
+                    || "html".equals(f.getKey()) || "sections".equals(f.getKey())
+                    || "panels".equals(f.getKey()) || "dashboard".equals(f.getKey())) {
+                    continue;
+                }
+                String v = f.getValue().isValueNode() ? f.getValue().asText()
+                    : f.getValue().toString();
+                summary.put(f.getKey(), v.length() > 200 ? v.substring(0, 200) + "…" : v);
+            }
+            if (summary.size() > 0) {
+                e.set("args", summary);
+            }
+        }
+        if (rows >= 0) {
+            e.put("rows", rows);
+        }
+        if (diagnostics != null) {
+            ArrayNode types = e.putArray("diagnostic_types");
+            JsonNode inner = diagnostics.path("diagnostics");
+            for (JsonNode w : inner.path("warnings")) {
+                String type = w.path("type").asText("");
+                types.add(type + ":" + w.path("severity").asText(""));
+                if ("explicit_exclusion".equals(type) && w.has("predicates")) {
+                    e.set("exclusions", w.get("predicates"));
+                }
+                if ("sample_attrition".equals(type) && w.has("dropped_units")) {
+                    e.set("dropped_units", w.get("dropped_units"));
+                }
+            }
+        }
+        if (error != null) {
+            e.put("error", error);
+        }
+        CALL_LOG.add(e);
+    }
+
+    /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
+    private static java.io.File writeCallLog(java.io.File dir) throws java.io.IOException {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        if (snapshot.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (ObjectNode e : snapshot) {
+            sb.append(e.toString()).append('\n');
+        }
+        java.io.File f = new java.io.File(dir, "calls.jsonl");
+        java.nio.file.Files.write(f.toPath(),
+            sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return f;
+    }
+
+    private static final java.util.regex.Pattern DISCLOSURE_WORDS = java.util.regex.Pattern
+        .compile("(?i)exclud|omitt|dropped|left out|not included|removed from|without ");
+
+    /**
+     * A report published after this session excluded units by hand must say so. Measured live
+     * (q134, 2026-09-10): an {@code explicit_exclusion} caution on three calls changed nothing —
+     * the answer reported n=42 of 49 and named neither the seven units nor the two predicates
+     * that removed them. A diagnostic the caller may ignore is advice; a publish that fails
+     * until the disclosure exists is a guardrail. Same mechanism as question_coverage.
+     *
+     * @throws IllegalArgumentException naming every predicate and, where the server knows
+     *     them, the dropped units, so the fix is one paragraph away rather than a re-query.
+     */
+    private static void enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        java.util.LinkedHashSet<String> predicates = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<String> literals = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<String> units = new java.util.LinkedHashSet<>();
+        for (ObjectNode e : snapshot) {
+            for (JsonNode pnode : e.path("exclusions")) {
+                String pred = pnode.asText();
+                predicates.add(pred);
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("'([^']+)'").matcher(pred);
+                while (m.find()) {
+                    literals.add(m.group(1));
+                }
+            }
+            for (JsonNode u : e.path("dropped_units")) {
+                units.add(u.asText());
+            }
+        }
+        if (predicates.isEmpty() && units.isEmpty()) {
+            return;
+        }
+        StringBuilder text = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            text.append(sec.heading == null ? "" : sec.heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+        }
+        String body = text.toString();
+        String lower = body.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<String> missingLiterals = new java.util.ArrayList<>();
+        for (String lit : literals) {
+            if (!lower.contains(lit.toLowerCase(java.util.Locale.ROOT))) {
+                missingLiterals.add(lit);
+            }
+        }
+        boolean disclosed = DISCLOSURE_WORDS.matcher(body).find();
+        if (missingLiterals.isEmpty() && disclosed) {
+            return;
+        }
+        StringBuilder msg = new StringBuilder(
+            "This report cannot be published yet: a query in this session removed units by "
+            + "hand and the report does not say so. ");
+        if (!predicates.isEmpty()) {
+            msg.append("Predicates seen: ").append(String.join("; ", predicates)).append(". ");
+        }
+        if (!missingLiterals.isEmpty()) {
+            msg.append("These excluded values appear nowhere in the report text: ")
+                .append(String.join(", ", missingLiterals)).append(". ");
+        }
+        if (!units.isEmpty()) {
+            msg.append("Rows the stats tools dropped for a null value: ")
+                .append(String.join(", ", units)).append(". ");
+        }
+        if (!disclosed) {
+            msg.append("No section says what was excluded (no 'excluded', 'dropped', "
+                + "'omitted', 'left out', or 'without ...' anywhere). ");
+        }
+        msg.append("Fix: add one paragraph to a section naming every unit these predicates "
+            + "removed (run the same SELECT without them if you do not know), the reason, "
+            + "and the headline statistic with and without them. Then call publish_report "
+            + "again. See recipe report-what-an-exclusion-changed-not-only-that-you-made-one.");
+        throw new IllegalArgumentException(msg.toString());
+    }
+
+    /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
+     *  the order the tally tiles render in. */
+    private static final String[] VERDICTS = {"true", "mostly true", "partially true",
+        "mostly false", "false", "not checkable here", "stale vintage"};
+
+    /**
+     * The claim-by-claim table an article validation publishes. A verdict without the
+     * figures on both sides is an opinion; the table forces both figures, the table they came
+     * from, and both vintages onto the page, and tallies the verdicts so a reader sees the
+     * shape of the article's accuracy before the detail.
+     */
+    private static ReportPage.Section claimsSection(JsonNode claims) {
+        java.util.Map<String, Integer> tally = new java.util.LinkedHashMap<>();
+        for (String v : VERDICTS) {
+            tally.put(v, Integer.valueOf(0));
+        }
+        StringBuilder rows = new StringBuilder();
+        int n = 0;
+        for (JsonNode c : claims) {
+            String assertion = c.path("assertion").asText("").trim();
+            String verdict = c.path("verdict").asText("").trim()
+                .toLowerCase(java.util.Locale.ROOT);
+            if (assertion.isEmpty() || verdict.isEmpty()) {
+                throw new IllegalArgumentException("each claim needs a non-empty 'assertion' "
+                    + "and 'verdict'; got " + c);
+            }
+            if (!tally.containsKey(verdict)) {
+                throw new IllegalArgumentException("claim verdict must be one of "
+                    + String.join(" | ", VERDICTS) + "; got '" + verdict + "' for: "
+                    + assertion);
+            }
+            tally.put(verdict, Integer.valueOf(tally.get(verdict).intValue() + 1));
+            n++;
+            String cls = "verdict-" + verdict.replace(' ', '-');
+            rows.append("<tr class=\"").append(cls).append("\">")
+                .append("<td>").append(n).append("</td>")
+                .append("<td>").append(ReportPage.esc(assertion)).append("</td>")
+                .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong></td>")
+                .append("<td>").append(ReportPage.esc(c.path("article_value").asText("")))
+                .append("</td>")
+                .append("<td>").append(ReportPage.esc(c.path("warehouse_value").asText("")))
+                .append(c.hasNonNull("table")
+                    ? " <code>" + ReportPage.esc(c.get("table").asText()) + "</code>" : "")
+                .append("</td>")
+                .append("<td>").append(ReportPage.esc(c.path("article_vintage").asText("")))
+                .append(" / ").append(ReportPage.esc(c.path("warehouse_vintage").asText("")))
+                .append("</td>")
+                .append("<td>").append(ReportPage.esc(c.path("reason").asText("")));
+            if (c.hasNonNull("sql") && !c.get("sql").asText().isEmpty()) {
+                rows.append("<details class=\"sqltoggle\"><summary>Show SQL</summary><pre><code>")
+                    .append(ReportPage.esc(c.get("sql").asText()))
+                    .append("</code></pre></details>");
+            }
+            rows.append("</td></tr>\n");
+        }
+        if (n == 0) {
+            return null;
+        }
+        StringBuilder tiles = new StringBuilder("<p>");
+        for (java.util.Map.Entry<String, Integer> t : tally.entrySet()) {
+            if (t.getValue().intValue() > 0) {
+                tiles.append("<strong>").append(t.getValue()).append("</strong> ")
+                    .append(ReportPage.esc(t.getKey())).append(" &middot; ");
+            }
+        }
+        tiles.append("<strong>").append(n).append("</strong> assertions checked</p>\n");
+        String html = tiles
+            + "<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th>"
+            + "<th>Article says</th><th>Warehouse says</th><th>Vintage article / warehouse</th>"
+            + "<th>Why</th></tr></thead><tbody>\n" + rows + "</tbody></table>\n"
+            + "<p class=\"note\">Verdicts: true, mostly true, partially true, mostly false, "
+            + "false, not checkable here (no table carries the measure), stale vintage (the "
+            + "article cites a release this corpus has not loaded — a freshness gap, not a "
+            + "falsehood).</p>";
+        return new ReportPage.Section("Claim-by-claim verdicts", html);
+    }
+
+    /** The queries and statistical calls this session ran, as a report section, so the SQL
+     *  behind every figure is on the page a reader is handed rather than only the calls the
+     *  author chose to cite. Skipped when nothing ran. */
+    private static ReportPage.Section queryAppendix() {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        StringBuilder sb = new StringBuilder();
+        int n = 0;
+        for (ObjectNode e : snapshot) {
+            if (!e.hasNonNull("sql") || e.has("error")) {
+                continue;
+            }
+            n++;
+            sb.append("<details class=\"sqltoggle\"><summary>")
+                .append(ReportPage.esc(e.path("tool").asText("")))
+                .append(e.has("rows") ? " — " + e.get("rows").asInt() + " rows" : "")
+                .append(" — ").append(e.path("ms").asLong()).append(" ms")
+                .append("</summary><pre><code>").append(ReportPage.esc(e.get("sql").asText()))
+                .append("</code></pre></details>\n");
+        }
+        if (n == 0) {
+            return null;
+        }
+        return new ReportPage.Section("Every query behind this report",
+            "<p>" + n + " warehouse " + (n == 1 ? "call" : "calls") + " ran in this session, "
+            + "in order. Each is reproducible against the same snapshot.</p>\n" + sb);
     }
 
     /**
@@ -7520,9 +7968,15 @@ public class McpServer {
     /** {@link #diagnose} for the stats tools, which measure their own n and covariates. */
     private static ObjectNode diagnoseStats(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped) {
+        return diagnoseStats(sql, covariates, covariateCols, n, totalRows, dropped, null);
+    }
+
+    private static ObjectNode diagnoseStats(String sql, List<String> covariates,
+            double[][] covariateCols, int n, int totalRows, int dropped,
+            List<String> droppedLabels) {
         try {
             return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
-                totalRows, dropped);
+                totalRows, dropped, droppedLabels);
         } catch (Exception e) {
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
@@ -7571,7 +8025,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
     }
 
     /** {@link #statsResult(ObjectNode, String, List, StatsEngine.Extraction)} for the
@@ -7582,7 +8036,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
     }
 
     /** Attaches sample-size bookkeeping every stats tool result shares — how many source
@@ -7591,6 +8045,23 @@ public class McpServer {
     private static void addExtractionMeta(ObjectNode out, StatsEngine.Extraction ex) {
         out.put("rows_returned_by_sql", ex.totalRows);
         out.put("rows_dropped_for_null", ex.droppedForNull);
+        addDroppedExamples(out, ex.droppedLabels, ex.droppedForNull);
+    }
+
+    /** Which rows complete-case filtering removed, by label — so "n=45 of 51" comes with
+     *  the six names rather than leaving the caller to rediscover them. */
+    private static void addDroppedExamples(ObjectNode out, List<String> labels, int dropped) {
+        if (labels == null || labels.isEmpty()) {
+            return;
+        }
+        ArrayNode arr = out.putArray("rows_dropped_examples");
+        for (String l : labels) {
+            arr.add(l);
+        }
+        if (dropped > labels.size()) {
+            out.put("rows_dropped_examples_note",
+                "first " + labels.size() + " of " + dropped + " dropped rows");
+        }
     }
 
     /** Same as {@link #addExtractionMeta(ObjectNode, StatsEngine.Extraction)} for the
@@ -7598,6 +8069,7 @@ public class McpServer {
     private static void addExtractionMeta(ObjectNode out, StatsEngine.LabeledExtraction ex) {
         out.put("rows_returned_by_sql", ex.totalRows);
         out.put("rows_dropped_for_null", ex.droppedForNull);
+        addDroppedExamples(out, ex.droppedLabels, ex.droppedForNull);
     }
 
     /** Base for the AskAmerica API — system property, then env, then production. */
