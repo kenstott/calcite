@@ -134,6 +134,7 @@ class AuthProvider:
     name = "base"
 
     def authenticate(self, username: str, password: str) -> Optional[str]:
+        del username, password
         raise NotImplementedError
 
     @property
@@ -231,6 +232,7 @@ class OidcProvider(AuthProvider):
 
     def _key_for(self, token: str):
         import jwt
+        import jwt.algorithms  # submodule; pyjwt's __init__ doesn't re-export it in stubs
 
         if self._public_key is not None:
             return self._public_key
@@ -266,7 +268,7 @@ class OidcProvider(AuthProvider):
         try:
             claims = jwt.decode(
                 password,
-                key,
+                key,  # pyright: ignore[reportArgumentType]  # public key only ever comes from a public JWK/PEM
                 algorithms=self._algorithms,
                 audience=self._audience,
                 issuer=self._issuer,
