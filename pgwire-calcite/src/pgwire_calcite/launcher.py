@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import signal
 import ssl
 import sys
@@ -147,6 +148,36 @@ def serve(
     return srv
 
 
+OWNER_POLL_SECONDS = 1.0
+
+
+def watch_owner(owner_pid: int, stop: threading.Event) -> threading.Thread:
+    """Request shutdown once the process that owns this server is gone (``--owner-pid``).
+
+    An embedding host (Provisa) starts this server through the Java launcher in its own
+    session so that stopping it signals the whole tree — which also means the tree does NOT
+    die with the host. A host that is SIGKILLed (a test runner's teardown, an OOM kill) runs
+    no shutdown hook, and every server it started would keep its port until someone noticed.
+    Polling the owner's liveness closes that gap from the child's side: no signal has to be
+    delivered for the server to know it is orphaned.
+    """
+
+    def _watch() -> None:
+        while not stop.wait(OWNER_POLL_SECONDS):
+            try:
+                os.kill(owner_pid, 0)
+            except ProcessLookupError:
+                log.info("owner pid %d is gone; shutting down", owner_pid)
+                stop.set()
+                return
+            except PermissionError:
+                continue  # alive, but owned by another user: still there
+
+    t = threading.Thread(target=_watch, name="pgwire-owner-watch", daemon=True)
+    t.start()
+    return t
+
+
 def install_shutdown_handler(stop: threading.Event) -> None:
     """Make SIGTERM (and SIGINT) request a clean shutdown instead of a hang.
 
@@ -205,6 +236,12 @@ def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pgwire-calcite", description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5433)
+    parser.add_argument(
+        "--owner-pid",
+        type=int,
+        default=None,
+        help="exit when this process is gone (the host that started the server)",
+    )
     parser.add_argument(
         "--database",
         default="postgres",
@@ -345,6 +382,8 @@ def main(argv: list | None = None) -> int:
     # launcher's shutdown hook can be swallowed and the listening socket stays
     # bound.
     install_shutdown_handler(stop)
+    if args.owner_pid is not None:
+        watch_owner(args.owner_pid, stop)
     try:
         stop.wait()
     except KeyboardInterrupt:

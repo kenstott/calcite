@@ -25,7 +25,7 @@ import signal
 import threading
 import time
 
-from pgwire_calcite.launcher import install_shutdown_handler
+from pgwire_calcite.launcher import install_shutdown_handler, watch_owner
 
 
 def test_sigterm_sets_stop_event():
@@ -102,3 +102,22 @@ def test_stop_wait_unblocks_promptly_on_sigterm():
     finally:
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
         signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
+def test_owner_watch_requests_shutdown_when_the_owner_dies():
+    """--owner-pid: the server stops on its own once the host that started it is gone, with
+    no signal delivered — the case a SIGKILLed host leaves behind."""
+    import subprocess
+    import sys
+
+    owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    stop = threading.Event()
+    try:
+        watch_owner(owner.pid, stop)
+        assert not stop.wait(1.5), "stop set while the owner was alive"
+        owner.kill()
+        owner.wait(timeout=5)
+        assert stop.wait(5), "stop not set within 5s of the owner dying"
+    finally:
+        if owner.poll() is None:
+            owner.kill()
