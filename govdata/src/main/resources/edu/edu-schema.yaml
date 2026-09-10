@@ -390,11 +390,33 @@ partitionedTables:
       - name: free_or_reduced_price_lunch
         type: int
         nullable: true
-        comment: Combined free+reduced lunch count; divide by enrollment for poverty proxy. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count — exclude value < 0 before using in any ratio.
+        comment: >
+          Combined free+reduced lunch count; divide by enrollment for poverty proxy. May carry
+          a negative NCES CCD sentinel code (see table comment) instead of a real count —
+          exclude value < 0 before using in any ratio. SOURCE BEHAVIOR: states that have moved
+          their schools to the Community Eligibility Provision stop collecting FRPL
+          applications altogether, and CCD then publishes NOTHING in this field for every
+          school in the state while still publishing direct_certification. Observed live
+          against production: no such state before 2016, then a state set that changes each
+          year — 2016 {DE,DC,MA,TN}, 2021 peaks at 10, 2022 {DE,DC,MA,MT,TN,WV},
+          2024 {AZ,DE,DC,MA,TN,WV,GU}. A NULL here for a whole state-year is therefore the
+          source's own answer, not a gap in ingestion, and it is not repairable by a
+          reprocess. direct_certification is the only poverty signal CCD carries for those
+          state-years — see that column for why the two are not interchangeable.
       - name: direct_certification
         type: int
         nullable: true
-        comment: Students directly certified for free meals (SNAP/TANF households). May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
+        comment: >
+          Students directly certified for free meals via SNAP/TANF data matching, without a
+          household application. May carry a negative NCES CCD sentinel code (see table
+          comment) instead of a real count. NOT INTERCHANGEABLE WITH
+          free_or_reduced_price_lunch: direct certification captures only the categorically
+          eligible subset, so it runs well below FRPL wherever both are reported — measured
+          live across production, the ratio of summed direct_certification to summed
+          free_or_reduced_price_lunch on schools reporting both is 0.57-0.69 in every year
+          2016-2024. Substituting it for FRPL (a COALESCE, say) understates poverty by
+          roughly a third and silently changes what the number means, so derive a separate
+          rate from it rather than folding it into an FRPL rate.
       - name: lunch_program
         type: int
         nullable: true
@@ -2868,6 +2890,17 @@ views:
       comments) — excluded (value < 0 treated as null) before computing
       total_enrollment, avg_pupil_teacher_ratio, and avg_frpl_rate, so a sentinel code
       is never silently counted as a real value.
+      avg_frpl_rate is NULL for a whole jurisdiction in any year where CCD published no
+      FRPL count for that state at all, which is what CCD does for states running the
+      Community Eligibility Provision: those schools take no FRPL applications, so the
+      field is empty statewide and direct_certification carries the poverty signal
+      instead. That set grows and shifts from 2016 on (2022: DE, DC, MA, MT, TN, WV;
+      2024: AZ, DE, DC, MA, TN, WV, GU) — see ccd_schools.free_or_reduced_price_lunch.
+      avg_direct_cert_rate is provided for exactly those jurisdictions, but it is a
+      DIFFERENT measure, not a fallback: it counts only the categorically eligible
+      subset and runs at 0.57-0.69 of FRPL wherever both are reported, so a regression
+      must not pool the two columns into one poverty control. Use one or the other and
+      say which.
     sql: >
       SELECT
         n.jurisdiction,
@@ -2879,6 +2912,7 @@ views:
         d.total_enrollment,
         d.avg_pupil_teacher_ratio,
         d.avg_frpl_rate,
+        d.avg_direct_cert_rate,
         d.district_count
       FROM naep_scores n
       LEFT JOIN (
@@ -2890,11 +2924,14 @@ views:
                    THEN d2.enrollment / NULLIF(d2.teachers_total_fte, 0) END) AS avg_pupil_teacher_ratio,
           COUNT(*)                                                      AS district_count,
           SUM(school_frpl.frpl_count) * 1.0
-            / NULLIF(SUM(CASE WHEN d2.enrollment >= 0 THEN d2.enrollment END), 0) AS avg_frpl_rate
+            / NULLIF(SUM(CASE WHEN d2.enrollment >= 0 THEN d2.enrollment END), 0) AS avg_frpl_rate,
+          SUM(school_frpl.direct_cert_count) * 1.0
+            / NULLIF(SUM(CASE WHEN d2.enrollment >= 0 THEN d2.enrollment END), 0) AS avg_direct_cert_rate
         FROM edu.ccd_districts d2
         LEFT JOIN (
           SELECT leaid, year,
-                 SUM(CASE WHEN free_or_reduced_price_lunch >= 0 THEN free_or_reduced_price_lunch END) AS frpl_count
+                 SUM(CASE WHEN free_or_reduced_price_lunch >= 0 THEN free_or_reduced_price_lunch END) AS frpl_count,
+                 SUM(CASE WHEN direct_certification >= 0 THEN direct_certification END)               AS direct_cert_count
           FROM edu.ccd_schools GROUP BY leaid, year
         ) school_frpl ON d2.leaid = school_frpl.leaid AND d2.year = school_frpl.year
         GROUP BY d2.fips, d2.year
