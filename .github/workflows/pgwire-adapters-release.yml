@@ -43,9 +43,19 @@ jobs:
           ./gradlew :${{ matrix.adapter.module }}:pgwPrintCp \
             --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
             --no-daemon --console=plain -q
+          ./gradlew pgwArrowCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
           mkdir -p out/jars
           # every real .jar on the adapter's runtime classpath
           for j in $(tr ':' '\n' < /tmp/pgw-file-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          # the pgwire server's own Arrow bridge jars — every adapter bundle needs them, whether or
+          # not the adapter pulls Arrow transitively (only parquet-backed `file` happens to)
+          for j in $(tr ':' '\n' < /tmp/pgw-arrow-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          for c in org.apache.arrow.memory.RootAllocator com.google.flatbuffers.Table; do
+            unzip -l out/jars/*.jar 2>/dev/null | grep -q "$(echo $c | tr . /).class" \
+              || { echo "bundle is missing $c"; exit 1; }
+          done
           # the adapter module's own output is a classes dir on the cp -> use its built jar
           cp -n ${{ matrix.adapter.module }}/build/libs/*.jar out/jars/ 2>/dev/null || true
           echo "bundled $(ls out/jars | wc -l) jars for ${{ matrix.adapter.name }}"
