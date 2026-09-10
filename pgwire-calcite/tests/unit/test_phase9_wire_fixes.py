@@ -52,7 +52,10 @@ class EchoParamsBackend:
     def ready(self) -> bool:
         return True
 
-    def execute_sql(self, sql: str, role_id=None, params=None, stream: bool = False):
+    def execute_sql(
+        self, sql: str, role_id=None, params=None, stream: bool = False, session_key=None, timeout_ms=0
+    ):
+        del session_key, timeout_ms
         params = list(params or [])
         self.calls.append((sql, params))
         return QueryResult(
