@@ -34,6 +34,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from pgwire_calcite.state import ServerState
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +73,7 @@ def _command_tag(sql: str) -> str:
     return kind if kind not in ("TABLE", "VIEW") else f"CREATE {kind}"
 
 
-state = None  # module-level reference; replaced by tests via patch()
+state: Optional["ServerState"] = None  # module-level reference; replaced by tests via patch()
 
 
 class DdlHandler:  # REQ-042, REQ-060
@@ -91,17 +95,23 @@ class DdlHandler:  # REQ-042, REQ-060
             # be refused loudly, not treated as one with no capabilities that then fails the
             # capability check for the same reason a stale/mistyped role_id would.
             raise PermissionError(f"Unknown role {role_id!r}")
-        role = state.roles[role_id]
-        caps = role.get("capabilities") or []
+        role = state.roles[role_id]  # declared as object; role rows are dicts at runtime
+        caps = role.get("capabilities") or []  # type: ignore[attr-defined]
         if "ddl" not in caps:
             raise PermissionError(f"Role {role_id!r} lacks 'ddl' capability")
 
         write_target = self._resolve_write_target(role_id, role, state)
         write_catalog, write_schema = write_target
 
-        # Determine whether to use direct source pool or Trino
+        # Determine whether to use direct source pool or Trino. NOTE: source_types,
+        # trino_conn, source_pools, source_catalogs and domain_write_targets below are not
+        # (yet) fields of pgwire_calcite.state.ServerState — this Trino/direct-source DDL
+        # routing is copied from provisa but still unported to Calcite (module docstring);
+        # out of scope for Phase 3 (auth/authz hardening), left as-is aside from the
+        # unknown-role fix above. The ignores below only silence the resulting static
+        # type errors, not the runtime gap.
         source_id = _catalog_to_source_id(write_catalog, state)
-        if source_id and state.source_types.get(source_id):
+        if source_id and state.source_types.get(source_id):  # type: ignore[attr-defined]
             self._exec_direct(ctx, sql, source_id, write_schema, role_id, state)
         else:
             if not _CREATE_TABLE_OR_VIEW_RE.match(sql):
@@ -109,7 +119,7 @@ class DdlHandler:  # REQ-042, REQ-060
                     f"Only CREATE TABLE/VIEW is supported for Trino catalog {write_catalog!r}. "
                     "Use a registered source as ddl_catalog for full DDL support."
                 )
-            if state.trino_conn is None:
+            if state.trino_conn is None:  # type: ignore[attr-defined]
                 raise RuntimeError("Trino connection not available for DDL")
             self._exec_trino(ctx, sql, write_catalog, write_schema, role_id, state)
 
@@ -242,7 +252,9 @@ def _register_ddl_object(
         raise RuntimeError("Server state not initialized")
     from pgwire_calcite.compiler.sql_gen import TableMeta
 
-    ctx = state.contexts.get(role_id)
+    # contexts is declared as object (None until Phase 2's catalog populates it); a dict
+    # keyed by role_id at runtime once set.
+    ctx = state.contexts.get(role_id)  # type: ignore[attr-defined]
     if ctx is None:
         return
 
@@ -251,12 +263,10 @@ def _register_ddl_object(
 
     meta = TableMeta(
         table_id=new_id,
-        field_name=table_name,
-        type_name="".join(w.capitalize() for w in table_name.split("_")),
-        source_id=catalog,
         catalog_name=catalog.replace("-", "_"),
         schema_name=schema,
         table_name=table_name,
+        type_name="".join(w.capitalize() for w in table_name.split("_")),
     )
     ctx.tables[table_name] = meta
     log.info(

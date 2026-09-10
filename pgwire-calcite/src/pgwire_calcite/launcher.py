@@ -69,7 +69,7 @@ def serve(
     users: dict | None = None,
     certfile: str | None = None,
     keyfile: str | None = None,
-    backend=None,
+    backend: object = None,
     auth_provider=None,
     authz_grants=None,
     database: str = "postgres",
@@ -105,14 +105,16 @@ def serve(
         from pgwire_calcite.catalog_populate import populate_state
 
         populate_state(conn, server_mod.state)
-    elif hasattr(backend, "fetch_catalog"):
-        from pgwire_calcite.catalog_populate import install_catalog
+    else:
+        fetch_catalog = getattr(backend, "fetch_catalog", None)
+        if fetch_catalog is not None:
+            from pgwire_calcite.catalog_populate import install_catalog
 
-        try:
-            ctx, column_types = backend.fetch_catalog()
-            install_catalog(server_mod.state, ctx, column_types)
-        except Exception as exc:  # child not ready / no metadata -> serve without catalog
-            log.warning("catalog over bridge unavailable: %s", exc)
+            try:
+                ctx, column_types = fetch_catalog()
+                install_catalog(server_mod.state, ctx, column_types)
+            except Exception as exc:  # child not ready / no metadata -> serve without catalog
+                log.warning("catalog over bridge unavailable: %s", exc)
     from pgwire_calcite.mtls import resolve_client_auth
 
     mtls_auth = resolve_client_auth(client_ca, mtls_mode, mtls_bind_principal)

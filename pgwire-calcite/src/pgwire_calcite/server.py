@@ -37,7 +37,7 @@ import socketserver
 import ssl
 import struct
 import threading
-from typing import Iterator, Optional, Tuple
+from typing import TYPE_CHECKING, Iterator, Optional, Tuple
 
 from buenavista.core import BVType, Connection, QueryResult as BVQueryResult, Session
 from buenavista.postgres import (
@@ -51,6 +51,10 @@ from buenavista.postgres import (
 from pgwire_calcite.auth import is_personal_access_token
 from pgwire_calcite.throttle import LockedOut, login_throttle, subject_key, throttled_auth
 from pgwire_calcite.types import QueryResult as TrinoResult
+
+if TYPE_CHECKING:
+    from pgwire_calcite.scram import ScramServerExchange
+    from pgwire_calcite.state import ServerState
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +75,7 @@ _DDL_RE = re.compile(
 )
 
 
-state = None  # module-level reference; set by the launcher, replaced by tests via patch()
+state: Optional["ServerState"] = None  # module-level reference; set by the launcher, replaced by tests via patch()
 
 
 def _authenticate_credential(provider, username: str, password: str) -> Optional[str]:
@@ -283,7 +287,11 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         # stream=True selects the Arrow batch-streaming path at the wire (Phase 3);
         # backends that don't stream ignore the flag and materialize.
         try:
-            result = _state.backend.execute_sql(stripped, self.role_id, params, stream=True)
+            # backend is declared as object (ServerState carries no Backend protocol type
+            # yet); every concrete backend (Stub/Calcite/Bridge) implements execute_sql.
+            result = _state.backend.execute_sql(  # type: ignore[attr-defined]
+                stripped, self.role_id, params, stream=True
+            )
         except PermissionError as exc:
             raise PermissionError(str(exc)) from exc
         except Exception as exc:
@@ -314,6 +322,12 @@ class CalciteConnection(Connection):
 
 class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
     """Extends BuenaVistaHandler with TLS, cleartext auth, and catalog intercept."""
+
+    # Per-connection SASL SCRAM exchange state; None before the handshake starts and
+    # between the SASLInitialResponse and SASLResponse messages is impossible (only ever
+    # None or a live exchange) — annotated so static analysis knows verify_final()/
+    # server_first() are reached only once it is set.
+    _scram: Optional["ScramServerExchange"] = None
 
     def _send_pg_error(self, severity: str, sqlstate: str, message: str) -> None:
         buf = BVBuffer()
@@ -466,11 +480,16 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 return
             from pgwire_calcite.scram import ScramServerExchange
 
-            self._scram = ScramServerExchange(verifier)
-            server_first = self._scram.server_first(client_first)
+            exchange = ScramServerExchange(verifier)
+            self._scram = exchange
+            server_first = exchange.server_first(client_first)
             self._send_auth_msg(11, server_first.encode("utf-8"))  # SASLContinue
             return
-        # SASLResponse: client-final-message
+        # SASLResponse: client-final-message. Reached only after the SASLInitialResponse
+        # branch above set self._scram to a live exchange; asserted so static analysis
+        # doesn't have to infer it across the two separate wire messages.
+        exchange = self._scram
+        assert exchange is not None
         client_final = payload.rstrip(b"\x00").decode("utf-8")
         subject = subject_key(username)
         try:
@@ -478,7 +497,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         except LockedOut as locked:
             self._send_lockout(locked)
             return
-        ok, server_final = self._scram.verify_final(client_final)
+        ok, server_final = exchange.verify_final(client_final)
         if not ok:
             login_throttle().record_failure(subject)
             self._send_pg_error(
