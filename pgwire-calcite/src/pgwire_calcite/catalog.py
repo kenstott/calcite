@@ -1354,6 +1354,8 @@ def _trino_to_pg_name(trino_type: str) -> str:
         "json": "jsonb",
         "row": "jsonb",
         "array": "ARRAY",
+        # "blob" is normalize.duckdb_label's label for BINARY/VARBINARY columns
+        "blob": "bytea",
         "varbinary": "bytea",
         "uuid": "uuid",
     }.get(t, "text")
@@ -1380,6 +1382,7 @@ def _trino_to_pg_oid(trino_type: str) -> int:
         "jsonb": 3802,
         "row": 3802,
         "array": 2277,
+        "blob": 17,
         "varbinary": 17,
         "uuid": 2950,
     }.get(t, 25)

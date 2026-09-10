@@ -11,6 +11,17 @@
         "ephemeralCache": true,
         "executionEngine": "linq4j"
       }
+    },
+    {
+      "name": "WIDEBIN",
+      "type": "map",
+      "tables": [
+        {
+          "name": "bintypes",
+          "type": "view",
+          "sql": "SELECT \"id\", CAST(x'DEADBEEF' AS VARBINARY) AS \"c_bin\" FROM \"WIDE\".\"widetypes\""
+        }
+      ]
     }
   ]
 }

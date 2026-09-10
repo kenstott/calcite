@@ -105,7 +105,19 @@ def test_attach_lists_fixture_tables(attached):
             "AND table_schema NOT IN ('pg_catalog', 'information_schema')"
         ).fetchall()
     }
-    assert names == {"widetypes"}, sorted(names)
+    assert names == {"widetypes", "bintypes"}, sorted(names)
+
+
+def test_scan_reads_a_binary_column_as_blob(attached):
+    """(2)+(3): a VARBINARY column is bytea (OID 17) in the catalog DuckDB reads,
+    so DuckDB types it BLOB and the binary COPY body decodes to the same octets."""
+    typ = attached.execute(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_catalog = 'pg' AND table_name = 'bintypes' AND column_name = 'c_bin'"
+    ).fetchall()
+    assert typ == [("BLOB",)], typ
+    rows = attached.execute('SELECT * FROM pg."WIDEBIN"."bintypes" ORDER BY 1').fetchall()
+    assert rows == [(1, b"\xde\xad\xbe\xef"), (2, b"\xde\xad\xbe\xef"), (3, b"\xde\xad\xbe\xef")]
 
 
 def test_scan_reads_every_supported_type_through_binary_copy(attached):
