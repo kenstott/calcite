@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.82.1](https://github.com/kenstott/calcite/compare/engine-v0.82.0...engine-v0.82.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **ci:** attach pgwire bundles with gh release upload instead of action-gh-release ([d2aa342](https://github.com/kenstott/calcite/commit/d2aa3420af81bc8d5d7ba6ab41bccbdba430a4f0))
+* **ci:** grant contents:write so dispatched pgwire releases can attach assets ([349fb9d](https://github.com/kenstott/calcite/commit/349fb9dc741a4bc26464853fcd4afa56080056f8))
+* **ci:** restore Windows pgwire bundles and make the Arrow jar check per-jar ([5fc663a](https://github.com/kenstott/calcite/commit/5fc663a5ef65fa0d733a4ff3e0b6545a61bbf39a))
+* **pgwire:** --owner-pid stops the server when the host that started it is gone ([60960b6](https://github.com/kenstott/calcite/commit/60960b6b5c2d8580372497b3e8799b1efcc64609))
+* **pgwire:** ship the DuckDB JDBC driver in every pgwire bundle ([2bdd7a1](https://github.com/kenstott/calcite/commit/2bdd7a1f767e626d988b2560dd3c32a2d8daa2c5))
+
 ## [0.82.0](https://github.com/kenstott/calcite/compare/engine-v0.81.0...engine-v0.82.0) (2026-09-10)
 
 
