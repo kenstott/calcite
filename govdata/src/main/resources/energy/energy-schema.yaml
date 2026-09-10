@@ -271,6 +271,21 @@ partitionedTables:
       generation (MMBtu), cost per MMBtu, sulfur content, and ash content. Broken down
       by state, energy source, and sector. One row per state + energy source + sector +
       year-month. Cross-references geo.states via state_abbr.
+      THIS TABLE CANNOT BE SUMMED NAIVELY — it interleaves rollup rows with the leaf rows
+      they already contain, on all three axes at once, and a SUM that ignores any of them
+      multiplies the answer:
+      (1) energy_source_code mixes leaves with EIA's own rollups — 'ALL', 'FOS', 'REN' and
+      'NUC' each already total other rows, and even some leaf-looking codes are nested
+      (COL = BIT + SUB + LIG). Use fuel_is_rollup to pick one level.
+      (2) sector_code likewise carries '99' = "All Sectors" alongside the individual
+      sectors it sums; see sector_is_rollup.
+      (3) geo_level mixes 'state', 'division' and 'national' rows — see that column.
+      For a state's annual generation mix, filter geo_level='state' AND sector_code='99',
+      take the ALL/FOS/REN/NUC rows, and SUM across the 12 months — there is no annual
+      sentinel row, so a per-year figure must be summed from months. Selecting a single
+      month's value per category instead mixes different peak months and produces parts
+      that do not add up to the total. The state_energy_mix view does exactly this and is
+      the intended entry point for mix questions.
 
     dimensions:
       type:
