@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -127,13 +128,20 @@ public class IcebergTableWriterDeepCoverageTest3 {
     assertEquals("sub/file.parquet",
         method.invoke(writer, "/base/path", "/base/path/sub/file.parquet"));
 
-    // No common prefix - returns just filename
-    assertEquals("file.parquet",
-        method.invoke(writer, "/other/path", "/base/path/file.parquet"));
+    // A file outside the staging root must fail loudly: silently returning just the basename
+    // would drop its Hive partition directory and corrupt partition-pruning metadata.
+    InvocationTargetException noPrefix =
+        assertThrows(InvocationTargetException.class,
+            () -> method.invoke(writer, "/other/path", "/base/path/file.parquet"));
+    assertTrue(noPrefix.getCause() instanceof IllegalStateException,
+        "expected IllegalStateException, got " + noPrefix.getCause());
 
-    // No slash in path
-    assertEquals("filename",
-        method.invoke(writer, "/other/path", "filename"));
+    // A bare basename is likewise not under the staging root
+    InvocationTargetException noSlash =
+        assertThrows(InvocationTargetException.class,
+            () -> method.invoke(writer, "/other/path", "filename"));
+    assertTrue(noSlash.getCause() instanceof IllegalStateException,
+        "expected IllegalStateException, got " + noSlash.getCause());
   }
 
   // ====================================================================

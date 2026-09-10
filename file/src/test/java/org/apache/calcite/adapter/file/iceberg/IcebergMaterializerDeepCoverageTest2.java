@@ -463,9 +463,20 @@ public class IcebergMaterializerDeepCoverageTest2 {
     Map<String, String> batch = new HashMap<String, String>();
     batch.put("year", "2023");
 
+    // A real Iceberg Table always reports a schema, and the method under test consults it to
+    // decide whether the batch's "year" dimension is actually a column on the target. Stub it
+    // to match a real accession-tracked table so the code reaches the scan below.
+    org.apache.iceberg.Table mockTable = mock(org.apache.iceberg.Table.class);
+    when(mockTable.schema()).thenReturn(
+        new org.apache.iceberg.Schema(
+            org.apache.iceberg.types.Types.NestedField.optional(
+                1, "year", org.apache.iceberg.types.Types.StringType.get()),
+            org.apache.iceberg.types.Types.NestedField.optional(
+                2, "accession_number", org.apache.iceberg.types.Types.StringType.get())));
+
     @SuppressWarnings("unchecked")
     Set<String> result =
-        (Set<String>) method.invoke(materializer, config, mock(org.apache.iceberg.Table.class), batch);
+        (Set<String>) method.invoke(materializer, config, mockTable, batch);
 
     // The mock Table has no real Iceberg data behind it, so the inner scan genuinely fails; the
     // outer catch falls back to the tracker (a real secondary source of truth) rather than

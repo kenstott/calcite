@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -283,7 +284,7 @@ public class IcebergTableWriterDeepCoverageTest2 {
         method.invoke(writer, "/staging", "/staging/year=2020/file.parquet"));
   }
 
-  @Test void testComputeRelativePathFallback() throws Exception {
+  @Test void testComputeRelativePathOutsideStagingRootThrows() throws Exception {
     Table table = createSimpleTable("crp_fallback_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -291,9 +292,14 @@ public class IcebergTableWriterDeepCoverageTest2 {
         IcebergTableWriter.class.getDeclaredMethod("computeRelativePath", String.class, String.class);
     method.setAccessible(true);
 
-    // Completely different paths - should fallback to filename
-    assertEquals("data.parquet",
-        method.invoke(writer, "/base1/", "/base2/data.parquet"));
+    // Completely different paths must fail loudly rather than falling back to the basename:
+    // that fallback would drop the Hive partition directory and corrupt partition-pruning
+    // metadata while leaving the column data itself correct.
+    InvocationTargetException thrown =
+        assertThrows(InvocationTargetException.class,
+            () -> method.invoke(writer, "/base1/", "/base2/data.parquet"));
+    assertTrue(thrown.getCause() instanceof IllegalStateException,
+        "expected IllegalStateException, got " + thrown.getCause());
   }
 
   // ===== getParentPath tests (via reflection) =====
