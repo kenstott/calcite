@@ -428,8 +428,12 @@ bulkDownloads:
   # File sizes: Annual ~80MB, Quarterly ~323MB
   # Shared by: state_wages, county_wages, county_qcew, metro_wages
   qcew_annual_bulk:
-    cachePattern: "type=qcew_bulk/year={year}/{frequency}_singlefile.zip"
-    url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+    # Keyed on effective_year, not year: dataLag/releaseMonth below map the pipeline slot
+    # to the data year BLS has actually published, and only that year's file exists on the
+    # server. The four consumer tables already build their own URL from {effective_year};
+    # this pre-download has to name the same file or it fetches a year that is not out yet.
+    cachePattern: "type=qcew_bulk/year={effective_year}/{frequency}_singlefile.zip"
+    url: "https://data.bls.gov/cew/data/files/{effective_year}/csv/{effective_year}_{frequency}_singlefile.zip"
     dimensions:
       year:
         type: yearRange
