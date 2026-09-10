@@ -59,6 +59,20 @@ class Backend(Protocol):
         """Liveness/readiness gate (Phase 5 readiness-gating hook)."""
         ...
 
+    def cancel_session(self, session_key: str, reason: str) -> bool:
+        """Abort whatever ``session_key`` is executing right now (PGW-050).
+
+        Called from another connection (the CancelRequest branch), never from the
+        thread running the statement. Returns False when that session has nothing
+        in flight. Where the statement lives is the backend's business: in this
+        process for ``CalciteBackend``, across the socket for ``BridgeBackend``.
+        """
+        ...
+
+    def discard_session(self, session_key: str) -> None:
+        """Forget the session's execution state — teardown, DISCARD ALL (PGW-052)."""
+        ...
+
     @property
     def extensions(self) -> frozenset:
         """Enabled PG extension surfaces (pgwire_calcite.extensions). The catalog
@@ -130,6 +144,15 @@ class StubBackend:
 
     def ready(self) -> bool:
         return True
+
+    def cancel_session(self, session_key: str, reason: str) -> bool:
+        """The stub answers instantly, so a session never has a statement in flight."""
+        del session_key, reason
+        return False
+
+    def discard_session(self, session_key: str) -> None:
+        """The stub holds no per-session execution state."""
+        del session_key
 
     def execute_sql(
         self,

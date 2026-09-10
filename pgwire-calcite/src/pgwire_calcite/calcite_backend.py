@@ -297,6 +297,14 @@ class CalciteBackend:
         with self._lock:
             return self._conn is not None and not bool(self._conn.isClosed())
 
+    def cancel_session(self, session_key: str, reason: str) -> bool:
+        """Cancel the statement this session is running in-process (PGW-050)."""
+        return IN_FLIGHT.cancel(session_key, reason)
+
+    def discard_session(self, session_key: str) -> None:
+        """Drop the session's registry entry — teardown, DISCARD ALL (PGW-052)."""
+        IN_FLIGHT.discard(session_key)
+
     def close(self) -> None:
         with self._lock:
             if self._conn is not None:

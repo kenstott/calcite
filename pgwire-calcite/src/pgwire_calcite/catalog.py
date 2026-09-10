@@ -2264,10 +2264,10 @@ def _populate_pg_roles_and_database(db, role_id: str, state=None) -> None:
 
     rows: list[tuple] = []
     seen_names: set[str] = set()
-    # Provisa roles from state (all defined roles, not just the connected one)
+    # Every role declared on the server state, not just the connected one
     _roles_attr = getattr(state, "roles", None)
-    provisa_roles = list(_roles_attr.values()) if isinstance(_roles_attr, dict) else []
-    for i, role in enumerate(provisa_roles):
+    declared_roles = list(_roles_attr.values()) if isinstance(_roles_attr, dict) else []
+    for i, role in enumerate(declared_roles):
         rname = role["id"] if isinstance(role, dict) else getattr(role, "id", None)
         if not rname or rname in seen_names:
             continue
