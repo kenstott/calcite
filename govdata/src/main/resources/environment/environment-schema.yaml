@@ -121,6 +121,22 @@ dimension_values:
     dataLag: 2
     descending: true
 
+  # GHGRP (ghg_emissions / ghg_facilities) publishes a year later than the rest of EPA's
+  # feeds, so it needs its own range rather than sharing epa_year_range. Confirmed live
+  # 2026-09-10: data.epa.gov/efservice/pub_facts_sector_ghg_emission/year/2024/CSV returns
+  # HTTP 200 with a ZERO-byte body while year/2023 returns 1,741,543 bytes — EPA answers for
+  # a year it has not published rather than 404ing, so a too-small dataLag silently declares
+  # coverage that can never arrive. dataLag 3 puts the ceiling on the newest year that
+  # actually has data; start 2012 lands the floor on 2010, matching what is loaded.
+  # tri_releases keeps epa_year_range: its maxYear 2024 is real, so its 2-year lag is correct.
+  ghgrp_year_range: &ghgrp_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2012}"
+    minYear: 2010
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 3
+    descending: true
+
   # EPA eGRID data year Y is historically published in January of Y+2 (verified across
   # eGRID2018 through eGRID2023: each release lands 2025-01, 2024-01, 2023-01, 2022-01,
   # 2021-02, or 2020-01/03). dataLag 2 + releaseMonth 2 targets the newest year that has
@@ -709,7 +725,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 136019
-      checkedAt: "2026-09-09T23:52:29Z"
+      checkedAt: "2026-09-10T22:50:18Z"
     partitions: *standard_partitions
     comment: >
       EPA GHGRP facility dimension — one row per reporting facility per year
@@ -728,7 +744,7 @@ partitionedTables:
     dimensions:
       type:
         - ghg_facilities
-      year: *epa_year_range
+      year: *ghgrp_year_range
 
     columns:
       - name: facility_id
@@ -849,7 +865,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 346683
-      checkedAt: "2026-09-09T23:52:30Z"
+      checkedAt: "2026-09-10T22:50:18Z"
     partitions: *standard_partitions
     comment: >
       EPA GHGRP emissions facts — CO2-equivalent emissions keyed by facility ×
@@ -860,7 +876,7 @@ partitionedTables:
     dimensions:
       type:
         - ghg_emissions
-      year: *epa_year_range
+      year: *ghgrp_year_range
 
     columns:
       - name: facility_id
