@@ -87,7 +87,15 @@ jobs:
           uv python install --install-dir ../bundle/python "${PY_VERSION}"   # python-build-standalone
           find ../bundle/python -maxdepth 1 -type l -delete   # drop uv's version-alias symlink (points outside the bundle; unused at runtime)
           rm -rf ../bundle/python/.lock ../bundle/python/.temp ../bundle/python/.gitignore
-          PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # python-build-standalone on Windows ships python.exe at the distribution root
+            # (no bin/ and no python3.12-named binary), and a Windows venv has no symlink to
+            # rewrite: Scripts/python.exe is a redirector, not a link.
+            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name python.exe | head -1)"
+          else
+            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+          fi
+          test -n "$PYBIN" || { echo "bundled interpreter not found under ../bundle/python"; find ../bundle/python -maxdepth 3 | head -40; exit 1; }
           uv venv --python "$PYBIN" ../bundle/cpython
           # install the app + deps into the bundled venv (batteries included; no runtime net).
           # --no-editable: vendor/buenavista is declared `editable = true` in
@@ -102,7 +110,7 @@ jobs:
           # derives sys.prefix/home from bin/python's own realpath, not from a
           # stale pyvenv.cfg home (verified locally by moving a built bundle to
           # an unrelated path and importing buenavista/pgwire_calcite from it).
-          python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
+          [[ "$RUNNER_OS" == "Windows" ]] || python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
           import os, sys
           target = os.path.realpath(sys.argv[1])
           venv_bin = sys.argv[2]

@@ -52,9 +52,14 @@ jobs:
           # the pgwire server's own Arrow bridge jars — every adapter bundle needs them, whether or
           # not the adapter pulls Arrow transitively (only parquet-backed `file` happens to)
           for j in $(tr ':' '\n' < /tmp/pgw-arrow-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          # `unzip -l a.jar b.jar ...` lists only a.jar and treats the rest as member patterns,
+          # so the check has to visit each jar on its own.
           for c in org.apache.arrow.memory.RootAllocator com.google.flatbuffers.Table; do
-            unzip -l out/jars/*.jar 2>/dev/null | grep -q "$(echo $c | tr . /).class" \
-              || { echo "bundle is missing $c"; exit 1; }
+            found=0
+            for j in out/jars/*.jar; do
+              unzip -l "$j" 2>/dev/null | grep -q "$(echo $c | tr . /).class" && { found=1; break; }
+            done
+            [ "$found" = 1 ] || { echo "bundle is missing $c"; exit 1; }
           done
           # the adapter module's own output is a classes dir on the cp -> use its built jar
           cp -n ${{ matrix.adapter.module }}/build/libs/*.jar out/jars/ 2>/dev/null || true
@@ -114,7 +119,15 @@ jobs:
           uv python install --install-dir ../bundle/python "${PY_VERSION}"
           find ../bundle/python -maxdepth 1 -type l -delete   # drop uv's version-alias symlink (points outside the bundle; unused at runtime)
           rm -rf ../bundle/python/.lock ../bundle/python/.temp ../bundle/python/.gitignore
-          PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # python-build-standalone on Windows ships python.exe at the distribution root
+            # (no bin/ and no python3.12-named binary), and a Windows venv has no symlink to
+            # rewrite: Scripts/python.exe is a redirector, not a link.
+            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name python.exe | head -1)"
+          else
+            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+          fi
+          test -n "$PYBIN" || { echo "bundled interpreter not found under ../bundle/python"; find ../bundle/python -maxdepth 3 | head -40; exit 1; }
           uv venv --python "$PYBIN" ../bundle/cpython
           # --no-editable: vendor/buenavista is declared `editable = true` in
           # [tool.uv.sources] (pyproject.toml) for local dev; ship a real install
@@ -128,7 +141,7 @@ jobs:
           # derives sys.prefix/home from bin/python's own realpath, not from a
           # stale pyvenv.cfg home (verified locally by moving a built bundle to
           # an unrelated path and importing buenavista/pgwire_calcite from it).
-          python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
+          [[ "$RUNNER_OS" == "Windows" ]] || python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
           import os, sys
           target = os.path.realpath(sys.argv[1])
           venv_bin = sys.argv[2]
