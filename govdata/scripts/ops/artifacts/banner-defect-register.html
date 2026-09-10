@@ -1,0 +1,29 @@
+  <div id="retired-banner" style="margin:24px 0 0;padding:22px 24px;background:var(--surface);
+       border:2px solid var(--ink);border-radius:4px;display:flex;flex-direction:column;gap:11px;">
+    <div style="font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:0.14em;
+         text-transform:uppercase;color:var(--sev-wrong);">Retired &middot; 10 September 2026</div>
+    <h2 style="font-family:var(--f-display);font-size:23px;font-weight:700;margin:0;
+        letter-spacing:-0.01em;color:var(--ink);">This register is an archive &mdash; tracking moved to
+        GitHub issues</h2>
+    <p style="margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.55;max-width:92ch;">
+      Every entry on this page was migrated to
+      <a href="https://github.com/kenstott/govdata-ops" rel="noopener" target="_blank"
+         style="color:var(--accent);"><strong>kenstott/govdata-ops</strong></a>
+      on 10 September 2026, and that private repo is the store of record from now on. Defects became
+      <code>type:defect</code> issues keeping their <code>D-NNN</code> id in the title, so an older
+      reference still resolves by search; the Dataset Availability Research table became
+      <code>type:sourcing</code> issues.
+      <strong style="color:var(--ink);">Nothing writes to this page any more.</strong> It is kept
+      because the root-cause analysis and live evidence in each entry is the record of how the defect
+      was actually traced.
+    </p>
+    <p style="margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.55;max-width:92ch;">
+      The dispositions below are now labels: <code>status:*</code> while open, <code>resolution:*</code>
+      at close. The one that used to live only in prose &mdash; a fix committed but not yet DQ-validated
+      &mdash; is <code>status:needs-dq</code>, which the ledger-runner's queue excludes, so an unvalidated
+      job cannot be picked up by accident. Whether a defect has a production job filed is now a query
+      against its sub-issues rather than a name match across two documents. Label vocabulary and issue
+      shapes are in <code>docs/ops/defect-tracking.md</code>.
+    </p>
+  </div>
+

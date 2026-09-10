@@ -1,0 +1,28 @@
+  <div id="retired-banner" style="margin:24px 0 0;padding:22px 24px;background:var(--surface);
+       border:2px solid var(--ink);border-radius:4px;display:flex;flex-direction:column;gap:11px;">
+    <div style="font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:0.14em;
+         text-transform:uppercase;color:var(--wrong);">Retired &middot; 10 September 2026</div>
+    <h2 style="font-family:var(--f-display);font-size:23px;font-weight:700;margin:0;
+        letter-spacing:-0.01em;color:var(--ink);">This ledger is an archive &mdash; tracking moved to
+        GitHub issues</h2>
+    <p style="margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.55;max-width:92ch;">
+      Every unit on this page was migrated to
+      <a href="https://github.com/kenstott/govdata-ops" rel="noopener" target="_blank"
+         style="color:var(--accent);"><strong>kenstott/govdata-ops</strong></a>
+      on 10 September 2026, and that private repo is the store of record from now on. Remediation
+      units became <code>type:remediation</code> issues, each filed as a sub-issue of the defect it
+      serves; the infrastructure table below became <code>type:infra</code> issues.
+      <strong style="color:var(--ink);">Nothing writes to this page any more.</strong> It is kept
+      because the evidence in it &mdash; the row counts, snapshot timestamps and commit hashes behind
+      each verdict &mdash; is the record of how each unit was actually verified.
+    </p>
+    <p style="margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.55;max-width:92ch;">
+      The ledger-runner's queue is now a query rather than this table:
+      <code>gh issue list -R kenstott/govdata-ops --label type:remediation --label status:ready-to-run</code>.
+      The prerequisite that used to live in an evidence paragraph &mdash; &ldquo;do not run this against
+      production yet&rdquo; &mdash; is now the <code>status:needs-dq</code> label, which that query excludes,
+      so an unvalidated job cannot be picked up by accident. Label vocabulary and the issue shapes are in
+      <code>docs/ops/defect-tracking.md</code>.
+    </p>
+  </div>
+

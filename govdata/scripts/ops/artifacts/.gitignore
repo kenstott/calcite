@@ -1,0 +1,6 @@
+# Point-in-time copies of the two artifacts, saved only to feed the one-time
+# migration. The banners beside them are source and stay tracked; these are
+# large, superseded by the published archives, and re-fetchable via
+# Artifact action:"read" whenever a script needs a current copy.
+defect-register.html
+remediation-ledger.html
