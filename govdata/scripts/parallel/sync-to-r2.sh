@@ -118,6 +118,69 @@ BUFFER=120                                # overlap between slices so a file wri
 STATE_DIR="${HOME}/.r2-sync-state"
 mkdir -p "$STATE_DIR"
 
+# ── Pointer pinning ────────────────────────────────────────────────────────────
+# A Hadoop-catalog Iceberg table publishes its current version through
+# <table>/metadata/version-hint.text, and that file is rewritten on EVERY commit. So
+# `rclone copy` of it always re-fetches whatever the source holds at copy time — which is why
+# copying it last still races a live writer: the value landing on R2 can name a snapshot
+# committed after the data pass had already listed its files, leaving a pointer to metadata
+# this pass never transferred. Reading it first removes the race, because a value captured
+# before the copy can only reference metadata older than the copy window.
+#
+# Sequence per table: capture the value, copy the data, confirm the metadata it names is on
+# R2, then publish that pinned value.
+
+# _capture_pins <schema> → lines of "<table>\t<version>", one per Iceberg table.
+# A directory with no readable version-hint.text is not a Hadoop-catalog table and is skipped.
+_capture_pins() {
+  local s=$1 t v
+  while read -r t; do
+    [ -z "$t" ] && continue
+    v=$(rclone cat "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
+    if [[ "$v" =~ ^[0-9]+$ ]]; then printf '%s\t%s\n' "$t" "$v"; fi
+  done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" 2>/dev/null | sed 's#/*$##' || true)
+}
+
+# _apply_pins <schema> <pins> → 0 if every pointer was published, 1 if any was held back.
+_apply_pins() {
+  local s=$1 pins=$2 t v rc=0 present
+  if [ -z "$pins" ]; then
+    log_info "sync-to-r2: [$s] no Iceberg pointers to publish"
+    return 0
+  fi
+  while IFS=$'\t' read -r t v; do
+    [ -z "$t" ] && continue
+    if $DRY_RUN; then
+      log_info "sync-to-r2: [$s/$t] would publish pointer v$v"
+      continue
+    fi
+    present=$(rclone lsf "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" 2>/dev/null || true)
+    if [ -z "$present" ]; then
+      # The pinned version can fall outside this slice's age window — that gap is precisely how
+      # a dangling pointer arises. Move the one file it names rather than advancing past it.
+      # Iceberg metadata is immutable per version, so this transfer never needs repeating.
+      log_info "sync-to-r2: [$s/$t] pinned v$v not on R2 yet — copying that file explicitly"
+      rclone copyto "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" \
+                    "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" 2>/dev/null || true
+      present=$(rclone lsf "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" 2>/dev/null || true)
+    fi
+    if [ -z "$present" ]; then
+      # Hold the previous pointer. A mirror readable at an older snapshot is strictly better
+      # than one advertising a version that resolves to nothing.
+      log_error "sync-to-r2: [$s/$t] v$v still absent on R2 — pointer HELD at its previous value"
+      rc=1
+      continue
+    fi
+    if printf '%s' "$v" | rclone rcat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null; then
+      log_info "sync-to-r2: [$s/$t] pointer published: v$v"
+    else
+      log_error "sync-to-r2: [$s/$t] pointer write failed — held at its previous value"
+      rc=1
+    fi
+  done <<< "$pins"
+  return $rc
+}
+
 # The whole discovery + slice-drain body runs once per call; run_pass() re-lists schemas
 # and re-checks liveness fresh on every invocation, exactly as a new run-scheduled.sh
 # invocation of this script would. A schema-listing/validation failure below still calls
@@ -214,6 +277,16 @@ for s in "${_schemas[@]}"; do
 
     log_info "sync-to-r2: [$s] slice $(date -u -d "@$_lo" +%Y-%m-%dT%H:%MZ) .. $(date -u -d "@$_slice_end" +%Y-%m-%dT%H:%MZ)"
 
+    # Capture pointers BEFORE any data moves (see "Pointer pinning" above). Only the slice that
+    # reaches _now publishes them: advancing the pointer mid-backlog would name a snapshot whose
+    # later files this pass has not copied yet, so historical slices move data only.
+    _is_final=false
+    if [ "$_slice_end" -eq "$_now" ]; then _is_final=true; fi
+    _pins=""
+    if $_is_final; then
+      _pins=$(_capture_pins "$s" || true)
+    fi
+
     # Two-pass, pointer-last copy, scoped to this schema's subtree. rclone orders a pass's
     # transfers itself and doesn't know the Hadoop-catalog pointer (version-hint.text)
     # depends on the data/metadata a snapshot references; copying it first would expose a
@@ -233,21 +306,34 @@ for s in "${_schemas[@]}"; do
     done
     _rc_data=${PIPESTATUS[0]}
     if [ "$_rc_data" -eq 0 ]; then
-      rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
-        --include "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
-        log_info "sync-to-r2: [$s] pointer: $line"
-      done
-      _rc_ptr=${PIPESTATUS[0]}
+      if $_is_final; then
+        _apply_pins "$s" "$_pins"
+        _rc_ptr=$?
+      else
+        log_info "sync-to-r2: [$s] historical slice — data only, pointer held"
+        _rc_ptr=0
+      fi
     else
       log_error "sync-to-r2: [$s] data pass failed (rc=$_rc_data) — skipping pointer pass, R2 pointer left untouched"
       _rc_ptr=1
     fi
     set -e
 
-    if [ "$_rc_data" -ne 0 ] || [ "$_rc_ptr" -ne 0 ]; then
-      log_error "sync-to-r2: [$s] slice FAILED (data rc=$_rc_data pointer rc=$_rc_ptr) — sentinel held at $_v, retry next pass"
+    if [ "$_rc_data" -ne 0 ]; then
+      log_error "sync-to-r2: [$s] slice FAILED (data rc=$_rc_data) — sentinel held at $_v, retry next pass"
       _fail=1
       break
+    fi
+
+    # A held pointer is the designed safe outcome, not a copy failure: the data pass succeeded
+    # and the mirror simply stays readable at its previous snapshot. It must NOT hold the
+    # sentinel. Pointer publication is attempted on every pass's final slice regardless of how
+    # far the sentinel has advanced, so failing the slice here would stall this schema's data
+    # sync without buying any retry that does not already happen. The pass still reports
+    # non-zero so the condition is visible rather than silent.
+    if [ "$_rc_ptr" -ne 0 ]; then
+      log_error "sync-to-r2: [$s] one or more pointers HELD — data synced and sentinel advanced; pointers retry next pass"
+      _fail=1
     fi
 
     $DRY_RUN || echo "$_slice_end" > "$_sf"
