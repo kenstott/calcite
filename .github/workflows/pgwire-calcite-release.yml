@@ -13,6 +13,11 @@ on:
   release:
     types: [created]
 
+# The attach step updates the engine-v<version> release; on workflow_dispatch the default
+# GITHUB_TOKEN is read-only, so grant it explicitly.
+permissions:
+  contents: write
+
 env:
   PY_VERSION: "3.12"
 
