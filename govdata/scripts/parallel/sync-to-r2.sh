@@ -143,7 +143,7 @@ _capture_pins() {
 
 # _apply_pins <schema> <pins> → 0 if every pointer was published, 1 if any was held back.
 _apply_pins() {
-  local s=$1 pins=$2 t v rc=0 present
+  local s=$1 pins=$2 t v rc=0 present cur _pub=0 _same=0 _held=0
   if [ -z "$pins" ]; then
     log_info "sync-to-r2: [$s] no Iceberg pointers to publish"
     return 0
@@ -169,15 +169,29 @@ _apply_pins() {
       # than one advertising a version that resolves to nothing.
       log_error "sync-to-r2: [$s/$t] v$v still absent on R2 — pointer HELD at its previous value"
       rc=1
+      _held=$(( _held + 1 ))
+      continue
+    fi
+    # Skip the write when R2 already advertises this version. Checked AFTER the presence
+    # test above, deliberately: a pointer published by an older revision of this script was
+    # never verified, so an unchanged hint can still name metadata that is missing. Comparing
+    # first would skip exactly the tables that need repairing. This trades a PUT for a GET on
+    # the common steady-state path, where most tables have not committed since the last pass.
+    cur=$(rclone cat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
+    if [ "$cur" = "$v" ]; then
+      _same=$(( _same + 1 ))
       continue
     fi
     if printf '%s' "$v" | rclone rcat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null; then
-      log_info "sync-to-r2: [$s/$t] pointer published: v$v"
+      log_info "sync-to-r2: [$s/$t] pointer published: v$v (was v${cur:-none})"
+      _pub=$(( _pub + 1 ))
     else
       log_error "sync-to-r2: [$s/$t] pointer write failed — held at its previous value"
       rc=1
+      _held=$(( _held + 1 ))
     fi
   done <<< "$pins"
+  log_info "sync-to-r2: [$s] pointers: $_pub published, $_same already current, $_held held"
   return $rc
 }
 
