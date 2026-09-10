@@ -786,6 +786,15 @@ public final class GovDataModelVerificationRunner {
       if (endpoint != null && !endpoint.isEmpty()) {
         conf.set("fs.s3a.endpoint", endpoint);
         conf.set("fs.s3a.path.style.access", "true");
+        // Same three settings IcebergDirectLoader applies, and for the same reason: R2
+        // rejects AWS region names outright ("Must be one of: wnam, enam, ... auto") while
+        // the S3A/SDK client still requires a value, so an unset region makes every HEAD
+        // fail with 400 Bad Request. Without these, loading the table against the R2 mirror
+        // 400s on version-hint.text and the duplicate-PK check is silently skipped with
+        // "Could not load Iceberg table" — the check reports nothing rather than failing.
+        conf.set("fs.s3a.endpoint.region", "auto");
+        conf.set("fs.s3a.change.detection.mode", "none");
+        conf.set("fs.s3a.change.detection.version.required", "false");
       }
       String keyId = org.apache.calcite.adapter.file.etl.ModelOperand
           .getString(schema + ".s3Config.accessKeyId");
