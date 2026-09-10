@@ -132,7 +132,7 @@ public final class GovDataCatalog {
       to.put("name", name);
       to.put("type", type);
       putComment(to, t.get("comment"), t.get("observedCoverage"));
-      putCoverage(to, t, schemaLag);
+      putCoverage(to, t, schemaLag, t.get("observedCoverage"));
       ArrayNode cols = MAPPER.createArrayNode();
       JsonNode columns = t.get("columns");
       if (columns != null && columns.isArray()) {
@@ -151,13 +151,20 @@ public final class GovDataCatalog {
   }
 
   /**
-   * Copy the table's declared {@code year} bounds as a {@code coverage} node.
+   * Emit the table's {@code coverage} node: what it actually holds, plus what it declared.
    *
-   * <p>Emitted verbatim from the YAML — {@code start} may still hold an unresolved
-   * {@code ${VAR:default}} reference, and {@code end} may be the literal
-   * {@code "current"}. Callers resolve those against the running environment; keeping
-   * this layer declarative means the catalog states what the schema author wrote, not
-   * what one particular JVM computed.
+   * <p>The declared bounds are copied verbatim from the YAML — {@code start} may still hold
+   * an unresolved {@code ${VAR:default}} reference, and {@code end} may be the literal
+   * {@code "current"}. Callers resolve those against the running environment; keeping that
+   * part declarative means the catalog reports what the schema author wrote, not what one
+   * particular JVM computed.
+   *
+   * <p>The declared window is not the answer to "what years does this table have", though,
+   * and reporting it as such is what made a table declaring 2023-2024 while holding
+   * 2011-2024 look correct. A source that has not published the newest year yet leaves the
+   * declaration wide; a backfill below the configured floor leaves it narrow. So
+   * {@code observed_*} accompanies every coverage node and is flagged {@code authoritative},
+   * with the declared bounds kept alongside to show what the pipeline was aiming at.
    *
    * <p>The schemas declare a year three different ways, and all three are real coverage:
    * a {@code yearRange} dimension, an explicit list of years, or nothing but a
@@ -166,7 +173,8 @@ public final class GovDataCatalog {
    * year in any of those positions gets no coverage node, which is the honest answer for
    * the ~83 partitioned by something other than time.
    */
-  private static void putCoverage(ObjectNode to, JsonNode t, JsonNode schemaLag) {
+  private static void putCoverage(ObjectNode to, JsonNode t, JsonNode schemaLag,
+      JsonNode observed) {
     JsonNode year = t.path("dimensions").path("year");
 
     if (year.isObject() && "yearRange".equals(text(year.get("type")))) {
@@ -180,6 +188,7 @@ public final class GovDataCatalog {
       // A dimension without its own lag still inherits the schema's.
       putInt(cov, "dataLag", year.hasNonNull("dataLag") ? year.get("dataLag") : schemaLag);
       putInt(cov, "releaseMonth", year.get("releaseMonth"));
+      putObserved(cov, observed);
       to.set("coverage", cov);
       return;
     }
@@ -192,6 +201,7 @@ public final class GovDataCatalog {
       cov.put("form", "list");
       putText(cov, "start", year.get(0));
       putText(cov, "end", year.get(year.size() - 1));
+      putObserved(cov, observed);
       to.set("coverage", cov);
       return;
     }
@@ -203,7 +213,39 @@ public final class GovDataCatalog {
       // No floor is declared anywhere for these — the global start governs, and the
       // caller omits first_year rather than inventing one. The ceiling is real.
       putInt(cov, "dataLag", schemaLag);
+      putObserved(cov, observed);
       to.set("coverage", cov);
+    }
+  }
+
+  /**
+   * Copies the machine-measured coverage onto a coverage node, and marks it authoritative.
+   *
+   * <p>The declared window states what the schema asked for; it is routinely wider than what
+   * exists, because a source has not published the newest year yet, or narrower, because a
+   * backfill went below the configured floor. A caller asking what years a table covers wants
+   * the years it can actually query — a request for data that has not landed is not coverage.
+   * So {@code observed_*} is what consumers should read, and the declared bounds stay alongside
+   * it to explain what the pipeline was aiming at.
+   *
+   * <p>These values come from the {@code observedCoverage} block, refreshed against production
+   * by {@code update-coverage-metadata.sh}. They are a measurement with a timestamp, not a live
+   * read, so {@code observed_checked_at} travels with them rather than being dropped.
+   */
+  private static void putObserved(ObjectNode cov, JsonNode observed) {
+    if (observed == null || !observed.isObject()) {
+      return;
+    }
+    putInt(cov, "observed_first_year", observed.get("minYear"));
+    putInt(cov, "observed_last_year", observed.get("maxYear"));
+    putInt(cov, "observed_distinct_years", observed.get("distinctYears"));
+    if (observed.hasNonNull("contiguous")) {
+      cov.put("observed_contiguous", observed.get("contiguous").asBoolean());
+    }
+    putInt(cov, "observed_row_count", observed.get("rowCount"));
+    putText(cov, "observed_checked_at", observed.get("checkedAt"));
+    if (observed.hasNonNull("minYear") || observed.hasNonNull("maxYear")) {
+      cov.put("authoritative", "observed");
     }
   }
 
