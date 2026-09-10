@@ -834,6 +834,16 @@ partitionedTables:
         pattern: "type=ghg_facilities/year=*/"
       partition:
         columns: [type, year]
+        # IcebergMaterializationWriter types a partition column from
+        # materialize.partition.columnDefinitions, NOT from the table-level
+        # partitions.columnDefinitions above — with neither, and no `year` in this table's
+        # `columns:` list, it fell through to STRING and every year comparison became a
+        # string comparison.
+        columnDefinitions:
+          - name: type
+            type: VARCHAR
+          - name: year
+            type: INTEGER
         valueSource:
           year: effective_year
       iceberg:
@@ -924,6 +934,16 @@ partitionedTables:
         pattern: "type=ghg_emissions/year=*/"
       partition:
         columns: [type, year]
+        # IcebergMaterializationWriter types a partition column from
+        # materialize.partition.columnDefinitions, NOT from the table-level
+        # partitions.columnDefinitions above — with neither, and no `year` in this table's
+        # `columns:` list, it fell through to STRING and every year comparison became a
+        # string comparison.
+        columnDefinitions:
+          - name: type
+            type: VARCHAR
+          - name: year
+            type: INTEGER
         valueSource:
           year: effective_year
       iceberg:
