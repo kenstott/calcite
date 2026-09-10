@@ -244,8 +244,10 @@ for arg in "$@"; do
         hcy_enqueue "$_s" once
       done
       # Year loop (current year is daily's slot, so start at cy-1).
+      # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
+      # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
       _year_schemas=(
-        sec_primary sec_secondary sec_13f
+        sec_primary sec_13f
         econ census geo crime weather energy
         fec fedregister cftc
         health edu patents lands
@@ -305,7 +307,8 @@ for arg in "$@"; do
       queue+=(
         "sec_primary:${_cy}"
         econ:daily census:daily geo:daily crime:daily weather:daily
-        "sec_secondary:${_cy}"
+        # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
+        # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
         "sec_13f:${_cy}"
         "sec_prices:daily"
         fec:daily fedregister:daily officials:daily
