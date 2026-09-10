@@ -126,11 +126,11 @@ def serve(
         if fetch_catalog is not None:
             from pgwire_calcite.catalog_populate import install_catalog
 
-            try:
-                ctx, column_types = fetch_catalog()
-                install_catalog(server_mod.state, ctx, column_types)
-            except Exception as exc:  # child not ready / no metadata -> serve without catalog
-                log.warning("catalog over bridge unavailable: %s", exc)
+            # A catalog the child cannot deliver is a startup failure: serving without one
+            # would answer every client's introspection with an empty schema and hide the
+            # child's fault behind a warning nobody reads.
+            ctx, column_types = fetch_catalog()
+            install_catalog(server_mod.state, ctx, column_types)
     from pgwire_calcite.mtls import resolve_client_auth
 
     mtls_auth = resolve_client_auth(client_ca, mtls_mode, mtls_bind_principal)
