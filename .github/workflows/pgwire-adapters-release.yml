@@ -59,7 +59,7 @@ jobs:
           for j in $(tr ':' '\n' < /tmp/pgw-arrow-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
           # `unzip -l a.jar b.jar ...` lists only a.jar and treats the rest as member patterns,
           # so the check has to visit each jar on its own.
-          for c in org.apache.arrow.memory.RootAllocator com.google.flatbuffers.Table; do
+          for c in org.apache.arrow.memory.RootAllocator com.google.flatbuffers.Table org.duckdb.DuckDBDriver; do
             found=0
             for j in out/jars/*.jar; do
               unzip -l "$j" 2>/dev/null | grep -q "$(echo $c | tr . /).class" && { found=1; break; }
