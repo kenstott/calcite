@@ -79,10 +79,39 @@ jobs:
       - name: Stage standalone CPython + install deps (airgap-ready venv)
         working-directory: pgwire-calcite
         run: |
-          uv python install ${PY_VERSION}        # python-build-standalone
-          uv venv --python ${PY_VERSION} ../bundle/cpython
-          # install the app + deps into the bundled venv (batteries included; no runtime net)
-          uv pip install --python ../bundle/cpython ./vendor/buenavista ".[oidc]"
+          # Install the interpreter INTO the bundle (not the runner's global
+          # uv-managed location) so the shipped tarball is self-contained: a
+          # `uv python install` outside the bundle leaves cpython/bin/python an
+          # absolute symlink to the runner's own path, which does not exist on
+          # any other machine.
+          uv python install --install-dir ../bundle/python "${PY_VERSION}"   # python-build-standalone
+          find ../bundle/python -maxdepth 1 -type l -delete   # drop uv's version-alias symlink (points outside the bundle; unused at runtime)
+          rm -rf ../bundle/python/.lock ../bundle/python/.temp ../bundle/python/.gitignore
+          PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+          uv venv --python "$PYBIN" ../bundle/cpython
+          # install the app + deps into the bundled venv (batteries included; no runtime net).
+          # --no-editable: vendor/buenavista is declared `editable = true` in
+          # [tool.uv.sources] (pyproject.toml) for local dev; ship a real install
+          # (an editable install points at this checkout's absolute path, which
+          # will not exist on the machine the bundle is extracted on).
+          uv pip install --python ../bundle/cpython --no-editable ./vendor/buenavista ".[oidc]"
+          # `uv venv` makes cpython/bin/python an ABSOLUTE symlink to $PYBIN.
+          # Rewrite it relative so the whole bundle (cpython/ + python/ together)
+          # is relocatable to any absolute path. pyvenv.cfg's `home` line stays
+          # build-machine-absolute but is harmless: CPython 3.11+'s getpath
+          # derives sys.prefix/home from bin/python's own realpath, not from a
+          # stale pyvenv.cfg home (verified locally by moving a built bundle to
+          # an unrelated path and importing buenavista/pgwire_calcite from it).
+          python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
+          import os, sys
+          target = os.path.realpath(sys.argv[1])
+          venv_bin = sys.argv[2]
+          link = os.path.join(venv_bin, "python")
+          rel = os.path.relpath(target, os.path.realpath(venv_bin))
+          os.remove(link)
+          os.symlink(rel, link)
+          print(f"bin/python -> {rel}")
+          PY
 
       - name: Minimal bundled JRE (jlink)
         run: |

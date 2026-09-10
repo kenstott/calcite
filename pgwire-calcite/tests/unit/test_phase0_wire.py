@@ -43,7 +43,11 @@ class MiniPgClient:
         self, host: str, port: int, user: str = "tester", password: str | None = None,
         use_ssl: bool = False,
     ):
-        self.sock = socket.create_connection((host, port), timeout=5)
+        # 60s, not a few: the FIRST query against a freshly served backend pays the
+        # one-time pg_proc harvest (159 Calcite operators, measured at ~8s on an
+        # otherwise busy machine). A deadline under that turns a slow-but-correct
+        # answer into a timeout; every later query on the connection is sub-second.
+        self.sock = socket.create_connection((host, port), timeout=60)
         if use_ssl:
             # PostgreSQL SSLRequest: length 8, code 80877103; server replies 'S' to proceed.
             self.sock.sendall(struct.pack("!ii", 8, 80877103))
@@ -227,6 +231,46 @@ def test_unsupported_query_fails_loud_not_silent(trust_server):
         r = c.query("SELECT * FROM some_table")
         assert r["error"] is not None, "StubBackend must reject, not silently return empty"
         assert "Phase 1" in r["error"]
+    finally:
+        c.close()
+
+
+@pytest.mark.parametrize(
+    "sql,kind",
+    [
+        ("CREATE TABLE t (x INT)", "CREATE TABLE"),
+        ("create or replace view v as select 1", "CREATE VIEW"),
+        ("CREATE MATERIALIZED VIEW mv AS SELECT 1", "CREATE MATERIALIZED VIEW"),
+        ("CREATE UNIQUE INDEX i ON t (x)", "CREATE UNIQUE INDEX"),
+        ("CREATE SCHEMA s", "CREATE SCHEMA"),
+        ("ALTER TABLE t ADD COLUMN y INT", "ALTER TABLE"),
+        ("DROP VIEW v", "DROP VIEW"),
+        ("DROP SEQUENCE s", "DROP SEQUENCE"),
+    ],
+)
+def test_ddl_is_refused_with_feature_not_supported(trust_server, sql, kind):
+    """The Calcite model is read-only, so DDL is answered with SQLSTATE 0A000
+    naming the statement kind — never half-executed, never silently accepted."""
+    host, port = trust_server
+    c = MiniPgClient(host, port)
+    try:
+        r = c.query(sql)
+        assert r["error"] is not None, f"{sql!r} must be refused"
+        assert "0A000" in r["error"], r["error"]
+        assert kind in r["error"], r["error"]
+        # the session survives the refusal and still answers
+        assert c.query("SELECT 1")["rows"] == [["1"]]
+    finally:
+        c.close()
+
+
+def test_ddl_refusal_does_not_catch_select(trust_server):
+    """`CREATE`-shaped words inside a query must not trip the DDL guard."""
+    host, port = trust_server
+    c = MiniPgClient(host, port)
+    try:
+        r = c.query("SELECT 1")
+        assert r["error"] is None, r["error"]
     finally:
         c.close()
 

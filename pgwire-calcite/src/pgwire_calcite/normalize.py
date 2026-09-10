@@ -83,12 +83,18 @@ class TypeMapping:
 # Keyed by an uppercased, size-stripped JDBC/Calcite type name.
 _TYPE_TABLE: Dict[str, TypeMapping] = {
     "BOOLEAN": TypeMapping(16, "bool", "BOOLEAN"),
-    "TINYINT": TypeMapping(21, "int2", "SMALLINT"),
-    "SMALLINT": TypeMapping(21, "int2", "SMALLINT"),
+    # TINYINT/SMALLINT are advertised as int4, not int2: the wire encoder's
+    # narrowest integer BVType is INTEGER (4 bytes), so an int2 OID here would
+    # make binary COPY hand a client 4 bytes under a 2-byte type and misalign
+    # every following field (PGW-016/021). Widening is lossless.
+    "TINYINT": TypeMapping(23, "int4", "INTEGER"),
+    "SMALLINT": TypeMapping(23, "int4", "INTEGER"),
     "INTEGER": TypeMapping(23, "int4", "INTEGER"),
     "INT": TypeMapping(23, "int4", "INTEGER"),
     "BIGINT": TypeMapping(20, "int8", "BIGINT"),
-    "REAL": TypeMapping(700, "float4", "FLOAT"),
+    # REAL is advertised as float8 for the same width reason: BVType.FLOAT encodes
+    # 8 bytes, so a float4 OID would misalign a binary COPY stream (PGW-016/021).
+    "REAL": TypeMapping(701, "float8", "DOUBLE"),
     "FLOAT": TypeMapping(701, "float8", "DOUBLE"),
     "DOUBLE": TypeMapping(701, "float8", "DOUBLE"),
     "DOUBLE PRECISION": TypeMapping(701, "float8", "DOUBLE"),
@@ -100,9 +106,18 @@ _TYPE_TABLE: Dict[str, TypeMapping] = {
     "DATE": TypeMapping(1082, "date", "DATE"),
     "TIME": TypeMapping(1083, "time", "TIME"),
     "TIMESTAMP": TypeMapping(1114, "timestamp", "TIMESTAMP"),
-    "TIMESTAMP WITH LOCAL TIME ZONE": TypeMapping(1184, "timestamptz", "TIMESTAMP"),
-    "VARBINARY": TypeMapping(17, "bytea", "VARCHAR"),
-    "BINARY": TypeMapping(17, "bytea", "VARCHAR"),
+    # Calcite's TIMESTAMP WITH LOCAL TIME ZONE reaches the wire as a naive datetime
+    # already normalized to the session zone, and the wire encoder has one timestamp
+    # BVType (OID 1114). Advertising 1184 in the catalog while sending 1114 in
+    # RowDescription made discover-then-query clients see two different types for one
+    # column; the binary layout is identical, so both sides say 1114 (PGW-016/021).
+    "TIMESTAMP WITH LOCAL TIME ZONE": TypeMapping(1114, "timestamp", "TIMESTAMP"),
+    # Binary columns are bytea (OID 17) everywhere: the backend coerces JDBC byte[]
+    # to Python bytes, BLOB is the label the wire encoder maps to BVType.BYTES, and
+    # the catalog derives atttypid 17 from that same label.
+    "VARBINARY": TypeMapping(17, "bytea", "BLOB"),
+    "BINARY": TypeMapping(17, "bytea", "BLOB"),
+    "LONGVARBINARY": TypeMapping(17, "bytea", "BLOB"),
     "ANY": TypeMapping(25, "text", "VARCHAR"),
 }
 
@@ -110,11 +125,18 @@ _TYPE_TABLE: Dict[str, TypeMapping] = {
 _DEFAULT_MAPPING = TypeMapping(25, "text", "VARCHAR")
 
 
+#: Calcite's DatabaseMetaData reports a column's nullability inside TYPE_NAME
+#: ("VARBINARY NOT NULL"); the suffix is not part of the type.
+_NULLABILITY_SUFFIX_RE = re.compile(r"\s+(NOT\s+NULL|NULL)$")
+
+
 def _strip_type(sql_type: str) -> str:
-    """Normalize a JDBC/Calcite type name: upper, drop precision/scale and array []."""
+    """Normalize a JDBC/Calcite type name: upper, drop precision/scale, [] and nullability."""
     t = sql_type.strip().upper()
-    t = re.sub(r"\s*\(.*\)\s*", "", t)  # DECIMAL(10,2) -> DECIMAL
+    # A space, not "": "TIMESTAMP(0) NOT NULL" must not collapse to "TIMESTAMPNOT NULL".
+    t = re.sub(r"\s*\(.*\)\s*", " ", t).strip()  # DECIMAL(10,2) -> DECIMAL
     t = t.replace("[]", "").strip()
+    t = _NULLABILITY_SUFFIX_RE.sub("", t).strip()  # VARBINARY NOT NULL -> VARBINARY
     return t
 
 
@@ -126,6 +148,23 @@ def type_mapping(sql_type: str) -> TypeMapping:
 def duckdb_label(sql_type: str) -> str:
     """DuckDB-style type label for the wire encoder (server side)."""
     return type_mapping(sql_type).duckdb
+
+
+#: JDBC type names that carry no usable type information: Calcite reports these for
+#: dynamic/untyped expressions. They are NOT unknown-types-defaulted-to-text — the
+#: real pg type has to be read off the data, so the streaming path reports them as
+#: "" and the wire layer buffers exactly one batch to infer (PGW-020).
+OPAQUE_SQL_TYPES = frozenset({"ANY", "OTHER", "NULL", "JAVA_OBJECT", "STRUCT"})
+
+
+def is_opaque(sql_type: str) -> bool:
+    """True when ResultSetMetaData gives no usable type for this column."""
+    return _strip_type(sql_type) in OPAQUE_SQL_TYPES
+
+
+def stream_type_label(sql_type: str) -> str:
+    """Type label for a streamed column: "" when metadata is insufficient."""
+    return "" if is_opaque(sql_type) else duckdb_label(sql_type)
 
 
 def pg_oid(sql_type: str) -> int:
@@ -143,3 +182,33 @@ def pg_column_label(label: str) -> str:
     """Map Calcite's auto-generated expression labels (``EXPR$0``) to the
     PostgreSQL convention (``?column?``), so PG-wire clients see familiar names."""
     return "?column?" if _EXPR_LABEL_RE.match(label or "") else label
+
+
+# --- Simple-query batch splitting -------------------------------------------
+
+
+def split_sql_statements(sql: str) -> list[str]:
+    """Split a batch into statements on TOP-LEVEL semicolons ONLY, statement-aware.
+
+    Uses sqlglot's tokenizer so a ``;`` inside a string literal, quoted identifier,
+    comment, or a dollar-quoted block does NOT mis-split (a naive ``str.split(';')``
+    turns ``SELECT 'a;b'`` into two malformed fragments). Original statement text is
+    preserved (sliced between top-level semicolon tokens, not re-rendered), so the
+    COPY/DDL regex matching in ``handle_query`` sees EXACTLY what executes. Blank
+    fragments (a trailing ``;``) are dropped.
+    """
+    import sqlglot
+
+    tokens = sqlglot.tokenize(sql, read="postgres")
+    stmts: list[str] = []
+    start = 0
+    for tok in tokens:
+        if tok.token_type == sqlglot.TokenType.SEMICOLON:
+            seg = sql[start : tok.start].strip()
+            if seg:
+                stmts.append(seg)
+            start = tok.end + 1
+    tail = sql[start:].strip()
+    if tail:
+        stmts.append(tail)
+    return stmts

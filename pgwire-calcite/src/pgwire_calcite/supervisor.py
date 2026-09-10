@@ -98,7 +98,20 @@ class CrashLoopBreaker:
 
 
 def _read_rss_mb(pid: int) -> Optional[float]:
-    """Resident set size in MiB from /proc (Linux). None if unavailable."""
+    """Resident set size in MiB, on every platform the server runs on.
+
+    Linux exposes it in /proc; Darwin and the BSDs do not, so RSS is read from
+    ``ps`` there. Without this the proactive memory recycle (PGW-034) is silently
+    inert everywhere but Linux — a limit that never fires. ``None`` means "no
+    reading this tick" (process already gone, or the OS reported nothing); the
+    caller must not read it as "under the limit".
+    """
+    if os.path.exists("/proc/self/status"):
+        return _read_rss_mb_proc(pid)
+    return _read_rss_mb_ps(pid)
+
+
+def _read_rss_mb_proc(pid: int) -> Optional[float]:
     try:
         with open(f"/proc/{pid}/status", "r", encoding="utf-8") as fh:
             for line in fh:
@@ -108,6 +121,28 @@ def _read_rss_mb(pid: int) -> Optional[float]:
     except (OSError, ValueError, IndexError):
         return None
     return None
+
+
+def _read_rss_mb_ps(pid: int) -> Optional[float]:
+    """RSS via ``ps -o rss=`` (KiB), for Darwin/BSD where /proc does not exist."""
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "rss=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:  # no such process
+        return None
+    line = out.stdout.strip()
+    if not line:
+        return None
+    try:
+        return float(line.split()[0]) / 1024.0
+    except (ValueError, IndexError):
+        return None
 
 
 class SupervisedChild:

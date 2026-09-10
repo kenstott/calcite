@@ -16,6 +16,7 @@ spawn; one real-subprocess test covers RSS reading + proactive recycle.
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 
@@ -173,13 +174,48 @@ def test_graceful_shutdown_stops_children():
     assert sp.created[0].terminated
 
 
-def test_real_subprocess_rss_recycle():
-    """Real /proc RSS read + proactive recycle of a memory-hogging child."""
-    import pathlib
+def test_real_rss_read_is_available_on_this_platform():
+    """PGW-034: RSS must be readable wherever the server runs, or the memory
+    recycle is inert. /proc on Linux, ps on Darwin/BSD — never "unavailable"."""
+    from pgwire_calcite.supervisor import _read_rss_mb
 
-    if not pathlib.Path("/proc/self/status").exists():
-        pytest.skip("/proc RSS not available on this platform")
-    hog = [sys.executable, "-c", "b=bytearray(120*1024*1024)\nimport time\ntime.sleep(30)"]
+    rss = _read_rss_mb(os.getpid())
+    assert rss is not None, "no RSS reader for this platform"
+    assert rss > 1.0  # this interpreter is certainly resident in more than 1 MiB
+    assert _read_rss_mb(_unused_pid()) is None  # a dead pid reports nothing
+
+
+def _unused_pid() -> int:
+    """A pid that is not running, to prove a dead process reads as None."""
+    pid = 2**21  # above every platform's default pid_max
+    while True:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return pid
+        except PermissionError:
+            pass
+        pid += 1
+
+
+#: Allocates 120 MiB and keeps every page resident by writing one byte per page.
+_HOG_SOURCE = (
+    "import time\n"
+    "n = 120 * 1024 * 1024\n"
+    "b = bytearray(n)\n"
+    "while True:\n"
+    "    for off in range(0, n, 4096):\n"
+    "        b[off] = (b[off] + 1) & 0xFF\n"
+    "    time.sleep(0.01)\n"
+)
+
+
+def test_real_subprocess_rss_recycle():
+    """Real RSS read + proactive recycle of a memory-hogging child."""
+    # The child must keep touching every page: allocate-then-sleep is not enough,
+    # because macOS compresses an untouched region out of RSS within a second and
+    # the "hog" stops looking like one before the supervisor ever ticks.
+    hog = [sys.executable, "-c", _HOG_SOURCE]
     spec = ChildSpec("hog", hog, rss_limit_mb=40, graceful_stop_timeout=3)
     sup = Supervisor([spec], clock=time.monotonic)
     sup.start_all()

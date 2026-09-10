@@ -70,6 +70,10 @@ class ServerState:
     #: Populated from Calcite metadata (Phase 2); None until then.
     contexts: object = None
     schema_build_cache: object = None
+    #: Server-wide default for `statement_timeout`, in milliseconds; 0 = no timeout
+    #: (PG semantics). Every new session starts here and may override it with
+    #: `SET statement_timeout`. Set by the launcher's --statement-timeout-ms (PGW-051).
+    statement_timeout_ms: int = 0
 
     def check_password(self, username: str, password: str) -> bool:
         """Cleartext-password check for provider='simple'. No silent default."""

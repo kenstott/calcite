@@ -12,6 +12,7 @@ package pgwire.launch;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public final class Launcher {
   private Launcher() {}
@@ -37,7 +38,26 @@ public final class Launcher {
       pb.environment().put("PGWIRE_HOME", home);
     }
     Process p = pb.start();
-    Runtime.getRuntime().addShutdownHook(new Thread(p::destroy));
+    // SIGTERM to this launcher runs this hook during JVM shutdown. Runtime.exit()
+    // does not wait for non-hook threads (the main thread blocked in p.waitFor()
+    // below is killed once every hook completes and the JVM halts) so the hook
+    // itself must block until the Python child (and, transitively, its Calcite
+    // child + listening socket) has actually exited -- otherwise the JVM can
+    // disappear while the Python process is still tearing down and holding the
+    // port. Escalate to a forcible kill if it does not exit within the graceful
+    // window so the port is always released within ~5s of SIGTERM.
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      p.destroy();
+      try {
+        if (!p.waitFor(5, TimeUnit.SECONDS)) {
+          p.destroyForcibly();
+          p.waitFor(2, TimeUnit.SECONDS);
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        p.destroyForcibly();
+      }
+    }));
     System.exit(p.waitFor());
   }
 }

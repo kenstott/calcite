@@ -1,0 +1,10 @@
+{
+  "client": "datagrip",
+  "phase": "introspect",
+  "sql": "select r.specific_name, r.routine_name, r.routine_type, p.ordinal_position, p.parameter_mode from information_schema.routines r left join information_schema.parameters p on p.specific_name = r.specific_name where r.routine_schema = 'pg_catalog' order by r.routine_name, p.ordinal_position",
+  "captured": false,
+  "expect": {
+    "answered_by": "catalog",
+    "min_phase": 2
+  }
+}
