@@ -170,8 +170,9 @@ public final class GovDataCatalog {
    * a {@code yearRange} dimension, an explicit list of years, or nothing but a
    * {@code year} hive partition column — the last meaning the table rides the global
    * start/end with the schema's own {@code dataLagYears} as its ceiling. A table with no
-   * year in any of those positions gets no coverage node, which is the honest answer for
-   * the ~83 partitioned by something other than time.
+   * year in any of those positions — the ~83 partitioned by something other than time — gets
+   * an explicit {@code form: "none"} / {@code time_varying: false} node rather than no node at
+   * all, so "has no time axis" is distinguishable from "coverage unknown".
    */
   private static void putCoverage(ObjectNode to, JsonNode t, JsonNode schemaLag,
       JsonNode observed) {
@@ -215,7 +216,21 @@ public final class GovDataCatalog {
       putInt(cov, "dataLag", schemaLag);
       putObserved(cov, observed);
       to.set("coverage", cov);
+      return;
     }
+
+    // No year in any position. Say so outright rather than omitting the node: an absent
+    // coverage node is ambiguous — it reads equally as "this table has no time axis", "we
+    // could not determine its coverage", and "somebody forgot to declare it". A caller
+    // deciding whether a table can answer a time-series question needs those distinguished,
+    // and the honest answer here is the first one.
+    ObjectNode cov = MAPPER.createObjectNode();
+    cov.put("form", "none");
+    cov.put("time_varying", false);
+    cov.put("note", "This table is not organized by year — it carries no year dimension and no "
+        + "year partition column, so it cannot be filtered or trended over time. Any "
+        + "year-over-year question needs a different table.");
+    to.set("coverage", cov);
   }
 
   /**

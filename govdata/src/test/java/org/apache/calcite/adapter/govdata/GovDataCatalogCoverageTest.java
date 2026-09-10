@@ -90,6 +90,29 @@ public class GovDataCatalogCoverageTest {
         "observed coverage is a measurement, so it must say when it was taken");
   }
 
+  /**
+   * A table with no time axis must SAY so. An omitted coverage node reads equally as "no time
+   * axis", "coverage unknown", and "someone forgot to declare it" — a caller deciding whether a
+   * table can answer a year-over-year question cannot act on that ambiguity.
+   */
+  @Test void saysExplicitlyWhenATableHasNoTimeAxis() {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList("geo", "ref", "edu"));
+    int checked = 0;
+    for (JsonNode s : catalog) {
+      for (JsonNode t : s.path("tables")) {
+        JsonNode cov = t.get("coverage");
+        assertNotNull(cov, t.path("name").asText() + " must always carry a coverage node");
+        if ("none".equals(cov.path("form").asText())) {
+          assertTrue(cov.path("time_varying").isBoolean(), "must state time_varying");
+          assertTrue(!cov.path("time_varying").asBoolean(), "form=none means not time-varying");
+          assertTrue(cov.path("note").asText().length() > 0, "must explain, not just flag");
+          checked++;
+        }
+      }
+    }
+    assertTrue(checked > 0, "expected at least one table with no year axis across geo/ref/edu");
+  }
+
   /** A table with no observedCoverage block must not claim authority it does not have. */
   @Test void omitsAuthoritativeWhenNothingWasObserved() {
     ArrayNode catalog = GovDataCatalog.build(Arrays.asList("edu"));
