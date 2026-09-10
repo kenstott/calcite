@@ -34,11 +34,17 @@ from pgwire_calcite.state import ServerState
 log = logging.getLogger(__name__)
 
 
-def build_state(backend=None, auth: str = "none", users: dict | None = None) -> ServerState:
+def build_state(
+    backend=None,
+    auth: str = "none",
+    users: dict | None = None,
+    statement_timeout_ms: int = 0,
+) -> ServerState:
     """Assemble the ServerState the wire layer reads.
 
     ``auth='none'`` is trust mode; ``auth='simple'`` enforces cleartext-password
-    auth against ``users`` (PGW-007).
+    auth against ``users`` (PGW-007). ``statement_timeout_ms`` is the server-wide
+    default every session starts with; 0 = no timeout, as in PostgreSQL (PGW-051).
     """
     if backend is None:
         backend = StubBackend()
@@ -46,6 +52,7 @@ def build_state(backend=None, auth: str = "none", users: dict | None = None) -> 
     st.auth_config = {"provider": auth}
     st.auth_middleware_active = auth != "none"
     st.users = dict(users or {})
+    st.statement_timeout_ms = int(statement_timeout_ms)
     return st
 
 
@@ -77,6 +84,7 @@ def serve(
     client_ca: str | None = None,
     mtls_mode: str | None = None,
     mtls_bind_principal: bool | None = None,
+    statement_timeout_ms: int = 0,
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking).
 
@@ -91,8 +99,15 @@ def serve(
     from pgwire_calcite import catalog as _catalog
 
     _catalog.set_database_name(database)
-    server_mod.state = build_state(backend=backend, auth=auth, users=users)
+    server_mod.state = build_state(
+        backend=backend, auth=auth, users=users, statement_timeout_ms=statement_timeout_ms
+    )
     server_mod.state.schema_registry.database = database
+    # Keep the GUC the catalog intercept reports in step with the server default,
+    # so `SHOW statement_timeout` on a fresh session matches what is enforced.
+    _catalog._KNOWN_SETTINGS["statement_timeout"] = server_mod._format_statement_timeout(
+        int(statement_timeout_ms)
+    )
     if auth_provider is not None:
         server_mod.state.auth_provider = auth_provider
     # Set authz grants before catalog population so discovery is filtered per role.
@@ -226,6 +241,13 @@ def main(argv: list | None = None) -> int:
         metavar="NAME:PASSWORD",
         help="cleartext user for --auth simple (repeatable)",
     )
+    parser.add_argument(
+        "--statement-timeout-ms",
+        type=int,
+        default=0,
+        help="server-wide default statement_timeout in milliseconds; 0 = no timeout "
+        "(PG default). Sessions override it with SET statement_timeout.",
+    )
     parser.add_argument("--tls-cert", default=None)
     parser.add_argument("--tls-key", default=None)
     parser.add_argument(
@@ -306,6 +328,7 @@ def main(argv: list | None = None) -> int:
         client_ca=args.client_ca,
         mtls_mode=args.mtls_mode,
         mtls_bind_principal=args.mtls_bind_principal,
+        statement_timeout_ms=args.statement_timeout_ms,
     )
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",

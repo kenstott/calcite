@@ -78,6 +78,7 @@ def stream_ipc_batches(
     lock,
     sql: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    cancel_scope=None,
 ) -> Tuple[List[str], List[str], Iterator[bytes]]:
     """Execute ``sql``; return (column_names, duckdb_labels, ipc_batch_generator).
 
@@ -86,6 +87,12 @@ def stream_ipc_batches(
     its lifetime and releases them in ``finally`` (completion, early stop, error).
     This is the shared core: the in-process rows path (``stream_query``) and the
     Calcite-child socket bridge both consume it.
+
+    ``cancel_scope`` (``calcite_backend.CancelScope``) publishes the JDBC Statement
+    so a CancelRequest on another connection — or the statement_timeout watchdog —
+    can abort it, and translates the resulting engine failure into SQLSTATE 57014
+    (PGW-050/051). It stays armed for the generator's whole lifetime, because a
+    cancel can land while rows are still streaming.
     """
     C = _ArrowClasses.get()
     lock.acquire()
@@ -95,7 +102,14 @@ def stream_ipc_batches(
     try:
         stmt = conn.createStatement()
         stmt.setFetchSize(batch_size)
-        rs = stmt.executeQuery(sql)
+        if cancel_scope is not None:
+            cancel_scope.arm(stmt)
+        try:
+            rs = stmt.executeQuery(sql)
+        except BaseException:
+            if cancel_scope is not None:
+                cancel_scope.raise_if_canceled()
+            raise
         names, labels = _columns_from_metadata(rs)
 
         allocator = C["RootAllocator"]()
@@ -108,6 +122,8 @@ def stream_ipc_batches(
         )
         iterator = C["JdbcToArrow"].sqlToArrowVectorIterator(rs, config)
     except BaseException:
+        if cancel_scope is not None:
+            cancel_scope.disarm()
         _cleanup(stmt, allocator)
         if acquired:
             lock.release()
@@ -116,13 +132,22 @@ def stream_ipc_batches(
     def _ipc_gen() -> Iterator[bytes]:
         nonlocal acquired
         try:
-            while bool(iterator.hasNext()):
-                root = iterator.next()
+            while True:
+                try:
+                    if not bool(iterator.hasNext()):
+                        break
+                    root = iterator.next()
+                except BaseException:
+                    if cancel_scope is not None:
+                        cancel_scope.raise_if_canceled()
+                    raise
                 try:
                     yield _root_to_ipc_bytes(C, root)
                 finally:
                     root.close()  # release this batch's off-heap buffers promptly
         finally:
+            if cancel_scope is not None:
+                cancel_scope.disarm()
             try:
                 iterator.close()
             except Exception:
@@ -171,6 +196,7 @@ def stream_query_batches(
     lock,
     sql: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    cancel_scope=None,
 ) -> Tuple[List[str], List[str], Iterator[List[tuple]]]:
     """Execute ``sql`` and return (column_names, duckdb_labels, batch_generator).
 
@@ -178,7 +204,7 @@ def stream_query_batches(
     is resident at a time, and the first batch can be peeked for type inference
     without draining the result.
     """
-    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size)
+    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size, cancel_scope=cancel_scope)
     return names, labels, batches_from_ipc(ipc)
 
 
@@ -187,9 +213,10 @@ def stream_query(
     lock,
     sql: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    cancel_scope=None,
 ) -> Tuple[List[str], List[str], Iterator[tuple]]:
     """Execute ``sql`` and return (column_names, duckdb_labels, row_generator)."""
-    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size)
+    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size, cancel_scope=cancel_scope)
     return names, labels, rows_from_ipc(ipc)
 
 
