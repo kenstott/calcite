@@ -106,9 +106,18 @@ _TYPE_TABLE: Dict[str, TypeMapping] = {
     "DATE": TypeMapping(1082, "date", "DATE"),
     "TIME": TypeMapping(1083, "time", "TIME"),
     "TIMESTAMP": TypeMapping(1114, "timestamp", "TIMESTAMP"),
-    "TIMESTAMP WITH LOCAL TIME ZONE": TypeMapping(1184, "timestamptz", "TIMESTAMP"),
-    "VARBINARY": TypeMapping(17, "bytea", "VARCHAR"),
-    "BINARY": TypeMapping(17, "bytea", "VARCHAR"),
+    # Calcite's TIMESTAMP WITH LOCAL TIME ZONE reaches the wire as a naive datetime
+    # already normalized to the session zone, and the wire encoder has one timestamp
+    # BVType (OID 1114). Advertising 1184 in the catalog while sending 1114 in
+    # RowDescription made discover-then-query clients see two different types for one
+    # column; the binary layout is identical, so both sides say 1114 (PGW-016/021).
+    "TIMESTAMP WITH LOCAL TIME ZONE": TypeMapping(1114, "timestamp", "TIMESTAMP"),
+    # Binary columns are bytea (OID 17) everywhere: the backend coerces JDBC byte[]
+    # to Python bytes, BLOB is the label the wire encoder maps to BVType.BYTES, and
+    # the catalog derives atttypid 17 from that same label.
+    "VARBINARY": TypeMapping(17, "bytea", "BLOB"),
+    "BINARY": TypeMapping(17, "bytea", "BLOB"),
+    "LONGVARBINARY": TypeMapping(17, "bytea", "BLOB"),
     "ANY": TypeMapping(25, "text", "VARCHAR"),
 }
 
@@ -116,11 +125,18 @@ _TYPE_TABLE: Dict[str, TypeMapping] = {
 _DEFAULT_MAPPING = TypeMapping(25, "text", "VARCHAR")
 
 
+#: Calcite's DatabaseMetaData reports a column's nullability inside TYPE_NAME
+#: ("VARBINARY NOT NULL"); the suffix is not part of the type.
+_NULLABILITY_SUFFIX_RE = re.compile(r"\s+(NOT\s+NULL|NULL)$")
+
+
 def _strip_type(sql_type: str) -> str:
-    """Normalize a JDBC/Calcite type name: upper, drop precision/scale and array []."""
+    """Normalize a JDBC/Calcite type name: upper, drop precision/scale, [] and nullability."""
     t = sql_type.strip().upper()
-    t = re.sub(r"\s*\(.*\)\s*", "", t)  # DECIMAL(10,2) -> DECIMAL
+    # A space, not "": "TIMESTAMP(0) NOT NULL" must not collapse to "TIMESTAMPNOT NULL".
+    t = re.sub(r"\s*\(.*\)\s*", " ", t).strip()  # DECIMAL(10,2) -> DECIMAL
     t = t.replace("[]", "").strip()
+    t = _NULLABILITY_SUFFIX_RE.sub("", t).strip()  # VARBINARY NOT NULL -> VARBINARY
     return t
 
 

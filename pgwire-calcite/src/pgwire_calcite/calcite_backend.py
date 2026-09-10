@@ -399,6 +399,12 @@ class CalciteBackend:
         if jdbc_type in (int(T.BOOLEAN), int(T.BIT)):
             v = rs.getBoolean(i)
             return None if bool(rs.wasNull()) else bool(v)
+        if jdbc_type in (int(T.BINARY), int(T.VARBINARY), int(T.LONGVARBINARY)):
+            # bytea (OID 17) is what normalize.py advertises for these; the wire and
+            # the COPY codecs require Python bytes, never the hex string getString()
+            # would hand back (PGW-016/021).
+            v = rs.getBytes(i)
+            return None if bool(rs.wasNull()) else bytes(v)
         if jdbc_type == int(T.DATE):
             s = rs.getString(i)
             return None if bool(rs.wasNull()) else datetime.date.fromisoformat(str(s))

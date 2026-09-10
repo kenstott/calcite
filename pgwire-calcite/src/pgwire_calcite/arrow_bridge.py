@@ -64,6 +64,68 @@ class _ArrowClasses:
         return cls._cache
 
 
+#: Arrow type ids whose JDBC consumer must be replaced (see _consumer_factory).
+_BINARY_TYPE_IDS = frozenset({"Binary", "LargeBinary", "FixedSizeBinary"})
+
+_FACTORY_CACHE = None
+
+
+def _consumer_factory(C):
+    """A JdbcConsumerFactory that reads binary columns with ``ResultSet.getBytes``.
+
+    arrow-jdbc's stock BinaryConsumer reads binary columns through
+    ``getBinaryStream``, which Calcite's Avatica cursor does not implement --
+    a VARBINARY column made the whole stream fail with "cannot convert to
+    InputStream (binary)". Every other Arrow type keeps the stock consumer, so
+    only binary columns cross into Python here, once per row.
+    """
+    global _FACTORY_CACHE
+    if _FACTORY_CACHE is not None:
+        return _FACTORY_CACHE
+    import jpype
+
+    @jpype.JImplements("org.apache.arrow.adapter.jdbc.consumer.JdbcConsumer")
+    class _BytesConsumer:
+        """Consume one binary column into a VarBinary/FixedSizeBinary vector."""
+
+        def __init__(self, column: int, vector):
+            self._column = column
+            self._vector = vector
+            self._index = 0
+
+        @jpype.JOverride
+        def consume(self, rs):
+            value = rs.getBytes(self._column)
+            if bool(rs.wasNull()):
+                self._vector.setNull(self._index)
+            else:
+                self._vector.setSafe(self._index, value)
+            self._index += 1
+
+        @jpype.JOverride
+        def resetValueVector(self, vector):
+            # A new batch root: write from the top of the new vector.
+            self._vector = vector
+            self._index = 0
+
+        @jpype.JOverride
+        def close(self):
+            self._vector.close()
+
+    @jpype.JImplements("org.apache.arrow.adapter.jdbc.JdbcToArrowConfig$JdbcConsumerFactory")
+    class _Factory:
+        @jpype.JOverride
+        def apply(self, arrow_type, column_index, nullable, vector, config):
+            if str(arrow_type.getTypeID()) in _BINARY_TYPE_IDS:
+                return _BytesConsumer(int(column_index), vector)
+            return C["JdbcToArrowUtils"].getConsumer(
+                arrow_type, column_index, nullable, vector, config
+            )
+
+    _FACTORY_CACHE = _Factory()
+    return _FACTORY_CACHE
+
+
 def _columns_from_metadata(rs) -> Tuple[List[str], List[str]]:
     """Read (column_names, duckdb_labels) from ResultSetMetaData without consuming rows."""
     md = rs.getMetaData()
@@ -118,6 +180,7 @@ def stream_ipc_batches(
             .setAllocator(allocator)
             .setCalendar(C["JdbcToArrowUtils"].getUtcCalendar())
             .setTargetBatchSize(int(batch_size))
+            .setJdbcConsumerGetter(_consumer_factory(C))
             .build()
         )
         iterator = C["JdbcToArrow"].sqlToArrowVectorIterator(rs, config)

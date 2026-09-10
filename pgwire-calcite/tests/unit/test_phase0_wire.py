@@ -43,7 +43,11 @@ class MiniPgClient:
         self, host: str, port: int, user: str = "tester", password: str | None = None,
         use_ssl: bool = False,
     ):
-        self.sock = socket.create_connection((host, port), timeout=5)
+        # 60s, not a few: the FIRST query against a freshly served backend pays the
+        # one-time pg_proc harvest (159 Calcite operators, measured at ~8s on an
+        # otherwise busy machine). A deadline under that turns a slow-but-correct
+        # answer into a timeout; every later query on the connection is sub-second.
+        self.sock = socket.create_connection((host, port), timeout=60)
         if use_ssl:
             # PostgreSQL SSLRequest: length 8, code 80877103; server replies 'S' to proceed.
             self.sock.sendall(struct.pack("!ii", 8, 80877103))

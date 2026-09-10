@@ -220,6 +220,11 @@ _DUCKDB_TYPE_TO_BVTYPE: dict[str, BVType] = {
     "INTEGER": BVType.INTEGER,
     "SMALLINT": BVType.INTEGER,
     "TINYINT": BVType.INTEGER,
+    # bytea (OID 17): the label normalize.py gives BINARY/VARBINARY columns. The
+    # values reaching here are Python bytes (calcite_backend._coerce / the Arrow
+    # binary consumer), which BVType.BYTES sends as raw bytes in binary format and
+    # as PG hex (\x...) in text format.
+    "BLOB": BVType.BYTES,
 }
 # Wider/unsigned integer types map to 8-byte int8.
 _DUCKDB_INT_TYPES = {
@@ -251,6 +256,8 @@ def _infer_bvtype(rows: list[tuple], col_idx: int) -> BVType:
             return BVType.BIGINT
         if isinstance(v, float):
             return BVType.FLOAT
+        if isinstance(v, (bytes, bytearray, memoryview)):
+            return BVType.BYTES
         if isinstance(v, decimal.Decimal):
             return BVType.DECIMAL
         if isinstance(v, datetime.datetime):
