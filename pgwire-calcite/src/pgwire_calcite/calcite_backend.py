@@ -30,6 +30,7 @@ import threading
 from typing import List, Optional
 
 from pgwire_calcite import normalize
+from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, QueryCanceled
 from pgwire_calcite.classpath import resolve_classpath
 from pgwire_calcite.dialect import transpile_pg_to_calcite
 from pgwire_calcite.types import QueryResult
@@ -37,6 +38,139 @@ from pgwire_calcite.types import QueryResult
 log = logging.getLogger(__name__)
 
 _CALCITE_DRIVER = "org.apache.calcite.jdbc.Driver"
+
+
+def _attach_current_thread_to_jvm() -> None:
+    """Make the calling thread able to call Java.
+
+    Cancellation always arrives on a thread that never executed a query — the
+    connection thread serving a CancelRequest, or the statement_timeout watchdog
+    timer — so it may not be attached to the JVM yet.
+    """
+    import jpype
+
+    if not jpype.java.lang.Thread.isAttached():
+        jpype.java.lang.Thread.attachAsDaemon()
+
+
+class InFlightStatement:
+    """One session's currently-executing JDBC Statement, cancellable from anywhere.
+
+    ``java.sql.Statement.cancel`` is defined to be called from a *different*
+    thread than the one blocked in ``execute``, which is exactly the pgwire
+    CancelRequest shape: a second connection asks the server to abort the first
+    connection's running query.
+    """
+
+    def __init__(self, stmt) -> None:
+        self._stmt = stmt
+        self._lock = threading.Lock()
+        #: PG wording for why this statement was cancelled; None while it runs normally.
+        self.reason: Optional[str] = None
+
+    def cancel(self, reason: str) -> bool:
+        """Cancel the statement once. Returns False if it was already cancelled."""
+        with self._lock:
+            if self.reason is not None:
+                return False
+            self.reason = reason
+        _attach_current_thread_to_jvm()
+        self._stmt.cancel()
+        return True
+
+
+class InFlightRegistry:
+    """session key -> the statement that session is running right now (PGW-050).
+
+    Only one statement per session can be in flight: the wire protocol executes a
+    session's statements one at a time, and the backend serializes on its own
+    connection lock.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._by_session: dict = {}
+
+    def begin(self, session_key: str, stmt) -> InFlightStatement:
+        handle = InFlightStatement(stmt)
+        with self._lock:
+            self._by_session[session_key] = handle
+        return handle
+
+    def end(self, session_key: str, handle: InFlightStatement) -> None:
+        with self._lock:
+            if self._by_session.get(session_key) is handle:
+                del self._by_session[session_key]
+
+    def discard(self, session_key: str) -> None:
+        """Drop the session's entry outright (DISCARD ALL, session teardown)."""
+        with self._lock:
+            self._by_session.pop(session_key, None)
+
+    def active_sessions(self) -> set:
+        """Session keys with a statement in flight right now."""
+        with self._lock:
+            return set(self._by_session)
+
+    def cancel(self, session_key: str, reason: str) -> bool:
+        """Cancel the session's in-flight statement. False if it has none."""
+        with self._lock:
+            handle = self._by_session.get(session_key)
+        if handle is None:
+            return False
+        return handle.cancel(reason)
+
+
+#: Process-wide registry; the wire layer's CancelRequest branch reads it.
+IN_FLIGHT = InFlightRegistry()
+
+
+class CancelScope:
+    """Arms cancellation + the statement_timeout watchdog around one execution.
+
+    Calcite's JDBC driver accepts ``Statement.setQueryTimeout`` but does not act
+    on it (verified against calcite/avatica: a 1s timeout let a 156s query run to
+    completion), so the timeout is enforced here by a watchdog that calls the same
+    ``Statement.cancel`` the CancelRequest path uses. ``setQueryTimeout`` is still
+    set so a future driver that honors it agrees with us.
+    """
+
+    def __init__(self, session_key: Optional[str], timeout_ms: int) -> None:
+        self._session_key = session_key
+        self._timeout_ms = max(0, int(timeout_ms))
+        self._handle: Optional[InFlightStatement] = None
+        self._timer: Optional[threading.Timer] = None
+
+    def arm(self, stmt) -> None:
+        if self._timeout_ms:
+            # JDBC takes whole seconds; round up so a sub-second timeout is not
+            # reported to the driver as "no timeout".
+            stmt.setQueryTimeout(-(-self._timeout_ms // 1000))
+        if self._session_key is None:
+            self._handle = InFlightStatement(stmt)  # timeout-only: nothing to look up
+        else:
+            self._handle = IN_FLIGHT.begin(self._session_key, stmt)
+        if self._timeout_ms:
+            handle = self._handle
+            self._timer = threading.Timer(
+                self._timeout_ms / 1000.0, handle.cancel, args=(CANCELED_BY_TIMEOUT,)
+            )
+            self._timer.daemon = True
+            self._timer.start()
+
+    def disarm(self) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+        if self._session_key is not None and self._handle is not None:
+            IN_FLIGHT.end(self._session_key, self._handle)
+        self._handle = None
+
+    def raise_if_canceled(self) -> None:
+        """Turn an engine-level failure into SQLSTATE 57014 when we caused it."""
+        handle = self._handle
+        if handle is not None and handle.reason is not None:
+            raise QueryCanceled(handle.reason)
 
 
 class CalciteBackend:
@@ -148,6 +282,8 @@ class CalciteBackend:
         role_id: str,
         params: Optional[list] = None,
         stream: bool = False,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
     ) -> QueryResult:
         del role_id, params  # params already substituted upstream (server._substitute_params)
         calcite_sql = transpile_pg_to_calcite(
@@ -158,6 +294,7 @@ class CalciteBackend:
         log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
         if self._conn is None:
             raise RuntimeError("Calcite connection is not open")
+        scope = CancelScope(session_key, timeout_ms)
         if stream:
             # Arrow batch-streaming path (PGW-019/020/022): the generator holds
             # the lock + JVM/Arrow resources and releases them when exhausted or
@@ -165,19 +302,24 @@ class CalciteBackend:
             from pgwire_calcite import arrow_bridge
 
             names, labels, rows = arrow_bridge.stream_query(
-                self._conn, self._lock, calcite_sql, self._batch_size
+                self._conn, self._lock, calcite_sql, self._batch_size, cancel_scope=scope
             )
             return QueryResult(rows=rows, column_names=names, column_types=labels)
         # Materialized path (direct/programmatic use, tests): typed JDBC row reads.
         with self._lock:
             stmt = self._conn.createStatement()
+            scope.arm(stmt)
             try:
                 has_rs = bool(stmt.execute(calcite_sql))
                 if not has_rs:
                     return QueryResult(rows=[], column_names=[], column_types=None)
                 rs = stmt.getResultSet()
                 return self._read_result(rs)
+            except BaseException:
+                scope.raise_if_canceled()
+                raise
             finally:
+                scope.disarm()
                 stmt.close()
 
     def _read_result(self, rs) -> QueryResult:

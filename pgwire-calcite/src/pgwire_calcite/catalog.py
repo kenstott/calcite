@@ -1183,7 +1183,45 @@ _KNOWN_SETTINGS = {
     "application_name": "",
     "is_superuser": "on",
     "session_authorization": "admin",
+    # Server-wide default, overridden per session by SET statement_timeout
+    # (launcher --statement-timeout-ms rewrites this at startup). PGW-051.
+    "statement_timeout": "0",
 }
+
+
+class _SessionSettings(threading.local):
+    """Per-connection SET values, published by the wire session.
+
+    One connection == one handler thread, so thread-local is exactly the session
+    scope. SHOW / current_setting read through this before falling back to the
+    server-wide defaults above, which is what makes `SET x = y; SHOW x` agree
+    within a session (PGW-051/052).
+    """
+
+    values: dict = {}
+
+
+_SESSION_SETTINGS = _SessionSettings()
+
+
+def publish_session_settings(values: dict) -> None:
+    """Bind this thread's session SET values for the duration of a statement."""
+    _SESSION_SETTINGS.values = values
+
+
+def setting_value(key: str) -> str:
+    """Resolve a GUC for the current session: session SET wins over the default."""
+    session = _SESSION_SETTINGS.values
+    if key in session:
+        return session[key]
+    return _KNOWN_SETTINGS.get(key, "")
+
+
+def all_settings() -> dict:
+    """Every GUC as SHOW ALL reports it for this session."""
+    merged = dict(_KNOWN_SETTINGS)
+    merged.update(_SESSION_SETTINGS.values)
+    return merged
 
 
 def _trino_to_pg_name(trino_type: str) -> str:
@@ -3145,7 +3183,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             if "current_setting" in fn:
                 args = node.args.get("expressions", [])
                 key = args[0].name.lower() if args and isinstance(args[0], exp.Literal) else ""
-                return exp.Literal.string(_KNOWN_SETTINGS.get(key, ""))
+                return exp.Literal.string(setting_value(key))
         if type(node).__name__ == "CurrentUser":
             return exp.Literal.string(role_id)
         if type(node).__name__ == "CurrentDatabase":
@@ -3253,9 +3291,9 @@ def _handle_show(sql: str):
         return QueryResult(rows=[], column_names=[])
     setting = parts[1].lower()
     if setting == "all":
-        rows = [(k, v) for k, v in _KNOWN_SETTINGS.items()]
+        rows = [(k, v) for k, v in all_settings().items()]
         return QueryResult(rows=rows, column_names=["name", "setting"])
-    value = _KNOWN_SETTINGS.get(setting, "")
+    value = setting_value(setting)
     return QueryResult(rows=[(value,)], column_names=[setting])
 
 
@@ -3296,14 +3334,14 @@ def _handle_current_setting(sql: str):
         col1 = (m1.group(2) or "current_setting") if m1 else "current_setting"
         col2 = (m2.group(1) or "set_config") if m2 else "set_config"
         key = m1.group(1).lower() if m1 else ""
-        val1 = _KNOWN_SETTINGS.get(key, "")
+        val1 = setting_value(key)
         return QueryResult(rows=[(val1, None)], column_names=[col1, col2])
 
     m = re.search(r"current_setting\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", sql, re.IGNORECASE)
     if not m:
         return None
     key = m.group(1).lower()
-    value = _KNOWN_SETTINGS.get(key, "")
+    value = setting_value(key)
     return QueryResult(rows=[(value,)], column_names=["current_setting"])
 
 

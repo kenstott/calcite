@@ -220,9 +220,28 @@ class BridgeBackend:
             sock.close()
 
     def execute_sql(
-        self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
+        self,
+        sql: str,
+        role_id: str,
+        params: Optional[list] = None,
+        stream: bool = False,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
     ) -> QueryResult:
         del role_id, params, stream  # params substituted upstream; always streams
+        # The Calcite child owns the JDBC Statement, so this side has nothing to
+        # register for cancellation and nothing to time out. Say so instead of
+        # accepting a timeout we would not enforce (PGW-051); cancellation over
+        # the bridge needs a control frame the child protocol does not have yet.
+        del session_key
+        if timeout_ms:
+            from pgwire_calcite.backend import PgProtocolError
+
+            raise PgProtocolError(
+                "0A000",
+                "statement_timeout is not supported by the bridge backend "
+                "(the Calcite child owns the statement)",
+            )
         # PG-only rejects happen here (PGW-018); JSON/vector surfaces honored.
         calcite_sql = transpile_pg_to_calcite(
             sql,

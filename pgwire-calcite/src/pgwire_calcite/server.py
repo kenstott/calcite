@@ -37,6 +37,7 @@ import socketserver
 import ssl
 import struct
 import threading
+import weakref
 from typing import Iterator, Optional, Tuple
 
 from buenavista.core import BVType, Connection, QueryResult as BVQueryResult, Session
@@ -70,6 +71,50 @@ _DDL_RE = re.compile(
 
 
 state = None  # module-level reference; set by the launcher, replaced by tests via patch()
+
+# Session-command grammar (PGW-051/052). SET/RESET/DISCARD/DEALLOCATE are answered
+# by the session itself, not the engine; the catch-all _TXN_TAG_RE above routes
+# them here.
+_SET_STMT_RE = re.compile(
+    r"^\s*SET\s+(?:SESSION\s+|LOCAL\s+)?([A-Za-z_][A-Za-z0-9_.]*)\s*(?:=|\bTO\b)\s*(.+?)\s*;?\s*$",
+    re.IGNORECASE,
+)
+_RESET_STMT_RE = re.compile(r"^\s*RESET\s+(ALL|[A-Za-z_][A-Za-z0-9_.]*)\s*;?\s*$", re.IGNORECASE)
+_DISCARD_STMT_RE = re.compile(
+    r"^\s*DISCARD\s+(ALL|PLANS|SEQUENCES|TEMP|TEMPORARY)\s*;?\s*$", re.IGNORECASE
+)
+_DEALLOCATE_STMT_RE = re.compile(
+    r"^\s*DEALLOCATE\s+(?:PREPARE\s+)?(ALL|[^\s;]+)\s*;?\s*$", re.IGNORECASE
+)
+
+#: PG's `statement_timeout` units. A bare number means milliseconds.
+_TIMEOUT_UNIT_MS = {"us": 0.001, "ms": 1, "s": 1000, "min": 60000, "h": 3600000, "d": 86400000}
+_TIMEOUT_VALUE_RE = re.compile(r"^(\d+)\s*([a-z]*)$", re.IGNORECASE)
+
+
+def _parse_statement_timeout(value: str) -> int:
+    """Parse a `SET statement_timeout` value into milliseconds (PG semantics)."""
+    from pgwire_calcite.backend import InvalidParameterValue
+
+    raw = value.strip().strip("'\"")
+    m = _TIMEOUT_VALUE_RE.match(raw)
+    if m is None:
+        raise InvalidParameterValue(f'invalid value for parameter "statement_timeout": "{value}"')
+    unit = (m.group(2) or "ms").lower()
+    if unit not in _TIMEOUT_UNIT_MS:
+        raise InvalidParameterValue(f'invalid value for parameter "statement_timeout": "{value}"')
+    return int(int(m.group(1)) * _TIMEOUT_UNIT_MS[unit])
+
+
+def _format_statement_timeout(ms: int) -> str:
+    """Render milliseconds the way PG's SHOW statement_timeout does."""
+    if ms <= 0:
+        return "0"
+    if ms % 60000 == 0:
+        return f"{ms // 60000}min"
+    if ms % 1000 == 0:
+        return f"{ms // 1000}s"
+    return f"{ms}ms"
 
 
 def _pg_literal(v) -> str:
@@ -208,12 +253,112 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def __init__(self) -> None:
         super().__init__()
         self.role_id: str | None = None
+        #: Weak reference to the connection's BVContext, bound at startup so
+        #: DISCARD ALL can drop this session's prepared statements and portals
+        #: (PGW-052). Weak on purpose: the context already owns the session, and a
+        #: strong back-reference would make the pair uncollectable by refcount —
+        #: which keeps a suspended portal's Arrow generator (and with it the
+        #: backend's connection lock) alive until the cycle collector happens to
+        #: run.
+        self._ctx_ref = None
+        #: GUC name -> value as SHOW reports it, for the settings this session SET.
+        self.settings: dict[str, str] = {}
+        self.statement_timeout_ms: int = self._default_statement_timeout_ms()
+        self.settings["statement_timeout"] = _format_statement_timeout(self.statement_timeout_ms)
+
+    @property
+    def key(self) -> str:
+        """Registry key for this session's in-flight statement."""
+        return str(self.id)
+
+    @staticmethod
+    def _default_statement_timeout_ms() -> int:
+        # No fallback: the field is declared on ServerState with a documented
+        # default, so a state that exists always carries one. Sessions created
+        # before the launcher installs state (direct construction in tests) get 0.
+        return int(state.statement_timeout_ms) if state is not None else 0
 
     def cursor(self):
         return None
 
     def close(self):
-        pass
+        from pgwire_calcite.calcite_backend import IN_FLIGHT
+
+        IN_FLIGHT.discard(self.key)
+
+    @property
+    def ctx(self):
+        """The connection's BVContext while it is alive, else None."""
+        return self._ctx_ref() if self._ctx_ref is not None else None
+
+    def bind_context(self, ctx) -> None:
+        self._ctx_ref = weakref.ref(ctx)
+
+    # --- session commands (SET / RESET / DISCARD / DEALLOCATE), PGW-051/052 ---
+
+    def _reset_settings(self) -> None:
+        self.settings = {}
+        self.statement_timeout_ms = self._default_statement_timeout_ms()
+        self.settings["statement_timeout"] = _format_statement_timeout(self.statement_timeout_ms)
+
+    def _forget_prepared(self) -> None:
+        """Close every prepared statement and portal this connection holds."""
+        ctx = self.ctx
+        if ctx is None:
+            return
+        ctx.stmts.clear()
+        ctx.portals.clear()
+        ctx.result_cache.clear()
+
+    def apply_session_command(self, sql: str) -> None:
+        """Apply SET/RESET/DISCARD/DEALLOCATE to this session's own state.
+
+        Transaction verbs (BEGIN/COMMIT/...) reach here too and are acknowledged
+        without state, matching the existing no-isolation behaviour (PGW-004).
+        """
+        from pgwire_calcite.calcite_backend import IN_FLIGHT
+
+        m = _SET_STMT_RE.match(sql)
+        if m is not None:
+            name, value = m.group(1).lower(), m.group(2)
+            if name == "statement_timeout":
+                self.statement_timeout_ms = _parse_statement_timeout(value)
+                self.settings[name] = _format_statement_timeout(self.statement_timeout_ms)
+            else:
+                self.settings[name] = value.strip().strip("'\"")
+            return
+
+        m = _RESET_STMT_RE.match(sql)
+        if m is not None:
+            if m.group(1).upper() == "ALL":
+                self._reset_settings()
+            else:
+                name = m.group(1).lower()
+                self.settings.pop(name, None)
+                if name == "statement_timeout":
+                    self.statement_timeout_ms = self._default_statement_timeout_ms()
+                    self.settings[name] = _format_statement_timeout(self.statement_timeout_ms)
+            return
+
+        m = _DISCARD_STMT_RE.match(sql)
+        if m is not None:
+            if m.group(1).upper() == "ALL":
+                self._reset_settings()
+                self._forget_prepared()
+                IN_FLIGHT.discard(self.key)
+            elif m.group(1).upper() == "PLANS":
+                self._forget_prepared()
+            return
+
+        m = _DEALLOCATE_STMT_RE.match(sql)
+        if m is not None:
+            if m.group(1).upper() == "ALL":
+                self._forget_prepared()
+            else:
+                ctx = self.ctx
+                if ctx is not None:
+                    ctx.stmts.pop(m.group(1), None)
+            return
 
     def in_transaction(self) -> bool:
         return False
@@ -225,9 +370,16 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def execute_sql(self, sql: str, params=None) -> CalciteQueryResult:
         stripped = _substitute_params(sql.strip(), params)
 
+        # Make this session's SET values the ones SHOW / current_setting resolve
+        # against for the rest of this statement (PGW-051).
+        from pgwire_calcite import catalog as _catalog_settings
+
+        _catalog_settings.publish_session_settings(self.settings)
+
         # Session / transaction commands: accepted and acknowledged, no real
         # transaction isolation (PGW-004). Empty result -> command tag from SQL.
         if _TXN_TAG_RE.match(stripped):
+            self.apply_session_command(stripped)
             return CalciteQueryResult(TrinoResult(), stripped)
 
         if self.role_id is None:
@@ -264,10 +416,22 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         # Non-catalog execution seam: Phase 0 StubBackend -> Phase 1 CalciteBackend.
         # stream=True selects the Arrow batch-streaming path at the wire (Phase 3);
         # backends that don't stream ignore the flag and materialize.
+        from pgwire_calcite.backend import PgProtocolError
+
         try:
-            result = _state.backend.execute_sql(stripped, self.role_id, params, stream=True)
+            result = _state.backend.execute_sql(
+                stripped,
+                self.role_id,
+                params,
+                stream=True,
+                session_key=self.key,
+                timeout_ms=self.statement_timeout_ms,
+            )
         except PermissionError as exc:
             raise PermissionError(str(exc)) from exc
+        except PgProtocolError:
+            # Already carries its SQLSTATE (57014 cancel/timeout) — send as-is.
+            raise
         except Exception as exc:
             log.warning("[PGWIRE] EXCEPTION sql=%r", stripped[:300], exc_info=True)
             raise RuntimeError(str(exc)) from exc
@@ -329,13 +493,27 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 self.wfile.write(b"N")
                 self.wfile.flush()
             return self.handle_startup(conn)
-        elif code == 80877102:  # Cancel request
+        elif code == 80877102:  # Cancel request (PGW-050)
+            # Arrives on a fresh connection that never authenticates, carrying the
+            # (process id, secret key) we handed the target session in
+            # BackendKeyData. Cancel that session's in-flight engine statement and
+            # leave the session itself open — PG's contract is that a cancelled
+            # backend keeps serving, it does not disconnect.
             process_id = self.r.read_uint32()
             secret_key = self.r.read_uint32()
             ctx = self.server.ctxts.get(process_id)  # type: ignore[attr-defined]
-            if ctx and ctx.secret_key == secret_key:
-                self.server.conn.close_session(ctx.session)  # type: ignore[attr-defined]
-                del self.server.ctxts[ctx.process_id]  # type: ignore[attr-defined]
+            if ctx is not None and ctx.secret_key == secret_key:
+                from pgwire_calcite.backend import CANCELED_BY_USER
+                from pgwire_calcite.calcite_backend import IN_FLIGHT
+
+                cancelled = IN_FLIGHT.cancel(str(ctx.session.id), CANCELED_BY_USER)
+                log.info(
+                    "[PGWIRE] cancel request for pid=%s: %s",
+                    process_id,
+                    "statement cancelled" if cancelled else "no statement in flight",
+                )
+            else:
+                log.info("[PGWIRE] cancel request for pid=%s rejected (bad key)", process_id)
             return None
         elif code == 196608:  # Protocol 3.0
             msg = [x.decode("utf-8") for x in self.r.read_bytes(msglen - 4).split(b"\x00")]
@@ -344,6 +522,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 "[PGWIRE] connect params: %s", {k: v for k, v in params.items() if k != "password"}
             )
             ctx = BVContext(conn.create_session(), None, params)
+            ctx.session.bind_context(ctx)  # type: ignore[attr-defined]
             # Trust mode: authenticate immediately with no password challenge, so a
             # plain `psql host=… user=… dbname=…` connects like any client. A
             # pluggable provider (Phase 5b) decides via requires_password; else the
@@ -481,6 +660,22 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         self.send_authentication_ok()
         self.handle_post_auth(ctx)
 
+    def send_error(self, exception, ctx: Optional[BVContext] = None) -> None:  # type: ignore[override]
+        """Emit ErrorResponse with a real SQLSTATE for errors that declare one.
+
+        buenavista's ErrorResponse carries only a message field, which clients
+        read as SQLSTATE XX000. Cancellation must be distinguishable (57014) or a
+        client cannot tell "you cancelled me" from "the engine broke" (PGW-050).
+        """
+        sqlstate = getattr(exception, "sqlstate", None)
+        if sqlstate is None:
+            super().send_error(exception, ctx)
+            return
+        log.info("[PGWIRE] %s: %s", sqlstate, exception)
+        self._send_pg_error("ERROR", sqlstate, str(exception))
+        if ctx is not None:
+            ctx.mark_error()
+
     def handle_describe(self, ctx: BVContext, payload: bytes) -> None:
         ba = bytearray(payload)
         if ba[0] == ord("P"):
@@ -560,6 +755,8 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         super().handle_execute(ctx, payload)
 
     def handle_query(self, ctx: BVContext, payload: bytes) -> None:
+        from pgwire_calcite.backend import PgProtocolError
+
         decoded = payload.decode("utf-8").rstrip("\x00")
 
         stmts = [s.strip() for s in decoded.split(";") if s.strip()]
@@ -624,7 +821,14 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
 
             if query_result.has_results():
                 self.send_row_description(query_result)
-                row_count = self.send_data_rows(query_result)
+                try:
+                    # Rows stream lazily off the engine, so a cancel can land after
+                    # RowDescription. PG allows ErrorResponse mid-result-set; the
+                    # connection survives and the next query runs (PGW-050).
+                    row_count = self.send_data_rows(query_result)
+                except PgProtocolError as exc:
+                    self.send_error(exc, ctx)
+                    break
                 self.send_command_complete("SELECT %d\x00" % row_count)
             else:
                 status = query_result.status()

@@ -37,8 +37,22 @@ class Backend(Protocol):
     """Contract the wire server executes non-catalog statements against."""
 
     def execute_sql(
-        self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
+        self,
+        sql: str,
+        role_id: str,
+        params: Optional[list] = None,
+        stream: bool = False,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
     ) -> QueryResult:
+        """Execute one statement.
+
+        ``session_key`` identifies the wire session so the backend can publish its
+        in-flight engine statement for out-of-band cancellation (PGW-050); ``None``
+        means "not cancellable from another connection" (direct/programmatic use).
+        ``timeout_ms`` is the session's ``statement_timeout`` in milliseconds, 0 =
+        no timeout (PG semantics, PGW-051).
+        """
         ...
 
     def ready(self) -> bool:
@@ -48,6 +62,37 @@ class Backend(Protocol):
 
 class BackendError(RuntimeError):
     """Backend could not execute the statement. Never swallowed silently."""
+
+
+class PgProtocolError(RuntimeError):
+    """An error that must reach the client with an explicit SQLSTATE.
+
+    ``CalciteHandler.send_error`` reads ``.sqlstate`` off the exception; anything
+    without it keeps buenavista's message-only ErrorResponse.
+    """
+
+    def __init__(self, sqlstate: str, message: str) -> None:
+        super().__init__(message)
+        self.sqlstate = sqlstate
+
+
+#: PG's wording for both cancellation causes, byte for byte (SQLSTATE 57014).
+CANCELED_BY_USER = "canceling statement due to user request"
+CANCELED_BY_TIMEOUT = "canceling statement due to statement timeout"
+
+
+class QueryCanceled(PgProtocolError):
+    """The in-flight statement was cancelled (CancelRequest or statement_timeout)."""
+
+    def __init__(self, message: str = CANCELED_BY_USER) -> None:
+        super().__init__("57014", message)
+
+
+class InvalidParameterValue(PgProtocolError):
+    """SET given a value the parameter cannot take (SQLSTATE 22023)."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("22023", message)
 
 
 _SELECT_ONE_RE = re.compile(r"^\s*SELECT\s+1\s*;?\s*$", re.IGNORECASE)
@@ -71,9 +116,16 @@ class StubBackend:
         return True
 
     def execute_sql(
-        self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
+        self,
+        sql: str,
+        role_id: str,
+        params: Optional[list] = None,
+        stream: bool = False,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
     ) -> QueryResult:
-        del role_id, params, stream  # stub is always materialized
+        # stub is always materialized and answers instantly: nothing to cancel or time out
+        del role_id, params, stream, session_key, timeout_ms
         stripped = sql.strip().rstrip(";").strip()
         if _SELECT_ONE_RE.match(sql):
             return QueryResult(rows=[(1,)], column_names=["?column?"], column_types=["INTEGER"])
