@@ -203,14 +203,17 @@ jobs:
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256
 
       - name: Attach to release
-        # On a release event softprops infers the release; on workflow_dispatch (used because a
-        # release created by GITHUB_TOKEN does not emit a release event) target engine-v<version>.
+        # On a release event use its tag; on workflow_dispatch (used because a release created
+        # by GITHUB_TOKEN emits no release event) target engine-v<version>. Plain upload with
+        # --clobber: softprops/action-gh-release tries to *update* the release object as well,
+        # which a dispatched run's token is not allowed to do.
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}
-          files: |
-            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz \
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256
 
   # Proves a just-built bundle actually runs on a clean machine: no repo checkout
