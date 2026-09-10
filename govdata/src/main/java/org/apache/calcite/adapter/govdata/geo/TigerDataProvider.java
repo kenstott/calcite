@@ -31,11 +31,15 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -136,9 +140,10 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
-    // Build download URL based on table type
-    String url = buildDownloadUrl(tableName, year, stateFips);
-    if (url == null) {
+    // Build download URLs based on table type. Usually one file; congressional districts fan out
+    // over one file per state on 2022-and-later vintages (see buildDownloadUrls).
+    List<String> urls = buildDownloadUrls(tableName, year, stateFips);
+    if (urls.isEmpty()) {
       LOGGER.warn("Could not build download URL for table {} year={}", tableName, year);
       return new ArrayList<Map<String, Object>>().iterator();
     }
@@ -150,27 +155,39 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       long maxMb = runtime.maxMemory() / (1024 * 1024);
       LOGGER.info("Memory before fetch: {}MB used / {}MB max", usedMb, maxMb);
 
-      // Check cache before downloading
-      String cachePath = cachePath(tableName, year, stateFips);
-      tempDir = restoreFromCache(cachePath, tableName, year, stateFips);
-      if (tempDir == null) {
-        LOGGER.info("Downloading TIGER shapefile from: {}", url);
-        tempDir = ZipDownloadUtils.downloadZipToTempDir(url, null, "tiger-" + tableName);
-        writeToCache(tempDir, cachePath);
-      }
-
-      // Find shapefile prefix
-      String prefix = findShapefilePrefix(tempDir);
-      if (prefix == null) {
-        LOGGER.error("No shapefile found in extracted ZIP for table {}", tableName);
-        return new ArrayList<Map<String, Object>>().iterator();
-      }
-
-      // Parse shapefile
       int yearInt = Integer.parseInt(year);
       TigerShapefileParser.AttributeMapper mapper = getMapperForTable(tableName, yearInt);
-      List<Object[]> records =
-          TigerShapefileParser.parseShapefile(tempDir, prefix, mapper);
+      List<Object[]> records = new ArrayList<Object[]>();
+
+      for (String url : urls) {
+        // One cache directory per downloaded file. A multi-file vintage would otherwise write
+        // every state's shapefile into the same directory, where the restore path — which keys off
+        // "some .shp is present" — would hand back one arbitrary state as if it were the year.
+        String cachePath = cachePath(tableName, year, stateFips);
+        if (urls.size() > 1) {
+          cachePath = storageProvider().resolvePath(cachePath, fileStem(url));
+        }
+        tempDir = restoreFromCache(cachePath, tableName, year, stateFips);
+        if (tempDir == null) {
+          LOGGER.info("Downloading TIGER shapefile from: {}", url);
+          tempDir = ZipDownloadUtils.downloadZipToTempDir(url, null, "tiger-" + tableName);
+          writeToCache(tempDir, cachePath);
+        }
+
+        // Find shapefile prefix
+        String prefix = findShapefilePrefix(tempDir);
+        if (prefix == null) {
+          LOGGER.error("No shapefile found in extracted ZIP for table {} ({})", tableName, url);
+          ZipDownloadUtils.deleteDirectory(tempDir);
+          tempDir = null;
+          return new ArrayList<Map<String, Object>>().iterator();
+        }
+
+        // Parse shapefile
+        records.addAll(TigerShapefileParser.parseShapefile(tempDir, prefix, mapper));
+        ZipDownloadUtils.deleteDirectory(tempDir);
+        tempDir = null;
+      }
 
       // Convert to Map records
       List<Map<String, Object>> result = new ArrayList<>();
@@ -187,10 +204,8 @@ public class TigerDataProvider implements StorageAwareDataProvider {
         result.add(row);
       }
 
-      LOGGER.info("Parsed {} records from TIGER shapefile for table {}",
-          result.size(), tableName);
-      ZipDownloadUtils.deleteDirectory(tempDir);
-      tempDir = null;
+      LOGGER.info("Parsed {} records from {} TIGER shapefile(s) for table {}",
+          result.size(), urls.size(), tableName);
 
       return result.iterator();
 
@@ -282,21 +297,36 @@ public class TigerDataProvider implements StorageAwareDataProvider {
     }
   }
 
-  /** Per-CD-directory memo of the congressional-district file suffix (e.g. "cd119") actually
-   *  published, discovered from the directory listing. */
-  private static final ConcurrentMap<String, String> CD_SUFFIX_BY_DIR =
-      new ConcurrentHashMap<String, String>();
+  /** Per-CD-directory memo of the congressional-district ZIP file names published for the newest
+   *  Congress in that directory — one national file, or one per state, depending on vintage. */
+  private static final ConcurrentMap<String, List<String>> CD_FILES_BY_DIR =
+      new ConcurrentHashMap<String, List<String>>();
 
   /**
-   * Discovers the congressional-district file suffix actually published under {@code cdDirUrl} by
-   * reading the directory listing (the listing IS the catalog — there is no JSON API). Census labels
-   * each TIGER vintage's CD files by the Congress number it ships (TIGER2024 ships {@code cd119},
-   * not the in-session {@code cd118}), so deriving the number from the year is wrong and 404s on
-   * every state. Returns e.g. {@code "cd119"} (the highest Congress present); memoized per directory.
-   * Throws if the listing cannot be read or contains no {@code cd<N>.zip} entry.
+   * Discovers the congressional-district ZIP files published under {@code cdDirUrl} by reading the
+   * directory listing (the listing IS the catalog — there is no JSON API). Two things vary by
+   * vintage and neither is derivable from the year:
+   *
+   * <ul>
+   *   <li>Census labels each vintage's CD files by the Congress number it actually ships, which is
+   *       not the in-session Congress for that calendar year — TIGER2024 ships {@code cd119}, not
+   *       {@code cd118}.</li>
+   *   <li>The file layout changed at the 2022 vintage. TIGER2021 and earlier publish ONE national
+   *       file ({@code tl_2021_us_cd116.zip}). TIGER2023 and later publish one file PER STATE
+   *       ({@code tl_2023_01_cd118.zip} …) and no national file at all. TIGER2022 carries both, for
+   *       different Congresses: 56 per-state {@code cd118} files alongside a national
+   *       {@code cd116}.</li>
+   * </ul>
+   *
+   * <p>So take the highest Congress number present, then return every file that ships it — one
+   * national file under the old layout, 56 state files under the new one. Anchoring on the highest
+   * Congress rather than on the presence of a national file is what keeps 2022 correct: its
+   * national file is a two-Congress-old leftover, not the vintage's real content.
+   *
+   * <p>Memoized per directory. Throws if the listing cannot be read or ships no {@code cd<N>.zip}.
    */
-  private static String discoverCdSuffix(String cdDirUrl) throws IOException {
-    String cached = CD_SUFFIX_BY_DIR.get(cdDirUrl);
+  private static List<String> discoverCdFiles(String cdDirUrl) throws IOException {
+    List<String> cached = CD_FILES_BY_DIR.get(cdDirUrl);
     if (cached != null) {
       return cached;
     }
@@ -309,8 +339,11 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       conn.disconnect();
       throw new IOException("HTTP " + status + " reading CD catalog listing " + cdDirUrl);
     }
-    int maxCongress = -1;
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("cd(\\d+)\\.zip");
+    // Congress number -> the file names shipping it. A listing names each file more than once
+    // (href plus link text), so the per-Congress collection dedupes and orders by name.
+    TreeMap<Integer, Set<String>> byCongress = new TreeMap<Integer, Set<String>>();
+    java.util.regex.Pattern pattern =
+        java.util.regex.Pattern.compile("(tl_\\d{4}_[0-9a-z]+_cd(\\d+)\\.zip)");
     try (InputStream in = conn.getInputStream()) {
       java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
       byte[] buf = new byte[65536];
@@ -320,21 +353,55 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       }
       java.util.regex.Matcher matcher = pattern.matcher(bos.toString("UTF-8"));
       while (matcher.find()) {
-        int n = Integer.parseInt(matcher.group(1));
-        if (n > maxCongress) {
-          maxCongress = n;
+        Integer congress = Integer.valueOf(matcher.group(2));
+        Set<String> names = byCongress.get(congress);
+        if (names == null) {
+          names = new TreeSet<String>();
+          byCongress.put(congress, names);
         }
+        names.add(matcher.group(1));
       }
     } finally {
       conn.disconnect();
     }
-    if (maxCongress < 0) {
+    if (byCongress.isEmpty()) {
       throw new IOException("No cd<N>.zip entries found in CD catalog listing " + cdDirUrl);
     }
-    String suffix = "cd" + maxCongress;
-    CD_SUFFIX_BY_DIR.put(cdDirUrl, suffix);
-    LOGGER.info("TIGER CD catalog: {} publishes {}", cdDirUrl, suffix);
-    return suffix;
+    Integer newest = byCongress.lastKey();
+    List<String> files =
+        Collections.unmodifiableList(new ArrayList<String>(byCongress.get(newest)));
+    CD_FILES_BY_DIR.put(cdDirUrl, files);
+    LOGGER.info("TIGER CD catalog: {} publishes cd{} as {} file(s)", cdDirUrl, newest, files.size());
+    return files;
+  }
+
+  /**
+   * URLs to download for one fetch unit. Every table resolves to a single file except congressional
+   * districts, whose 2022-and-later vintages are published per state (see {@link #discoverCdFiles}).
+   * Those fan out here rather than through a {@code state_fips} dimension so the per-vintage layout
+   * difference stays inside this provider and the table keeps one partition per year.
+   */
+  private List<String> buildDownloadUrls(String tableName, String year, String stateFips)
+      throws IOException {
+    if ("congressional_districts".equals(tableName)) {
+      int yearInt = Integer.parseInt(year);
+      String subdir2010 = (yearInt == 2010) ? "/2010" : "";
+      String cdDirUrl = String.format("%s/TIGER%s/CD%s/", TIGER_BASE_URL, year, subdir2010);
+      List<String> urls = new ArrayList<String>();
+      for (String file : discoverCdFiles(cdDirUrl)) {
+        urls.add(cdDirUrl + file);
+      }
+      return urls;
+    }
+    String url = buildDownloadUrl(tableName, year, stateFips);
+    return url == null ? Collections.<String>emptyList() : Collections.singletonList(url);
+  }
+
+  /** Last path segment of a download URL without its {@code .zip} suffix, used to give each file
+   *  of a multi-file vintage its own cache directory. */
+  private static String fileStem(String url) {
+    String name = url.substring(url.lastIndexOf('/') + 1);
+    return name.endsWith(".zip") ? name.substring(0, name.length() - 4) : name;
   }
 
   private String buildDownloadUrl(String tableName, String year, String stateFips)
@@ -401,22 +468,10 @@ public class TigerDataProvider implements StorageAwareDataProvider {
           TIGER_BASE_URL, tigerPath, subdir2010, year, cbsaSuffix);
 
     case "congressional_districts":
-      // Census labels each TIGER vintage's CD files by the Congress number it actually ships, which
-      // is NOT the in-session congress for that calendar year (TIGER2024 ships cd119, not cd118).
-      // Computing the number from the year produced 404s; discover the real suffix from the CD
-      // directory listing (the listing IS the catalog).
-      //
-      // CD is published as ONE NATIONAL file per vintage (tl_<year>_us_cd<NNN>.zip), never per
-      // state — verified against census.gov for 2013/2017/2021, where tl_<year>_<fips>_cd<NNN>.zip
-      // is absent while the _us_ form returns 206. Building a per-state URL therefore requested 51
-      // nonexistent files per year; census.gov stalls rather than 404s on those, so each burned the
-      // full 120s read timeout x4 retries and the table never ingested. The state_fips fan-out was
-      // removed from this table's dimensions to match (see geo-schema.yaml); state remains a
-      // regular column read from the shapefile. Mirrors the cbsa case above.
-      String cdDirUrl = String.format("%s/%s/CD%s/", TIGER_BASE_URL, tigerPath, subdir2010);
-      String cdSuffix = discoverCdSuffix(cdDirUrl);
-      return String.format("%s/%s/CD%s/tl_%s_us_%s.zip",
-          TIGER_BASE_URL, tigerPath, subdir2010, year, cdSuffix);
+      // Handled by buildDownloadUrls: the vintage decides both the Congress number and
+      // whether CD ships as one national file or one per state, and only a directory
+      // listing can tell us which. Nothing here can name that file from the year alone.
+      return null;
 
     case "school_districts":
       if (stateFips == null) {

@@ -1078,21 +1078,22 @@ partitionedTables:
         start: "2023"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 2
-      # No state_fips fan-out: Census publishes CD as ONE NATIONAL file per vintage
-      # (tl_<year>_us_cd<NNN>.zip), never per state — verified 2013/2017/2021, where the
-      # per-state name is absent while the _us_ name returns 206. Fanning out by state
-      # requested 51 nonexistent files per year, and census.gov stalls rather than 404s on
-      # those, so each burned the full read timeout x4 retries. state_fips remains a declared
-      # COLUMN below, read from the shapefile, so per-district state is still available.
-      # Mirrors cbsa, which is national and already dimensioned [type, year].
+      # No state_fips fan-out here even though 2022-and-later vintages ARE published per state:
+      # the layout differs by vintage (2021 and earlier ship one national file, 2023 and later
+      # ship 56 state files, 2022 ships both for different Congresses), and only the CD/ directory
+      # listing says which. TigerDataProvider.buildDownloadUrls reads that listing and downloads
+      # whichever set the vintage carries, so the table keeps one partition per year and the
+      # difference stays out of the model. state_fips remains a declared COLUMN below, read from
+      # the shapefile, so per-district state is still available.
 
-    # TIGER tables use TigerDataProvider for binary shapefile handling
-    # Note: the cd<NNN> suffix is the Congress number the vintage actually ships (TIGER2024
-    # ships cd119, not the in-session cd118), so TigerDataProvider.discoverCdSuffix reads it
-    # from the CD/ directory listing rather than deriving it from the year.
+    # TIGER tables use TigerDataProvider for binary shapefile handling.
+    # The url below is NOT fetched — the dataProvider hook builds its own URLs. It records the
+    # directory that IS the catalog: TigerDataProvider.discoverCdFiles reads this listing to learn
+    # both the Congress number the vintage ships (TIGER2024 ships cd119, not the in-session cd118)
+    # and whether that Congress ships as one national file or one per state.
     source:
       type: http
-      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/tl_{year}_us_cd118.zip"
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/"
       method: GET
       response:
         format: json
