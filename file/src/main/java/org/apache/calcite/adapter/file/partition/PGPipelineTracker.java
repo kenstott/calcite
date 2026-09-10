@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import org.apache.calcite.adapter.file.etl.SecretRedaction;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -509,6 +511,11 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
    * <p>Only {@code error_message} is sanitized. {@code source_key} is an identity — silently
    * altering it would write a marker under a key no reader looks up, so a NUL there stays a loud
    * failure.
+   *
+   * <p>Credentials are stripped here as well as at the point the URL becomes a diagnostic. This
+   * column is durable and readable by anyone with database access, so it is the last place a key
+   * should be allowed to land; redacting at both ends means a diagnostic built somewhere that
+   * has not been routed through {@link SecretRedaction} still cannot persist one.
    */
   private static String sanitizeErrorMessage(String errorMessage) {
     if (errorMessage == null) {
@@ -517,6 +524,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     String cleaned = errorMessage.indexOf(PG_FORBIDDEN_CHAR) >= 0
         ? errorMessage.replace(PG_FORBIDDEN_CHAR, ' ')
         : errorMessage;
+    cleaned = SecretRedaction.redact(cleaned);
     return cleaned.length() > 1000 ? cleaned.substring(0, 1000) : cleaned;
   }
 

@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.file.partition;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.SecretRedaction;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -345,10 +347,14 @@ public class DuckDBPartitionStatusStore implements PipelineTracker, AutoCloseabl
       stmt.setString(3, sourceTable);
       stmt.setString(4, targetPattern);
       stmt.setLong(5, now);
-      stmt.setString(6, errorMessage != null ? errorMessage.substring(0, Math.min(1000, errorMessage.length())) : null);
+      // Redacted before both the durable write and the log line: a source that authenticates
+      // with a query-string key puts it in every request URL, so any diagnostic built from one
+      // carries it into a row that outlives the run.
+      String safeMessage = SecretRedaction.redact(errorMessage);
+      stmt.setString(6, safeMessage != null ? safeMessage.substring(0, Math.min(1000, safeMessage.length())) : null);
       stmt.executeUpdate();
       LOGGER.info("Marked {} with key {} as ERROR at {} (message={})",
-          alternateName, keyValues, now, errorMessage != null ? errorMessage.substring(0, Math.min(100, errorMessage.length())) : "null");
+          alternateName, keyValues, now, safeMessage != null ? safeMessage.substring(0, Math.min(100, safeMessage.length())) : "null");
     } catch (SQLException e) {
       LOGGER.error("Error marking error status for {}/{}: {}",
           alternateName, keyValues, e.getMessage());

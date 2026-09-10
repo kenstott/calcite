@@ -158,17 +158,21 @@ public final class RetryableHttp {
       long retryAfterMs = retryAfterMillis(conn);
       conn.disconnect();
       if (isRetryableStatus(status, rateLimit)) {
-        last = new HttpStatusException(status, "HTTP " + status + " from " + url);
-        LOGGER.warn("HTTP {} (attempt {}/{}) for {}{}", status, attempt + 1, maxRetries + 1, url,
+        last = new HttpStatusException(status,
+            "HTTP " + status + " from " + SecretRedaction.redact(url));
+        LOGGER.warn("HTTP {} (attempt {}/{}) for {}{}", status, attempt + 1, maxRetries + 1,
+            SecretRedaction.redact(url),
             retryAfterMs >= 0 ? " — Retry-After " + (retryAfterMs / 1000) + "s" : "");
         if (attempt < maxRetries) {
           backoff(attempt, retryAfterMs, baseBackoffMs);
         }
         continue;
       }
-      throw new HttpStatusException(status, "HTTP " + status + " from " + url);
+      throw new HttpStatusException(status,
+          "HTTP " + status + " from " + SecretRedaction.redact(url));
     }
-    throw last != null ? last : new IOException("retries exhausted for " + url);
+    throw last != null ? last
+        : new IOException("retries exhausted for " + SecretRedaction.redact(url));
   }
 
   /** Enforces a minimum spacing of {@code 1000/requestsPerSecond} ms between calls, JVM-wide. */
