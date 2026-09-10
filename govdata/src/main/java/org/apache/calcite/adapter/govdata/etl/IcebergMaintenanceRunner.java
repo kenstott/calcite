@@ -126,6 +126,15 @@ public class IcebergMaintenanceRunner {
         hadoopConf.set("fs.s3a.path.style.access", "true");
         hadoopConfig.put("fs.s3a.endpoint", endpoint);
         hadoopConfig.put("fs.s3a.path.style.access", "true");
+        // R2 rejects AWS region names ("Must be one of: wnam, enam, ... auto") while the
+        // S3A/SDK client still requires a value, so an unset region makes every request
+        // 400. MinIO ignores it. Same settings IcebergDirectLoader uses.
+        hadoopConf.set("fs.s3a.endpoint.region", "auto");
+        hadoopConf.set("fs.s3a.change.detection.mode", "none");
+        hadoopConf.set("fs.s3a.change.detection.version.required", "false");
+        hadoopConfig.put("fs.s3a.endpoint.region", "auto");
+        hadoopConfig.put("fs.s3a.change.detection.mode", "none");
+        hadoopConfig.put("fs.s3a.change.detection.version.required", "false");
       }
     }
 

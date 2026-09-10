@@ -83,6 +83,12 @@ public final class StatisticsBackfillRunner {
     if (endpoint != null && !endpoint.isEmpty()) {
       conf.set("fs.s3a.endpoint", endpoint);
       conf.set("fs.s3a.path.style.access", "true");
+      // R2 rejects AWS region names ("Must be one of: wnam, enam, ... auto") while the
+      // S3A/SDK client still requires a value, so an unset region makes every request
+      // 400. MinIO ignores it. Same settings IcebergDirectLoader uses.
+      conf.set("fs.s3a.endpoint.region", "auto");
+      conf.set("fs.s3a.change.detection.mode", "none");
+      conf.set("fs.s3a.change.detection.version.required", "false");
     }
     conf.set("fs.s3a.access.key", String.valueOf(System.getenv("AWS_ACCESS_KEY_ID")));
     conf.set("fs.s3a.secret.key", String.valueOf(System.getenv("AWS_SECRET_ACCESS_KEY")));
