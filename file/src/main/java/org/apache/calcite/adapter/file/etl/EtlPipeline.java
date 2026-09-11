@@ -2598,10 +2598,149 @@ public class EtlPipeline {
     if (data != null && !rowTransformers.isEmpty()) {
       data = applyRowTransformers(data, rowTransformers, config, variables);
     }
+    // Validators run after all rowTransformers, per HooksConfig's documented execution order.
+    List<Validator> validators = loadValidators(config.getHooks());
+    if (data != null && !validators.isEmpty()) {
+      data = applyValidators(data, validators, config, pipelineName);
+    }
     // DQ sample cap (GOVDATA_DQ): bound rows per fetch-unit. Applied after transformers so the
     // cap bounds the final output; cache-safe since caching sources write their body first.
     data = applyDqRowLimit(data, pipelineName);
     return data;
+  }
+
+  /**
+   * Loads class-based Validators configured in hooks.validators.
+   *
+   * <p>Expression-based entries are rejected with a loud, immediate error — see
+   * {@link #loadRowTransformers} for why a silent skip is unacceptable here. Validator's
+   * DROP/WARN/FAIL semantics ({@link ValidationResult}) were fully specified but had zero
+   * callers anywhere in this codebase before this method; a validators: block in any schema
+   * YAML previously kept every row unconditionally regardless of the configured checks.
+   *
+   * @param hooksConfig Hooks configuration (may be null)
+   * @return Ordered list of Validator instances (empty if none configured)
+   */
+  static List<Validator> loadValidators(HooksConfig hooksConfig) {
+    if (hooksConfig == null || hooksConfig.getValidators().isEmpty()) {
+      return Collections.emptyList();
+    }
+    List<Validator> validators = new ArrayList<Validator>();
+    for (HooksConfig.ValidatorConfig vc : hooksConfig.getValidators()) {
+      if (!vc.isClassBased()) {
+        throw new IllegalArgumentException(
+            "validators entry has type='" + vc.getType() + "' (condition=" + vc.getCondition()
+                + ", action=" + vc.getAction() + ") — expression-based validators are not "
+                + "implemented; use 'type: class' with a class implementing Validator");
+      }
+      String className = vc.getClassName();
+      try {
+        Class<?> clazz = Class.forName(className);
+        if (!Validator.class.isAssignableFrom(clazz)) {
+          throw new IllegalArgumentException(
+              "Class " + className + " does not implement Validator");
+        }
+        validators.add((Validator) clazz.getDeclaredConstructor().newInstance());
+        LOGGER.info("Loaded Validator: {}", className);
+      } catch (ClassNotFoundException e) {
+        throw new IllegalArgumentException("Validator class not found: " + className, e);
+      } catch (Exception e) {
+        throw new IllegalArgumentException("Failed to instantiate Validator: " + className, e);
+      }
+    }
+    return validators;
+  }
+
+  /**
+   * Wraps a source iterator with the configured Validator chain as a streaming filter.
+   *
+   * <p>Each row flows through every validator in order; the first non-VALID result decides the
+   * row's fate (remaining validators are skipped for that row, matching
+   * {@code govdata-hooks}' documented "first DROP wins" order). {@code DROP} removes the row
+   * silently; {@code WARN} keeps it and logs; {@code FAIL} throws, ending the whole pipeline for
+   * this fetch (never silent — the exception carries the validator's message).
+   *
+   * <p>When a validator itself throws, {@link HooksConfig.HookErrorHandling#getValidatorAction()}
+   * governs the outcome: {@code fail} propagates, otherwise the error is logged and treated as
+   * a passing (WARN-equivalent) result for that row — matching the "continue" default documented
+   * for validator errors (distinct from a validator's own FAIL action, which always propagates).
+   */
+  static Iterator<Map<String, Object>> applyValidators(
+      final Iterator<Map<String, Object>> source,
+      final List<Validator> validators,
+      final EtlPipelineConfig config,
+      final String pipelineName) {
+    final HooksConfig.HookErrorHandling.ErrorAction errorAction =
+        config.getHooks() != null && config.getHooks().getErrorHandling() != null
+            ? config.getHooks().getErrorHandling().getValidatorAction()
+            : HooksConfig.HookErrorHandling.ErrorAction.CONTINUE;
+    return new CloseableRowIterator() {
+      private Map<String, Object> nextRow;
+      private boolean primed;
+
+      @Override public void close() {
+        closeQuietly(source);
+      }
+
+      private void advance() {
+        nextRow = null;
+        while (source.hasNext()) {
+          Map<String, Object> row = source.next();
+          boolean keep = true;
+          for (Validator validator : validators) {
+            ValidationResult result;
+            try {
+              result = validator.validate(row);
+            } catch (RuntimeException e) {
+              if (errorAction == HooksConfig.HookErrorHandling.ErrorAction.FAIL) {
+                throw e;
+              }
+              LOGGER.warn("Validator {} failed on a row for '{}' — treating as valid "
+                  + "(action={}): {}", validator.getClass().getName(), pipelineName,
+                  errorAction, e.getMessage());
+              continue;
+            }
+            if (result.getAction() == ValidationResult.Action.FAIL) {
+              throw new IllegalStateException("Validator " + validator.getClass().getName()
+                  + " failed pipeline '" + pipelineName + "': " + result.getMessage());
+            }
+            if (result.getAction() == ValidationResult.Action.WARN) {
+              LOGGER.warn("Validator {} warned for '{}': {}",
+                  validator.getClass().getName(), pipelineName, result.getMessage());
+            }
+            if (!result.shouldInclude()) {
+              keep = false;
+              break;
+            }
+          }
+          if (keep) {
+            nextRow = row;
+            return;
+          }
+        }
+      }
+
+      @Override public boolean hasNext() {
+        if (!primed) {
+          advance();
+          primed = true;
+        }
+        return nextRow != null;
+      }
+
+      @Override public Map<String, Object> next() {
+        if (!primed) {
+          advance();
+          primed = true;
+        }
+        if (nextRow == null) {
+          throw new NoSuchElementException();
+        }
+        Map<String, Object> row = nextRow;
+        primed = false;
+        return row;
+      }
+    };
   }
 
   /**
@@ -2826,7 +2965,16 @@ public class EtlPipeline {
     List<RowTransformer> transformers = new ArrayList<RowTransformer>();
     for (HooksConfig.TransformerConfig tc : hooksConfig.getRowTransformers()) {
       if (!tc.isClassBased()) {
-        continue;
+        // Expression-based rowTransformers are declared in HooksConfig/TransformerConfig and
+        // documented, but no expression evaluator for them has ever been implemented — silently
+        // skipping the entry (the prior behavior) left every row completely untransformed with
+        // no error, which is indistinguishable from a correctly-configured no-op transformer.
+        // Fail loudly instead: a misconfigured or not-yet-supported hook must never look like a
+        // working one. Use a type: class entry (see RowTransformer's javadoc) instead.
+        throw new IllegalArgumentException(
+            "rowTransformers entry has type='" + tc.getType() + "' (column=" + tc.getColumn()
+                + ", expression=" + tc.getExpression() + ") — expression-based rowTransformers "
+                + "are not implemented; use 'type: class' with a class implementing RowTransformer");
       }
       String className = tc.getClassName();
       try {

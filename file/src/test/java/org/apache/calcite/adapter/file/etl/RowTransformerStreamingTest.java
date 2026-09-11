@@ -221,18 +221,32 @@ public class RowTransformerStreamingTest {
 
   // ── reflective loading ──────────────────────────────────────────────────────
 
-  @Test void loadsClassBasedTransformersInOrderSkippingExpressions() {
+  @Test void loadsClassBasedTransformersInOrder() {
     List<HooksConfig.TransformerConfig> configs = new ArrayList<HooksConfig.TransformerConfig>();
     configs.add(HooksConfig.TransformerConfig.ofClass(FanOut.class.getName()));
-    configs.add(HooksConfig.TransformerConfig.ofExpression("col", "1+1")); // skipped
     configs.add(HooksConfig.TransformerConfig.ofClass(Tagger.class.getName()));
     HooksConfig hooks = HooksConfig.builder().rowTransformers(configs).build();
 
     List<RowTransformer> loaded = EtlPipeline.loadRowTransformers(hooks);
 
-    assertEquals(2, loaded.size(), "only the two class-based configs load");
+    assertEquals(2, loaded.size());
     assertInstanceOf(FanOut.class, loaded.get(0));
     assertInstanceOf(Tagger.class, loaded.get(1));
+  }
+
+  /**
+   * Expression-based rowTransformers have no evaluator implementation — {@link
+   * EtlPipeline#loadRowTransformers} must fail loudly rather than silently skip the entry
+   * (a silent skip is indistinguishable from a correctly-configured no-op transformer and once
+   * shipped exactly that way with no error, see kenstott/govdata-ops#207).
+   */
+  @Test void expressionBasedTransformerConfigThrows() {
+    List<HooksConfig.TransformerConfig> configs = new ArrayList<HooksConfig.TransformerConfig>();
+    configs.add(HooksConfig.TransformerConfig.ofClass(FanOut.class.getName()));
+    configs.add(HooksConfig.TransformerConfig.ofExpression("col", "1+1"));
+    HooksConfig hooks = HooksConfig.builder().rowTransformers(configs).build();
+
+    assertThrows(IllegalArgumentException.class, () -> EtlPipeline.loadRowTransformers(hooks));
   }
 
   @Test void loadReturnsEmptyWhenNoHooks() {
