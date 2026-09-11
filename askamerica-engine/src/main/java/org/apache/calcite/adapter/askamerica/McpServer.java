@@ -2232,7 +2232,13 @@ public class McpServer {
             + "`file.csv.gz` returns as plain text/CSV, not an \"unrecognized binary content "
             + "type\" error. Supports POST via the optional `method`/`body` params for the rare "
             + "API that requires one. One tool for any URL; you never need to guess the file "
-            + "type first.",
+            + "type first. This is a RAW fetch, not an extraction tool: there is no `prompt` or "
+            + "instruction-style argument that summarizes or filters the content for you (that "
+            + "convention exists on other fetch tools, not this one) — the ONLY accepted "
+            + "arguments are `url` (required), `max_pages`, `max_sheets`, "
+            + "`max_rows_per_sheet`, `max_chars`, `method`, `body`, `body_content_type`. "
+            + "Passing anything else errors immediately; call it with just `url` unless one of "
+            + "those specific limits or the POST params is actually needed.",
             schema(webFetchProps, new String[]{"url"})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
@@ -3216,6 +3222,8 @@ public class McpServer {
                     }
                     enforceExclusionDisclosure(secs);
                     enforceTableProvenance(secs);
+                    enforceStatisticalProvenance(secs);
+                    enforceRecipeConsulted();
                     ReportPage.Section appendix = queryAppendix();
                     if (appendix != null) {
                         secs.add(appendix);
@@ -4949,6 +4957,51 @@ public class McpServer {
      *  "without" over 1500 characters from anything about the exclusion. */
     private static final int DISCLOSURE_PROXIMITY_CHARS = 400;
 
+    /**
+     * A {@code recipe_not_consulted:high} diagnostic is advice the caller can silently ignore
+     * unless something makes ignoring it costly. Measured live (q12, 2026-09-11): the notice
+     * fired on the very first {@code search_catalog} call and was never surfaced or acted on
+     * anywhere in the final report -- the run never called {@code find_recipe} at all, even
+     * though the warning explicitly said to. Refuses the publish in that exact case: the
+     * diagnostic fired this session AND find_recipe was never called. A single, cheap
+     * find_recipe call closes this every time it actually applies; an empty result is itself a
+     * valid resolution (it means the catalog has no recipe for this question, not that the run
+     * did something wrong), so this never blocks a genuinely recipe-less question -- only one
+     * that never checked.
+     */
+    private static void enforceRecipeConsulted() {
+        if (RECIPE_CONSULTED.get()) {
+            return;
+        }
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        boolean fired = false;
+        for (ObjectNode e : snapshot) {
+            for (JsonNode t : e.path("diagnostic_types")) {
+                if (t.asText("").startsWith("recipe_not_consulted:")) {
+                    fired = true;
+                    break;
+                }
+            }
+            if (fired) {
+                break;
+            }
+        }
+        if (!fired) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "This report cannot be published yet: a recipe_not_consulted diagnostic fired "
+            + "earlier this session (on search_catalog or on a multi-step query) and "
+            + "find_recipe has still not been called. Call find_recipe with a plain-words "
+            + "topic for what this question computes before publishing -- an empty result is a "
+            + "valid outcome (the catalog has no recipe for this yet) and does not block the "
+            + "publish once you have actually called it, but silently proceeding without "
+            + "calling it at all does.");
+    }
+
     private static void enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
@@ -5114,6 +5167,108 @@ public class McpServer {
             + "different table, run the real query against it and cite that one instead; if "
             + "the figure genuinely came from a source outside this corpus (a paper, a press "
             + "release), say so plainly rather than describing it as warehouse-native.");
+    }
+
+    /** Verb shapes that mean "I actually ran this," not just "this concept exists" — mirrors
+     *  {@link #PROVENANCE_CLAIM_WORDS} but for a statistical METHOD rather than a table. */
+    private static final java.util.regex.Pattern STAT_CLAIM_WORDS = java.util.regex.Pattern
+        .compile("(?i)\\bran\\b|\\brun\\b|computed|estimated|found (?:a|no|that)|"
+            + "shows?\\b|showed|results? (?:show|indicate)|coefficient (?:of|is|was)|"
+            + "regression (?:of|predicting|shows|showed)|test(?:ed)? (?:for|whether)|"
+            + "p\\s*[<=]\\s*0|p-value");
+
+    /** Named statistical method -> the MCP tool(s) that actually perform it. A report claiming
+     *  one of these ran needs a matching call somewhere in {@code calls.jsonl}; naming the
+     *  method as a general concept with no run-claim verb nearby is not policed. */
+    private static final java.util.LinkedHashMap<java.util.regex.Pattern, String[]>
+        STAT_METHOD_TOOLS = new java.util.LinkedHashMap<>();
+    static {
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)\\bOLS\\b|ordinary least squares|multivariate OLS"),
+            new String[]{"ols_regression", "robust_regression", "flexible_regression",
+                "panel_fixed_effects"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)difference[- ]in[- ]differences|diff[- ]in[- ]diff\\b|\\bDiD\\b"),
+            new String[]{"diff_in_diff"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)instrumental variable|\\b2SLS\\b|IV regression"),
+            new String[]{"iv_2sls"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)double machine learning|double[- ]ML\\b"),
+            new String[]{"double_ml_ate"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)event study"),
+            new String[]{"event_study"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)panel fixed effects|fixed[- ]effects regression"),
+            new String[]{"panel_fixed_effects"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)Welch'?s t[- ]test|\\bt[- ]test\\b|hypothesis test"),
+            new String[]{"hypothesis_test"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)Gini coefficient"),
+            new String[]{"gini_coefficient"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)quantile binning"),
+            new String[]{"quantile_binning_test"});
+    }
+
+    /**
+     * A report claiming a named statistical method (OLS, diff-in-diff, a t-test, ...) was run,
+     * with no matching tool call anywhere in this session, is the same class of fabricated
+     * provenance {@link #enforceTableProvenance} already catches for tables — measured live
+     * (q7 and q34, 2026-09-11 rejudges): two separate reports asserted a specific method's
+     * result ("Multivariate OLS with both together", a CO2-intensity figure implying a
+     * computation) with no corresponding {@code ols_regression} (or any stats tool) call in
+     * {@code calls.jsonl} at all. Only fires when the method name sits near a verb claiming it
+     * was actually run ({@link #STAT_CLAIM_WORDS}) — naming a method as a general concept
+     * ("an OLS regression could test this") is not policed.
+     */
+    private static void enforceStatisticalProvenance(java.util.List<ReportPage.Section> secs) {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        java.util.Set<String> toolsCalled = new java.util.HashSet<>();
+        for (ObjectNode e : snapshot) {
+            toolsCalled.add(e.path("tool").asText(""));
+        }
+        StringBuilder text = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            text.append(sec.heading == null ? "" : sec.heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+        }
+        String body = text.toString().replaceAll("<[^>]+>", " ");
+        java.util.LinkedHashSet<String> unsupported = new java.util.LinkedHashSet<>();
+        for (java.util.Map.Entry<java.util.regex.Pattern, String[]> ent
+                : STAT_METHOD_TOOLS.entrySet()) {
+            java.util.regex.Matcher mm = ent.getKey().matcher(body);
+            while (mm.find()) {
+                boolean satisfied = false;
+                for (String toolName : ent.getValue()) {
+                    if (toolsCalled.contains(toolName)) {
+                        satisfied = true;
+                        break;
+                    }
+                }
+                if (satisfied) {
+                    continue;
+                }
+                int winStart = Math.max(0, mm.start() - DISCLOSURE_PROXIMITY_CHARS);
+                int winEnd = Math.min(body.length(), mm.end() + DISCLOSURE_PROXIMITY_CHARS);
+                if (STAT_CLAIM_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                    unsupported.add(mm.group().trim() + " (needs one of: "
+                        + String.join(", ", ent.getValue()) + ")");
+                }
+            }
+        }
+        if (unsupported.isEmpty()) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "This report cannot be published yet: it claims a statistical method was run with "
+            + "no matching tool call anywhere in this session — " + String.join("; ", unsupported)
+            + ". Either call the matching tool for real and cite its actual result, or rewrite "
+            + "the sentence so it does not claim the method was executed (e.g. describe it as a "
+            + "check that could be run, or drop the claim). A reader cannot tell a result you "
+            + "actually computed from one you did not.");
     }
 
     /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
