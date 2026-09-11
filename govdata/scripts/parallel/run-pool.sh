@@ -46,6 +46,7 @@ OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL proce
 # 3200MB absolute ceiling. Tunable via env.
 WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-2048}"
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
+RESET_BUDGET_FILE=false  # --reset-budget forces this invocation's -j/-r to become the new baseline
 
 # Parse flags
 while [ $# -gt 0 ]; do
@@ -72,6 +73,8 @@ while [ $# -gt 0 ]; do
       PARALLEL_THREADS=$2; shift 2 ;;
     --force)
       export FORCE=true; shift ;;
+    --reset-budget)
+      RESET_BUDGET_FILE=true; shift ;;
     --schema)
       if [ -z "${2:-}" ]; then
         echo "ERROR: --schema requires a schema name" >&2; exit 1
@@ -102,6 +105,15 @@ if [ $# -eq 0 ]; then
   echo "  $0 -j 4 daily              — hard cap at 4 concurrent"
   echo "  $0 -p 4 historical         — 4 parallel entity threads per worker"
   echo "  $0 --force daily           — bypass release-window checks (backfill/testing)"
+  echo "  $0 --reset-budget daily    — force -j/-r to overwrite a live-edited pool-budget.conf"
+  echo ""
+  echo "  -j/-r seed runs/pool-budget.conf only if it doesn't already exist; while a pool is"
+  echo "  running, another process can edit RESERVE_MB/MAX_WORKERS in that same file to borrow"
+  echo "  headroom — picked up within one poll cycle (~10s), no signal/PID needed, and it survives"
+  echo "  this pool restarting (run-scheduled.sh window boundary, crash-relaunch). Pass"
+  echo "  --reset-budget to instead force this invocation's -j/-r as the new baseline, overwriting"
+  echo "  whatever is on disk. Only gates new admissions; a running worker is never killed to"
+  echo "  honor a lowered value."
   echo ""
   echo "  Aliases:"
   echo "    daily      — recurring workers: one SEC year (current), all non-SEC schemas (daily mode)"
@@ -475,10 +487,62 @@ else
   total_mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 fi
 budget_mb=$((total_mem_mb - OS_RESERVE_MB))
+
+# Live budget file: re-read every loop iteration (see refresh_budget below). While a pool is
+# running, any other process can edit RESERVE_MB/MAX_WORKERS in this file to borrow headroom
+# (e.g. the remediation-ledger-runner raising MAX_WORKERS for a production job, or an
+# interactive session that needs to build+test something memory-heavy) — no signal or PID
+# targeting needed. Fixed, predictable path (not timestamped like POOL_LOG) so a borrower can
+# find it without knowing this process's PID.
+BUDGET_FILE="$POOL_LOG_DIR/pool-budget.conf"
+write_budget_file() {
+  { echo "RESERVE_MB=$OS_RESERVE_MB"; echo "MAX_WORKERS=$MAX_WORKERS"; } > "$BUDGET_FILE.tmp"
+  mv -f "$BUDGET_FILE.tmp" "$BUDGET_FILE"
+}
+
+# Re-reads BUDGET_FILE (if present) and updates OS_RESERVE_MB/MAX_WORKERS/budget_mb from it.
+# Malformed or missing values fall back to the current in-memory value rather than erroring —
+# a borrower's typo or a half-written file (unlikely given the atomic mv above, but cheap to
+# guard) should never wedge the pool. Called once per main-loop iteration (~10s cadence).
+refresh_budget() {
+  [ -f "$BUDGET_FILE" ] || return 0
+  local _reserve _workers
+  _reserve=$(grep -m1 '^RESERVE_MB=' "$BUDGET_FILE" 2>/dev/null | cut -d= -f2)
+  _workers=$(grep -m1 '^MAX_WORKERS=' "$BUDGET_FILE" 2>/dev/null | cut -d= -f2)
+  if [[ "$_reserve" =~ ^[0-9]+$ ]] && [ "$_reserve" != "$OS_RESERVE_MB" ]; then
+    log_info "Budget file: OS_RESERVE_MB ${OS_RESERVE_MB}MB -> ${_reserve}MB"
+    OS_RESERVE_MB=$_reserve
+  fi
+  if [[ "$_workers" =~ ^[0-9]+$ ]] && [ "$_workers" != "$MAX_WORKERS" ]; then
+    log_info "Budget file: MAX_WORKERS ${MAX_WORKERS} -> ${_workers}"
+    MAX_WORKERS=$_workers
+  fi
+  budget_mb=$((total_mem_mb - OS_RESERVE_MB))
+}
+
+# Seed on first run, or when --reset-budget explicitly asks this invocation's -j/-r to become
+# the new baseline. Otherwise PRESERVE whatever is already on disk — a prior run-pool.sh
+# unconditionally overwrote this file on every startup, which silently reverted a live borrow
+# (e.g. the remediation-ledger-runner raising MAX_WORKERS) the moment run-scheduled.sh's window
+# boundary (or a crash-relaunch, as often as every 30s) restarted the pool. Warn rather than
+# stay silent when this invocation's own flags disagree with the preserved file, so a real
+# intended baseline change doesn't look like a no-op.
+if $RESET_BUDGET_FILE || [ ! -f "$BUDGET_FILE" ]; then
+  write_budget_file
+else
+  _od_reserve=$(grep -m1 '^RESERVE_MB=' "$BUDGET_FILE" 2>/dev/null | cut -d= -f2)
+  _od_workers=$(grep -m1 '^MAX_WORKERS=' "$BUDGET_FILE" 2>/dev/null | cut -d= -f2)
+  if [ "$_od_reserve" != "$OS_RESERVE_MB" ] || [ "$_od_workers" != "$MAX_WORKERS" ]; then
+    log_info "Budget file: preserving on-disk RESERVE_MB=${_od_reserve:-?}MB/MAX_WORKERS=${_od_workers:-?} over this invocation's -r ${OS_RESERVE_MB}MB/-j ${MAX_WORKERS} (pass --reset-budget to overwrite)"
+  fi
+  refresh_budget
+fi
+
 echo "=== Pool Runner: $total workers, ${total_mem_mb}MB total, ${OS_RESERVE_MB}MB reserved, ${budget_mb}MB budget ==="
 if [ "$MAX_WORKERS" -lt 99 ]; then
   echo "    Hard cap: max $MAX_WORKERS concurrent"
 fi
+echo "    Budget file: $BUDGET_FILE (edit RESERVE_MB/MAX_WORKERS to borrow headroom while running)"
 echo "    Timeout: ${TIMEOUT_MINS}min inactivity (default; large schemas use per-schema override)"
 echo ""
 
@@ -930,6 +994,12 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     fi
     ((i++)) || true
   done
+
+  # Pick up any external edit to the budget file before deciding what to admit next. Never
+  # touches active_pids — a lowered budget/cap only takes effect on the *next* admission
+  # decision inside fill_pool below, once a running worker finishes on its own and this loop
+  # would otherwise have started another one in its place.
+  refresh_budget
 
   # Fill any open slots
   fill_pool
