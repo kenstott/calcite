@@ -288,12 +288,15 @@ partitionedTables:
       Bridge table mapping GLEIF LEI codes to SEC CIK numbers (lei, cik,
       legal_name, entity_status). Derived from the GLEIF golden copy CSV
       filtered where registration_authority_id = 'RA000665' (SEC EDGAR).
-      Current snapshot only, overwritten each run — unlike gleif_entities,
-      which keeps an append-only change history. Provides fast LEI <-> CIK
-      lookups without scanning the full GLEIF dataset. entity_org_bridge.sec_cik
-      (EIN-path matches) joins here on cik = sec_cik to reach the LEI — the
-      exact bridge for that column; do not name-match its org against
-      gleif_entities.legal_name.
+      That authority ID covers both real filer CIKs and SEC fund-series
+      identifiers (e.g. "S000005113") registered with SEC but not themselves
+      filers — a validator drops any non-numeric cik value, since a series ID
+      never matches a real CIK downstream. Current snapshot only, overwritten
+      each run — unlike gleif_entities, which keeps an append-only change
+      history. Provides fast LEI <-> CIK lookups without scanning the full
+      GLEIF dataset. entity_org_bridge.sec_cik (EIN-path matches) joins here
+      on cik = sec_cik to reach the LEI — the exact bridge for that column;
+      do not name-match its org against gleif_entities.legal_name.
 
     columns:
       - *lei_column
@@ -323,6 +326,27 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
+
+    hooks:
+      # RA000665 (SEC) in GLEIF's own golden copy mixes two different identifier shapes under
+      # the same registration authority: real numeric CIKs for operating-company filers, and
+      # SEC fund-series identifiers (e.g. "S000005113") for fund series registered with SEC but
+      # not themselves 10-K/10-Q filers. Both pass the RegistrationAuthorityID row filter above
+      # — that filter selects "reports to SEC", not "is a filer CIK". A series ID will never
+      # match a real CIK downstream (ref.canonical_org_entity's sec_cik bridge, entity_org_bridge,
+      # sec.filing_metadata joins), so it is dead weight that dilutes the mapping rather than
+      # extending it. Confirmed live 2026-09-10: 22,932 of 27,929 rows were S-prefixed series
+      # IDs against only 4,997 real numeric CIKs (see kenstott/govdata-ops#79).
+      #
+      # Class-based rowTransformer, not an expression or a validator — neither of those hook
+      # forms is actually invoked anywhere in the pipeline despite being documented:
+      # HooksConfig.getValidators() has no caller at all, and EtlPipeline.loadRowTransformers
+      # silently `continue`s past every non-class-based entry (`if (!tc.isClassBased())
+      # continue;`). Both confirmed live — an expression/validator here keeps every row
+      # unchanged with no error. Tracked separately: kenstott/govdata-ops#207.
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.ref.GleifCikNumericFilterTransformer"
 
     dimensions:
       type:
