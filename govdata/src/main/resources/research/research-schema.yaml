@@ -280,8 +280,18 @@ partitionedTables:
       sector_is_rollup/fuel_is_rollup flags. A field's taxonomy label can
       differ across the 2021 field-of-R&D revision (e.g. "Computer sciences
       and mathematics" pre-2021 vs. "Computer and information sciences"
-      post-2021); both eras' labels are preserved as-is from the source, with
-      NA years absent as null rather than zero.
+      post-2021); both eras' labels are preserved as-is from the source. A
+      field/year cell marked "NA" in the source is dropped — no row is
+      emitted for it at all, not a row with a null value — because NCSES
+      uses NA for two different reasons this table can't tell apart: a field
+      that didn't exist under that year's taxonomy, or a "(preliminary)"
+      most-recent year published only at the level-0/level-1 grain (NCSES
+      withholds level-2 sub-field detail until the following year's edition
+      finalizes it), which is why the newest year always has far fewer rows
+      than the years before it. Re-running this table's full-refresh fetch
+      after NCSES publishes the next edition picks up the finalized detail
+      automatically — a low row count for only the single most recent year
+      is expected, not a defect.
 
     dimensions:
       type:
