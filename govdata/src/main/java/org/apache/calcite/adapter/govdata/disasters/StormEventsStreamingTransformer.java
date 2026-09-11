@@ -209,8 +209,9 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       row.put("state_fips", stateFips);
       String czType = str(cols, "CZ_TYPE");
       String czFips = pad(str(cols, "CZ_FIPS"), 3);
-      row.put("county_fips",
-          "C".equals(czType) && stateFips != null && czFips != null ? stateFips + czFips : null);
+      String countyFips =
+          "C".equals(czType) && stateFips != null && czFips != null ? stateFips + czFips : null;
+      row.put("county_fips", isKnownNonMunicipioFips(countyFips) ? null : countyFips);
       row.put("state_name", str(cols, "STATE"));
       row.put("event_type", str(cols, "EVENT_TYPE"));
       row.put("cz_type", czType);
@@ -243,6 +244,34 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       return null;
     }
     return yearMonth.substring(0, 4) + "-" + yearMonth.substring(4, 6) + "-" + pad(day, 2);
+  }
+
+  /**
+   * NOAA reuses NWS zone codes in {@code CZ_FIPS} while still stamping {@code CZ_TYPE='C'}
+   * for a handful of territories/eras — confirmed live, distinct from real Census municipio
+   * FIPS and unmappable to any single county-equivalent (a zone spans multiple municipios,
+   * so there is no 1:1 remap that could recover a real code). Explicitly nulls
+   * {@code county_fips} for these rather than emitting a value that reads as a real FIPS
+   * downstream, matching the convention Guam/American Samoa's zone codes already trigger via
+   * their state remap. Same guard, called explicitly for cases where the state code alone
+   * does not tell them apart:
+   * <ul>
+   *   <li>Puerto Rico 72002/72004/72006/72008/72010/72012 — legacy 2004-2008 storm_events
+   *       rows using NWS PR public-zone numbering ({@code PRZ002}/{@code PRZ004}/…) alongside
+   *       real municipio FIPS in the same years. NCEI switched to real FIPS-only from 2009
+   *       onward, so this list is closed.</li>
+   * </ul>
+   */
+  private static boolean isKnownNonMunicipioFips(String countyFips) {
+    if (countyFips == null || countyFips.length() != 5) {
+      return false;
+    }
+    switch (countyFips) {
+      case "72002": case "72004": case "72006": case "72008": case "72010": case "72012":
+        return true;
+      default:
+        return false;
+    }
   }
 
   /** NOAA's own {@code STATE_FIPS} uses non-standard codes for 4 territories - confirmed

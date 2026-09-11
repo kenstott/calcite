@@ -876,6 +876,14 @@ partitionedTables:
       geo.counties only carries a single unified "66010"; American Samoa uses "002"/"003"
       against geo.counties' real five-district "010"-"050") — NOAA evidently numbers these two
       territories' zones on its own internal scheme with no Census county-equivalent mapping.
+      Puerto Rico has a smaller, closed variant of the same problem: 6 codes
+      (72002/72004/72006/72008/72010/72012, 331 rows total across 2004-2008 only) are NWS
+      PR public-zone codes NCEI stamped as CZ_TYPE='C' rather than 'Z' — interleaved with real
+      odd-numbered municipio FIPS (72001, 72003, ...) in the same 2004-2008 window before NCEI
+      switched to real-FIPS-only from 2009 onward. Because a zone spans multiple municipios
+      there is no 1:1 remap that could recover a real municipio code from a zone code, so
+      StormEventsStreamingTransformer explicitly nulls county_fips for these 6 values instead
+      of emitting an unresolvable FIPS.
       A second, unrelated residual: for a small number of county-type rows in the 50 states
       (confirmed live: 72 in Alaska across this table's full history, 49 in Georgia isolated to
       Jan-2025-published rows, 1 in Louisiana), CZ_FIPS itself doesn't match any real county
