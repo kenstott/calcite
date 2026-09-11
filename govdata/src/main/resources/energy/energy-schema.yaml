@@ -2713,11 +2713,25 @@ views:
 
   - name: capacity_pipeline
     comment: >
-      Planned capacity additions and retirements from EIA-860M monthly snapshots.
-      Aggregates eia_capacity_changes by state, expected change year, technology, fuel
-      category, and change type. Provides a forward-looking pipeline of new capacity
-      entering service and old capacity retiring. One row per state + change_year +
-      change_month + technology + fuel_category + change_type.
+      Capacity additions and retirements from EIA-860M annual snapshots, aggregated by
+      state, change year, technology, fuel category and change type. One row per state +
+      change_year + change_month + technology + fuel_category + change_type.
+      DEDUPLICATION: eia_capacity_changes is a cumulative snapshot in which a single event
+      reappears in every later snapshot_year it survives into (see that table's comment), so
+      this view first reduces to the newest snapshot per (plant_id, generator_id, change_year,
+      change_type) before aggregating. Without that step the totals overstate by roughly 4x —
+      measured live, the pre-deduplication figure for this view's own filter was 3,773,160 MW
+      across 72,779 rows against 918,476 MW across 14,575 real events.
+      NOT FORWARD-LOOKING, despite the view's name: no row in eia_capacity_changes carries a
+      change_year beyond the current year, and the 'Planned Addition' and 'Cancellation'
+      rows — the ones that would carry a pipeline date — have change_year NULL on every row,
+      so they aggregate into a single NULL bucket rather than a future year. 'Retirement'
+      rows are historical (1896-2023). Treat this as a record of capacity change, not a
+      pipeline of announced projects, until the planned-date mapping is fixed.
+      The source's change_type vocabulary is exactly: Addition (259,980 rows, 1891-2025),
+      Retirement (58,060, 1896-2023), Planned Addition (14,719, year NULL) and Cancellation
+      (12,725, year NULL). This view covers 'Planned Addition' and 'Retirement'; historical
+      'Addition' is deliberately excluded, which is why it is not a total-capacity view.
     sql: >
       SELECT
         c.state_abbr,
@@ -2744,8 +2758,13 @@ views:
         COUNT(*)                                                           AS unit_count,
         SUM(c.nameplate_capacity_mw)                                       AS total_nameplate_mw,
         SUM(c.net_summer_capacity_mw)                                      AS total_summer_mw
-      FROM eia_capacity_changes c
-      WHERE c.change_type IN ('Planned Addition', 'Planned Retirement', 'New Unit', 'Retirement')
+      FROM (
+        SELECT * FROM eia_capacity_changes
+        WHERE change_type IN ('Planned Addition', 'Retirement')
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY plant_id, generator_id, change_year, change_type
+          ORDER BY snapshot_year DESC) = 1
+      ) c
       GROUP BY
         c.state_abbr, c.change_year, c.change_month,
         c.technology, c.energy_source_code,
