@@ -205,10 +205,44 @@ column_templates:
 dimension_values:
 
   # Annual USDA data publishes early the following year; iterate publish year and
-  # fetch data year = publish - 1 via {effective_year}. Earliest NASS digital record ~1997.
+  # fetch data year = publish - 1 via {effective_year}. Earliest NASS digital record ~1997 per
+  # this comment's original claim — contradicted live 2026-09-11 (quickstats.nass.usda.gov
+  # returns full COUNTY-grain FIELD CROPS data for Iowa back to at least 1950, and STATE-grain
+  # back to at least 1925); not corrected here pending its own investigation, see
+  # kenstott/govdata-ops#204.
   ag_year_range: &ag_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+
+  # minYear on each of these three matches each table's currently-loaded floor (verified live
+  # against production MinIO — see kenstott/govdata-ops#115), NOT each source's absolute
+  # historical limit (NASS's own API answers for years decades earlier — see ag_year_range's
+  # comment above and #204). The floor here exists to protect what is already loaded and
+  # maintained: without it, an explicit backfill/revisit run (GOVDATA_START_YEAR set below
+  # ag_year_range's 2010 default) has nothing stopping it from silently requesting years this
+  # table was never meant to carry. Widening ag_year_range's own default `start` instead was
+  # rejected — it would double the request volume against NASS's already-throttling Azure WAF
+  # for every scheduled run, not just an explicit backfill (see #71/D-223).
+  nass_year_range: &nass_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 1994
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+
+  rma_year_range: &rma_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 1995
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+
+  fsa_year_range: &fsa_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2004
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
@@ -275,7 +309,7 @@ partitionedTables:
         - nass_crop_production
       agg_level_desc: *nass_agg_levels
       state_alpha: *nass_states
-      year: *ag_year_range
+      year: *nass_year_range
 
     columns: *nass_columns
 
@@ -386,7 +420,7 @@ partitionedTables:
         - nass_livestock_inventory
       agg_level_desc: *nass_agg_levels
       state_alpha: *nass_states
-      year: *ag_year_range
+      year: *nass_year_range
 
     columns: *nass_columns
 
@@ -485,7 +519,7 @@ partitionedTables:
     dimensions:
       type:
         - rma_crop_insurance
-      year: *ag_year_range
+      year: *rma_year_range
 
     columns:
       - name: year
@@ -1072,7 +1106,7 @@ partitionedTables:
     dimensions:
       type:
         - fsa_commodity_payments
-      year: *ag_year_range
+      year: *fsa_year_range
 
     columns:
       - name: year
