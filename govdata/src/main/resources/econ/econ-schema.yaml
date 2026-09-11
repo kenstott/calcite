@@ -4422,7 +4422,19 @@ partitionedTables:
       series: *fred_series_list
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        # start was 2020, and the tracker confirms 2020-2025 were never attempted despite
+        # being in that window (zero rows for those years; only 2026 has ever run) - not a
+        # stale marker, simply never dispatched. Raised to 1986, DCOILWTICO's own real
+        # observation_start (confirmed live via FRED's /fred/series metadata endpoint), so
+        # WTI crude - the series the reported gap was filed against - gets its actual
+        # history rather than 2026-only. The 50 curated series do not share one start date
+        # (DFF reaches 1954, DTWEXBGS only 2006), and a year before a given series' own
+        # start simply returns an empty observations array rather than erring (already
+        # relied upon by this table's own current-year-in-progress handling above), so
+        # widening past any one series' floor costs a wasted request, not a failure. Deeper
+        # floors for individual series (many reach the 1950s-60s) are a follow-up, not
+        # audited exhaustively here across all 50.
+        start: "{env:GOVDATA_START_YEAR:1986}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # FRED data typically available within days
