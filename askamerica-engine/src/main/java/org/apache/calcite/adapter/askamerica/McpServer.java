@@ -4671,23 +4671,36 @@ public class McpServer {
             + "need no chart.");
     }
 
+    /** How close a disclosure word ("excluded", "dropped", ...) must sit to a mention of the
+     *  excluded column/value for that mention to count as an actual disclosure, not a coincidence
+     *  elsewhere in the report. Chosen from the q53 incident below: the false positive was a
+     *  "without" over 1500 characters from anything about the exclusion. */
+    private static final int DISCLOSURE_PROXIMITY_CHARS = 400;
+
     private static void enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
             snapshot = new java.util.ArrayList<>(CALL_LOG);
         }
         java.util.LinkedHashSet<String> predicates = new java.util.LinkedHashSet<>();
-        java.util.LinkedHashSet<String> literals = new java.util.LinkedHashSet<>();
+        // key term per predicate: the quoted literal if present, else the column/identifier the
+        // predicate tests (e.g. "metro_nonmetro" out of "metro_nonmetro IS NOT NULL").
+        java.util.LinkedHashMap<String, String> keyTermByPredicate = new java.util.LinkedHashMap<>();
         java.util.LinkedHashSet<String> units = new java.util.LinkedHashSet<>();
         for (ObjectNode e : snapshot) {
             for (JsonNode pnode : e.path("exclusions")) {
                 String pred = pnode.asText();
                 predicates.add(pred);
-                java.util.regex.Matcher m = java.util.regex.Pattern
+                java.util.regex.Matcher qm = java.util.regex.Pattern
                     .compile("'([^']+)'").matcher(pred);
-                while (m.find()) {
-                    literals.add(m.group(1));
+                if (qm.find()) {
+                    keyTermByPredicate.put(pred, qm.group(1));
+                    continue;
                 }
+                java.util.regex.Matcher im = java.util.regex.Pattern
+                    .compile("([\\w.]+)\\s*(?:IS\\s+NOT\\s+NULL|IS\\s+NULL|[<>=!]+)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE).matcher(pred);
+                keyTermByPredicate.put(pred, im.find() ? im.group(1) : pred.trim());
             }
             for (JsonNode u : e.path("dropped_units")) {
                 units.add(u.asText());
@@ -4701,35 +4714,56 @@ public class McpServer {
             text.append(sec.heading == null ? "" : sec.heading).append('\n')
                 .append(sec.html == null ? "" : sec.html).append('\n');
         }
-        String body = text.toString();
+        // Strip tags so "nearby" is measured in prose, not across markup that would otherwise
+        // separate two words sitting in the same visible sentence.
+        String body = text.toString().replaceAll("<[^>]+>", " ");
         String lower = body.toLowerCase(java.util.Locale.ROOT);
-        java.util.List<String> missingLiterals = new java.util.ArrayList<>();
-        for (String lit : literals) {
-            if (!lower.contains(lit.toLowerCase(java.util.Locale.ROOT))) {
-                missingLiterals.add(lit);
+        java.util.List<String> undisclosed = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, String> pe : keyTermByPredicate.entrySet()) {
+            String term = pe.getValue().toLowerCase(java.util.Locale.ROOT);
+            boolean nearDisclosure = false;
+            int from = 0;
+            int idx;
+            while ((idx = lower.indexOf(term, from)) >= 0) {
+                int winStart = Math.max(0, idx - DISCLOSURE_PROXIMITY_CHARS);
+                int winEnd = Math.min(lower.length(), idx + term.length()
+                    + DISCLOSURE_PROXIMITY_CHARS);
+                if (DISCLOSURE_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                    nearDisclosure = true;
+                    break;
+                }
+                from = idx + term.length();
+            }
+            if (!nearDisclosure) {
+                undisclosed.add(pe.getKey());
             }
         }
-        boolean disclosed = DISCLOSURE_WORDS.matcher(body).find();
-        if (missingLiterals.isEmpty() && disclosed) {
+        java.util.List<String> missingUnits = new java.util.ArrayList<>();
+        for (String u : units) {
+            if (!lower.contains(u.toLowerCase(java.util.Locale.ROOT))) {
+                missingUnits.add(u);
+            }
+        }
+        if (undisclosed.isEmpty() && missingUnits.isEmpty()) {
             return;
         }
         StringBuilder msg = new StringBuilder(
             "This report cannot be published yet: a query in this session removed units by "
-            + "hand and the report does not say so. ");
+            + "hand and the report does not say so near the value it excluded — a disclosure "
+            + "word ('excluded', 'dropped', 'omitted', 'left out', 'without ...') found "
+            + "anywhere in the report does not count unless it sits next to what was actually "
+            + "excluded; a coincidental use of one of those words elsewhere in the report is "
+            + "not a disclosure. ");
         if (!predicates.isEmpty()) {
             msg.append("Predicates seen: ").append(String.join("; ", predicates)).append(". ");
         }
-        if (!missingLiterals.isEmpty()) {
-            msg.append("These excluded values appear nowhere in the report text: ")
-                .append(String.join(", ", missingLiterals)).append(". ");
+        if (!undisclosed.isEmpty()) {
+            msg.append("Not disclosed near their excluded value: ")
+                .append(String.join("; ", undisclosed)).append(". ");
         }
-        if (!units.isEmpty()) {
-            msg.append("Rows the stats tools dropped for a null value: ")
-                .append(String.join(", ", units)).append(". ");
-        }
-        if (!disclosed) {
-            msg.append("No section says what was excluded (no 'excluded', 'dropped', "
-                + "'omitted', 'left out', or 'without ...' anywhere). ");
+        if (!missingUnits.isEmpty()) {
+            msg.append("Rows the stats tools dropped for a null value, named nowhere in the "
+                + "report: ").append(String.join(", ", missingUnits)).append(". ");
         }
         msg.append("Fix: add one paragraph to a section naming every unit these predicates "
             + "removed (run the same SELECT without them if you do not know), the reason, "
