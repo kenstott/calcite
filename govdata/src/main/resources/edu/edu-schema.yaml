@@ -2591,6 +2591,14 @@ views:
       this view excludes them (value < 0 treated as null) before computing
       pupil_teacher_ratio and before summing into district_frpl_count/frpl_rate, so a
       sentinel code is never silently counted as a real value.
+      frpl_rate is NULL for a whole district in any year its state runs the Community
+      Eligibility Provision: CEP schools take no FRPL applications, so CCD publishes nothing
+      in free_or_reduced_price_lunch statewide and carries direct_certification instead. That
+      state set grows and shifts from 2016 on (2022: DE, DC, MA, MT, TN, WV; 2024: AZ, DE, DC,
+      MA, TN, WV, GU). direct_cert_rate is provided for those districts but is a DIFFERENT
+      measure, not a fallback — it counts only the categorically eligible subset and runs at
+      0.57-0.69 of FRPL wherever both are reported, so the two must not be pooled into one
+      poverty control. Use one or the other and say which.
     sql: >
       SELECT
         d.leaid,
@@ -2608,11 +2616,14 @@ views:
         CASE WHEN d.enrollment >= 0 AND d.teachers_total_fte >= 0
              THEN d.enrollment / NULLIF(d.teachers_total_fte, 0) END            AS pupil_teacher_ratio,
         s.free_or_reduced_price_lunch                                          AS district_frpl_count,
-        s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0)          AS frpl_rate
+        s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0)          AS frpl_rate,
+        s.direct_certification                                                 AS district_direct_cert_count,
+        s.direct_certification * 1.0 / NULLIF(s.enrollment, 0)                 AS direct_cert_rate
       FROM ccd_districts d
       LEFT JOIN (
         SELECT leaid, year,
                SUM(CASE WHEN free_or_reduced_price_lunch >= 0 THEN free_or_reduced_price_lunch END) AS free_or_reduced_price_lunch,
+               SUM(CASE WHEN direct_certification >= 0 THEN direct_certification END)               AS direct_certification,
                SUM(CASE WHEN enrollment >= 0 THEN enrollment END)                                   AS enrollment
         FROM ccd_schools
         GROUP BY leaid, year
@@ -2654,6 +2665,14 @@ views:
       s.enrollment and s.free_or_reduced_price_lunch carry negative NCES CCD sentinel
       codes on some rows (see ccd_schools' comment) — excluded (value < 0 treated as
       null) here before exposing them and before computing frpl_rate.
+      frpl_rate is NULL for a whole school in any year its state runs the Community
+      Eligibility Provision: CEP schools take no FRPL applications, so CCD publishes nothing
+      in free_or_reduced_price_lunch statewide and carries direct_certification instead. That
+      state set grows and shifts from 2016 on (2022: DE, DC, MA, MT, TN, WV; 2024: AZ, DE, DC,
+      MA, TN, WV, GU). direct_cert_rate is provided for those schools but is a DIFFERENT
+      measure, not a fallback — it counts only the categorically eligible subset and runs at
+      0.57-0.69 of FRPL wherever both are reported, so the two must not be pooled into one
+      poverty control. Use one or the other and say which.
     sql: >
       SELECT
         s.ncessch,
@@ -2664,6 +2683,9 @@ views:
         CASE WHEN s.free_or_reduced_price_lunch >= 0 THEN s.free_or_reduced_price_lunch END AS free_or_reduced_price_lunch,
         CASE WHEN s.free_or_reduced_price_lunch >= 0 AND s.enrollment >= 0
              THEN s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0) END    AS frpl_rate,
+        CASE WHEN s.direct_certification >= 0 THEN s.direct_certification END          AS direct_certification,
+        CASE WHEN s.direct_certification >= 0 AND s.enrollment >= 0
+             THEN s.direct_certification * 1.0 / NULLIF(s.enrollment, 0) END           AS direct_cert_rate,
         s.charter,
         s.school_level,
         ts.counselors_fte,
@@ -2773,6 +2795,13 @@ views:
       s.free_or_reduced_price_lunch carry negative NCES CCD sentinel codes on some rows
       (see ccd_schools' comment) — excluded (value < 0 treated as null) before summing
       into school_enrollment_sum and district_frpl_rate.
+      district_frpl_rate is NULL for a whole district in any year its state runs the
+      Community Eligibility Provision — CEP schools take no FRPL applications, so CCD
+      publishes nothing in free_or_reduced_price_lunch statewide (2022: DE, DC, MA, MT, TN,
+      WV; 2024: AZ, DE, DC, MA, TN, WV, GU). district_direct_cert_rate covers those districts
+      but is a DIFFERENT measure, not a fallback: it counts only the categorically eligible
+      subset, running at 0.57-0.69 of FRPL wherever both are reported, so pooling the two into
+      one poverty control understates poverty by roughly a third.
     sql: >
       SELECT
         d.leaid,
@@ -2792,6 +2821,8 @@ views:
         SUM(CASE WHEN s.enrollment >= 0 THEN s.enrollment END)              AS school_enrollment_sum,
         SUM(CASE WHEN s.free_or_reduced_price_lunch >= 0 THEN s.free_or_reduced_price_lunch END) * 1.0
           / NULLIF(SUM(CASE WHEN s.enrollment >= 0 THEN s.enrollment END), 0) AS district_frpl_rate,
+        SUM(CASE WHEN s.direct_certification >= 0 THEN s.direct_certification END) * 1.0
+          / NULLIF(SUM(CASE WHEN s.enrollment >= 0 THEN s.enrollment END), 0) AS district_direct_cert_rate,
         SUM(CASE WHEN s.charter = 1 THEN 1 ELSE 0 END) * 1.0
           / NULLIF(COUNT(*), 0)                                             AS charter_share
       FROM ccd_districts d
