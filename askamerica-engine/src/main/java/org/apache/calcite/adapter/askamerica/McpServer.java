@@ -175,6 +175,9 @@ public class McpServer {
         // otherwise probes for a real X11/Windows display and fails on a headless host.
         System.setProperty("java.awt.headless", "true");
 
+        // Fixed loopback endpoint for the browser extension: claim verdicts by article URL.
+        ClaimsServer.start(System.err);
+
         // DuckDBJdbcSchemaFactory's own default (4GB) is sized for many small connections
         // sharing a box; this server holds one long-lived, many-schema connection serving
         // real analytical queries, which needs more headroom. Only sets it if the operator
@@ -556,27 +559,57 @@ public class McpServer {
             + "whether it holds up — 'validate this', 'fact-check this', 'is this true', 'is this "
             + "accurate', 'verify this', 'check this article', 'debunk this', 'true or false', "
             + "'how much of this is right', or simply a link followed by a question mark — that "
-            + "is a VALIDATION, not a research question, and it has its own shape:\n"
+            + "is a VALIDATION, not a research question, and it has its own shape. The article "
+            + "is the thing under test, never a source: nothing it says counts as evidence for "
+            + "itself.\n"
             + "1. Fetch the text (web_fetch for a URL). Extract every assertion of fact as a "
             + "verbatim sentence. Separate the CLAIM from its ATTRIBUTION: 'officials say "
             + "unemployment fell' is graded on whether unemployment fell, not on whether "
-            + "officials said it. Skip opinion and prediction; keep numbers, trends, rankings, "
-            + "comparisons and causal claims.\n"
-            + "2. For each assertion, search_catalog for the measure it rests on. Its "
-            + "unmatched_terms tell you which words no table carries: an assertion whose "
-            + "measure is unmatched is 'not checkable here' — say so, never proxy it into a "
-            + "verdict.\n"
-            + "3. Check every checkable assertion against the warehouse: the same measure, the "
-            + "same unit, the same period. Record the article's figure, the warehouse figure, "
-            + "the table, and BOTH vintages. A mismatch where the article cites a release newer "
-            + "than the loaded window is 'stale vintage' — a freshness gap, not a falsehood.\n"
-            + "4. Verdict per assertion: true | mostly true | partially true | mostly false | "
+            + "officials said it, and 'X said Y' is graded on Y. Whether a quote was actually "
+            + "spoken is never the assertion under test. Skip opinion and prediction; keep "
+            + "numbers, trends, rankings, comparisons and causal claims.\n"
+            + "2. Test every assertion INDEPENDENTLY in this corpus. Independent means your own "
+            + "statistical analysis of warehouse data, not a search for someone else's verdict. "
+            + "search_catalog for the measure the assertion rests on. Measure present: compute "
+            + "it here at the same unit and period; record the article's figure, the warehouse "
+            + "figure, the table, and BOTH vintages. Measure absent but the assertion is a "
+            + "RELATIONSHIP between things this corpus carries ('places with more X have more "
+            + "Y', 'A causes B', 'group G does more of Z'): build the test — join the "
+            + "components at county, state or year grain and run hypothesis_test, "
+            + "ols_regression, robust_regression or diff_in_diff on the join — and grade on the "
+            + "effect size, its interval and its p-value. 'Not checkable here' is reserved for "
+            + "an assertion whose measure AND whose components are all unmatched; never proxy "
+            + "a missing measure into a verdict, and never mark a relationship claim 'not "
+            + "checkable' without first trying its components.\n"
+            + "3. The article's own sources are comparison points, not the test. Fetch the "
+            + "study or release the article cites (web_fetch; python for a PDF table) to "
+            + "record its figure, unit, period and population beside yours, and note where "
+            + "the article's number diverges from its own source.\n"
+            + "4. Quantitative evidence from outside this corpus is DATA, not prose: when a "
+            + "cited study or an official release gives a rate, a series or a table, bring the "
+            + "figures in and compute the comparison against your warehouse result — "
+            + "difference, ratio, correlation, regression — rather than describing it. Where "
+            + "an external series and a warehouse series overlap in time or geography, "
+            + "correlate them and report the coefficient.\n"
+            + "5. Charts follow YOUR analysis. Every assertion graded from a warehouse figure, a "
+            + "relationship test, a series you computed, or a comparison you ran against an "
+            + "external figure gets a render_chart of that evidence; compose_dashboard the set "
+            + "and pass it as publish_report's `dashboard`, and publish_report REFUSES a publish "
+            + "whose claims carry a warehouse_value or sql but no chart. A validation graded "
+            + "entirely from publications, with no statistical or quantitative analysis of your "
+            + "own anywhere in it, carries NO chart: a graph of nothing measured is noise.\n"
+            + "6. Verdict per assertion: true | mostly true | partially true | mostly false | "
             + "false | not checkable here | stale vintage. 'Partially true' needs the reason: "
             + "right direction wrong magnitude, right figure wrong year, true nationally but not "
-            + "for the place named, true for a subgroup presented as the whole.\n"
-            + "5. publish_report with the `claims` array (one entry per assertion) and a "
-            + "summary that leads with the tally and the assertion that matters most. The "
-            + "user asked whether the piece can be trusted; answer that first.\n\n"
+            + "for the place named, true for a subgroup presented as the whole. A mismatch "
+            + "where the article cites a release newer than the loaded window is 'stale "
+            + "vintage' — a freshness gap, not a falsehood.\n"
+            + "7. publish_report with the `claims` array (one entry per assertion, each with "
+            + "article_value, warehouse_value, independent_value, sources, table, sql and "
+            + "reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
+            + "leads with the tally and the "
+            + "assertion that matters most. The user asked whether the piece can be trusted; "
+            + "answer that first.\n\n"
 
             + "## WORKFLOW — RESEARCH FIRST, DATA SECOND, IN ORDER\n\n"
             + "Measured, most recently in a 25-run reaudit: the average answer still cites only "
@@ -1918,16 +1951,26 @@ public class McpServer {
         pubProps.set("sources", sourcesProp);
         pubProps.set("claims", prop("array",
             "For an article or claim validation: one object per assertion, as "
-            + "[{assertion, verdict, article_value, warehouse_value, table, article_vintage, "
-            + "warehouse_vintage, reason, sql}]. `assertion` is the article's sentence "
-            + "VERBATIM (the claim, not its attribution — 'officials say X' is graded on X). "
-            + "`verdict` is one of: true | mostly true | partially true | mostly false | false | "
-            + "not checkable here | stale vintage. `warehouse_value` and `table` are what this "
-            + "corpus says and where; `sql` is the query that produced it. Use 'not checkable "
-            + "here' when search_catalog's unmatched_terms show no table carries the measure, "
-            + "and 'stale vintage' when the article cites a release newer than the loaded "
-            + "window — that is a freshness gap, not a falsehood. Renders as a tallied "
-            + "claim-by-claim table directly under the summary."));
+            + "[{assertion, verdict, article_value, warehouse_value, independent_value, "
+            + "sources, table, article_vintage, warehouse_vintage, reason, sql}]. `assertion` "
+            + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
+            + "say X' is graded on X). `verdict` is one of: true | mostly true | partially true "
+            + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
+            + "and `table` are what this corpus says and where; `sql` is the query that "
+            + "produced it. `independent_value` is the figure from primary sources the article "
+            + "did not supply, and `sources` (array of {title, url}) names them — every claim "
+            + "needs at least one. Use 'not checkable here' only when search_catalog's "
+            + "unmatched_terms show no table carries the measure or its components, and "
+            + "'stale vintage' when the article cites a release newer than the loaded window — "
+            + "that is a freshness gap, not a falsehood. Renders as a tallied claim-by-claim "
+            + "table directly under the summary. A publish whose claims rest on your own "
+            + "warehouse analysis (any warehouse_value or sql) MUST also carry a `dashboard` or "
+            + "follow a render_chart/compose_dashboard call; it is refused otherwise. Claims "
+            + "graded purely from publications need no chart."));
+        pubProps.set("source_url", prop("string",
+            "For a validation: the URL of the article or page the claims were extracted from. "
+            + "Lets the AskAmerica browser extension find this validation from that page. "
+            + "Defaults to the last web_fetch URL of the session when omitted."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -2455,6 +2498,7 @@ public class McpServer {
                 }
                 case "web_fetch": {
                     String fetchUrl = args.path("url").asText();
+                    LAST_FETCH_URL = fetchUrl;
                     int maxPages = args.has("max_pages")
                         ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
                     int maxSheets = args.has("max_sheets")
@@ -3018,6 +3062,8 @@ public class McpServer {
                     }
                     JsonNode claims = args.path("claims");
                     if (claims.isArray() && claims.size() > 0) {
+                        enforceClaimShape(claims);
+                        enforceValidationChart(boardSvg, claims);
                         ReportPage.Section claimsSec = claimsSection(claims);
                         if (claimsSec != null) {
                             // Directly under the summary, where a reader looks first.
@@ -3057,6 +3103,13 @@ public class McpServer {
                     String url = ArtifactServer.publish(
                         html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         "text/html; charset=utf-8", "html");
+                    if (claims.isArray() && claims.size() > 0) {
+                        String srcUrl = args.path("source_url").asText(null);
+                        if (srcUrl == null || srcUrl.trim().isEmpty()) {
+                            srcUrl = LAST_FETCH_URL;
+                        }
+                        ClaimsServer.record(srcUrl, args.path("title").asText(null), url, claims);
+                    }
                     log.println("[askamerica-mcp] tool=publish_report sections=" + secs.size()
                         + " sources=" + srcs.size() + " board=" + (boardSvg != null));
                     // A Markdown link, not a bare URL: this protocol version (2024-11-05) has no
@@ -3343,8 +3396,11 @@ public class McpServer {
             t.start();
         }
 
-        if (chartPng != null && EVAL_MODE) {
-            LAST_CHART_PNG = chartPng;
+        if (chartPng != null) {
+            CHART_RENDERED = true;
+            if (EVAL_MODE) {
+                LAST_CHART_PNG = chartPng;
+            }
         }
         recordCall(name, args, ms, rows, diagnostics, null);
         ArrayNode content = MAPPER.createArrayNode();
@@ -4275,7 +4331,7 @@ public class McpServer {
             }
             i++;
         }
-        return out.toString();
+        return stripRedundantLimitClause(out.toString());
     }
 
     // Extract the first govdata schema name from a SQL query (e.g. "FROM sec.filings" → "sec").
@@ -4382,6 +4438,11 @@ public class McpServer {
      * the same thing; there is no cross-run leakage to guard against.
      */
     private static volatile byte[] LAST_CHART_PNG;
+    /** Whether any chart or dashboard has been rendered this session, in any mode; the
+     *  validation chart gate reads this rather than the eval-only PNG holders. */
+    private static volatile boolean CHART_RENDERED;
+    /** The URL most recently handed to web_fetch: the default source_url of a validation. */
+    private static volatile String LAST_FETCH_URL;
 
     /**
      * The most recent {@code compose_dashboard} render at 2x, kept separately from
@@ -4527,6 +4588,79 @@ public class McpServer {
      * @throws IllegalArgumentException naming every predicate and, where the server knows
      *     them, the dropped units, so the fix is one paragraph away rather than a re-query.
      */
+    private static final java.util.regex.Pattern ATTRIBUTION_LEAD = java.util.regex.Pattern.compile(
+        "^\\s*[\\p{L}\\p{N} .,'&-]{1,60}?\\b(said|says|saying|stated|states|claimed|claims|wrote|writes|"
+        + "argued|argues|tweeted|posted|told|asserted|asserts|alleged|alleges|noted|reported)\\b\\s*[:,]?\\s*[\"'\u201c\u2018]",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** The claim is graded, never its attribution. Refuses an assertion shaped "X said: '...'",
+     *  and a graded verdict with no evidence behind it (no warehouse figure or SQL, and no
+     *  independent figure with a source). */
+    private static void enforceClaimShape(JsonNode claims) {
+        for (JsonNode c : claims) {
+            String assertion = c.path("assertion").asText("").trim();
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (ATTRIBUTION_LEAD.matcher(assertion).find()) {
+                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                    + "\" is an attribution, not a claim. Whether someone said it is never the "
+                    + "thing under test. Drop the 'X said:' lead, keep the quoted statement as the "
+                    + "assertion, and grade THAT against the warehouse (join its components at "
+                    + "county, state or year grain and test them) or against independent figures.");
+            }
+            boolean warehouse = nonBlank(c, "sql") || nonBlank(c, "warehouse_value");
+            boolean independent = nonBlank(c, "independent_value")
+                && c.path("sources").isArray() && c.path("sources").size() > 0;
+            boolean graded = !"not checkable here".equals(verdict) && !"stale vintage".equals(verdict);
+            if (graded && !warehouse && !independent) {
+                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                    + "\" is graded '" + verdict + "' with no evidence attached. A graded verdict "
+                    + "needs either a warehouse figure (warehouse_value and the sql that produced "
+                    + "it) or an independent figure (independent_value plus at least one entry in "
+                    + "sources). If neither exists, the verdict is 'not checkable here' with a "
+                    + "reason naming what was searched.");
+            }
+            if (!graded && !nonBlank(c, "reason")) {
+                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                    + "\" is '" + verdict + "' without a reason. Say which measure was searched "
+                    + "for, which terms search_catalog left unmatched, and which components were "
+                    + "tried.");
+            }
+        }
+    }
+
+    private static boolean nonBlank(JsonNode c, String key) {
+        return c.hasNonNull(key) && !c.get(key).asText().trim().isEmpty();
+    }
+
+    /** A validation whose claims rest on the caller's own warehouse analysis must show it: refuse
+     *  when at least one claim has a warehouse_value or sql, no dashboard was composed
+     *  in this call, and no chart or board has been rendered in the session. A validation
+     *  graded purely from publications passes with no chart. */
+    private static void enforceValidationChart(String boardSvg, JsonNode claims) {
+        if (boardSvg != null || CHART_RENDERED || LAST_DASHBOARD_PNG != null
+            || LAST_CHART_PNG != null) {
+            return;
+        }
+        boolean numeric = false;
+        for (JsonNode c : claims) {
+            for (String k : new String[]{"warehouse_value", "sql"}) {
+                if (c.hasNonNull(k) && !c.get(k).asText().trim().isEmpty()) {
+                    numeric = true;
+                }
+            }
+        }
+        if (!numeric) {
+            return;
+        }
+        throw new IllegalArgumentException("validation refused: this publish carries claims "
+            + "graded from your own warehouse analysis (a warehouse_value or sql) but no chart. "
+            + "render_chart the evidence behind each such claim (the article's figure against "
+            + "the warehouse and independent figures, the relationship you tested, or the "
+            + "series the claim is about), compose_dashboard the set and pass it as this "
+            + "call's `dashboard`, then publish again. Claims graded purely from publications "
+            + "need no chart.");
+    }
+
     private static void enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
@@ -4596,7 +4730,7 @@ public class McpServer {
 
     /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
      *  the order the tally tiles render in. */
-    private static final String[] VERDICTS = {"true", "mostly true", "partially true",
+    static final String[] VERDICTS = {"true", "mostly true", "partially true",
         "mostly false", "false", "not checkable here", "stale vintage"};
 
     /**
@@ -4611,6 +4745,7 @@ public class McpServer {
             tally.put(v, Integer.valueOf(0));
         }
         StringBuilder rows = new StringBuilder();
+        StringBuilder details = new StringBuilder();
         int n = 0;
         for (JsonNode c : claims) {
             String assertion = c.path("assertion").asText("").trim();
@@ -4632,22 +4767,63 @@ public class McpServer {
                 .append("<td>").append(n).append("</td>")
                 .append("<td>").append(ReportPage.esc(assertion)).append("</td>")
                 .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong></td>")
-                .append("<td>").append(ReportPage.esc(c.path("article_value").asText("")))
-                .append("</td>")
-                .append("<td>").append(ReportPage.esc(c.path("warehouse_value").asText("")))
-                .append(c.hasNonNull("table")
-                    ? " <code>" + ReportPage.esc(c.get("table").asText()) + "</code>" : "")
-                .append("</td>")
-                .append("<td>").append(ReportPage.esc(c.path("article_vintage").asText("")))
-                .append(" / ").append(ReportPage.esc(c.path("warehouse_vintage").asText("")))
-                .append("</td>")
-                .append("<td>").append(ReportPage.esc(c.path("reason").asText("")));
-            if (c.hasNonNull("sql") && !c.get("sql").asText().isEmpty()) {
-                rows.append("<details class=\"sqltoggle\"><summary>Show SQL</summary><pre><code>")
-                    .append(ReportPage.esc(c.get("sql").asText()))
-                    .append("</code></pre></details>");
+                .append("</tr>\n");
+
+            details.append("<details class=\"claim-detail ").append(cls).append("\">")
+                .append("<summary>#").append(n).append(" &middot; <strong>")
+                .append(ReportPage.esc(verdict)).append("</strong> &mdash; ")
+                .append(ReportPage.esc(assertion)).append("</summary>\n")
+                .append("<dl>\n");
+            appendDetailRow(details, "Article says", c.path("article_value").asText(""));
+            String warehouseValue = c.path("warehouse_value").asText("");
+            if (!warehouseValue.isEmpty() || c.hasNonNull("table")) {
+                String wv = ReportPage.esc(warehouseValue)
+                    + (c.hasNonNull("table")
+                        ? " <code>" + ReportPage.esc(c.get("table").asText()) + "</code>" : "");
+                details.append("<dt>Warehouse says</dt><dd>").append(wv).append("</dd>\n");
             }
-            rows.append("</td></tr>\n");
+            String indep = c.path("independent_value").asText("");
+            JsonNode srcs = c.path("sources");
+            boolean hasSrcs = srcs.isArray() && srcs.size() > 0;
+            if (!indep.isEmpty() || hasSrcs) {
+                details.append("<dt>Independent evidence</dt><dd>")
+                    .append(ReportPage.esc(indep));
+                if (hasSrcs) {
+                    details.append("<ul class=\"claim-sources\">");
+                    for (JsonNode sn : srcs) {
+                        String t = sn.isObject() ? sn.path("title").asText("") : sn.asText("");
+                        String u = sn.isObject() ? sn.path("url").asText("") : "";
+                        if (t.isEmpty() && u.isEmpty()) {
+                            continue;
+                        }
+                        details.append("<li>");
+                        if (!u.isEmpty()) {
+                            details.append("<a href=\"").append(ReportPage.esc(u)).append("\">")
+                                .append(ReportPage.esc(t.isEmpty() ? u : t)).append("</a>");
+                        } else {
+                            details.append(ReportPage.esc(t));
+                        }
+                        details.append("</li>");
+                    }
+                    details.append("</ul>");
+                }
+                details.append("</dd>\n");
+            }
+            String artVintage = c.path("article_vintage").asText("");
+            String whVintage = c.path("warehouse_vintage").asText("");
+            if (!artVintage.isEmpty() || !whVintage.isEmpty()) {
+                details.append("<dt>Vintage article / warehouse</dt><dd>")
+                    .append(ReportPage.esc(artVintage)).append(" / ")
+                    .append(ReportPage.esc(whVintage)).append("</dd>\n");
+            }
+            appendDetailRow(details, "Why", c.path("reason").asText(""));
+            details.append("</dl>\n");
+            if (c.hasNonNull("sql") && !c.get("sql").asText().isEmpty()) {
+                details.append("<details class=\"sqltoggle\"><summary>Show SQL</summary><pre><code>")
+                    .append(ReportPage.esc(c.get("sql").asText()))
+                    .append("</code></pre></details>\n");
+            }
+            details.append("</details>\n");
         }
         if (n == 0) {
             return null;
@@ -4662,13 +4838,21 @@ public class McpServer {
         tiles.append("<strong>").append(n).append("</strong> assertions checked</p>\n");
         String html = tiles
             + "<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th>"
-            + "<th>Article says</th><th>Warehouse says</th><th>Vintage article / warehouse</th>"
-            + "<th>Why</th></tr></thead><tbody>\n" + rows + "</tbody></table>\n"
+            + "</tr></thead><tbody>\n" + rows + "</tbody></table>\n"
             + "<p class=\"note\">Verdicts: true, mostly true, partially true, mostly false, "
             + "false, not checkable here (no table carries the measure), stale vintage (the "
             + "article cites a release this corpus has not loaded — a freshness gap, not a "
-            + "falsehood).</p>";
+            + "falsehood).</p>\n"
+            + "<h3>Claim detail</h3>\n" + details;
         return new ReportPage.Section("Claim-by-claim verdicts", html);
+    }
+
+    private static void appendDetailRow(StringBuilder details, String label, String value) {
+        if (value == null || value.isEmpty()) {
+            return;
+        }
+        details.append("<dt>").append(ReportPage.esc(label)).append("</dt><dd>")
+            .append(ReportPage.esc(value)).append("</dd>\n");
     }
 
     /** The queries and statistical calls this session ran, as a report section, so the SQL
@@ -5206,31 +5390,114 @@ public class McpServer {
     }
 
     /**
-     * Strips a caller-written {@code LIMIT n} when a {@code FETCH FIRST ... ROWS ONLY} clause
-     * is ALSO present in the same statement -- a combination no SQL dialect this server serves
-     * accepts, so it always fails to parse. Returns {@code sql} unchanged when only one (or
-     * neither) clause is present.
+     * This dialect accepts only {@code FETCH FIRST n ROWS ONLY} -- never bare {@code LIMIT n} --
+     * and a statement carrying both fails to parse outright rather than silently preferring
+     * one. Observed live, twice: a caller trained on Postgres-style {@code LIMIT} defaults to
+     * it out of habit while ALSO following this tool's own "Add FETCH FIRST N ROWS ONLY"
+     * guidance, producing {@code "... LIMIT 5 FETCH FIRST 500 ROWS ONLY"}; and a caller writes
+     * {@code LIMIT n} alone with no {@code FETCH FIRST} at all. Both are mechanical to fix
+     * without a round trip: when only {@code LIMIT n} is present it is rewritten to the accepted
+     * syntax; when {@code FETCH FIRST} is ALSO present, the redundant {@code LIMIT n} is
+     * dropped rather than guessing which cap the caller meant to keep.
      *
-     * <p>Observed live: a caller trained on Postgres-style {@code LIMIT} defaulted to it out of
-     * habit while ALSO following this tool's own "Add FETCH FIRST N ROWS ONLY" guidance,
-     * producing {@code "... LIMIT 5 FETCH FIRST 500 ROWS ONLY"} -- two conflicting caps, neither
-     * negotiable with the other. {@code FETCH FIRST} is kept (it is the syntax this dialect's
-     * own guidance teaches, and what {@link #runSqlRows}'s own auto-append also uses), and the
-     * {@code LIMIT} clause is removed rather than burning a round trip on a parse failure that
-     * is certain in advance.
+     * <p>The first version of this method used a plain substring check for {@code " limit "}
+     * (space on both sides) and missed the exact failure it exists to catch: a multi-line
+     * statement with {@code LIMIT} at the start of its own line, preceded by a newline rather
+     * than a space, left the guard's condition false and the broken SQL ran unrepaired. This
+     * version does its own quote/comment-aware character scan instead of a substring or regex
+     * match, so whitespace, case, and position never matter.
      */
     static String stripRedundantLimitClause(String sql) {
-        String lower = sql.toLowerCase(java.util.Locale.ROOT);
-        if (!lower.contains("fetch first") || !lower.contains(" limit ")) {
+        if (sql == null || sql.isEmpty()) {
             return sql;
         }
-        String stripped = sql.replaceAll("(?i)\\bLIMIT\\s+\\d+\\b\\s*", "");
-        if (!stripped.equals(sql)) {
-            LAST_REPAIR_NOTICE.set(
-                "Both a LIMIT clause and a FETCH FIRST ... ROWS ONLY clause were present in "
-                + "the same statement -- only one row-limiting clause is allowed. The LIMIT "
-                + "clause was removed and the statement ran as: " + stripped);
+        String lower = sql.toLowerCase(java.util.Locale.ROOT);
+        if (!lower.contains("limit")) {
+            return sql;
         }
+        int n = sql.length();
+        boolean hasFetch = false;
+        int limitStart = -1;
+        int limitEnd = -1;
+        String limitDigits = null;
+        int i = 0;
+        while (i < n) {
+            char ch = sql.charAt(i);
+            if (ch == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                i = nl < 0 ? n : nl;
+                continue;
+            }
+            if (ch == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int close = sql.indexOf("*/", i + 2);
+                i = close < 0 ? n : close + 2;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                int j = i + 1;
+                while (j < n) {
+                    if (sql.charAt(j) == ch) {
+                        if (j + 1 < n && sql.charAt(j + 1) == ch) {
+                            j += 2;
+                            continue;
+                        }
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                i = Math.min(j, n);
+                continue;
+            }
+            if (Character.isLetter(ch)) {
+                int j = i;
+                while (j < n
+                        && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                    j++;
+                }
+                String word = sql.substring(i, j);
+                if ("fetch".equalsIgnoreCase(word)) {
+                    hasFetch = true;
+                } else if ("limit".equalsIgnoreCase(word) && limitStart < 0) {
+                    int k = j;
+                    while (k < n && Character.isWhitespace(sql.charAt(k))) {
+                        k++;
+                    }
+                    int digitsStart = k;
+                    while (k < n && Character.isDigit(sql.charAt(k))) {
+                        k++;
+                    }
+                    if (k > digitsStart) {
+                        limitStart = i;
+                        limitEnd = k;
+                        limitDigits = sql.substring(digitsStart, k);
+                    }
+                }
+                i = j;
+                continue;
+            }
+            i++;
+        }
+        if (limitStart < 0) {
+            return sql;
+        }
+        if (!hasFetch) {
+            String rewritten = sql.substring(0, limitStart) + "FETCH FIRST " + limitDigits
+                + " ROWS ONLY" + sql.substring(limitEnd);
+            LAST_REPAIR_NOTICE.set(
+                "LIMIT " + limitDigits + " is not valid in this dialect -- only FETCH FIRST n "
+                + "ROWS ONLY is accepted. Rewritten and run as: " + rewritten);
+            return rewritten;
+        }
+        int delStart = limitStart;
+        while (delStart > 0 && Character.isWhitespace(sql.charAt(delStart - 1))) {
+            delStart--;
+        }
+        String stripped = sql.substring(0, delStart) + sql.substring(limitEnd);
+        LAST_REPAIR_NOTICE.set(
+            "Both a LIMIT clause and a FETCH FIRST ... ROWS ONLY clause were present in the "
+            + "same statement -- only one row-limiting clause is allowed. The LIMIT clause was "
+            + "removed and the statement ran as: " + stripped);
         return stripped;
     }
 

@@ -782,6 +782,28 @@
         "archived version"
       ],
       "body": "The single most common way this connector's own comparative-eval scoring has cost a run first place, despite otherwise-equal work, is declaring a resource unreachable or a fact non-existent, when an access technique that would have solved it had ALREADY been used successfully earlier in the very same session for a different table or page. This is a retrieval-discipline gap, not a capability gap - the tool that would have worked was already in hand.\n\nMeasured directly across this harness's rejudge batch: one run used the Wayback Machine to route around a BLS 403 for one page, then later in the SAME answer declared BLS 'does not publish' a state-by-industry cross-tabulation without retrying that exact technique - a second persona reached the identical table by doing nothing more than what the first persona had already proven worked. Separately, a run declared no current state-level CO2/GDP series exists without checking whether EIA's own SEDS workbook (still actively updated) covered it, and another declared no consistent pre/post-2018 bridge-condition series existed without trying FHWA's own by-year publication pages directly.\n\nBefore writing 'X does not exist' / 'this table cannot be reached' / 'no such series is published': (1) check whether this SAME session already found a working access route for a DIFFERENT blocked resource (an archive-snapshot fetch, a mirror URL, a different file format, a state-level instead of federal endpoint) and try that exact route here before concluding the resource itself is the problem; (2) for a gzip-format static archive (a file literally named *.csv.gz, *.tar.gz, or one that returns as unparseable binary with Content-Type application/gzip or application/x-gzip), call web_fetch on it directly rather than treating the binary-content error as final - web_fetch auto-decompresses a raw gzip resource before content-type detection, so a NOAA/Census-style compressed archive that used to fail with 'unrecognized binary content type' now returns as plain text/CSV; (3) for a page or API that blocks on a naive bot-detection User-Agent string, web_fetch already presents an ordinary browser's header set, so a 403 that persists after that is more likely a real access wall (paywall, required auth) than a User-Agent problem, and should be reported as such rather than retried indefinitely.\n\nThe generalizable check, regardless of which specific technique applies: before a headline claim that something 'doesn't exist' or 'can't be reached,' name the SPECIFIC thing you tried and ask whether anything used successfully elsewhere this session applies here too. A resource being genuinely unavailable and a resource being unavailable to the specific approach tried so far are different findings, and only the first one licenses the strong claim."
+    },
+    {
+      "id": "immigration-and-crime-relationship-test",
+      "title": "Testing 'immigrants / ethnic enclaves / foreign-born areas have more crime' with warehouse data",
+      "triggers": [
+        "immigrant",
+        "immigrants",
+        "immigration",
+        "ethnic enclave",
+        "ethnic enclaves",
+        "foreign-born",
+        "foreign born",
+        "nativity",
+        "migrants crime",
+        "immigrants crime",
+        "immigration crime",
+        "undocumented crime",
+        "sanctuary crime",
+        "enclaves crime",
+        "do immigrants commit more crime"
+      ],
+      "body": "No arrest, offense or incarceration table in this corpus carries the offender's nativity, so 'immigrants commit crime at rate X' cannot be computed here directly; the published offender-rate studies (NIJ-funded Texas DPS arrest study, Light/He/Robey 2020 PNAS; Abramitzky et al. 2023 NBER w31440 incarceration by nativity 1870-2020) are the independent_value for that shape of claim.\n\nThe PLACE-level claim ('areas with more immigrants / ethnic enclaves have higher crime rates') IS testable here, at state grain, from two tables that join through geo.states:\n\n  1. Foreign-born share: census.acs_nativity (population by nativity; use census.acs_nativity_by_education when only the 25+ population is needed) -> foreign_born / total by state and year. The `state` column is the 2-digit FIPS.\n  2. Crime rate: crime.cde_offenses -> offense_rate (per 100k, one row per state x offense_code x month). Aggregate to state-year: AVG(offense_rate) or SUM over months, for offense_code 'violent-crime' and 'property-crime' separately. Join geo.states ON state_fips = acs.state to get state_abbr.\n  3. Test: hypothesis_test (correlation) then ols_regression / robust_regression of crime_rate on foreign_born_share with at least poverty rate (census.acs_poverty) and urban share (geo.rural_urban_continuum or census population density) as controls; report the coefficient, its interval and p-value, and say plainly that it is cross-sectional and not causal.\n  4. Chart: scatter of foreign-born share vs violent-crime rate by state, one point per state, with the fitted line.\n\nA claim about enclaves is a claim about places; grade it on step 3, not on whether the speaker said it. The verdict for 'more immigrants -> more crime' is decided by the sign and significance of that coefficient; the published literature (Ousey & Kubrin 2018 meta-analysis; Adelman et al. 2017) is the comparison point, not the test."
     }
   ]
 }

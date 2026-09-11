@@ -449,13 +449,22 @@ final class QuestionGuidance {
             new String[]{"source"},
             new String[]{
                 "The article URL, the pasted text, or the single claim to check."},
-            "Validate this: {source}\n\nExtract every factual assertion verbatim, grade the "
-            + "claim rather than its attribution, mark any assertion whose measure no table "
-            + "carries as 'not checkable here', check the rest against the same measure, unit "
-            + "and period in this corpus with both vintages recorded, and publish the result "
-            + "with publish_report's `claims` array so each verdict sits beside the article's "
-            + "figure, the warehouse figure, and the SQL that produced it. Lead the summary "
-            + "with the tally and the assertion that matters most."),
+            "Validate this: {source}\n\nThe piece is under test, not a source. Extract every "
+            + "factual assertion verbatim and grade the claim rather than its attribution. Test "
+            + "each assertion independently with your own statistical analysis of this corpus: "
+            + "the measure itself at the same unit and period where a table carries it, both "
+            + "vintages recorded; otherwise its components joined at county, state or year "
+            + "grain and tested with hypothesis_test or a regression, graded on effect size and "
+            + "p-value. Fetch the study or release the article cites only as a comparison "
+            + "point, and bring any external figures in as data to correlate with the "
+            + "warehouse result rather than describing them. Render a chart for every "
+            + "assertion graded from numbers (none for a validation graded purely from "
+            + "publications), compose_dashboard them, and publish with "
+            + "publish_report's `dashboard` and `claims` array so each verdict sits beside the "
+            + "article's figure, the warehouse figure, the independent figure, its sources, "
+            + "and the SQL that produced it. 'Not checkable here' is only for an assertion "
+            + "whose measure and components are all absent. Lead the summary with the tally "
+            + "and the assertion that matters most."),
         new Template(
             "marginal_comparison",
             "Compare two options at the margin on one measured outcome, with an effect size "
