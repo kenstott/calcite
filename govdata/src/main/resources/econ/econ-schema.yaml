@@ -330,7 +330,24 @@ dimension_values:
 
   year_range_from_2020: &year_range_from_2020
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
+    # start was 2010, though the loaded floor for every current consumer (national_accounts,
+    # ita_data, gdp_statistics) is 2008 - itself short of what BEA actually publishes. Verified
+    # live 2026-09-10 against the exact API call these tables use: national_accounts'
+    # T40205B (the table D-258 was filed against) returns data back to 1999, not the 1967 the
+    # issue assumed from browsing BEA's site (that date likely describes the standard NIPA
+    # table 4.2.5, a different table number from the underlying-detail 4.2.5B this schema
+    # fetches). ita_data's BalGds indicator reaches 1960; gdp_statistics' T10101 reaches 1930
+    # - both real floors deeper than the 1999 set here, left for a future pass rather than
+    # fully mapped per-tablename now. A GetData call for a year before a given tablename's
+    # own start returns BEAAPI.Error (code 201, "No data exists"), NOT
+    # BEAAPI.Results.Error - BeaResponseTransformer's error check only looks under Results,
+    # so this top-level shape falls through to its "no Data array" branch and comes back as
+    # an empty result rather than a thrown error or a recognized skip. That fallthrough is
+    # what makes widening this floor safe today (a too-early request costs a wasted round
+    # trip, not a failure) - but it also means the code cannot currently distinguish "no data
+    # published for this year" from a genuinely malformed response, which is worth fixing on
+    # its own rather than relied upon.
+    start: "${GOVDATA_START_YEAR:1999}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
