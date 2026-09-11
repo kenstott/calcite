@@ -146,9 +146,24 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
       putDoubleField(out, "net_summer_capacity_mw", row, colIndex, "Summer Capacity (MW)");
       putDoubleField(out, "net_winter_capacity_mw", row, colIndex, "Winter Capacity (MW)");
       out.putNull("nameplate_energy_capacity_mwh"); // not available in EIA-860M
-      // change_year/change_month: the effective date of the capacity change
-      putIntField(out, "change_year", row, colIndex, "Operating Year");
-      putIntField(out, "change_month", row, colIndex, "Operating Month");
+      // change_year/change_month: the effective date of the capacity change.
+      // The column naming this differs per sheet. "Operating" and "Retired" date a change
+      // that has happened, and use "Operating Year"/"Operating Month". "Planned" dates one
+      // that has not, and uses "Planned Operation Year"/"Planned Operation Month". Reading
+      // "Operating Year" on every sheet left change_year NULL on all 14,719 Planned Addition
+      // rows, which is why nothing in the table carried a future date and capacity_pipeline
+      // had no forward-looking content despite its name.
+      // Resolved against the header actually present rather than the sheet name, so a file
+      // that labels the column differently degrades to NULL on that file alone.
+      // "Canceled or Postponed" carries no date column at all — verified against the 2024
+      // file, its header ends at Prime Mover Code / Latitude / Longitude — so Cancellation
+      // rows keep a NULL change_year. That is the source's own answer, not a mapping gap.
+      String changeYearCol = colIndex.containsKey("Operating Year")
+          ? "Operating Year" : "Planned Operation Year";
+      String changeMonthCol = colIndex.containsKey("Operating Month")
+          ? "Operating Month" : "Planned Operation Month";
+      putIntField(out, "change_year", row, colIndex, changeYearCol);
+      putIntField(out, "change_month", row, colIndex, changeMonthCol);
       putIntField(out, "operating_month", row, colIndex, "Operating Month");
       putIntField(out, "operating_year", row, colIndex, "Operating Year");
       putIntField(out, "planned_retirement_month", row, colIndex, "Planned Retirement Month");
