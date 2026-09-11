@@ -1016,12 +1016,26 @@ partitionedTables:
       checkedAt: "2026-09-11T00:04:08Z"
     partitions: *standard_partitions
     comment: >
-      EIA Form 860M monthly generator inventory snapshot for December of each year.
+      EIA Form 860M generator inventory, one annual snapshot per snapshot_year.
       Captures planned additions and planned retirements with capacity (nameplate, summer,
-      winter, energy storage). One row per generator change record per snapshot. The
-      December file provides the most complete annual picture; prior months may be fetched
-      for intra-year pipeline analysis. Transformer parses the XLSX directly.
+      winter, energy storage). Transformer parses the XLSX directly.
       Cross-references geo.states via state_abbr; joins eia_power_plants via plant_id.
+      GRAIN — READ BEFORE AGGREGATING: this is a CUMULATIVE SNAPSHOT, not a change log.
+      One row per generator per snapshot_year, so a single addition or retirement event
+      REAPPEARS in every later snapshot it survives into — measured live, additions with
+      change_year 2020-2024 appear in 1 to 6 distinct snapshot_years each. The row count
+      therefore grows every year by construction (25,986 in 2016 to 38,359 in 2025) without
+      any new events.
+      SUMming nameplate_capacity_mw across snapshot_year multiplies every event by the number
+      of snapshots it appears in: for change_type='Addition' and change_year 2020-2024 that
+      is 746,721 MW across 18,688 rows, against 5,236 real generator-years — roughly 3.6x
+      EIA's own published additions of ~40 GW/yr.
+      To total real capacity change, first reduce to one row per (plant_id, generator_id,
+      change_year) — e.g. pick the newest snapshot_year per generator with QUALIFY
+      ROW_NUMBER() OVER (PARTITION BY plant_id, generator_id, change_year
+      ORDER BY snapshot_year DESC) = 1 — and only then aggregate.
+      snapshot_month is NULL on every row: only the December file is ingested, so the column
+      carries no information and must not be used to disambiguate snapshots.
 
     dimensions:
       type:
