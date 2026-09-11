@@ -55,7 +55,23 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
 
   private static final int PAGE_SIZE = 2000;
   private static final int CONNECT_TIMEOUT_MS = 60_000;
-  private static final int READ_TIMEOUT_MS = 300_000;
+  // A healthy page (2000 features with full polygon geometry) completes in single-digit
+  // seconds, confirmed live. 300s was generous enough that a genuinely hung connection ate
+  // a full 5 minutes before the retry loop below even got a chance to react - with up to
+  // MAX_PAGE_RETRIES attempts, a single bad page could stall the whole multi-page fetch for
+  // up to 20 minutes. 90s leaves ample margin over the normal case while letting a stuck
+  // connection fail fast enough for retry to actually help.
+  private static final int READ_TIMEOUT_MS = 90_000;
+  // fetchPage() manages its own HttpURLConnection directly (the StreamingResponseTransformer
+  // contract bypasses HttpSource's shared RetryableHttp path entirely), so it previously had no
+  // retry of its own. Confirmed live: a mid-stream connection drop (Premature EOF while parsing
+  // page N's JSON body - an intermittent failure on this server, not a permanent block; the same
+  // request succeeds on a plain retry) threw straight out of the iterator and killed the whole
+  // fetch, with every row from the pages that DID succeed already handed to the caller - which is
+  // exactly why production held 10,000 rows (5 clean pages of 2000) against a real ~39k feature
+  // count: the 6th page failed and nothing above this iterator knew the result was partial.
+  private static final int MAX_PAGE_RETRIES = 4;
+  private static final long RETRY_BACKOFF_MS = 3_000L;
 
   private static final String OUT_FIELDS = String.join(",",
       "OBJECTID", "poly_IRWINID", "attr_UniqueFireIdentifier", "attr_IncidentName",
@@ -83,6 +99,29 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
     }
 
     private void fetchPage() throws IOException {
+      IOException last = null;
+      for (int attempt = 0; attempt <= MAX_PAGE_RETRIES; attempt++) {
+        if (attempt > 0) {
+          LOGGER.warn("wildfire_perimeters: retrying page at offset {} (attempt {}/{}): {}",
+              offset, attempt + 1, MAX_PAGE_RETRIES + 1, last.getMessage());
+          try {
+            Thread.sleep(RETRY_BACKOFF_MS * attempt);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while retrying WFIGS page fetch", ie);
+          }
+        }
+        try {
+          fetchPageOnce();
+          return;
+        } catch (IOException e) {
+          last = e;
+        }
+      }
+      throw last;
+    }
+
+    private void fetchPageOnce() throws IOException {
       String url = baseUrl
           + (baseUrl.contains("?") ? "&" : "?")
           + "where=" + enc("1=1")
