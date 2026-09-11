@@ -698,15 +698,23 @@ if _gh_available; then
       *)    VERDICT_LABEL="dq-warn" ;;
     esac
 
+    # The results parquet names this column table_name; selecting `tbl` made every one of
+    # these queries fail with a Binder Error, which 2>/dev/null swallowed, so each DQ issue
+    # rendered "(could not read findings)" and named no failing table. The findings were in
+    # the parquet the whole time. Keep stderr visible in the log so a future mismatch is
+    # loud rather than silently degrading to the placeholder.
     FINDINGS_TABLE=$(duckdb -noheader -list -c "
-      SELECT '| ' || tbl || ' | ' || test || ' | ' || status || ' | ' ||
+      SELECT '| ' || table_name || ' | ' || test || ' | ' || status || ' | ' ||
              COALESCE(CAST(value AS VARCHAR), '—') || ' | ' ||
              COALESCE(CAST(threshold AS VARCHAR), '—') || ' | ' ||
              COALESCE(REPLACE(detail, '|', '/'), '') || ' |'
       FROM read_parquet('${RESULT_LOCAL}')
       WHERE status != 'pass'
-      ORDER BY status DESC, tbl, test
-      LIMIT 50;" 2>/dev/null || echo "| (could not read findings) | | | | | |")
+      ORDER BY status DESC, table_name, test
+      LIMIT 50;") || {
+      log_info "$WORKER_ID: WARNING: could not read DQ findings from ${RESULT_LOCAL}"
+      FINDINGS_TABLE="| (could not read findings) | | | | | |"
+    }
 
     FINDINGS_MD="| Table | Test | Status | Value | Threshold | Detail |
 |-------|------|--------|-------|-----------|--------|
