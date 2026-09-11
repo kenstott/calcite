@@ -500,6 +500,20 @@ partitionedTables:
         type: string
         nullable: true
         comment: Office county name
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: >
+          5-digit county FIPS, derived from office_county_name/office_state_abbr via exact
+          match against the Census county-name crosswalk (the same lookup
+          energy.eia_power_plants uses) — FDIC reports the county as free text and never
+          carries a native FIPS code. NULL where the name cannot be resolved: Puerto Rico
+          and US Virgin Islands county-equivalents are not in the crosswalk at all (a real
+          gap in that reference, not a spelling mismatch — do not expect these to resolve
+          without adding PR/VI reference data first), and DC branches genuinely have no
+          county subdivision to report. A bare name shared by both a Virginia independent
+          city and a same-named Virginia county (Fairfax, Richmond) also stays NULL rather
+          than guessing which one a branch belongs to.
       - name: latitude
         type: double
         nullable: true

@@ -14291,6 +14291,11 @@
   },
   {
     "state_abbr": "VA",
+    "county_name": "FAIRFAX CITY",
+    "county_fips": "51600"
+  },
+  {
+    "state_abbr": "VA",
     "county_name": "FALLS CHURCH",
     "county_fips": "51610"
   },
@@ -14322,6 +14327,11 @@
   {
     "state_abbr": "VA",
     "county_name": "GALAX",
+    "county_fips": "51640"
+  },
+  {
+    "state_abbr": "VA",
+    "county_name": "GALAX CITY",
     "county_fips": "51640"
   },
   {
@@ -14362,6 +14372,11 @@
   {
     "state_abbr": "VA",
     "county_name": "HAMPTON",
+    "county_fips": "51650"
+  },
+  {
+    "state_abbr": "VA",
+    "county_name": "HAMPTON CITY",
     "county_fips": "51650"
   },
   {
@@ -14441,6 +14456,11 @@
   },
   {
     "state_abbr": "VA",
+    "county_name": "LEXINGTON CITY",
+    "county_fips": "51678"
+  },
+  {
+    "state_abbr": "VA",
     "county_name": "LOUDOUN",
     "county_fips": "51107"
   },
@@ -14457,6 +14477,11 @@
   {
     "state_abbr": "VA",
     "county_name": "LYNCHBURG",
+    "county_fips": "51680"
+  },
+  {
+    "state_abbr": "VA",
+    "county_name": "LYNCHBURG CITY",
     "county_fips": "51680"
   },
   {
@@ -14516,7 +14541,17 @@
   },
   {
     "state_abbr": "VA",
+    "county_name": "NEWPORT NEWS CITY",
+    "county_fips": "51700"
+  },
+  {
+    "state_abbr": "VA",
     "county_name": "NORFOLK",
+    "county_fips": "51710"
+  },
+  {
+    "state_abbr": "VA",
+    "county_name": "NORFOLK CITY",
     "county_fips": "51710"
   },
   {
@@ -14641,6 +14676,11 @@
   },
   {
     "state_abbr": "VA",
+    "county_name": "SALEM CITY",
+    "county_fips": "51775"
+  },
+  {
+    "state_abbr": "VA",
     "county_name": "SCOTT",
     "county_fips": "51169"
   },
@@ -14681,6 +14721,11 @@
   },
   {
     "state_abbr": "VA",
+    "county_name": "SUFFOLK CITY",
+    "county_fips": "51800"
+  },
+  {
+    "state_abbr": "VA",
     "county_name": "SURRY",
     "county_fips": "51181"
   },
@@ -14697,6 +14742,11 @@
   {
     "state_abbr": "VA",
     "county_name": "VIRGINIA BEACH",
+    "county_fips": "51810"
+  },
+  {
+    "state_abbr": "VA",
+    "county_name": "VIRGINIA BEACH CITY",
     "county_fips": "51810"
   },
   {
