@@ -3461,6 +3461,125 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # BROADBAND ARRA AWARDS — USAspending spending_by_award (CFDA 11.557 + 10.855)
+  # ---------------------------------------------------------------------------
+  - name: broadband_arra_awards
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=broadband_arra_awards/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      ARRA (American Recovery and Reinvestment Act, 2009) broadband stimulus award-level
+      grants — one row per award, with recipient, dollar amount, performance period, and
+      recipient location (county-grain via county_fips). Covers both ARRA broadband
+      programs: NTIA's Broadband Technology Opportunities Program (BTOP, CFDA 11.557,
+      middle-mile/institutional/public-computing infrastructure) and RUS's Broadband
+      Initiatives Program (BIP, CFDA 10.855, last-mile rural infrastructure). Verified
+      live 2026-09-11: real awards under both programs (e.g. BTOP's EAGLE-NET ALLIANCE,
+      $100.6M, Broomfield County CO; BIP awards to rural school districts and health
+      clinics). Closes the ARRA third of the "federal broadband award geography" sourcing
+      gap alongside broadband_reconnect_awards (ReConnect) and
+      broadband_bead_state_allocations (BEAD, state-grain only); RDOF/CAF-II remain
+      FCC/USAC-administered, not CFDA awards — see broadband_high_cost_disbursements
+      (carrier/state grain — RDOF has no address-level source publicly available) and
+      broadband_caf_deployment_locations. A one-time, closed-out 2009-2011 program: full
+      crawl each run (not year-partitioned), whole result set small enough (low hundreds
+      of awards across both CFDA numbers) that a full refresh is cheap. Source:
+      api.usaspending.gov/api/v2/search/spending_by_award/ (program_numbers filter,
+      award types 02/03/04/05 — grants only, no contracts/loans in either program).
+
+    dimensions:
+      type:
+        - broadband_arra_awards
+      cfda_number:
+        type: list
+        values: ["11.557", "10.855"]
+
+    columns:
+      - name: cfda_number
+        type: string
+        nullable: false
+        comment: CFDA/Assistance Listing number (11.557 = NTIA BTOP, 10.855 = RUS BIP)
+      - name: award_id
+        type: string
+        nullable: false
+        comment: USAspending award identifier (PK)
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: Award recipient (utility, cooperative, municipality, tribal entity, health/education institution, etc.)
+      - name: award_amount
+        type: double
+        nullable: true
+        comment: Award amount (USD)
+      - name: start_date
+        type: string
+        nullable: true
+        comment: Period-of-performance start date (YYYY-MM-DD)
+      - name: end_date
+        type: string
+        nullable: true
+        comment: Period-of-performance end date (YYYY-MM-DD)
+      - name: awarding_agency
+        type: string
+        nullable: true
+        comment: Awarding federal agency (Department of Commerce/NTIA for BTOP, USDA Rural Utilities Service for BIP)
+      - name: description
+        type: string
+        nullable: true
+        comment: Award description as filed by the awarding agency
+      - <<: *state_abbr_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: Recipient county name as reported by USAspending
+      - name: city_name
+        type: string
+        nullable: true
+        comment: Recipient city
+      - name: zip5
+        type: string
+        nullable: true
+        comment: Recipient 5-digit ZIP
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_award/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAwardSearchProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=broadband_arra_awards/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: broadband_arra_awards
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # BROADBAND BEAD STATE ALLOCATIONS — USAspending spending_by_award (CFDA 11.035, snapshot)
   # ---------------------------------------------------------------------------
   - name: broadband_bead_state_allocations
