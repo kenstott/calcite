@@ -3252,6 +3252,186 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS HOUSING YEAR BUILT DETAIL - Bracketed housing-unit counts by decade built
+  # ---------------------------------------------------------------------------
+  # New table rather than new columns on acs_housing_tenure: that table is already in
+  # production (observedCoverage rowCount 49091), and IcebergMaterializationWriter drops
+  # and recreates a table with purge=true on a column-set mismatch — adding columns to a
+  # production table's schema needs the same DQ-verification discipline as a defect fix,
+  # never an unverified schema change run against production. A brand-new table has no
+  # existing data to lose, so that risk doesn't apply here.
+  - name: acs_housing_year_built_detail
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Housing units bracketed by decade of structure built (ACS 5-Year table B25034),
+      at state and county levels — ten brackets (built 2020 or later, 2010-2019,
+      2000-2009, 1990-1999, 1980-1989, 1970-1979, 1960-1969, 1950-1959, 1940-1949, and
+      1939 or earlier) plus the table's own total. Complements acs_housing_tenure's
+      median_year_built: a median only tells you 50% of units are older/newer than
+      itself, not the share relative to an arbitrary threshold (e.g. "percent of
+      housing stock built before 1980") — these brackets answer that directly. Verified
+      live 2026-09-11: bracket sum matches the table's own total exactly (Bronx County
+      NY, 2023 ACS5); pre-1939 share is far higher in an established Northeast county
+      (Nantucket MA ~17%) than a Sun Belt boomtown (Maricopa AZ ~1%), matching known
+      housing-stock-age geography. Tract-grain is NOT included — this codebase's
+      declarative ACS infrastructure has no per-county tract fan-out mechanism; state
+      and county grain only (see all_geographies).
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: total_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_001E" AS BIGINT)'
+        comment: Total housing units (all vintages) — brackets below should sum to this
+      - name: total_units_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for total_units (Census variable B25034_001M; negative sentinels normalized to null)
+      - name: built_2020_or_later
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_002E" AS BIGINT)'
+        comment: Housing units built 2020 or later
+      - name: built_2020_or_later_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_2020_or_later (Census variable B25034_002M; negative sentinels normalized to null)
+      - name: built_2010_to_2019
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_003E" AS BIGINT)'
+        comment: Housing units built 2010 to 2019
+      - name: built_2010_to_2019_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_2010_to_2019 (Census variable B25034_003M; negative sentinels normalized to null)
+      - name: built_2000_to_2009
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_004E" AS BIGINT)'
+        comment: Housing units built 2000 to 2009
+      - name: built_2000_to_2009_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_2000_to_2009 (Census variable B25034_004M; negative sentinels normalized to null)
+      - name: built_1990_to_1999
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_005E" AS BIGINT)'
+        comment: Housing units built 1990 to 1999
+      - name: built_1990_to_1999_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_005M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_005M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_1990_to_1999 (Census variable B25034_005M; negative sentinels normalized to null)
+      - name: built_1980_to_1989
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_006E" AS BIGINT)'
+        comment: Housing units built 1980 to 1989
+      - name: built_1980_to_1989_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_1980_to_1989 (Census variable B25034_006M; negative sentinels normalized to null)
+      - name: built_1970_to_1979
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_007E" AS BIGINT)'
+        comment: Housing units built 1970 to 1979
+      - name: built_1970_to_1979_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_007M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_007M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_1970_to_1979 (Census variable B25034_007M; negative sentinels normalized to null)
+      - name: built_1960_to_1969
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_008E" AS BIGINT)'
+        comment: Housing units built 1960 to 1969
+      - name: built_1960_to_1969_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_008M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_008M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_1960_to_1969 (Census variable B25034_008M; negative sentinels normalized to null)
+      - name: built_1950_to_1959
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_009E" AS BIGINT)'
+        comment: Housing units built 1950 to 1959
+      - name: built_1950_to_1959_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_009M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_009M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_1950_to_1959 (Census variable B25034_009M; negative sentinels normalized to null)
+      - name: built_1940_to_1949
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_010E" AS BIGINT)'
+        comment: Housing units built 1940 to 1949
+      - name: built_1940_to_1949_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_1940_to_1949 (Census variable B25034_010M; negative sentinels normalized to null)
+      - name: built_1939_or_earlier
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25034_011E" AS BIGINT)'
+        comment: Housing units built 1939 or earlier
+      - name: built_1939_or_earlier_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25034_011M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25034_011M" AS BIGINT) END'
+        comment: 90% CI margin of error for built_1939_or_earlier (Census variable B25034_011M; negative sentinels normalized to null)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B25034_001E,B25034_001M,B25034_002E,B25034_002M,B25034_003E,B25034_003M,B25034_004E,B25034_004M,B25034_005E,B25034_005M,B25034_006E,B25034_006M,B25034_007E,B25034_007M,B25034_008E,B25034_008M,B25034_009E,B25034_009M,B25034_010E,B25034_010M,B25034_011E,B25034_011M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_housing_year_built_detail
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS INCOME DISTRIBUTION - Income brackets and Gini coefficient
   # ---------------------------------------------------------------------------
   - name: acs_income_distribution
