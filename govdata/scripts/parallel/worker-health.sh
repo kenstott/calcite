@@ -166,24 +166,8 @@ run_daily_only_health_tables() {
 # dimension means a snapshot that only daily needs. The warning names it so it can be given a
 # proper group; running it in a catch-all is the safe default, not the intended end state.
 run_ungrouped_health_tables() {
-  local kind="$1" all_tables assigned="" entry t unassigned=""
-
-  all_tables="$(schema_tables health "$kind")" || return 1
-  for entry in "${ALL_MODE_GROUPS[@]}" "${DAILY_ONLY_GROUPS[@]}"; do
-    assigned="${assigned},${entry#*|}"
-  done
-  assigned="${assigned},"
-
-  IFS=',' read -ra _all <<< "$all_tables"
-  for t in "${_all[@]}"; do
-    t="$(echo "$t" | xargs)"
-    [ -n "$t" ] || continue
-    case "$assigned" in
-      *",${t},"*) ;;
-      *) unassigned="${unassigned}${t}," ;;
-    esac
-  done
-  unassigned="${unassigned%,}"
+  local kind="$1" unassigned
+  unassigned="$(unassigned_schema_tables health "$kind" "${ALL_MODE_GROUPS[@]}" "${DAILY_ONLY_GROUPS[@]}")" || return 1
 
   [ -n "$unassigned" ] || return 0
   log_info "$WORKER_ID: WARNING — health-schema.yaml declares tables in no worker group: ${unassigned}. Running them in health-ungrouped; assign them to a group in worker-health.sh."

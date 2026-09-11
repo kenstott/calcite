@@ -1228,6 +1228,37 @@ print(",".join(names))
 PY
 }
 
+# Diffs a schema's real table list (from schema_tables) against the union of a bespoke worker's
+# hand-maintained groups, and echoes the tables present in the schema but assigned to none of
+# them. Empty output means full coverage. Each remaining arg is one "<label>|<comma-separated
+# tables>" group entry, the same shape worker-health.sh's ALL_MODE_GROUPS/DAILY_ONLY_GROUPS
+# already use — this is that script's run_ungrouped_health_tables diff, factored out so
+# worker-lands.sh/worker-edu.sh/worker-patents.sh can reuse it instead of re-deriving their own.
+# A bespoke worker's grouping is hand-curated on purpose (it encodes rate limits, cadence, and
+# failure isolation the schema can't express), so this only ever detects a table that fell
+# through every group — never a false positive from `all_tables` being e.g. count-limited.
+#
+# Usage: unassigned=$(unassigned_schema_tables health all "${ALL_MODE_GROUPS[@]}" "${DAILY_ONLY_GROUPS[@]}")
+unassigned_schema_tables() {
+  local schema="$1" kind="$2"
+  shift 2
+  local all_tables assigned="," entry t unassigned=""
+  all_tables="$(schema_tables "$schema" "$kind")" || return 1
+  for entry in "$@"; do
+    assigned="${assigned}${entry#*|},"
+  done
+  IFS=',' read -ra _all <<< "$all_tables"
+  for t in "${_all[@]}"; do
+    t="$(echo "$t" | xargs)"
+    [ -n "$t" ] || continue
+    case "$assigned" in
+      *",${t},"*) ;;
+      *) unassigned="${unassigned}${t}," ;;
+    esac
+  done
+  echo "${unassigned%,}"
+}
+
 #
 # Usage: filtered=$(filter_enabled_tables "table1,table2,table3")
 #   Echoes a JSON-array-ready, double-quoted, comma-separated list for the group. With

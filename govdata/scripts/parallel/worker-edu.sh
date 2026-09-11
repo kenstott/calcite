@@ -83,6 +83,29 @@ ENDJSON
   run_etl "$model_file" "$WORKER_ID"
 }
 
+# Catch every schema table none of the cadence functions above cover — see
+# unassigned_schema_tables in common.sh (the same protection worker-health.sh/worker-lands.sh
+# have; a table added to edu-schema.yaml without a matching run_edu_model call here would
+# otherwise never be dispatched by anything, with no error). Checked on every full backfill.
+run_ungrouped_edu_tables() {
+  local start="$1" end="$2" unassigned _t quoted=""
+  unassigned="$(unassigned_schema_tables edu all \
+    "k12|ccd_districts,ccd_schools" \
+    "assessments|naep_scores,naep_achievement_levels,crdc_schools" \
+    "ipeds|ipeds_institutions,ipeds_completions,ipeds_financials,ipeds_tuition" \
+    "libraries|library_outlets" \
+    "f33|f33_district_finance" \
+    "scorecard|college_scorecard,college_scorecard_programs")" || return 1
+
+  [ -n "$unassigned" ] || return 0
+  IFS=',' read -ra _un <<< "$unassigned"
+  for _t in "${_un[@]}"; do
+    [ -n "$_t" ] && quoted="${quoted}\"${_t}\","
+  done
+  log_info "$WORKER_ID: WARNING — edu-schema.yaml declares tables in no worker cadence: ${unassigned}. Assign them to a cadence in worker-edu.sh."
+  run_edu_model "edu-ungrouped" "${quoted%,}" "$start" "$end"
+}
+
 # ── modes ─────────────────────────────────────────────────────────────────────
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
@@ -119,6 +142,8 @@ run_historical_cadence() {
   else
     log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
   fi
+
+  run_ungrouped_edu_tables "$START" "$END"
 }
 
 run_annual_cadence() {

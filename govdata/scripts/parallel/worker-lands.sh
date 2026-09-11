@@ -82,6 +82,26 @@ ENDJSON
   run_etl "$model_file" "$WORKER_ID"
 }
 
+# Catch every schema table none of the groups above cover — see unassigned_schema_tables in
+# common.sh. pilt_county_payments, va_facilities and blm_field_offices were each added to the
+# schema and silently never dispatched by anything here before their own dispatch lines were
+# added by hand (see the comments above); checked on every full `historical` backfill so a
+# fourth such addition surfaces as a warning instead of a silent gap.
+run_ungrouped_lands_tables() {
+  local start="$1" end="$2" unassigned _t quoted=""
+  unassigned="$(unassigned_schema_tables lands all \
+    "once|national_forests,nps_units,blm_field_offices,padus_federal_fee_lands,va_facilities,forest_inventory,forest_metrics,fia_plots,fia_seedlings,fia_invasives,fia_down_woody_debris,fia_pop_evaluations,fia_tree_grm,fia_pop_stratum,fia_pop_plot_stratum_assgn,fia_pop_estn_unit,fia_pop_eval_grp,fia_pop_eval_attribute" \
+    "historical|timber_sales,nps_visitation,onrr_revenues,pilt_county_payments,va_facilities,blm_field_offices,national_forests,nps_units,padus_federal_fee_lands,forest_inventory,forest_metrics")" || return 1
+
+  [ -n "$unassigned" ] || return 0
+  IFS=',' read -ra _un <<< "$unassigned"
+  for _t in "${_un[@]}"; do
+    [ -n "$_t" ] && quoted="${quoted}\"${_t}\","
+  done
+  log_info "$WORKER_ID: WARNING — lands-schema.yaml declares tables in no worker group: ${unassigned}. Assign them to a group in worker-lands.sh."
+  run_lands_model "lands-ungrouped" "${quoted%,}" "$start" "$end"
+}
+
 # ── modes ─────────────────────────────────────────────────────────────────────
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
@@ -164,6 +184,7 @@ case "$MODE" in
       run_lands_model "lands-historical-fia" \
         '"fia_plots", "fia_seedlings", "fia_invasives", "fia_down_woody_debris", "fia_pop_evaluations", "fia_tree_grm", "fia_pop_stratum", "fia_pop_plot_stratum_assgn", "fia_pop_estn_unit", "fia_pop_eval_grp", "fia_pop_eval_attribute"' \
         "$START" "$END"
+      run_ungrouped_lands_tables "$START" "$END"
     fi
     ;;
 

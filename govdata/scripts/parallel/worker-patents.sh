@@ -83,6 +83,24 @@ ENDJSON
   run_etl "$model_file" "$WORKER_ID"
 }
 
+# Catch every schema table none of the dated/forever groups above cover — see
+# unassigned_schema_tables in common.sh (the same protection worker-health.sh/worker-lands.sh/
+# worker-edu.sh have). Checked on every full `historical` backfill.
+run_ungrouped_patents_tables() {
+  local start="$1" end="$2" unassigned _t quoted=""
+  unassigned="$(unassigned_schema_tables patents all \
+    "dated|patent_grants,patent_claims,patent_summaries,trademark_case_file,trademark_owner,trademark_classification,trademark_intl_class,trademark_statement" \
+    "forever|patent_locations,patent_abstracts,patent_applications,patent_figures,patent_assignees,patent_cpc_classes,patent_inventors")" || return 1
+
+  [ -n "$unassigned" ] || return 0
+  IFS=',' read -ra _un <<< "$unassigned"
+  for _t in "${_un[@]}"; do
+    [ -n "$_t" ] && quoted="${quoted}\"${_t}\","
+  done
+  log_info "$WORKER_ID: WARNING — patents-schema.yaml declares tables in no worker group: ${unassigned}. Assign them to a group in worker-patents.sh."
+  run_patents_model "patents-ungrouped" "${quoted%,}" "$start" "$end"
+}
+
 # ── modes ─────────────────────────────────────────────────────────────────────
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
@@ -119,6 +137,8 @@ case "$MODE" in
     # enabling the view name here created nothing (NoSuchTableException).
     run_patents_model "patents-historical-trademarks" \
       '"trademark_case_file","trademark_owner","trademark_classification","trademark_intl_class","trademark_statement"' "$START" "$END"
+
+    run_ungrouped_patents_tables "$START" "$END"
     ;;
 
   daily)
