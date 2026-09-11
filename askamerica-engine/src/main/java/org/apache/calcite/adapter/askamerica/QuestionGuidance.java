@@ -469,7 +469,11 @@ final class QuestionGuidance {
             + "'Claim 2 —' as prose headings instead of populating `claims` is an incomplete "
             + "publish, and if you catch yourself having done that, call publish_report again "
             + "with every graded assertion in `claims` before you finish. Only a validation "
-            + "with a single assertion may skip the array."),
+            + "with a single assertion may skip the array. With two or more claims, also pass "
+            + "`pinocchios` — {\"count\": 0-4, \"explanation\": \"...\"}, a Washington Post "
+            + "Fact Checker-style rating for the piece as a whole, refused without one: weigh "
+            + "the central, most-repeated claim's distance from the facts, not a mechanical "
+            + "count of false verdicts, and name which claim(s) drove the count."),
         new Template(
             "marginal_comparison",
             "Compare two options at the margin on one measured outcome, with an effect size "

@@ -619,7 +619,20 @@ public class McpServer {
             + "incomplete: call publish_report again, this time with every assertion you graded "
             + "placed in `claims`, before you finish. A validation with exactly one assertion "
             + "may be reported in prose if a table would be silly for one row; two or more "
-            + "assertions always go in `claims`.\n\n"
+            + "assertions always go in `claims`.\n"
+            + "8. With two or more claims, also pass `pinocchios` — an overall rating for the "
+            + "PIECE, Washington Post Fact Checker style, as {\"count\": 0-4, \"explanation\": "
+            + "\"...\"}, refused without one. This is an editorial judgment across the whole set "
+            + "of claims, not a mechanical count of false verdicts: weigh what the piece's "
+            + "central, most-repeated assertion actually claims and how far it strays, not its "
+            + "vaguest or most defensible line. 0 = true or no significant issues; 1 = some "
+            + "shading of the facts or selective framing that is still individually defensible; "
+            + "2 = significant omissions or exaggerations — a real number wearing a misleading "
+            + "label, a qualifier that only survives by not checking it; 3 = significant factual "
+            + "errors or self-contradiction — a headline claim the most recent data actually "
+            + "runs the opposite direction from; 4 = whoppers — a number or claim invented or "
+            + "contradicted outright by the primary source. Name which claim(s) drove the "
+            + "rating in the explanation, not a restatement of the claims table.\n\n"
 
             + "## WORKFLOW — RESEARCH FIRST, DATA SECOND, IN ORDER\n\n"
             + "Measured, most recently in a 25-run reaudit: the average answer still cites only "
@@ -1990,6 +2003,25 @@ public class McpServer {
             "For a validation: the URL of the article or page the claims were extracted from. "
             + "Lets the AskAmerica browser extension find this validation from that page. "
             + "Defaults to the last web_fetch URL of the session when omitted."));
+        pubProps.set("pinocchios", prop("object",
+            "For a validation with two or more claims: an overall Pinocchio rating for the "
+            + "PIECE as a whole (Washington Post Fact Checker style), as {\"count\": 0-4, "
+            + "\"explanation\": \"...\"}. This is a judgment call across the whole set of "
+            + "claims, not a mechanical count of false ones — weigh what the piece's central, "
+            + "most-repeated assertion actually claims, not its vaguest or most defensible one. "
+            + "count=0: true or no significant issues. count=1: some shading of the facts, "
+            + "selective framing, a defensible-but-flattering choice of comparison. count=2: "
+            + "significant omissions or exaggerations — a real number wearing a misleading "
+            + "label (e.g. a true magnitude attributed to a cause the data doesn't support), or "
+            + "a qualifier that only survives by not checking it. count=3: significant factual "
+            + "errors and/or self-contradiction — a headline claim the most recent data "
+            + "actually runs the opposite direction from. count=4: whoppers — a number or "
+            + "claim invented or contradicted outright by the primary source. The explanation "
+            + "should read like an editorial verdict, not a restatement of the claims table: "
+            + "name which claim(s) drove the rating and why the count landed where it did, not "
+            + "higher or lower. Renders as a labeled banner above the claim table. Omit for a "
+            + "validation with only one claim or none graded false/misleading enough to warrant "
+            + "a rating."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -3094,7 +3126,31 @@ public class McpServer {
                     if (claims.isArray() && claims.size() > 0) {
                         enforceClaimShape(claims);
                         enforceValidationChart(boardSvg, claims);
-                        ReportPage.Section claimsSec = claimsSection(claims);
+                        JsonNode pinocchios = args.path("pinocchios");
+                        if (pinocchios.isObject()) {
+                            if (!pinocchios.hasNonNull("count") || !pinocchios.hasNonNull("explanation")
+                                    || pinocchios.path("explanation").asText("").trim().isEmpty()) {
+                                throw new IllegalArgumentException(
+                                    "pinocchios needs both a 'count' (0-4) and a non-empty "
+                                    + "'explanation' -- a bare rating with no reasoning is not "
+                                    + "useful to a reader deciding whether to trust it.");
+                            }
+                            int count = pinocchios.path("count").asInt(-1);
+                            if (count < 0 || count > 4) {
+                                throw new IllegalArgumentException(
+                                    "pinocchios.count must be 0-4 (Washington Post Fact "
+                                    + "Checker scale), got " + count);
+                            }
+                        } else if (claims.size() >= 2) {
+                            throw new IllegalArgumentException(
+                                "This validation grades " + claims.size() + " claims but "
+                                + "carries no overall pinocchios rating. Every validation with "
+                                + "two or more claims needs one -- weigh the piece's central, "
+                                + "most-repeated assertion (not its vaguest one) and rate 0-4 "
+                                + "per the Washington Post Fact Checker scale, with an "
+                                + "explanation naming which claim(s) drove the count.");
+                        }
+                        ReportPage.Section claimsSec = claimsSection(claims, pinocchios);
                         if (claimsSec != null) {
                             // Directly under the summary, where a reader looks first.
                             secs.add(Math.min(1, secs.size()), claimsSec);
@@ -4917,7 +4973,7 @@ public class McpServer {
      * from, and both vintages onto the page, and tallies the verdicts so a reader sees the
      * shape of the article's accuracy before the detail.
      */
-    private static ReportPage.Section claimsSection(JsonNode claims) {
+    private static ReportPage.Section claimsSection(JsonNode claims, JsonNode pinocchios) {
         java.util.Map<String, Integer> tally = new java.util.LinkedHashMap<>();
         for (String v : VERDICTS) {
             tally.put(v, Integer.valueOf(0));
@@ -5014,7 +5070,20 @@ public class McpServer {
             }
         }
         tiles.append("<strong>").append(n).append("</strong> assertions checked</p>\n");
-        String html = tiles
+        String pinocchioHtml = "";
+        if (pinocchios != null && pinocchios.isObject()) {
+            int count = pinocchios.path("count").asInt(0);
+            String explanation = pinocchios.path("explanation").asText("");
+            StringBuilder icons = new StringBuilder();
+            for (int i = 0; i < 4; i++) {
+                icons.append(i < count ? "🤥" : "○");
+            }
+            String label = count == 0 ? "No Pinocchios — true or no significant issues"
+                : count + " of 4 Pinocchios";
+            pinocchioHtml = "<div class=\"pinocchio-rating\"><p><strong>" + icons + " " + label
+                + "</strong></p><p>" + ReportPage.esc(explanation) + "</p></div>\n";
+        }
+        String html = pinocchioHtml + tiles
             + "<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th>"
             + "</tr></thead><tbody>\n" + rows + "</tbody></table>\n"
             + "<p class=\"note\">Verdicts: true, mostly true, partially true, mostly false, "
