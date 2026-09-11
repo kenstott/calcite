@@ -8,7 +8,7 @@
  * machine learning models is strictly prohibited without explicit written
  * permission from the copyright holder.
  */
-package org.apache.calcite.adapter.govdata.housing;
+package org.apache.calcite.adapter.govdata.lands;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
@@ -34,15 +34,18 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 /**
- * Base for HUD Open Data ArcGIS FeatureServer transformers. The configured source URL is a
- * {@code .../FeatureServer/{layer}/query} endpoint returning {@code {"features":[{"attributes":{…}}]}};
- * ArcGIS caps a page at {@code maxRecordCount} (2000) and flags {@code exceededTransferLimit} when
- * more rows remain, so this base pages with {@code &resultOffset=N} until the layer is exhausted.
+ * Base for USFS/NPS ArcGIS MapServer/FeatureServer transformers in this schema. The configured
+ * source URL is a {@code .../query} endpoint returning {@code {"features":[{"attributes":{…}}]}};
+ * ArcGIS caps a page at {@code maxRecordCount} (commonly 2000, regardless of a larger requested
+ * {@code resultRecordCount}) and flags {@code exceededTransferLimit} when more rows remain, so
+ * this base pages with {@code &resultOffset=N} until the layer is exhausted.
  *
  * <p>The source URL must already carry the query parameters ({@code where}, {@code outFields},
- * {@code returnGeometry=false}, {@code f=json}, {@code resultRecordCount}); only {@code resultOffset}
- * is appended per page. Rows are produced lazily one page at a time (contract of
- * {@link StreamingResponseTransformer}), so memory stays O(page) regardless of layer size.
+ * {@code f=json}, {@code resultRecordCount}); only {@code resultOffset} is appended per page.
+ * Rows are produced lazily one page at a time (contract of {@link StreamingResponseTransformer}),
+ * so memory stays O(page) regardless of layer size. Mirrors
+ * {@code housing.AbstractArcGisFeatureTransformer} — kept as a separate per-schema copy rather
+ * than a shared base, matching this codebase's per-schema transformer convention.
  */
 abstract class AbstractArcGisFeatureTransformer implements StreamingResponseTransformer {
 
@@ -142,12 +145,13 @@ abstract class AbstractArcGisFeatureTransformer implements StreamingResponseTran
     }
 
     /**
-     * Fetches and parses one page, retrying on a JSON parse failure. A large page (multiple MB)
-     * occasionally arrives truncated with no HTTP-level error: the connection closes as if at a
-     * normal EOF, {@link #get} returns successfully, and only the JSON parse reveals the body
-     * was cut short. {@link #get}'s own retry loop cannot catch this — it only retries a non-2xx
-     * status, and this response was 200. Re-fetching the same page from scratch (not resuming —
-     * ArcGIS's paging is offset-based, not byte-range) clears it in practice.
+     * Fetches and parses one page, retrying on a JSON parse failure. A large page (multiple MB —
+     * routine at 2000 wide-schema features) occasionally arrives truncated with no HTTP-level
+     * error: the connection closes as if at a normal EOF, {@link #get} returns successfully, and
+     * only the JSON parse reveals the body was cut short. {@link #get}'s own retry loop cannot
+     * catch this — it only retries a non-2xx status, and this response was 200. Re-fetching the
+     * same page from scratch (not resuming — ArcGIS's paging is offset-based, not byte-range)
+     * clears it in practice.
      */
     private JsonNode fetchPageJson(int off) throws IOException {
       IOException lastFailure = null;

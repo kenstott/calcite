@@ -243,7 +243,11 @@ partitionedTables:
       reach as far back as 1820, but this table is only ever fetched from
       GOVDATA_START_YEAR forward (see observedCoverage below for the real floor
       actually loaded) — the 1820 figure describes what the source's older layers
-      contain, not what's in this table. All layers publish the identical 71-field schema.
+      contain, not what's in this table. The service hard-caps maxRecordCount at
+      2000 regardless of the requested resultRecordCount (a single year can hold
+      4x that); UsfsFactsTransformer pages on exceededTransferLimit via
+      resultOffset rather than making one request per year. All layers publish
+      the identical 71-field schema.
 
     dimensions:
       type:
