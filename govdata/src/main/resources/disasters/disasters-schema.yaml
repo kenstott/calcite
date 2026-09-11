@@ -549,10 +549,30 @@ partitionedTables:
       disaster_declarations / wildfire_perimeters by county+date overlap.
       Source: fema.gov/api/open/v2/FimaNfipClaims.
 
+      DEPRECATION WARNING (confirmed live 2026-09-11, D-283): OpenFEMA has deprecated this
+      exact endpoint - its own API response metadata states the dataset is frozen (no further
+      updates) since 2026-06-01 and will stop being served entirely after 2026-10-15, in favor
+      of a renamed v3 dataset ("nfip-redacted-claims-v3", FIMA prefix dropped). Migrating this
+      table's source URL/schema to the v3 dataset before that date is a separate, tracked
+      follow-up - incremental updates will silently stop working once the old endpoint is
+      pulled, though history already materialized here is unaffected.
+
     dimensions:
       type:
         - nfip_claims
-      year: *disasters_year_range
+      # Own floor, not *disasters_year_range (D-283): NFIP's own program history predates
+      # most of this schema's siblings that share that anchor by decades. Confirmed live
+      # against fema.gov/api/open/v2/FimaNfipClaims: real claim rows exist back to 1978
+      # (the earliest yearOfLoss the API returns at all), not just the 2010 default. Do not
+      # widen the shared anchor itself for this - disaster_declarations/hazard_mitigation/
+      # public_assistance's real program-start floors were not verified here and are likely
+      # different (later) than NFIP's.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:1978}"
+        minYear: 1978
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
 
     columns:
       - <<: *state_fips_column
