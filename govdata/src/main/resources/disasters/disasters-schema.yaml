@@ -185,11 +185,22 @@ partitionedTables:
       - name: ih_program_declared
         type: boolean
         nullable: true
-        comment: Individual and Households Program declared
+        comment: >
+          Individuals and Households Program declared — use this column for "was individual
+          assistance activated," not ia_program_declared (D-285). FEMA's modern program name
+          for the same concept individual filers know as "Individual Assistance"; confirmed
+          live it varies genuinely with real disasters (e.g. true for Hurricane Harvey
+          DR-4332-TX, which also carries a real lastIAFilingDate).
       - name: ia_program_declared
         type: boolean
         nullable: true
-        comment: Individual Assistance declared
+        comment: >
+          Source field iaProgramDeclared is FALSE for every row FEMA's API currently returns
+          (confirmed live across hundreds of declarations spanning 2012-2026, including
+          disasters unambiguously IA-activated in reality, e.g. Hurricane Harvey) — the field
+          reads as dead/unpopulated at the source itself, not an ingest bug (D-285). Use
+          ih_program_declared for a real individual-assistance signal; this column is kept
+          only because it's still present in the raw feed, not because it carries information.
       - name: pa_program_declared
         type: boolean
         nullable: true
@@ -1353,17 +1364,19 @@ views:
     comment: >
       Annual disaster-declaration counts by state, incident_type, and year —
       disaster_count plus counts of declarations with IA (Individual
-      Assistance) and PA (Public Assistance) programs declared. Aggregates the
-      county-program rows in disaster_declarations to distinct disasters per
-      state/year/incident_type. Ready to join sec.filing_metadata on state for
-      risk-disclosure research.
+      Assistance, sourced from ih_program_declared - see disaster_declarations'
+      own column comment, D-285: the source field behind ia_program_declared
+      itself is dead at FEMA) and PA (Public Assistance) programs declared.
+      Aggregates the county-program rows in disaster_declarations to distinct
+      disasters per state/year/incident_type. Ready to join sec.filing_metadata
+      on state for risk-disclosure research.
     sql: >
       SELECT
         d.year,
         d.state_fips,
         d.incident_type,
         COUNT(DISTINCT d.disaster_number)  AS disaster_count,
-        SUM(CASE WHEN d.ia_program_declared THEN 1 ELSE 0 END) AS ia_declarations,
+        SUM(CASE WHEN d.ih_program_declared THEN 1 ELSE 0 END) AS ia_declarations,
         SUM(CASE WHEN d.pa_program_declared THEN 1 ELSE 0 END) AS pa_declarations
       FROM disaster_declarations d
       GROUP BY d.year, d.state_fips, d.incident_type
