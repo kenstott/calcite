@@ -638,19 +638,32 @@ public class McpServer {
             + "placed in `claims`, before you finish. A validation with exactly one assertion "
             + "may be reported in prose if a table would be silly for one row; two or more "
             + "assertions always go in `claims`.\n"
-            + "8. With two or more claims, also pass `pinocchios` — an overall rating for the "
-            + "PIECE, Washington Post Fact Checker style, as {\"count\": 0-4, \"explanation\": "
-            + "\"...\"}, refused without one. This is an editorial judgment across the whole set "
-            + "of claims, not a mechanical count of false verdicts: weigh what the piece's "
-            + "central, most-repeated assertion actually claims and how far it strays, not its "
-            + "vaguest or most defensible line. 0 = true or no significant issues; 1 = some "
-            + "shading of the facts or selective framing that is still individually defensible; "
-            + "2 = significant omissions or exaggerations — a real number wearing a misleading "
-            + "label, a qualifier that only survives by not checking it; 3 = significant factual "
-            + "errors or self-contradiction — a headline claim the most recent data actually "
-            + "runs the opposite direction from; 4 = whoppers — a number or claim invented or "
-            + "contradicted outright by the primary source. Name which claim(s) drove the "
-            + "rating in the explanation, not a restatement of the claims table.\n\n"
+            + "8. With two or more claims, also pass `pinocchios`, refused without one — "
+            + "Washington Post Fact Checker style, {\"count\": 0-4, \"explanation\": \"...\"}. "
+            + "A validated piece is not always a news report — it may be a paper, a blog post, "
+            + "a press release, a transcript. When the graded claims mix the PIECE's OWN "
+            + "fidelity (did it accurately represent the event, study, quote, or source it "
+            + "describes) with the factual accuracy of assertions it relays or advances "
+            + "(whether the piece's own, or attributed to a person/study/release it cites), "
+            + "rate these separately instead — {\"fidelity\": {\"count\":0-4,"
+            + "\"explanation\":\"...\"}, \"claims_accuracy\": {\"count\":0-4,"
+            + "\"explanation\":\"...\"}} — since a piece that faithfully represents an "
+            + "exaggerated claim it quotes or cites is a real and common case a single "
+            + "blended count would hide. Use the single form only when that split isn't "
+            + "meaningful for this piece (e.g. every claim graded is the piece's own, with "
+            + "nothing attributed to a separate source). Either way this is an editorial "
+            + "judgment across its set of "
+            + "claims, not a mechanical count of false verdicts: weigh what the central, "
+            + "most-repeated assertion in that group actually claims and how far it strays, "
+            + "not its vaguest or most defensible line. 0 = true or no significant issues; "
+            + "1 = some shading of the facts or selective framing that is still individually "
+            + "defensible; 2 = significant omissions or exaggerations — a real number wearing "
+            + "a misleading label, a qualifier that only survives by not checking it; "
+            + "3 = significant factual errors or self-contradiction — a headline claim the "
+            + "most recent data actually runs the opposite direction from; 4 = whoppers — a "
+            + "number or claim invented or contradicted outright by the primary source. Name "
+            + "which claim(s) drove each rating in its explanation, not a restatement of the "
+            + "claims table.\n\n"
 
             + "## WORKFLOW — RESEARCH FIRST, DATA SECOND, IN ORDER\n\n"
             + "Measured, most recently in a 25-run reaudit: the average answer still cites only "
@@ -2022,24 +2035,40 @@ public class McpServer {
             + "Lets the AskAmerica browser extension find this validation from that page. "
             + "Defaults to the last web_fetch URL of the session when omitted."));
         pubProps.set("pinocchios", prop("object",
-            "For a validation with two or more claims: an overall Pinocchio rating for the "
-            + "PIECE as a whole (Washington Post Fact Checker style), as {\"count\": 0-4, "
-            + "\"explanation\": \"...\"}. This is a judgment call across the whole set of "
-            + "claims, not a mechanical count of false ones — weigh what the piece's central, "
-            + "most-repeated assertion actually claims, not its vaguest or most defensible one. "
-            + "count=0: true or no significant issues. count=1: some shading of the facts, "
-            + "selective framing, a defensible-but-flattering choice of comparison. count=2: "
-            + "significant omissions or exaggerations — a real number wearing a misleading "
-            + "label (e.g. a true magnitude attributed to a cause the data doesn't support), or "
-            + "a qualifier that only survives by not checking it. count=3: significant factual "
-            + "errors and/or self-contradiction — a headline claim the most recent data "
-            + "actually runs the opposite direction from. count=4: whoppers — a number or "
-            + "claim invented or contradicted outright by the primary source. The explanation "
-            + "should read like an editorial verdict, not a restatement of the claims table: "
-            + "name which claim(s) drove the rating and why the count landed where it did, not "
-            + "higher or lower. Renders as a labeled banner above the claim table. Omit for a "
-            + "validation with only one claim or none graded false/misleading enough to warrant "
-            + "a rating."));
+            "For a validation with two or more claims: a Pinocchio rating (Washington Post "
+            + "Fact Checker style), count 0-4 with an explanation. The piece under test is not "
+            + "always a news report — it may be a paper, a blog post, a press release, a "
+            + "transcript. Two shapes are accepted:\n"
+            + "SINGLE, {\"count\": 0-4, \"explanation\": \"...\"} — use when the piece's own "
+            + "fidelity and the assertions it carries aren't usefully distinguishable (e.g. "
+            + "every claim graded is the piece's own, nothing attributed to a separate source "
+            + "it quotes or cites).\n"
+            + "SPLIT, {\"fidelity\": {\"count\":0-4,\"explanation\":\"...\"}, "
+            + "\"claims_accuracy\": {\"count\":0-4,\"explanation\":\"...\"}} — use "
+            + "whenever the piece accurately represents a person, study, or release whose OWN "
+            + "claims are the thing actually under test: grade the piece's fidelity (did it "
+            + "quote/frame/cite them accurately) separately from claims_accuracy (are the "
+            + "numbers and assertions THEY made actually true). Collapsing these into one "
+            + "count when they diverge — a piece faithfully relaying someone else's "
+            + "exaggerated claim — hides the more useful of the two verdicts; prefer SPLIT "
+            + "whenever a validation grades both the piece's own fidelity and a quoted or "
+            + "cited source's factual claims as separate line items in `claims`.\n"
+            + "Either shape is a judgment call across its set of claims, not a mechanical count "
+            + "of false ones — weigh what the central, most-repeated assertion in that group "
+            + "actually claims, not its vaguest or most defensible one. count=0: true or no "
+            + "significant issues. count=1: some shading of the facts, selective framing, a "
+            + "defensible-but-flattering choice of comparison. count=2: significant omissions "
+            + "or exaggerations — a real number wearing a misleading label (e.g. a true "
+            + "magnitude attributed to a cause the data doesn't support), or a qualifier that "
+            + "only survives by not checking it. count=3: significant factual errors and/or "
+            + "self-contradiction — a headline claim the most recent data actually runs the "
+            + "opposite direction from. count=4: whoppers — a number or claim invented or "
+            + "contradicted outright by the primary source. Each explanation should read like "
+            + "an editorial verdict, not a restatement of the claims table: name which claim(s) "
+            + "drove that rating and why the count landed where it did, not higher or lower. "
+            + "Renders as a labeled banner (or two, for SPLIT) above the claim table. Omit for "
+            + "a validation with only one claim or none graded false/misleading enough to "
+            + "warrant a rating."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -3145,7 +3174,12 @@ public class McpServer {
                         enforceClaimShape(claims);
                         enforceValidationChart(boardSvg, claims);
                         JsonNode pinocchios = args.path("pinocchios");
-                        if (pinocchios.isObject()) {
+                        boolean isSplit = pinocchios.isObject()
+                            && (pinocchios.has("fidelity") || pinocchios.has("claims_accuracy"));
+                        if (isSplit) {
+                            validatePinocchiosSubRating(pinocchios, "fidelity");
+                            validatePinocchiosSubRating(pinocchios, "claims_accuracy");
+                        } else if (pinocchios.isObject()) {
                             if (!pinocchios.hasNonNull("count") || !pinocchios.hasNonNull("explanation")
                                     || pinocchios.path("explanation").asText("").trim().isEmpty()) {
                                 throw new IllegalArgumentException(
@@ -3162,11 +3196,15 @@ public class McpServer {
                         } else if (claims.size() >= 2) {
                             throw new IllegalArgumentException(
                                 "This validation grades " + claims.size() + " claims but "
-                                + "carries no overall pinocchios rating. Every validation with "
-                                + "two or more claims needs one -- weigh the piece's central, "
-                                + "most-repeated assertion (not its vaguest one) and rate 0-4 "
-                                + "per the Washington Post Fact Checker scale, with an "
-                                + "explanation naming which claim(s) drove the count.");
+                                + "carries no pinocchios rating. Every validation with two or "
+                                + "more claims needs one -- either an overall {count, "
+                                + "explanation}, or, when the graded claims mix the piece's "
+                                + "own fidelity with the factual accuracy of what it relays or "
+                                + "quotes from another source, a split {fidelity, "
+                                + "claims_accuracy} rating instead. Weigh each group's "
+                                + "central, most-repeated assertion (not its vaguest one) and "
+                                + "rate 0-4 per the Washington Post Fact Checker scale, with an "
+                                + "explanation naming which claim(s) drove each count.");
                         }
                         ReportPage.Section claimsSec = claimsSection(claims, pinocchios);
                         if (claimsSec != null) {
@@ -5089,6 +5127,44 @@ public class McpServer {
      * from, and both vintages onto the page, and tallies the verdicts so a reader sees the
      * shape of the article's accuracy before the detail.
      */
+    /** Validates one sub-rating ({@code count} + {@code explanation}) of a SPLIT {@code
+     *  pinocchios} object, e.g. the {@code fidelity} or {@code
+     *  claims_accuracy} field. */
+    private static void validatePinocchiosSubRating(JsonNode pinocchios, String field) {
+        JsonNode sub = pinocchios.path(field);
+        if (!sub.isObject() || !sub.hasNonNull("count") || !sub.hasNonNull("explanation")
+                || sub.path("explanation").asText("").trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                "pinocchios." + field + " needs both a 'count' (0-4) and a non-empty "
+                + "'explanation' -- a split rating needs both halves filled in, not just one.");
+        }
+        int count = sub.path("count").asInt(-1);
+        if (count < 0 || count > 4) {
+            throw new IllegalArgumentException(
+                "pinocchios." + field + ".count must be 0-4 (Washington Post Fact Checker "
+                + "scale), got " + count);
+        }
+    }
+
+    /** Renders one Pinocchios banner. {@code label} is null for a SINGLE overall rating, or
+     *  the sub-rating's name ("Reporting Accuracy", "Subject Claims Accuracy") for SPLIT. */
+    private static String pinocchioBadge(String label, JsonNode rating) {
+        if (rating == null || !rating.isObject()) {
+            return "";
+        }
+        int count = rating.path("count").asInt(0);
+        String explanation = rating.path("explanation").asText("");
+        StringBuilder icons = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            icons.append(i < count ? "🤥" : "○");
+        }
+        String verdict = count == 0 ? "No Pinocchios — true or no significant issues"
+            : count + " of 4 Pinocchios";
+        String heading = label == null ? verdict : ReportPage.esc(label) + ": " + verdict;
+        return "<div class=\"pinocchio-rating\"><p><strong>" + icons + " " + heading
+            + "</strong></p><p>" + ReportPage.esc(explanation) + "</p></div>\n";
+    }
+
     private static ReportPage.Section claimsSection(JsonNode claims, JsonNode pinocchios) {
         java.util.Map<String, Integer> tally = new java.util.LinkedHashMap<>();
         for (String v : VERDICTS) {
@@ -5188,16 +5264,14 @@ public class McpServer {
         tiles.append("<strong>").append(n).append("</strong> assertions checked</p>\n");
         String pinocchioHtml = "";
         if (pinocchios != null && pinocchios.isObject()) {
-            int count = pinocchios.path("count").asInt(0);
-            String explanation = pinocchios.path("explanation").asText("");
-            StringBuilder icons = new StringBuilder();
-            for (int i = 0; i < 4; i++) {
-                icons.append(i < count ? "🤥" : "○");
+            boolean isSplit = pinocchios.has("fidelity")
+                || pinocchios.has("claims_accuracy");
+            if (isSplit) {
+                pinocchioHtml = pinocchioBadge("Fidelity", pinocchios.path("fidelity"))
+                    + pinocchioBadge("Claims Accuracy", pinocchios.path("claims_accuracy"));
+            } else {
+                pinocchioHtml = pinocchioBadge(null, pinocchios);
             }
-            String label = count == 0 ? "No Pinocchios — true or no significant issues"
-                : count + " of 4 Pinocchios";
-            pinocchioHtml = "<div class=\"pinocchio-rating\"><p><strong>" + icons + " " + label
-                + "</strong></p><p>" + ReportPage.esc(explanation) + "</p></div>\n";
         }
         String html = pinocchioHtml + tiles
             + "<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th>"
