@@ -464,7 +464,12 @@ final class QuestionGuidance {
             + "article's figure, the warehouse figure, the independent figure, its sources, "
             + "and the SQL that produced it. 'Not checkable here' is only for an assertion "
             + "whose measure and components are all absent. Lead the summary with the tally "
-            + "and the assertion that matters most."),
+            + "and the assertion that matters most. The `claims` array is mandatory, not "
+            + "optional, whenever two or more assertions are graded: writing 'Claim 1 —', "
+            + "'Claim 2 —' as prose headings instead of populating `claims` is an incomplete "
+            + "publish, and if you catch yourself having done that, call publish_report again "
+            + "with every graded assertion in `claims` before you finish. Only a validation "
+            + "with a single assertion may skip the array."),
         new Template(
             "marginal_comparison",
             "Compare two options at the margin on one measured outcome, with an effect size "
