@@ -2564,7 +2564,14 @@ partitionedTables:
         type: VARCHAR
         nullable: true
       - name: deaths
-        comment: "Number of deaths for the cause/period (COVID-19 deaths for weekly rows)"
+        comment: >
+          Number of deaths for the cause/period (COVID-19 deaths for weekly rows). NULL means
+          CDC suppressed this week's count under its small-cell privacy threshold (typically
+          <10), NOT that zero deaths occurred — confirmed live (2,296 weekly state-level
+          COVID-19 rows carry this NULL). Do not treat NULL as 0 in a SUM; a plain SUM(deaths)
+          already excludes these rows correctly by SQL's own NULL-skipping behavior, but an
+          explicit COALESCE(deaths, 0) or an outer join that backfills a missing week with 0
+          would silently convert real suppression into a false zero.
         type: VARCHAR
         nullable: true
       - name: age_adjusted_rate
