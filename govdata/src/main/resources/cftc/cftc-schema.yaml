@@ -1235,7 +1235,12 @@ partitionedTables:
       - name: cftc_market_code
         type: string
         nullable: true
-        expression: 'src."cftc_market_code"'
+        # Confirmed live: CFTC's own Socrata JSON started emitting this field with a
+        # trailing space starting mid-2022 ("CBT " instead of "CBT") - by 2023-2024 every
+        # row carries the padded form. TRIM so an exact-match filter (cftc_market_code='CBT')
+        # keeps matching regardless of which vintage a row came from; without it, a filter
+        # written against the pre-2022 clean form silently returns nothing for 2023+.
+        expression: 'TRIM(src."cftc_market_code")'
       - name: cftc_region_code
         type: string
         nullable: true
