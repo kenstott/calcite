@@ -719,7 +719,12 @@ partitionedTables:
       - name: state_fips
         type: string
         nullable: true
-        comment: State FIPS code
+        comment: >
+          State FIPS code — US locations only. NULL on 71% of rows (D-276), but confirmed live
+          this tracks country_code almost perfectly: US rows are populated (99.98%), every
+          non-US country's rows are 100% NULL by definition (no US state to assign). A
+          state-level analysis should filter to country_code='US' first rather than treating a
+          NULL state_fips as a geocoding gap.
       - name: county_fips
         type: string
         nullable: true
