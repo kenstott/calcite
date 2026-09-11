@@ -1184,11 +1184,18 @@ partitionedTables:
       Crop Reporting District-level survey data was incomplete. Compiled from every
       county-level release the source currently publishes: final annual files for
       1992-2012, the 2013-17 (ver 2.0) consolidated final release, and single-year
-      preliminary releases thereafter. Excludes seed-treatment pesticide application
-      beginning in 2015 (the survey provider discontinued those estimates) and
-      excludes the separate state-level-by-crop-group series (different grain, not
-      in this table). Joins to geo.counties via the derived county_fips column and
-      to geo.states via state_fips_code.
+      preliminary releases thereafter. Preliminary years cover far fewer compounds
+      than the finalized series — 2019 holds only 69 of the ~400 compounds present
+      in 2013-2018 — because USGS calculates preliminary estimates as soon as data
+      becomes available from its survey provider, ahead of the full compound set.
+      A finalized 2018-2022 release restoring the full compound list is scheduled
+      by USGS for December 2026 and will replace these preliminary partitions on
+      reprocess; until then, filter to year <= 2018 for a compound set that is
+      stable across years. Excludes seed-treatment pesticide application beginning
+      in 2015 (the survey provider discontinued those estimates) and excludes the
+      separate state-level-by-crop-group series (different grain, not in this
+      table). Joins to geo.counties via the derived county_fips column and to
+      geo.states via state_fips_code.
 
     dimensions:
       type:
