@@ -7865,6 +7865,169 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- USGS Mineral Commodity Summaries: per-commodity salient statistics -------
+  # Discovered/streamed by org.apache.calcite.adapter.govdata.econ.UsgsMineralCommodityStatsProvider.
+  # No year dimension (like pesticide_use_by_county): one run discovers every MCS Data
+  # Release item under the stable ScienceBase parent 5c8c03e4e4b0938824529f7d and
+  # partitions by each row's own `year` (the MCS release year). Only releases carrying
+  # the unified *_Commodities_Data.csv (MCS 2026 onward, confirmed live 2026-09-11) are
+  # ingested; MCS 2022-2025 shipped an 85-file-per-release ZIP of per-commodity
+  # wide-format CSVs with no unified file and are not ingested by this provider — a real,
+  # logged gap, not silently guessed at.
+  - name: usgs_mineral_commodity_stats
+    # Freshness gate: the ScienceBase parent listing is dynamic JSON with no reliable
+    # Last-Modified; a content-hash probe skips reprocessing when the listing (and thus
+    # the set of matched releases) is unchanged since the last successful run.
+    freshness:
+      type: hash
+    pattern: "type=usgs_mineral_commodity_stats/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: year
+          type: integer
+    comment: >
+      USGS Mineral Commodity Summaries (MCS) per-commodity salient statistics, long-format:
+      one row per (release, commodity, country, statistic, statistic_detail, data_year).
+      Covers production, imports, exports, consumption, price, reserves, capacity,
+      employment, stocks, and net import reliance (statistic = 'Net import reliance') for
+      ~127 mineral commodities — verified live 2026-09-11 against MCS 2026 (Copper NIR
+      38/44/41/41/45% for 2020-2024 matches the published USGS Copper chapter; Gallium NIR
+      100% every year matches zero US primary production). Joins to trade_imports/
+      trade_exports via `commodity` (name-based; no shared commodity code exists between
+      USGS and Census HS classifications). `year` is the MCS release year (partition
+      column); `data_year`/`data_year_text` is the calendar year (or, for a handful of
+      multi-year aggregate rows, a text range like "2021-24") the statistic describes.
+      `value_num` is null for a non-numeric annotation (USGS's own withheld/not-available
+      markers) — the original text is preserved in `value_text`, never fabricated as a
+      number. Hosted on ScienceBase (USGS's own data-release platform, not a third-party
+      mirror); each release's item id is not derivable from its year, so this table is
+      built by ScienceBase catalog discovery rather than a templated URL — see the
+      provider class comment for the discovery mechanism.
+    dimensions:
+      type:
+        - usgs_mineral_commodity_stats
+    columns:
+      - name: mcs_chapter
+        type: string
+        nullable: true
+        comment: USGS MCS chapter heading this row's commodity is published under
+      - name: section
+        type: string
+        nullable: true
+        comment: >
+          Section within the commodity's chapter (e.g. "Salient Statistics-United
+          States", "Import Sources", "Recycling")
+      - name: commodity
+        type: string
+        nullable: true
+        comment: >
+          Commodity name as published by USGS (e.g. "Copper", "Gallium", "Aluminum") —
+          join key to trade_imports/trade_exports' commodity-name columns; no shared
+          code exists between USGS and Census HS classifications
+      - name: country
+        type: string
+        nullable: true
+        comment: >
+          Country the row's value applies to. "United States" for domestic salient
+          statistics; a trading-partner country name for Import Sources rows
+      - name: statistic
+        type: string
+        nullable: true
+        comment: >
+          Top-level statistic category as published (e.g. Production, Import, Export,
+          Consumption, Price, Reserves, Capacity, Employment, Stock, Supply,
+          "Net import reliance"). Filter on this for a specific measure across all
+          commodities/years — this table is long-format, one row per data point.
+      - name: statistic_detail
+        type: string
+        nullable: true
+        comment: >
+          USGS's finer line-item label within `statistic` (e.g. "Production: Fused
+          aluminum oxide, crude" under Production for Abrasives)
+      - name: unit
+        type: string
+        nullable: true
+        comment: Unit of measure for value_num as published (e.g. "metric tons", "percent")
+      - name: data_year
+        type: integer
+        nullable: true
+        comment: >
+          Calendar year this statistic describes, when data_year_text is a single
+          4-digit year; null for a multi-year aggregate period (see data_year_text)
+      - name: data_year_text
+        type: string
+        nullable: true
+        comment: >
+          Raw year/period text as published — a single year matching data_year, or a
+          multi-year range (e.g. "2021-24") for a handful of aggregate rows
+      - name: value_num
+        type: double
+        nullable: true
+        comment: >
+          Parsed numeric value; null when the source cell is a non-numeric annotation
+          (a USGS withheld/not-available marker) rather than a real number — see value_text
+      - name: value_text
+        type: string
+        nullable: true
+        comment: Raw value cell as published, including any non-numeric annotation
+      - name: notes
+        type: string
+        nullable: true
+        comment: USGS footnote/qualifier text for this data point
+      - name: is_critical_mineral_2025
+        type: boolean
+        nullable: true
+        comment: Whether USGS's 2025 critical-minerals list includes this commodity
+      - name: other_notes
+        type: string
+        nullable: true
+        comment: Additional USGS notes column, when published
+      - name: year
+        type: integer
+        nullable: false
+        comment: MCS release year (partition column; stamped by the provider from the release title)
+    source:
+      type: http
+      # ScienceBase listing of the stable MCS series parent's children. The provider
+      # filters titles to "Mineral Commodity Summaries <year> Data Release" (the parent
+      # also holds unrelated geospatial-compilation items) and resolves each match's own
+      # Commodities_Data.csv file — see the provider class comment.
+      url: "https://www.sciencebase.gov/catalog/items?parentId=5c8c03e4e4b0938824529f7d&format=json&max=100&fields=title"
+      method: GET
+      headers:
+        User-Agent: "Apache-Calcite-GovData/1.0"
+      response:
+        format: json  # ignored: UsgsMineralCommodityStatsProvider discovers and streams the files itself
+      rawCache:
+        enabled: true
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.econ.UsgsMineralCommodityStatsProvider"
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=usgs_mineral_commodity_stats/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
