@@ -37,6 +37,8 @@ public class FdaNdcResponseTransformer extends AbstractOpenFdaResponseTransforme
     put(row, "product_type", text(record, "product_type"));
     put(row, "marketing_category", text(record, "marketing_category"));
     put(row, "marketing_start_date", text(record, "marketing_start_date"));
+    put(row, "marketing_end_date", text(record, "marketing_end_date"));
+    put(row, "listing_expiration_date", text(record, "listing_expiration_date"));
 
     put(row, "application_number", text(record, "application_number"));
     put(row, "rxcui", nestedFirstText(record, "openfda", "rxcui"));

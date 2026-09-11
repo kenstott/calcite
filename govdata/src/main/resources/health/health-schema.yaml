@@ -124,6 +124,23 @@ partitionedTables:
         type: string
         nullable: true
         comment: YYYYMMDD
+      - name: marketing_end_date
+        type: string
+        nullable: true
+        comment: >
+          YYYYMMDD; NULL means still actively marketed under this listing, not "unknown" (D-253).
+          A distinct-labeler count meant to measure current market concentration should filter to
+          marketing_end_date IS NULL — otherwise every repackager/relabeler and discontinued
+          listing that ever existed for a generic drug counts as a current manufacturer, which is
+          exactly backwards from the concentration the count is meant to show.
+      - name: listing_expiration_date
+        type: string
+        nullable: true
+        comment: >
+          YYYYMMDD the labeler's annual NDC listing certification lapses; distinct from
+          marketing_end_date (a discontinuation the labeler actively reported) — a lapsed listing
+          with no marketing_end_date means the labeler simply stopped re-certifying, not that the
+          product was discontinued.
       - name: application_number
         type: string
         nullable: true
