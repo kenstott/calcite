@@ -606,6 +606,7 @@ fi
 # ── upload results ────────────────────────────────────────────────────────────
 if $DRY_RUN; then
   log_info "$WORKER_ID: --dry-run — skipping S3 upload (local results at $RESULT_LOCAL)"
+  RESULTS_LOCATION_NOTE="--dry-run: never uploaded. Local results at \`${RESULT_LOCAL}\` on ${WORKER_ID}."
 else
   # Persist results before upload — if upload fails, results survive TMP_DIR cleanup
   _persist_dir="$SCRIPT_DIR/runs/$WORKER_ID"
@@ -654,8 +655,15 @@ PYEOF
 
   if $_upload_ok; then
     log_info "$WORKER_ID: results written to $S3_RESULT_PATH"
+    RESULTS_LOCATION_NOTE="\`${S3_RESULT_PATH}\`"
   else
     log_warn "$WORKER_ID: upload failed after 3 attempts (results saved at $_persist_path)"
+    # The GitHub issue previously always embedded S3_RESULT_PATH regardless of whether the
+    # upload above actually succeeded, so a silent upload failure (all three fallbacks
+    # swallowed by 2>/dev/null) produced an issue pointing at a results.parquet that was
+    # never written - a dead link with no indication anything was wrong. Point at the local
+    # persisted copy instead so the issue is honest about what is actually retrievable.
+    RESULTS_LOCATION_NOTE="upload to ${GOVDATA_DQ_TRACKER_BUCKET} FAILED after 3 attempts. Results persisted locally on ${WORKER_ID} at \`${_persist_path}\` — retrieve from that host."
   fi
 fi
 
@@ -727,7 +735,7 @@ ${FINDINGS_TABLE}"
 
 ${FINDINGS_MD}
 
-Results: \`${S3_RESULT_PATH}\`" \
+Results: ${RESULTS_LOCATION_NOTE:-\`${S3_RESULT_PATH}\`}" \
         2>/dev/null && log_info "$WORKER_ID: commented on DQ issue #${OPEN_ISSUE}" || \
         log_info "$WORKER_ID: WARNING: failed to comment on DQ issue #${OPEN_ISSUE}"
     else
@@ -748,7 +756,7 @@ ${FINDINGS_MD}
 
 ## Results
 
-\`${S3_RESULT_PATH}\`" \
+${RESULTS_LOCATION_NOTE:-\`${S3_RESULT_PATH}\`}" \
         2>/dev/null && log_info "$WORKER_ID: created DQ issue for ${VERDICT}" || \
         log_info "$WORKER_ID: WARNING: failed to create DQ issue (gh not authenticated?)"
     fi
