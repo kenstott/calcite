@@ -1249,6 +1249,198 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  - name: fema_nri_earthquake_by_county
+    # FEMA republishes the NRI layer periodically (not a continuous series); a hash probe
+    # skips reprocessing when the layer's content is unchanged since the last successful run.
+    freshness:
+      type: hash
+    pattern: "type=fema_nri_earthquake_by_county/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA National Risk Index (NRI) county-level earthquake hazard, exposure, and
+      expected-annual-loss data — one row per county (3,142 rows). Verified live 2026-09-11:
+      San Francisco County CA earthquake_risk_rating "Relatively High" (San Andreas exposure);
+      Story County IA "Very Low" (mid-continent). Also carries the NRI's overall
+      all-hazard composite (risk_score/risk_rating/risk_national_pctl/risk_state_pctl,
+      eal_score/eal_rating) for context, plus population/building_value/agriculture_value/
+      area for normalizing the earthquake measures. The source layer carries 17 other
+      hazard blocks (wildfire, hurricane, flood, tornado, etc.) on the same 367-field
+      schema — not ingested here; a follow-on sourcing item, not a gap in this table.
+      Hosted on FEMA's own ArcGIS Online tenant (services.arcgis.com/XG15cJAlne2vxtgt),
+      not the .fema.gov domain itself — same accepted "agency-hosted ArcGIS mirror"
+      pattern as housing.opportunity_zones; re-verify the item id if this 404s (the
+      canonical hazards.fema.gov/nri URLs only redirect to a landing page, not this data).
+      Joins to geo.counties via county_fips.
+
+    dimensions:
+      type:
+        - fema_nri_earthquake_by_county
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_name
+        type: string
+        nullable: true
+        comment: Full state name, as published by FEMA NRI
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (no state suffix)
+      - name: population
+        type: int
+        nullable: true
+        comment: County population (FEMA NRI's own 2016 vintage population figure)
+      - name: building_value_usd
+        type: double
+        nullable: true
+        comment: Total building value in the county (USD), FEMA NRI's own building inventory
+      - name: agriculture_value_usd
+        type: double
+        nullable: true
+        comment: Total agricultural value in the county (USD)
+      - name: area_sq_mi
+        type: double
+        nullable: true
+        comment: County land area in square miles
+      - name: risk_score
+        type: double
+        nullable: true
+        comment: NRI overall all-hazard composite risk score (not earthquake-specific)
+      - name: risk_rating
+        type: string
+        nullable: true
+        comment: NRI overall all-hazard composite risk rating (e.g. "Relatively High")
+      - name: risk_national_pctl
+        type: double
+        nullable: true
+        comment: NRI overall composite risk, national percentile (0-100)
+      - name: risk_state_pctl
+        type: double
+        nullable: true
+        comment: NRI overall composite risk, percentile within the county's own state (0-100)
+      - name: eal_score
+        type: double
+        nullable: true
+        comment: NRI overall all-hazard composite expected-annual-loss score
+      - name: eal_rating
+        type: string
+        nullable: true
+        comment: NRI overall all-hazard composite expected-annual-loss rating
+      - name: earthquake_events
+        type: double
+        nullable: true
+        comment: Historic earthquake event count used in NRI's earthquake model; null when FEMA has none on record for the county
+      - name: earthquake_annualized_frequency
+        type: double
+        nullable: true
+        comment: Annualized frequency of a damaging earthquake for the county
+      - name: earthquake_exposure_building_value
+        type: double
+        nullable: true
+        comment: Building value (USD) exposed to earthquake hazard
+      - name: earthquake_exposure_population
+        type: double
+        nullable: true
+        comment: Population exposed to earthquake hazard
+      - name: earthquake_exposure_population_equivalence
+        type: double
+        nullable: true
+        comment: Population converted to a USD-equivalent exposure value (FEMA NRI methodology)
+      - name: earthquake_exposure_total
+        type: double
+        nullable: true
+        comment: Total exposure (USD) — building value plus population equivalence
+      - name: earthquake_historic_loss_ratio_buildings
+        type: double
+        nullable: true
+        comment: Historic earthquake loss ratio for buildings
+      - name: earthquake_historic_loss_ratio_population
+        type: double
+        nullable: true
+        comment: Historic earthquake loss ratio for population
+      - name: earthquake_historic_loss_ratio_rating
+        type: string
+        nullable: true
+        comment: Historic earthquake loss ratio, overall rating
+      - name: earthquake_eal_building_value
+        type: double
+        nullable: true
+        comment: Expected annual loss (USD) to buildings from earthquake
+      - name: earthquake_eal_population
+        type: double
+        nullable: true
+        comment: Expected annual loss (population-equivalent units) from earthquake
+      - name: earthquake_eal_population_equivalence
+        type: double
+        nullable: true
+        comment: Expected annual population loss converted to a USD-equivalent value
+      - name: earthquake_eal_total
+        type: double
+        nullable: true
+        comment: Total expected annual loss (USD) from earthquake
+      - name: earthquake_eal_score
+        type: double
+        nullable: true
+        comment: Earthquake expected-annual-loss score
+      - name: earthquake_eal_rating
+        type: string
+        nullable: true
+        comment: Earthquake expected-annual-loss rating (e.g. "Very Low", "Relatively High")
+      - name: earthquake_risk_score
+        type: double
+        nullable: true
+        comment: Earthquake-specific hazard-type risk index score
+      - name: earthquake_risk_rating
+        type: string
+        nullable: true
+        comment: >
+          Earthquake-specific hazard-type risk index rating — the primary column for
+          "which counties have high earthquake risk" questions (ops#191's original ask)
+
+    # NRI_Counties_Prod_v1181_view FeatureServer layer (FEMA's own ArcGIS Online tenant).
+    # outFields is scoped to the overall composite + full ERQK_* (earthquake) block — see
+    # the table comment for why the other 17 hazard blocks on this layer aren't selected.
+    # FemaNriEarthquakeByCountyTransformer pages with &resultOffset (ArcGIS caps a page at
+    # resultRecordCount) until exceededTransferLimit is false.
+    source:
+      type: http
+      url: "https://services.arcgis.com/XG15cJAlne2vxtgt/ArcGIS/rest/services/NRI_Counties_Prod_v1181_view/FeatureServer/0/query?where=1%3D1&outFields=STATE,STATEABBRV,COUNTY,STCOFIPS,POPULATION,BUILDVALUE,AGRIVALUE,AREA,RISK_SCORE,RISK_RATNG,RISK_NPCTL,RISK_SPCTL,EAL_SCORE,EAL_RATNG,ERQK_EVNTS,ERQK_AFREQ,ERQK_EXPB,ERQK_EXPP,ERQK_EXPPE,ERQK_EXPT,ERQK_HLRB,ERQK_HLRP,ERQK_HLRR,ERQK_EALB,ERQK_EALP,ERQK_EALPE,ERQK_EALT,ERQK_EALS,ERQK_EALR,ERQK_RISKS,ERQK_RISKR&returnGeometry=false&f=json&resultRecordCount=2000"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # FemaNriEarthquakeByCountyTransformer streams the paginated FeatureServer JSON itself
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaNriEarthquakeByCountyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fema_nri_earthquake_by_county/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: fema_nri_earthquake_by_county
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1353,6 +1545,18 @@ constraints:
 
   wildfire_perimeters:
     primaryKey: [incident_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  fema_nri_earthquake_by_county:
+    primaryKey: [county_fips]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
