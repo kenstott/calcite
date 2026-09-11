@@ -812,12 +812,18 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       EIA Form 860 annual electric generator inventory. One row per generator (plant +
-      generator ID + year). Includes plant and utility identifiers, geographic location
-      (state, county, city, lat/lon), NERC region, balancing authority, technology,
-      prime mover, energy sources, capacity (nameplate, summer, winter, minimum load),
-      ownership type, operating status, operating and retirement dates, and energy storage
-      flag. Transformer downloads and parses the annual ZIP archive from EIA.
-      Cross-references geo.states via state_abbr; joins eia_utility_annual via utility_id.
+      generator ID + year), sourced from BOTH the archive's "Operable" sheet and its
+      "Retired and Canceled" sheet (2011 onward; earlier archives carry only an
+      operable-equivalent). A generator therefore has a row in a given report_year's
+      archive whether it was running that year or had already stopped — filter
+      operating_status IN ('RE','CN') to isolate the latter, and read retirement_year for
+      when it actually happened, as distinct from planned_retirement_year (a forecast made
+      while still operating). Includes plant and utility identifiers, geographic location
+      (state, county, city, lat/lon), NERC region, balancing authority, technology, prime
+      mover, energy sources, capacity (nameplate, summer, winter, minimum load), ownership
+      type, and energy storage flag. Transformer downloads and parses the annual ZIP
+      archive from EIA. Cross-references geo.states via state_abbr; joins
+      eia_utility_annual via utility_id.
 
     dimensions:
       type:
@@ -941,7 +947,15 @@ partitionedTables:
       - name: operating_status
         type: string
         nullable: true
-        comment: Operating status code
+        comment: >
+          Operating status code — OP (operating), SB (standby/backup), OA (out of service,
+          expected back), OS (out of service, not expected back), P/L/T/U/V (various
+          under-construction / permitting stages), RE (retired) or CN (cancelled or
+          postponed). RE and CN only appear on a row sourced from the "Retired and
+          Canceled" sheet (see retirement_year) — a generator that stopped operating
+          simply has no row on the "Operable" sheet in that year's archive rather than
+          switching this code, so its last "Operable" row's status stays whatever it was
+          the year before it disappeared.
       - name: operating_month
         type: integer
         nullable: true
@@ -953,11 +967,32 @@ partitionedTables:
       - name: planned_retirement_month
         type: integer
         nullable: true
-        comment: Planned retirement month
+        comment: >
+          Planned retirement month, as reported by a still-operating generator on the
+          "Operable" sheet — a forecast, not an actual retirement. Once a generator has
+          actually retired this is no longer populated for it; see retirement_month.
       - name: planned_retirement_year
         type: integer
         nullable: true
-        comment: Planned retirement year
+        comment: >
+          Planned retirement year — see planned_retirement_month. Not populated once a
+          generator has actually retired; see retirement_year.
+      - name: retirement_month
+        type: integer
+        nullable: true
+        comment: >
+          Actual retirement month, from EIA-860's "Retired and Canceled" sheet — only
+          populated on a row whose operating_status is RE or CN. NULL on every "Operable"
+          sheet row, including one whose planned_retirement_year suggests retirement is
+          coming: this field records that a generator DID retire, not that it is expected
+          to.
+      - name: retirement_year
+        type: integer
+        nullable: true
+        comment: >
+          Actual retirement year — see retirement_month. To find when a generator retired,
+          filter operating_status IN ('RE','CN') and read this column, not
+          planned_retirement_year.
       - name: energy_storage_flag
         type: boolean
         nullable: true

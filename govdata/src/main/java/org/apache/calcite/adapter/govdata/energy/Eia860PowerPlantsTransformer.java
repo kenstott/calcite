@@ -171,79 +171,104 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     return result;
   }
 
+  /**
+   * The generator workbook carries a variable set of sheets across vintages — always
+   * "Operable", and (2011 onward) "Retired and Canceled" for generators that stopped
+   * operating or were cancelled before completion. Reading only sheet 0 ("Operable")
+   * meant a retired generator simply vanished from the feed instead of appearing with a
+   * retirement date: operating_status for coal technology, for example, took only
+   * OP/OS/SB/OA and never RE, and the only retirement field populated was
+   * planned_retirement_year — a forecast on a still-operating unit, not an actual
+   * retirement record. Both sheets share the same column headers for every field this
+   * transformer reads (confirmed against the 2023 archive), so one row-parsing method
+   * serves both; only the sheet lookup and the resulting operating_status values differ.
+   */
   private String parseGeneratorFile(byte[] xlsxBytes, Map<String, Map<String, String>> plantData,
       String year) throws Exception {
     Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(xlsxBytes));
     try {
-      Sheet sheet = wb.getSheetAt(0);
-      if (sheet == null) {
-        return "[]";
-      }
-
-      Row headerRow = findHeaderRow(sheet, "Generator ID");
-      if (headerRow == null) {
-        return "[]";
-      }
-
-      Map<String, Integer> colIndex = buildColumnIndex(headerRow);
-      int startRow = headerRow.getRowNum() + 1;
       ArrayNode result = MAPPER.createArrayNode();
-
-      for (int r = startRow; r <= sheet.getLastRowNum(); r++) {
-        Row row = sheet.getRow(r);
-        if (row == null) {
-          continue;
-        }
-
-        String plantId = colIndex.containsKey("Plant Code")
-            ? cellString(row.getCell(colIndex.get("Plant Code"))) : null;
-        if (plantId == null || plantId.isEmpty()) {
-          continue;
-        }
-
-        ObjectNode out = MAPPER.createObjectNode();
-        if (year != null && !year.isEmpty()) {
-          try {
-            out.put("report_year", Integer.parseInt(year));
-          } catch (NumberFormatException e) {
-            out.putNull("report_year");
-          }
-        }
-
-        // Plant attributes (denormalized from plant lookup)
-        Map<String, String> plant = plantData.get(plantId.trim());
-        if (plant != null) {
-          putPlantFields(out, plant);
-        } else {
-          out.put("plant_id", plantId.trim());
-        }
-
-        // Generator attributes
-        putStringField(out, "generator_id", row, colIndex, "Generator ID");
-        putStringField(out, "technology", row, colIndex, "Technology");
-        putStringField(out, "prime_mover", row, colIndex, "Prime Mover");
-        putStringField(out, "energy_source_1", row, colIndex, "Energy Source 1");
-        putStringField(out, "energy_source_2", row, colIndex, "Energy Source 2");
-        putStringField(out, "energy_source_3", row, colIndex, "Energy Source 3");
-        putDoubleField(out, "nameplate_capacity_mw", row, colIndex, "Nameplate Capacity (MW)");
-        putDoubleField(out, "net_summer_capacity_mw", row, colIndex, "Summer Capacity (MW)");
-        putDoubleField(out, "net_winter_capacity_mw", row, colIndex, "Winter Capacity (MW)");
-        putDoubleField(out, "minimum_load_mw", row, colIndex, "Minimum Load (MW)");
-        putStringField(out, "ownership_code", row, colIndex, "Ownership");
-        putStringField(out, "operating_status", row, colIndex, "Status");
-        putIntField(out, "operating_month", row, colIndex, "Operating Month");
-        putIntField(out, "operating_year", row, colIndex, "Operating Year");
-        putIntField(out, "planned_retirement_month", row, colIndex, "Planned Retirement Month");
-        putIntField(out, "planned_retirement_year", row, colIndex, "Planned Retirement Year");
-        putStringField(out, "energy_storage_flag", row, colIndex, "Energy Storage");
-
-        result.add(out);
+      Sheet operable = wb.getSheetAt(0);
+      if (operable != null) {
+        parseGeneratorSheet(operable, plantData, year, result);
       }
-
+      // Absent on pre-2011 archives (verified: 2008-2010 ship only an operable-equivalent
+      // sheet) and on any archive whose retired/cancelled generator count is legitimately
+      // zero for that year — both are real "nothing to add" cases, not parse failures.
+      Sheet retired = wb.getSheet("Retired and Canceled");
+      if (retired != null) {
+        parseGeneratorSheet(retired, plantData, year, result);
+      }
       LOGGER.debug("EIA-860: parsed {} generator records for year {}", result.size(), year);
       return result.toString();
     } finally {
       wb.close();
+    }
+  }
+
+  private void parseGeneratorSheet(Sheet sheet, Map<String, Map<String, String>> plantData,
+      String year, ArrayNode result) {
+    Row headerRow = findHeaderRow(sheet, "Generator ID");
+    if (headerRow == null) {
+      return;
+    }
+
+    Map<String, Integer> colIndex = buildColumnIndex(headerRow);
+    int startRow = headerRow.getRowNum() + 1;
+
+    for (int r = startRow; r <= sheet.getLastRowNum(); r++) {
+      Row row = sheet.getRow(r);
+      if (row == null) {
+        continue;
+      }
+
+      String plantId = colIndex.containsKey("Plant Code")
+          ? cellString(row.getCell(colIndex.get("Plant Code"))) : null;
+      if (plantId == null || plantId.isEmpty()) {
+        continue;
+      }
+
+      ObjectNode out = MAPPER.createObjectNode();
+      if (year != null && !year.isEmpty()) {
+        try {
+          out.put("report_year", Integer.parseInt(year));
+        } catch (NumberFormatException e) {
+          out.putNull("report_year");
+        }
+      }
+
+      // Plant attributes (denormalized from plant lookup)
+      Map<String, String> plant = plantData.get(plantId.trim());
+      if (plant != null) {
+        putPlantFields(out, plant);
+      } else {
+        out.put("plant_id", plantId.trim());
+      }
+
+      // Generator attributes
+      putStringField(out, "generator_id", row, colIndex, "Generator ID");
+      putStringField(out, "technology", row, colIndex, "Technology");
+      putStringField(out, "prime_mover", row, colIndex, "Prime Mover");
+      putStringField(out, "energy_source_1", row, colIndex, "Energy Source 1");
+      putStringField(out, "energy_source_2", row, colIndex, "Energy Source 2");
+      putStringField(out, "energy_source_3", row, colIndex, "Energy Source 3");
+      putDoubleField(out, "nameplate_capacity_mw", row, colIndex, "Nameplate Capacity (MW)");
+      putDoubleField(out, "net_summer_capacity_mw", row, colIndex, "Summer Capacity (MW)");
+      putDoubleField(out, "net_winter_capacity_mw", row, colIndex, "Winter Capacity (MW)");
+      putDoubleField(out, "minimum_load_mw", row, colIndex, "Minimum Load (MW)");
+      putStringField(out, "ownership_code", row, colIndex, "Ownership");
+      putStringField(out, "operating_status", row, colIndex, "Status");
+      putIntField(out, "operating_month", row, colIndex, "Operating Month");
+      putIntField(out, "operating_year", row, colIndex, "Operating Year");
+      putIntField(out, "planned_retirement_month", row, colIndex, "Planned Retirement Month");
+      putIntField(out, "planned_retirement_year", row, colIndex, "Planned Retirement Year");
+      // Only present on the "Retired and Canceled" sheet; putIntField already emits NULL
+      // when the column is absent from the "Operable" sheet's header.
+      putIntField(out, "retirement_month", row, colIndex, "Retirement Month");
+      putIntField(out, "retirement_year", row, colIndex, "Retirement Year");
+      putStringField(out, "energy_storage_flag", row, colIndex, "Energy Storage");
+
+      result.add(out);
     }
   }
 
