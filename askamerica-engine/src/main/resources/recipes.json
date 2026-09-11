@@ -804,6 +804,23 @@
         "do immigrants commit more crime"
       ],
       "body": "No arrest, offense or incarceration table in this corpus carries the offender's nativity, so 'immigrants commit crime at rate X' cannot be computed here directly; the published offender-rate studies (NIJ-funded Texas DPS arrest study, Light/He/Robey 2020 PNAS; Abramitzky et al. 2023 NBER w31440 incarceration by nativity 1870-2020) are the independent_value for that shape of claim.\n\nThe PLACE-level claim ('areas with more immigrants / ethnic enclaves have higher crime rates') IS testable here, at state grain, from two tables that join through geo.states:\n\n  1. Foreign-born share: census.acs_nativity (population by nativity; use census.acs_nativity_by_education when only the 25+ population is needed) -> foreign_born / total by state and year. The `state` column is the 2-digit FIPS.\n  2. Crime rate: crime.cde_offenses -> offense_rate (per 100k, one row per state x offense_code x month). Aggregate to state-year: AVG(offense_rate) or SUM over months, for offense_code 'violent-crime' and 'property-crime' separately. Join geo.states ON state_fips = acs.state to get state_abbr.\n  3. Test: hypothesis_test (correlation) then ols_regression / robust_regression of crime_rate on foreign_born_share with at least poverty rate (census.acs_poverty) and urban share (geo.rural_urban_continuum or census population density) as controls; report the coefficient, its interval and p-value, and say plainly that it is cross-sectional and not causal.\n  4. Chart: scatter of foreign-born share vs violent-crime rate by state, one point per state, with the fitted line.\n\nA claim about enclaves is a claim about places; grade it on step 3, not on whether the speaker said it. The verdict for 'more immigrants -> more crime' is decided by the sign and significance of that coefficient; the published literature (Ousey & Kubrin 2018 meta-analysis; Adelman et al. 2017) is the comparison point, not the test."
+    },
+    {
+      "id": "federal-royalty-productivity-by-state",
+      "title": "Per-acre federal oil & gas royalty productivity, by state — and covering ALL leased states, not a sample",
+      "triggers": [
+        "royalty per acre",
+        "federal oil and gas lease",
+        "federal onshore lease",
+        "onrr",
+        "royalty productivity",
+        "leased acres",
+        "producing acres",
+        "blm acreage",
+        "public land statistics",
+        "royalty per producing acre"
+      ],
+      "body": "A per-acre royalty-productivity question needs onrr_revenues (ONRR royalty revenue by state and fiscal year) joined to acreage by state and fiscal year. As of 2026-09-11 no leased-acreage or producing-acreage table exists in the lands schema -- but check LIVE with list_tables/search_catalog against lands each time rather than trusting this recipe text on that point, since this corpus is added to over time and the gap may have closed since this recipe was written. Only fall back to an external web_fetch against BLM's Public Land Statistics (blm.gov) for the acreage half of the join after that live check comes back empty.\n\nMeasured live (q46, 2026-09-11): a run that did this join correctly still lost on completeness because it published a table covering only 12 of the ~32 states with federal oil-and-gas leases, using only one denominator (producing acres), while a competing answer covered all 32 leased states with BOTH leased-acre and producing-acre denominators and a cross-state correlation statistic. The accuracy of the 12 states reported was fine -- the loss was scope, not correctness. There was no query row-limit forcing the stop; it was an unprompted self-truncation. This is the durable lesson regardless of where the acreage figures end up coming from.\n\nDo not stop at a convenience sample of states. Enumerate every state onrr_revenues reports federal onshore royalty revenue for for the fiscal year(s) in scope, join every one of them to acreage, and report both leased-acre and producing-acre denominators side by side -- they answer different questions (how much of what's leased is actually producing being one of them) and a reader comparing states needs both, not just whichever was queried first."
     }
   ]
 }
