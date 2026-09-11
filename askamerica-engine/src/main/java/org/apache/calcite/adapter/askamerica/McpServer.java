@@ -2203,14 +2203,41 @@ public class McpServer {
             "url", prop("string",
             "Direct HTTP(S) URL. Must be a genuine, already-known link, not a guess."));
         webFetchProps.set(
-            "max_pages", prop("integer", "PDF only: max pages, first-to-last (default 40)."));
+            "max_pages", prop("integer", "PDF only: max pages to extract per call (default 40)."));
         webFetchProps.set(
-            "max_sheets", prop("integer", "Excel only: max worksheets (default 5)."));
+            "start_page", prop("integer",
+            "PDF only (default 1): the first page to extract, so a document longer than "
+            + "max_pages can be read section by section instead of only ever seeing the "
+            + "start. Check `table_of_contents` in a prior response on this URL (or its "
+            + "`total_pages`) before picking one."));
+        webFetchProps.set(
+            "max_sheets", prop("integer",
+            "Excel only: max worksheets to extract when sheet_names is not given (default 5)."));
+        webFetchProps.set(
+            "sheet_names", prop("array",
+            "Excel only: extract exactly these sheets by name instead of the first max_sheets. "
+            + "Check `sheets_available` in a prior response on this URL for the real names — a "
+            + "workbook can have far more sheets than max_sheets covers, and the one you need "
+            + "is not necessarily among the first few."));
         webFetchProps.set(
             "max_rows_per_sheet", prop("integer", "Excel only: max rows per sheet (default 500)."));
         webFetchProps.set(
             "max_chars", prop("integer",
-            "HTML/text only: max characters returned (default 20000)."));
+            "HTML/text/Word only: max characters returned per call (default 20000)."));
+        webFetchProps.set(
+            "start_char", prop("integer",
+            "Word/text only (default 0): the character offset to start returning from. Check "
+            + "`table_of_contents` in a prior response on this URL (each heading's "
+            + "char_offset) or its `total_chars` before picking one."));
+        webFetchProps.set(
+            "max_slides", prop("integer",
+            "PowerPoint only: max slides to extract when slide_numbers is not given "
+            + "(default 60)."));
+        webFetchProps.set(
+            "slide_numbers", prop("array",
+            "PowerPoint only: extract exactly these slide numbers (1-based) instead of the "
+            + "first max_slides. Check `table_of_contents` in a prior response on this URL "
+            + "for every slide's number and title."));
         webFetchProps.set(
             "method", prop("string",
             "HTTP method: \"GET\" (default) or \"POST\". Use POST only when the target API "
@@ -2221,24 +2248,37 @@ public class McpServer {
         webFetchProps.set(
             "body_content_type", prop("string",
             "POST only: Content-Type header for the body (default \"application/json\")."));
+        webFetchProps.set(
+            "prompt", prop("string",
+            "Accepted but IGNORED — this tool has no extraction/summarization mode, so there "
+            + "is nothing for an instruction here to steer. Declared only so passing one (a "
+            + "habit from other fetch-tool conventions) doesn't error. Use start_page/"
+            + "sheet_names/start_char/slide_numbers instead once you've seen the document's "
+            + "structure — that is precise navigation, not a best-effort guess."));
         tools.add(
             tool("web_fetch",
             "**MANDATORY**: use this tool for every URL. NEVER use WebFetch or Fetch. Detects "
             + "the content type from the actual fetched bytes and returns it fully parsed: a "
-            + "PDF's text, an .xlsx workbook as JSON sheets/rows, a .docx's text, or an HTML "
-            + "page converted to Markdown — full content in every case, never a summary. "
-            + "Gzip-compressed files (a raw .gz resource, not just a compressed transfer) are "
-            + "decompressed automatically before detection, so a NOAA/Census-style "
-            + "`file.csv.gz` returns as plain text/CSV, not an \"unrecognized binary content "
-            + "type\" error. Supports POST via the optional `method`/`body` params for the rare "
-            + "API that requires one. One tool for any URL; you never need to guess the file "
-            + "type first. This is a RAW fetch, not an extraction tool: there is no `prompt` or "
-            + "instruction-style argument that summarizes or filters the content for you (that "
-            + "convention exists on other fetch tools, not this one) — the ONLY accepted "
-            + "arguments are `url` (required), `max_pages`, `max_sheets`, "
-            + "`max_rows_per_sheet`, `max_chars`, `method`, `body`, `body_content_type`. "
-            + "Passing anything else errors immediately; call it with just `url` unless one of "
-            + "those specific limits or the POST params is actually needed.",
+            + "PDF's text, an .xlsx workbook as JSON sheets/rows, a .docx's text, a .pptx's "
+            + "slide text, or an HTML page converted to Markdown — full content in every case, "
+            + "never a summary. Gzip-compressed files (a raw .gz resource, not just a "
+            + "compressed transfer) are decompressed automatically before detection, so a "
+            + "NOAA/Census-style `file.csv.gz` returns as plain text/CSV, not an \"unrecognized "
+            + "binary content type\" error. Supports POST via the optional `method`/`body` "
+            + "params for the rare API that requires one. One tool for any URL; you never need "
+            + "to guess the file type first.\n\n"
+            + "**A document too large for one call's limits is ALWAYS returned WITH its "
+            + "structure — a PDF's bookmark outline, a workbook's sheet list, a Word doc's "
+            + "heading list, a slide deck's slide titles — never silently just the first part.** "
+            + "When a response carries `table_of_contents` or `sheets_available` and says "
+            + "`truncated: true`, you MUST inspect it and make a second, TARGETED call on the "
+            + "SAME url — `start_page`/`sheet_names`/`start_char`/`slide_numbers` naming the "
+            + "actual section you need — rather than assuming what came back first is the "
+            + "relevant part. That second call is cheap: fetching the same URL again reuses the "
+            + "already-downloaded, already-decompressed bytes from this session's cache and "
+            + "just re-parses them, it does not hit the network again. `prompt` is accepted (a "
+            + "habit from other fetch-tool conventions) but does NOTHING — there is no "
+            + "extraction/summarization mode here; use the structural navigation above instead.",
             schema(webFetchProps, new String[]{"url"})));
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
@@ -2612,29 +2652,9 @@ public class McpServer {
                     break;
                 }
                 case "web_fetch": {
-                    String fetchUrl = args.path("url").asText();
-                    LAST_FETCH_URL = fetchUrl;
-                    int maxPages = args.has("max_pages")
-                        ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
-                    int maxSheets = args.has("max_sheets")
-                        ? Math.min(Math.max(1, args.get("max_sheets").asInt()), 20) : 5;
-                    int maxRows = args.has("max_rows_per_sheet")
-                        ? Math.min(Math.max(1, args.get("max_rows_per_sheet").asInt()), 5000)
-                        : 500;
-                    int maxChars = args.has("max_chars")
-                        ? Math.min(Math.max(1000, args.get("max_chars").asInt()), 200000)
-                        : 20000;
-                    String method = args.has("method") && !args.get("method").isNull()
-                        ? args.get("method").asText().toUpperCase(java.util.Locale.ROOT) : "GET";
-                    String body = args.has("body") && !args.get("body").isNull()
-                        ? args.get("body").asText() : null;
-                    String bodyContentType = args.has("body_content_type")
-                        && !args.get("body_content_type").isNull()
-                        ? args.get("body_content_type").asText() : null;
-                    log.println("[askamerica-mcp] tool=web_fetch url=" + fetchUrl
-                        + " method=" + method);
-                    text = webFetch(fetchUrl, maxPages, maxSheets, maxRows, maxChars,
-                        method, body, bodyContentType);
+                    LAST_FETCH_URL = args.path("url").asText();
+                    log.println("[askamerica-mcp] tool=web_fetch url=" + LAST_FETCH_URL);
+                    text = webFetch(args);
                     break;
                 }
                 case "update_schema": {
@@ -9183,6 +9203,39 @@ public class McpServer {
         }
     }
 
+    private static final class CachedFetch {
+        final byte[] bytes;
+        final String contentType;
+        CachedFetch(byte[] bytes, String contentType) {
+            this.bytes = bytes;
+            this.contentType = contentType;
+        }
+    }
+
+    /**
+     * Session-scoped cache of already-fetched-and-decompressed document bytes, keyed by URL.
+     * Exists so the targeted-navigation pattern (peek at a PDF's table_of_contents / an xlsx's
+     * sheet list / a pptx's slide list, then call {@code web_fetch} again on the SAME url with
+     * {@code start_page}/{@code sheet_names}/{@code slide_numbers}) re-parses from memory
+     * instead of re-fetching over the network and re-decompressing every follow-up call — a
+     * document this large is exactly the case where a second network round-trip per targeted
+     * request would be wasteful and, for a rate-limited or slow origin, unreliable. GET-only: a
+     * POST's response can legitimately differ per request body, so it is never cached. Capped
+     * at a small number of entries with LRU eviction (accessOrder=true) since each entry can be
+     * up to {@link #DOC_FETCH_MAX_BYTES} (25MB) and this is a long-running server process, not
+     * a single request's scratch space.
+     */
+    private static final int WEB_FETCH_CACHE_MAX_ENTRIES = 6;
+    private static final java.util.Map<String, CachedFetch> WEB_FETCH_CACHE =
+        java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<String, CachedFetch>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(
+                        java.util.Map.Entry<String, CachedFetch> eldest) {
+                    return size() > WEB_FETCH_CACHE_MAX_ENTRIES;
+                }
+            });
+
     private static FetchedContent fetchUrlContent(String urlStr) throws FetchException {
         return fetchUrlContent(urlStr, "GET", null, null);
     }
@@ -9300,10 +9353,15 @@ public class McpServer {
     /**
      * Converts .xlsx bytes (already fetched by {@link #webFetch}) to a JSON sheet/row/column
      * structure using Apache POI, already a govdata dependency for the same purpose during
-     * ETL.
+     * ETL. Always returns {@code sheets_available} (every sheet's name and row/column count,
+     * regardless of {@code maxSheets}) so a workbook with dozens of sheets doesn't silently
+     * extract whichever ones happen to come first — the caller can see the full list and name
+     * exactly the sheet(s) it needs via {@code sheet_names} on the next call (cheap: {@link
+     * #webFetch}'s cache re-parses from memory rather than re-fetching). Without {@code
+     * sheet_names}, falls back to the previous first-{@code maxSheets} behavior.
      */
     private static String parseXlsxBytes(String urlStr, byte[] bytes, int maxSheets,
-            int maxRowsPerSheet) {
+            int maxRowsPerSheet, java.util.List<String> sheetNames) {
         try {
             try (org.apache.poi.ss.usermodel.Workbook wb =
                      org.apache.poi.ss.usermodel.WorkbookFactory.create(
@@ -9312,9 +9370,39 @@ public class McpServer {
                     new org.apache.poi.ss.usermodel.DataFormatter();
                 ObjectNode out = MAPPER.createObjectNode();
                 out.put("source_url", urlStr);
+
+                int totalSheetCount = wb.getNumberOfSheets();
+                ArrayNode available = MAPPER.createArrayNode();
+                for (int s = 0; s < totalSheetCount; s++) {
+                    org.apache.poi.ss.usermodel.Sheet sheet = wb.getSheetAt(s);
+                    ObjectNode av = available.addObject();
+                    av.put("name", sheet.getSheetName());
+                    av.put("row_count", sheet.getLastRowNum() + 1);
+                }
+                out.set("sheets_available", available);
+
+                java.util.List<Integer> indices = new java.util.ArrayList<>();
+                if (sheetNames != null && !sheetNames.isEmpty()) {
+                    for (String want : sheetNames) {
+                        int idx = wb.getSheetIndex(want);
+                        if (idx >= 0) {
+                            indices.add(idx);
+                        }
+                    }
+                    if (indices.isEmpty()) {
+                        out.put("error", "None of the requested sheet_names " + sheetNames
+                            + " matched a sheet in this workbook. See sheets_available above "
+                            + "for the real names.");
+                        return out.toString();
+                    }
+                } else {
+                    for (int s = 0; s < Math.min(totalSheetCount, maxSheets); s++) {
+                        indices.add(s);
+                    }
+                }
+
                 ArrayNode sheetsOut = MAPPER.createArrayNode();
-                int sheetCount = Math.min(wb.getNumberOfSheets(), maxSheets);
-                for (int s = 0; s < sheetCount; s++) {
+                for (int s : indices) {
                     org.apache.poi.ss.usermodel.Sheet sheet = wb.getSheetAt(s);
                     ObjectNode sheetOut = MAPPER.createObjectNode();
                     sheetOut.put("name", sheet.getSheetName());
@@ -9339,9 +9427,15 @@ public class McpServer {
                     sheetsOut.add(sheetOut);
                 }
                 out.set("sheets", sheetsOut);
-                if (wb.getNumberOfSheets() > maxSheets) {
+                if (sheetNames == null && totalSheetCount > maxSheets) {
                     out.put("sheets_truncated", true);
-                    out.put("total_sheet_count", wb.getNumberOfSheets());
+                    out.put("total_sheet_count", totalSheetCount);
+                    out.put("warning",
+                        "Only the first " + maxSheets + " of " + totalSheetCount + " sheets "
+                        + "were extracted. See sheets_available above for every sheet's name, "
+                        + "then call web_fetch again on this same URL with sheet_names naming "
+                        + "the specific ones you need (served from cache, not re-fetched) "
+                        + "rather than assuming the first ones are the relevant ones.");
                 }
                 return out.toString();
             }
@@ -9355,34 +9449,58 @@ public class McpServer {
 
     /**
      * Extracts plain text from PDF bytes via PDFBox ({@code PDFTextStripper}) — text only, no
-     * table-structure reconstruction.
+     * table-structure reconstruction. A long PDF is not read starting at page 1 by default any
+     * more: if the document has a bookmark outline, it is always returned (cheap — no extra
+     * page extraction) alongside whatever page range was requested, so the caller can inspect
+     * it and make a second, TARGETED call with {@code start_page} naming the actual section it
+     * needs, instead of guessing at page 1 — precise navigation, not a keyword-matching guess.
+     * The web_fetch cache (see {@link #WEB_FETCH_CACHE}) makes that second call cheap: the same
+     * URL is re-parsed from memory, not re-fetched. Measured live (q50, 2026-09-11): a 304-page
+     * DOI PILT report blew the page limit and the run had to fall back to Bash+python slicing
+     * of the raw file to find the relevant section itself, with no outline to navigate by and
+     * no way to ask for a specific range.
      */
-    private static String parsePdfBytes(String urlStr, byte[] bytes, int maxPages) {
+    private static String parsePdfBytes(String urlStr, byte[] bytes, int maxPages,
+            int startPage) {
         try {
             try (org.apache.pdfbox.pdmodel.PDDocument doc =
                      org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
                 int totalPages = doc.getNumberOfPages();
-                int pagesToRead = Math.min(totalPages, maxPages);
-                org.apache.pdfbox.text.PDFTextStripper stripper =
-                    new org.apache.pdfbox.text.PDFTextStripper();
-                stripper.setStartPage(1);
-                stripper.setEndPage(pagesToRead);
-                String extracted = stripper.getText(doc);
-                boolean truncated = totalPages > pagesToRead;
                 ObjectNode out = MAPPER.createObjectNode();
                 out.put("source_url", urlStr);
                 out.put("total_pages", totalPages);
-                out.put("pages_extracted", pagesToRead);
+
+                ArrayNode toc = pdfOutline(doc);
+                if (toc != null && toc.size() > 0) {
+                    out.set("table_of_contents", toc);
+                }
+
+                int start = Math.max(1, startPage);
+                int end = Math.min(totalPages, start + maxPages - 1);
+                org.apache.pdfbox.text.PDFTextStripper stripper =
+                    new org.apache.pdfbox.text.PDFTextStripper();
+                stripper.setStartPage(start);
+                stripper.setEndPage(Math.max(start, end));
+                String extracted = stripper.getText(doc);
+                boolean truncated = end < totalPages || start > 1;
+                out.put("pages_extracted", start + "-" + Math.max(start, end));
                 out.put("truncated", truncated);
                 out.put("text", extracted);
                 if (extracted == null || extracted.trim().isEmpty()) {
                     out.put("warning",
                         "No text extracted — this is likely a scanned/image-only PDF with no "
                         + "embedded text layer, which this tool cannot read.");
-                } else if (truncated) {
-                    out.put("warning",
-                        "Only pages 1-" + pagesToRead + " of " + totalPages + " were extracted. "
-                        + "Call web_fetch again with a higher max_pages to read the rest.");
+                } else if (end < totalPages) {
+                    out.put("warning", (toc != null && toc.size() > 0)
+                        ? "Not all pages were extracted. Use table_of_contents above to pick "
+                            + "the section you need and call web_fetch again on this same URL "
+                            + "with that section's start_page (served from cache, not "
+                            + "re-fetched)."
+                        : "Not all pages were extracted, and this document has no bookmark "
+                            + "outline to navigate by. Call web_fetch again on this same URL "
+                            + "with a higher max_pages or a specific start_page (served from "
+                            + "cache, not re-fetched) rather than assuming the first "
+                            + maxPages + " pages are the relevant ones.");
                 }
                 return out.toString();
             }
@@ -9393,26 +9511,237 @@ public class McpServer {
     }
 
     /**
-     * Extracts plain text from .docx bytes (paragraphs and table cell text, in document order)
-     * via POI's {@code XWPFWordExtractor}.
+     * Walks a PDF's bookmark outline (if any) one level deep and resolves each entry's actual
+     * page number, returning {@code [{title, page}, ...]} in document order. Most bookmark-less
+     * government/report PDFs return an empty array here, which is the expected common case, not
+     * a failure — {@link #parsePdfBytes} falls back to keyword-relevance page selection when
+     * this is empty. Only the top level plus immediate children are walked (not full recursive
+     * depth) since a flat two-level list is already enough to pick a {@code start_page} from,
+     * and a pathological outline with thousands of nested entries should not become a second
+     * unbounded-extraction problem of its own.
      */
-    private static String parseDocxBytes(String urlStr, byte[] bytes) {
+    private static ArrayNode pdfOutline(org.apache.pdfbox.pdmodel.PDDocument doc) {
+        ArrayNode toc = MAPPER.createArrayNode();
         try {
-            try (org.apache.poi.xwpf.usermodel.XWPFDocument doc =
-                     new org.apache.poi.xwpf.usermodel.XWPFDocument(
-                         new ByteArrayInputStream(bytes));
-                 org.apache.poi.xwpf.extractor.XWPFWordExtractor extractor =
-                     new org.apache.poi.xwpf.extractor.XWPFWordExtractor(doc)) {
-                String extracted = extractor.getText();
-                ObjectNode out = MAPPER.createObjectNode();
-                out.put("source_url", urlStr);
-                out.put("text", extracted == null ? "" : extracted);
-                return out.toString();
+            org.apache.pdfbox.pdmodel.PDDocumentCatalog catalog = doc.getDocumentCatalog();
+            org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline
+                outline = catalog.getDocumentOutline();
+            if (outline == null) {
+                return toc;
             }
+            addOutlineLevel(doc, outline.getFirstChild(), toc, true);
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] web_fetch pdf outline read error (non-fatal): "
+                + e.getMessage());
+        }
+        return toc;
+    }
+
+    private static void addOutlineLevel(org.apache.pdfbox.pdmodel.PDDocument doc,
+            org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem item,
+            ArrayNode toc, boolean recurseOneLevel) {
+        int guard = 0;
+        while (item != null && guard++ < 500) {
+            try {
+                String title = item.getTitle();
+                org.apache.pdfbox.pdmodel.PDPage page = item.findDestinationPage(doc);
+                if (title != null && !title.trim().isEmpty() && page != null) {
+                    int pageNum = doc.getPages().indexOf(page) + 1;
+                    if (pageNum > 0) {
+                        ObjectNode entry = toc.addObject();
+                        entry.put("title", title.trim());
+                        entry.put("page", pageNum);
+                    }
+                }
+                if (recurseOneLevel && item.getFirstChild() != null) {
+                    addOutlineLevel(doc, item.getFirstChild(), toc, false);
+                }
+            } catch (Exception e) {
+                // One bad bookmark entry (a malformed destination, etc.) should not lose every
+                // other entry in the outline.
+            }
+            item = item.getNextSibling();
+        }
+    }
+
+    private static final java.util.regex.Pattern DOCX_HEADING_STYLE =
+        java.util.regex.Pattern.compile("(?i)heading\\s*([1-6])");
+
+    /**
+     * Extracts plain text from .docx bytes (paragraphs and table cell text, in document order),
+     * built manually from {@code getBodyElements()} rather than {@code XWPFWordExtractor} so
+     * each Heading-styled paragraph's character offset in the returned text can be recorded.
+     * Always returns {@code table_of_contents} (every heading + its offset) when the document
+     * has any, plus a {@code max_chars}/{@code start_char} window over the full text — this
+     * tool previously returned the ENTIRE document unbounded, a latent version of the same
+     * problem {@link #parsePdfBytes} had with page limits, just without a truncation warning to
+     * notice it by. A caller can jump straight to a section via the heading's {@code
+     * char_offset} as {@code start_char} on a follow-up call (cheap: {@link #WEB_FETCH_CACHE}
+     * re-parses from memory).
+     */
+    private static String parseDocxBytes(String urlStr, byte[] bytes, int maxChars,
+            int startChar) {
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument doc =
+                 new org.apache.poi.xwpf.usermodel.XWPFDocument(new ByteArrayInputStream(bytes))) {
+            StringBuilder full = new StringBuilder();
+            ArrayNode toc = MAPPER.createArrayNode();
+            for (org.apache.poi.xwpf.usermodel.IBodyElement el : doc.getBodyElements()) {
+                if (el instanceof org.apache.poi.xwpf.usermodel.XWPFParagraph) {
+                    org.apache.poi.xwpf.usermodel.XWPFParagraph para =
+                        (org.apache.poi.xwpf.usermodel.XWPFParagraph) el;
+                    String text = para.getText();
+                    String style = para.getStyle();
+                    if (style != null && !text.trim().isEmpty()) {
+                        java.util.regex.Matcher hm = DOCX_HEADING_STYLE.matcher(style);
+                        if (hm.find()) {
+                            ObjectNode entry = toc.addObject();
+                            entry.put("title", text.trim());
+                            entry.put("level", Integer.parseInt(hm.group(1)));
+                            entry.put("char_offset", full.length());
+                        }
+                    }
+                    full.append(text).append('\n');
+                } else if (el instanceof org.apache.poi.xwpf.usermodel.XWPFTable) {
+                    org.apache.poi.xwpf.usermodel.XWPFTable table =
+                        (org.apache.poi.xwpf.usermodel.XWPFTable) el;
+                    for (org.apache.poi.xwpf.usermodel.XWPFTableRow row : table.getRows()) {
+                        java.util.List<String> cells = new java.util.ArrayList<>();
+                        for (org.apache.poi.xwpf.usermodel.XWPFTableCell cell : row.getTableCells()) {
+                            cells.add(cell.getText());
+                        }
+                        full.append(String.join(" | ", cells)).append('\n');
+                    }
+                }
+            }
+            String fullText = full.toString();
+            ObjectNode out = MAPPER.createObjectNode();
+            out.put("source_url", urlStr);
+            out.put("total_chars", fullText.length());
+            if (toc.size() > 0) {
+                out.set("table_of_contents", toc);
+            }
+            int start = Math.max(0, Math.min(startChar, fullText.length()));
+            int end = Math.min(fullText.length(), start + maxChars);
+            boolean truncated = end < fullText.length() || start > 0;
+            out.put("text", fullText.substring(start, end));
+            out.put("truncated", truncated);
+            if (end < fullText.length()) {
+                out.put("warning", (toc.size() > 0)
+                    ? "Not all of this document was returned. Use table_of_contents above to "
+                        + "pick the section you need and call web_fetch again on this same URL "
+                        + "with that heading's char_offset as start_char (served from cache, "
+                        + "not re-fetched)."
+                    : "Not all of this document was returned, and it has no heading structure "
+                        + "to navigate by. Call web_fetch again on this same URL with a higher "
+                        + "max_chars or a specific start_char (served from cache, not "
+                        + "re-fetched) rather than assuming the start of the document is the "
+                        + "relevant part.");
+            }
+            return out.toString();
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch docx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .docx file: " + e.getMessage()
                 + ". If this is the old binary .doc format, this tool cannot help with it.";
+        }
+    }
+
+    /**
+     * Extracts text from .pptx bytes via POI's {@code XSLFSlide} — every text-carrying shape's
+     * text on each slide, plus speaker notes when present. Always returns {@code
+     * table_of_contents} (every slide's number and title, from its title placeholder shape when
+     * one exists) so a long deck can be navigated by slide number via {@code slide_numbers} on
+     * a follow-up call, the same pattern as {@link #parsePdfBytes}'s outline and {@link
+     * #parseXlsxBytes}'s sheet list — a caller should not have to guess that the answer is in
+     * the first {@code max_slides} slides of a 200-slide deck. This is new support: {@code
+     * .pptx} previously fell through to {@link #webFetch}'s "unrecognized binary content type"
+     * error, since {@link #sniffContentKind} had no case for the {@code ppt/} zip entry prefix.
+     */
+    private static String parsePptxBytes(String urlStr, byte[] bytes, int maxSlides,
+            java.util.List<Integer> slideNumbers) {
+        try (org.apache.poi.xslf.usermodel.XMLSlideShow ppt =
+                 new org.apache.poi.xslf.usermodel.XMLSlideShow(new ByteArrayInputStream(bytes))) {
+            java.util.List<org.apache.poi.xslf.usermodel.XSLFSlide> slides = ppt.getSlides();
+            int totalSlides = slides.size();
+            ArrayNode toc = MAPPER.createArrayNode();
+            for (int i = 0; i < totalSlides; i++) {
+                String title = slides.get(i).getTitle();
+                ObjectNode entry = toc.addObject();
+                entry.put("slide_number", i + 1);
+                entry.put("title", title == null || title.trim().isEmpty()
+                    ? "(untitled)" : title.trim());
+            }
+
+            java.util.List<Integer> indices = new java.util.ArrayList<>();
+            if (slideNumbers != null && !slideNumbers.isEmpty()) {
+                for (int n : slideNumbers) {
+                    if (n >= 1 && n <= totalSlides) {
+                        indices.add(n - 1);
+                    }
+                }
+                if (indices.isEmpty()) {
+                    ObjectNode out = MAPPER.createObjectNode();
+                    out.put("source_url", urlStr);
+                    out.put("total_slides", totalSlides);
+                    out.set("table_of_contents", toc);
+                    out.put("error", "None of the requested slide_numbers " + slideNumbers
+                        + " are valid for this " + totalSlides + "-slide deck.");
+                    return out.toString();
+                }
+            } else {
+                for (int i = 0; i < Math.min(totalSlides, maxSlides); i++) {
+                    indices.add(i);
+                }
+            }
+
+            ArrayNode slidesOut = MAPPER.createArrayNode();
+            for (int i : indices) {
+                org.apache.poi.xslf.usermodel.XSLFSlide slide = slides.get(i);
+                StringBuilder text = new StringBuilder();
+                for (org.apache.poi.sl.usermodel.Shape<?, ?> shape : slide.getShapes()) {
+                    if (shape instanceof org.apache.poi.xslf.usermodel.XSLFTextShape) {
+                        String t = ((org.apache.poi.xslf.usermodel.XSLFTextShape) shape).getText();
+                        if (t != null && !t.trim().isEmpty()) {
+                            text.append(t).append('\n');
+                        }
+                    }
+                }
+                org.apache.poi.xslf.usermodel.XSLFNotes notes = slide.getNotes();
+                if (notes != null) {
+                    for (org.apache.poi.xslf.usermodel.XSLFShape shape : notes.getShapes()) {
+                        if (shape instanceof org.apache.poi.xslf.usermodel.XSLFTextShape) {
+                            String t = ((org.apache.poi.xslf.usermodel.XSLFTextShape) shape)
+                                .getText();
+                            if (t != null && !t.trim().isEmpty()) {
+                                text.append("[notes] ").append(t).append('\n');
+                            }
+                        }
+                    }
+                }
+                ObjectNode slideOut = slidesOut.addObject();
+                slideOut.put("slide_number", i + 1);
+                slideOut.put("text", text.toString());
+            }
+
+            ObjectNode out = MAPPER.createObjectNode();
+            out.put("source_url", urlStr);
+            out.put("total_slides", totalSlides);
+            out.set("table_of_contents", toc);
+            out.set("slides", slidesOut);
+            boolean truncated = (slideNumbers == null) && totalSlides > maxSlides;
+            out.put("truncated", truncated);
+            if (truncated) {
+                out.put("warning",
+                    "Only the first " + maxSlides + " of " + totalSlides + " slides were "
+                    + "extracted. Use table_of_contents above to pick the slides you need and "
+                    + "call web_fetch again on this same URL with slide_numbers naming them "
+                    + "(served from cache, not re-fetched) rather than assuming the first ones "
+                    + "are the relevant ones.");
+            }
+            return out.toString();
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] web_fetch pptx parse error: " + e.getMessage());
+            return "Could not parse " + urlStr + " as a .pptx file: " + e.getMessage()
+                + ". If this is the old binary .ppt format, this tool cannot help with it.";
         }
     }
 
@@ -9461,80 +9790,142 @@ public class McpServer {
      * name to remember instead of four, closing the adoption gap a caller reaching for
      * WebFetch by habit would otherwise fall into.
      */
-    private static String webFetch(String urlStr, int maxPages, int maxSheets,
-            int maxRowsPerSheet, int maxChars) {
-        return webFetch(urlStr, maxPages, maxSheets, maxRowsPerSheet, maxChars,
-            "GET", null, null);
-    }
-
-    private static String webFetch(String urlStr, int maxPages, int maxSheets,
-            int maxRowsPerSheet, int maxChars, String method, String body,
-            String bodyContentType) {
-        FetchedContent fetched;
-        try {
-            fetched = fetchUrlContent(urlStr, method, body, bodyContentType);
-        } catch (FetchException fe) {
-            log.println("[askamerica-mcp] web_fetch fetch error: " + fe.getMessage());
-            return fe.getMessage();
-        }
-        byte[] bytes = fetched.bytes;
-        if (bytes.length >= 2 && (bytes[0] & 0xFF) == 0x1F && (bytes[1] & 0xFF) == 0x8B) {
-            // Magic number for gzip. This is a raw gzip-format resource (e.g. NOAA/Census's
-            // "file.csv.gz" static archives) — the bytes ARE the compressed file, not a
-            // transfer-encoding wrapper HttpURLConnection would already have handled. Decompress
-            // once here so a caller sees "csv.gz" resolve to plain text, not an opaque
-            // "unrecognized binary content type" error.
-            try {
-                byte[] decompressed = gunzip(bytes);
-                log.println("[askamerica-mcp] web_fetch url=" + urlStr + " gunzipped "
-                    + bytes.length + " -> " + decompressed.length + " bytes");
-                bytes = decompressed;
-            } catch (java.io.IOException ge) {
-                ObjectNode out = MAPPER.createObjectNode();
-                out.put("source_url", urlStr);
-                out.put("error", "Fetched a gzip-compressed file (" + bytes.length
-                    + " bytes) but could not decompress it: " + ge.getMessage());
-                return out.toString();
+    /**
+     * Reads and clamps every {@code web_fetch} argument itself (the schema's own defaults and
+     * bounds are the single source of truth here, not duplicated in the tool-dispatch handler),
+     * then fetches (or reuses a cached fetch of) the URL and dispatches to the matching parser
+     * by sniffing the actual bytes.
+     */
+    private static String webFetch(JsonNode args) {
+        String urlStr = args.path("url").asText();
+        int maxPages = args.has("max_pages")
+            ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
+        int maxSheets = args.has("max_sheets")
+            ? Math.min(Math.max(1, args.get("max_sheets").asInt()), 20) : 5;
+        int maxRowsPerSheet = args.has("max_rows_per_sheet")
+            ? Math.min(Math.max(1, args.get("max_rows_per_sheet").asInt()), 5000) : 500;
+        int maxChars = args.has("max_chars")
+            ? Math.min(Math.max(1000, args.get("max_chars").asInt()), 200000) : 20000;
+        String method = args.has("method") && !args.get("method").isNull()
+            ? args.get("method").asText().toUpperCase(java.util.Locale.ROOT) : "GET";
+        String body = args.has("body") && !args.get("body").isNull()
+            ? args.get("body").asText() : null;
+        String bodyContentType = args.has("body_content_type")
+            && !args.get("body_content_type").isNull()
+            ? args.get("body_content_type").asText() : null;
+        int startPage = args.has("start_page")
+            ? Math.max(1, args.get("start_page").asInt()) : 1;
+        int startChar = args.has("start_char")
+            ? Math.max(0, args.get("start_char").asInt()) : 0;
+        int maxSlides = args.has("max_slides")
+            ? Math.min(Math.max(1, args.get("max_slides").asInt()), 300) : 60;
+        java.util.List<String> sheetNames = null;
+        if (args.has("sheet_names") && args.get("sheet_names").isArray()
+                && args.get("sheet_names").size() > 0) {
+            sheetNames = new java.util.ArrayList<>();
+            for (JsonNode n : args.get("sheet_names")) {
+                sheetNames.add(n.asText());
             }
         }
-        String kind = sniffContentKind(bytes, fetched.contentType);
+        java.util.List<Integer> slideNumbers = null;
+        if (args.has("slide_numbers") && args.get("slide_numbers").isArray()
+                && args.get("slide_numbers").size() > 0) {
+            slideNumbers = new java.util.ArrayList<>();
+            for (JsonNode n : args.get("slide_numbers")) {
+                slideNumbers.add(n.asInt());
+            }
+        }
+        boolean cacheable = "GET".equalsIgnoreCase(method);
+        CachedFetch cached = cacheable ? WEB_FETCH_CACHE.get(urlStr) : null;
+        byte[] bytes;
+        String contentType;
+        if (cached != null) {
+            log.println("[askamerica-mcp] web_fetch url=" + urlStr + " served from cache ("
+                + cached.bytes.length + " bytes) -- a targeted follow-up on the same URL "
+                + "(different start_page/sheet_names/etc) does not re-fetch or re-decompress.");
+            bytes = cached.bytes;
+            contentType = cached.contentType;
+        } else {
+            FetchedContent fetched;
+            try {
+                fetched = fetchUrlContent(urlStr, method, body, bodyContentType);
+            } catch (FetchException fe) {
+                log.println("[askamerica-mcp] web_fetch fetch error: " + fe.getMessage());
+                return fe.getMessage();
+            }
+            bytes = fetched.bytes;
+            contentType = fetched.contentType;
+            if (bytes.length >= 2 && (bytes[0] & 0xFF) == 0x1F && (bytes[1] & 0xFF) == 0x8B) {
+                // Magic number for gzip. This is a raw gzip-format resource (e.g. NOAA/Census's
+                // "file.csv.gz" static archives) — the bytes ARE the compressed file, not a
+                // transfer-encoding wrapper HttpURLConnection would already have handled.
+                // Decompress once here so a caller sees "csv.gz" resolve to plain text, not an
+                // opaque "unrecognized binary content type" error.
+                try {
+                    byte[] decompressed = gunzip(bytes);
+                    log.println("[askamerica-mcp] web_fetch url=" + urlStr + " gunzipped "
+                        + bytes.length + " -> " + decompressed.length + " bytes");
+                    bytes = decompressed;
+                } catch (java.io.IOException ge) {
+                    ObjectNode out = MAPPER.createObjectNode();
+                    out.put("source_url", urlStr);
+                    out.put("error", "Fetched a gzip-compressed file (" + bytes.length
+                        + " bytes) but could not decompress it: " + ge.getMessage());
+                    return out.toString();
+                }
+            }
+            if (cacheable) {
+                WEB_FETCH_CACHE.put(urlStr, new CachedFetch(bytes, contentType));
+            }
+        }
+        String kind = sniffContentKind(bytes, contentType);
         log.println("[askamerica-mcp] web_fetch url=" + urlStr + " content-type="
-            + fetched.contentType + " detected=" + kind);
+            + contentType + " detected=" + kind);
         switch (kind) {
         case "pdf":
-            return parsePdfBytes(urlStr, bytes, maxPages);
+            return parsePdfBytes(urlStr, bytes, maxPages, startPage);
         case "xlsx":
-            return parseXlsxBytes(urlStr, bytes, maxSheets, maxRowsPerSheet);
+            return parseXlsxBytes(urlStr, bytes, maxSheets, maxRowsPerSheet, sheetNames);
         case "docx":
-            return parseDocxBytes(urlStr, bytes);
+            return parseDocxBytes(urlStr, bytes, maxChars, startChar);
+        case "pptx":
+            return parsePptxBytes(urlStr, bytes, maxSlides, slideNumbers);
         case "html":
             return parseHtmlBytes(urlStr, bytes, maxChars);
         case "text": {
             ObjectNode out = MAPPER.createObjectNode();
             out.put("source_url", urlStr);
             String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-            boolean truncated = text.length() > maxChars;
-            out.put("text", truncated ? text.substring(0, maxChars) : text);
+            out.put("total_chars", text.length());
+            int start = Math.min(startChar, text.length());
+            int end = Math.min(text.length(), start + maxChars);
+            boolean truncated = end < text.length() || start > 0;
+            out.put("text", text.substring(start, end));
             out.put("truncated", truncated);
+            if (truncated) {
+                out.put("warning",
+                    "Not all of this file was returned (" + text.length() + " total chars). "
+                    + "Call web_fetch again on this same URL with a higher max_chars or a "
+                    + "specific start_char (served from cache, not re-fetched).");
+            }
             return out.toString();
         }
         default: {
             ObjectNode out = MAPPER.createObjectNode();
             out.put("source_url", urlStr);
-            String ct = fetched.contentType;
-            String ctNote = ct == null || ct.isEmpty() ? "" : " Server reported Content-Type: "
-                + ct + ".";
+            String ctNote = contentType == null || contentType.isEmpty() ? ""
+                : " Server reported Content-Type: " + contentType + ".";
             out.put("error",
                 "Fetched " + bytes.length + " bytes of an unrecognized binary content type "
-                + "(not PDF, Excel, Word, HTML, or plain text) — no text could be extracted "
-                + "from this URL." + ctNote);
+                + "(not PDF, Excel, Word, PowerPoint, HTML, or plain text) — no text could be "
+                + "extracted from this URL." + ctNote);
             return out.toString();
         }
         }
     }
 
     /**
-     * Identifies fetched bytes as "pdf", "xlsx", "docx", "html", "text", or "unknown".
+     * Identifies fetched bytes as "pdf", "xlsx", "docx", "pptx", "html", "text", or "unknown".
      * Magic-number sniffing of the actual bytes is authoritative for pdf/xlsx/docx — PDF and
      * the Office Open XML zip container (shared by .xlsx/.docx/.pptx) both have unambiguous
      * magic numbers; telling xlsx apart from docx requires looking at which top-level entry
@@ -9560,6 +9951,9 @@ public class McpServer {
                     }
                     if (name.startsWith("word/")) {
                         return "docx";
+                    }
+                    if (name.startsWith("ppt/")) {
+                        return "pptx";
                     }
                 }
             } catch (Exception ignored) {
