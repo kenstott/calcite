@@ -37,17 +37,87 @@ class Backend(Protocol):
     """Contract the wire server executes non-catalog statements against."""
 
     def execute_sql(
-        self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
+        self,
+        sql: str,
+        role_id: str,
+        params: Optional[list] = None,
+        stream: bool = False,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
     ) -> QueryResult:
+        """Execute one statement.
+
+        ``session_key`` identifies the wire session so the backend can publish its
+        in-flight engine statement for out-of-band cancellation (PGW-050); ``None``
+        means "not cancellable from another connection" (direct/programmatic use).
+        ``timeout_ms`` is the session's ``statement_timeout`` in milliseconds, 0 =
+        no timeout (PG semantics, PGW-051).
+        """
         ...
 
     def ready(self) -> bool:
         """Liveness/readiness gate (Phase 5 readiness-gating hook)."""
         ...
 
+    def cancel_session(self, session_key: str, reason: str) -> bool:
+        """Abort whatever ``session_key`` is executing right now (PGW-050).
+
+        Called from another connection (the CancelRequest branch), never from the
+        thread running the statement. Returns False when that session has nothing
+        in flight. Where the statement lives is the backend's business: in this
+        process for ``CalciteBackend``, across the socket for ``BridgeBackend``.
+        """
+        ...
+
+    def discard_session(self, session_key: str) -> None:
+        """Forget the session's execution state — teardown, DISCARD ALL (PGW-052)."""
+        ...
+
+    @property
+    def extensions(self) -> frozenset:
+        """Enabled PG extension surfaces (pgwire_calcite.extensions). The catalog
+        advertises exactly these in pg_extension (PGW-046)."""
+        ...
+
+    # Optional capabilities, discovered with getattr() by the catalog builder because not
+    # every backend can answer them (PGW-051):
+    #   table_row_count(schema, table) -> int   real pg_class.reltuples
+    #   function_library() -> str               Calcite `fun` list, for pg_proc projection
+
 
 class BackendError(RuntimeError):
     """Backend could not execute the statement. Never swallowed silently."""
+
+
+class PgProtocolError(RuntimeError):
+    """An error that must reach the client with an explicit SQLSTATE.
+
+    ``CalciteHandler.send_error`` reads ``.sqlstate`` off the exception; anything
+    without it keeps buenavista's message-only ErrorResponse.
+    """
+
+    def __init__(self, sqlstate: str, message: str) -> None:
+        super().__init__(message)
+        self.sqlstate = sqlstate
+
+
+#: PG's wording for both cancellation causes, byte for byte (SQLSTATE 57014).
+CANCELED_BY_USER = "canceling statement due to user request"
+CANCELED_BY_TIMEOUT = "canceling statement due to statement timeout"
+
+
+class QueryCanceled(PgProtocolError):
+    """The in-flight statement was cancelled (CancelRequest or statement_timeout)."""
+
+    def __init__(self, message: str = CANCELED_BY_USER) -> None:
+        super().__init__("57014", message)
+
+
+class InvalidParameterValue(PgProtocolError):
+    """SET given a value the parameter cannot take (SQLSTATE 22023)."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("22023", message)
 
 
 _SELECT_ONE_RE = re.compile(r"^\s*SELECT\s+1\s*;?\s*$", re.IGNORECASE)
@@ -67,13 +137,34 @@ class StubBackend:
     #: Reported by SELECT version() and used to satisfy DuckDB's >=12 / clients' >=14 gate.
     SERVER_VERSION = "14.0 (pgwire-calcite stub backend, Phase 0)"
 
+    @property
+    def extensions(self) -> frozenset:
+        """The stub lowers no operators, so it declares no extension surfaces."""
+        return frozenset()
+
     def ready(self) -> bool:
         return True
 
+    def cancel_session(self, session_key: str, reason: str) -> bool:
+        """The stub answers instantly, so a session never has a statement in flight."""
+        del session_key, reason
+        return False
+
+    def discard_session(self, session_key: str) -> None:
+        """The stub holds no per-session execution state."""
+        del session_key
+
     def execute_sql(
-        self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
+        self,
+        sql: str,
+        role_id: str,
+        params: Optional[list] = None,
+        stream: bool = False,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
     ) -> QueryResult:
-        del role_id, params, stream  # stub is always materialized
+        # stub is always materialized and answers instantly: nothing to cancel or time out
+        del role_id, params, stream, session_key, timeout_ms
         stripped = sql.strip().rstrip(";").strip()
         if _SELECT_ONE_RE.match(sql):
             return QueryResult(rows=[(1,)], column_names=["?column?"], column_types=["INTEGER"])

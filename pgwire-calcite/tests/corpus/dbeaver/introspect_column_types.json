@@ -1,0 +1,10 @@
+{
+  "client": "dbeaver",
+  "phase": "introspect",
+  "sql": "SELECT c.relname, a.attname, format_type(a.atttypid, a.atttypmod) AS data_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'SALES' AND a.attnum > 0 ORDER BY c.relname, a.attnum",
+  "captured": false,
+  "expect": {
+    "answered_by": "catalog",
+    "min_phase": 2
+  }
+}

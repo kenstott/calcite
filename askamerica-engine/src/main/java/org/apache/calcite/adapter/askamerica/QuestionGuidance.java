@@ -443,6 +443,44 @@ final class QuestionGuidance {
 
     static final List<Template> TEMPLATES = Collections.unmodifiableList(Arrays.asList(
         new Template(
+            "validate_article",
+            "Check every factual assertion in an article, a pasted passage, or a single claim "
+            + "against the warehouse, and publish a claim-by-claim verdict table.",
+            new String[]{"source"},
+            new String[]{
+                "The article URL, the pasted text, or the single claim to check."},
+            "Validate this: {source}\n\nThe piece is under test, not a source. Extract every "
+            + "factual assertion verbatim and grade the claim rather than its attribution. "
+            + "'Validate this' never means confirming the event happened and the quotes are "
+            + "transcribed accurately -- that is fact-checking the reporter, not the reported, "
+            + "and it is not the task: every numeric or factual assertion a reporter OR a "
+            + "subject quoted in the piece makes gets tested exactly like an unattributed "
+            + "claim, including when the only obstacle is a failed query that needs fixing and "
+            + "retrying rather than abandoning. Test "
+            + "each assertion independently with your own statistical analysis of this corpus: "
+            + "the measure itself at the same unit and period where a table carries it, both "
+            + "vintages recorded; otherwise its components joined at county, state or year "
+            + "grain and tested with hypothesis_test or a regression, graded on effect size and "
+            + "p-value. Fetch the study or release the article cites only as a comparison "
+            + "point, and bring any external figures in as data to correlate with the "
+            + "warehouse result rather than describing them. Render a chart for every "
+            + "assertion graded from numbers (none for a validation graded purely from "
+            + "publications), compose_dashboard them, and publish with "
+            + "publish_report's `dashboard` and `claims` array so each verdict sits beside the "
+            + "article's figure, the warehouse figure, the independent figure, its sources, "
+            + "and the SQL that produced it. 'Not checkable here' is only for an assertion "
+            + "whose measure and components are all absent. Lead the summary with the tally "
+            + "and the assertion that matters most. The `claims` array is mandatory, not "
+            + "optional, whenever two or more assertions are graded: writing 'Claim 1 —', "
+            + "'Claim 2 —' as prose headings instead of populating `claims` is an incomplete "
+            + "publish, and if you catch yourself having done that, call publish_report again "
+            + "with every graded assertion in `claims` before you finish. Only a validation "
+            + "with a single assertion may skip the array. With two or more claims, also pass "
+            + "`pinocchios` — {\"count\": 0-4, \"explanation\": \"...\"}, a Washington Post "
+            + "Fact Checker-style rating for the piece as a whole, refused without one: weigh "
+            + "the central, most-repeated claim's distance from the facts, not a mechanical "
+            + "count of false verdicts, and name which claim(s) drove the count."),
+        new Template(
             "marginal_comparison",
             "Compare two options at the margin on one measured outcome, with an effect size "
             + "and its uncertainty.",

@@ -1,0 +1,10 @@
+{
+  "client": "datagrip",
+  "phase": "introspect",
+  "sql": "select ext.oid, ext.extname, ext.extversion, ext.extnamespace, av.version, av.installed from pg_catalog.pg_extension ext left join pg_available_extension_versions() av on av.name = ext.extname and av.version = ext.extversion order by ext.extname",
+  "captured": false,
+  "expect": {
+    "answered_by": "catalog",
+    "min_phase": 2
+  }
+}

@@ -26,10 +26,18 @@ capture procedure are documented in [`harness.py`](harness.py).
 
 | Client   | Entries | Captured | Notes |
 |----------|---------|----------|-------|
-| psql     | 1       | yes      | Phase 0 simple-query gate |
-| dbeaver  | 1       | **no**   | seed; live capture pending (needs DBeaver + reference PG) |
-| datagrip | 0       | —        | pending |
+| psql     | 1       | 1        | Phase 0 simple-query gate |
+| dbeaver  | 5       | 1        | columns captured; column types / procedures / FK metadata seeded |
+| datagrip | 4       | 1        | tables captured; extensions / dependencies / routines seeded |
 | duckdb   | 0       | —        | pending |
+
+The Phase-2 catalog-fidelity probes (`introspect_column_types`, `introspect_procedures`,
+`introspect_foreign_keys`, `retrieve_extensions`, `retrieve_dependencies`,
+`retrieve_routines`) exercise `format_type`, `pg_proc` /
+`information_schema.routines` + `.parameters`, `information_schema.referential_constraints`,
+`pg_available_extension_versions()` and the chained `::regclass::oid` cast in
+`pg_depend.refclassid`. They replay in
+`tests/unit/test_phase2_catalog.py::test_phase2_corpus_replays_against_catalog`.
 
 **Pending your hardware:** capturing real DBeaver/DataGrip/DuckDB traffic needs
 those clients pointed at a reference PostgreSQL with `log_statement = 'all'`.

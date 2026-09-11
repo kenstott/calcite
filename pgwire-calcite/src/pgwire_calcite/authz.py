@@ -95,14 +95,20 @@ def _filter_ctx(base: CompilationContext, grants: RoleGrants, role: str) -> Comp
 
 
 def referenced_tables(pg_sql: str) -> List[Tuple[str, str]]:
-    """(schema, table) pairs referenced by a PG query; [] if it can't be parsed."""
+    """(schema, table) pairs referenced by a PG query.
+
+    Raises ``ValueError`` if sqlglot cannot parse the statement — under an active authz
+    policy, a query ``enforce_query`` cannot read the tables of must never be treated as
+    referencing none (Phase 3 hardening): that would let an adversarial or merely unusual
+    statement sqlglot trips on bypass authorization entirely instead of being denied.
+    """
     import sqlglot
     import sqlglot.expressions as exp
 
     try:
         tree = sqlglot.parse_one(pg_sql, read="postgres")
-    except Exception:
-        return []
+    except Exception as exc:
+        raise ValueError(f"cannot parse query for authorization: {exc}") from exc
     out: List[Tuple[str, str]] = []
     for t in tree.find_all(exp.Table):
         out.append((t.db or "", t.name or ""))
@@ -110,8 +116,13 @@ def referenced_tables(pg_sql: str) -> List[Tuple[str, str]]:
 
 
 def enforce_query(grants: RoleGrants, role: str, pg_sql: str) -> None:
-    """Raise PermissionError if the query references any out-of-grant table."""
-    for schema, table in referenced_tables(pg_sql):
+    """Raise PermissionError if the query references any out-of-grant table, or if its
+    tables cannot be determined at all — fail closed, never open (Phase 3 hardening)."""
+    try:
+        refs = referenced_tables(pg_sql)
+    except ValueError as exc:
+        raise PermissionError(f"permission denied: {exc}") from exc
+    for schema, table in refs:
         if not table:
             continue
         if not grants.allows(role, schema, table):

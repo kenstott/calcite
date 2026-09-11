@@ -1,0 +1,10 @@
+{
+  "client": "dbeaver",
+  "phase": "introspect",
+  "sql": "SELECT rc.constraint_name, rc.unique_constraint_schema, rc.unique_constraint_name, rc.match_option, rc.update_rule, rc.delete_rule, kcu.table_name, kcu.column_name FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = rc.constraint_name AND kcu.constraint_schema = rc.constraint_schema ORDER BY rc.constraint_name, kcu.ordinal_position",
+  "captured": false,
+  "expect": {
+    "answered_by": "catalog",
+    "min_phase": 2
+  }
+}

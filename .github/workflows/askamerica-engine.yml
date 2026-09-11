@@ -222,6 +222,33 @@ jobs:
           path: askamerica-engine/build/libs/askamerica-engine.jar
           retention-days: 30
 
+  # ── Browser extension (source lives in kenstott/askamerica) ────────────────
+  browser-extension:
+    name: Package browser extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout askamerica Python/extension repo
+        uses: actions/checkout@v4
+        with:
+          repository: kenstott/askamerica
+          token: ${{ secrets.ASKAMERICA_REPO_PAT }}
+          path: askamerica-python
+
+      - name: Zip extension
+        run: |
+          cd askamerica-python/extension
+          zip -r ../../askamerica-extension.zip . -x '*.DS_Store'
+          cd ../..
+          unzip -l askamerica-extension.zip
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: askamerica-extension
+          path: askamerica-extension.zip
+          retention-days: 30
+
   # ── JDBC driver test suite ───────────────────────────────────────────────
   test:
     name: JDBC driver tests
@@ -769,7 +796,7 @@ jobs:
   # ── GitHub Release ────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [jar, govdata-jar, trino-plugins, installer, publish, publish-python]
+    needs: [jar, govdata-jar, trino-plugins, browser-extension, installer, publish, publish-python]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -800,6 +827,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: trino-plugins
+          path: release-assets/
+
+      - name: Download browser extension
+        uses: actions/download-artifact@v4
+        with:
+          name: askamerica-extension
           path: release-assets/
 
       - name: Create release
@@ -862,6 +895,10 @@ jobs:
             | `trino-splunk-plugin.zip` | `splunk` | Splunk (`jdbc:splunk:`) |
             | `trino-file-plugin.zip` | `file` | files / S3 globs (file adapter) |
             | `trino-cloudops-plugin.zip` | `cloudops` | Azure/AWS/GCP inventory (`jdbc:cloudops:`) |
+
+            ### Browser extension
+
+            `askamerica-extension.zip` — unzip and load unpacked via `chrome://extensions` (Developer mode). Reads previously published AskAmerica validation claims for the page you're on and hands off "Validate with AskAmerica" to your own Claude Desktop/claude.ai session; makes no model API calls itself. Requires the AskAmerica MCP engine running locally to see live claims.
           files: release-assets/**/*
           draft: false
           prerelease: false

@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import signal
 import ssl
 import sys
 import threading
@@ -33,11 +35,17 @@ from pgwire_calcite.state import ServerState
 log = logging.getLogger(__name__)
 
 
-def build_state(backend=None, auth: str = "none", users: dict | None = None) -> ServerState:
+def build_state(
+    backend=None,
+    auth: str = "none",
+    users: dict | None = None,
+    statement_timeout_ms: int = 0,
+) -> ServerState:
     """Assemble the ServerState the wire layer reads.
 
     ``auth='none'`` is trust mode; ``auth='simple'`` enforces cleartext-password
-    auth against ``users`` (PGW-007).
+    auth against ``users`` (PGW-007). ``statement_timeout_ms`` is the server-wide
+    default every session starts with; 0 = no timeout, as in PostgreSQL (PGW-051).
     """
     if backend is None:
         backend = StubBackend()
@@ -45,14 +53,21 @@ def build_state(backend=None, auth: str = "none", users: dict | None = None) -> 
     st.auth_config = {"provider": auth}
     st.auth_middleware_active = auth != "none"
     st.users = dict(users or {})
+    st.statement_timeout_ms = int(statement_timeout_ms)
     return st
 
 
-def _build_ssl_ctx(certfile: str | None, keyfile: str | None) -> ssl.SSLContext | None:
+def _build_ssl_ctx(
+    certfile: str | None, keyfile: str | None, mtls_auth=None
+) -> ssl.SSLContext | None:
     if not certfile or not keyfile:
         return None
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    if mtls_auth is not None:
+        from pgwire_calcite.mtls import apply_to_context
+
+        apply_to_context(ctx, mtls_auth)
     return ctx
 
 
@@ -63,20 +78,37 @@ def serve(
     users: dict | None = None,
     certfile: str | None = None,
     keyfile: str | None = None,
-    backend=None,
+    backend: object = None,
     auth_provider=None,
     authz_grants=None,
     database: str = "postgres",
+    client_ca: str | None = None,
+    mtls_mode: str | None = None,
+    mtls_bind_principal: bool | None = None,
+    statement_timeout_ms: int = 0,
 ) -> server_mod.CalciteServer:
-    """Install state and start the server thread. Returns the server (non-blocking)."""
+    """Install state and start the server thread. Returns the server (non-blocking).
+
+    ``client_ca``/``mtls_mode``/``mtls_bind_principal`` configure opt-in mutual TLS
+    (PGWIRE_CALCITE_CLIENT_CA / _MTLS_MODE / _MTLS_BIND_PRINCIPAL when left None); mTLS is
+    off unless a CA is configured either way. Only meaningful with ``certfile``/``keyfile``
+    also set — mTLS needs a server certificate to negotiate TLS in the first place.
+    """
     # Set the catalog/database name reported to clients (current_database, pg_database,
     # information_schema) BEFORE catalog population reads it. Single source of truth,
     # kept in sync with schema_registry.database below.
     from pgwire_calcite import catalog as _catalog
 
     _catalog.set_database_name(database)
-    server_mod.state = build_state(backend=backend, auth=auth, users=users)
+    server_mod.state = build_state(
+        backend=backend, auth=auth, users=users, statement_timeout_ms=statement_timeout_ms
+    )
     server_mod.state.schema_registry.database = database
+    # Keep the GUC the catalog intercept reports in step with the server default,
+    # so `SHOW statement_timeout` on a fresh session matches what is enforced.
+    _catalog._KNOWN_SETTINGS["statement_timeout"] = server_mod._format_statement_timeout(
+        int(statement_timeout_ms)
+    )
     if auth_provider is not None:
         server_mod.state.auth_provider = auth_provider
     # Set authz grants before catalog population so discovery is filtered per role.
@@ -90,17 +122,82 @@ def serve(
         from pgwire_calcite.catalog_populate import populate_state
 
         populate_state(conn, server_mod.state)
-    elif hasattr(backend, "fetch_catalog"):
-        from pgwire_calcite.catalog_populate import install_catalog
+    else:
+        fetch_catalog = getattr(backend, "fetch_catalog", None)
+        if fetch_catalog is not None:
+            from pgwire_calcite.catalog_populate import install_catalog
 
-        try:
-            ctx, column_types = backend.fetch_catalog()
+            # A catalog the child cannot deliver is a startup failure: serving without one
+            # would answer every client's introspection with an empty schema and hide the
+            # child's fault behind a warning nobody reads.
+            ctx, column_types = fetch_catalog()
             install_catalog(server_mod.state, ctx, column_types)
-        except Exception as exc:  # child not ready / no metadata -> serve without catalog
-            log.warning("catalog over bridge unavailable: %s", exc)
-    ssl_ctx = _build_ssl_ctx(certfile, keyfile)
-    srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx)
+    from pgwire_calcite.mtls import resolve_client_auth
+
+    mtls_auth = resolve_client_auth(client_ca, mtls_mode, mtls_bind_principal)
+    ssl_ctx = _build_ssl_ctx(certfile, keyfile, mtls_auth=mtls_auth)
+    if mtls_auth is not None and ssl_ctx is None:
+        # A client CA with no server certificate configured can mean only one thing: TLS
+        # itself never gets negotiated, so the mTLS policy could never apply. Refusing to
+        # start is better than serving connections the operator believes are verified.
+        raise ValueError(
+            "mTLS client CA is configured but no --tls-cert/--tls-key (or certfile/keyfile) "
+            "was given; a server certificate is required to negotiate TLS at all"
+        )
+    srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth)
     return srv
+
+
+OWNER_POLL_SECONDS = 1.0
+
+
+def watch_owner(owner_pid: int, stop: threading.Event) -> threading.Thread:
+    """Request shutdown once the process that owns this server is gone (``--owner-pid``).
+
+    An embedding host (Provisa) starts this server through the Java launcher in its own
+    session so that stopping it signals the whole tree — which also means the tree does NOT
+    die with the host. A host that is SIGKILLed (a test runner's teardown, an OOM kill) runs
+    no shutdown hook, and every server it started would keep its port until someone noticed.
+    Polling the owner's liveness closes that gap from the child's side: no signal has to be
+    delivered for the server to know it is orphaned.
+    """
+
+    def _watch() -> None:
+        while not stop.wait(OWNER_POLL_SECONDS):
+            try:
+                os.kill(owner_pid, 0)
+            except ProcessLookupError:
+                log.info("owner pid %d is gone; shutting down", owner_pid)
+                stop.set()
+                return
+            except PermissionError:
+                continue  # alive, but owned by another user: still there
+
+    t = threading.Thread(target=_watch, name="pgwire-owner-watch", daemon=True)
+    t.start()
+    return t
+
+
+def install_shutdown_handler(stop: threading.Event) -> None:
+    """Make SIGTERM (and SIGINT) request a clean shutdown instead of a hang.
+
+    Must be called AFTER the backend is constructed: starting the embedded
+    Calcite JVM (JPype -> ``jpype.startJVM``) installs its own native SIGTERM/
+    SIGINT handlers unless ``-Xrs`` is passed, and the JVM's handler otherwise
+    wins (last ``signal.signal``/``sigaction`` call for a given signal replaces
+    any earlier one at the OS level). The Java launcher's shutdown hook sends
+    SIGTERM to this process expecting it to exit and release the listening
+    socket promptly (see ``Launcher.java``); without re-installing our own
+    handler last, the JVM's handler can swallow the signal and this process
+    (and the port) lingers.
+    """
+
+    def _handle(signum, frame):  # noqa: ANN001 - signal handler signature
+        log.info("received signal %s; shutting down", signum)
+        stop.set()
+
+    signal.signal(signal.SIGTERM, _handle)
+    signal.signal(signal.SIGINT, _handle)
 
 
 def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcite_child: str | None = None, extensions=None):
@@ -140,6 +237,12 @@ def main(argv: list | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5433)
     parser.add_argument(
+        "--owner-pid",
+        type=int,
+        default=None,
+        help="exit when this process is gone (the host that started the server)",
+    )
+    parser.add_argument(
         "--database",
         default="postgres",
         help="catalog/database name reported to clients (current_database(), "
@@ -177,8 +280,35 @@ def main(argv: list | None = None) -> int:
         metavar="NAME:PASSWORD",
         help="cleartext user for --auth simple (repeatable)",
     )
+    parser.add_argument(
+        "--statement-timeout-ms",
+        type=int,
+        default=0,
+        help="server-wide default statement_timeout in milliseconds; 0 = no timeout "
+        "(PG default). Sessions override it with SET statement_timeout.",
+    )
     parser.add_argument("--tls-cert", default=None)
     parser.add_argument("--tls-key", default=None)
+    parser.add_argument(
+        "--client-ca",
+        default=None,
+        help="PEM bundle of CA(s) trusted to sign client certificates; enables mutual TLS "
+        "(env PGWIRE_CALCITE_CLIENT_CA). Opt-in; requires --tls-cert/--tls-key.",
+    )
+    parser.add_argument(
+        "--mtls-mode",
+        choices=["required", "optional"],
+        default=None,
+        help="'required' (default once --client-ca is set) or 'optional' "
+        "(env PGWIRE_CALCITE_MTLS_MODE)",
+    )
+    parser.add_argument(
+        "--mtls-bind-principal",
+        action="store_true",
+        default=None,
+        help="require the client certificate's common name to equal the startup user "
+        "(env PGWIRE_CALCITE_MTLS_BIND_PRINCIPAL)",
+    )
     parser.add_argument("--log-level", default="INFO")
     parser.add_argument(
         "--extension",
@@ -234,6 +364,10 @@ def main(argv: list | None = None) -> int:
         backend=backend,
         auth_provider=auth_provider,
         database=args.database,
+        client_ca=args.client_ca,
+        mtls_mode=args.mtls_mode,
+        mtls_bind_principal=args.mtls_bind_principal,
+        statement_timeout_ms=args.statement_timeout_ms,
     )
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
@@ -242,11 +376,21 @@ def main(argv: list | None = None) -> int:
         args.port,
     )
     stop = threading.Event()
+    # Installed AFTER build_backend()/serve() so this wins over any signal
+    # handler the embedded Calcite JVM installed on startup (see
+    # install_shutdown_handler's docstring) -- otherwise SIGTERM from the Java
+    # launcher's shutdown hook can be swallowed and the listening socket stays
+    # bound.
+    install_shutdown_handler(stop)
+    if args.owner_pid is not None:
+        watch_owner(args.owner_pid, stop)
     try:
         stop.wait()
     except KeyboardInterrupt:
-        log.info("shutting down")
-        srv.shutdown()
+        stop.set()
+    log.info("shutting down")
+    srv.shutdown()
+    srv.server_close()
     return 0
 
 

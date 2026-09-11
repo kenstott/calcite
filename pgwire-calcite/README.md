@@ -25,7 +25,7 @@ are copied but **not yet wired** to Calcite — they land in Phases 2 and 4.
 | `src/pgwire_calcite/state.py` | server state + schema registry | 0 |
 | `src/pgwire_calcite/launcher.py` | minimal launcher (replaces FastAPI `state`) | 0 |
 | `src/pgwire_calcite/catalog.py` | pg_catalog intercept (copied, unwired) | 2 |
-| `src/pgwire_calcite/{copy,ddl}_handler.py` | COPY / DDL (copied, unwired) | 4 |
+| `src/pgwire_calcite/binary_copy.py` | `COPY ... TO STDOUT` (binary/csv/text) | 4 |
 | `tests/corpus/` | client regression corpus + harness | 0 (ongoing) |
 
 ## Develop

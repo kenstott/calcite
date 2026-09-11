@@ -13,6 +13,11 @@ on:
   release:
     types: [created]
 
+# The attach step updates the engine-v<version> release; on workflow_dispatch the default
+# GITHUB_TOKEN is read-only, so grant it explicitly.
+permissions:
+  contents: write
+
 env:
   PY_VERSION: "3.12"
 
@@ -32,9 +37,14 @@ jobs:
           ./gradlew :file:pgwPrintCp \
             --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
             --no-daemon --console=plain -q
+          ./gradlew pgwArrowCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
           mkdir -p out/jars
           # copy every real .jar on the runtime classpath
           for j in $(tr ':' '\n' < /tmp/pgw-file-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          # the pgwire server's Arrow bridge + the DuckDB JDBC driver (compileOnly in file/)
+          for j in $(tr ':' '\n' < /tmp/pgw-arrow-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
           # the file module's own output is a classes dir on the cp -> use its built jar
           cp -n file/build/libs/*.jar out/jars/ 2>/dev/null || true
           echo "bundled $(ls out/jars | wc -l) jars"
@@ -79,10 +89,47 @@ jobs:
       - name: Stage standalone CPython + install deps (airgap-ready venv)
         working-directory: pgwire-calcite
         run: |
-          uv python install ${PY_VERSION}        # python-build-standalone
-          uv venv --python ${PY_VERSION} ../bundle/cpython
-          # install the app + deps into the bundled venv (batteries included; no runtime net)
-          uv pip install --python ../bundle/cpython ./vendor/buenavista ".[oidc]"
+          # Install the interpreter INTO the bundle (not the runner's global
+          # uv-managed location) so the shipped tarball is self-contained: a
+          # `uv python install` outside the bundle leaves cpython/bin/python an
+          # absolute symlink to the runner's own path, which does not exist on
+          # any other machine.
+          uv python install --install-dir ../bundle/python "${PY_VERSION}"   # python-build-standalone
+          find ../bundle/python -maxdepth 1 -type l -delete   # drop uv's version-alias symlink (points outside the bundle; unused at runtime)
+          rm -rf ../bundle/python/.lock ../bundle/python/.temp ../bundle/python/.gitignore
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # python-build-standalone on Windows ships python.exe at the distribution root
+            # (no bin/ and no python3.12-named binary), and a Windows venv has no symlink to
+            # rewrite: Scripts/python.exe is a redirector, not a link.
+            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name python.exe | head -1)"
+          else
+            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+          fi
+          test -n "$PYBIN" || { echo "bundled interpreter not found under ../bundle/python"; find ../bundle/python -maxdepth 3 | head -40; exit 1; }
+          uv venv --python "$PYBIN" ../bundle/cpython
+          # install the app + deps into the bundled venv (batteries included; no runtime net).
+          # --no-editable: vendor/buenavista is declared `editable = true` in
+          # [tool.uv.sources] (pyproject.toml) for local dev; ship a real install
+          # (an editable install points at this checkout's absolute path, which
+          # will not exist on the machine the bundle is extracted on).
+          uv pip install --python ../bundle/cpython --no-editable ./vendor/buenavista ".[oidc]"
+          # `uv venv` makes cpython/bin/python an ABSOLUTE symlink to $PYBIN.
+          # Rewrite it relative so the whole bundle (cpython/ + python/ together)
+          # is relocatable to any absolute path. pyvenv.cfg's `home` line stays
+          # build-machine-absolute but is harmless: CPython 3.11+'s getpath
+          # derives sys.prefix/home from bin/python's own realpath, not from a
+          # stale pyvenv.cfg home (verified locally by moving a built bundle to
+          # an unrelated path and importing buenavista/pgwire_calcite from it).
+          [[ "$RUNNER_OS" == "Windows" ]] || python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
+          import os, sys
+          target = os.path.realpath(sys.argv[1])
+          venv_bin = sys.argv[2]
+          link = os.path.join(venv_bin, "python")
+          rel = os.path.relpath(target, os.path.realpath(venv_bin))
+          os.remove(link)
+          os.symlink(rel, link)
+          print(f"bin/python -> {rel}")
+          PY
 
       - name: Minimal bundled JRE (jlink)
         run: |
@@ -124,12 +171,15 @@ jobs:
             pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256
 
       - name: Attach to release
-        # On a release event softprops infers the release; on workflow_dispatch (used because a
-        # release created by GITHUB_TOKEN does not emit a release event) target engine-v<version>.
+        # On a release event use its tag; on workflow_dispatch (used because a release created
+        # by GITHUB_TOKEN emits no release event) target engine-v<version>. Plain upload with
+        # --clobber: softprops/action-gh-release tries to *update* the release object as well,
+        # which a dispatched run's token is not allowed to do.
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}
-          files: |
-            pgwire-calcite-*-${{ matrix.variant }}.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
+            pgwire-calcite-*-${{ matrix.variant }}.tar.gz \
             pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256

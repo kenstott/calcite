@@ -587,6 +587,12 @@ class BuenaVistaHandler(socketserver.StreamRequestHandler):
         params = []
         for i in range(num_params):
             nb = buf.read_int32()
+            if nb == -1:
+                # A NULL bind is signalled by length -1 and carries NO value bytes.
+                # Reading -1 bytes would silently desynchronise the rest of the Bind
+                # message (result formats, and every message after it).
+                params.append(None)
+                continue
             v = buf.read_bytes(nb)
             stmt_oids = ctx.stmts[stmt][1]
             typeoid = stmt_oids[i] if i < len(stmt_oids) else 0

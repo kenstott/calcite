@@ -175,6 +175,9 @@ public class McpServer {
         // otherwise probes for a real X11/Windows display and fails on a headless host.
         System.setProperty("java.awt.headless", "true");
 
+        // Fixed loopback endpoint for the browser extension: claim verdicts by article URL.
+        ClaimsServer.start(System.err);
+
         // DuckDBJdbcSchemaFactory's own default (4GB) is sized for many small connections
         // sharing a box; this server holds one long-lived, many-schema connection serving
         // real analytical queries, which needs more headroom. Only sets it if the operator
@@ -551,6 +554,117 @@ public class McpServer {
             + "agriculture), transport (NHTSA/BTS/FAA/FTA/FHWA), environment (EPA/USGS), fiscal "
             + "(IRS SOI / USAspending / SBA / SSA).\n\n"
 
+            + "## VALIDATING AN ARTICLE OR A CLAIM\n\n"
+            + "When the user hands you a URL, a pasted article, or a quoted passage and asks "
+            + "whether it holds up — 'validate this', 'fact-check this', 'is this true', 'is this "
+            + "accurate', 'verify this', 'check this article', 'debunk this', 'true or false', "
+            + "'how much of this is right', or simply a link followed by a question mark — that "
+            + "is a VALIDATION, not a research question, and it has its own shape. The article "
+            + "is the thing under test, never a source: nothing it says counts as evidence for "
+            + "itself.\n"
+            + "1. Fetch the text (web_fetch for a URL). Extract every assertion of fact as a "
+            + "verbatim sentence. Separate the CLAIM from its ATTRIBUTION: 'officials say "
+            + "unemployment fell' is graded on whether unemployment fell, not on whether "
+            + "officials said it, and 'X said Y' is graded on Y. Whether a quote was actually "
+            + "spoken is never the assertion under test. Skip opinion and prediction; keep "
+            + "numbers, trends, rankings, comparisons and causal claims.\n"
+            + "1a. **'Validate this' NEVER means 'confirm the event happened and the quotes are "
+            + "transcribed accurately.'** That is fact-checking the REPORTER, a categorically "
+            + "easier task than fact-checking the REPORTED — and it is not the task. Measured "
+            + "live, 2026-09-11: given a URL to a speech, a run cross-referenced four other "
+            + "outlets, confirmed the speaker said what the article quotes him saying, declared "
+            + "the whole piece 'accurate', and never tested a single one of the speaker's own "
+            + "numeric claims (a migration figure, an investment claim, a job-growth claim) — "
+            + "one query failed on a wrong column name and the run gave up rather than fix it "
+            + "and continue, then wrote that a claim was 'accurately attributed... not "
+            + "independently verified' as though that satisfied the task. It did not: the "
+            + "assertions a REPORTER makes AND the assertions the article quotes its SUBJECTS "
+            + "making are both squarely in scope and both get the full step 1-8 treatment "
+            + "below, exactly like a claim with no attribution at all — a number is not exempt "
+            + "from testing because a name is attached to it. If a genuine attempt to test an "
+            + "assertion fails (a query errors, a table lacks the measure), FIX THE QUERY AND "
+            + "RETRY or reach for search_catalog's unmatched_terms and grade 'not checkable "
+            + "here' with a stated reason — giving up silently and reporting the surrounding "
+            + "article as 'accurate' regardless is never an acceptable outcome.\n"
+            + "2. Test every assertion INDEPENDENTLY in this corpus. Independent means your own "
+            + "statistical analysis of warehouse data, not a search for someone else's verdict. "
+            + "search_catalog for the measure the assertion rests on. Measure present: compute "
+            + "it here at the same unit and period; record the article's figure, the warehouse "
+            + "figure, the table, and BOTH vintages. Measure absent but the assertion is a "
+            + "RELATIONSHIP between things this corpus carries ('places with more X have more "
+            + "Y', 'A causes B', 'group G does more of Z'): build the test — join the "
+            + "components at county, state or year grain and run hypothesis_test, "
+            + "ols_regression, robust_regression or diff_in_diff on the join — and grade on the "
+            + "effect size, its interval and its p-value. 'Not checkable here' is reserved for "
+            + "an assertion whose measure AND whose components are all unmatched; never proxy "
+            + "a missing measure into a verdict, and never mark a relationship claim 'not "
+            + "checkable' without first trying its components.\n"
+            + "3. The article's own sources are comparison points, not the test. Fetch the "
+            + "study or release the article cites (web_fetch; python for a PDF table) to "
+            + "record its figure, unit, period and population beside yours, and note where "
+            + "the article's number diverges from its own source.\n"
+            + "4. Quantitative evidence from outside this corpus is DATA, not prose: when a "
+            + "cited study or an official release gives a rate, a series or a table, bring the "
+            + "figures in and compute the comparison against your warehouse result — "
+            + "difference, ratio, correlation, regression — rather than describing it. Where "
+            + "an external series and a warehouse series overlap in time or geography, "
+            + "correlate them and report the coefficient.\n"
+            + "5. Charts follow YOUR analysis. Every assertion graded from a warehouse figure, a "
+            + "relationship test, a series you computed, or a comparison you ran against an "
+            + "external figure gets a render_chart of that evidence; compose_dashboard the set "
+            + "and pass it as publish_report's `dashboard`, and publish_report REFUSES a publish "
+            + "whose claims carry a warehouse_value or sql but no chart. A validation graded "
+            + "entirely from publications, with no statistical or quantitative analysis of your "
+            + "own anywhere in it, carries NO chart: a graph of nothing measured is noise.\n"
+            + "6. Verdict per assertion: true | mostly true | partially true | mostly false | "
+            + "false | not checkable here | stale vintage. 'Partially true' needs the reason: "
+            + "right direction wrong magnitude, right figure wrong year, true nationally but not "
+            + "for the place named, true for a subgroup presented as the whole. A mismatch "
+            + "where the article cites a release newer than the loaded window is 'stale "
+            + "vintage' — a freshness gap, not a falsehood.\n"
+            + "7. publish_report with the `claims` array (one entry per assertion, each with "
+            + "article_value, warehouse_value, independent_value, sources, table, sql and "
+            + "reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
+            + "leads with the tally and the "
+            + "assertion that matters most. The user asked whether the piece can be trusted; "
+            + "answer that first. **The `claims` array is not optional and prose is not a "
+            + "substitute for it.** Writing the verdicts as free-text sections ('Claim 1 — ...', "
+            + "'Claim 2 — ...') instead of populating `claims` is a failure of this task, not a "
+            + "stylistic choice, because it throws away the short scannable table and per-claim "
+            + "detail sections the reader depends on. If you notice — before or after "
+            + "publishing — that you graded two or more distinct assertions but the last "
+            + "publish_report call carried no `claims` array (or an empty one), that publish is "
+            + "incomplete: call publish_report again, this time with every assertion you graded "
+            + "placed in `claims`, before you finish. A validation with exactly one assertion "
+            + "may be reported in prose if a table would be silly for one row; two or more "
+            + "assertions always go in `claims`.\n"
+            + "8. With two or more claims, also pass `pinocchios`, refused without one — "
+            + "Washington Post Fact Checker style, {\"count\": 0-4, \"explanation\": \"...\"}. "
+            + "A validated piece is not always a news report — it may be a paper, a blog post, "
+            + "a press release, a transcript. When the graded claims mix the PIECE's OWN "
+            + "fidelity (did it accurately represent the event, study, quote, or source it "
+            + "describes) with the factual accuracy of assertions it relays or advances "
+            + "(whether the piece's own, or attributed to a person/study/release it cites), "
+            + "rate these separately instead — {\"fidelity\": {\"count\":0-4,"
+            + "\"explanation\":\"...\"}, \"claims_accuracy\": {\"count\":0-4,"
+            + "\"explanation\":\"...\"}} — since a piece that faithfully represents an "
+            + "exaggerated claim it quotes or cites is a real and common case a single "
+            + "blended count would hide. Use the single form only when that split isn't "
+            + "meaningful for this piece (e.g. every claim graded is the piece's own, with "
+            + "nothing attributed to a separate source). Either way this is an editorial "
+            + "judgment across its set of "
+            + "claims, not a mechanical count of false verdicts: weigh what the central, "
+            + "most-repeated assertion in that group actually claims and how far it strays, "
+            + "not its vaguest or most defensible line. 0 = true or no significant issues; "
+            + "1 = some shading of the facts or selective framing that is still individually "
+            + "defensible; 2 = significant omissions or exaggerations — a real number wearing "
+            + "a misleading label, a qualifier that only survives by not checking it; "
+            + "3 = significant factual errors or self-contradiction — a headline claim the "
+            + "most recent data actually runs the opposite direction from; 4 = whoppers — a "
+            + "number or claim invented or contradicted outright by the primary source. Name "
+            + "which claim(s) drove each rating in its explanation, not a restatement of the "
+            + "claims table.\n\n"
+
             + "## WORKFLOW — RESEARCH FIRST, DATA SECOND, IN ORDER\n\n"
             + "Measured, most recently in a 25-run reaudit: the average answer still cites only "
             + "~3.5 distinct external sources against a ~10 target, and connector callers as a "
@@ -736,6 +850,15 @@ public class McpServer {
             + "used per year — never deflate by hand from a remembered CPI figure, and a "
             + "nominal multi-year comparison is not growth). This adjusts for TIME only, not "
             + "PLACE.\n"
+            + "- **A recurring or ongoing phenomenon (a trade dispute, a policy wave, a crisis) "
+            + "has a CURRENT instance, and a question naming no year means that one, not "
+            + "whichever instance the literature covers best.** Measured live: a run answered "
+            + "'the trade war' with a rigorously-sourced, warehouse-verified 2018-19 episode "
+            + "while every other arm on the same question correctly identified 2025-26 (today's "
+            + "date) as the live one — sourcing rigor on the wrong episode still answers the "
+            + "wrong question. Before treating an episode as THE answer, check today's date "
+            + "against the episode's own window and name explicitly why that episode, not a "
+            + "more recent one, is the one being asked about.\n"
             + "- **MANDATORY: CALL find_recipe BEFORE any multi-step comparison** — places, "
             + "rates, multi-year trends, causal claims, a table's construction basis you have "
             + "not verified. Call it before deciding you're already certain of the method, not "
@@ -1889,6 +2012,63 @@ public class McpServer {
             + "asked of the connector, so the figure is independently re-derivable. Omit both "
             + "sql and tool/params for genuine web sources.");
         pubProps.set("sources", sourcesProp);
+        pubProps.set("claims", prop("array",
+            "For an article or claim validation: one object per assertion, as "
+            + "[{assertion, verdict, article_value, warehouse_value, independent_value, "
+            + "sources, table, article_vintage, warehouse_vintage, reason, sql}]. `assertion` "
+            + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
+            + "say X' is graded on X). `verdict` is one of: true | mostly true | partially true "
+            + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
+            + "and `table` are what this corpus says and where; `sql` is the query that "
+            + "produced it. `independent_value` is the figure from primary sources the article "
+            + "did not supply, and `sources` (array of {title, url}) names them — every claim "
+            + "needs at least one. Use 'not checkable here' only when search_catalog's "
+            + "unmatched_terms show no table carries the measure or its components, and "
+            + "'stale vintage' when the article cites a release newer than the loaded window — "
+            + "that is a freshness gap, not a falsehood. Renders as a tallied claim-by-claim "
+            + "table directly under the summary. A publish whose claims rest on your own "
+            + "warehouse analysis (any warehouse_value or sql) MUST also carry a `dashboard` or "
+            + "follow a render_chart/compose_dashboard call; it is refused otherwise. Claims "
+            + "graded purely from publications need no chart."));
+        pubProps.set("source_url", prop("string",
+            "For a validation: the URL of the article or page the claims were extracted from. "
+            + "Lets the AskAmerica browser extension find this validation from that page. "
+            + "Defaults to the last web_fetch URL of the session when omitted."));
+        pubProps.set("pinocchios", prop("object",
+            "For a validation with two or more claims: a Pinocchio rating (Washington Post "
+            + "Fact Checker style), count 0-4 with an explanation. The piece under test is not "
+            + "always a news report — it may be a paper, a blog post, a press release, a "
+            + "transcript. Two shapes are accepted:\n"
+            + "SINGLE, {\"count\": 0-4, \"explanation\": \"...\"} — use when the piece's own "
+            + "fidelity and the assertions it carries aren't usefully distinguishable (e.g. "
+            + "every claim graded is the piece's own, nothing attributed to a separate source "
+            + "it quotes or cites).\n"
+            + "SPLIT, {\"fidelity\": {\"count\":0-4,\"explanation\":\"...\"}, "
+            + "\"claims_accuracy\": {\"count\":0-4,\"explanation\":\"...\"}} — use "
+            + "whenever the piece accurately represents a person, study, or release whose OWN "
+            + "claims are the thing actually under test: grade the piece's fidelity (did it "
+            + "quote/frame/cite them accurately) separately from claims_accuracy (are the "
+            + "numbers and assertions THEY made actually true). Collapsing these into one "
+            + "count when they diverge — a piece faithfully relaying someone else's "
+            + "exaggerated claim — hides the more useful of the two verdicts; prefer SPLIT "
+            + "whenever a validation grades both the piece's own fidelity and a quoted or "
+            + "cited source's factual claims as separate line items in `claims`.\n"
+            + "Either shape is a judgment call across its set of claims, not a mechanical count "
+            + "of false ones — weigh what the central, most-repeated assertion in that group "
+            + "actually claims, not its vaguest or most defensible one. count=0: true or no "
+            + "significant issues. count=1: some shading of the facts, selective framing, a "
+            + "defensible-but-flattering choice of comparison. count=2: significant omissions "
+            + "or exaggerations — a real number wearing a misleading label (e.g. a true "
+            + "magnitude attributed to a cause the data doesn't support), or a qualifier that "
+            + "only survives by not checking it. count=3: significant factual errors and/or "
+            + "self-contradiction — a headline claim the most recent data actually runs the "
+            + "opposite direction from. count=4: whoppers — a number or claim invented or "
+            + "contradicted outright by the primary source. Each explanation should read like "
+            + "an editorial verdict, not a restatement of the claims table: name which claim(s) "
+            + "drove that rating and why the count landed where it did, not higher or lower. "
+            + "Renders as a labeled banner (or two, for SPLIT) above the claim table. Omit for "
+            + "a validation with only one claim or none graded false/misleading enough to "
+            + "warrant a rating."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -2213,7 +2393,18 @@ public class McpServer {
                     log.println("[askamerica-mcp] Initializing schema: " + k);
                     ensureFreshR2Credentials();
                     GovDataDriver driver = new GovDataDriver();
-                    Connection c = driver.connect("jdbc:govdata:source=" + k, new Properties());
+                    Properties connProps = new Properties();
+                    // GovDataDriver's own default (standard,postgresql,spatial,mssql) has no
+                    // DATE_TRUNC operator at all -- it is registered only under the bigquery
+                    // function library (SqlLibraryOperators.DATE_TRUNC, signature <DATE>,
+                    // <DATETIME_INTERVAL>) -- so a caller's DATE_TRUNC('month', d) fails
+                    // validation with "No match found for function signature" before ever
+                    // reaching DuckDB. Adding bigquery here is scoped to this engine's own
+                    // connections only (GovDataDriver only applies its default when the caller
+                    // has not already set "fun"), not to the shared driver default other
+                    // tooling (DQ, ETL, model-verify) still uses.
+                    connProps.setProperty("fun", "standard,postgresql,spatial,mssql,bigquery");
+                    Connection c = driver.connect("jdbc:govdata:source=" + k, connProps);
                     if (c == null) {
                         throw new IllegalStateException(
                             "GovDataDriver returned null for schema: " + k);
@@ -2416,6 +2607,7 @@ public class McpServer {
                 }
                 case "web_fetch": {
                     String fetchUrl = args.path("url").asText();
+                    LAST_FETCH_URL = fetchUrl;
                     int maxPages = args.has("max_pages")
                         ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
                     int maxSheets = args.has("max_sheets")
@@ -2977,6 +3169,57 @@ public class McpServer {
                         flts.add(new ReportPage.Filter(lbl, cls,
                             fn.has("note") ? fn.get("note").asText(null) : null));
                     }
+                    JsonNode claims = args.path("claims");
+                    if (claims.isArray() && claims.size() > 0) {
+                        enforceClaimShape(claims);
+                        enforceValidationChart(boardSvg, claims);
+                        JsonNode pinocchios = args.path("pinocchios");
+                        boolean isSplit = pinocchios.isObject()
+                            && (pinocchios.has("fidelity") || pinocchios.has("claims_accuracy"));
+                        if (isSplit) {
+                            validatePinocchiosSubRating(pinocchios, "fidelity");
+                            validatePinocchiosSubRating(pinocchios, "claims_accuracy");
+                        } else if (pinocchios.isObject()) {
+                            if (!pinocchios.hasNonNull("count") || !pinocchios.hasNonNull("explanation")
+                                    || pinocchios.path("explanation").asText("").trim().isEmpty()) {
+                                throw new IllegalArgumentException(
+                                    "pinocchios needs both a 'count' (0-4) and a non-empty "
+                                    + "'explanation' -- a bare rating with no reasoning is not "
+                                    + "useful to a reader deciding whether to trust it.");
+                            }
+                            int count = pinocchios.path("count").asInt(-1);
+                            if (count < 0 || count > 4) {
+                                throw new IllegalArgumentException(
+                                    "pinocchios.count must be 0-4 (Washington Post Fact "
+                                    + "Checker scale), got " + count);
+                            }
+                        } else if (claims.size() >= 2) {
+                            throw new IllegalArgumentException(
+                                "This validation grades " + claims.size() + " claims but "
+                                + "carries no pinocchios rating. Every validation with two or "
+                                + "more claims needs one -- either an overall {count, "
+                                + "explanation}, or, when the graded claims mix the piece's "
+                                + "own fidelity with the factual accuracy of what it relays or "
+                                + "quotes from another source, a split {fidelity, "
+                                + "claims_accuracy} rating instead. Weigh each group's "
+                                + "central, most-repeated assertion (not its vaguest one) and "
+                                + "rate 0-4 per the Washington Post Fact Checker scale, with an "
+                                + "explanation naming which claim(s) drove each count.");
+                        }
+                        ReportPage.Section claimsSec = claimsSection(claims, pinocchios);
+                        if (claimsSec != null) {
+                            // Directly under the summary, where a reader looks first.
+                            secs.add(Math.min(1, secs.size()), claimsSec);
+                        }
+                    } else {
+                        enforceClaimsArrayPresence(secs);
+                    }
+                    enforceExclusionDisclosure(secs);
+                    enforceTableProvenance(secs);
+                    ReportPage.Section appendix = queryAppendix();
+                    if (appendix != null) {
+                        secs.add(appendix);
+                    }
                     String html = ReportPage.render(rTitle, rSub, secs, boardSvg, boardSvgUrl,
                         srcs,
                         args.has("footnote") ? args.get("footnote").asText(null) : null,
@@ -2994,11 +3237,24 @@ public class McpServer {
                         java.io.File reportHtml = new java.io.File(evalDir, "report.html");
                         java.nio.file.Files.write(reportHtml.toPath(),
                             html.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        writeCallLog(evalDir);
+                        if (claims.isArray() && claims.size() > 0) {
+                            java.nio.file.Files.write(new java.io.File(evalDir, "claims.json")
+                                .toPath(), claims.toString()
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        }
                         evalReportNote = " Saved to " + reportHtml + ".";
                     }
                     String url = ArtifactServer.publish(
                         html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         "text/html; charset=utf-8", "html");
+                    if (claims.isArray() && claims.size() > 0) {
+                        String srcUrl = args.path("source_url").asText(null);
+                        if (srcUrl == null || srcUrl.trim().isEmpty()) {
+                            srcUrl = LAST_FETCH_URL;
+                        }
+                        ClaimsServer.record(srcUrl, args.path("title").asText(null), url, claims);
+                    }
                     log.println("[askamerica-mcp] tool=publish_report sections=" + secs.size()
                         + " sources=" + srcs.size() + " board=" + (boardSvg != null));
                     // A Markdown link, not a bare URL: this protocol version (2024-11-05) has no
@@ -3075,6 +3331,9 @@ public class McpServer {
                         dTitle, dSub, dFoot, dBy, panels, cols, dw, dh);
                     chartPng = dash.toPng();
                     chartSvg = dash.toSvg();
+                    if (EVAL_MODE) {
+                        LAST_DASHBOARD_PNG = dash.toPng(2.0);
+                    }
                     int stats = 0;
                     for (DashboardLayout.Panel p : panels) {
                         if ("stat".equals(p.kind)) {
@@ -3214,6 +3473,7 @@ public class McpServer {
             long ms = System.currentTimeMillis() - t0;
             String compact = compactErrorMessage(e);
             log.println("[askamerica-mcp] tool=" + name + " ERROR ms=" + ms + " msg=" + compact);
+            recordCall(name, args, ms, -1, null, compact);
             if (telemetryOptIn && !"set_telemetry".equals(name)) {
                 final String tName = name;
                 final long tMs = ms;
@@ -3281,9 +3541,13 @@ public class McpServer {
             t.start();
         }
 
-        if (chartPng != null && EVAL_MODE) {
-            LAST_CHART_PNG = chartPng;
+        if (chartPng != null) {
+            CHART_RENDERED = true;
+            if (EVAL_MODE) {
+                LAST_CHART_PNG = chartPng;
+            }
         }
+        recordCall(name, args, ms, rows, diagnostics, null);
         ArrayNode content = MAPPER.createArrayNode();
         if (chartPng != null) {
             ObjectNode imageBlock = MAPPER.createObjectNode();
@@ -3706,11 +3970,55 @@ public class McpServer {
         }
         ObjectNode out = MAPPER.createObjectNode();
         out.set("matches", hits);
+        addUnmatchedTerms(out, query.trim(), hits);
         if (extSources.size() > 0) {
             out.set("external_sources", extSources);
             out.put("external_sources_caveat", ExternalSources.CAVEAT);
         }
         return out.toString();
+    }
+
+    private static final java.util.Set<String> SEARCH_STOPWORDS = new java.util.HashSet<>(
+        java.util.Arrays.asList("the", "and", "for", "with", "from", "that", "this", "into",
+            "over", "per", "rate", "rates", "data", "table", "tables", "state", "states",
+            "county", "counties", "year", "years", "total", "number", "count", "average",
+            "annual", "monthly", "level", "levels", "national", "federal"));
+
+    /**
+     * The words in a search that no hit's name or description contains. A hit list is easy
+     * to read as "the catalog has this" when it only has the neighbours: measured live, a
+     * search for "teacher salary student achievement class size" returned staffing and
+     * spending tables, and the caller built a spend-per-teacher proxy without ever being
+     * told that no table carries a salary. Naming the unmatched word is what turns "proxy"
+     * from a private decision into a stated one.
+     */
+    private static void addUnmatchedTerms(ObjectNode out, String query, ArrayNode hits) {
+        StringBuilder hay = new StringBuilder();
+        for (JsonNode h : hits) {
+            hay.append(' ').append(h.path("table").asText("")).append(' ')
+                .append(h.path("column").asText("")).append(' ')
+                .append(h.path("description").asText(""));
+        }
+        String haystack = hay.toString().toLowerCase(java.util.Locale.ROOT);
+        ArrayNode unmatched = MAPPER.createArrayNode();
+        for (String raw : query.toLowerCase(java.util.Locale.ROOT).split("[^a-z0-9]+")) {
+            if (raw.length() < 4 || SEARCH_STOPWORDS.contains(raw)) {
+                continue;
+            }
+            String stem = raw.endsWith("ies") ? raw.substring(0, raw.length() - 3) + "y"
+                : (raw.endsWith("s") ? raw.substring(0, raw.length() - 1) : raw);
+            if (!haystack.contains(stem)) {
+                unmatched.add(raw);
+            }
+        }
+        if (unmatched.size() > 0) {
+            out.set("unmatched_terms", unmatched);
+            out.put("unmatched_terms_note", "No returned table, column or description "
+                + "contains these words. If a figure the question needs is named by one of "
+                + "them, the corpus may not carry it directly: say so in the answer, and if "
+                + "you build a proxy from what IS here, name it as a proxy and say what it "
+                + "includes that the missing measure would not.");
+        }
     }
 
     /**
@@ -3925,6 +4233,7 @@ public class McpServer {
             return out.toString();
         }
         out.set("observed", IngestedYears.detail(r));
+        addNullShares(out, s, t);
 
         if (declared != null && r.status == null) {
             out.set("missing_vs_declared", IngestedYears.missingVersusDeclared(r,
@@ -3940,6 +4249,65 @@ public class McpServer {
         log.println("[askamerica-mcp] data_coverage " + s + "." + t
             + " status=" + (r.status == null ? "measured" : r.status));
         return out.toString();
+    }
+
+    /**
+     * Share of rows null per column, over the whole table. One aggregate scan, capped at 40
+     * columns. A null-heavy covariate is the quiet way a sample shrinks: a poverty control
+     * with six null jurisdictions turns a 51-state regression into a 45-state one the moment
+     * it enters the model, and nothing about the coverage window says so.
+     */
+    private static void addNullShares(ObjectNode out, String schema, String table) {
+        try {
+            Connection c = getCatalogConnection();
+            java.util.List<String> cols = new ArrayList<>();
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery(
+                     "SELECT column_name FROM information_schema.columns "
+                     + "WHERE lower(table_schema) = '" + schema + "' "
+                     + "AND lower(table_name) = '" + table + "' ORDER BY ordinal_position")) {
+                while (rs.next() && cols.size() < 40) {
+                    cols.add(rs.getString(1));
+                }
+            }
+            if (cols.isEmpty()) {
+                return;
+            }
+            StringBuilder sql = new StringBuilder("SELECT COUNT(*)");
+            for (String col : cols) {
+                sql.append(", COUNT(\"").append(col.replace("\"", "\"\"")).append("\")");
+            }
+            sql.append(" FROM \"").append(schema).append("\".\"").append(table).append('"');
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery(sql.toString())) {
+                if (!rs.next()) {
+                    return;
+                }
+                long total = rs.getLong(1);
+                if (total <= 0) {
+                    return;
+                }
+                ObjectNode shares = MAPPER.createObjectNode();
+                for (int i = 0; i < cols.size(); i++) {
+                    long nonNull = rs.getLong(i + 2);
+                    double share = (total - nonNull) / (double) total;
+                    if (share > 0) {
+                        shares.put(cols.get(i), Math.round(share * 1000.0) / 1000.0);
+                    }
+                }
+                out.put("rows_scanned_for_nulls", total);
+                out.set("null_share_by_column", shares);
+                if (shares.size() > 0) {
+                    out.put("null_share_note", "Share of rows where each column is null; "
+                        + "columns with no nulls are omitted. A column used as a covariate "
+                        + "drops every row where it is null, so a non-zero share here is the "
+                        + "sample attrition a regression on this table will show.");
+                }
+            }
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] null-share scan skipped for " + schema + "." + table
+                + ": " + e.getMessage());
+        }
     }
 
     private static Integer intOrNull(ObjectNode n, String field) {
@@ -4108,7 +4476,7 @@ public class McpServer {
             }
             i++;
         }
-        return out.toString();
+        return repairDateTruncDateArg(stripRedundantLimitClause(out.toString()));
     }
 
     // Extract the first govdata schema name from a SQL query (e.g. "FROM sec.filings" → "sec").
@@ -4131,6 +4499,39 @@ public class McpServer {
             }
         }
         return null;
+    }
+
+    /** Every govdata schema this engine connects to. Used only to recognize a "schema.table"
+     *  mention in report PROSE as a real table reference worth checking provenance on — not
+     *  to scope a connection or validate a query. */
+    private static final java.util.Set<String> KNOWN_SCHEMAS = new java.util.HashSet<>(
+        java.util.Arrays.asList(
+            "sec", "geo", "econ", "census", "crime", "weather", "ref", "fec", "fedregister",
+            "cyber_vuln", "cyber_threat", "energy", "health", "edu", "econ_reference", "cftc",
+            "patents", "fiscal", "disasters", "housing", "transport", "environment",
+            "officials", "research", "lands", "ag", "banking"));
+
+    private static final java.util.regex.Pattern SQL_SCHEMA_TABLE_PAT =
+        java.util.regex.Pattern.compile(
+            "(?i)\\b(?:FROM|JOIN)\\s+\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\.\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?");
+
+    /** Every "schema.table" a query's FROM/JOIN clauses actually name, lowercased. Feeds
+     *  {@link #enforceTableProvenance}: a report claiming a table was queried when it never
+     *  appears here is a fabricated-provenance claim, not a stylistic slip. */
+    private static java.util.Set<String> extractTableNames(String sql) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        if (sql == null) {
+            return out;
+        }
+        java.util.regex.Matcher m = SQL_SCHEMA_TABLE_PAT.matcher(sql);
+        while (m.find()) {
+            String schema = m.group(1).toLowerCase(java.util.Locale.ROOT);
+            if (META_SCHEMAS.contains(schema)) {
+                continue;
+            }
+            out.add(schema + "." + m.group(2).toLowerCase(java.util.Locale.ROOT));
+        }
+        return out;
     }
 
     private static ArrayNode query(String sql, int limit) throws Exception {
@@ -4215,6 +4616,19 @@ public class McpServer {
      * the same thing; there is no cross-run leakage to guard against.
      */
     private static volatile byte[] LAST_CHART_PNG;
+    /** Whether any chart or dashboard has been rendered this session, in any mode; the
+     *  validation chart gate reads this rather than the eval-only PNG holders. */
+    private static volatile boolean CHART_RENDERED;
+    /** The URL most recently handed to web_fetch: the default source_url of a validation. */
+    private static volatile String LAST_FETCH_URL;
+
+    /**
+     * The most recent {@code compose_dashboard} render at 2x, kept separately from
+     * {@link #LAST_CHART_PNG}: publish_report returns a 40% thumbnail of its board as the
+     * call's image, and "the last image this process produced" was therefore a 352x258
+     * picture that no reader could use. The saved dashboard.png is this one when it exists.
+     */
+    private static volatile byte[] LAST_DASHBOARD_PNG;
 
     /**
      * Writes a comparative-eval answer (and, if any, the last chart this process rendered) to
@@ -4244,13 +4658,668 @@ public class McpServer {
             markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
         String chartNote = "";
-        byte[] chart = LAST_CHART_PNG;
+        byte[] chart = LAST_DASHBOARD_PNG != null ? LAST_DASHBOARD_PNG : LAST_CHART_PNG;
         if (chart != null) {
             java.io.File dashboardPng = new java.io.File(dir, "dashboard.png");
             java.nio.file.Files.write(dashboardPng.toPath(), chart);
             chartNote = " and " + dashboardPng;
         }
-        return "Saved " + agentMd + chartNote + ".";
+        java.io.File calls = writeCallLog(dir);
+        return "Saved " + agentMd + chartNote + (calls == null ? "" : " and " + calls) + ".";
+    }
+
+    // ── Per-process tool-call log ─────────────────────────────────────────────
+
+    /** Every tool call this process has served, oldest first, capped so a runaway session
+     *  cannot grow it without bound. One process serves one client session, so this is the
+     *  session's audit trail: what was asked of the warehouse, in what order, how long it
+     *  took, and what the server warned about. */
+    private static final java.util.List<ObjectNode> CALL_LOG =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<ObjectNode>());
+    private static final int CALL_LOG_MAX = 2000;
+    private static final java.util.concurrent.atomic.AtomicInteger CALL_SEQ =
+        new java.util.concurrent.atomic.AtomicInteger();
+
+    private static void recordCall(String tool, JsonNode args, long ms, int rows,
+            ObjectNode diagnostics, String error) {
+        if (CALL_LOG.size() >= CALL_LOG_MAX) {
+            return;
+        }
+        ObjectNode e = MAPPER.createObjectNode();
+        e.put("seq", CALL_SEQ.incrementAndGet());
+        e.put("ts", java.time.Instant.now().toString());
+        e.put("tool", tool);
+        e.put("ms", ms);
+        if (args != null && args.hasNonNull("sql")) {
+            String sqlText = args.get("sql").asText();
+            e.put("sql", sqlText);
+            java.util.Set<String> tables = extractTableNames(sqlText);
+            if (!tables.isEmpty()) {
+                ArrayNode tablesArr = e.putArray("tables");
+                for (String t : tables) {
+                    tablesArr.add(t);
+                }
+            }
+        }
+        if (args != null && args.isObject()) {
+            ObjectNode summary = MAPPER.createObjectNode();
+            java.util.Iterator<java.util.Map.Entry<String, JsonNode>> it = args.fields();
+            while (it.hasNext()) {
+                java.util.Map.Entry<String, JsonNode> f = it.next();
+                if ("sql".equals(f.getKey()) || "markdown".equals(f.getKey())
+                    || "html".equals(f.getKey()) || "sections".equals(f.getKey())
+                    || "panels".equals(f.getKey()) || "dashboard".equals(f.getKey())) {
+                    continue;
+                }
+                String v = f.getValue().isValueNode() ? f.getValue().asText()
+                    : f.getValue().toString();
+                summary.put(f.getKey(), v.length() > 200 ? v.substring(0, 200) + "…" : v);
+            }
+            if (summary.size() > 0) {
+                e.set("args", summary);
+            }
+        }
+        if (rows >= 0) {
+            e.put("rows", rows);
+        }
+        if (diagnostics != null) {
+            ArrayNode types = e.putArray("diagnostic_types");
+            JsonNode inner = diagnostics.path("diagnostics");
+            for (JsonNode w : inner.path("warnings")) {
+                String type = w.path("type").asText("");
+                types.add(type + ":" + w.path("severity").asText(""));
+                if ("explicit_exclusion".equals(type) && w.has("predicates")) {
+                    e.set("exclusions", w.get("predicates"));
+                }
+                if ("sample_attrition".equals(type) && w.has("dropped_units")) {
+                    e.set("dropped_units", w.get("dropped_units"));
+                }
+            }
+        }
+        if (error != null) {
+            e.put("error", error);
+        }
+        CALL_LOG.add(e);
+    }
+
+    /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
+    private static java.io.File writeCallLog(java.io.File dir) throws java.io.IOException {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        if (snapshot.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (ObjectNode e : snapshot) {
+            sb.append(e.toString()).append('\n');
+        }
+        java.io.File f = new java.io.File(dir, "calls.jsonl");
+        java.nio.file.Files.write(f.toPath(),
+            sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return f;
+    }
+
+    private static final java.util.regex.Pattern DISCLOSURE_WORDS = java.util.regex.Pattern
+        .compile("(?i)exclud|omitt|dropped|left out|not included|removed from|without ");
+
+    /**
+     * A report published after this session excluded units by hand must say so. Measured live
+     * (q134, 2026-09-10): an {@code explicit_exclusion} caution on three calls changed nothing —
+     * the answer reported n=42 of 49 and named neither the seven units nor the two predicates
+     * that removed them. A diagnostic the caller may ignore is advice; a publish that fails
+     * until the disclosure exists is a guardrail. Same mechanism as question_coverage.
+     *
+     * @throws IllegalArgumentException naming every predicate and, where the server knows
+     *     them, the dropped units, so the fix is one paragraph away rather than a re-query.
+     */
+    private static final java.util.regex.Pattern ATTRIBUTION_LEAD = java.util.regex.Pattern.compile(
+        "^\\s*[\\p{L}\\p{N} .,'&-]{1,60}?\\b(said|says|saying|stated|states|claimed|claims|wrote|writes|"
+        + "argued|argues|tweeted|posted|told|asserted|asserts|alleged|alleges|noted|reported)\\b\\s*[:,]?\\s*[\"'\u201c\u2018]",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** The claim is graded, never its attribution. Refuses an assertion shaped "X said: '...'",
+     *  and a graded verdict with no evidence behind it (no warehouse figure or SQL, and no
+     *  independent figure with a source). */
+    /** Numbered section heading shaped like a per-claim verdict write-up: "1. Was X accurate",
+     *  "2. Is the article's Y correct", "Claim 3 — ...". The exact prose pattern a model falls
+     *  back to when it grades several assertions but never populates {@code claims}. */
+    private static final java.util.regex.Pattern NUMBERED_CLAIM_HEADING = java.util.regex.Pattern
+        .compile("^\\s*(?:\\d+\\.|Claim\\s*\\d+\\s*[-—:])");
+
+    private static final java.util.regex.Pattern VERDICT_SHAPED_WORDS = java.util.regex.Pattern
+        .compile("(?i)\\b(true|false|accurate|inaccurate|correct|incorrect|checks? out|holds? up|"
+            + "verdict|misleading|fabricat)");
+
+    /**
+     * A report with no {@code claims} array is refused outright when it is shaped like a
+     * validation anyway -- two or more numbered section headings that read as per-assertion
+     * verdict write-ups, at least half of them carrying verdict-shaped language. This is the
+     * exact failure the mandatory-claims instruction is meant to prevent: measured live,
+     * 2026-09-11, a q136 rerun (JD Vance ethnic-enclaves validation) published with four
+     * numbered prose headings ("1. Was Vance quoted accurately", "2. Is the article's
+     * counter-claim ... correct", ...) instead of the required `claims` array, despite the
+     * instruction banner stating the array is mandatory whenever two or more assertions are
+     * graded. An instruction a model can silently not follow is advice; this gate makes the
+     * same failure a hard refusal instead of a second missed opportunity.
+     *
+     * <p>Only fires on the SHAPE of the section headings, never on whether an external URL was
+     * fetched this session -- many ordinary (non-validation) reports cite an external article
+     * without being a claim-by-claim validation, and gating on web_fetch alone would refuse
+     * those incorrectly. A numbered list of ordinary section headings with no verdict language
+     * (e.g. "1. Background", "2. Methodology") does not trip this either; both the numbering
+     * AND the verdict-shaped wording have to be present together.
+     */
+    /** Phrasing that admits a specific figure was never actually tested, while the report
+     *  still declares the surrounding piece accurate/true/checks out anyway. This is the
+     *  written signature of "confirmed the reporting, never tested the substance" -- the
+     *  model narrates its own cop-out instead of doing the work or grading 'not checkable
+     *  here', and does so in plain enough language to catch mechanically. */
+    private static final java.util.regex.Pattern SUBSTANCE_NOT_TESTED_ADMISSION =
+        java.util.regex.Pattern.compile("(?i)"
+            + "(?:accurately (?:quoted|attributed|reported|transcribed)[^.]{0,80}not "
+            + "independently"
+            + "|not (?:independently|itself) (?:verified|re-derived|tested|checked)"
+            + "|could not be independently (?:verified|re-derived|reconstructed)"
+            + "|cannot independently (?:reconstruct|verify|re-derive)"
+            + "|accurately attributed to [^.]{0,60}, not [^.]{0,40}(?:independently )?verified)");
+
+    private static final java.util.regex.Pattern OVERALL_TRUE_CLAIM = java.util.regex.Pattern
+        .compile("(?i)\\b(is accurate|checks out|holds up|is true|accurate\\.)\\b");
+
+    private static void enforceClaimsArrayPresence(java.util.List<ReportPage.Section> secs) {
+        int numberedHeadings = 0;
+        int verdictShapedHeadings = 0;
+        StringBuilder allText = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            String heading = sec.heading;
+            allText.append(heading == null ? "" : heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+            if (heading == null) {
+                continue;
+            }
+            if (NUMBERED_CLAIM_HEADING.matcher(heading).find()) {
+                numberedHeadings++;
+                if (VERDICT_SHAPED_WORDS.matcher(heading).find()) {
+                    verdictShapedHeadings++;
+                }
+            }
+        }
+        if (numberedHeadings >= 2 && verdictShapedHeadings >= numberedHeadings / 2) {
+            throw new IllegalArgumentException(
+                "This report cannot be published yet: it has " + numberedHeadings + " numbered "
+                + "section headings that read as per-assertion verdict write-ups ('1. Was ... "
+                + "accurate', '2. Is ... correct', ...) but carries no `claims` array. This is a "
+                + "validation and the claims array is mandatory whenever two or more assertions "
+                + "are graded -- it is not a stylistic choice. Rebuild each of these sections as "
+                + "one entry in `claims` (assertion, verdict, article_value, warehouse_value, "
+                + "independent_value, sources, reason), add the required `pinocchios` rating for "
+                + "the piece as a whole, and call publish_report again. Do not resubmit this "
+                + "prose-section version.");
+        }
+        String body = allText.toString().replaceAll("<[^>]+>", " ");
+        java.util.regex.Matcher admission = SUBSTANCE_NOT_TESTED_ADMISSION.matcher(body);
+        if (admission.find() && OVERALL_TRUE_CLAIM.matcher(body).find()) {
+            throw new IllegalArgumentException(
+                "This report cannot be published yet: it admits, in its own words ('"
+                + admission.group().trim() + "'), that a specific figure or claim was never "
+                + "actually tested -- yet the report still declares the piece accurate/true. "
+                + "Confirming that a quote was said, or that an article was reported "
+                + "accurately by the outlet that ran it, is fact-checking the REPORTER; it is "
+                + "not fact-checking what was reported, and it is not this task. Every numeric "
+                + "or factual assertion a reporter OR a subject quoted in the piece makes gets "
+                + "tested exactly like an unattributed claim: build the `claims` array, "
+                + "actually test each one (retry a failed query rather than abandoning it), "
+                + "grade 'not checkable here' with a named reason only when search_catalog's "
+                + "unmatched_terms genuinely show no table carries it, and add the required "
+                + "`pinocchios` rating. A verdict of 'accurate' resting on unattempted claims "
+                + "is not honest.");
+        }
+    }
+
+    private static void enforceClaimShape(JsonNode claims) {
+        for (JsonNode c : claims) {
+            String assertion = c.path("assertion").asText("").trim();
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (ATTRIBUTION_LEAD.matcher(assertion).find()) {
+                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                    + "\" is an attribution, not a claim. Whether someone said it is never the "
+                    + "thing under test. Drop the 'X said:' lead, keep the quoted statement as the "
+                    + "assertion, and grade THAT against the warehouse (join its components at "
+                    + "county, state or year grain and test them) or against independent figures.");
+            }
+            boolean warehouse = nonBlank(c, "sql") || nonBlank(c, "warehouse_value");
+            boolean independent = nonBlank(c, "independent_value")
+                && c.path("sources").isArray() && c.path("sources").size() > 0;
+            boolean graded = !"not checkable here".equals(verdict) && !"stale vintage".equals(verdict);
+            if (graded && !warehouse && !independent) {
+                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                    + "\" is graded '" + verdict + "' with no evidence attached. A graded verdict "
+                    + "needs either a warehouse figure (warehouse_value and the sql that produced "
+                    + "it) or an independent figure (independent_value plus at least one entry in "
+                    + "sources). If neither exists, the verdict is 'not checkable here' with a "
+                    + "reason naming what was searched.");
+            }
+            if (!graded && !nonBlank(c, "reason")) {
+                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                    + "\" is '" + verdict + "' without a reason. Say which measure was searched "
+                    + "for, which terms search_catalog left unmatched, and which components were "
+                    + "tried.");
+            }
+        }
+    }
+
+    private static boolean nonBlank(JsonNode c, String key) {
+        return c.hasNonNull(key) && !c.get(key).asText().trim().isEmpty();
+    }
+
+    /** A validation whose claims rest on the caller's own warehouse analysis must show it: refuse
+     *  when at least one claim has a warehouse_value or sql, no dashboard was composed
+     *  in this call, and no chart or board has been rendered in the session. A validation
+     *  graded purely from publications passes with no chart. */
+    private static void enforceValidationChart(String boardSvg, JsonNode claims) {
+        if (boardSvg != null || CHART_RENDERED || LAST_DASHBOARD_PNG != null
+            || LAST_CHART_PNG != null) {
+            return;
+        }
+        boolean numeric = false;
+        for (JsonNode c : claims) {
+            for (String k : new String[]{"warehouse_value", "sql"}) {
+                if (c.hasNonNull(k) && !c.get(k).asText().trim().isEmpty()) {
+                    numeric = true;
+                }
+            }
+        }
+        if (!numeric) {
+            return;
+        }
+        throw new IllegalArgumentException("validation refused: this publish carries claims "
+            + "graded from your own warehouse analysis (a warehouse_value or sql) but no chart. "
+            + "render_chart the evidence behind each such claim (the article's figure against "
+            + "the warehouse and independent figures, the relationship you tested, or the "
+            + "series the claim is about), compose_dashboard the set and pass it as this "
+            + "call's `dashboard`, then publish again. Claims graded purely from publications "
+            + "need no chart.");
+    }
+
+    /** How close a disclosure word ("excluded", "dropped", ...) must sit to a mention of the
+     *  excluded column/value for that mention to count as an actual disclosure, not a coincidence
+     *  elsewhere in the report. Chosen from the q53 incident below: the false positive was a
+     *  "without" over 1500 characters from anything about the exclusion. */
+    private static final int DISCLOSURE_PROXIMITY_CHARS = 400;
+
+    private static void enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        java.util.LinkedHashSet<String> predicates = new java.util.LinkedHashSet<>();
+        // key term per predicate: the quoted literal if present, else the column/identifier the
+        // predicate tests (e.g. "metro_nonmetro" out of "metro_nonmetro IS NOT NULL").
+        java.util.LinkedHashMap<String, String> keyTermByPredicate = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashSet<String> units = new java.util.LinkedHashSet<>();
+        for (ObjectNode e : snapshot) {
+            for (JsonNode pnode : e.path("exclusions")) {
+                String pred = pnode.asText();
+                predicates.add(pred);
+                java.util.regex.Matcher qm = java.util.regex.Pattern
+                    .compile("'([^']+)'").matcher(pred);
+                if (qm.find()) {
+                    keyTermByPredicate.put(pred, qm.group(1));
+                    continue;
+                }
+                java.util.regex.Matcher im = java.util.regex.Pattern
+                    .compile("([\\w.]+)\\s*(?:IS\\s+NOT\\s+NULL|IS\\s+NULL|[<>=!]+)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE).matcher(pred);
+                keyTermByPredicate.put(pred, im.find() ? im.group(1) : pred.trim());
+            }
+            for (JsonNode u : e.path("dropped_units")) {
+                units.add(u.asText());
+            }
+        }
+        if (predicates.isEmpty() && units.isEmpty()) {
+            return;
+        }
+        StringBuilder text = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            text.append(sec.heading == null ? "" : sec.heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+        }
+        // Strip tags so "nearby" is measured in prose, not across markup that would otherwise
+        // separate two words sitting in the same visible sentence.
+        String body = text.toString().replaceAll("<[^>]+>", " ");
+        String lower = body.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<String> undisclosed = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, String> pe : keyTermByPredicate.entrySet()) {
+            String term = pe.getValue().toLowerCase(java.util.Locale.ROOT);
+            boolean nearDisclosure = false;
+            int from = 0;
+            int idx;
+            while ((idx = lower.indexOf(term, from)) >= 0) {
+                int winStart = Math.max(0, idx - DISCLOSURE_PROXIMITY_CHARS);
+                int winEnd = Math.min(lower.length(), idx + term.length()
+                    + DISCLOSURE_PROXIMITY_CHARS);
+                if (DISCLOSURE_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                    nearDisclosure = true;
+                    break;
+                }
+                from = idx + term.length();
+            }
+            if (!nearDisclosure) {
+                undisclosed.add(pe.getKey());
+            }
+        }
+        java.util.List<String> missingUnits = new java.util.ArrayList<>();
+        for (String u : units) {
+            if (!lower.contains(u.toLowerCase(java.util.Locale.ROOT))) {
+                missingUnits.add(u);
+            }
+        }
+        if (undisclosed.isEmpty() && missingUnits.isEmpty()) {
+            return;
+        }
+        StringBuilder msg = new StringBuilder(
+            "This report cannot be published yet: a query in this session removed units by "
+            + "hand and the report does not say so near the value it excluded — a disclosure "
+            + "word ('excluded', 'dropped', 'omitted', 'left out', 'without ...') found "
+            + "anywhere in the report does not count unless it sits next to what was actually "
+            + "excluded; a coincidental use of one of those words elsewhere in the report is "
+            + "not a disclosure. ");
+        if (!predicates.isEmpty()) {
+            msg.append("Predicates seen: ").append(String.join("; ", predicates)).append(". ");
+        }
+        if (!undisclosed.isEmpty()) {
+            msg.append("Not disclosed near their excluded value: ")
+                .append(String.join("; ", undisclosed)).append(". ");
+        }
+        if (!missingUnits.isEmpty()) {
+            msg.append("Rows the stats tools dropped for a null value, named nowhere in the "
+                + "report: ").append(String.join(", ", missingUnits)).append(". ");
+        }
+        msg.append("Fix: add one paragraph to a section naming every unit these predicates "
+            + "removed (run the same SELECT without them if you do not know), the reason, "
+            + "and the headline statistic with and without them. Then call publish_report "
+            + "again. See recipe report-what-an-exclusion-changed-not-only-that-you-made-one.");
+        throw new IllegalArgumentException(msg.toString());
+    }
+
+    private static final java.util.regex.Pattern PROVENANCE_CLAIM_WORDS = java.util.regex.Pattern
+        .compile("(?i)computed from|queried (?:directly|live|from)|sourced directly|"
+            + "live[- ]scann?(?:ed)?|fetched directly from|pulled directly from|"
+            + "directly (?:via|from) the warehouse|warehouse[- ]native|live[- ]quer(?:y|ied)");
+
+    /**
+     * A report claiming it queried, computed from, or live-scanned a table it never actually
+     * touched this session is a fabricated-provenance claim, not a stylistic slip — measured
+     * live (q117, 2026-09-11): the judge caught "live scan" claimed against two tables with
+     * zero matching entries in {@code calls.jsonl}, wording a keyword grep for "computed
+     * from"/"queried directly" entirely missed. A caller's own honesty is not something to
+     * take on faith when the actual tool log is sitting right here to check it against.
+     *
+     * <p>Collects every "schema.table" any successful SQL call this session actually named
+     * (see {@link #extractTableNames}, fed into {@link #recordCall}'s {@code tables} field),
+     * then scans the report body for a "schema.table" mention — recognized by schema name,
+     * see {@link #KNOWN_SCHEMAS}, not by guessing at arbitrary dotted tokens — sitting near a
+     * provenance-claiming phrase. A table named that way but never queried refuses the
+     * publish; a table merely mentioned in passing (no provenance claim nearby) does not,
+     * since naming a table in prose without claiming to have queried it is not a claim this
+     * gate has any business policing.
+     */
+    private static void enforceTableProvenance(java.util.List<ReportPage.Section> secs) {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        java.util.Set<String> queried = new java.util.HashSet<>();
+        for (ObjectNode e : snapshot) {
+            for (JsonNode t : e.path("tables")) {
+                queried.add(t.asText().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        StringBuilder text = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            text.append(sec.heading == null ? "" : sec.heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+        }
+        String body = text.toString().replaceAll("<[^>]+>", " ");
+        java.util.regex.Pattern mentionPat = java.util.regex.Pattern.compile(
+            "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\.([a-zA-Z_][a-zA-Z0-9_]*)\\b");
+        java.util.regex.Matcher mm = mentionPat.matcher(body);
+        java.util.LinkedHashSet<String> falseClaims = new java.util.LinkedHashSet<>();
+        while (mm.find()) {
+            String schema = mm.group(1).toLowerCase(java.util.Locale.ROOT);
+            if (!KNOWN_SCHEMAS.contains(schema)) {
+                continue;
+            }
+            String table = schema + "." + mm.group(2).toLowerCase(java.util.Locale.ROOT);
+            if (queried.contains(table)) {
+                continue;
+            }
+            int winStart = Math.max(0, mm.start() - DISCLOSURE_PROXIMITY_CHARS);
+            int winEnd = Math.min(body.length(), mm.end() + DISCLOSURE_PROXIMITY_CHARS);
+            if (PROVENANCE_CLAIM_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                falseClaims.add(table);
+            }
+        }
+        if (falseClaims.isEmpty()) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "This report cannot be published yet: it claims to have queried, computed from, "
+            + "or live-scanned a table this session never actually called SQL against — "
+            + String.join(", ", falseClaims) + ". Either the table was named by mistake for "
+            + "the one actually queried, or the claim needs to go — a reader cannot tell "
+            + "provenance you did not really have from provenance you did. If you meant a "
+            + "different table, run the real query against it and cite that one instead; if "
+            + "the figure genuinely came from a source outside this corpus (a paper, a press "
+            + "release), say so plainly rather than describing it as warehouse-native.");
+    }
+
+    /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
+     *  the order the tally tiles render in. */
+    static final String[] VERDICTS = {"true", "mostly true", "partially true",
+        "mostly false", "false", "not checkable here", "stale vintage"};
+
+    /**
+     * The claim-by-claim table an article validation publishes. A verdict without the
+     * figures on both sides is an opinion; the table forces both figures, the table they came
+     * from, and both vintages onto the page, and tallies the verdicts so a reader sees the
+     * shape of the article's accuracy before the detail.
+     */
+    /** Validates one sub-rating ({@code count} + {@code explanation}) of a SPLIT {@code
+     *  pinocchios} object, e.g. the {@code fidelity} or {@code
+     *  claims_accuracy} field. */
+    private static void validatePinocchiosSubRating(JsonNode pinocchios, String field) {
+        JsonNode sub = pinocchios.path(field);
+        if (!sub.isObject() || !sub.hasNonNull("count") || !sub.hasNonNull("explanation")
+                || sub.path("explanation").asText("").trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                "pinocchios." + field + " needs both a 'count' (0-4) and a non-empty "
+                + "'explanation' -- a split rating needs both halves filled in, not just one.");
+        }
+        int count = sub.path("count").asInt(-1);
+        if (count < 0 || count > 4) {
+            throw new IllegalArgumentException(
+                "pinocchios." + field + ".count must be 0-4 (Washington Post Fact Checker "
+                + "scale), got " + count);
+        }
+    }
+
+    /** Renders one Pinocchios banner. {@code label} is null for a SINGLE overall rating, or
+     *  the sub-rating's name ("Reporting Accuracy", "Subject Claims Accuracy") for SPLIT. */
+    private static String pinocchioBadge(String label, JsonNode rating) {
+        if (rating == null || !rating.isObject()) {
+            return "";
+        }
+        int count = rating.path("count").asInt(0);
+        String explanation = rating.path("explanation").asText("");
+        StringBuilder icons = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            icons.append(i < count ? "🤥" : "○");
+        }
+        String verdict = count == 0 ? "No Pinocchios — true or no significant issues"
+            : count + " of 4 Pinocchios";
+        String heading = label == null ? verdict : ReportPage.esc(label) + ": " + verdict;
+        return "<div class=\"pinocchio-rating\"><p><strong>" + icons + " " + heading
+            + "</strong></p><p>" + ReportPage.esc(explanation) + "</p></div>\n";
+    }
+
+    private static ReportPage.Section claimsSection(JsonNode claims, JsonNode pinocchios) {
+        java.util.Map<String, Integer> tally = new java.util.LinkedHashMap<>();
+        for (String v : VERDICTS) {
+            tally.put(v, Integer.valueOf(0));
+        }
+        StringBuilder rows = new StringBuilder();
+        StringBuilder details = new StringBuilder();
+        int n = 0;
+        for (JsonNode c : claims) {
+            String assertion = c.path("assertion").asText("").trim();
+            String verdict = c.path("verdict").asText("").trim()
+                .toLowerCase(java.util.Locale.ROOT);
+            if (assertion.isEmpty() || verdict.isEmpty()) {
+                throw new IllegalArgumentException("each claim needs a non-empty 'assertion' "
+                    + "and 'verdict'; got " + c);
+            }
+            if (!tally.containsKey(verdict)) {
+                throw new IllegalArgumentException("claim verdict must be one of "
+                    + String.join(" | ", VERDICTS) + "; got '" + verdict + "' for: "
+                    + assertion);
+            }
+            tally.put(verdict, Integer.valueOf(tally.get(verdict).intValue() + 1));
+            n++;
+            String cls = "verdict-" + verdict.replace(' ', '-');
+            rows.append("<tr class=\"").append(cls).append("\">")
+                .append("<td>").append(n).append("</td>")
+                .append("<td>").append(ReportPage.esc(assertion)).append("</td>")
+                .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong></td>")
+                .append("</tr>\n");
+
+            details.append("<details class=\"claim-detail ").append(cls).append("\">")
+                .append("<summary>#").append(n).append(" &middot; <strong>")
+                .append(ReportPage.esc(verdict)).append("</strong> &mdash; ")
+                .append(ReportPage.esc(assertion)).append("</summary>\n")
+                .append("<dl>\n");
+            appendDetailRow(details, "Article says", c.path("article_value").asText(""));
+            String warehouseValue = c.path("warehouse_value").asText("");
+            if (!warehouseValue.isEmpty() || c.hasNonNull("table")) {
+                String wv = ReportPage.esc(warehouseValue)
+                    + (c.hasNonNull("table")
+                        ? " <code>" + ReportPage.esc(c.get("table").asText()) + "</code>" : "");
+                details.append("<dt>Warehouse says</dt><dd>").append(wv).append("</dd>\n");
+            }
+            String indep = c.path("independent_value").asText("");
+            JsonNode srcs = c.path("sources");
+            boolean hasSrcs = srcs.isArray() && srcs.size() > 0;
+            if (!indep.isEmpty() || hasSrcs) {
+                details.append("<dt>Independent evidence</dt><dd>")
+                    .append(ReportPage.esc(indep));
+                if (hasSrcs) {
+                    details.append("<ul class=\"claim-sources\">");
+                    for (JsonNode sn : srcs) {
+                        String t = sn.isObject() ? sn.path("title").asText("") : sn.asText("");
+                        String u = sn.isObject() ? sn.path("url").asText("") : "";
+                        if (t.isEmpty() && u.isEmpty()) {
+                            continue;
+                        }
+                        details.append("<li>");
+                        if (!u.isEmpty()) {
+                            details.append("<a href=\"").append(ReportPage.esc(u)).append("\">")
+                                .append(ReportPage.esc(t.isEmpty() ? u : t)).append("</a>");
+                        } else {
+                            details.append(ReportPage.esc(t));
+                        }
+                        details.append("</li>");
+                    }
+                    details.append("</ul>");
+                }
+                details.append("</dd>\n");
+            }
+            String artVintage = c.path("article_vintage").asText("");
+            String whVintage = c.path("warehouse_vintage").asText("");
+            if (!artVintage.isEmpty() || !whVintage.isEmpty()) {
+                details.append("<dt>Vintage article / warehouse</dt><dd>")
+                    .append(ReportPage.esc(artVintage)).append(" / ")
+                    .append(ReportPage.esc(whVintage)).append("</dd>\n");
+            }
+            appendDetailRow(details, "Why", c.path("reason").asText(""));
+            details.append("</dl>\n");
+            if (c.hasNonNull("sql") && !c.get("sql").asText().isEmpty()) {
+                details.append("<details class=\"sqltoggle\"><summary>Show SQL</summary><pre><code>")
+                    .append(ReportPage.esc(c.get("sql").asText()))
+                    .append("</code></pre></details>\n");
+            }
+            details.append("</details>\n");
+        }
+        if (n == 0) {
+            return null;
+        }
+        StringBuilder tiles = new StringBuilder("<p>");
+        for (java.util.Map.Entry<String, Integer> t : tally.entrySet()) {
+            if (t.getValue().intValue() > 0) {
+                tiles.append("<strong>").append(t.getValue()).append("</strong> ")
+                    .append(ReportPage.esc(t.getKey())).append(" &middot; ");
+            }
+        }
+        tiles.append("<strong>").append(n).append("</strong> assertions checked</p>\n");
+        String pinocchioHtml = "";
+        if (pinocchios != null && pinocchios.isObject()) {
+            boolean isSplit = pinocchios.has("fidelity")
+                || pinocchios.has("claims_accuracy");
+            if (isSplit) {
+                pinocchioHtml = pinocchioBadge("Fidelity", pinocchios.path("fidelity"))
+                    + pinocchioBadge("Claims Accuracy", pinocchios.path("claims_accuracy"));
+            } else {
+                pinocchioHtml = pinocchioBadge(null, pinocchios);
+            }
+        }
+        String html = pinocchioHtml + tiles
+            + "<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th>"
+            + "</tr></thead><tbody>\n" + rows + "</tbody></table>\n"
+            + "<p class=\"note\">Verdicts: true, mostly true, partially true, mostly false, "
+            + "false, not checkable here (no table carries the measure), stale vintage (the "
+            + "article cites a release this corpus has not loaded — a freshness gap, not a "
+            + "falsehood).</p>\n"
+            + "<h3>Claim detail</h3>\n" + details;
+        return new ReportPage.Section("Claim-by-claim verdicts", html);
+    }
+
+    private static void appendDetailRow(StringBuilder details, String label, String value) {
+        if (value == null || value.isEmpty()) {
+            return;
+        }
+        details.append("<dt>").append(ReportPage.esc(label)).append("</dt><dd>")
+            .append(ReportPage.esc(value)).append("</dd>\n");
+    }
+
+    /** The queries and statistical calls this session ran, as a report section, so the SQL
+     *  behind every figure is on the page a reader is handed rather than only the calls the
+     *  author chose to cite. Skipped when nothing ran. */
+    private static ReportPage.Section queryAppendix() {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        StringBuilder sb = new StringBuilder();
+        int n = 0;
+        for (ObjectNode e : snapshot) {
+            if (!e.hasNonNull("sql") || e.has("error")) {
+                continue;
+            }
+            n++;
+            sb.append("<details class=\"sqltoggle\"><summary>")
+                .append(ReportPage.esc(e.path("tool").asText("")))
+                .append(e.has("rows") ? " — " + e.get("rows").asInt() + " rows" : "")
+                .append(" — ").append(e.path("ms").asLong()).append(" ms")
+                .append("</summary><pre><code>").append(ReportPage.esc(e.get("sql").asText()))
+                .append("</code></pre></details>\n");
+        }
+        if (n == 0) {
+            return null;
+        }
+        return new ReportPage.Section("Every query behind this report",
+            "<p>" + n + " warehouse " + (n == 1 ? "call" : "calls") + " ran in this session, "
+            + "in order. Each is reproducible against the same snapshot.</p>\n" + sb);
     }
 
     /**
@@ -4758,39 +5827,334 @@ public class McpServer {
     }
 
     /**
-     * Strips a caller-written {@code LIMIT n} when a {@code FETCH FIRST ... ROWS ONLY} clause
-     * is ALSO present in the same statement -- a combination no SQL dialect this server serves
-     * accepts, so it always fails to parse. Returns {@code sql} unchanged when only one (or
-     * neither) clause is present.
+     * This dialect accepts only {@code FETCH FIRST n ROWS ONLY} -- never bare {@code LIMIT n} --
+     * and a statement carrying both fails to parse outright rather than silently preferring
+     * one. Observed live, twice: a caller trained on Postgres-style {@code LIMIT} defaults to
+     * it out of habit while ALSO following this tool's own "Add FETCH FIRST N ROWS ONLY"
+     * guidance, producing {@code "... LIMIT 5 FETCH FIRST 500 ROWS ONLY"}; and a caller writes
+     * {@code LIMIT n} alone with no {@code FETCH FIRST} at all. Both are mechanical to fix
+     * without a round trip: when only {@code LIMIT n} is present it is rewritten to the accepted
+     * syntax; when {@code FETCH FIRST} is ALSO present, the redundant {@code LIMIT n} is
+     * dropped rather than guessing which cap the caller meant to keep.
      *
-     * <p>Observed live: a caller trained on Postgres-style {@code LIMIT} defaulted to it out of
-     * habit while ALSO following this tool's own "Add FETCH FIRST N ROWS ONLY" guidance,
-     * producing {@code "... LIMIT 5 FETCH FIRST 500 ROWS ONLY"} -- two conflicting caps, neither
-     * negotiable with the other. {@code FETCH FIRST} is kept (it is the syntax this dialect's
-     * own guidance teaches, and what {@link #runSqlRows}'s own auto-append also uses), and the
-     * {@code LIMIT} clause is removed rather than burning a round trip on a parse failure that
-     * is certain in advance.
+     * <p>The first version of this method used a plain substring check for {@code " limit "}
+     * (space on both sides) and missed the exact failure it exists to catch: a multi-line
+     * statement with {@code LIMIT} at the start of its own line, preceded by a newline rather
+     * than a space, left the guard's condition false and the broken SQL ran unrepaired. This
+     * version does its own quote/comment-aware character scan instead of a substring or regex
+     * match, so whitespace, case, and position never matter.
      */
     static String stripRedundantLimitClause(String sql) {
-        String lower = sql.toLowerCase(java.util.Locale.ROOT);
-        if (!lower.contains("fetch first") || !lower.contains(" limit ")) {
+        if (sql == null || sql.isEmpty()) {
             return sql;
         }
-        String stripped = sql.replaceAll("(?i)\\bLIMIT\\s+\\d+\\b\\s*", "");
-        if (!stripped.equals(sql)) {
-            LAST_REPAIR_NOTICE.set(
-                "Both a LIMIT clause and a FETCH FIRST ... ROWS ONLY clause were present in "
-                + "the same statement -- only one row-limiting clause is allowed. The LIMIT "
-                + "clause was removed and the statement ran as: " + stripped);
+        String lower = sql.toLowerCase(java.util.Locale.ROOT);
+        if (!lower.contains("limit")) {
+            return sql;
         }
+        int n = sql.length();
+        boolean hasFetch = false;
+        int limitStart = -1;
+        int limitEnd = -1;
+        String limitDigits = null;
+        int i = 0;
+        while (i < n) {
+            char ch = sql.charAt(i);
+            if (ch == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                i = nl < 0 ? n : nl;
+                continue;
+            }
+            if (ch == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int close = sql.indexOf("*/", i + 2);
+                i = close < 0 ? n : close + 2;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                int j = i + 1;
+                while (j < n) {
+                    if (sql.charAt(j) == ch) {
+                        if (j + 1 < n && sql.charAt(j + 1) == ch) {
+                            j += 2;
+                            continue;
+                        }
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                i = Math.min(j, n);
+                continue;
+            }
+            if (Character.isLetter(ch)) {
+                int j = i;
+                while (j < n
+                        && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                    j++;
+                }
+                String word = sql.substring(i, j);
+                if ("fetch".equalsIgnoreCase(word)) {
+                    hasFetch = true;
+                } else if ("limit".equalsIgnoreCase(word) && limitStart < 0) {
+                    int k = j;
+                    while (k < n && Character.isWhitespace(sql.charAt(k))) {
+                        k++;
+                    }
+                    int digitsStart = k;
+                    while (k < n && Character.isDigit(sql.charAt(k))) {
+                        k++;
+                    }
+                    if (k > digitsStart) {
+                        limitStart = i;
+                        limitEnd = k;
+                        limitDigits = sql.substring(digitsStart, k);
+                    }
+                }
+                i = j;
+                continue;
+            }
+            i++;
+        }
+        if (limitStart < 0) {
+            return sql;
+        }
+        if (!hasFetch) {
+            String rewritten = sql.substring(0, limitStart) + "FETCH FIRST " + limitDigits
+                + " ROWS ONLY" + sql.substring(limitEnd);
+            LAST_REPAIR_NOTICE.set(
+                "LIMIT " + limitDigits + " is not valid in this dialect -- only FETCH FIRST n "
+                + "ROWS ONLY is accepted. Rewritten and run as: " + rewritten);
+            return rewritten;
+        }
+        int delStart = limitStart;
+        while (delStart > 0 && Character.isWhitespace(sql.charAt(delStart - 1))) {
+            delStart--;
+        }
+        String stripped = sql.substring(0, delStart) + sql.substring(limitEnd);
+        LAST_REPAIR_NOTICE.set(
+            "Both a LIMIT clause and a FETCH FIRST ... ROWS ONLY clause were present in the "
+            + "same statement -- only one row-limiting clause is allowed. The LIMIT clause was "
+            + "removed and the statement ran as: " + stripped);
         return stripped;
+    }
+
+    /**
+     * This dialect has exactly one registered {@code DATE_TRUNC} operator -- Calcite's
+     * BigQuery-library one ({@code SqlLibraryOperators.DATE_TRUNC}), whose signature is
+     * {@code DATE_TRUNC(<DATE_OR_TIMESTAMP>, <DATETIME_INTERVAL>)}: the date/timestamp
+     * FIRST, an unquoted time-unit identifier (MONTH, YEAR, ...) SECOND. A caller writing
+     * the PostgreSQL/DuckDB convention instead -- {@code DATE_TRUNC('month', filing_date)},
+     * unit string first, quoted -- fails Calcite's own validator (not DuckDB's; confirmed
+     * live 2026-09-11 by the error's {@code <TYPE>}-bracket format, which matches Calcite's
+     * {@code canNotApplyOp2Type}/{@code assignabletypesmustmatch} message style, not
+     * DuckDB's own {@code Binder Error: ... 'date_trunc(TYPE, TYPE)'} format) with
+     * {@code No match found for function signature DATE_TRUNC(<CHARACTER>, <DATE>)} --
+     * because the quoted-first form is not the operator's real signature at all, not
+     * because of the second argument's type. Casting either argument therefore cannot fix
+     * this; the argument ORDER and the unit's quoting are what have to change. Every
+     * govdata date column is a natural, correct thing to truncate, so the rewrite belongs
+     * here rather than in a warning the caller has to notice and work around: swap the two
+     * arguments and strip the unit's quotes, e.g. {@code DATE_TRUNC('month', filing_date)}
+     * becomes {@code DATE_TRUNC(filing_date, MONTH)}. Left untouched (and NOT counted as a
+     * repair) when the unit argument is already unquoted -- the caller already wrote the
+     * form this dialect accepts.
+     *
+     * <p>Character-scans for a top-level {@code DATE_TRUNC(} call (skipping comments and
+     * quoted strings, so a mention inside a string literal or an alias is left alone), then
+     * paren/quote-aware-splits the call into its two arguments so a date argument that is
+     * itself a nested call (e.g. {@code DATE_TRUNC('month', COALESCE(a, b))}) is captured
+     * whole rather than truncated at its first internal comma or paren. Every call in the
+     * statement is repaired, not only the first, since two truncations of different columns
+     * in the same SELECT are common.
+     */
+    static String repairDateTruncDateArg(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return sql;
+        }
+        String lower0 = sql.toLowerCase(java.util.Locale.ROOT);
+        if (!lower0.contains("date_trunc")) {
+            return sql;
+        }
+        StringBuilder out = new StringBuilder(sql.length() + 16);
+        int n = sql.length();
+        int i = 0;
+        boolean repaired = false;
+        String lastCall = null;
+        while (i < n) {
+            char ch = sql.charAt(i);
+            if (ch == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                int stop = nl < 0 ? n : nl;
+                out.append(sql, i, stop);
+                i = stop;
+                continue;
+            }
+            if (ch == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int close = sql.indexOf("*/", i + 2);
+                int stop = close < 0 ? n : close + 2;
+                out.append(sql, i, stop);
+                i = stop;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                int j = i + 1;
+                while (j < n) {
+                    if (sql.charAt(j) == ch) {
+                        if (j + 1 < n && sql.charAt(j + 1) == ch) {
+                            j += 2;
+                            continue;
+                        }
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                out.append(sql, i, Math.min(j, n));
+                i = Math.min(j, n);
+                continue;
+            }
+            if (Character.isLetter(ch) || ch == '_') {
+                int j = i;
+                while (j < n
+                        && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                    j++;
+                }
+                String word = sql.substring(i, j);
+                int k = j;
+                while (k < n && Character.isWhitespace(sql.charAt(k))) {
+                    k++;
+                }
+                if ("date_trunc".equalsIgnoreCase(word) && k < n && sql.charAt(k) == '(') {
+                    int[] arg1End = new int[1];
+                    int[] callEnd = new int[1];
+                    if (splitDateTruncCall(sql, k, arg1End, callEnd)) {
+                        String arg1Trim = sql.substring(k + 1, arg1End[0]).trim();
+                        String arg2Trim = sql.substring(arg1End[0] + 1, callEnd[0] - 1).trim();
+                        boolean unitIsQuotedFirst = arg1Trim.length() >= 2
+                            && (arg1Trim.charAt(0) == '\'' || arg1Trim.charAt(0) == '"');
+                        if (unitIsQuotedFirst) {
+                            String unit = arg1Trim.substring(1, arg1Trim.length() - 1)
+                                .toUpperCase(java.util.Locale.ROOT);
+                            // The operator's first operand must resolve to DATE or TIMESTAMP;
+                            // many govdata date columns are declared VARCHAR, which the
+                            // operator rejects outright (confirmed live 2026-09-11: "Cannot
+                            // apply 'DATE_TRUNC' to arguments of type 'DATE_TRUNC(<VARCHAR>,
+                            // <INTERVAL MONTH>)'"). CAST(... AS TIMESTAMP) is a no-op when the
+                            // column is already DATE/TIMESTAMP and resolves the mismatch when
+                            // it is a VARCHAR-typed date column.
+                            String dateUpper = arg2Trim.toUpperCase(java.util.Locale.ROOT);
+                            boolean alreadyDated = dateUpper.startsWith("DATE ")
+                                || dateUpper.startsWith("TIMESTAMP")
+                                || dateUpper.startsWith("NOW()")
+                                || dateUpper.startsWith("CURRENT_TIMESTAMP")
+                                || dateUpper.startsWith("CURRENT_DATE")
+                                || (dateUpper.startsWith("CAST(")
+                                    && (dateUpper.endsWith("AS DATE)")
+                                        || dateUpper.endsWith("AS TIMESTAMP)")));
+                            String dateArg = alreadyDated ? arg2Trim
+                                : "CAST(" + arg2Trim + " AS TIMESTAMP)";
+                            String rewrittenCall = "(" + dateArg + ", " + unit + ")";
+                            out.append(word).append(rewrittenCall);
+                            repaired = true;
+                            lastCall = word + rewrittenCall;
+                        } else {
+                            out.append(word).append(sql, k, callEnd[0]);
+                        }
+                        i = callEnd[0];
+                        continue;
+                    }
+                }
+                out.append(word);
+                i = j;
+                continue;
+            }
+            out.append(ch);
+            i++;
+        }
+        if (repaired) {
+            LAST_REPAIR_NOTICE.set(
+                "DATE_TRUNC in this dialect takes the date/timestamp FIRST (cast to TIMESTAMP "
+                + "if not already a date/timestamp type) and an unquoted time-unit SECOND "
+                + "(DATE_TRUNC(CAST(col AS TIMESTAMP), MONTH)), not PostgreSQL/DuckDB's "
+                + "DATE_TRUNC('month', col) -- the quoted-unit-first form has no matching "
+                + "function signature here. Rewritten and run as: " + lastCall);
+            return out.toString();
+        }
+        return sql;
+    }
+
+    /**
+     * From an opening paren at {@code sql.charAt(openParen) == '('}, finds the top-level
+     * comma separating a two-argument call's arguments and the paren that closes the call,
+     * skipping nested parens, quoted strings, and comments. Returns false (leaving the
+     * output indices unset) if the call is malformed -- not two comma-separated arguments,
+     * or unterminated -- so the caller leaves it untouched rather than guessing.
+     */
+    private static boolean splitDateTruncCall(String sql, int openParen, int[] outArg1End,
+            int[] outCallEnd) {
+        int n = sql.length();
+        int depth = 0;
+        int commaAt = -1;
+        int i = openParen;
+        while (i < n) {
+            char ch = sql.charAt(i);
+            if (ch == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                i = nl < 0 ? n : nl;
+                continue;
+            }
+            if (ch == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int close = sql.indexOf("*/", i + 2);
+                i = close < 0 ? n : close + 2;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                int j = i + 1;
+                while (j < n) {
+                    if (sql.charAt(j) == ch) {
+                        if (j + 1 < n && sql.charAt(j + 1) == ch) {
+                            j += 2;
+                            continue;
+                        }
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                i = Math.min(j, n);
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                i++;
+                continue;
+            }
+            if (ch == ')') {
+                depth--;
+                if (depth == 0) {
+                    if (commaAt < 0) {
+                        return false;
+                    }
+                    outArg1End[0] = commaAt;
+                    outCallEnd[0] = i + 1;
+                    return true;
+                }
+                i++;
+                continue;
+            }
+            if (ch == ',' && depth == 1 && commaAt < 0) {
+                commaAt = i;
+            }
+            i++;
+        }
+        return false;
     }
 
     /** As {@link #runSqlOn} but hands back the rows themselves, so a caller that needs to
      *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
      *  serialized form is identical either way. */
     private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
-        String effective = stripRedundantLimitClause(sql);
+        String effective = repairDateTruncDateArg(stripRedundantLimitClause(sql));
         String lower = effective.toLowerCase();
         if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
             effective = effective.replaceAll(";\\s*$", "")
@@ -7520,9 +8884,15 @@ public class McpServer {
     /** {@link #diagnose} for the stats tools, which measure their own n and covariates. */
     private static ObjectNode diagnoseStats(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped) {
+        return diagnoseStats(sql, covariates, covariateCols, n, totalRows, dropped, null);
+    }
+
+    private static ObjectNode diagnoseStats(String sql, List<String> covariates,
+            double[][] covariateCols, int n, int totalRows, int dropped,
+            List<String> droppedLabels) {
         try {
             return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
-                totalRows, dropped);
+                totalRows, dropped, droppedLabels);
         } catch (Exception e) {
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
@@ -7571,7 +8941,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
     }
 
     /** {@link #statsResult(ObjectNode, String, List, StatsEngine.Extraction)} for the
@@ -7582,7 +8952,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
     }
 
     /** Attaches sample-size bookkeeping every stats tool result shares — how many source
@@ -7591,6 +8961,23 @@ public class McpServer {
     private static void addExtractionMeta(ObjectNode out, StatsEngine.Extraction ex) {
         out.put("rows_returned_by_sql", ex.totalRows);
         out.put("rows_dropped_for_null", ex.droppedForNull);
+        addDroppedExamples(out, ex.droppedLabels, ex.droppedForNull);
+    }
+
+    /** Which rows complete-case filtering removed, by label — so "n=45 of 51" comes with
+     *  the six names rather than leaving the caller to rediscover them. */
+    private static void addDroppedExamples(ObjectNode out, List<String> labels, int dropped) {
+        if (labels == null || labels.isEmpty()) {
+            return;
+        }
+        ArrayNode arr = out.putArray("rows_dropped_examples");
+        for (String l : labels) {
+            arr.add(l);
+        }
+        if (dropped > labels.size()) {
+            out.put("rows_dropped_examples_note",
+                "first " + labels.size() + " of " + dropped + " dropped rows");
+        }
     }
 
     /** Same as {@link #addExtractionMeta(ObjectNode, StatsEngine.Extraction)} for the
@@ -7598,6 +8985,7 @@ public class McpServer {
     private static void addExtractionMeta(ObjectNode out, StatsEngine.LabeledExtraction ex) {
         out.put("rows_returned_by_sql", ex.totalRows);
         out.put("rows_dropped_for_null", ex.droppedForNull);
+        addDroppedExamples(out, ex.droppedLabels, ex.droppedForNull);
     }
 
     /** Base for the AskAmerica API — system property, then env, then production. */

@@ -11,3 +11,26 @@ allprojects {
     }
   }
 }
+
+// The pgwire server's own JVM-side dependencies (arrow_bridge.py: RootAllocator, JdbcToArrow,
+// ArrowStreamWriter). Resolved on the root project, independent of the adapter: an adapter that
+// does not pull Arrow transitively (sharepoint, splunk) otherwise ships a bundle that cannot run a
+// single SELECT ("Class org.apache.arrow.memory.RootAllocator is not found"). The version matches
+// the vendored arrow-jdbc jar (pgwire-calcite/vendor/jars/arrow-jdbc-17.0.0.jar).
+rootProject {
+  tasks.register("pgwArrowCp") {
+    doLast {
+      def cfg = configurations.detachedConfiguration(
+        dependencies.create("org.apache.arrow:arrow-vector:17.0.0"),
+        dependencies.create("org.apache.arrow:arrow-memory-netty:17.0.0"),
+        dependencies.create("org.apache.arrow:arrow-format:17.0.0"),
+        // DuckDB JDBC: every adapter model.json sets executionEngine=duckdb, but file/ declares
+        // the driver compileOnly so it is absent from runtimeClasspath. Without it the bundle
+        // fails at startup with ClassNotFoundException: org.duckdb.DuckDBDriver (caught by the
+        // adapters smoke job). Version matches file/build.gradle.kts.
+        dependencies.create("org.duckdb:duckdb_jdbc:1.4.4.0"))
+      new File("/tmp/pgw-arrow-cp.txt").text = cfg.asPath
+      println "WROTE /tmp/pgw-arrow-cp.txt (" + cfg.files.size() + " entries)"
+    }
+  }
+}
