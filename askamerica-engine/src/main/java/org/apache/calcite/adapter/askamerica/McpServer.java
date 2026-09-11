@@ -806,6 +806,15 @@ public class McpServer {
             + "used per year — never deflate by hand from a remembered CPI figure, and a "
             + "nominal multi-year comparison is not growth). This adjusts for TIME only, not "
             + "PLACE.\n"
+            + "- **A recurring or ongoing phenomenon (a trade dispute, a policy wave, a crisis) "
+            + "has a CURRENT instance, and a question naming no year means that one, not "
+            + "whichever instance the literature covers best.** Measured live: a run answered "
+            + "'the trade war' with a rigorously-sourced, warehouse-verified 2018-19 episode "
+            + "while every other arm on the same question correctly identified 2025-26 (today's "
+            + "date) as the live one — sourcing rigor on the wrong episode still answers the "
+            + "wrong question. Before treating an episode as THE answer, check today's date "
+            + "against the episode's own window and name explicitly why that episode, not a "
+            + "more recent one, is the one being asked about.\n"
             + "- **MANDATORY: CALL find_recipe BEFORE any multi-step comparison** — places, "
             + "rates, multi-year trends, causal claims, a table's construction basis you have "
             + "not verified. Call it before deciding you're already certain of the method, not "
@@ -3092,6 +3101,7 @@ public class McpServer {
                         }
                     }
                     enforceExclusionDisclosure(secs);
+                    enforceTableProvenance(secs);
                     ReportPage.Section appendix = queryAppendix();
                     if (appendix != null) {
                         secs.add(appendix);
@@ -4377,6 +4387,39 @@ public class McpServer {
         return null;
     }
 
+    /** Every govdata schema this engine connects to. Used only to recognize a "schema.table"
+     *  mention in report PROSE as a real table reference worth checking provenance on — not
+     *  to scope a connection or validate a query. */
+    private static final java.util.Set<String> KNOWN_SCHEMAS = new java.util.HashSet<>(
+        java.util.Arrays.asList(
+            "sec", "geo", "econ", "census", "crime", "weather", "ref", "fec", "fedregister",
+            "cyber_vuln", "cyber_threat", "energy", "health", "edu", "econ_reference", "cftc",
+            "patents", "fiscal", "disasters", "housing", "transport", "environment",
+            "officials", "research", "lands", "ag", "banking"));
+
+    private static final java.util.regex.Pattern SQL_SCHEMA_TABLE_PAT =
+        java.util.regex.Pattern.compile(
+            "(?i)\\b(?:FROM|JOIN)\\s+\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\.\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?");
+
+    /** Every "schema.table" a query's FROM/JOIN clauses actually name, lowercased. Feeds
+     *  {@link #enforceTableProvenance}: a report claiming a table was queried when it never
+     *  appears here is a fabricated-provenance claim, not a stylistic slip. */
+    private static java.util.Set<String> extractTableNames(String sql) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        if (sql == null) {
+            return out;
+        }
+        java.util.regex.Matcher m = SQL_SCHEMA_TABLE_PAT.matcher(sql);
+        while (m.find()) {
+            String schema = m.group(1).toLowerCase(java.util.Locale.ROOT);
+            if (META_SCHEMAS.contains(schema)) {
+                continue;
+            }
+            out.add(schema + "." + m.group(2).toLowerCase(java.util.Locale.ROOT));
+        }
+        return out;
+    }
+
     private static ArrayNode query(String sql, int limit) throws Exception {
         // No pre-emptive schema check. extractSchema() plays no part in choosing the
         // connection — runSqlOn always uses the all-schemas catalog connection — so
@@ -4534,7 +4577,15 @@ public class McpServer {
         e.put("tool", tool);
         e.put("ms", ms);
         if (args != null && args.hasNonNull("sql")) {
-            e.put("sql", args.get("sql").asText());
+            String sqlText = args.get("sql").asText();
+            e.put("sql", sqlText);
+            java.util.Set<String> tables = extractTableNames(sqlText);
+            if (!tables.isEmpty()) {
+                ArrayNode tablesArr = e.putArray("tables");
+                for (String t : tables) {
+                    tablesArr.add(t);
+                }
+            }
         }
         if (args != null && args.isObject()) {
             ObjectNode summary = MAPPER.createObjectNode();
@@ -4781,6 +4832,78 @@ public class McpServer {
             + "and the headline statistic with and without them. Then call publish_report "
             + "again. See recipe report-what-an-exclusion-changed-not-only-that-you-made-one.");
         throw new IllegalArgumentException(msg.toString());
+    }
+
+    private static final java.util.regex.Pattern PROVENANCE_CLAIM_WORDS = java.util.regex.Pattern
+        .compile("(?i)computed from|queried (?:directly|live|from)|sourced directly|"
+            + "live[- ]scann?(?:ed)?|fetched directly from|pulled directly from|"
+            + "directly (?:via|from) the warehouse|warehouse[- ]native|live[- ]quer(?:y|ied)");
+
+    /**
+     * A report claiming it queried, computed from, or live-scanned a table it never actually
+     * touched this session is a fabricated-provenance claim, not a stylistic slip — measured
+     * live (q117, 2026-09-11): the judge caught "live scan" claimed against two tables with
+     * zero matching entries in {@code calls.jsonl}, wording a keyword grep for "computed
+     * from"/"queried directly" entirely missed. A caller's own honesty is not something to
+     * take on faith when the actual tool log is sitting right here to check it against.
+     *
+     * <p>Collects every "schema.table" any successful SQL call this session actually named
+     * (see {@link #extractTableNames}, fed into {@link #recordCall}'s {@code tables} field),
+     * then scans the report body for a "schema.table" mention — recognized by schema name,
+     * see {@link #KNOWN_SCHEMAS}, not by guessing at arbitrary dotted tokens — sitting near a
+     * provenance-claiming phrase. A table named that way but never queried refuses the
+     * publish; a table merely mentioned in passing (no provenance claim nearby) does not,
+     * since naming a table in prose without claiming to have queried it is not a claim this
+     * gate has any business policing.
+     */
+    private static void enforceTableProvenance(java.util.List<ReportPage.Section> secs) {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        java.util.Set<String> queried = new java.util.HashSet<>();
+        for (ObjectNode e : snapshot) {
+            for (JsonNode t : e.path("tables")) {
+                queried.add(t.asText().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        StringBuilder text = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            text.append(sec.heading == null ? "" : sec.heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+        }
+        String body = text.toString().replaceAll("<[^>]+>", " ");
+        java.util.regex.Pattern mentionPat = java.util.regex.Pattern.compile(
+            "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\.([a-zA-Z_][a-zA-Z0-9_]*)\\b");
+        java.util.regex.Matcher mm = mentionPat.matcher(body);
+        java.util.LinkedHashSet<String> falseClaims = new java.util.LinkedHashSet<>();
+        while (mm.find()) {
+            String schema = mm.group(1).toLowerCase(java.util.Locale.ROOT);
+            if (!KNOWN_SCHEMAS.contains(schema)) {
+                continue;
+            }
+            String table = schema + "." + mm.group(2).toLowerCase(java.util.Locale.ROOT);
+            if (queried.contains(table)) {
+                continue;
+            }
+            int winStart = Math.max(0, mm.start() - DISCLOSURE_PROXIMITY_CHARS);
+            int winEnd = Math.min(body.length(), mm.end() + DISCLOSURE_PROXIMITY_CHARS);
+            if (PROVENANCE_CLAIM_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                falseClaims.add(table);
+            }
+        }
+        if (falseClaims.isEmpty()) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "This report cannot be published yet: it claims to have queried, computed from, "
+            + "or live-scanned a table this session never actually called SQL against — "
+            + String.join(", ", falseClaims) + ". Either the table was named by mistake for "
+            + "the one actually queried, or the claim needs to go — a reader cannot tell "
+            + "provenance you did not really have from provenance you did. If you meant a "
+            + "different table, run the real query against it and cite that one instead; if "
+            + "the figure genuinely came from a source outside this corpus (a paper, a press "
+            + "release), say so plainly rather than describing it as warehouse-native.");
     }
 
     /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
