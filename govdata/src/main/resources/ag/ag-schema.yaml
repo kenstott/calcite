@@ -205,11 +205,14 @@ column_templates:
 dimension_values:
 
   # Annual USDA data publishes early the following year; iterate publish year and
-  # fetch data year = publish - 1 via {effective_year}. Earliest NASS digital record ~1997 per
-  # this comment's original claim — contradicted live 2026-09-11 (quickstats.nass.usda.gov
-  # returns full COUNTY-grain FIELD CROPS data for Iowa back to at least 1950, and STATE-grain
-  # back to at least 1925); not corrected here pending its own investigation, see
-  # kenstott/govdata-ops#204.
+  # fetch data year = publish - 1 via {effective_year}. NASS Quick Stats' own API answers for
+  # years decades before this default's 2010 start: confirmed live 2026-09-11
+  # (quickstats.nass.usda.gov, sector_desc=CROPS&group_desc=FIELD CROPS, Iowa CORN) at
+  # STATE grain back to 1866 and COUNTY grain back to 1929 (0 rows below 1929 — county
+  # enumeration starts there), with 1925/1970 state-level yields matching published historical
+  # figures. minYear on nass_year_range below still gates any backfill to protect what's
+  # already loaded and cap request volume against NASS's Azure-WAF throttling — see that
+  # comment and kenstott/govdata-ops#204/#71/D-223.
   ag_year_range: &ag_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
@@ -218,8 +221,9 @@ dimension_values:
 
   # minYear on each of these three matches each table's currently-loaded floor (verified live
   # against production MinIO — see kenstott/govdata-ops#115), NOT each source's absolute
-  # historical limit (NASS's own API answers for years decades earlier — see ag_year_range's
-  # comment above and #204). The floor here exists to protect what is already loaded and
+  # historical limit (NASS's own API answers for years decades earlier — confirmed to 1866
+  # state / 1929 county, see ag_year_range's comment above and #204). The floor here exists
+  # to protect what is already loaded and
   # maintained: without it, an explicit backfill/revisit run (GOVDATA_START_YEAR set below
   # ag_year_range's 2010 default) has nothing stopping it from silently requesting years this
   # table was never meant to carry. Widening ag_year_range's own default `start` instead was
