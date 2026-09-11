@@ -29,7 +29,7 @@ public class FdicLocationsTransformer extends AbstractFdicTransformer {
     putText(row, "city", rec, "CITY");
     putText(row, "state_abbr", rec, "STALP");
     putText(row, "zip", rec, "ZIP");
-    putText(row, "county_fips", rec, "STCNTY");
+    putCountyFips(row, "county_fips", rec, "STCNTY");
     putText(row, "cbsa_name", rec, "CBSA");
     putDouble(row, "latitude", rec, "LATITUDE");
     putDouble(row, "longitude", rec, "LONGITUDE");

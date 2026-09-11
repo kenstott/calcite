@@ -103,6 +103,22 @@ abstract class AbstractFdicTransformer implements ResponseTransformer {
     }
   }
 
+  /**
+   * Like {@link #putText}, for FDIC's county-FIPS fields (STCNTY / STCNTYBR) specifically:
+   * FDIC uses the literal "00" for a foreign branch (confirmed live against
+   * banks.data.fdic.gov/api/locations — every STCNTY=00 row is a "(FRGN)"-suffixed office in
+   * London, Nassau, Grand Cayman, Singapore, etc. with no US state at all), not a real county.
+   * Passing it through as-is would read as a valid-looking 2-digit FIPS fragment.
+   */
+  protected static void putCountyFips(ObjectNode row, String col, JsonNode rec, String field) {
+    JsonNode v = rec.path(field);
+    if (v.isMissingNode() || v.isNull() || "00".equals(v.asText())) {
+      row.putNull(col);
+    } else {
+      row.put(col, v.asText());
+    }
+  }
+
   protected static void putInt(ObjectNode row, String col, JsonNode rec, String field) {
     JsonNode v = rec.path(field);
     if (v.isMissingNode() || v.isNull() || (v.isTextual() && v.asText().isEmpty())) {

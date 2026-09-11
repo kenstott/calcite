@@ -27,7 +27,7 @@ public class FdicSodTransformer extends AbstractFdicTransformer {
     putText(row, "address", rec, "ADDRESBR");
     putText(row, "city", rec, "CITY2BR");
     putText(row, "state_abbr", rec, "STALPBR");
-    putText(row, "county_fips", rec, "STCNTYBR");
+    putCountyFips(row, "county_fips", rec, "STCNTYBR");
     putText(row, "zip", rec, "ZIPBR");
     putDouble(row, "latitude", rec, "SIMS_LATITUDE");
     putDouble(row, "longitude", rec, "SIMS_LONGITUDE");
