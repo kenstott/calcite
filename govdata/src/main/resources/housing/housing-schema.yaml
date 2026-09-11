@@ -1078,6 +1078,143 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # CFPB HMDA — lending activity aggregated to census-tract grain
+  # ---------------------------------------------------------------------------
+  - name: hmda_lending_by_tract
+    # Freshness gate: FFIEC CFPB data-browser API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token). HASH freshness makes EtlPipeline
+    # call the provider's fetch twice per batch (once to hash, once to write) relying on
+    # the raw cache to make the second call free — real here, not just a courtesy:
+    # HmdaLoanLevelAggregateProvider routes its ~4.2GB/year download through rawCache
+    # specifically so that second call reads from the just-written cache entry instead
+    # of re-downloading from CFPB (confirmed live 2026-09-11: bypassing the cache made
+    # the second call re-fetch the full file, doubling a 23-minute download).
+    freshness:
+      type: hash
+    pattern: "type=hmda_lending_by_tract/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Real census-tract-grain HMDA lending activity — the tract/county grain
+      housing.hmda_loans cannot provide. That table's aggregations-endpoint
+      `counties=` filter is accepted and echoed back by the API but never actually
+      applied server-side (confirmed live 2026-09-11: Story County IA and Loving
+      County TX, population ~64, both returned their entire state's total). Real
+      tract/county grain requires the loan-level data instead: this table downloads
+      CFPB's "Nationwide Data Subset" loan-level export
+      (ffiec.cfpb.gov/v2/data-browser-api/view/nationwide/csv) for each year and
+      aggregates to (state, county, tract) via HmdaLoanLevelAggregateProvider — an
+      embedded DuckDB query streamed directly off the downloaded file, never loaded
+      into JVM heap as a row list. The API requires an explicit actions_taken filter
+      alongside years or it silently returns a small undocumented partial subset
+      instead of an error (confirmed live: omitting it returned ~261K rows for 2023;
+      passing all 8 action codes returned the real ~1.11M). origination_count/
+      denial_count/origination_total_amount are counted from real loan-level records,
+      not derived or estimated. tract_population/tract_minority_population_percent/
+      tract_to_msa_income_percentage are the source's own per-tract context fields
+      (constant across a tract's loan records within a year), carried through for
+      convenience. Complements housing.hmda_loans' state x action x purpose funnel
+      view rather than replacing it — this table has no purpose/demographic
+      breakdown by design, to keep the first tract-grain build scoped; that
+      breakdown is a natural follow-on, not included here. Joins to geo.counties via
+      county_fips and to geo.census_tracts via census_tract, where those exist.
+
+    dimensions:
+      type:
+        - hmda_lending_by_tract
+      year: *hmda_year_range
+
+    columns:
+      - name: state_code
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS code (FK to geo.counties)
+      - name: census_tract
+        type: string
+        nullable: false
+        comment: 11-digit census tract FIPS code; PK component with year
+      - name: application_count
+        type: long
+        nullable: true
+        comment: Total loan application/action records in this tract/year (all action_taken values)
+      - name: origination_count
+        type: long
+        nullable: true
+        comment: Count of records with action_taken=1 (loan originated)
+      - name: denial_count
+        type: long
+        nullable: true
+        comment: Count of records with action_taken=3 (application denied)
+      - name: origination_total_amount
+        type: double
+        nullable: true
+        comment: Sum of loan_amount (USD) across originated loans (action_taken=1) in this tract/year
+      - name: origination_median_amount
+        type: double
+        nullable: true
+        comment: Median loan_amount (USD) across originated loans in this tract/year
+      - name: avg_interest_rate
+        type: double
+        nullable: true
+        comment: >
+          Average interest rate across originated loans with a real reported rate;
+          null when the source's interest_rate is 'NA' or 'Exempt' for a record,
+          not fabricated
+      - name: tract_population
+        type: double
+        nullable: true
+        comment: Tract population, as carried by the source's own per-tract context field
+      - name: tract_minority_population_percent
+        type: double
+        nullable: true
+      - name: tract_to_msa_income_percentage
+        type: double
+        nullable: true
+        comment: Tract median family income as a percentage of the MSA/MD median family income
+      - name: year
+        type: integer
+        nullable: false
+        comment: HMDA filing/activity year; PK component with census_tract
+
+    source:
+      type: http
+      # Placeholder URL — HmdaLoanLevelAggregateProvider builds and fetches the real
+      # per-year nationwide/csv URL itself (year comes from the dimension variable,
+      # not URL templating) and never uses HttpSource's own fetch path.
+      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/nationwide/csv"
+      method: GET
+      response:
+        format: json  # ignored: HmdaLoanLevelAggregateProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.HmdaLoanLevelAggregateProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hmda_lending_by_tract/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hmda_lending_by_tract
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # CFPB HMDA — applicant demographics (delta year × state, 3 fetches/unit)
   # ---------------------------------------------------------------------------
   - name: hmda_applicant_demographics
