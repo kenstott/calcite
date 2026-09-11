@@ -1079,6 +1079,154 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: chr_premature_death_trends
+    # Content-hash gate: unlike chr_premature_death's per-release file, this trends file's
+    # ETag behavior on countyhealthrankings.org has not been verified live — hash is always
+    # safe (downloads once, then skips reprocessing when the body is byte-identical).
+    freshness:
+      type: hash
+    pattern: "type=chr_premature_death_trends"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Premature Death (years of potential life lost before age 75, per 100,000 population)
+      historical time series at nation/state/county grain, from County Health Rankings &
+      Roadmaps' own "Trends" data release — a single file spanning 46 yearspans, 1997-1999
+      through 2023 (verified live 2026-09-11: Story County IA numerator/rate values for the
+      earliest yearspans are internally consistent and plausible). Complements
+      chr_premature_death (the current single-vintage release, which also carries
+      race/ethnicity-stratified rates the trends file does not) with the long-run history
+      that table cannot provide — chr_premature_death has no year dimension and only ever
+      holds the latest release. Sourced from the same CHR "Trends" CSV used for every CHR
+      measure (chr_trends_csv_{release_year}.csv); this table is scoped to Premature Death
+      (measureid=1) via source.rowFilter — the file's other ~14 measures are a real,
+      documented follow-on, not ingested here. yearspan is a rolling 3-year window through
+      the mid-2010s, then single calendar years in recent releases; period_end_year (the
+      span's last year) is provided for time-ordering and joins. geo_level distinguishes
+      nation/state/county rows sharing this one table — filter to geo_level='county' rather
+      than summing across levels. Joins to geo.counties via fips_code (county rows only).
+
+    columns:
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: "CASE WHEN src.\"statecode\" = '00' THEN 'nation' WHEN src.\"countycode\" = '000' THEN 'state' ELSE 'county' END"
+        comment: "'nation', 'state', or 'county' — filter, don't sum across levels"
+      - name: state_fips
+        type: string
+        nullable: true
+        source: statecode
+        comment: 2-digit state FIPS ('00' for the national row)
+      - name: county_fips
+        type: string
+        nullable: true
+        source: countycode
+        comment: 3-digit county FIPS ('000' for state/nation rows)
+      - name: fips_code
+        type: string
+        nullable: true
+        expression: 'src."statecode" || src."countycode"'
+        comment: 5-digit combined FIPS code
+      - name: state_abbr
+        type: string
+        nullable: true
+        source: state
+        comment: FK to geo.state_ref.state_abbr (nation row carries 'US')
+      - name: name
+        type: string
+        nullable: true
+        source: county
+        comment: County, state, or "United States" name
+      - name: yearspan
+        type: string
+        nullable: true
+        source: yearspan
+        comment: Raw CHR yearspan as published — a 3-year rolling window (e.g. "1997-1999") for older releases, a single calendar year for recent ones
+      - name: period_end_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(RIGHT(src."yearspan", 4) AS INTEGER)'
+        comment: Last year of yearspan (or the year itself, for a single-year span) — for time-ordering and joins
+      - name: premature_death_numerator
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(src."numerator", '','', '''') AS DOUBLE)'
+        comment: Total years of potential life lost
+      - name: premature_death_denominator
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(src."denominator", '','', '''') AS DOUBLE)'
+        comment: Population denominator; null for a yearspan CHR did not publish a denominator for (not fabricated)
+      - name: premature_death_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(src."rawvalue", '','', '''') AS DOUBLE)'
+        comment: Years of potential life lost before age 75, per 100,000 population (age-adjusted)
+      - name: ci_low
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(src."cilow", '','', '''') AS DOUBLE)'
+      - name: ci_high
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(src."cihigh", '','', '''') AS DOUBLE)'
+      - name: chr_release_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."chrreleaseyear" AS INTEGER)'
+        comment: CHR release year that last restated this yearspan's value; null when never restated after first publication
+      - name: trend_break_flag
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."trendbreak" AS INTEGER)'
+        comment: CHR's own flag marking a methodology break at this yearspan (non-null only where CHR flagged one)
+      - name: differ_flag
+        type: string
+        nullable: true
+        source: differflag
+        comment: CHR's own data-differs annotation, verbatim (sparse; domain not independently documented by CHR)
+
+    source:
+      type: http
+      url: "https://www.countyhealthrankings.org/sites/default/files/media/document/chr_trends_csv_2025.csv"
+      method: GET
+      # Scoped to Premature Death only — see the table comment for why the file's other
+      # measures aren't ingested here.
+      rowFilter:
+        column: measurename
+        pattern: "^Premature death$"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - chr_premature_death_trends
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   # ==========================================================================
   # FDA ADVERSE EVENTS — FAERS reports, bulk partition ZIPs (download.open.fda.gov)
   # Year filter: GOVDATA_START_YEAR (default 2010); partitions enumerated from download.json
@@ -2015,7 +2163,13 @@ partitionedTables:
       county_fips is derived by concatenating FIPS_STATE_CD + FIPS_CNTY_CD (only
       when both are present at their expected 2-digit/3-digit widths). Source:
       data.cms.gov/data.json, dataset "Provider of Services File - Quality
-      Improvement and Evaluation System".
+      Improvement and Evaluation System". CORRECTED 2026-09-11: despite this
+      being a "current snapshot" release, CMS does NOT purge terminated facilities
+      from it — verified live (Hahnemann University Hospital's real 2019-09-06
+      closure, PRVDR_NUM 390290, is present in the current file alongside an
+      unrelated 1998 predecessor-CCN termination). This file therefore already
+      carries facility-level termination history; see cms_pos_termination_history
+      for the termination-code/date columns this table does not carry.
 
     columns:
       - name: provider_number
@@ -2130,6 +2284,398 @@ partitionedTables:
     dimensions:
       type:
         - cms_pos_facilities
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
+  # CMS POS TERMINATION HISTORY — closure/termination event per facility
+  # ==========================================================================
+  - name: cms_pos_termination_history
+    # Freshness gate: same CMS data-api dataset as cms_pos_facilities; no meaningful
+    # Last-Modified, so this hashes the response body post-fetch (fails open on a
+    # missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=cms_pos_termination_history"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Hospital/facility closure and termination events from CMS's Provider of
+      Services File (POS) — one row per provider_number (CCN), same source dataset
+      as cms_pos_facilities but scoped to the termination-code/date fields that
+      table does not carry. Despite CMS presenting this as a "current" release,
+      terminated CCNs are NOT purged from it: verified live 2026-09-11 against
+      Hahnemann University Hospital's real closure — PRVDR_NUM 390290 shows
+      termination_code='01', termination_date=2019-09-06, matching its actual
+      September 2019 shutdown; a separate, older PRVDR_NUM 390051 for the same
+      facility name shows an unrelated 1998 termination_code='04' (change-of-
+      ownership) predecessor record. One CCN can therefore have zero, one, or
+      (rarely, across a CHOW/successor chain) multiple related termination rows —
+      cross_ref_provider_number links a terminated CCN to its predecessor/successor
+      number when CMS recorded one. is_terminated is derived from termination_date
+      being non-null, not from termination_code alone (a blank code with a real
+      date, or vice versa, both count as a real event; neither is fabricated when
+      absent). psych_unit/rehab_unit termination fields capture a sub-unit closure
+      that didn't end the whole facility's participation. Joins to
+      cms_pos_facilities via provider_number.
+
+    columns:
+      - name: provider_number
+        type: string
+        nullable: false
+        expression: 'src."PRVDR_NUM"'
+        comment: CMS Certification Number (CCN) — PK; FK to cms_pos_facilities.provider_number
+      - name: facility_name
+        type: string
+        nullable: true
+        expression: 'src."FAC_NAME"'
+        comment: FAC_NAME
+      - name: provider_category_code
+        type: string
+        nullable: true
+        expression: 'src."PRVDR_CTGRY_CD"'
+        comment: PRVDR_CTGRY_CD (01=hospital, 06=psych/behavioral residential, 12=clinic, 19=community mental health, 21=other)
+      - name: state
+        type: string
+        nullable: true
+        expression: 'src."STATE_CD"'
+        comment: STATE_CD (2-letter USPS; FK to geo.state_ref)
+      - name: state_fips
+        type: string
+        nullable: true
+        expression: 'src."FIPS_STATE_CD"'
+        comment: FIPS_STATE_CD (2-digit; FK to geo.state_ref)
+      - name: county_fips
+        type: string
+        nullable: true
+        expression: 'CASE WHEN LENGTH(src."FIPS_STATE_CD") = 2 AND LENGTH(src."FIPS_CNTY_CD") = 3 THEN src."FIPS_STATE_CD" || src."FIPS_CNTY_CD" ELSE NULL END'
+        comment: Derived 5-digit county FIPS (FK to geo.counties); null unless both source fields are present at their expected width
+      - name: cross_ref_provider_number
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."CROSS_REF_PROVIDER_NUMBER", '''')'
+        comment: Predecessor/successor CCN CMS recorded for this facility (e.g. across a change-of-ownership), when one exists
+      - name: original_participation_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(STRPTIME(NULLIF(src."ORGNL_PRTCPTN_DT", ''''), ''%Y%m%d'') AS DATE)'
+        comment: Date this CCN first began Medicare participation (ORGNL_PRTCPTN_DT)
+      - name: certification_action_type_code
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."CRTFCTN_ACTN_TYPE_CD", '''')'
+        comment: CRTFCTN_ACTN_TYPE_CD — CMS's own certification-action code
+      - name: termination_code
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."PGM_TRMNTN_CD", '''')'
+        comment: PGM_TRMNTN_CD — CMS's termination-reason code; null when the facility has never been terminated
+      - name: termination_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(STRPTIME(NULLIF(src."TRMNTN_EXPRTN_DT", ''''), ''%Y%m%d'') AS DATE)'
+        comment: Real termination/closure date (TRMNTN_EXPRTN_DT), verified live against Hahnemann University Hospital's actual 2019-09-06 closure
+      - name: is_terminated
+        type: boolean
+        nullable: false
+        expression: 'src."TRMNTN_EXPRTN_DT" IS NOT NULL AND src."TRMNTN_EXPRTN_DT" != '''''
+        comment: Derived from termination_date being present — the primary column for "has this facility closed" questions
+      - name: psych_unit_termination_code
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."PSYCH_UNIT_TRMNTN_CD", '''')'
+        comment: PSYCH_UNIT_TRMNTN_CD — termination of a psychiatric sub-unit without the whole facility closing
+      - name: psych_unit_termination_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(STRPTIME(NULLIF(src."PSYCH_UNIT_TRMNTN_DT", ''''), ''%Y%m%d'') AS DATE)'
+      - name: rehab_unit_termination_code
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."REHAB_UNIT_TRMNTN_CD", '''')'
+        comment: REHAB_UNIT_TRMNTN_CD — termination of a rehab sub-unit without the whole facility closing
+      - name: rehab_unit_termination_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(STRPTIME(NULLIF(src."REHAB_UNIT_TRMNTN_DT", ''''), ''%Y%m%d'') AS DATE)'
+
+    source:
+      type: http
+      # Stable dataset id (unlike the CSV distribution's per-release UUID cms_pos_facilities
+      # has to discover via data.json) — CMS's data-api serves this same POS dataset as a
+      # paginated JSON array keyed by a permanent dataset id.
+      url: "https://data.cms.gov/data-api/v1/dataset/8ba0f9b4-9493-4aa0-9f82-44ea9468d1b5/data"
+      method: GET
+      parameters:
+        size: "5000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "size"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    # CmsPosTerminationFieldProjector narrows each page's ~473-field records down to the
+    # ~15 this table needs BEFORE the batch reaches the pipeline's DuckDB expression
+    # evaluator. Required, not an optimization: confirmed live 2026-09-11 that the full
+    # unprojected record set (highly sparse per facility category) makes DuckDB's
+    # read_json_auto infer a single MAP(VARCHAR,VARCHAR) column instead of one column per
+    # field, silently nulling every src."FIELD" expression with no error — see the
+    # projector class comment.
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsPosTerminationFieldProjector"
+
+    dimensions:
+      type:
+        - cms_pos_termination_history
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
+  # CMS HOSPITAL COST REPORT (HCRIS) — payer-mix revenue + total margin financials
+  # ==========================================================================
+  - name: hospital_cost_report_financials
+    # Freshness gate: CMS data-api dataset has no meaningful Last-Modified; hash the
+    # response body post-fetch (fails open on a missing prior token). CMS replaces
+    # this same dataset id with the newest final-settled fiscal year in place — there
+    # is no stable per-year id to backfill prior years from (confirmed live
+    # 2026-09-11: current content is FY2023 cost reports only).
+    freshness:
+      type: hash
+    pattern: "type=hospital_cost_report_financials"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS Hospital Provider Cost Report (HCRIS) financials — one row per hospital
+      per cost-reporting fiscal year, from CMS's own pre-aggregated extract (no raw
+      HOSP-10 worksheet join needed; CMS already did it). Current snapshot only
+      (FY2023, ~6,100 hospitals, verified live 2026-09-11) — CMS replaces this
+      dataset in place with each year's newly finalized cost reports, so there is
+      no per-year id to backfill history from; a prior year's data is not
+      retrievable through this API once superseded. Cross-checked live: Mayo
+      Clinic Hospital Rochester (CCN 240010) shows Net Patient Revenue ~$3.70B,
+      Net Income ~$1.24B for FY2023 — plausible for a major academic medical
+      center. Financial fields are as CMS reports them (a facility with a fiscal
+      year spanning parts of two calendar years is assigned to fiscal_year by its
+      Fiscal Year End Date). Joins to cms_pos_facilities/cms_pos_termination_history
+      via provider_number (CCN) for a real payer-mix-vs-closure-risk analysis —
+      the pairing ops#186 originally asked for.
+
+    columns:
+      - name: report_record_number
+        type: string
+        nullable: true
+        expression: 'src."rpt_rec_num"'
+        comment: CMS cost-report record number (rpt_rec_num) — not itself a stable cross-year key
+      - name: provider_number
+        type: string
+        nullable: false
+        expression: 'src."Provider CCN"'
+        comment: CMS Certification Number (CCN); FK to cms_pos_facilities.provider_number
+      - name: hospital_name
+        type: string
+        nullable: true
+        expression: 'src."Hospital Name"'
+      - name: street_address
+        type: string
+        nullable: true
+        expression: 'src."Street Address"'
+      - name: city
+        type: string
+        nullable: true
+        expression: 'src."City"'
+      - name: state
+        type: string
+        nullable: true
+        expression: 'src."State Code"'
+        comment: FK to geo.state_ref.state_abbr
+      - name: zip_code
+        type: string
+        nullable: true
+        expression: 'src."Zip Code"'
+      - name: county_name
+        type: string
+        nullable: true
+        expression: 'src."County"'
+        comment: County name as reported (not a FIPS code — join cms_pos_facilities.county_fips via provider_number instead)
+      - name: cbsa_number
+        type: string
+        nullable: true
+        expression: 'src."Medicare CBSA Number"'
+      - name: rural_urban
+        type: string
+        nullable: true
+        expression: 'src."Rural Versus Urban"'
+        comment: "'R' rural, 'U' urban"
+      - name: facility_type
+        type: string
+        nullable: true
+        expression: 'src."CCN Facility Type"'
+      - name: provider_type
+        type: string
+        nullable: true
+        expression: 'src."Provider Type"'
+      - name: ownership_code
+        type: string
+        nullable: true
+        expression: 'src."Type of Control"'
+      - name: fiscal_year_begin_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(src."Fiscal Year Begin Date" AS DATE)'
+      - name: fiscal_year_end_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(src."Fiscal Year End Date" AS DATE)'
+      - name: fiscal_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(SUBSTR(src."Fiscal Year End Date", 1, 4) AS INTEGER)'
+        comment: Calendar year of Fiscal Year End Date — this table's own "year" for grouping/joins
+      - name: fte_employees
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."FTE - Employees on Payroll" AS DOUBLE)'
+      - name: number_of_beds
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."Number of Beds" AS INTEGER)'
+      - name: cost_of_charity_care
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Cost of Charity Care" AS DOUBLE)'
+      - name: total_bad_debt_expense
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Bad Debt Expense" AS DOUBLE)'
+      - name: cost_of_uncompensated_care
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Cost of Uncompensated Care" AS DOUBLE)'
+      - name: total_unreimbursed_uncompensated_care
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Unreimbursed and Uncompensated Care" AS DOUBLE)'
+      - name: total_costs
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Costs" AS DOUBLE)'
+      - name: inpatient_revenue
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Inpatient Revenue" AS DOUBLE)'
+      - name: outpatient_revenue
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Outpatient Revenue" AS DOUBLE)'
+      - name: total_patient_revenue
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Patient Revenue" AS DOUBLE)'
+      - name: net_patient_revenue
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Net Patient Revenue" AS DOUBLE)'
+        comment: Net patient revenue (gross patient revenue less contractual allowances/discounts) — the ticket's "payer-mix revenue" figure
+      - name: net_income_from_patient_services
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Net Income from Service to Patients" AS DOUBLE)'
+      - name: total_other_income
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Other Income" AS DOUBLE)'
+      - name: total_income
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Income" AS DOUBLE)'
+      - name: net_income
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Net Income" AS DOUBLE)'
+        comment: Bottom-line net income — the ticket's "total margin" figure (as a dollar amount; divide by total_income for a margin ratio)
+      - name: net_revenue_from_medicaid
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Net Revenue from Medicaid" AS DOUBLE)'
+        comment: Payer-mix component — Medicaid net revenue
+      - name: medicaid_charges
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Medicaid Charges" AS DOUBLE)'
+      - name: net_revenue_from_chip
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Net Revenue from Stand-Alone CHIP" AS DOUBLE)'
+      - name: chip_charges
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Stand-Alone CHIP Charges" AS DOUBLE)'
+
+    source:
+      type: http
+      url: "https://data.cms.gov/data-api/v1/dataset/44060663-47d8-4ced-a115-b53b4c270acb/data"
+      method: GET
+      parameters:
+        size: "5000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "size"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - hospital_cost_report_financials
 
     materialize:
       enabled: true
