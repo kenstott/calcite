@@ -2078,6 +2078,17 @@ partitionedTables:
       type: http
       url: "https://www.irs.gov/pub/irs-soi/{year_short}incyallagi.csv"
       method: GET
+      # 2012 is the one year IRS names differently: "12cyallagi.csv", not the standard
+      # "12incyallagi.csv" every other year (2011, 2013 onward) uses - confirmed live
+      # 2026-09-10 (irs.gov/pub/irs-soi/12incyallagi.csv 404s; irs.gov/pub/irs-soi/12cyallagi.csv
+      # is the real file, linked from irs.gov/statistics/soi-tax-stats-county-data-2012). This is
+      # the entire reason effective_year 2012 was missing while every neighboring year loaded.
+      # yearRange matches on the RAW (pre-dataLag) year dimension value, not effective_year -
+      # confirmed against this table's own tracker rows (effective_year=2013 pairs with raw
+      # year=2016, i.e. year - dataLag: 3), so effective_year 2012 needs raw yearRange [2015,2015].
+      urlRules:
+        - url: "https://www.irs.gov/pub/irs-soi/{year_short}cyallagi.csv"
+          yearRange: [2015, 2015]
       response:
         format: csv
       rateLimit:
