@@ -138,6 +138,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private List<String> deferredPartitionColumns;
   private long totalRowsWritten;
   private int totalFilesWritten;
+  /**
+   * Sum of {@link org.apache.iceberg.DataFile#recordCount()} across every file actually
+   * registered in an Iceberg commit this run (replace or append) — read back from the files
+   * themselves at commit time, independent of {@link #totalRowsWritten} (a count of rows handed
+   * to {@link #writeBatch}, before file writing/buffering). A mismatch between the two means
+   * rows were lost somewhere between being processed and actually landing in a committed file.
+   */
+  private long totalRecordsCommitted;
   private boolean initialized;
   private int maxRetries;
   private long retryDelayMs;
@@ -244,6 +252,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     this.warehousePath = warehousePath;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
     this.totalRowsWritten = 0;
+    this.totalRecordsCommitted = 0;
     this.totalFilesWritten = 0;
     this.initialized = false;
     this.maxRetries = DEFAULT_MAX_RETRIES;
@@ -1463,9 +1472,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       long commitStart = System.currentTimeMillis();
       if (!toReplace.isEmpty()) {
         tableWriter.replacePartitionsDataFiles(toReplace);
+        totalRecordsCommitted += sumRecordCounts(toReplace);
       }
       if (!toAppend.isEmpty()) {
         tableWriter.bulkCommitDataFiles(toAppend);
+        totalRecordsCommitted += sumRecordCounts(toAppend);
       }
       totalCommittedFiles += toReplace.size() + toAppend.size();
       long elapsed = System.currentTimeMillis() - commitStart;
@@ -1480,11 +1491,21 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       List<org.apache.iceberg.DataFile> chunk = files.subList(i, end);
       long commitStart = System.currentTimeMillis();
       tableWriter.bulkCommitDataFiles(chunk);
+      totalRecordsCommitted += sumRecordCounts(chunk);
       totalCommittedFiles += chunk.size();
       long elapsed = System.currentTimeMillis() - commitStart;
       LOGGER.info("Committed chunk {}-{} of {} files in {}ms ({} total committed)",
           i, end, total, elapsed, totalCommittedFiles);
     }
+  }
+
+  /** Sum of {@link org.apache.iceberg.DataFile#recordCount()} across a list of data files. */
+  private static long sumRecordCounts(List<org.apache.iceberg.DataFile> dataFiles) {
+    long sum = 0;
+    for (org.apache.iceberg.DataFile f : dataFiles) {
+      sum += f.recordCount();
+    }
+    return sum;
   }
 
   private void intermediateCommit() throws IOException {
@@ -2829,6 +2850,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   @Override public long getTotalRowsWritten() {
     return totalRowsWritten;
+  }
+
+  /**
+   * Sum of {@link org.apache.iceberg.DataFile#recordCount()} across every file actually
+   * registered in an Iceberg commit this run — see {@link #totalRecordsCommitted}.
+   */
+  public long getCommittedRowCount() {
+    return totalRecordsCommitted;
   }
 
   @Override public int getTotalFilesWritten() {

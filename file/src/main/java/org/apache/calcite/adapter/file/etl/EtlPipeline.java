@@ -1738,6 +1738,30 @@ public class EtlPipeline {
 
       // Mark table as complete if all batches succeeded without errors
       if (failedBatches == 0 && errors.isEmpty()) {
+        // Reconcile rows this pipeline believes it processed (totalRows) against rows actually
+        // registered in the commit just performed, read back from the committed files
+        // themselves (Iceberg only — a Parquet writer has no equivalent post-commit readback,
+        // and every other writer here is a test mock with no real commit to reconcile against).
+        // A mismatch means rows were silently lost between being processed and landing in a
+        // committed file (e.g. a concurrent writer's commit interleaving with this one) — the
+        // tracker must never record `complete` with a row count that does not match what
+        // actually landed, since a `complete` marker makes the freshness gate skip the period on
+        // every subsequent run and the table never self-heals (kenstott/govdata-ops#86:
+        // weather.ghcnd_daily sat at 0.14% of its real size for four years, marked complete with
+        // the full row count, undetected for weeks).
+        // Skipped when a custom DataWriter hook is configured: totalRows there counts whatever
+        // dataWriter.write() reports, which materializes data through a path the standard writer
+        // never sees (writer.writeBatch is bypassed whenever dataWriter.write() succeeds — see
+        // processSingleBatch), so the two counts are not comparable.
+        if (dataWriter == null && writer instanceof IcebergMaterializationWriter) {
+          long committedRowCount = ((IcebergMaterializationWriter) writer).getCommittedRowCount();
+          if (committedRowCount != totalRows) {
+            throw new IOException("Pipeline '" + pipelineName + "' processed " + totalRows
+                + " rows but only " + committedRowCount + " were registered in the Iceberg"
+                + " commit — refusing to mark complete with a row count that does not match what"
+                + " actually landed in the table.");
+          }
+        }
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);
         LOGGER.info("Marked pipeline '{}' as complete with configHash={}, signature={}, rows={}",
             pipelineName, configHash, dimensionSignature, totalRows);
