@@ -1307,7 +1307,18 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     data.put("fiscal_year_end", fiscalYearEnd);
 
-    String businessAddress = buildFullAddress(doc, "BusinessAddress");
+    // "BusinessAddress" here previously meant buildFullAddress(doc, "BusinessAddress"),
+    // which looked for XBRL DEI concepts BusinessAddressAddressLine1/CityOrTown/
+    // StateOrProvince/PostalCode. None of those are real DEI taxonomy elements - confirmed
+    // against Apple's own filed XBRL (aapl-20240928_htm.xml): the actual concepts are
+    // dei:EntityAddressAddressLine1/CityOrTown/StateOrProvince/PostalZipCode, with no
+    // Business/Mailing-specific variant (there is one EntityAddress set per filing, not
+    // two) - so this always matched nothing and business_address was NULL on every filing.
+    // mailing_address already sources from the same EDGAR submissions.json this file already
+    // fetches for fiscal_year_end/sic_code, which is reliable (87.8% populated where
+    // mailing_address is present at all) - use it for business_address too rather than
+    // parsing a DEI concept name that does not exist.
+    String businessAddress = submissionsInfo.get("business_address");
     data.put("business_address", businessAddress);
 
     String mailingAddress = submissionsInfo.get("mailing_address");
@@ -1566,29 +1577,6 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
     return null;
-  }
-
-  private String buildFullAddress(Document doc, String addressType) {
-    String street = extractDeiValue(doc, addressType + "AddressLine1");
-    String city = extractDeiValue(doc, addressType + "CityOrTown");
-    String state = extractDeiValue(doc, addressType + "StateOrProvince");
-    String zip = extractDeiValue(doc, addressType + "PostalCode");
-
-    if (street == null || street.isEmpty()) {
-      return null;
-    }
-
-    StringBuilder addr = new StringBuilder(street);
-    if (city != null && !city.isEmpty()) {
-      addr.append(", ").append(city);
-    }
-    if (state != null && !state.isEmpty()) {
-      addr.append(", ").append(state);
-    }
-    if (zip != null && !zip.isEmpty()) {
-      addr.append(" ").append(zip);
-    }
-    return addr.toString();
   }
 
   private String extractAccessionNumber(String filename) {
