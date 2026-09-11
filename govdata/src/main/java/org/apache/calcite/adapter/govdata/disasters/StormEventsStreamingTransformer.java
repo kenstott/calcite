@@ -205,7 +205,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       row.put("begin_date", isoDate(str(cols, "BEGIN_YEARMONTH"), str(cols, "BEGIN_DAY")));
       row.put("end_date", isoDate(str(cols, "END_YEARMONTH"), str(cols, "END_DAY")));
 
-      String stateFips = pad(str(cols, "STATE_FIPS"), 2);
+      String stateFips = toCensusStateFips(pad(str(cols, "STATE_FIPS"), 2));
       row.put("state_fips", stateFips);
       String czType = str(cols, "CZ_TYPE");
       String czFips = pad(str(cols, "CZ_FIPS"), 3);
@@ -243,6 +243,22 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       return null;
     }
     return yearMonth.substring(0, 4) + "-" + yearMonth.substring(4, 6) + "-" + pad(day, 2);
+  }
+
+  /** NOAA's own {@code STATE_FIPS} uses non-standard codes for 4 territories - confirmed
+   * live, distinct from Census TIGER (geo.states) and unjoinable as published (D-284).
+   * Remaps just these 4; every other value already matches Census FIPS. */
+  private static String toCensusStateFips(String noaaStateFips) {
+    if (noaaStateFips == null) {
+      return null;
+    }
+    switch (noaaStateFips) {
+      case "99": return "72"; // Puerto Rico
+      case "96": return "78"; // U.S. Virgin Islands
+      case "98": return "66"; // Guam
+      case "97": return "60"; // American Samoa
+      default: return noaaStateFips;
+    }
   }
 
   private static String pad(String v, int width) {

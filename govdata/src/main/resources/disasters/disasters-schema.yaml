@@ -865,6 +865,27 @@ partitionedTables:
       NCEI gzip CSV. Joins to geo.counties and to disaster_declarations by
       county+date overlap.
 
+      state_fips/county_fips (D-284): NOAA's own STATE_FIPS uses 4 non-standard codes for
+      Puerto Rico/Virgin Islands/Guam/American Samoa (99/96/98/97) instead of their real
+      Census FIPS (72/78/66/60) — remapped so these join geo.states like every other state.
+      Confirmed live this also recovers county_fips for Puerto Rico and the Virgin Islands
+      specifically (their CZ_FIPS values are real Census municipio/district codes once paired
+      with the corrected state code — 7,905/7,905 and 60/60 county-type rows now join
+      geo.counties). Guam and American Samoa's CZ_FIPS values are NOT real Census codes even
+      after the state remap (e.g. Guam's storm_events rows use "002"/"003"/"006", but
+      geo.counties only carries a single unified "66010"; American Samoa uses "002"/"003"
+      against geo.counties' real five-district "010"-"050") — NOAA evidently numbers these two
+      territories' zones on its own internal scheme with no Census county-equivalent mapping.
+      A second, unrelated residual: for a small number of county-type rows in the 50 states
+      (confirmed live: 72 in Alaska across this table's full history, 49 in Georgia isolated to
+      Jan-2025-published rows, 1 in Louisiana), CZ_FIPS itself doesn't match any real county
+      FIPS at all — e.g. Georgia's early-2025 batch pairs real county names like "WALKER" with
+      CZ_FIPS values ("2", "4", "6"...) that belong to no actual Georgia county. Confirmed this
+      is wrong in NOAA's own published file, not an artifact of this ingest. Neither residual has
+      a crosswalk that recovers the correct FIPS from what NOAA actually published; a LEFT JOIN
+      to geo.counties silently drops these rows, expect the gap rather than treating it as a
+      join bug.
+
     dimensions:
       type:
         - storm_events
