@@ -166,11 +166,13 @@ public class UsaSpendingDistrictRecipientsProvider implements CachingDataProvide
         row.put("state_abbr", stateAbbr);
         row.put("district_number", districtNumber);
         row.put("rank", Integer.valueOf(rank));
-        row.put("recipient_name", text(r, "name"));
+        String recipientName = text(r, "name");
+        row.put("recipient_name", recipientName);
         row.put("recipient_id", text(r, "recipient_id"));
         row.put("recipient_uei", text(r, "uei"));
         row.put("recipient_duns", text(r, "code"));
         row.put("obligated_amount", num(r, "amount"));
+        row.put("is_aggregate_recipient", Boolean.valueOf("MULTIPLE RECIPIENTS".equals(recipientName)));
         rows.add(row);
       }
     }

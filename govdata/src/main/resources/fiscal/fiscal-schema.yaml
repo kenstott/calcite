@@ -3007,7 +3007,11 @@ partitionedTables:
         nullable: true
         comment: >
           Recipient/contractor name as reported by USAspending; "MULTIPLE RECIPIENTS"
-          is USAspending's own aggregate bucket for sub-reporting-threshold transactions
+          is USAspending's own aggregate bucket for sub-reporting-threshold transactions.
+          Check is_aggregate_recipient rather than string-matching this column directly
+          (D-280) — a naive ORDER BY obligated_amount DESC per district otherwise returns
+          this bucket at rank 1 for the largest-total districts, reading as a single
+          dominant contractor when it is really an aggregation artifact.
       - name: recipient_id
         type: string
         nullable: true
@@ -3020,6 +3024,13 @@ partitionedTables:
         type: string
         nullable: true
         comment: Legacy 9-digit DUNS-shaped identifier (USAspending's "code" field), when known
+      - name: is_aggregate_recipient
+        type: boolean
+        nullable: false
+        comment: >
+          True when recipient_name is USAspending's "MULTIPLE RECIPIENTS" aggregate bucket
+          rather than a real, individually-identified recipient (D-280). Filter this out (or
+          handle separately) before ranking recipients by obligated_amount.
       - name: obligated_amount
         type: double
         nullable: true
