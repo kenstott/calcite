@@ -2817,7 +2817,9 @@ partitionedTables:
       DC/PR/GU/VI/AS/MP as district "98"). Carries obligated_amount (all award types)
       alongside obligated_amount_excl_loans and obligated_amount_excl_loans_excl_cms_admin
       for the same reasons as usaspending_by_state/usaspending_by_county — see those
-      tables' comments for the nationwide evidence. cd_fips matches
+      tables' comments for the nationwide evidence. obligated_amount_contracts isolates
+      procurement contract/IDV awards specifically (D-278), since obligated_amount alone
+      mixes contracts with grants, loans, and direct payments indistinguishably. cd_fips matches
       geo.congressional_districts.cd_fips exactly (state FIPS + district number), no
       crosswalk needed. Does NOT carry a recipient/contractor-name dimension — USAspending's
       award-level search (spending_by_award, already used by
@@ -2884,6 +2886,16 @@ partitionedTables:
           the Medicare Administrative Contractor's location, not the beneficiary's,
           which concentrates Medicare claims spending into whichever district hosts a
           MAC contractor's office.
+      - name: obligated_amount_contracts
+        type: double
+        nullable: true
+        comment: >
+          Obligations from procurement contract/IDV award types only (codes A, B, C, D,
+          IDV_A-E) — the actual "federal contract spending" figure (D-278). obligated_amount
+          above is ALL award types combined (contracts + grants + loans + direct payments +
+          other assistance) and is not a contract-spending figure by itself; a caller who
+          specifically means contracts should use this column, not filter/derive from
+          obligated_amount.
 
     source:
       type: http

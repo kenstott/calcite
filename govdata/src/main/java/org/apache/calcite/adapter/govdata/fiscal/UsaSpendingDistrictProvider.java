@@ -36,7 +36,10 @@ import java.util.Map;
  * all award types). Same mechanism, cadence, and award-type/loan/CMS-admin column
  * shape as {@link UsaSpendingCountyProvider} and {@code UsaSpendingStateProvider} —
  * one call per fiscal year, 442 rows in a single unpaginated response (435 numbered
- * districts + at-large single-district states, DC, and territories).
+ * districts + at-large single-district states, DC, and territories). A fourth call
+ * (contract/IDV award-type codes only) provides obligated_amount_contracts, so a
+ * caller who specifically means federal contract spending (not the all-award-type
+ * total, which mixes in grants/loans/direct payments) doesn't have to guess (D-278).
  *
  * <p>{@code shape_code} (e.g. {@code "4204"}) is the 2-digit state FIPS + 2-digit
  * district number, matching {@code geo.congressional_districts.cd_fips} exactly —
@@ -73,6 +76,13 @@ public class UsaSpendingDistrictProvider implements CachingDataProvider {
   private static final String AWARD_TYPE_CODES_EXCL_LOANS =
       "\"A\",\"B\",\"C\",\"D\",\"IDV_A\",\"IDV_B\",\"IDV_C\",\"IDV_D\",\"IDV_E\","
       + "\"02\",\"03\",\"04\",\"05\",\"06\",\"10\",\"09\",\"11\"";
+
+  /** Procurement contract/IDV codes only, the subset of {@link #AWARD_TYPE_CODES} that
+   * "federal contract spending" actually means (D-278) — excludes grants, direct payments,
+   * loans, and other assistance, which the all-award-type obligated_amount otherwise mixes
+   * together indistinguishably. */
+  private static final String AWARD_TYPE_CODES_CONTRACTS_ONLY =
+      "\"A\",\"B\",\"C\",\"D\",\"IDV_A\",\"IDV_B\",\"IDV_C\",\"IDV_D\",\"IDV_E\"";
 
   /** CMS-funded awards report place of performance at the Medicare Administrative
    * Contractor's location, not the beneficiary's -- matches by_state/by_county's
@@ -168,6 +178,32 @@ public class UsaSpendingDistrictProvider implements CachingDataProvider {
       }
     }
 
+    String bodyContracts =
+        "{\"filters\":{\"time_period\":[{\"start_date\":\"" + start + "\",\"end_date\":\"" + end
+        + "\"}],\"award_type_codes\":[" + AWARD_TYPE_CODES_CONTRACTS_ONLY + "]},"
+        + "\"scope\":\"place_of_performance\",\"geo_layer\":\"district\","
+        + "\"spending_level\":\"transactions\",\"subawards\":false}";
+    LOGGER.info("usaspending_by_district: POST {} fy={} (contracts only)", ENDPOINT, fy);
+    JsonNode rootContracts;
+    InputStream inContracts = rawCache.openStream(cacheKey("contracts-only", bodyContracts),
+        () -> FiscalHttp.openPostJsonWithRetry(ENDPOINT, bodyContracts).getInputStream());
+    try {
+      rootContracts = MAPPER.readTree(inContracts);
+    } finally {
+      inContracts.close();
+    }
+    Map<String, Double> contractsByCode = new LinkedHashMap<String, Double>();
+    JsonNode resultsContracts = rootContracts.path("results");
+    if (resultsContracts.isArray()) {
+      for (JsonNode r : resultsContracts) {
+        String code = text(r, "shape_code");
+        if (code == null) {
+          continue;
+        }
+        contractsByCode.put(code, num(r, "aggregated_amount"));
+      }
+    }
+
     JsonNode results = root.path("results");
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     if (results.isArray()) {
@@ -190,6 +226,7 @@ public class UsaSpendingDistrictProvider implements CachingDataProvider {
           row.put("obligated_amount_excl_loans_excl_cms_admin",
               exclLoans - (cms == null ? 0.0 : cms));
         }
+        row.put("obligated_amount_contracts", contractsByCode.get(code));
         rows.add(row);
       }
     }
