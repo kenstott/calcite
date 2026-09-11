@@ -241,9 +241,12 @@ partitionedTables:
       JSON field (https://www.federalregister.gov/api/v1/documents.json) — not
       present in fr_documents' govinfo.gov bulk-XML source. true = economically
       significant under EO 12866 (subject to OMB/OIRA regulatory review), false =
-      not significant, NULL = not yet classified by the API (common for very
-      recent documents — treat as unknown, not false). Join to fr_documents on
-      document_number to filter significant vs. routine rules.
+      not significant. NULL is overwhelmingly "significance does not apply to this
+      document type" (confirmed live: 817 of 818 Notices in a March 2026 sample are
+      NULL, since EO 12866 review applies only to Rules) rather than "not yet
+      classified" — filter to type='Rule' or 'Proposed Rule' before treating a NULL
+      as meaningful. Join to fr_documents on document_number to filter significant
+      vs. routine rules.
 
     dimensions:
       year: *fr_year_range
@@ -261,10 +264,17 @@ partitionedTables:
         type: boolean
         nullable: true
         comment: OIRA EO 12866 economic-significance flag (true/false/null — see table comment)
+      - name: type
+        type: string
+        nullable: true
+        comment: >
+          Federal Register document type (Rule, Proposed Rule, Notice, Presidential Document).
+          EO 12866 significance review applies only to Rule/Proposed Rule — filter to those
+          before aggregating `significant` or NULL from every non-rule Notice swamps the count.
 
     source:
       type: http
-      url: "https://www.federalregister.gov/api/v1/documents.json?conditions[publication_date][gte]={year}-{month}-01&conditions[publication_date][lte]={year}-{month}-{month_end}&fields[]=document_number&fields[]=publication_date&fields[]=significant"
+      url: "https://www.federalregister.gov/api/v1/documents.json?conditions[publication_date][gte]={year}-{month}-01&conditions[publication_date][lte]={year}-{month}-{month_end}&fields[]=document_number&fields[]=publication_date&fields[]=significant&fields[]=type"
       method: GET
       response:
         format: json
