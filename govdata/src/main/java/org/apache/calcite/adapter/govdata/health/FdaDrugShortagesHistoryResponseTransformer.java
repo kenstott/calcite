@@ -79,6 +79,13 @@ public class FdaDrugShortagesHistoryResponseTransformer implements ResponseTrans
       {"discontinuednotelink", "discontinued_note_link"},
   };
 
+  /** Output columns carrying the source's own MM/DD/YYYY presentation - parsed to ISO via
+   * {@link AbstractOpenFdaResponseTransformer#mmddyyyyToIso} so they can be declared
+   * {@code type: date} (same fix as the live-feed table, D-252). */
+  private static final java.util.Set<String> DATE_COLUMNS = new java.util.HashSet<String>(
+      java.util.Arrays.asList("initial_posting_date", "update_date", "change_date",
+          "discontinued_date"));
+
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.trim().isEmpty()) {
       return "[]";
@@ -125,6 +132,7 @@ public class FdaDrugShortagesHistoryResponseTransformer implements ResponseTrans
               fields.size() - indexToColumn.length);
         }
         ObjectNode row = MAPPER.createObjectNode();
+        String initialPostingDate = null;
         for (int i = 0; i < indexToColumn.length && i < fields.size(); i++) {
           if (indexToColumn[i] == null) {
             continue;
@@ -132,6 +140,11 @@ public class FdaDrugShortagesHistoryResponseTransformer implements ResponseTrans
           String value = trimToNull(fields.get(i));
           if ("status".equals(indexToColumn[i])) {
             value = canonicalizeStatus(value);
+          } else if (DATE_COLUMNS.contains(indexToColumn[i])) {
+            value = AbstractOpenFdaResponseTransformer.mmddyyyyToIso(value);
+            if ("initial_posting_date".equals(indexToColumn[i])) {
+              initialPostingDate = value;
+            }
           }
           if (value == null) {
             row.putNull(indexToColumn[i]);
@@ -139,6 +152,8 @@ public class FdaDrugShortagesHistoryResponseTransformer implements ResponseTrans
             row.put(indexToColumn[i], value);
           }
         }
+        row.put("posting_year", initialPostingDate != null
+            ? Integer.parseInt(initialPostingDate.substring(0, 4)) : null);
         row.put("snapshot_date", snapshotDate);
         row.put("type", "fda_drug_shortages_history");
         out.add(row);

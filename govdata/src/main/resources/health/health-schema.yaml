@@ -492,9 +492,13 @@ partitionedTables:
         nullable: false
         comment: Package-level NDC for this shortage episode — PK part 1
       - name: initial_posting_date
-        type: string
+        type: date
         nullable: false
-        comment: MM/DD/YYYY when this shortage episode was first posted — PK part 2
+        comment: Date this shortage episode was first posted — PK part 2 (parsed from the source's own MM/DD/YYYY presentation)
+      - name: posting_year
+        type: integer
+        nullable: true
+        comment: Calendar year of initial_posting_date — avoids a date function for the common "shortages per year" query
       - name: generic_name
         type: string
         nullable: true
@@ -517,9 +521,9 @@ partitionedTables:
         nullable: true
         comment: e.g. New, Revised, Reverified
       - name: update_date
-        type: string
+        type: date
         nullable: true
-        comment: MM/DD/YYYY of the most recent update to this episode
+        comment: Date of the most recent update to this episode (parsed from the source's own MM/DD/YYYY presentation)
       - name: status
         type: string
         nullable: true
@@ -528,9 +532,9 @@ partitionedTables:
         type: string
         nullable: true
       - name: discontinued_date
-        type: string
+        type: date
         nullable: true
-        comment: MM/DD/YYYY; null unless status is a discontinuation
+        comment: Null unless status is a discontinuation (parsed from the source's own MM/DD/YYYY presentation)
       - name: dosage_form
         type: string
         nullable: true
@@ -668,9 +672,13 @@ partitionedTables:
         nullable: false
         comment: Strength/form/package description — PK part 3 (disambiguates multiple presentations of one generic_name)
       - name: initial_posting_date
-        type: string
+        type: date
         nullable: true
-        comment: MM/DD/YYYY when this shortage episode was first posted — PK part 4
+        comment: Date this shortage episode was first posted — PK part 4 (parsed from the source's own MM/DD/YYYY presentation)
+      - name: posting_year
+        type: integer
+        nullable: true
+        comment: Calendar year of initial_posting_date — avoids a date function for the common "shortages per year" query
       - name: company_name
         type: string
         nullable: true
@@ -682,9 +690,9 @@ partitionedTables:
         nullable: true
         comment: e.g. New, Revised, Reverified
       - name: update_date
-        type: string
+        type: date
         nullable: true
-        comment: MM/DD/YYYY of the most recent update to this episode as of this snapshot
+        comment: Date of the most recent update to this episode as of this snapshot (parsed from the source's own MM/DD/YYYY presentation)
       - name: availability
         type: string
         nullable: true
@@ -705,13 +713,13 @@ partitionedTables:
         nullable: true
         comment: Canonicalized to Current, To Be Discontinued, or Resolved
       - name: change_date
-        type: string
+        type: date
         nullable: true
-        comment: MM/DD/YYYY
+        comment: Parsed from the source's own MM/DD/YYYY presentation
       - name: discontinued_date
-        type: string
+        type: date
         nullable: true
-        comment: MM/DD/YYYY; null unless status is a discontinuation
+        comment: Null unless status is a discontinuation (parsed from the source's own MM/DD/YYYY presentation)
       - name: generic_name_note
         type: string
         nullable: true

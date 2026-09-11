@@ -228,6 +228,34 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
     return nullIfEmpty(node.path(fieldName).asText(null));
   }
 
+  /**
+   * Converts openFDA's own {@code MM/DD/YYYY} date presentation to ISO {@code YYYY-MM-DD} so
+   * the column can be declared {@code type: date} — {@code CAST(... AS DATE)}/{@code EXTRACT}
+   * don't accept the US form, and DuckDB's {@code strptime} isn't resolvable through Calcite.
+   * Returns null (rather than throwing) for anything not matching {@code MM/DD/YYYY} exactly,
+   * so a malformed source value drops out as a missing date instead of failing the whole row.
+   */
+  protected static String mmddyyyyToIso(String value) {
+    if (value == null) {
+      return null;
+    }
+    String[] parts = value.split("/");
+    if (parts.length != 3) {
+      return null;
+    }
+    try {
+      int month = Integer.parseInt(parts[0]);
+      int day = Integer.parseInt(parts[1]);
+      int year = Integer.parseInt(parts[2]);
+      if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900) {
+        return null;
+      }
+      return String.format("%04d-%02d-%02d", year, month, day);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
   private static String nullIfEmpty(String s) {
     if (s == null || s.isEmpty() || "null".equals(s)) {
       return null;
