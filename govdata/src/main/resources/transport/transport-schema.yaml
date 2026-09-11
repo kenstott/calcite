@@ -1778,8 +1778,22 @@ partitionedTables:
       - name: recordable_crash_rate
         type: double
         nullable: true
-        expression: 'TRY_CAST(src."RECORDABLE_CRASH_RATE" AS DOUBLE)'
-        comment: FMCSA recordable crash rate (per the carrier census, when computed)
+        expression: >-
+          CASE WHEN TRY_CAST(src."RECORDABLE_CRASH_RATE" AS DOUBLE) IN (999.0, 999.99, 999.999)
+               THEN NULL
+               ELSE TRY_CAST(src."RECORDABLE_CRASH_RATE" AS DOUBLE) END
+        comment: >
+          Crashes per million miles, FMCSA's own computed field — NOT populated for the whole
+          carrier census. FMCSA computes it only for a carrier with a compliance review or a
+          reported mileage figure on file, which is 20% of active carriers (447,289 of
+          2,236,332, measured live 2026-09-10) — a caller must not treat a non-null rate as
+          representative of the other 80%, since carriers with a compliance review skew toward
+          ones FMCSA already had reason to look at. 999.0/999.99/999.999 are FMCSA's own
+          placeholder sentinels for "not computed" (489 rows, measured live) and are excluded
+          here rather than left as data — a naive AVG or top-N over the raw field is dominated
+          by them. Values above 900 that are NOT one of those three exact sentinels (a handful
+          of rows in the 909-954 range) are real: an extremely low-mileage carrier can
+          genuinely compute to a rate in that range and is not filtered out.
       - name: mcs150_mileage
         type: long
         nullable: true
