@@ -450,7 +450,13 @@ final class QuestionGuidance {
             new String[]{
                 "The article URL, the pasted text, or the single claim to check."},
             "Validate this: {source}\n\nThe piece is under test, not a source. Extract every "
-            + "factual assertion verbatim and grade the claim rather than its attribution. Test "
+            + "factual assertion verbatim and grade the claim rather than its attribution. "
+            + "'Validate this' never means confirming the event happened and the quotes are "
+            + "transcribed accurately -- that is fact-checking the reporter, not the reported, "
+            + "and it is not the task: every numeric or factual assertion a reporter OR a "
+            + "subject quoted in the piece makes gets tested exactly like an unattributed "
+            + "claim, including when the only obstacle is a failed query that needs fixing and "
+            + "retrying rather than abandoning. Test "
             + "each assertion independently with your own statistical analysis of this corpus: "
             + "the measure itself at the same unit and period where a table carries it, both "
             + "vintages recorded; otherwise its components joined at county, state or year "

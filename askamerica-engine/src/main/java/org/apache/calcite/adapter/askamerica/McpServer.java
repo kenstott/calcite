@@ -568,6 +568,24 @@ public class McpServer {
             + "officials said it, and 'X said Y' is graded on Y. Whether a quote was actually "
             + "spoken is never the assertion under test. Skip opinion and prediction; keep "
             + "numbers, trends, rankings, comparisons and causal claims.\n"
+            + "1a. **'Validate this' NEVER means 'confirm the event happened and the quotes are "
+            + "transcribed accurately.'** That is fact-checking the REPORTER, a categorically "
+            + "easier task than fact-checking the REPORTED — and it is not the task. Measured "
+            + "live, 2026-09-11: given a URL to a speech, a run cross-referenced four other "
+            + "outlets, confirmed the speaker said what the article quotes him saying, declared "
+            + "the whole piece 'accurate', and never tested a single one of the speaker's own "
+            + "numeric claims (a migration figure, an investment claim, a job-growth claim) — "
+            + "one query failed on a wrong column name and the run gave up rather than fix it "
+            + "and continue, then wrote that a claim was 'accurately attributed... not "
+            + "independently verified' as though that satisfied the task. It did not: the "
+            + "assertions a REPORTER makes AND the assertions the article quotes its SUBJECTS "
+            + "making are both squarely in scope and both get the full step 1-8 treatment "
+            + "below, exactly like a claim with no attribution at all — a number is not exempt "
+            + "from testing because a name is attached to it. If a genuine attempt to test an "
+            + "assertion fails (a query errors, a table lacks the measure), FIX THE QUERY AND "
+            + "RETRY or reach for search_catalog's unmatched_terms and grade 'not checkable "
+            + "here' with a stated reason — giving up silently and reporting the surrounding "
+            + "article as 'accurate' regardless is never an acceptable outcome.\n"
             + "2. Test every assertion INDEPENDENTLY in this corpus. Independent means your own "
             + "statistical analysis of warehouse data, not a search for someone else's verdict. "
             + "search_catalog for the measure the assertion rests on. Measure present: compute "
@@ -4755,11 +4773,31 @@ public class McpServer {
      * (e.g. "1. Background", "2. Methodology") does not trip this either; both the numbering
      * AND the verdict-shaped wording have to be present together.
      */
+    /** Phrasing that admits a specific figure was never actually tested, while the report
+     *  still declares the surrounding piece accurate/true/checks out anyway. This is the
+     *  written signature of "confirmed the reporting, never tested the substance" -- the
+     *  model narrates its own cop-out instead of doing the work or grading 'not checkable
+     *  here', and does so in plain enough language to catch mechanically. */
+    private static final java.util.regex.Pattern SUBSTANCE_NOT_TESTED_ADMISSION =
+        java.util.regex.Pattern.compile("(?i)"
+            + "(?:accurately (?:quoted|attributed|reported|transcribed)[^.]{0,80}not "
+            + "independently"
+            + "|not (?:independently|itself) (?:verified|re-derived|tested|checked)"
+            + "|could not be independently (?:verified|re-derived|reconstructed)"
+            + "|cannot independently (?:reconstruct|verify|re-derive)"
+            + "|accurately attributed to [^.]{0,60}, not [^.]{0,40}(?:independently )?verified)");
+
+    private static final java.util.regex.Pattern OVERALL_TRUE_CLAIM = java.util.regex.Pattern
+        .compile("(?i)\\b(is accurate|checks out|holds up|is true|accurate\\.)\\b");
+
     private static void enforceClaimsArrayPresence(java.util.List<ReportPage.Section> secs) {
         int numberedHeadings = 0;
         int verdictShapedHeadings = 0;
+        StringBuilder allText = new StringBuilder();
         for (ReportPage.Section sec : secs) {
             String heading = sec.heading;
+            allText.append(heading == null ? "" : heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
             if (heading == null) {
                 continue;
             }
@@ -4770,19 +4808,36 @@ public class McpServer {
                 }
             }
         }
-        if (numberedHeadings < 2 || verdictShapedHeadings < numberedHeadings / 2) {
-            return;
+        if (numberedHeadings >= 2 && verdictShapedHeadings >= numberedHeadings / 2) {
+            throw new IllegalArgumentException(
+                "This report cannot be published yet: it has " + numberedHeadings + " numbered "
+                + "section headings that read as per-assertion verdict write-ups ('1. Was ... "
+                + "accurate', '2. Is ... correct', ...) but carries no `claims` array. This is a "
+                + "validation and the claims array is mandatory whenever two or more assertions "
+                + "are graded -- it is not a stylistic choice. Rebuild each of these sections as "
+                + "one entry in `claims` (assertion, verdict, article_value, warehouse_value, "
+                + "independent_value, sources, reason), add the required `pinocchios` rating for "
+                + "the piece as a whole, and call publish_report again. Do not resubmit this "
+                + "prose-section version.");
         }
-        throw new IllegalArgumentException(
-            "This report cannot be published yet: it has " + numberedHeadings + " numbered "
-            + "section headings that read as per-assertion verdict write-ups ('1. Was ... "
-            + "accurate', '2. Is ... correct', ...) but carries no `claims` array. This is a "
-            + "validation and the claims array is mandatory whenever two or more assertions "
-            + "are graded -- it is not a stylistic choice. Rebuild each of these sections as "
-            + "one entry in `claims` (assertion, verdict, article_value, warehouse_value, "
-            + "independent_value, sources, reason), add the required `pinocchios` rating for "
-            + "the piece as a whole, and call publish_report again. Do not resubmit this "
-            + "prose-section version.");
+        String body = allText.toString().replaceAll("<[^>]+>", " ");
+        java.util.regex.Matcher admission = SUBSTANCE_NOT_TESTED_ADMISSION.matcher(body);
+        if (admission.find() && OVERALL_TRUE_CLAIM.matcher(body).find()) {
+            throw new IllegalArgumentException(
+                "This report cannot be published yet: it admits, in its own words ('"
+                + admission.group().trim() + "'), that a specific figure or claim was never "
+                + "actually tested -- yet the report still declares the piece accurate/true. "
+                + "Confirming that a quote was said, or that an article was reported "
+                + "accurately by the outlet that ran it, is fact-checking the REPORTER; it is "
+                + "not fact-checking what was reported, and it is not this task. Every numeric "
+                + "or factual assertion a reporter OR a subject quoted in the piece makes gets "
+                + "tested exactly like an unattributed claim: build the `claims` array, "
+                + "actually test each one (retry a failed query rather than abandoning it), "
+                + "grade 'not checkable here' with a named reason only when search_catalog's "
+                + "unmatched_terms genuinely show no table carries it, and add the required "
+                + "`pinocchios` rating. A verdict of 'accurate' resting on unattempted claims "
+                + "is not honest.");
+        }
     }
 
     private static void enforceClaimShape(JsonNode claims) {
