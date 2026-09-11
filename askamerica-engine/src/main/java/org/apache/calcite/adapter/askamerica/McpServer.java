@@ -3155,6 +3155,8 @@ public class McpServer {
                             // Directly under the summary, where a reader looks first.
                             secs.add(Math.min(1, secs.size()), claimsSec);
                         }
+                    } else {
+                        enforceClaimsArrayPresence(secs);
                     }
                     enforceExclusionDisclosure(secs);
                     enforceTableProvenance(secs);
@@ -4724,6 +4726,65 @@ public class McpServer {
     /** The claim is graded, never its attribution. Refuses an assertion shaped "X said: '...'",
      *  and a graded verdict with no evidence behind it (no warehouse figure or SQL, and no
      *  independent figure with a source). */
+    /** Numbered section heading shaped like a per-claim verdict write-up: "1. Was X accurate",
+     *  "2. Is the article's Y correct", "Claim 3 — ...". The exact prose pattern a model falls
+     *  back to when it grades several assertions but never populates {@code claims}. */
+    private static final java.util.regex.Pattern NUMBERED_CLAIM_HEADING = java.util.regex.Pattern
+        .compile("^\\s*(?:\\d+\\.|Claim\\s*\\d+\\s*[-—:])");
+
+    private static final java.util.regex.Pattern VERDICT_SHAPED_WORDS = java.util.regex.Pattern
+        .compile("(?i)\\b(true|false|accurate|inaccurate|correct|incorrect|checks? out|holds? up|"
+            + "verdict|misleading|fabricat)");
+
+    /**
+     * A report with no {@code claims} array is refused outright when it is shaped like a
+     * validation anyway -- two or more numbered section headings that read as per-assertion
+     * verdict write-ups, at least half of them carrying verdict-shaped language. This is the
+     * exact failure the mandatory-claims instruction is meant to prevent: measured live,
+     * 2026-09-11, a q136 rerun (JD Vance ethnic-enclaves validation) published with four
+     * numbered prose headings ("1. Was Vance quoted accurately", "2. Is the article's
+     * counter-claim ... correct", ...) instead of the required `claims` array, despite the
+     * instruction banner stating the array is mandatory whenever two or more assertions are
+     * graded. An instruction a model can silently not follow is advice; this gate makes the
+     * same failure a hard refusal instead of a second missed opportunity.
+     *
+     * <p>Only fires on the SHAPE of the section headings, never on whether an external URL was
+     * fetched this session -- many ordinary (non-validation) reports cite an external article
+     * without being a claim-by-claim validation, and gating on web_fetch alone would refuse
+     * those incorrectly. A numbered list of ordinary section headings with no verdict language
+     * (e.g. "1. Background", "2. Methodology") does not trip this either; both the numbering
+     * AND the verdict-shaped wording have to be present together.
+     */
+    private static void enforceClaimsArrayPresence(java.util.List<ReportPage.Section> secs) {
+        int numberedHeadings = 0;
+        int verdictShapedHeadings = 0;
+        for (ReportPage.Section sec : secs) {
+            String heading = sec.heading;
+            if (heading == null) {
+                continue;
+            }
+            if (NUMBERED_CLAIM_HEADING.matcher(heading).find()) {
+                numberedHeadings++;
+                if (VERDICT_SHAPED_WORDS.matcher(heading).find()) {
+                    verdictShapedHeadings++;
+                }
+            }
+        }
+        if (numberedHeadings < 2 || verdictShapedHeadings < numberedHeadings / 2) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "This report cannot be published yet: it has " + numberedHeadings + " numbered "
+            + "section headings that read as per-assertion verdict write-ups ('1. Was ... "
+            + "accurate', '2. Is ... correct', ...) but carries no `claims` array. This is a "
+            + "validation and the claims array is mandatory whenever two or more assertions "
+            + "are graded -- it is not a stylistic choice. Rebuild each of these sections as "
+            + "one entry in `claims` (assertion, verdict, article_value, warehouse_value, "
+            + "independent_value, sources, reason), add the required `pinocchios` rating for "
+            + "the piece as a whole, and call publish_report again. Do not resubmit this "
+            + "prose-section version.");
+    }
+
     private static void enforceClaimShape(JsonNode claims) {
         for (JsonNode c : claims) {
             String assertion = c.path("assertion").asText("").trim();
