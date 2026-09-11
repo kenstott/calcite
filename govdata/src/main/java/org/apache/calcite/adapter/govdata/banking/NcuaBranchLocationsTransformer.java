@@ -119,7 +119,11 @@ public class NcuaBranchLocationsTransformer implements StreamingResponseTransfor
     row.put("city", col(headers, values, "PhysicalAddressCity"));
     row.put("state_abbr", col(headers, values, "PhysicalAddressStateCode"));
     row.put("zip", col(headers, values, "PhysicalAddressPostalCode"));
-    row.put("county_name", col(headers, values, "PhysicalAddressCountyName"));
+    // NCUA renamed this header to "PhysicalAddressCountyName2" starting the 2025-03 cycle
+    // (confirmed live: the 2024-12 file still has "PhysicalAddressCountyName", 2025-03 has
+    // only the "2" variant with the same county-name values) - try both so historical cycles
+    // keep resolving under the old name.
+    row.put("county_name", colAny(headers, values, "PhysicalAddressCountyName2", "PhysicalAddressCountyName"));
     row.put("country", col(headers, values, "PhysicalAddressCountry"));
     row.put("phone", col(headers, values, "PhoneNumber"));
     row.put("has_atm", oneZeroOrNull(col(headers, values, "ATM")));
@@ -135,6 +139,18 @@ public class NcuaBranchLocationsTransformer implements StreamingResponseTransfor
           return v.isEmpty() ? null : v;
         }
         return null;
+      }
+    }
+    return null;
+  }
+
+  /** Like {@link #col}, trying each header name in order - for a column NCUA has renamed
+   * across cycles, so both the current and prior name resolve from whichever cycle uses it. */
+  private static String colAny(String[] headers, String[] values, String... names) {
+    for (String name : names) {
+      String v = col(headers, values, name);
+      if (v != null) {
+        return v;
       }
     }
     return null;
