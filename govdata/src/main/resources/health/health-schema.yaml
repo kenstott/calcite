@@ -275,11 +275,26 @@ partitionedTables:
       - name: latest_submission_date
         type: string
         nullable: true
-        comment: YYYYMMDD of most recent submission action
+        comment: >
+          YYYYMMDD of the most recent submission action — a supplement (label change,
+          manufacturing change, etc.), not the approval, for any application with post-approval
+          activity. Use original_approval_date for the application's actual approval year.
       - name: review_priority
         type: string
         nullable: true
         comment: STANDARD or PRIORITY
+      - name: original_approval_date
+        type: string
+        nullable: true
+        comment: >
+          YYYYMMDD the application's ORIG submission reached status AP (approved) — the
+          application's real approval date and the only usable year dimension for an approval
+          cohort (D-251). NULL when the ORIG submission's own status isn't AP in this feed (e.g.
+          tentative approval only) or wasn't found. openFDA's drugsfda endpoint carries no
+          separate filing/received date anywhere in the record (confirmed live against
+          NDA020702/Lipitor's own ORIG entry), so review time (submission-to-approval duration)
+          is not computable from this source — only the approval date itself. See
+          fda_drug_submissions for the full per-submission history this is derived from.
 
     source:
       type: http
@@ -306,6 +321,116 @@ partitionedTables:
     dimensions:
       type:
         - fda_drug_approvals
+      partition_file:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+        properties:
+          endpoint: "results.drug.drugsfda"
+          startYear: "${GOVDATA_START_YEAR:2010}"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
+  # FDA DRUG SUBMISSIONS — full per-submission history behind fda_drug_approvals
+  # (D-251): same openFDA drugsfda download, one row per (application_number,
+  # submission_number) instead of collapsing to the latest submission. Lets a caller
+  # build an approval cohort (application_number where submission_type=ORIG and
+  # submission_status=AP) or a priority-review breakdown that fda_drug_approvals'
+  # single latest_* triple can't answer alone.
+  # ==========================================================================
+  - name: fda_drug_submissions
+    pattern: "type=fda_drug_submissions"
+    freshness:
+      type: version
+      probe_url: "https://api.fda.gov/download.json"
+      version_field: "results.drug.drugsfda.export_date"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Full submission history per FDA drug application — one row per (application_number,
+      submission_number). ORIG (submission_number 1, almost always) is the original
+      application; SUPPL rows are post-approval supplements (label changes, manufacturing
+      changes, new indications, etc.). An application's real approval date is its ORIG row's
+      submission_status_date where submission_status = AP (also surfaced directly as
+      fda_drug_approvals.original_approval_date). openFDA exposes no separate filing/received
+      date anywhere in this record — only this status date — so review time
+      (submission-to-approval duration) cannot be computed from this table or any other
+      openFDA source; it is available only from FDA's own PDUFA performance reports. FK to
+      fda_drug_approvals.application_number.
+
+    columns:
+      - name: application_number
+        type: string
+        nullable: false
+        comment: FK to fda_drug_approvals.application_number — PK part 1
+      - name: submission_number
+        type: string
+        nullable: false
+        comment: PK part 2 — ORIG is almost always "1"; SUPPL numbers increment per supplement
+      - name: submission_type
+        type: string
+        nullable: true
+        comment: ORIG (original application) or SUPPL (post-approval supplement)
+      - name: submission_status
+        type: string
+        nullable: true
+        comment: AP = approved, TA = tentatively approved
+      - name: submission_status_date
+        type: string
+        nullable: true
+        comment: YYYYMMDD this submission reached submission_status
+      - name: submission_class_code
+        type: string
+        nullable: true
+        comment: e.g. TYPE 1 (New Molecular Entity), EFFICACY, LABELING, MANUF (CMC)
+      - name: submission_class_code_description
+        type: string
+        nullable: true
+        comment: Human-readable form of submission_class_code
+      - name: review_priority
+        type: string
+        nullable: true
+        comment: STANDARD or PRIORITY
+
+    source:
+      type: http
+      url: "{partition_file}"
+      method: GET
+      response:
+        format: TEXT
+      skipResponseBody: true
+      rateLimit:
+        requestsPerSecond: 5.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: false
+
+    hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDrugSubmissionsResponseTransformer"
+
+    dimensions:
+      type:
+        - fda_drug_submissions
       partition_file:
         type: custom
         resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"

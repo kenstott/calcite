@@ -150,9 +150,9 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
 
   private void flattenInto(JsonNode record, ArrayNode out) {
     try {
-      ObjectNode row = MAPPER.createObjectNode();
-      flattenRecord(record, row);
-      out.add(row);
+      for (ObjectNode row : flattenRecords(record)) {
+        out.add(row);
+      }
     } catch (Exception e) {
       LOGGER.debug("Skipping malformed {} record: {}", getClass().getSimpleName(), e.getMessage());
     }
@@ -177,8 +177,21 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
     }
   }
 
-  /** Map one results[] entry into the flat output row. */
-  protected abstract void flattenRecord(JsonNode record, ObjectNode row);
+  /** Map one results[] entry into the flat output row (the common one-row-per-application
+   * case). Subclasses producing more than one row per entry (e.g. one per submission)
+   * override {@link #flattenRecords} instead and can leave this unimplemented. */
+  protected void flattenRecord(JsonNode record, ObjectNode row) {
+    throw new UnsupportedOperationException(
+        getClass().getSimpleName() + " must override flattenRecord or flattenRecords");
+  }
+
+  /** Map one results[] entry into one or more output rows. Default delegates to
+   * {@link #flattenRecord} for the common one-row-per-application case. */
+  protected java.util.List<ObjectNode> flattenRecords(JsonNode record) {
+    ObjectNode row = MAPPER.createObjectNode();
+    flattenRecord(record, row);
+    return java.util.Collections.singletonList(row);
+  }
 
   /** Get first string element of a JSON array node, or null. */
   protected static String firstText(JsonNode node, String fieldName) {

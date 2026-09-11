@@ -48,6 +48,11 @@ public class FdaDrugApprovalsResponseTransformer extends AbstractOpenFdaResponse
     JsonNode submissions = record.path("submissions");
     JsonNode latestSubmission = MAPPER.createObjectNode();
     String latestDate = null;
+    // ORIG's own submission_status_date, when its status is AP: this application's real
+    // approval date - the only year dimension this record actually carries. (D-251: the
+    // latest_* triple above tracks the most recent *supplement*, not the approval, so a
+    // decades-old drug's latest_submission_date can be this year's labeling change.)
+    String originalApprovalDate = null;
     if (submissions.isArray()) {
       for (JsonNode sub : submissions) {
         String subDate = text(sub, "submission_status_date");
@@ -55,12 +60,17 @@ public class FdaDrugApprovalsResponseTransformer extends AbstractOpenFdaResponse
           latestDate = subDate;
           latestSubmission = sub;
         }
+        if ("ORIG".equals(text(sub, "submission_type"))
+            && "AP".equals(text(sub, "submission_status"))) {
+          originalApprovalDate = subDate;
+        }
       }
     }
     put(row, "latest_submission_type", text(latestSubmission, "submission_type"));
     put(row, "latest_submission_status", text(latestSubmission, "submission_status"));
     put(row, "latest_submission_date", latestDate);
     put(row, "review_priority", text(latestSubmission, "review_priority"));
+    put(row, "original_approval_date", originalApprovalDate);
 
     row.put("type", "fda_drug_approvals");
   }
