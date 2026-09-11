@@ -2099,19 +2099,37 @@ partitionedTables:
       - name: annual_avg_estabs
         type: int
         nullable: true
-        comment: Average annual establishment count
+        comment: >
+          Average annual establishment count. BLS discloses this even for a cell whose
+          employment/wage figures are suppressed (disclosure_code = 'N') — see
+          annual_avg_emplvl.
       - name: annual_avg_emplvl
         type: int
         nullable: true
-        comment: Average annual employment level
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_emplvl" AS INTEGER) END'
+        comment: >
+          Average annual employment level. NULL when BLS disclosure_code = 'N' — a
+          single-employer or near-single-employer cell BLS will not publish, not a real 0.
+          Same suppression as county_qcew, sourced from the same QCEW file — see that table's
+          comment for the confirmed live example. Never SUM/AVG without excluding NULLs;
+          treating a suppressed cell as 0 understates the total.
       - name: total_annual_wages
         type: long
         nullable: true
-        comment: Total annual wages in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."total_annual_wages" AS BIGINT) END'
+        comment: Total annual wages in dollars. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
       - name: annual_avg_wkly_wage
         type: int
         nullable: true
-        comment: Average weekly wage in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_wkly_wage" AS INTEGER) END'
+        comment: Average weekly wage in dollars. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
+      - name: disclosure_code
+        type: string
+        nullable: true
+        comment: >
+          BLS suppression flag, verbatim from the source. 'N' means annual_avg_emplvl,
+          total_annual_wages and annual_avg_wkly_wage are suppressed to NULL in this table;
+          annual_avg_estabs is disclosed regardless. Blank means no suppression.
       # Computed columns for user convenience
       - name: state_fips
         type: string
@@ -2349,23 +2367,42 @@ partitionedTables:
       - name: annual_avg_estabs
         type: int
         nullable: true
-        comment: Average annual establishment count
+        comment: >
+          Average annual establishment count. BLS discloses this even for a cell whose
+          employment/wage figures are suppressed (disclosure_code = 'N') — see
+          annual_avg_emplvl.
       - name: annual_avg_emplvl
         type: int
         nullable: true
-        comment: Average annual employment level
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_emplvl" AS INTEGER) END'
+        comment: >
+          Average annual employment level. NULL when BLS disclosure_code = 'N' — a
+          single-employer or near-single-employer cell BLS will not publish, not a real 0.
+          Same suppression as county_qcew, sourced from the same QCEW file — see that table's
+          comment for the confirmed live example. Never SUM/AVG without excluding NULLs;
+          treating a suppressed cell as 0 understates the total.
       - name: total_annual_wages
         type: long
         nullable: true
-        comment: Total annual wages in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."total_annual_wages" AS BIGINT) END'
+        comment: Total annual wages in dollars. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
       - name: annual_avg_wkly_wage
         type: int
         nullable: true
-        comment: Average weekly wage in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_wkly_wage" AS INTEGER) END'
+        comment: Average weekly wage in dollars. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
       - name: avg_annual_pay
         type: int
         nullable: true
-        comment: Average annual pay in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."avg_annual_pay" AS INTEGER) END'
+        comment: Average annual pay in dollars. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
+      - name: disclosure_code
+        type: string
+        nullable: true
+        comment: >
+          BLS suppression flag, verbatim from the source. 'N' means annual_avg_emplvl,
+          total_annual_wages, annual_avg_wkly_wage and avg_annual_pay are suppressed to NULL
+          in this table; annual_avg_estabs is disclosed regardless. Blank means no suppression.
       # Computed columns for user convenience
       - name: metro_code
         type: string
@@ -2489,19 +2526,47 @@ partitionedTables:
       - name: annual_avg_estabs
         type: int
         nullable: true
-        comment: Average annual establishment count
+        comment: >
+          Average annual establishment count. BLS discloses this even for a cell whose
+          employment/wage figures are suppressed (disclosure_code = 'N') — a non-zero count
+          here with NULL employment does not mean 0 establishments reported 0 workers, it
+          means the count itself was never suppressed. See disclosure_code.
       - name: annual_avg_emplvl
         type: int
         nullable: true
-        comment: Average annual employment level
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_emplvl" AS INTEGER) END'
+        comment: >
+          Average annual employment level. NULL when BLS disclosure_code = 'N' — a
+          single-employer or near-single-employer cell whose employment BLS will not publish,
+          not a real 0. Confirmed live: Muhlenberg County KY (FIPS 21177), NAICS 2211, 2015-2022
+          all carry disclosure_code 'N' with annual_avg_estabs 2-3 alongside this NULL — the
+          plant did not go to zero employment, BLS suppressed the figure. Never SUM/AVG this
+          column without excluding NULLs (the default SQL behavior); treating a suppressed cell
+          as 0 understates the true total.
       - name: total_annual_wages
         type: long
         nullable: true
-        comment: Total annual wages in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."total_annual_wages" AS BIGINT) END'
+        comment: >
+          Total annual wages in dollars. NULL when BLS disclosure_code = 'N' — see
+          annual_avg_emplvl, which is suppressed by the same flag and for the same reason.
       - name: annual_avg_wkly_wage
         type: int
         nullable: true
-        comment: Average weekly wage in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_wkly_wage" AS INTEGER) END'
+        comment: >
+          Average weekly wage in dollars. NULL when BLS disclosure_code = 'N' — see
+          annual_avg_emplvl.
+      - name: disclosure_code
+        type: string
+        nullable: true
+        comment: >
+          BLS suppression flag, verbatim from the source. 'N' means annual_avg_emplvl,
+          total_annual_wages and annual_avg_wkly_wage are suppressed to NULL in this table
+          (see those columns) to protect the identity of a single dominant employer;
+          annual_avg_estabs is disclosed regardless. Blank means no suppression. Kept as its
+          own column, not collapsed into the NULLs, so a caller can distinguish "BLS would not
+          publish this" from any other reason a measure might be NULL.
 
     # Dimension definitions for iteration
     dimensions:
@@ -2614,19 +2679,37 @@ partitionedTables:
       - name: annual_avg_estabs
         type: int
         nullable: true
-        comment: Average annual establishment count
+        comment: >
+          Average annual establishment count. BLS discloses this even for a cell whose
+          employment/wage figures are suppressed (disclosure_code = 'N') — see
+          annual_avg_emplvl.
       - name: annual_avg_emplvl
         type: int
         nullable: true
-        comment: Average annual employment level
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_emplvl" AS INTEGER) END'
+        comment: >
+          Average annual employment level. NULL when BLS disclosure_code = 'N' — a
+          single-employer or near-single-employer cell BLS will not publish, not a real 0.
+          Same suppression as county_qcew, sourced from the same QCEW file — see that table's
+          comment for the confirmed live example (Muhlenberg County KY, NAICS 2211). Never
+          SUM/AVG without excluding NULLs; treating a suppressed cell as 0 understates the total.
       - name: total_annual_wages
         type: long
         nullable: true
-        comment: Total annual wages in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."total_annual_wages" AS BIGINT) END'
+        comment: Total annual wages in dollars. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
       - name: annual_avg_wkly_wage
         type: int
         nullable: true
-        comment: Average weekly wage in dollars
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_wkly_wage" AS INTEGER) END'
+        comment: Average weekly wage in dollars. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
+      - name: disclosure_code
+        type: string
+        nullable: true
+        comment: >
+          BLS suppression flag, verbatim from the source. 'N' means annual_avg_emplvl,
+          total_annual_wages and annual_avg_wkly_wage are suppressed to NULL in this table;
+          annual_avg_estabs is disclosed regardless. Blank means no suppression.
       # Computed columns for user convenience
       - name: county_fips
         type: string
