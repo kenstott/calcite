@@ -114,7 +114,7 @@ ALL_MODE_GROUPS=(
   "health-who|who_gho_indicators"
   "health-trials|clinical_trials,clinical_trial_conditions,clinical_trial_interventions"
   "health-cdc|cdc_covid_vaccinations,cdc_mortality,cdc_brfss"
-  "health-cms-medicaid|cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home"
+  "health-cms-medicaid|cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home,cms_pos_termination_history,hospital_cost_report_financials"
   "health-rxnorm|rxnorm_drugs"
   "health-hrsa|ahrf_physician_supply"
 )
@@ -139,7 +139,7 @@ DAILY_ONLY_GROUPS=(
   "health-cdc-geo|cdc_county_overdose_deaths,cdc_county_injury_mortality,cdc_state_vital_provisional,cdc_teen_birth_rates_county"
   # County Health Rankings' 13MB annual CSV, isolated so its one long download cannot stall the
   # Socrata group above.
-  "health-chr|chr_premature_death"
+  "health-chr|chr_premature_death,chr_premature_death_trends"
   # CDC WONDER XML API tables — isolated from health-cdc-geo because WONDER enforces a strict
   # 15-second minimum between requests (HTTP 429 otherwise), unlike data.cdc.gov Socrata.
   "health-wonder|cdc_wonder_cancer_incidence,cdc_wonder_std_morbidity,cdc_wonder_tb,cdc_wonder_natality,cdc_wonder_cause_of_death,cdc_wonder_cause_of_death_2018_2024,cdc_wonder_multiple_cause_of_death,cdc_wonder_multiple_cause_of_death_2018_2024,cdc_wonder_vaers"
