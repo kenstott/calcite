@@ -903,7 +903,26 @@ partitionedTables:
       - name: total_risk_based_capital_thousands
         type: long
         nullable: true
-        comment: Total risk-based capital — Call Report item RBC (USD thousands)
+        comment: >
+          Total risk-based capital (Tier 1 + Tier 2) — Call Report item RBC (USD thousands).
+          Confirmed live against api.fdic.gov/banks/financials: 0 (not null, not missing) for
+          roughly 39% of institutions in a typical quarter, stable across at least the last two
+          years — these are institutions that elected the Community Bank Leverage Ratio (CBLR)
+          framework and are not required to compute the standard risk-based ratios at all;
+          RBCT2 and the risk-based ratio RBCRWAJ are 0 for the exact same institutions, while
+          total_tier1_capital_thousands (RBCT1, below) still reports a real value for them since
+          Tier 1 is what CBLR's own simplified leverage ratio uses. A caller computing a
+          risk-based-capital ratio (e.g. CRE concentration) should use
+          total_tier1_capital_thousands as the denominator when this column is 0, not filter
+          the institution out.
+      - name: total_tier1_capital_thousands
+        type: long
+        nullable: true
+        comment: >
+          Tier 1 risk-based capital — Call Report item RBCT1 (USD thousands). Populated for
+          every institution regardless of CBLR election (see total_risk_based_capital_thousands
+          above) — the correct capital denominator for a CBLR-electing bank, whose total RBC
+          reports 0.
 
     backfill_period: annual
 
@@ -921,7 +940,7 @@ partitionedTables:
       method: GET
       parameters:
         filters: "REPDTE:[{year}0101 TO {year}1231]"
-        fields: "CERT,REPDTE,ASSET,DEPDOM,NETINC,LIAB,NUMEMP,EQV,NIMY,EINTEXP,LNRENRES,LNRECONS,LNREMULT,RBC"
+        fields: "CERT,REPDTE,ASSET,DEPDOM,NETINC,LIAB,NUMEMP,EQV,NIMY,EINTEXP,LNRENRES,LNRECONS,LNREMULT,RBC,RBCT1"
         format: "json"
       response:
         format: json

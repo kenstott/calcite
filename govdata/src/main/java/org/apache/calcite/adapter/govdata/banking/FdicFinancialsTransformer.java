@@ -35,5 +35,6 @@ public class FdicFinancialsTransformer extends AbstractFdicTransformer {
     putLong(row, "cre_construction_land_dev_thousands", rec, "LNRECONS");
     putLong(row, "cre_multifamily_thousands", rec, "LNREMULT");
     putLong(row, "total_risk_based_capital_thousands", rec, "RBC");
+    putLong(row, "total_tier1_capital_thousands", rec, "RBCT1");
   }
 }
