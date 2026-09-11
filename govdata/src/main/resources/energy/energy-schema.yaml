@@ -1256,7 +1256,14 @@ partitionedTables:
       - name: production_unit
         type: string
         nullable: true
-        comment: Unit of measure (e.g., 'Thousand Barrels', 'Million Cubic Feet')
+        comment: >
+          Unit of measure — one of exactly two short codes this table actually stores: MBBL
+          (thousand barrels) or MBBL/D (thousand barrels per day). The spelled-out forms in
+          series_description ("Thousand Barrels", "Thousand Barrels per Day") never appear
+          here and are not valid filter values (D-270) — filtering on the long form silently
+          returns a near-empty result instead of an error. This table is crude oil only; there
+          is no natural-gas production series (see the table comment), so a gas unit like
+          "Million Cubic Feet" never appears either.
       - name: series_id
         type: string
         nullable: true
