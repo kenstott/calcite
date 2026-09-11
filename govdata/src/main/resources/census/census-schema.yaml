@@ -146,7 +146,14 @@ dimension_values:
   decennial_years: &decennial_years
     type: yearRange
     start: 2000            # cadence anchor (feed-began): aligns the decennial step at 2000/2010/2020
-    minYear: "${GOVDATA_START_YEAR:2010}"   # global demarcation clamp (daily → current year)
+    # Literal, not "${GOVDATA_START_YEAR:...}" - minYear only ever raises `start` (never
+    # lowers it), so binding it to the operator run-window variable meant any process that
+    # exported GOVDATA_START_YEAR above 2000 (its unset default resolves to 2010) silently
+    # raised this floor above the cadence anchor, permanently excluding the 2000 vintage from
+    # a fresh rebuild with no tracker row and no error - exactly the risk that orphaned FEC's
+    # 2010/2012 cycles (kenstott/govdata-ops#104). 2000 is this table's own feed-began anchor,
+    # so pinning minYear there makes the clamp a permanent no-op rather than a live risk.
+    minYear: 2000
     step: 10
     dataLag: 0             # vintage-axis: partition year = census year, not census year - lag
 
@@ -3908,7 +3915,10 @@ partitionedTables:
       year:
         type: yearRange
         start: 2017            # cadence anchor (feed-began): quinquennial step 2017/2022/2027
-        minYear: "${GOVDATA_START_YEAR:2010}"   # global demarcation clamp (daily → current year)
+        # Literal, not "${GOVDATA_START_YEAR:...}" - see decennial_years above for why binding
+        # this to the run-window variable is a live risk (kenstott/govdata-ops#104). 2017 is
+        # this table's own feed-began anchor.
+        minYear: 2017
         step: 5
         end: "${GOVDATA_END_YEAR:current}"
         dataLag: 0             # vintage-axis: partition year = census year, not census year - lag

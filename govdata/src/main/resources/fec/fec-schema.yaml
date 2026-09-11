@@ -50,7 +50,18 @@ dimension_templates:
     start: 2010
     cadenceStart: 2010
     cadenceLength: 2
-    minYear: "${GOVDATA_START_YEAR:2010}"
+    # A literal, not "${GOVDATA_START_YEAR:...}" - minYear is a floor describing what the
+    # source has, not the run's own window (that's `start`, above). Binding it to the same
+    # run-window variable meant any process that exported GOVDATA_START_YEAR above 2010 for
+    # an unrelated reason silently raised this clamp too (DimensionIterator.resolveRange only
+    # ever raises `start` to meet minYear, never lowers it) - permanently excluding whatever
+    # years fell below it from that run, with no tracker row and no error. 1980 is the real
+    # floor for every table that shares this anchor (fec.gov bulk-downloads indiv80.zip etc.
+    # confirmed live 2026-09-10); it's a safe minimum for the 3 tables whose own files only
+    # start at 2010 (independent_expenditures, electioneering_communications,
+    # communication_costs) since minYear only ever raises `start`, never lowers it below what
+    # a table's own `start`/`cadenceStart` already requests.
+    minYear: 1980
 
 # ============================================================================
 # BULK DOWNLOADS
