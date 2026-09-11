@@ -97,15 +97,28 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
       .connectTimeout(Duration.ofSeconds(30))
       .build();
 
+  // Confirmed against production's own pipeline_tracker: this host's Cloudflare gate 403s a
+  // request some of the time (activity years 2012/2016/2017/2025 all recorded a genuine HTTP
+  // 403 from this exact client/header combination), while an identical request for a
+  // neighboring activity year succeeds - an intermittent gate, not a permanent block on this
+  // client. Worth a few retries before giving up.
+  private static final int MAX_FETCH_RETRIES = 4;
+  private static final long RETRY_BACKOFF_MS = 5_000L;
+
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
     final String url = context.getUrl();
-    final ZipInputStream zis = openZip(url, context.getHeaders());
+    final ZipInputStream zis = openZipWithRetry(url, context.getHeaders());
     final ZipEntry entry = findAggregateA11Entry(zis, url);
     if (entry == null) {
       zis.close();
-      LOGGER.warn("CRA: no *_Aggr_A11.dat entry found in {}", url);
-      return java.util.Collections.emptyIterator();
+      // Every configured activity year (1996+) publishes an A1-1 aggregate, so a ZIP that
+      // downloaded successfully but doesn't contain the expected member is not "this year
+      // has no data" (that's what the source's own 404 already communicates, upstream in
+      // openZip) - it means this table's own name-matching assumption doesn't hold for this
+      // file. Throwing surfaces it as an error the pipeline can retry/report on, rather than
+      // silently completing with zero rows and no way to tell it apart from a real empty year.
+      throw new IOException("CRA: no *_Aggr_A11.dat entry found in " + url);
     }
     LOGGER.debug("CRA: streaming {} from {}", entry.getName(), url);
 
@@ -194,6 +207,36 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
       }
     }
     return null;
+  }
+
+  /** Retries {@link #openZip} on a transient failure. A 404 (source hasn't published this
+   * year yet) is not transient and propagates on the first attempt - only an actual
+   * connection/HTTP-status failure (this host's Cloudflare gate 403ing some requests and not
+   * others for the same client/headers, confirmed against production's own tracker) is worth
+   * retrying. */
+  private static ZipInputStream openZipWithRetry(String url, Map<String, String> headers)
+      throws IOException {
+    IOException last = null;
+    for (int attempt = 0; attempt <= MAX_FETCH_RETRIES; attempt++) {
+      if (attempt > 0) {
+        LOGGER.warn("CRA: retrying {} (attempt {}/{}): {}",
+            url, attempt + 1, MAX_FETCH_RETRIES + 1, last.getMessage());
+        try {
+          Thread.sleep(RETRY_BACKOFF_MS * attempt);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while retrying CRA aggregate fetch", ie);
+        }
+      }
+      try {
+        return openZip(url, headers);
+      } catch (SkippedBatchException e) {
+        throw e;
+      } catch (IOException e) {
+        last = e;
+      }
+    }
+    throw last;
   }
 
   /** Downloads the ZIP over HTTP/2 (see the class doc for why: this host's Cloudflare gate
