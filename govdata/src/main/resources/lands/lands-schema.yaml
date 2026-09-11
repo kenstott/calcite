@@ -1639,7 +1639,13 @@ partitionedTables:
       url: "https://irmaservices.nps.gov/Stats/v1/visitation?startMonth=1&startYear={year}&endMonth=12&endYear={year}"
       method: GET
       response:
-        format: json
+        # IRMA now serves XML by default (application/xml, no Accept header sent); JSON is
+        # legacy (still present in raw-cached responses fetched before the flip). Declaring
+        # `xml` here (rather than the default `json`, or omitting this block, which also
+        # defaults to json) skips HttpSource's JSON-only API-error preflight, which would
+        # otherwise reject the XML body before the transformer's own format dispatch (below)
+        # ever runs. The transformer handles both formats regardless of this declared value.
+        format: xml
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
