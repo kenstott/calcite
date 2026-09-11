@@ -2305,7 +2305,18 @@ public class McpServer {
                     log.println("[askamerica-mcp] Initializing schema: " + k);
                     ensureFreshR2Credentials();
                     GovDataDriver driver = new GovDataDriver();
-                    Connection c = driver.connect("jdbc:govdata:source=" + k, new Properties());
+                    Properties connProps = new Properties();
+                    // GovDataDriver's own default (standard,postgresql,spatial,mssql) has no
+                    // DATE_TRUNC operator at all -- it is registered only under the bigquery
+                    // function library (SqlLibraryOperators.DATE_TRUNC, signature <DATE>,
+                    // <DATETIME_INTERVAL>) -- so a caller's DATE_TRUNC('month', d) fails
+                    // validation with "No match found for function signature" before ever
+                    // reaching DuckDB. Adding bigquery here is scoped to this engine's own
+                    // connections only (GovDataDriver only applies its default when the caller
+                    // has not already set "fun"), not to the shared driver default other
+                    // tooling (DQ, ETL, model-verify) still uses.
+                    connProps.setProperty("fun", "standard,postgresql,spatial,mssql,bigquery");
+                    Connection c = driver.connect("jdbc:govdata:source=" + k, connProps);
                     if (c == null) {
                         throw new IllegalStateException(
                             "GovDataDriver returned null for schema: " + k);
@@ -4341,7 +4352,7 @@ public class McpServer {
             }
             i++;
         }
-        return stripRedundantLimitClause(out.toString());
+        return repairDateTruncDateArg(stripRedundantLimitClause(out.toString()));
     }
 
     // Extract the first govdata schema name from a SQL query (e.g. "FROM sec.filings" → "sec").
@@ -5545,11 +5556,223 @@ public class McpServer {
         return stripped;
     }
 
+    /**
+     * This dialect has exactly one registered {@code DATE_TRUNC} operator -- Calcite's
+     * BigQuery-library one ({@code SqlLibraryOperators.DATE_TRUNC}), whose signature is
+     * {@code DATE_TRUNC(<DATE_OR_TIMESTAMP>, <DATETIME_INTERVAL>)}: the date/timestamp
+     * FIRST, an unquoted time-unit identifier (MONTH, YEAR, ...) SECOND. A caller writing
+     * the PostgreSQL/DuckDB convention instead -- {@code DATE_TRUNC('month', filing_date)},
+     * unit string first, quoted -- fails Calcite's own validator (not DuckDB's; confirmed
+     * live 2026-09-11 by the error's {@code <TYPE>}-bracket format, which matches Calcite's
+     * {@code canNotApplyOp2Type}/{@code assignabletypesmustmatch} message style, not
+     * DuckDB's own {@code Binder Error: ... 'date_trunc(TYPE, TYPE)'} format) with
+     * {@code No match found for function signature DATE_TRUNC(<CHARACTER>, <DATE>)} --
+     * because the quoted-first form is not the operator's real signature at all, not
+     * because of the second argument's type. Casting either argument therefore cannot fix
+     * this; the argument ORDER and the unit's quoting are what have to change. Every
+     * govdata date column is a natural, correct thing to truncate, so the rewrite belongs
+     * here rather than in a warning the caller has to notice and work around: swap the two
+     * arguments and strip the unit's quotes, e.g. {@code DATE_TRUNC('month', filing_date)}
+     * becomes {@code DATE_TRUNC(filing_date, MONTH)}. Left untouched (and NOT counted as a
+     * repair) when the unit argument is already unquoted -- the caller already wrote the
+     * form this dialect accepts.
+     *
+     * <p>Character-scans for a top-level {@code DATE_TRUNC(} call (skipping comments and
+     * quoted strings, so a mention inside a string literal or an alias is left alone), then
+     * paren/quote-aware-splits the call into its two arguments so a date argument that is
+     * itself a nested call (e.g. {@code DATE_TRUNC('month', COALESCE(a, b))}) is captured
+     * whole rather than truncated at its first internal comma or paren. Every call in the
+     * statement is repaired, not only the first, since two truncations of different columns
+     * in the same SELECT are common.
+     */
+    static String repairDateTruncDateArg(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return sql;
+        }
+        String lower0 = sql.toLowerCase(java.util.Locale.ROOT);
+        if (!lower0.contains("date_trunc")) {
+            return sql;
+        }
+        StringBuilder out = new StringBuilder(sql.length() + 16);
+        int n = sql.length();
+        int i = 0;
+        boolean repaired = false;
+        String lastCall = null;
+        while (i < n) {
+            char ch = sql.charAt(i);
+            if (ch == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                int stop = nl < 0 ? n : nl;
+                out.append(sql, i, stop);
+                i = stop;
+                continue;
+            }
+            if (ch == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int close = sql.indexOf("*/", i + 2);
+                int stop = close < 0 ? n : close + 2;
+                out.append(sql, i, stop);
+                i = stop;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                int j = i + 1;
+                while (j < n) {
+                    if (sql.charAt(j) == ch) {
+                        if (j + 1 < n && sql.charAt(j + 1) == ch) {
+                            j += 2;
+                            continue;
+                        }
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                out.append(sql, i, Math.min(j, n));
+                i = Math.min(j, n);
+                continue;
+            }
+            if (Character.isLetter(ch) || ch == '_') {
+                int j = i;
+                while (j < n
+                        && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                    j++;
+                }
+                String word = sql.substring(i, j);
+                int k = j;
+                while (k < n && Character.isWhitespace(sql.charAt(k))) {
+                    k++;
+                }
+                if ("date_trunc".equalsIgnoreCase(word) && k < n && sql.charAt(k) == '(') {
+                    int[] arg1End = new int[1];
+                    int[] callEnd = new int[1];
+                    if (splitDateTruncCall(sql, k, arg1End, callEnd)) {
+                        String arg1Trim = sql.substring(k + 1, arg1End[0]).trim();
+                        String arg2Trim = sql.substring(arg1End[0] + 1, callEnd[0] - 1).trim();
+                        boolean unitIsQuotedFirst = arg1Trim.length() >= 2
+                            && (arg1Trim.charAt(0) == '\'' || arg1Trim.charAt(0) == '"');
+                        if (unitIsQuotedFirst) {
+                            String unit = arg1Trim.substring(1, arg1Trim.length() - 1)
+                                .toUpperCase(java.util.Locale.ROOT);
+                            // The operator's first operand must resolve to DATE or TIMESTAMP;
+                            // many govdata date columns are declared VARCHAR, which the
+                            // operator rejects outright (confirmed live 2026-09-11: "Cannot
+                            // apply 'DATE_TRUNC' to arguments of type 'DATE_TRUNC(<VARCHAR>,
+                            // <INTERVAL MONTH>)'"). CAST(... AS TIMESTAMP) is a no-op when the
+                            // column is already DATE/TIMESTAMP and resolves the mismatch when
+                            // it is a VARCHAR-typed date column.
+                            String dateUpper = arg2Trim.toUpperCase(java.util.Locale.ROOT);
+                            boolean alreadyDated = dateUpper.startsWith("DATE ")
+                                || dateUpper.startsWith("TIMESTAMP")
+                                || dateUpper.startsWith("NOW()")
+                                || dateUpper.startsWith("CURRENT_TIMESTAMP")
+                                || dateUpper.startsWith("CURRENT_DATE")
+                                || (dateUpper.startsWith("CAST(")
+                                    && (dateUpper.endsWith("AS DATE)")
+                                        || dateUpper.endsWith("AS TIMESTAMP)")));
+                            String dateArg = alreadyDated ? arg2Trim
+                                : "CAST(" + arg2Trim + " AS TIMESTAMP)";
+                            String rewrittenCall = "(" + dateArg + ", " + unit + ")";
+                            out.append(word).append(rewrittenCall);
+                            repaired = true;
+                            lastCall = word + rewrittenCall;
+                        } else {
+                            out.append(word).append(sql, k, callEnd[0]);
+                        }
+                        i = callEnd[0];
+                        continue;
+                    }
+                }
+                out.append(word);
+                i = j;
+                continue;
+            }
+            out.append(ch);
+            i++;
+        }
+        if (repaired) {
+            LAST_REPAIR_NOTICE.set(
+                "DATE_TRUNC in this dialect takes the date/timestamp FIRST (cast to TIMESTAMP "
+                + "if not already a date/timestamp type) and an unquoted time-unit SECOND "
+                + "(DATE_TRUNC(CAST(col AS TIMESTAMP), MONTH)), not PostgreSQL/DuckDB's "
+                + "DATE_TRUNC('month', col) -- the quoted-unit-first form has no matching "
+                + "function signature here. Rewritten and run as: " + lastCall);
+            return out.toString();
+        }
+        return sql;
+    }
+
+    /**
+     * From an opening paren at {@code sql.charAt(openParen) == '('}, finds the top-level
+     * comma separating a two-argument call's arguments and the paren that closes the call,
+     * skipping nested parens, quoted strings, and comments. Returns false (leaving the
+     * output indices unset) if the call is malformed -- not two comma-separated arguments,
+     * or unterminated -- so the caller leaves it untouched rather than guessing.
+     */
+    private static boolean splitDateTruncCall(String sql, int openParen, int[] outArg1End,
+            int[] outCallEnd) {
+        int n = sql.length();
+        int depth = 0;
+        int commaAt = -1;
+        int i = openParen;
+        while (i < n) {
+            char ch = sql.charAt(i);
+            if (ch == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                i = nl < 0 ? n : nl;
+                continue;
+            }
+            if (ch == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int close = sql.indexOf("*/", i + 2);
+                i = close < 0 ? n : close + 2;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                int j = i + 1;
+                while (j < n) {
+                    if (sql.charAt(j) == ch) {
+                        if (j + 1 < n && sql.charAt(j + 1) == ch) {
+                            j += 2;
+                            continue;
+                        }
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                i = Math.min(j, n);
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                i++;
+                continue;
+            }
+            if (ch == ')') {
+                depth--;
+                if (depth == 0) {
+                    if (commaAt < 0) {
+                        return false;
+                    }
+                    outArg1End[0] = commaAt;
+                    outCallEnd[0] = i + 1;
+                    return true;
+                }
+                i++;
+                continue;
+            }
+            if (ch == ',' && depth == 1 && commaAt < 0) {
+                commaAt = i;
+            }
+            i++;
+        }
+        return false;
+    }
+
     /** As {@link #runSqlOn} but hands back the rows themselves, so a caller that needs to
      *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
      *  serialized form is identical either way. */
     private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
-        String effective = stripRedundantLimitClause(sql);
+        String effective = repairDateTruncDateArg(stripRedundantLimitClause(sql));
         String lower = effective.toLowerCase();
         if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
             effective = effective.replaceAll(";\\s*$", "")
