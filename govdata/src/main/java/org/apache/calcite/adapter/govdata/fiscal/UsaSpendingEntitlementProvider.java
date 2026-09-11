@@ -104,7 +104,7 @@ public class UsaSpendingEntitlementProvider implements CachingDataProvider {
 
       JsonNode root;
       InputStream in = rawCache.openStream(cacheKey(cfdaNumber, body),
-          () -> FiscalHttp.openPostJson(ENDPOINT, body).getInputStream());
+          () -> FiscalHttp.openPostJsonWithRetry(ENDPOINT, body).getInputStream());
       try {
         root = MAPPER.readTree(in);
       } finally {

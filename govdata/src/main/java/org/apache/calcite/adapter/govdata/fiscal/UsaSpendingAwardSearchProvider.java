@@ -78,7 +78,7 @@ public class UsaSpendingAwardSearchProvider implements CachingDataProvider {
 
       JsonNode root;
       InputStream in = rawCache.openStream(cacheKey,
-          () -> FiscalHttp.openPostJson(ENDPOINT, body).getInputStream());
+          () -> FiscalHttp.openPostJsonWithRetry(ENDPOINT, body).getInputStream());
       try {
         root = MAPPER.readTree(in);
       } finally {

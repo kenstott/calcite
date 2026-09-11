@@ -109,7 +109,7 @@ public class UsaSpendingDistrictProvider implements CachingDataProvider {
 
     JsonNode root;
     InputStream in = rawCache.openStream(cacheKey("all", body),
-        () -> FiscalHttp.openPostJson(ENDPOINT, body).getInputStream());
+        () -> FiscalHttp.openPostJsonWithRetry(ENDPOINT, body).getInputStream());
     try {
       root = MAPPER.readTree(in);
     } finally {
@@ -124,7 +124,7 @@ public class UsaSpendingDistrictProvider implements CachingDataProvider {
     LOGGER.info("usaspending_by_district: POST {} fy={} (excl loans)", ENDPOINT, fy);
     JsonNode rootExclLoans;
     InputStream inExclLoans = rawCache.openStream(cacheKey("excl-loans", bodyExclLoans),
-        () -> FiscalHttp.openPostJson(ENDPOINT, bodyExclLoans).getInputStream());
+        () -> FiscalHttp.openPostJsonWithRetry(ENDPOINT, bodyExclLoans).getInputStream());
     try {
       rootExclLoans = MAPPER.readTree(inExclLoans);
     } finally {
@@ -150,7 +150,7 @@ public class UsaSpendingDistrictProvider implements CachingDataProvider {
     LOGGER.info("usaspending_by_district: POST {} fy={} (CMS only, excl loans)", ENDPOINT, fy);
     JsonNode rootCms;
     InputStream inCms = rawCache.openStream(cacheKey("cms-excl-loans", bodyCms),
-        () -> FiscalHttp.openPostJson(ENDPOINT, bodyCms).getInputStream());
+        () -> FiscalHttp.openPostJsonWithRetry(ENDPOINT, bodyCms).getInputStream());
     try {
       rootCms = MAPPER.readTree(inCms);
     } finally {
