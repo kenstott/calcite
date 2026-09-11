@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.lands;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
+import org.apache.calcite.adapter.govdata.geo.CountyFipsByNameLookup;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -98,6 +99,12 @@ public class PiltCountyPaymentsTransformer implements ResponseTransformer {
       } else {
         row.putNull("area_type");
       }
+      String countyFips = countyFips(stateCode, areaName, areaType);
+      if (countyFips != null) {
+        row.put("county_fips", countyFips);
+      } else {
+        row.putNull("county_fips");
+      }
       Long payment = parseMoney(paymentRaw);
       if (payment != null) {
         row.put("payment_dollars", payment);
@@ -147,6 +154,39 @@ public class PiltCountyPaymentsTransformer implements ResponseTransformer {
       if (areaName.regionMatches(true, 0, lead, 0, lead.length())) {
         return prefix;
       }
+    }
+    return null;
+  }
+
+  /**
+   * Resolves county_fips against the shared Census crosswalk (D-282). Tries the raw label
+   * first — the crosswalk keeps the disambiguating type word for the handful of names that
+   * need it (e.g. Virginia's "Richmond City" vs. the same-named county) — then falls back to
+   * the label with its area_type word stripped, since the crosswalk's ordinary entries carry
+   * the bare name ("ALBANY", not "ALBANY COUNTY"). Returns null rather than guessing for the
+   * ~7% of areas (New England towns/plantations, independent cities the crosswalk doesn't
+   * carry, territory-wide rows) that have no county-equivalent FIPS at all.
+   */
+  private static String countyFips(String stateCode, String areaName, String areaType) {
+    String fips = CountyFipsByNameLookup.lookup(stateCode, areaName);
+    if (fips != null || areaType == null) {
+      return fips;
+    }
+    String stripped = stripAreaType(areaName, areaType);
+    return stripped == null ? null : CountyFipsByNameLookup.lookup(stateCode, stripped);
+  }
+
+  /** Removes the matched area_type word (suffix or "TYPE OF " prefix) from areaName. */
+  private static String stripAreaType(String areaName, String areaType) {
+    String suffix = " " + areaType;
+    if (areaName.length() > suffix.length()
+        && areaName.regionMatches(true, areaName.length() - suffix.length(),
+            suffix, 0, suffix.length())) {
+      return areaName.substring(0, areaName.length() - suffix.length()).trim();
+    }
+    String prefix = areaType + " OF ";
+    if (areaName.regionMatches(true, 0, prefix, 0, prefix.length())) {
+      return areaName.substring(prefix.length()).trim();
     }
     return null;
   }

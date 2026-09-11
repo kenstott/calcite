@@ -1920,6 +1920,16 @@ partitionedTables:
         type: string
         nullable: true
         comment: COUNTY/PARISH/BOROUGH/TOWN/CITY/... parsed from area_name; null when unrecognized
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: >
+          5-digit county FIPS, resolved against the Census county-name crosswalk (D-282; same
+          lookup energy.eia_power_plants/banking.history use). NULL for roughly 7% of
+          FY2025-scale payment dollars — New England towns/plantations below the county level,
+          independent cities and territory-wide rows (DC/Guam/PR/VI) the crosswalk has no
+          county-equivalent entry for at all. This is a real gap in standard county geography
+          for those area types, not a lookup failure to fix by guessing.
       - name: payment_dollars
         type: bigint
         nullable: true
