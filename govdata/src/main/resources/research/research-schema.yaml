@@ -223,7 +223,12 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://ncses.nsf.gov/pubs/nsf24321/assets/data-tables/tables/nsf24321-tab007.xlsx"
+      # Publication id bumped nsf24321 (FY2022) -> nsf26316 (FY2024) per this schema's own
+      # design note that this id must be updated by hand for each new NCSES edition (D-277) -
+      # same current edition nsf_rd_by_field already uses. Verified live: same Table 7 layout
+      # (title format, 8 fixed numeric columns), NsfFederalRdTransformer reads the year from the
+      # title text dynamically, not hardcoded, so no transformer change needed.
+      url: "https://ncses.nsf.gov/pubs/nsf26316/assets/data-tables/tables/nsf26316-tab007.xlsx"
       method: GET
       response:
         format: TEXT   # NsfFederalRdTransformer re-downloads the XLSX and emits JSON rows
