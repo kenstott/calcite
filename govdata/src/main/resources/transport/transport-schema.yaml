@@ -2988,12 +2988,61 @@ partitionedTables:
       - name: bridge_condition
         type: string
         nullable: true
-        expression: 'src."BRIDGE_CONDITION"'
-        comment: FHWA-precomputed summary — G(ood)/F(air)/P(oor)
+        expression: >-
+          CASE
+            WHEN src."BRIDGE_CONDITION" IN ('G','F','P','N') THEN src."BRIDGE_CONDITION"
+            WHEN LEAST(
+                   COALESCE(TRY_CAST(src."DECK_COND_058" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."SUPERSTRUCTURE_COND_059" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."SUBSTRUCTURE_COND_060" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."CULVERT_COND_062" AS INTEGER), 99)
+                 ) <= 4 THEN 'P'
+            WHEN LEAST(
+                   COALESCE(TRY_CAST(src."DECK_COND_058" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."SUPERSTRUCTURE_COND_059" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."SUBSTRUCTURE_COND_060" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."CULVERT_COND_062" AS INTEGER), 99)
+                 ) >= 7 THEN 'G'
+            WHEN LEAST(
+                   COALESCE(TRY_CAST(src."DECK_COND_058" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."SUPERSTRUCTURE_COND_059" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."SUBSTRUCTURE_COND_060" AS INTEGER), 99),
+                   COALESCE(TRY_CAST(src."CULVERT_COND_062" AS INTEGER), 99)
+                 ) IN (5, 6) THEN 'F'
+            ELSE NULL
+          END
+        comment: >
+          FHWA's Good/Fair/Poor rollup. FHWA's own precomputed BRIDGE_CONDITION field does
+          not exist in the raw NBI file before 2019 (confirmed against the cached 2017/2018
+          files — the column is simply absent, not blank), which left this NULL on all
+          615,576 2017 rows and all 616,595 2018 rows. Computed here from the four component
+          ratings using FHWA's own published classification (Poor: any of
+          deck/superstructure/substructure/culvert <= 4; Good: all >= 7; Fair: otherwise) when
+          the raw field is missing or invalid — validated against 617,084 record_type=1 rows
+          in 2019, where both the raw field and the components are present: 100% agreement,
+          zero mismatches. Also guards against a single malformed 2024 row that carried "42"
+          (that year's state_code, apparently shifted into this field) by restricting the raw
+          field to its only 4 legal values before trusting it, falling through to the computed
+          rollup otherwise.
       - name: lowest_rating
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."LOWEST_RATING" AS INTEGER)'
+        expression: >-
+          COALESCE(
+            TRY_CAST(src."LOWEST_RATING" AS INTEGER),
+            LEAST(
+              COALESCE(TRY_CAST(src."DECK_COND_058" AS INTEGER), 99),
+              COALESCE(TRY_CAST(src."SUPERSTRUCTURE_COND_059" AS INTEGER), 99),
+              COALESCE(TRY_CAST(src."SUBSTRUCTURE_COND_060" AS INTEGER), 99),
+              COALESCE(TRY_CAST(src."CULVERT_COND_062" AS INTEGER), 99)
+            )
+          )
+        comment: >
+          Lowest of the four component condition ratings. Same 2017/2018 absence as
+          bridge_condition (LOWEST_RATING is not a column in the raw NBI file before 2019) -
+          computed from the components with the identical formula when the raw field is
+          missing. A value of 99 means every component was itself missing/not applicable for
+          that structure, not a genuinely high rating - filter it out of any MIN/aggregate.
       - name: deck_area_sqm
         type: double
         nullable: true
