@@ -138,9 +138,22 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
     put(row, "state", text(r, "jurisdiction_of_occurrence"));
     put(row, "cause_name", "COVID-19");
     put(row, "full_cause_name", "COVID-19 (underlying cause of death)");
-    put(row, "deaths", text(r, "covid_19_u071_underlying_cause_of_death"));
+    put(row, "deaths", isCovidSuppressed(r) ? null : text(r, "covid_19_u071_underlying_cause_of_death"));
     put(row, "age_adjusted_rate", null);
     put(row, "source_type", "weekly");
+  }
+
+  /**
+   * CDC flags a suppressed (1-9, privacy-withheld) COVID-19 weekly count two different ways in
+   * this vintage: some weeks omit {@code covid_19_u071_underlying_cause_of_death} entirely
+   * (already null via {@link #text}), others include the field as the literal placeholder
+   * {@code "0"} alongside a companion {@code flag_cov19mcod} field (value always
+   * {@code "Suppressed (counts 1-9)"} when present — confirmed live, only ever that one value).
+   * Reading the count field alone silently reports a suppressed 1-9 range as a real zero;
+   * checking this flag is what {@code flag_cov19mcod} exists in the source for.
+   */
+  private static boolean isCovidSuppressed(JsonNode r) {
+    return !r.path("flag_cov19mcod").isMissingNode() && !r.path("flag_cov19mcod").isNull();
   }
 
   private void mapPreCovidWeekly(JsonNode r, ObjectNode row) {
@@ -182,7 +195,8 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
     row.put("state", str(r.get("jurisdiction_of_occurrence")));
     row.put("cause_name", "COVID-19");
     row.put("full_cause_name", "COVID-19 (underlying cause of death)");
-    row.put("deaths", str(r.get("covid_19_u071_underlying_cause_of_death")));
+    row.put("deaths", r.get("flag_cov19mcod") != null
+        ? null : str(r.get("covid_19_u071_underlying_cause_of_death")));
     row.put("age_adjusted_rate", null);
     row.put("source_type", "weekly");
   }

@@ -2721,7 +2721,11 @@ partitionedTables:
           COVID-19 rows carry this NULL). Do not treat NULL as 0 in a SUM; a plain SUM(deaths)
           already excludes these rows correctly by SQL's own NULL-skipping behavior, but an
           explicit COALESCE(deaths, 0) or an outer join that backfills a missing week with 0
-          would silently convert real suppression into a false zero.
+          would silently convert real suppression into a false zero. CDC signals weekly COVID-19
+          suppression two different ways in the source: some weeks omit the count field
+          entirely, others include it as a "0" placeholder alongside a companion suppression
+          flag field — CdcMortalityResponseTransformer checks that flag and nulls the placeholder
+          case too, so every suppressed weekly COVID-19 row reaches this table as NULL either way.
         type: VARCHAR
         nullable: true
       - name: age_adjusted_rate
