@@ -227,6 +227,23 @@ if ! $SKIP_HISTORICAL; then
 fi
 echo ""
 
+# dataLag scoping check — advisory only, never blocks. --start/--end are PIPELINE years; a table
+# with dataLag>0 maps pipeline year to effective/data year as (pipeline_year - dataLag), so a
+# caller who means "data years X-Y" and passes them directly silently rewrites the wrong
+# partition. Confirmed twice live (kenstott/govdata-ops#232, #233): the run completes with exit 0
+# and an advanced tracker either way, so this is the only signal short of a post-hoc partition
+# check. Runs once per --tables entry since dataLag is a per-table property.
+if [[ -n "$START_YEAR" && -n "$END_YEAR" ]]; then
+  DATALAG_CHECKER="$SCRIPT_DIR/check-datalag-scoping.py"
+  SCHEMA_YAML="$SCRIPT_DIR/../../src/main/resources/${SCHEMA}/${SCHEMA}-schema.yaml"
+  if [[ -f "$DATALAG_CHECKER" && -f "$SCHEMA_YAML" ]]; then
+    IFS=',' read -ra DATALAG_CHECK_TABLES <<< "$TABLES"
+    for _t in "${DATALAG_CHECK_TABLES[@]}"; do
+      python3 "$DATALAG_CHECKER" "$SCHEMA_YAML" "$_t" "$START_YEAR" "$END_YEAR" || true
+    done
+  fi
+fi
+
 # ── SEC document tables have a SEPARATE per-accession tracker layer (phase='staging',
 #    table_name=<suffix>) that SecFilingCache/DocumentETLProcessor consult independently of the
 #    table-level phase='incremental' row GOVDATA_FORCE_REPROCESS_TABLES bypasses. Forcing the
