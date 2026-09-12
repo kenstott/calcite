@@ -715,6 +715,15 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     }
   }
 
+  /**
+   * Whether a period key carries finer-than-year grain (month and/or day). All combinations for
+   * one table share the same key shape, so checking a single representative combo characterizes
+   * the whole table.
+   */
+  private static boolean hasSubYearGrain(Map<String, String> keyValues) {
+    return keyValues != null && (keyValues.containsKey("month") || keyValues.containsKey("day"));
+  }
+
   @Override public void markProcessedWithError(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern, String errorMessage) {
     upsertState(flattenKeyValues(keyValues), alternateName, "incremental",
@@ -789,24 +798,43 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptySet();
     }
     Set<Map<String, String>> processed = getProcessedKeyValues(alternateName);
-    // Settle/promote empty markers against the high-water-mark year (newest period with data).
-    // An empty period at/below the HWM, aged past the recency horizon, or with no period is
-    // genuinely empty → processed (and promoted to 'complete'); an empty period above the HWM
-    // is still pending → left unprocessed so the source is re-fetched.
+    // Settle/promote empty markers against the high-water-mark YEAR (newest year with data) —
+    // but ONLY for annual-grain tables (no month/day in the period key). An empty period at/below
+    // the HWM, aged past the recency horizon, or with no period is genuinely empty → processed
+    // (and promoted to 'complete'); an empty period above the HWM is still pending → left
+    // unprocessed so the source is re-fetched.
+    //
+    // "A later period succeeded, so this earlier one must be genuinely done" is only a sound
+    // signal when periods are a single forward-moving sequence — true for an annual-grain table
+    // with one combo per year, false the moment a table has independent combos WITHIN the same
+    // year (month/day), because those are typically dispatched out of chronological order in a
+    // historical backfill/force-reprocess. Refining the comparison to year+month+day does NOT
+    // fix this: Jan is still chronologically "<=" a later Sep in the same year, so it would still
+    // wrongly settle. The only correct fix for sub-year grain is to stop cross-combo settlement
+    // entirely and rely solely on the recency horizon. Confirmed live
+    // (kenstott/govdata-ops#230): this cross-combo settlement is exactly what permanently hid
+    // cftc_trades' 2024 Jan-Aug gap (real source data, wrongly recorded empty by a since-fixed
+    // skip bug) — the empty Jan-Aug day markers were considered "settled" purely because 2024
+    // (their year) was <= 2024 (the max year with any data), even though Sep 2024's success had
+    // nothing to do with whether Jan 2024 was ever actually re-fetched.
     Set<Map<String, String>> empties = getEmptyKeyValues(alternateName);
     if (!empties.isEmpty()) {
-      int hwm = 0;
-      for (Map<String, String> c : processed) {
-        int y = yearOf(c);
-        if (y > hwm) {
-          hwm = y;
+      boolean subYearGrain = !allCombinations.isEmpty()
+          && hasSubYearGrain(allCombinations.get(0));
+      int hwmYear = 0;
+      if (!subYearGrain) {
+        for (Map<String, String> c : processed) {
+          int y = yearOf(c);
+          if (y > hwmYear) {
+            hwmYear = y;
+          }
         }
       }
       int currentYear = java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
       for (Map<String, String> e : empties) {
         int y = yearOf(e);
         boolean settled = y <= 0
-            || (hwm > 0 && y <= hwm)
+            || (!subYearGrain && hwmYear > 0 && y <= hwmYear)
             || (currentYear - y > EMPTY_RECENCY_HORIZON_YEARS);
         if (settled) {
           processed.add(e);

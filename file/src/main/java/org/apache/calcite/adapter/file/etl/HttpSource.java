@@ -1080,6 +1080,24 @@ public class HttpSource implements DataSource {
     applyAuth(conn, variables);
     int status = conn.getResponseCode();
     if (status >= 400) {
+      // A 403 from an S3-backed source can mean two very different things: a genuine gap
+      // (weekend/holiday/future date — safe to skip via skipOn) or InvalidObjectState — the
+      // object is real and has data, but its storage class (e.g. GLACIER/DEEP_ARCHIVE, from a
+      // bucket lifecycle policy) makes it temporarily unretrievable without an explicit restore
+      // request. Both arrive as HTTP 403 with no other signal to tell them apart except the body,
+      // so skipOn alone cannot distinguish "nothing to fetch" from "data exists but is archived" —
+      // confirmed live against DTCC's cftc/eod bucket, where files older than ~2 years silently
+      // 403 this way. Surface it as a real failure instead of a clean skip so it stays visible and
+      // retry-eligible, rather than being recorded as an empty period indistinguishable from a
+      // genuine gap.
+      if (status == 403) {
+        String errorBody = readResponse(conn.getErrorStream());
+        if (errorBody.contains("InvalidObjectState")) {
+          conn.disconnect();
+          throw new IOException("HTTP 403 InvalidObjectState (object archived, not a genuine "
+              + "gap) for CSV_STREAM: " + fullUrl);
+        }
+      }
       if (shouldSkip(status, config.getRateLimit())) {
         LOGGER.debug("CSV_STREAM skip: HTTP {} for {} (skipOn match)", status, fullUrl);
         conn.disconnect();

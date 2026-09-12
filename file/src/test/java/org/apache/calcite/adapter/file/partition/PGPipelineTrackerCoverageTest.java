@@ -621,6 +621,58 @@ class PGPipelineTrackerCoverageTest {
     assertNotNull(unprocessed);
   }
 
+  /**
+   * Regression for kenstott/govdata-ops#230: a day-grain table's empty period must not be
+   * settled (promoted to 'complete' with no re-fetch) just because a LATER day in the SAME year
+   * happened to succeed. Reproduces the exact shape that let cftc_trades' 2024 Jan-Aug (real
+   * source data, silently recorded empty by a since-fixed skip bug) sit permanently unretried
+   * once Sep 2024 onward started succeeding: year-only settlement treated "empty, year<=hwm" as
+   * settled, collapsing every month within the same year into one bucket.
+   */
+  @Test void testFilterUnprocessedDayGrainEmptyNotSettledByLaterMonthSameYear() throws Exception {
+    PreparedStatement completeStmt = mock(PreparedStatement.class);
+    ResultSet completeRs = mock(ResultSet.class);
+    when(mockConnection.prepareStatement(org.mockito.ArgumentMatchers.contains("state = 'complete'")))
+        .thenReturn(completeStmt);
+    when(completeStmt.executeQuery()).thenReturn(completeRs);
+    // A later day (Sep 10) in the same year 2024 already succeeded.
+    when(completeRs.next()).thenReturn(true, false);
+    when(completeRs.getString("source_key")).thenReturn("day=10__month=09__year=2024");
+
+    PreparedStatement emptyStmt = mock(PreparedStatement.class);
+    ResultSet emptyRs = mock(ResultSet.class);
+    when(mockConnection.prepareStatement(org.mockito.ArgumentMatchers.contains("state = 'empty'")))
+        .thenReturn(emptyStmt);
+    when(emptyStmt.executeQuery()).thenReturn(emptyRs);
+    // Two empty markers: an EARLY-2024 day (same year as the success above — must stay pending),
+    // and an old (2020) day well past the recency horizon (must settle regardless of hwm).
+    when(emptyRs.next()).thenReturn(true, true, false);
+    when(emptyRs.getString("source_key")).thenReturn(
+        "day=03__month=01__year=2024", "day=03__month=01__year=2020");
+
+    // Any other prepareStatement call (the upsertState INSERT for settled periods) is a no-op mock.
+    PreparedStatement upsertStmt = mock(PreparedStatement.class);
+    when(mockConnection.prepareStatement(org.mockito.ArgumentMatchers.contains("INSERT INTO pipeline_tracker")))
+        .thenReturn(upsertStmt);
+
+    List<Map<String, String>> all = new ArrayList<Map<String, String>>();
+    Map<String, String> jan2024 = new LinkedHashMap<>();
+    jan2024.put("year", "2024"); jan2024.put("month", "01"); jan2024.put("day", "03");
+    Map<String, String> old2020 = new LinkedHashMap<>();
+    old2020.put("year", "2020"); old2020.put("month", "01"); old2020.put("day", "03");
+    all.add(jan2024);
+    all.add(old2020);
+
+    Set<Integer> unprocessed = tracker.filterUnprocessed("alt1", "source1", all);
+
+    assertTrue(unprocessed.contains(0),
+        "day-grain empty period in the SAME year as a later success must stay pending, not be "
+            + "silently settled — this is the exact mechanism that permanently hid cftc_trades' "
+            + "2024 Jan-Aug gap");
+    assertFalse(unprocessed.contains(1),
+        "an empty period old enough to be past the recency horizon must still settle");
+  }
+
   // ===== Table Completion =====
 
   @Test void testIsTableCompleteReturnsFalse() throws Exception {
