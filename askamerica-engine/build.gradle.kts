@@ -65,6 +65,11 @@ configurations.all {
 dependencies {
     implementation(project(":driver-base"))
     implementation(project(":govdata"))
+    // Babel's SqlBabelParserImpl accepts the Postgres/DuckDB-shell "expr::type" infix cast
+    // syntax that Calcite's default core parser has no grammar production for at all — a
+    // parser-factory connection property (see McpServer's connection setup), not a dialect
+    // switch on GovDataDriver's own shared default, so only this engine's connections change.
+    implementation(project(":babel"))
     implementation("com.formdev:flatlaf:3.3")
     implementation("org.knowm.xchart:xchart:4.0.4")
     // PDF-to-text for web_fetch (McpServer). Not previously a real dependency here —

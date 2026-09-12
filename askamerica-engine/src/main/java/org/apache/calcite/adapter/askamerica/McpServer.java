@@ -2450,6 +2450,18 @@ public class McpServer {
                     // has not already set "fun"), not to the shared driver default other
                     // tooling (DQ, ETL, model-verify) still uses.
                     connProps.setProperty("fun", "standard,postgresql,spatial,mssql,bigquery");
+                    // GovDataDriver's shared default has no parserFactory at all, so this passes
+                    // straight through unmodified to the connection Calcite builds -- scoped to
+                    // this engine's own connections only, same as fun= above, not to the shared
+                    // driver default other tooling (DQ, ETL, model-verify) still uses. Calcite's
+                    // default core parser grammar has no "::" cast production; callers whose
+                    // training data defaults to Postgres/DuckDB-shell SQL (this warehouse's own
+                    // storage engine) reach for expr::type and hit an opaque JavaCC parse error
+                    // instead of either accepting it or explaining what's wrong. Babel's parser
+                    // is a strict grammar superset built for exactly this kind of dialect
+                    // compatibility, already wires "::" to SqlLibraryOperators.INFIX_CAST.
+                    connProps.setProperty("parserFactory",
+                        "org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY");
                     Connection c = driver.connect("jdbc:govdata:source=" + k, connProps);
                     if (c == null) {
                         throw new IllegalStateException(
