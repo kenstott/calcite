@@ -3243,6 +3243,7 @@ public class McpServer {
                     enforceExclusionDisclosure(secs);
                     enforceTableProvenance(secs);
                     enforceStatisticalProvenance(secs);
+                    enforceRecurringEventRecency(secs);
                     enforceRecipeConsulted();
                     ReportPage.Section appendix = queryAppendix();
                     if (appendix != null) {
@@ -5289,6 +5290,84 @@ public class McpServer {
             + "the sentence so it does not claim the method was executed (e.g. describe it as a "
             + "check that could be run, or drop the claim). A reader cannot tell a result you "
             + "actually computed from one you did not.");
+    }
+
+    /** Named categories of thing that RECUR — a new episode can exist right now even though an
+     *  older, more heavily-documented one is what training data or a quick literature search
+     *  turns up first. Deliberately narrow and literal (not a general "is this current" check)
+     *  to keep false positives low; add a category only after a second real incident, the same
+     *  bar every other gate in this file uses. */
+    private static final java.util.regex.Pattern RECURRING_EVENT_PHRASE = java.util.regex.Pattern
+        .compile("(?i)\\btrade war\\b|\\btariff war\\b|government shutdown|\\brecession\\b|"
+            + "banking crisis|debt[- ]ceiling standoff|\\bpandemic\\b");
+
+    /** Explicit acknowledgment that recency was actually considered and ruled out or ruled
+     *  irrelevant, e.g. "no more recent trade war," "still the most recent shutdown," "as of
+     *  2026 no newer episode." Distinguishes a deliberate scoping choice from silently
+     *  defaulting to the best-documented historical instance. */
+    private static final java.util.regex.Pattern RECENCY_CONSIDERED_WORDS = java.util.regex.Pattern
+        .compile("(?i)no (?:more recent|newer) |still the (?:most recent|current|latest)|"
+            + "as of (?:today|20\\d{2})[^.]{0,60}no |checked for a (?:more recent|newer|current)|"
+            + "remains the (?:most recent|only)");
+
+    /**
+     * A report about a named RECURRING event category (a trade war, a shutdown, a recession...)
+     * that cites no source dated within the last two years, AND never explicitly says recency
+     * was considered, is refused -- on the theory that a genuinely current answer would have at
+     * least one recent citation, or an explicit statement that none exists, even when the bulk
+     * of the analysis is historical. Measured live (q82, 2026-09-11/12, same question rerun
+     * twice): on this exact question, a run answered entirely about the 2018-2019 US-China
+     * trade war and never addressed a live 2025-2026 trade-policy episode the question's
+     * current-tense framing implied -- an instruction-only fix ("identify the CURRENT instance
+     * of a recurring phenomenon relative to today's date") had already been added for this
+     * exact incident and did not prevent the recurrence on a fresh rerun, the same lesson the
+     * claims-array and pinocchios gates already taught this session: prose guidance a model can
+     * silently not follow needs a mechanical backstop.
+     *
+     * <p>Deliberately loose about what counts as "recent enough": ANY four-digit year at or
+     * after (this year - 1) appearing anywhere in the report body clears it, since the goal is
+     * only to catch the specific failure of citing NOTHING but old material, with no
+     * acknowledgment that recency was even considered, on a topic whose framing implies "as of
+     * now" -- not to police how much of the analysis is historical background, which is often
+     * appropriate and even necessary context. A report that deliberately and only covers a
+     * named past episode clears the gate by saying so in those recency-considered terms, not by
+     * naming the episode's year alone (an old year on its own looks identical to an accidental
+     * default to the best-documented historical instance).
+     */
+    private static void enforceRecurringEventRecency(java.util.List<ReportPage.Section> secs) {
+        StringBuilder text = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            text.append(sec.heading == null ? "" : sec.heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+        }
+        String body = text.toString().replaceAll("<[^>]+>", " ");
+        java.util.regex.Matcher phrase = RECURRING_EVENT_PHRASE.matcher(body);
+        if (!phrase.find()) {
+            return;
+        }
+        int currentYear = java.time.LocalDate.now().getYear();
+        java.util.regex.Matcher yr = java.util.regex.Pattern.compile("\\b(19|20)\\d{2}\\b")
+            .matcher(body);
+        while (yr.find()) {
+            if (Integer.parseInt(yr.group()) >= currentYear - 1) {
+                return;
+            }
+        }
+        if (RECENCY_CONSIDERED_WORDS.matcher(body).find()) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "This report cannot be published yet: it discusses '" + phrase.group().trim()
+            + "' -- a category of event that recurs -- but cites no source dated " + (currentYear
+            - 1) + " or later anywhere in the report, and never states that a more recent "
+            + "instance was checked for. Confirm whether a more recent instance of this exact "
+            + "phenomenon exists as of today (" + java.time.LocalDate.now() + ") and, if so, "
+            + "address it (a web_fetch/search for the current year's own episode, not just the "
+            + "best-documented historical one). If the question is genuinely and only about a "
+            + "specific past episode, say explicitly that a more recent instance was checked "
+            + "for and none was found (or that this historical episode remains the most recent) "
+            + "-- naming the old episode's year alone is not enough, since that looks identical "
+            + "to silently defaulting to the best-documented historical instance.");
     }
 
     /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
