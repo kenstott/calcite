@@ -13,6 +13,9 @@ package org.apache.calcite.adapter.govdata.banking;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,5 +64,41 @@ class CraSmallBusinessLendingTransformerTest {
     // PK\x99\x99 - starts with the two ASCII bytes of "PK" but no valid zip trailer.
     assertFalse(CraSmallBusinessLendingTransformer.isZipMagic(
         new byte[] {(byte) 0x50, (byte) 0x4B, (byte) 0x99, (byte) 0x99}));
+  }
+
+  /**
+   * Regression for kenstott/govdata-ops#241's follow-up: the volume-triggered CAPTCHA gate
+   * (confirmed live - a burst of back-to-back requests trips it on every request, including
+   * years that had each individually just succeeded) cannot be out-waited by the original
+   * few-second linear backoff, since Cloudflare's own challenge-cookie default lifetime is far
+   * longer. A CAPTCHA-classified failure must always get the longer, fixed backoff regardless
+   * of which attempt number it is; any other transient IOException keeps the original linear
+   * schedule.
+   */
+  @Test void captchaClassifiedFailureAlwaysGetsTheLongerFixedBackoff() {
+    IOException captcha = new CraSmallBusinessLendingTransformer.FfiecCaptchaException(
+        "CRA aggregate download returned non-zip body");
+
+    long backoffAttempt1 = CraSmallBusinessLendingTransformer.backoffForRetry(captcha, 1);
+    long backoffAttempt4 = CraSmallBusinessLendingTransformer.backoffForRetry(captcha, 4);
+
+    assertEquals(backoffAttempt1, backoffAttempt4,
+        "a CAPTCHA-classified failure's backoff must not scale with attempt number - "
+            + "retrying sooner cannot succeed against a still-active challenge");
+    assertTrue(backoffAttempt1 > 5_000L,
+        "CAPTCHA backoff must be meaningfully longer than the original few-second linear "
+            + "backoff, since that window is known too short to out-wait the challenge: "
+            + backoffAttempt1);
+  }
+
+  @Test void genericTransientFailureKeepsTheOriginalLinearBackoff() {
+    IOException generic = new IOException("CRA aggregate download HTTP 500");
+
+    long backoffAttempt1 = CraSmallBusinessLendingTransformer.backoffForRetry(generic, 1);
+    long backoffAttempt2 = CraSmallBusinessLendingTransformer.backoffForRetry(generic, 2);
+
+    assertTrue(backoffAttempt2 > backoffAttempt1,
+        "a generic transient failure must still scale backoff with attempt number: "
+            + backoffAttempt1 + " then " + backoffAttempt2);
   }
 }

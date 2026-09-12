@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.banking;
 
+import org.apache.calcite.adapter.file.etl.CrossProcessRateLimiter;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.SkippedBatchException;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
@@ -106,6 +107,29 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
   // client. Worth a few retries before giving up.
   private static final int MAX_FETCH_RETRIES = 4;
   private static final long RETRY_BACKOFF_MS = 5_000L;
+
+  // Confirmed live (kenstott/govdata-ops#241): the gate is request-VOLUME-triggered, not
+  // per-year or per-client-fingerprint - a burst of back-to-back requests to this host (even
+  // across years that had each individually just succeeded moments earlier) trips it on every
+  // subsequent request. FFIEC documents no rate limit anywhere checked (robots.txt, response
+  // headers - no Retry-After/X-RateLimit-* on a 403) - this is Cloudflare's generic bot-
+  // management challenge (`cf-mitigated: challenge`), whose own session cookie
+  // (`__cf_bm`) carries Cloudflare's standard 30-minute default TTL, meaning a tripped
+  // challenge state is not something a same-run retry can out-wait practically. Pacing
+  // successive requests to this host - across years within one run, and across concurrent
+  // worker threads on the same host - avoids tripping the volume heuristic in the first place,
+  // which is more effective than reacting to it after the fact. Host-wide (not per-year) since
+  // the trigger is aggregate volume, not any one URL.
+  private static final String FFIEC_RATE_LIMIT_KEY = "ffiec.gov";
+  private static final long FFIEC_MIN_REQUEST_INTERVAL_MS = 5_000L;
+
+  // A CAPTCHA-classified failure (detected by isZipMagic below) gets a longer backoff than a
+  // generic transient IOException: retrying within the existing few-second window is retrying
+  // against a still-active challenge and provably cannot succeed, whereas a genuine one-off
+  // transient error (a dropped connection, a mid-response timeout) has a real chance of
+  // succeeding on the standard backoff. Still short of the __cf_bm TTL - a same-run retry is a
+  // secondary safety net behind the pacing above, not the primary defense.
+  private static final long CAPTCHA_RETRY_BACKOFF_MS = 30_000L;
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
@@ -221,10 +245,11 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
     IOException last = null;
     for (int attempt = 0; attempt <= MAX_FETCH_RETRIES; attempt++) {
       if (attempt > 0) {
-        LOGGER.warn("CRA: retrying {} (attempt {}/{}): {}",
-            url, attempt + 1, MAX_FETCH_RETRIES + 1, last.getMessage());
+        long backoff = backoffForRetry(last, attempt);
+        LOGGER.warn("CRA: retrying {} (attempt {}/{}, backoff {}ms): {}",
+            url, attempt + 1, MAX_FETCH_RETRIES + 1, backoff, last.getMessage());
         try {
-          Thread.sleep(RETRY_BACKOFF_MS * attempt);
+          Thread.sleep(backoff);
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
           throw new IOException("Interrupted while retrying CRA aggregate fetch", ie);
@@ -241,9 +266,19 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
     throw last;
   }
 
+  /** Selects the backoff for the next attempt: a CAPTCHA-classified failure (see
+   * {@link #CAPTCHA_RETRY_BACKOFF_MS}'s doc) always gets the longer, fixed backoff regardless
+   * of attempt number, since retrying sooner cannot succeed against a still-active challenge;
+   * any other transient {@link IOException} keeps the existing linear backoff. */
+  static long backoffForRetry(IOException lastFailure, int attempt) {
+    return lastFailure instanceof FfiecCaptchaException
+        ? CAPTCHA_RETRY_BACKOFF_MS : RETRY_BACKOFF_MS * attempt;
+  }
+
   /** Downloads the ZIP over HTTP/2 (see the class doc for why: this host's Cloudflare gate
    * fingerprints {@code HttpURLConnection}'s TLS/HTTP-1.1 client and rejects it outright). */
   private static ZipInputStream openZip(String url, Map<String, String> headers) throws IOException {
+    CrossProcessRateLimiter.acquire(FFIEC_RATE_LIMIT_KEY, FFIEC_MIN_REQUEST_INTERVAL_MS);
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create(url))
         .timeout(Duration.ofMinutes(5))
@@ -288,11 +323,21 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
     if (read < 4 || !isZipMagic(magic)) {
       String contentType = response.headers().firstValue("content-type").orElse("(none)");
       String snippet = readBodySnippet(sniffable, 512);
-      throw new IOException("CRA aggregate download returned non-zip body (HTTP " + code
+      throw new FfiecCaptchaException("CRA aggregate download returned non-zip body (HTTP " + code
           + ", Content-Type=" + contentType + ") for " + url
           + " - likely FFIEC CAPTCHA/challenge; snippet: " + snippet);
     }
     return new ZipInputStream(sniffable);
+  }
+
+  /** Marks a non-zip response body as CAPTCHA/challenge-shaped rather than a generic transient
+   * failure, so {@link #openZipWithRetry} can apply {@link #CAPTCHA_RETRY_BACKOFF_MS} instead of
+   * the shorter default backoff - see that constant's doc for why the two need to differ. */
+  // Package-private for unit test access (backoffForRetry's differentiation logic).
+  static final class FfiecCaptchaException extends IOException {
+    FfiecCaptchaException(String message) {
+      super(message);
+    }
   }
 
   // Package-private for unit test access.
