@@ -933,6 +933,15 @@ final class QuestionDiagnostics {
     private static final java.util.regex.Pattern IS_NOT_NULL =
         java.util.regex.Pattern.compile("(?i)([A-Za-z_][A-Za-z0-9_.]*)\\s+IS\\s+NOT\\s+NULL");
 
+    /** Matches a column alias assigned to an expression built from {@code LAG(...)}/{@code
+     *  LEAD(...)}, e.g. {@code rig_count - LAG(rig_count) OVER (ORDER BY ym) AS d_rig}. An
+     *  {@code IS NOT NULL} filter on such a column is a mathematically necessary consequence of
+     *  first-differencing (the series' first/last row has no prior/next value to diff against),
+     *  not a modelling choice, and should not be flagged as an unreported exclusion. */
+    private static final java.util.regex.Pattern DIFF_COLUMN_ALIAS = java.util.regex.Pattern
+        .compile("(?i)(?:LAG|LEAD)\\s*\\([^)]*\\)\\s*(?:OVER\\s*\\([^)]*\\))?[^,]{0,80}?"
+            + "\\bAS\\s+([A-Za-z_][A-Za-z0-9_]*)");
+
     /**
      * Caller SQL that removes units by hand — {@code <> 'District of Columbia'},
      * {@code NOT IN (...)}, {@code x IS NOT NULL} on a covariate. Each is a legitimate
@@ -959,9 +968,19 @@ final class QuestionDiagnostics {
             predicates.add(m.group(1) + " NOT IN (" + m.group(2).trim() + ")");
             pivotal |= PIVOTAL_UNIT.matcher(m.group(2)).find();
         }
+        java.util.Set<String> diffAliases = new java.util.HashSet<>();
+        java.util.regex.Matcher da = DIFF_COLUMN_ALIAS.matcher(sql);
+        while (da.find()) {
+            diffAliases.add(da.group(1).toLowerCase(Locale.ROOT));
+        }
         m = IS_NOT_NULL.matcher(sql);
         while (m.find()) {
-            predicates.add(m.group(1) + " IS NOT NULL");
+            String col = m.group(1);
+            String bare = col.contains(".") ? col.substring(col.lastIndexOf('.') + 1) : col;
+            if (diffAliases.contains(bare.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            predicates.add(col + " IS NOT NULL");
         }
         if (predicates.size() == 0) {
             return;
