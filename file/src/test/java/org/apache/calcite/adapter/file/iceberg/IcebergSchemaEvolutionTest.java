@@ -191,6 +191,52 @@ class IcebergSchemaEvolutionTest {
         "the recreated table is empty — this is the pre-existing behavior, unchanged");
   }
 
+  // ===== checkTypeMismatch: column count UNCHANGED, only a type changes =====
+  //
+  // Distinct from testNonAdditiveChangeStillDropsAndRecreates above: that test always adds a
+  // new column alongside the retype, so the column count increases and the pre-existing
+  // count-based check in ensureTableExists already routes it through pureColumnAdditions (which
+  // itself does a per-name type comparison). When the column count stays exactly the same - a
+  // pure retype, nothing added or removed - ensureTableExists's count check saw no difference at
+  // all and returned the existing table completely unchecked. That is the gap checkTypeMismatch
+  // closes.
+
+  @Test void testColumnTypeChangeWithSameColumnCountThrows() throws Exception {
+    IcebergMaterializer materializer = newMaterializer();
+    String tableId = "evo_retype_" + UUID.randomUUID().toString().substring(0, 8);
+
+    materializer.ensureTableExists(
+        configWith(tableId, Arrays.asList(col("cik", "VARCHAR"), col("year", "VARCHAR"))));
+
+    IllegalStateException thrown = org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> materializer.ensureTableExists(
+            configWith(tableId, Arrays.asList(col("cik", "VARCHAR"), col("year", "INTEGER")))));
+
+    assertTrue(thrown.getMessage().contains("year"),
+        "exception message must name the mismatched column: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("string"),
+        "exception message must name the existing type: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("int"),
+        "exception message must name the expected type: " + thrown.getMessage());
+  }
+
+  @Test void testMatchingColumnTypesLoadCleanlyWithNoException() throws Exception {
+    IcebergMaterializer materializer = newMaterializer();
+    String tableId = "evo_match_" + UUID.randomUUID().toString().substring(0, 8);
+
+    IcebergMaterializer.TableSetupResult created = materializer.ensureTableExists(
+        configWith(tableId, Arrays.asList(col("cik", "VARCHAR"), col("accession", "VARCHAR"))));
+    appendRow(created.table, "0000320193", "0000320193-21-000001");
+    assertEquals(1, countRows(created.table));
+
+    IcebergMaterializer.TableSetupResult reopened = materializer.ensureTableExists(
+        configWith(tableId, Arrays.asList(col("cik", "VARCHAR"), col("accession", "VARCHAR"))));
+
+    assertFalse(reopened.wasRecreated, "identical column names and types must load cleanly");
+    assertEquals(1, countRows(reopened.table),
+        "the row from before must survive a same-schema reopen");
+  }
+
   /** Appends one row through a real Parquet DataWriter, matching how production data lands. */
   private static void appendRow(Table table, String cik, String accession) throws Exception {
     OutputFile outputFile = table.io().newOutputFile(

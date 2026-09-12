@@ -2910,6 +2910,14 @@ public class IcebergMaterializer {
         IcebergCatalogManager.dropTable(catalogConfig, config.getTargetTableId(), true);
         // Fall through to create new table with wasRecreated = true
       } else {
+        // Column count matches (or is smaller) than expected, so the count check above sees no
+        // difference at all and would otherwise return the table completely unchecked. That is
+        // exactly the gap a pure retype falls into — same column, same position, different
+        // type — since nothing looks missing or added by count alone. A count INCREASE is
+        // deliberately excluded from this check: that path's own pureColumnAdditions above
+        // already does its own per-name type comparison and routes a retype-alongside-addition
+        // to the drop-and-recreate branch, which is the correct outcome for that case.
+        checkTypeMismatch(config.getTargetTableId(), existingTable, columns);
         LOGGER.debug("Loading existing table: {} ({} columns)",
             config.getTargetTableId(), existingColumnCount);
         return new TableSetupResult(existingTable, false);
@@ -2935,6 +2943,41 @@ public class IcebergMaterializer {
         columns,
         config.getPartitionColumnNames());
     return new TableSetupResult(recreatedTable, true);
+  }
+
+  /**
+   * Throws when an expected column is present in {@code existingTable} under a DIFFERENT Iceberg
+   * type than this run's config declares (e.g. a partition/dimension column's declared type
+   * moving STRING -&gt; INTEGER). The count-based check in {@link #ensureTableExists} only ever
+   * compares column COUNTS, so a type-only change — column count unchanged, one column's type
+   * different — is invisible to it: nothing looks missing or added.
+   *
+   * <p>Deliberately throws rather than auto-dropping and recreating: unlike a missing column,
+   * there is no way to tell "this config declares the intentional new type" apart from "this
+   * config's own jar is stale and doesn't know about a type change a different worker already
+   * applied" — the same ambiguity the count-based drift check itself avoids by requiring a pure
+   * superset before evolving in place. An operator must run a purge (e.g. {@code data_purge.sh})
+   * and reprocess explicitly, so a type change stays an auditable, intentional action rather than
+   * something either silently ignored or silently applied.
+   */
+  static void checkTypeMismatch(String targetTableId, Table existingTable,
+      List<IcebergCatalogManager.ColumnDef> expectedColumns) {
+    Schema existingSchema = existingTable.schema();
+    for (IcebergCatalogManager.ColumnDef col : expectedColumns) {
+      Types.NestedField existingField = existingSchema.findField(col.getName());
+      if (existingField == null) {
+        continue; // missing entirely — the count-based check's concern, not this method's
+      }
+      Type expectedType = IcebergCatalogManager.mapToIcebergType(col.getType());
+      if (!expectedType.equals(existingField.type())) {
+        throw new IllegalStateException("Iceberg table '" + targetTableId
+            + "' has column type mismatch — declared config expects '" + col.getName()
+            + "' as " + expectedType + ", existing table has '" + col.getName()
+            + "' as " + existingField.type() + ". This ETL cannot silently reconcile the "
+            + "change; purge the table (e.g. data_purge.sh) and reprocess to rebuild it with "
+            + "the new type.");
+      }
+    }
   }
 
   /**
