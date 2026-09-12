@@ -467,6 +467,43 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   }
 
   /**
+   * Throws when an expected column is present in {@code existingTable} under a DIFFERENT Iceberg
+   * type than this run's config declares (e.g. a partition column's {@code columnDefinitions}
+   * moving STRING -&gt; INTEGER). {@link #schemaDriftReason} only ever compares column NAMES, so
+   * a type-only change is invisible to it — the column is still there, nothing looks missing —
+   * and the writer would silently keep committing against the OLD type forever. Confirmed live
+   * (kenstott/govdata-ops#237): a reprocess intended to pick up exactly this kind of type change
+   * completed with no error, leaving the live column type unchanged.
+   *
+   * <p>Deliberately throws rather than auto-dropping and recreating: unlike a missing column,
+   * there is no way to tell "this config declares the intentional new type" apart from "this
+   * config's own jar is stale and doesn't know about a type change a different worker already
+   * applied" — the same ambiguity that made count-based drift detection dangerous
+   * (kenstott/govdata-ops#226). An operator must run {@code data_purge.sh} (or equivalent) and
+   * reprocess explicitly, so the type change stays an auditable, intentional action rather than
+   * something either silently skipped or silently auto-applied.
+   */
+  private void checkTypeMismatch(String targetTableId, Table existingTable,
+      List<IcebergCatalogManager.ColumnDef> expectedColumns) {
+    org.apache.iceberg.Schema existingSchema = existingTable.schema();
+    for (IcebergCatalogManager.ColumnDef col : expectedColumns) {
+      org.apache.iceberg.types.Types.NestedField existingField = existingSchema.findField(col.getName());
+      if (existingField == null) {
+        continue; // missing entirely — schemaDriftReason's concern, not this method's
+      }
+      org.apache.iceberg.types.Type expectedType = IcebergCatalogManager.mapToIcebergType(col.getType());
+      if (!expectedType.equals(existingField.type())) {
+        throw new IllegalStateException("Iceberg table '" + targetTableId
+            + "' has column type mismatch — declared config expects '" + col.getName()
+            + "' as " + expectedType + ", existing table has '" + col.getName()
+            + "' as " + existingField.type() + ". This ETL cannot silently reconcile the "
+            + "change; purge the table (e.g. data_purge.sh) and reprocess to rebuild it with "
+            + "the new type.");
+      }
+    }
+  }
+
+  /**
    * Returns a human-readable reason the committed table is missing a column this run's config
    * expects (drift), or {@code null} if every expected column (data or partition) is present.
    *
@@ -608,6 +645,20 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     if (IcebergCatalogManager.tableExists(catalogConfig, targetTableId)) {
       Table existingTable = IcebergCatalogManager.loadTable(catalogConfig, targetTableId);
+
+      // A column's declared TYPE changing (e.g. a partition column's columnDefinitions moving
+      // STRING -> INTEGER) is invisible to schemaDriftReason below, which only ever compares
+      // column NAMES — the column is still present, just with the old type, so nothing looks
+      // missing. Confirmed live (kenstott/govdata-ops#237): a reprocess intended to pick up
+      // exactly this kind of type change committed successfully against the OLD schema with no
+      // error, silently leaving the column's live type unchanged. Deliberately NOT auto-dropping
+      // here the way a missing column does: unlike a name mismatch, there's no way to tell "this
+      // config is the intentional new type" from "this config's own jar is stale and doesn't
+      // know about a type change someone else already applied" — the same ambiguity that made
+      // count-based drift dangerous (kenstott/govdata-ops#226). Failing loudly and requiring an
+      // explicit data_purge.sh + reprocess keeps the operator's intent auditable instead of
+      // guessing at it.
+      checkTypeMismatch(targetTableId, existingTable, expectedColumns);
 
       // Check whether the existing table matches the expected columns. This handles the case where
       // a previous run only created partition columns, or the configured schema has changed.

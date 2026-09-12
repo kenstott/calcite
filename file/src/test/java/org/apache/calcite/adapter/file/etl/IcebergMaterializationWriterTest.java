@@ -654,6 +654,102 @@ public class IcebergMaterializationWriterTest {
         "Should have written rows in the evolved schema write");
   }
 
+  @Test public void testColumnTypeMismatchThrowsIllegalStateException() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_type_mismatch");
+    warehouseDir.mkdirs();
+
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    MaterializeConfig config1 =
+        buildIcebergConfig(
+            warehouseDir, "type_mismatch_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("year", "VARCHAR")),
+        Collections.<String>emptyList());
+
+    writer.initialize(config1);
+
+    List<Map<String, Object>> rows1 = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row1 = new HashMap<String, Object>();
+    row1.put("id", 1);
+    row1.put("year", "2023");
+    rows1.add(row1);
+    writer.writeBatch(rows1.iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    MaterializeConfig config2 =
+        buildIcebergConfig(
+            warehouseDir, "type_mismatch_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("year", "INTEGER")),
+        Collections.<String>emptyList());
+
+    IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> {
+      writer.initialize(config2);
+    });
+    assertTrue(thrown.getMessage().contains("year"),
+        "exception message must name the mismatched column: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("string"),
+        "exception message must name the existing type: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("int"),
+        "exception message must name the expected type: " + thrown.getMessage());
+  }
+
+  @Test public void testMatchingColumnTypesLoadCleanlyWithNoException() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_type_match");
+    warehouseDir.mkdirs();
+
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    MaterializeConfig config1 =
+        buildIcebergConfig(
+            warehouseDir, "type_match_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("year", "INTEGER")),
+        Collections.<String>emptyList());
+
+    writer.initialize(config1);
+
+    List<Map<String, Object>> rows1 = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row1 = new HashMap<String, Object>();
+    row1.put("id", 1);
+    row1.put("year", 2023);
+    rows1.add(row1);
+    writer.writeBatch(rows1.iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    MaterializeConfig config2 =
+        buildIcebergConfig(
+            warehouseDir, "type_match_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("year", "INTEGER")),
+        Collections.<String>emptyList());
+
+    writer.initialize(config2);
+
+    List<Map<String, Object>> rows2 = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("id", 2);
+    row2.put("year", 2024);
+    rows2.add(row2);
+    writer.writeBatch(rows2.iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+
+    long totalRows = writer.getTotalRowsWritten();
+    assertTrue(totalRows > 0,
+        "Should have written rows when reopening a table with matching column types");
+  }
+
   @Test public void testDateFormatMismatchInJavaFallbackNullsRowInsteadOfFailingBatch()
       throws Exception {
     // Regression: DateParseFormat.parse() throws on a genuine mismatch (unlike the DuckDB
