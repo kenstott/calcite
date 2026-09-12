@@ -3195,10 +3195,11 @@ public class McpServer {
                         flts.add(new ReportPage.Filter(lbl, cls,
                             fn.has("note") ? fn.get("note").asText(null) : null));
                     }
+                    java.util.List<String> gateProblems = new java.util.ArrayList<>();
                     JsonNode claims = args.path("claims");
                     if (claims.isArray() && claims.size() > 0) {
-                        enforceClaimShape(claims);
-                        enforceValidationChart(boardSvg, claims);
+                        addIfPresent(gateProblems, enforceClaimShape(claims));
+                        addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
                         JsonNode pinocchios = args.path("pinocchios");
                         boolean isSplit = pinocchios.isObject()
                             && (pinocchios.has("fidelity") || pinocchios.has("claims_accuracy"));
@@ -3238,14 +3239,25 @@ public class McpServer {
                             secs.add(Math.min(1, secs.size()), claimsSec);
                         }
                     } else {
-                        enforceClaimsArrayPresence(secs);
+                        addIfPresent(gateProblems, enforceClaimsArrayPresence(secs));
                     }
-                    enforceExclusionDisclosure(secs);
-                    enforceHighSeverityDisclosure(secs);
-                    enforceTableProvenance(secs);
-                    enforceStatisticalProvenance(secs);
-                    enforceRecurringEventRecency(secs);
-                    enforceRecipeConsulted();
+                    addIfPresent(gateProblems, enforceExclusionDisclosure(secs));
+                    addIfPresent(gateProblems, enforceHighSeverityDisclosure(secs));
+                    addIfPresent(gateProblems, enforceTableProvenance(secs));
+                    addIfPresent(gateProblems, enforceStatisticalProvenance(secs));
+                    addIfPresent(gateProblems, enforceRecurringEventRecency(secs));
+                    addIfPresent(gateProblems, enforceRecipeConsulted());
+                    if (!gateProblems.isEmpty()) {
+                        StringBuilder combined = new StringBuilder(
+                            "This report cannot be published yet -- " + gateProblems.size()
+                            + " separate issue(s) found, ALL listed here so they can be fixed "
+                            + "in one pass rather than one publish_report attempt per issue:\n");
+                        for (int gi = 0; gi < gateProblems.size(); gi++) {
+                            combined.append('[').append(gi + 1).append("] ")
+                                .append(gateProblems.get(gi)).append('\n');
+                        }
+                        throw new IllegalArgumentException(combined.toString());
+                    }
                     ReportPage.Section appendix = queryAppendix();
                     if (appendix != null) {
                         secs.add(appendix);
@@ -3659,6 +3671,16 @@ public class McpServer {
      * </ul>
      */
     static String compactErrorMessage(Throwable e) {
+        // Every publish_report enforce* gate throws IllegalArgumentException with a complete,
+        // deliberately-authored, actionable message -- never a raw stack trace or noisy driver
+        // text. The generic 600-char truncateMessage() fallback below exists for THOSE (a SQL
+        // parser error, a DuckDB exception), and would defeat the combined-gate-error refusal
+        // (measured live, 2026-09-12: three real gate violations combined comfortably exceed
+        // 600 chars) that exists specifically so a caller sees every open issue in one publish
+        // attempt instead of one per round trip. Exempt it from truncation entirely.
+        if (e instanceof IllegalArgumentException && e.getMessage() != null) {
+            return e.getMessage();
+        }
         // The watchdog (see ACTIVE_STATEMENTS/WATCHDOG_CANCELLED_AT) already builds a complete,
         // accurate message — real elapsed time, which multiple of the timeout fired, the same
         // narrowing guidance the normal timeout gives — before this exception reaches here.
@@ -4897,7 +4919,7 @@ public class McpServer {
     private static final java.util.regex.Pattern OVERALL_TRUE_CLAIM = java.util.regex.Pattern
         .compile("(?i)\\b(is accurate|checks out|holds up|is true|accurate\\.)\\b");
 
-    private static void enforceClaimsArrayPresence(java.util.List<ReportPage.Section> secs) {
+    private static String enforceClaimsArrayPresence(java.util.List<ReportPage.Section> secs) {
         int numberedHeadings = 0;
         int verdictShapedHeadings = 0;
         StringBuilder allText = new StringBuilder();
@@ -4915,23 +4937,21 @@ public class McpServer {
                 }
             }
         }
+        java.util.List<String> problems = new java.util.ArrayList<>();
         if (numberedHeadings >= 2 && verdictShapedHeadings >= numberedHeadings / 2) {
-            throw new IllegalArgumentException(
-                "This report cannot be published yet: it has " + numberedHeadings + " numbered "
+            problems.add("it has " + numberedHeadings + " numbered "
                 + "section headings that read as per-assertion verdict write-ups ('1. Was ... "
                 + "accurate', '2. Is ... correct', ...) but carries no `claims` array. This is a "
                 + "validation and the claims array is mandatory whenever two or more assertions "
                 + "are graded -- it is not a stylistic choice. Rebuild each of these sections as "
                 + "one entry in `claims` (assertion, verdict, article_value, warehouse_value, "
                 + "independent_value, sources, reason), add the required `pinocchios` rating for "
-                + "the piece as a whole, and call publish_report again. Do not resubmit this "
-                + "prose-section version.");
+                + "the piece as a whole. Do not resubmit this prose-section version.");
         }
         String body = allText.toString().replaceAll("<[^>]+>", " ");
         java.util.regex.Matcher admission = SUBSTANCE_NOT_TESTED_ADMISSION.matcher(body);
         if (admission.find() && OVERALL_TRUE_CLAIM.matcher(body).find()) {
-            throw new IllegalArgumentException(
-                "This report cannot be published yet: it admits, in its own words ('"
+            problems.add("it admits, in its own words ('"
                 + admission.group().trim() + "'), that a specific figure or claim was never "
                 + "actually tested -- yet the report still declares the piece accurate/true. "
                 + "Confirming that a quote was said, or that an article was reported "
@@ -4945,25 +4965,31 @@ public class McpServer {
                 + "`pinocchios` rating. A verdict of 'accurate' resting on unattempted claims "
                 + "is not honest.");
         }
+        if (problems.isEmpty()) {
+            return null;
+        }
+        return String.join(" ALSO: ", problems);
     }
 
-    private static void enforceClaimShape(JsonNode claims) {
+    private static String enforceClaimShape(JsonNode claims) {
+        java.util.List<String> problems = new java.util.ArrayList<>();
         for (JsonNode c : claims) {
             String assertion = c.path("assertion").asText("").trim();
             String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
             if (ATTRIBUTION_LEAD.matcher(assertion).find()) {
-                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                problems.add("the assertion \"" + assertion
                     + "\" is an attribution, not a claim. Whether someone said it is never the "
                     + "thing under test. Drop the 'X said:' lead, keep the quoted statement as the "
                     + "assertion, and grade THAT against the warehouse (join its components at "
                     + "county, state or year grain and test them) or against independent figures.");
+                continue;
             }
             boolean warehouse = nonBlank(c, "sql") || nonBlank(c, "warehouse_value");
             boolean independent = nonBlank(c, "independent_value")
                 && c.path("sources").isArray() && c.path("sources").size() > 0;
             boolean graded = !"not checkable here".equals(verdict) && !"stale vintage".equals(verdict);
             if (graded && !warehouse && !independent) {
-                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                problems.add("the assertion \"" + assertion
                     + "\" is graded '" + verdict + "' with no evidence attached. A graded verdict "
                     + "needs either a warehouse figure (warehouse_value and the sql that produced "
                     + "it) or an independent figure (independent_value plus at least one entry in "
@@ -4971,26 +4997,42 @@ public class McpServer {
                     + "reason naming what was searched.");
             }
             if (!graded && !nonBlank(c, "reason")) {
-                throw new IllegalArgumentException("validation refused: the assertion \"" + assertion
+                problems.add("the assertion \"" + assertion
                     + "\" is '" + verdict + "' without a reason. Say which measure was searched "
                     + "for, which terms search_catalog left unmatched, and which components were "
                     + "tried.");
             }
         }
+        if (problems.isEmpty()) {
+            return null;
+        }
+        return "validation refused: " + String.join(" ALSO: ", problems);
     }
 
     private static boolean nonBlank(JsonNode c, String key) {
         return c.hasNonNull(key) && !c.get(key).asText().trim().isEmpty();
     }
 
+    /** Appends {@code problem} to {@code problems} when non-null. Every {@code enforce*} gate
+     *  in {@code publish_report}'s pipeline returns a violation message (or null when it
+     *  passes) rather than throwing directly, so the handler can run every gate regardless of
+     *  whether an earlier one failed and report every open issue in one refusal -- measured
+     *  live (q105, q121, 2026-09-12): a report needed 4-5 publish_report round trips to
+     *  converge because each attempt only ever learned about the single next unmet gate. */
+    private static void addIfPresent(java.util.List<String> problems, String problem) {
+        if (problem != null && !problem.isEmpty()) {
+            problems.add(problem);
+        }
+    }
+
     /** A validation whose claims rest on the caller's own warehouse analysis must show it: refuse
      *  when at least one claim has a warehouse_value or sql, no dashboard was composed
      *  in this call, and no chart or board has been rendered in the session. A validation
      *  graded purely from publications passes with no chart. */
-    private static void enforceValidationChart(String boardSvg, JsonNode claims) {
+    private static String enforceValidationChart(String boardSvg, JsonNode claims) {
         if (boardSvg != null || CHART_RENDERED || LAST_DASHBOARD_PNG != null
             || LAST_CHART_PNG != null) {
-            return;
+            return null;
         }
         boolean numeric = false;
         for (JsonNode c : claims) {
@@ -5001,15 +5043,15 @@ public class McpServer {
             }
         }
         if (!numeric) {
-            return;
+            return null;
         }
-        throw new IllegalArgumentException("validation refused: this publish carries claims "
+        return "validation refused: this publish carries claims "
             + "graded from your own warehouse analysis (a warehouse_value or sql) but no chart. "
             + "render_chart the evidence behind each such claim (the article's figure against "
             + "the warehouse and independent figures, the relationship you tested, or the "
             + "series the claim is about), compose_dashboard the set and pass it as this "
             + "call's `dashboard`, then publish again. Claims graded purely from publications "
-            + "need no chart.");
+            + "need no chart.";
     }
 
     /** How close a disclosure word ("excluded", "dropped", ...) must sit to a mention of the
@@ -5030,9 +5072,9 @@ public class McpServer {
      * did something wrong), so this never blocks a genuinely recipe-less question -- only one
      * that never checked.
      */
-    private static void enforceRecipeConsulted() {
+    private static String enforceRecipeConsulted() {
         if (RECIPE_CONSULTED.get()) {
-            return;
+            return null;
         }
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
@@ -5051,16 +5093,15 @@ public class McpServer {
             }
         }
         if (!fired) {
-            return;
+            return null;
         }
-        throw new IllegalArgumentException(
-            "This report cannot be published yet: a recipe_not_consulted diagnostic fired "
+        return "a recipe_not_consulted diagnostic fired "
             + "earlier this session (on search_catalog or on a multi-step query) and "
             + "find_recipe has still not been called. Call find_recipe with a plain-words "
             + "topic for what this question computes before publishing -- an empty result is a "
             + "valid outcome (the catalog has no recipe for this yet) and does not block the "
             + "publish once you have actually called it, but silently proceeding without "
-            + "calling it at all does.");
+            + "calling it at all does.";
     }
 
     /** Broader than {@link #DISCLOSURE_WORDS} on purpose -- this gate polices "was this
@@ -5084,7 +5125,7 @@ public class McpServer {
      * house-price rows, both fired and were never mentioned anywhere near the affected
      * column/metro in the final report -- only a general, unrelated caveat existed elsewhere.
      */
-    private static void enforceHighSeverityDisclosure(java.util.List<ReportPage.Section> secs) {
+    private static String enforceHighSeverityDisclosure(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
             snapshot = new java.util.ArrayList<>(CALL_LOG);
@@ -5104,7 +5145,7 @@ public class McpServer {
             }
         }
         if (byType.isEmpty()) {
-            return;
+            return null;
         }
         StringBuilder text = new StringBuilder();
         for (ReportPage.Section sec : secs) {
@@ -5137,10 +5178,10 @@ public class McpServer {
             }
         }
         if (undisclosed.isEmpty()) {
-            return;
+            return null;
         }
         StringBuilder msg = new StringBuilder(
-            "This report cannot be published yet: a high-severity data-quality diagnostic "
+            "a high-severity data-quality diagnostic "
             + "fired on a query this session and the specific column/table/year/place it names "
             + "is never mentioned near a caveat anywhere in the report -- a caveat elsewhere in "
             + "the report about something else does not count. ");
@@ -5149,12 +5190,11 @@ public class McpServer {
                 .append(". ");
         }
         msg.append("Fix: add a sentence next to each affected figure naming the specific "
-            + "problem and what it means for that figure's reliability, then call "
-            + "publish_report again.");
-        throw new IllegalArgumentException(msg.toString());
+            + "problem and what it means for that figure's reliability.");
+        return msg.toString();
     }
 
-    private static void enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
+    private static String enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
             snapshot = new java.util.ArrayList<>(CALL_LOG);
@@ -5184,7 +5224,7 @@ public class McpServer {
             }
         }
         if (predicates.isEmpty() && units.isEmpty()) {
-            return;
+            return null;
         }
         StringBuilder text = new StringBuilder();
         for (ReportPage.Section sec : secs) {
@@ -5222,10 +5262,10 @@ public class McpServer {
             }
         }
         if (undisclosed.isEmpty() && missingUnits.isEmpty()) {
-            return;
+            return null;
         }
         StringBuilder msg = new StringBuilder(
-            "This report cannot be published yet: a query in this session removed units by "
+            "a query in this session removed units by "
             + "hand and the report does not say so near the value it excluded — a disclosure "
             + "word ('excluded', 'dropped', 'omitted', 'left out', 'without ...') found "
             + "anywhere in the report does not count unless it sits next to what was actually "
@@ -5244,9 +5284,9 @@ public class McpServer {
         }
         msg.append("Fix: add one paragraph to a section naming every unit these predicates "
             + "removed (run the same SELECT without them if you do not know), the reason, "
-            + "and the headline statistic with and without them. Then call publish_report "
-            + "again. See recipe report-what-an-exclusion-changed-not-only-that-you-made-one.");
-        throw new IllegalArgumentException(msg.toString());
+            + "and the headline statistic with and without them. See recipe "
+            + "report-what-an-exclusion-changed-not-only-that-you-made-one.");
+        return msg.toString();
     }
 
     private static final java.util.regex.Pattern PROVENANCE_CLAIM_WORDS = java.util.regex.Pattern
@@ -5271,7 +5311,7 @@ public class McpServer {
      * since naming a table in prose without claiming to have queried it is not a claim this
      * gate has any business policing.
      */
-    private static void enforceTableProvenance(java.util.List<ReportPage.Section> secs) {
+    private static String enforceTableProvenance(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
             snapshot = new java.util.ArrayList<>(CALL_LOG);
@@ -5308,17 +5348,16 @@ public class McpServer {
             }
         }
         if (falseClaims.isEmpty()) {
-            return;
+            return null;
         }
-        throw new IllegalArgumentException(
-            "This report cannot be published yet: it claims to have queried, computed from, "
+        return "it claims to have queried, computed from, "
             + "or live-scanned a table this session never actually called SQL against — "
             + String.join(", ", falseClaims) + ". Either the table was named by mistake for "
             + "the one actually queried, or the claim needs to go — a reader cannot tell "
             + "provenance you did not really have from provenance you did. If you meant a "
             + "different table, run the real query against it and cite that one instead; if "
             + "the figure genuinely came from a source outside this corpus (a paper, a press "
-            + "release), say so plainly rather than describing it as warehouse-native.");
+            + "release), say so plainly rather than describing it as warehouse-native.";
     }
 
     /** Verb shapes that mean "I actually ran this," not just "this concept exists" — mirrors
@@ -5373,7 +5412,7 @@ public class McpServer {
      * was actually run ({@link #STAT_CLAIM_WORDS}) — naming a method as a general concept
      * ("an OLS regression could test this") is not policed.
      */
-    private static void enforceStatisticalProvenance(java.util.List<ReportPage.Section> secs) {
+    private static String enforceStatisticalProvenance(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
             snapshot = new java.util.ArrayList<>(CALL_LOG);
@@ -5412,15 +5451,14 @@ public class McpServer {
             }
         }
         if (unsupported.isEmpty()) {
-            return;
+            return null;
         }
-        throw new IllegalArgumentException(
-            "This report cannot be published yet: it claims a statistical method was run with "
+        return "it claims a statistical method was run with "
             + "no matching tool call anywhere in this session — " + String.join("; ", unsupported)
             + ". Either call the matching tool for real and cite its actual result, or rewrite "
             + "the sentence so it does not claim the method was executed (e.g. describe it as a "
             + "check that could be run, or drop the claim). A reader cannot tell a result you "
-            + "actually computed from one you did not.");
+            + "actually computed from one you did not.";
     }
 
     /** Named categories of thing that RECUR — a new episode can exist right now even though an
@@ -5465,7 +5503,7 @@ public class McpServer {
      * naming the episode's year alone (an old year on its own looks identical to an accidental
      * default to the best-documented historical instance).
      */
-    private static void enforceRecurringEventRecency(java.util.List<ReportPage.Section> secs) {
+    private static String enforceRecurringEventRecency(java.util.List<ReportPage.Section> secs) {
         StringBuilder text = new StringBuilder();
         for (ReportPage.Section sec : secs) {
             text.append(sec.heading == null ? "" : sec.heading).append('\n')
@@ -5474,21 +5512,20 @@ public class McpServer {
         String body = text.toString().replaceAll("<[^>]+>", " ");
         java.util.regex.Matcher phrase = RECURRING_EVENT_PHRASE.matcher(body);
         if (!phrase.find()) {
-            return;
+            return null;
         }
         int currentYear = java.time.LocalDate.now().getYear();
         java.util.regex.Matcher yr = java.util.regex.Pattern.compile("\\b(19|20)\\d{2}\\b")
             .matcher(body);
         while (yr.find()) {
             if (Integer.parseInt(yr.group()) >= currentYear - 1) {
-                return;
+                return null;
             }
         }
         if (RECENCY_CONSIDERED_WORDS.matcher(body).find()) {
-            return;
+            return null;
         }
-        throw new IllegalArgumentException(
-            "This report cannot be published yet: it discusses '" + phrase.group().trim()
+        return "it discusses '" + phrase.group().trim()
             + "' -- a category of event that recurs -- but cites no source dated " + (currentYear
             - 1) + " or later anywhere in the report, and never states that a more recent "
             + "instance was checked for. Confirm whether a more recent instance of this exact "
@@ -5498,7 +5535,7 @@ public class McpServer {
             + "specific past episode, say explicitly that a more recent instance was checked "
             + "for and none was found (or that this historical episode remains the most recent) "
             + "-- naming the old episode's year alone is not enough, since that looks identical "
-            + "to silently defaulting to the best-documented historical instance.");
+            + "to silently defaulting to the best-documented historical instance.";
     }
 
     /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
