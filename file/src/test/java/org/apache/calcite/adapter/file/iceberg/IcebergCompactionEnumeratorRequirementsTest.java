@@ -225,18 +225,58 @@ public class IcebergCompactionEnumeratorRequirementsTest {
     assertTrue(filesAfter < filesBefore,
         "compaction must reduce the data-file count (" + filesBefore + " -> " + filesAfter + ")");
 
-    // After compaction only the current snapshot is retained (non-current snapshots expired).
+    // Pre-compaction snapshots are NOT expired yet: compactSmallFiles's 3-arg overload (the one
+    // CompactionRunner.main uses) defaults to a 7-day retention window, and none of the snapshots
+    // created microseconds ago in this test are anywhere near that old. This is deliberate — see
+    // IcebergTableWriter.compactSmallFiles's javadoc: expiring at `now` raced concurrent readers
+    // still scanning an older snapshot's manifests. Immediate expiry (retentionDays=0) is covered
+    // separately below.
     table.refresh();
     int snapshotCount = 0;
     for (Snapshot s : table.snapshots()) {
       snapshotCount++;
     }
-    assertEquals(1, snapshotCount,
-        "non-current snapshots must be expired after compaction");
+    assertTrue(snapshotCount > 1,
+        "pre-compaction snapshots must survive the default 7-day retention window, not be "
+            + "expired immediately");
 
     // Row set is unchanged.
     Set<String> rowsAfter = readAll(table);
     assertEquals(rowsBefore, rowsAfter, "compaction must preserve the exact row set");
+  }
+
+  // ----------------------------------------------------------------------------------------
+  // Companion to compactionReducesFileCountAtMinFilesThreshold: that test fixes the default
+  // (7-day) retention window's behavior of NOT expiring fresh snapshots. This test exercises the
+  // other half of the same contract — explicitly requesting immediate expiry (retentionDays=0)
+  // must actually reclaim the pre-compaction snapshots, which had no direct coverage before.
+  // ----------------------------------------------------------------------------------------
+  @Test
+  @Tag("FILE-075")
+  public void compactionWithZeroRetentionExpiresPreCompactionSnapshotsImmediately()
+      throws Exception {
+    Table table = createTable("file075zeroretention");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    final int compactionMinFiles = 3;
+    Set<String> expected = appendSmallFiles(writer, table, compactionMinFiles);
+    Set<String> rowsBefore = readAll(table);
+
+    int compactedPartitions = writer.compactSmallFiles(
+        128L * 1024 * 1024, compactionMinFiles, 10L * 1024 * 1024, 0);
+    assertEquals(1, compactedPartitions, "partition at the min-files threshold must compact");
+    table.refresh();
+
+    int snapshotCount = 0;
+    for (Snapshot s : table.snapshots()) {
+      snapshotCount++;
+    }
+    assertEquals(1, snapshotCount,
+        "retentionDays=0 must expire every non-current (pre-compaction) snapshot immediately");
+
+    Set<String> rowsAfter = readAll(table);
+    assertEquals(rowsBefore, rowsAfter, "compaction must preserve the exact row set");
+    assertEquals(expected, rowsAfter, "rows must still match what was originally written");
   }
 
   // ----------------------------------------------------------------------------------------

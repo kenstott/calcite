@@ -467,42 +467,43 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   }
 
   /**
-   * Ensures the target Iceberg table exists with correct schema.
+   * Returns a human-readable reason the committed table is missing a column this run's config
+   * expects (drift), or {@code null} if every expected column (data or partition) is present.
    *
-   * <p>If the table exists but is missing expected data columns (e.g., only has
-   * partition columns from a previous buggy run), it will be dropped and recreated.
-   */
-  /**
-   * Returns a human-readable reason the committed table schema no longer matches the configured
-   * columns (drift), or {@code null} if the schema is fine. Drift means the table is missing an
-   * expected data column, or its total column count differs from the expected merged set (data
-   * columns plus synthetic partition columns not already present in the source data).
+   * <p>Deliberately one-directional: the existing table having MORE columns than this run
+   * expects is never treated as drift. Two configs built at different times can each be a
+   * perfectly coherent view of the schema — this method has no way to know which one is
+   * "current", so it only ever acts on what it can prove (an expected column genuinely absent),
+   * never on an extra column it doesn't recognize. Concretely, this means a worker running an
+   * older config no longer purges a table a different, up-to-date worker already rebuilt with
+   * an added column (a real production incident: kenstott/govdata-ops#226) — at the cost that a
+   * column removed from the schema is no longer auto-dropped from existing tables and needs an
+   * explicit cleanup instead.
    */
   private String schemaDriftReason(Table existingTable,
-      List<ColumnConfig> columnConfigs,
       List<IcebergCatalogManager.ColumnDef> expectedColumns) {
     Set<String> existingColumnNames = new HashSet<String>();
     for (org.apache.iceberg.types.Types.NestedField field : existingTable.schema().columns()) {
       existingColumnNames.add(field.name());
     }
-    Set<String> missingDataColumns = new HashSet<String>();
-    for (ColumnConfig colConfig : columnConfigs != null ? columnConfigs
-        : Collections.<ColumnConfig>emptyList()) {
-      if (!existingColumnNames.contains(colConfig.getName())) {
-        missingDataColumns.add(colConfig.getName());
+    Set<String> missingColumns = new HashSet<String>();
+    for (IcebergCatalogManager.ColumnDef col : expectedColumns) {
+      if (!existingColumnNames.contains(col.getName())) {
+        missingColumns.add(col.getName());
       }
     }
-    if (!missingDataColumns.isEmpty()) {
-      return "missing " + missingDataColumns.size() + " data columns: " + missingDataColumns;
-    }
-    // expectedColumns.size() is the merged set, avoiding double-counting shared columns.
-    if (existingColumnNames.size() != expectedColumns.size()) {
-      return "schema drift (existing=" + existingColumnNames.size()
-          + " columns, expected=" + expectedColumns.size() + ")";
+    if (!missingColumns.isEmpty()) {
+      return "missing " + missingColumns.size() + " expected column(s): " + missingColumns;
     }
     return null;
   }
 
+  /**
+   * Ensures the target Iceberg table exists with correct schema.
+   *
+   * <p>If the table exists but is missing expected data columns (e.g., only has
+   * partition columns from a previous buggy run), it will be dropped and recreated.
+   */
   private Table ensureTableExists(String targetTableId) {
     // Build expected columns from config
     List<IcebergCatalogManager.ColumnDef> expectedColumns =
@@ -610,7 +611,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
       // Check whether the existing table matches the expected columns. This handles the case where
       // a previous run only created partition columns, or the configured schema has changed.
-      String driftReason = schemaDriftReason(existingTable, columnConfigs, expectedColumns);
+      String driftReason = schemaDriftReason(existingTable, expectedColumns);
       if (driftReason == null) {
         LOGGER.debug("Loading existing Iceberg table: {} (schema OK)", targetTableId);
         return existingTable;
@@ -627,7 +628,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
             ? IcebergCatalogManager.loadTable(catalogConfig, targetTableId)
             : null;
         String reason = current == null ? null
-            : schemaDriftReason(current, columnConfigs, expectedColumns);
+            : schemaDriftReason(current, expectedColumns);
         if (current != null && reason == null) {
           LOGGER.debug("Iceberg table '{}' schema OK after acquiring lock "
               + "(recreated by a sibling)", targetTableId);

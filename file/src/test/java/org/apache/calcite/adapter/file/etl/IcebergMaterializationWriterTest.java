@@ -309,6 +309,113 @@ public class IcebergMaterializationWriterTest {
     assertEquals(100.0, (Double) byId.get(2).get("amount"), 0.0001);
   }
 
+  @Test public void testMissingExpectedColumnStillTriggersDropAndRecreate() throws Exception {
+    // Preserves the original, legitimate drift case this mechanism exists for: a declared
+    // column the current config expects is genuinely absent from the table (e.g. the first run
+    // after a real column was added). This must still purge and rebuild.
+    File warehouseDir = new File(tempDir, "warehouse_drift_missing");
+    warehouseDir.mkdirs();
+
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    MaterializeConfig configV1 =
+        buildIcebergConfig(warehouseDir, "drift_missing_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configV1);
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("name", "first");
+    writer.writeBatch(Collections.singletonList(row).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    // Second writer's config expects a column ("extra") the existing table does not have.
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    MaterializeConfig configV2 =
+        buildIcebergConfig(warehouseDir, "drift_missing_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR"),
+            createColumnConfig("extra", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configV2);
+
+    org.apache.iceberg.Table reloaded =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(writer.getTableLocation());
+    Set<String> columnNames = new HashSet<String>();
+    for (org.apache.iceberg.types.Types.NestedField f : reloaded.schema().columns()) {
+      columnNames.add(f.name());
+    }
+    assertEquals(3, columnNames.size(), "table rebuilt with the newly-expected column");
+    assertTrue(columnNames.contains("extra"), "missing expected column must trigger a rebuild");
+    int rowCount = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(reloaded).build()) {
+      for (org.apache.iceberg.data.Record ignored : records) {
+        rowCount++;
+      }
+    }
+    assertEquals(0, rowCount,
+        "a genuinely missing expected column must still purge prior data (existing behavior)");
+  }
+
+  @Test public void testStaleConfigWithFewerColumnsDoesNotPurgeExistingData() throws Exception {
+    // Regression for kenstott/govdata-ops#226: a writer whose OWN config simply doesn't declare
+    // a column the table already has (e.g. a jar built before that column was added elsewhere)
+    // must NOT treat that as drift and purge the table out from under a correctly-built schema.
+    File warehouseDir = new File(tempDir, "warehouse_drift_extra");
+    warehouseDir.mkdirs();
+
+    // First writer: "up to date" config with 3 columns, including one ("extra") a later, stale
+    // writer won't know about.
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    MaterializeConfig configCurrent =
+        buildIcebergConfig(warehouseDir, "drift_extra_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR"),
+            createColumnConfig("extra", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configCurrent);
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("name", "first");
+    row.put("extra", "kept");
+    writer.writeBatch(Collections.singletonList(row).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    // Second writer: "stale" config missing "extra" — simulates a worker running an older jar
+    // against a table a different, up-to-date worker already rebuilt.
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    MaterializeConfig configStale =
+        buildIcebergConfig(warehouseDir, "drift_extra_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configStale);
+
+    org.apache.iceberg.Table reloaded =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(writer.getTableLocation());
+    Set<String> columnNames = new HashSet<String>();
+    for (org.apache.iceberg.types.Types.NestedField f : reloaded.schema().columns()) {
+      columnNames.add(f.name());
+    }
+    assertTrue(columnNames.contains("extra"),
+        "a stale writer's narrower config must not drop a column another writer already added");
+
+    int rowCount = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(reloaded).build()) {
+      for (org.apache.iceberg.data.Record ignored : records) {
+        rowCount++;
+      }
+    }
+    assertEquals(1, rowCount,
+        "the row written under the up-to-date config must survive a stale writer's initialize()");
+  }
+
   @Test public void testDeclaredArrayColumnTypeCreatesListType() throws Exception {
     // Regression: mapToIcebergType previously fell through "array<date>"/"array<double>" to
     // STRING (the default case), silently dropping any declared list-typed column to a plain
