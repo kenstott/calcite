@@ -1305,19 +1305,30 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=eia_fossil/year=*/month=*/"
+        pattern: "type=eia_fossil/year=*/"
+      # Partitioned by year only, not year+month: at ~980 rows/year this table doesn't carry
+      # enough volume per period to justify month-level physical partitioning — the prior
+      # [type, year, month] scheme produced ~250 files averaging under 100 rows each for a
+      # 20,640-row table, and eia_area_code (this table's most common filter) isn't a partition
+      # column at all, so a narrowly-filtered query gained no pruning benefit from that
+      # granularity while still paying the file-open cost of all of them. incrementalKeys below
+      # stays at [year, month] — the tracker still needs per-month completion state to drive the
+      # rolling 36-month revision window correctly; only the physical partition/replace boundary
+      # is coarser.
       partition:
-        columns: [type, year, month]
+        columns: [type, year]
         valueSource:
           year: effective_year
-          month: production_month
       iceberg:
         <<: *iceberg_common
         tableName: eia_fossil_fuel_production
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
-        batchPartitionColumns: [year, month]
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
         incrementalKeys: [year, month]
 
   # ---------------------------------------------------------------------------
