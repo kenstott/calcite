@@ -2158,6 +2158,34 @@ partitionedTables:
       Federal_Fee_Managers_Authoritative_PADUS/FeatureServer/0 (official USGS
       GAP Analysis Project ArcGIS org, item v01gqwM5QqNysAAi).
 
+      WARNING: do not SUM(acres) for a total federal-fee acreage figure —
+      this layer's own rows are not mutually exclusive despite its
+      "Authoritative" name. Verified live 2026-09-12 directly against the
+      source FeatureServer (not an artifact of this table's ingestion — our
+      own SUM(acres) matches the source's own aggregate query exactly):
+      summing all 5,361 rows gives ~2.25B acres, near the entire land area of
+      the US; even filtering to category='Fee' (ownership, excluding
+      Proclamation boundaries) still gives ~2.10B acres. Grouping by
+      mang_name shows BLM/USFS/NPS/USACE/USBR sums are each close to their
+      independently known real totals (e.g. USFS ~193M acres, matching the
+      National Forest System almost exactly) — the inflation is concentrated
+      in FWS, whose rows include near-duplicate polygon pairs for the same
+      unit at nearly identical (not exactly equal) acreage, e.g. Pacific
+      Remote Islands Marine National Monument appears twice (310,260,466 and
+      310,260,380 acres), Papahanaumokuakea Marine National Monument three
+      times (283,392,764 / 283,392,311 / 88,143,702 for a "Monument
+      Original" sub-record), Mariana Trench NWR twice (50,559,347 /
+      50,559,316), Arctic NWR twice (19,637,182 / 19,637,012). This is a
+      source data-quality defect in PAD-US's own authoritative layer, not
+      fixable by de-duplicating on any single column here. A query needing a
+      real distinct-area total should use CRS's published federal land
+      figure (~640-650M acres) rather than SUM(acres) on this table, or
+      compute a true union area via ST_Union/ST_Area over geometry_wkt
+      (costly but correct). This table remains the right source for
+      per-parcel attribute lookups, agency/designation filters, and spatial
+      joins (e.g. against geo.counties or disasters.wildfire_perimeters)
+      where exact row-for-row overlap doesn't matter.
+
     dimensions:
       type:
         - padus_federal_fee_lands
