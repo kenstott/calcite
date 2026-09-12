@@ -17,6 +17,8 @@ import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -265,6 +267,63 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
     if (code < 200 || code >= 300) {
       throw new IOException("CRA aggregate download HTTP " + code + ": " + url);
     }
-    return new ZipInputStream(response.body());
+    // FFIEC's Cloudflare gate can return 200 OK with a CAPTCHA HTML page instead of a zip
+    // when the challenge fires - a status-code-only check would pass this through, and the
+    // downstream ZipInputStream then finds no entries and surfaces as "no *_Aggr_A11.dat
+    // entry found" outside the retry loop. Sniffing the standard zip magic (PK\x03\x04, and
+    // the empty/spanned variants) here forces the throw back into the retry path so the
+    // intermittent gate gets the same 4x/5s-backoff treatment as a real 403.
+    BufferedInputStream sniffable = new BufferedInputStream(response.body());
+    sniffable.mark(4);
+    byte[] magic = new byte[4];
+    int read = 0;
+    while (read < 4) {
+      int n = sniffable.read(magic, read, 4 - read);
+      if (n < 0) {
+        break;
+      }
+      read += n;
+    }
+    sniffable.reset();
+    if (read < 4 || !isZipMagic(magic)) {
+      String contentType = response.headers().firstValue("content-type").orElse("(none)");
+      String snippet = readBodySnippet(sniffable, 512);
+      throw new IOException("CRA aggregate download returned non-zip body (HTTP " + code
+          + ", Content-Type=" + contentType + ") for " + url
+          + " - likely FFIEC CAPTCHA/challenge; snippet: " + snippet);
+    }
+    return new ZipInputStream(sniffable);
+  }
+
+  // Package-private for unit test access.
+  static boolean isZipMagic(byte[] b) {
+    if (b[0] != (byte) 0x50 || b[1] != (byte) 0x4B) {
+      return false;
+    }
+    // PK\x03\x04 = local file header, PK\x05\x06 = end-of-central-directory (empty archive),
+    // PK\x07\x08 = spanned archive marker. All are valid ZIP openings.
+    return (b[2] == (byte) 0x03 && b[3] == (byte) 0x04)
+        || (b[2] == (byte) 0x05 && b[3] == (byte) 0x06)
+        || (b[2] == (byte) 0x07 && b[3] == (byte) 0x08);
+  }
+
+  private static String readBodySnippet(InputStream in, int maxBytes) {
+    ByteArrayOutputStream buf = new ByteArrayOutputStream();
+    byte[] chunk = new byte[Math.min(512, maxBytes)];
+    int total = 0;
+    try {
+      while (total < maxBytes) {
+        int n = in.read(chunk, 0, Math.min(chunk.length, maxBytes - total));
+        if (n < 0) {
+          break;
+        }
+        buf.write(chunk, 0, n);
+        total += n;
+      }
+    } catch (IOException ignored) {
+      // best-effort — snippet is diagnostic only
+    }
+    return new String(buf.toByteArray(), java.nio.charset.StandardCharsets.ISO_8859_1)
+        .replaceAll("\\s+", " ").trim();
   }
 }
