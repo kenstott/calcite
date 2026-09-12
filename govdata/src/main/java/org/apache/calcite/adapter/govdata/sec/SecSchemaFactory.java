@@ -2209,6 +2209,25 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     return getOrCreateXbrlConverter(operand, storageProvider);
   }
 
+  /**
+   * Reads the model's {@code enabledTables} operand (same key/shape every other schema's own
+   * per-table gating already reads — see e.g. {@code CyberSchemaFactory},
+   * {@code PatentsSchemaFactory}) into a {@code Set<String>}, or {@code null} when absent/empty
+   * (unrestricted — every normal, non-scoped run).
+   */
+  @SuppressWarnings("unchecked")
+  private Set<String> readEnabledTables(Map<String, Object> operand) {
+    Object raw = operand.get("enabledTables");
+    if (!(raw instanceof List)) {
+      return null;
+    }
+    List<String> list = (List<String>) raw;
+    if (list.isEmpty()) {
+      return null;
+    }
+    return new HashSet<String>(list);
+  }
+
   private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand,
       StorageProvider converterStorageProvider) {
     try {
@@ -2221,17 +2240,34 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       boolean enableVectorization = false;
       LOGGER.info("Creating XbrlToParquetConverter with enableVectorization={}", enableVectorization);
 
-      // Try constructor with StorageProvider and enableVectorization
+      // enabledTables scopes which of the ~10 disaggregated document tables the converter
+      // actually writes — null means unrestricted (every normal run). Confirmed live
+      // (kenstott/govdata-ops#235): before this was threaded through, this schema's own
+      // isEnabled("*") -> false hook (below) meant a caller's --tables was a complete no-op for
+      // sec — every table got written regardless of what was asked for.
+      Set<String> enabledTables = readEnabledTables(operand);
+      if (enabledTables != null) {
+        LOGGER.info("SEC document conversion scoped to enabledTables={}", enabledTables);
+      }
+
+      // Try constructor with StorageProvider, enableVectorization, and enabledTables
       try {
         return (FileConverter) clazz
-            .getConstructor(StorageProvider.class, boolean.class)
-            .newInstance(converterStorageProvider, enableVectorization);
-      // fallback-guard: allow normal Java reflection idiom for overload discovery (try 2-arg ctor, fall back to 1-arg)
-      } catch (NoSuchMethodException e) {
-        // Fall back to single-arg constructor (vectorization disabled)
-        return (FileConverter) clazz
-            .getConstructor(StorageProvider.class)
-            .newInstance(converterStorageProvider);
+            .getConstructor(StorageProvider.class, boolean.class, Set.class)
+            .newInstance(converterStorageProvider, enableVectorization, enabledTables);
+      // fallback-guard: allow normal Java reflection idiom for overload discovery (try 3-arg
+      // ctor, fall back to 2-arg, then 1-arg)
+      } catch (NoSuchMethodException e3) {
+        try {
+          return (FileConverter) clazz
+              .getConstructor(StorageProvider.class, boolean.class)
+              .newInstance(converterStorageProvider, enableVectorization);
+        } catch (NoSuchMethodException e2) {
+          // Fall back to single-arg constructor (vectorization disabled)
+          return (FileConverter) clazz
+              .getConstructor(StorageProvider.class)
+              .newInstance(converterStorageProvider);
+        }
       }
     } catch (Exception e) {
       // A null converter here doesn't fail loudly at the call site — it either NPEs somewhere

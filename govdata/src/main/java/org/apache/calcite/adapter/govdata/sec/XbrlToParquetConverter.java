@@ -78,6 +78,17 @@ public class XbrlToParquetConverter implements FileConverter {
 
   private final StorageProvider storageProvider;
   private final boolean enableVectorization;
+  // null = unrestricted (write every table this filing produces — the historical default and
+  // still the behavior for every normal run). Non-null scopes writes to the named tables only,
+  // e.g. from a remediation job's --tables. Confirmed live (kenstott/govdata-ops#235): before
+  // this field existed, SecSchemaFactory's isEnabled("*") -> false hook meant --tables was a
+  // complete no-op for sec — every one of the ~10 disaggregated tables got written regardless of
+  // what was asked for. Skipping a table's write here also means its path is never added to
+  // outputFiles, which is what SecFilingCache's per-table completion tracking (see
+  // SecSchemaFactory#buildInventoryFromOutputFiles) already keys off of — a later run that
+  // enables the skipped table for the same accession sees it as still-incomplete and reprocesses
+  // it, so scoping writes this way needs no other tracker change to stay safe.
+  private final Set<String> enabledTables;
 
   // Override metadata for non-XBRL filings (e.g. 8-K plain HTML) is passed
   // via ConversionMetadata hints instead of mutable instance fields, making
@@ -88,8 +99,21 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   public XbrlToParquetConverter(StorageProvider storageProvider, boolean enableVectorization) {
+    this(storageProvider, enableVectorization, null);
+  }
+
+  public XbrlToParquetConverter(StorageProvider storageProvider, boolean enableVectorization,
+      Set<String> enabledTables) {
     this.storageProvider = storageProvider;
     this.enableVectorization = enableVectorization;
+    this.enabledTables = enabledTables;
+  }
+
+  /** True when {@code tableName} should be written this run — unrestricted (null/empty
+   * enabledTables) always writes everything, matching every other schema's convention that an
+   * absent enabledTables means "no scope restriction." */
+  private boolean isTableEnabled(String tableName) {
+    return enabledTables == null || enabledTables.isEmpty() || enabledTables.contains(tableName);
   }
 
   /**
@@ -279,6 +303,17 @@ public class XbrlToParquetConverter implements FileConverter {
     // Path pattern: s3://bucket/sec/{cik}/{accession}/{filename} or /path/sec/{cik}/{accession}/{filename}
     if (accession == null || accession.isEmpty()) {
       accession = extractAccessionFromPath(sourceFilePath);
+    }
+
+    // Fallback: the caller-supplied hint (set explicitly by the 7-arg convertInternal overload,
+    // or by any other caller that knows the accession without it being encodable in either of
+    // the two attempts above — e.g. a source path with no accession-shaped directory segment,
+    // such as a test fixture living outside the production {cik}/{accession}/ layout).
+    if ((accession == null || accession.isEmpty()) && metadata != null) {
+      String hintAccession = metadata.getHint("accession");
+      if (hintAccession != null && !hintAccession.isEmpty()) {
+        accession = hintAccession;
+      }
     }
 
     // Extract filename from path (works for both local and S3 paths)
@@ -489,7 +524,9 @@ public class XbrlToParquetConverter implements FileConverter {
       try {
         factsData = writeFactsToParquet(doc, factsPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
         // Paths are already full paths from storageProvider.resolvePath()
-        outputFiles.add(factsPath);
+        if (isTableEnabled("financial_line_items")) {
+          outputFiles.add(factsPath);
+        }
         LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
       } catch (Exception e) {
         LOGGER.error("Exception during facts.parquet creation for {}: {}", fileName, e.getMessage());
@@ -498,16 +535,22 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Write filing metadata
       writeMetadataToParquet(doc, metadataPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
-      outputFiles.add(metadataPath);
+      if (isTableEnabled("filing_metadata")) {
+        outputFiles.add(metadataPath);
+      }
 
       // Convert contexts to Parquet
       writeContextsToParquet(doc, contextsPath, cik, filingType, actualFilingDate, accession);
-      outputFiles.add(contextsPath);
+      if (isTableEnabled("filing_contexts")) {
+        outputFiles.add(contextsPath);
+      }
 
       // Extract MD&A ONCE and use for both mda_sections and vectorized_chunks
       List<Map<String, Object>> mdaData = extractMDAData(doc, cik, filingType, actualFilingDate, accession, sourceFilePath);
       writeMDAToParquetFromData(mdaData, mdaPath);
-      outputFiles.add(mdaPath);
+      if (isTableEnabled("mda_sections")) {
+        outputFiles.add(mdaPath);
+      }
 
       // Extract Item 1A Risk Factors (10-K only; a no-op returning an empty list otherwise)
       List<Map<String, Object>> riskFactorData =
@@ -519,7 +562,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // SecSchemaFactory#buildInventoryFromOutputFiles turns into the filing's staging markers.
       // Reporting a path with no object behind it would record a risk_factors marker for filings
       // that produced no risk factors.
-      if (!riskFactorData.isEmpty()) {
+      if (!riskFactorData.isEmpty() && isTableEnabled("risk_factor_sections")) {
         outputFiles.add(riskFactorsPath);
       }
 
@@ -527,7 +570,9 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
       try {
         writeRelationshipsToParquet(doc, relationshipsPath, cik, accession, filingType, actualFilingDate, sourceFilePath);
-        outputFiles.add(relationshipsPath);
+        if (isTableEnabled("xbrl_relationships")) {
+          outputFiles.add(relationshipsPath);
+        }
         LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
       } catch (Exception e) {
         LOGGER.error("Exception during relationships.parquet creation for {}: {}", fileName, e.getMessage());
@@ -1228,8 +1273,12 @@ public class XbrlToParquetConverter implements FileConverter {
         // Still need to create the file for cache validation
       }
 
-      storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlFact", "XbrlFact");
-      LOGGER.info("Successfully wrote " + dataList.size() + " facts to " + outputPath);
+      if (isTableEnabled("financial_line_items")) {
+        storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlFact", "XbrlFact");
+        LOGGER.info("Successfully wrote " + dataList.size() + " facts to " + outputPath);
+      } else {
+        LOGGER.debug("Skipping financial_line_items write (not in enabledTables): " + outputPath);
+      }
 
     } catch (Exception e) {
       LOGGER.error("Failed to write facts parquet file for {} (CIK: {}): {}", filingDate, cik, e.getMessage());
@@ -1377,8 +1426,12 @@ public class XbrlToParquetConverter implements FileConverter {
     dataList.add(data);
 
     // Use consolidated StorageProvider method for Parquet writing
-    storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
-    LOGGER.info("Successfully wrote " + dataList.size() + " metadata records to " + outputPath);
+    if (isTableEnabled("filing_metadata")) {
+      storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
+      LOGGER.info("Successfully wrote " + dataList.size() + " metadata records to " + outputPath);
+    } else {
+      LOGGER.debug("Skipping filing_metadata write (not in enabledTables): " + outputPath);
+    }
   }
 
   // ---- DQ helpers ----
@@ -1679,9 +1732,11 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Only write file if there's data - empty parquet files cause DuckDB union_by_name issues
-    if (!dataList.isEmpty()) {
+    if (!dataList.isEmpty() && isTableEnabled("filing_contexts")) {
       storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlContext", "XbrlContext");
       LOGGER.info("Successfully wrote " + dataList.size() + " context records to " + outputPath);
+    } else if (!dataList.isEmpty()) {
+      LOGGER.debug("Skipping filing_contexts write (not in enabledTables): " + outputPath);
     } else if (contexts.isEmpty()) {
       LOGGER.debug("Skipping empty contexts file (0 <context> elements in document): {}", outputPath);
     } else {
@@ -2720,11 +2775,13 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void writeMDAToParquetFromData(List<Map<String, Object>> mdaData, String outputPath)
       throws IOException {
-    if (!mdaData.isEmpty()) {
+    if (!mdaData.isEmpty() && isTableEnabled("mda_sections")) {
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
           AbstractSecDataDownloader.loadTableColumns("mda_sections");
       storageProvider.writeAvroParquet(outputPath, columns, mdaData, "MDASection", "MDASection");
       LOGGER.info("Wrote {} MD&A chunks to {}", mdaData.size(), outputPath);
+    } else if (!mdaData.isEmpty()) {
+      LOGGER.debug("Skipping mda_sections write (not in enabledTables): " + outputPath);
     } else {
       LOGGER.debug("Skipping empty MD&A file (reason logged by extractMDAData above): {}", outputPath);
     }
@@ -2735,12 +2792,14 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private void writeRiskFactorsToParquetFromData(List<Map<String, Object>> riskFactorData,
       String outputPath) throws IOException {
-    if (!riskFactorData.isEmpty()) {
+    if (!riskFactorData.isEmpty() && isTableEnabled("risk_factor_sections")) {
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
           AbstractSecDataDownloader.loadTableColumns("risk_factor_sections");
       storageProvider.writeAvroParquet(outputPath, columns, riskFactorData, "RiskFactorSection",
           "RiskFactorSection");
       LOGGER.info("Wrote {} Risk Factors chunks to {}", riskFactorData.size(), outputPath);
+    } else if (!riskFactorData.isEmpty()) {
+      LOGGER.debug("Skipping risk_factor_sections write (not in enabledTables): " + outputPath);
     } else {
       LOGGER.debug("Skipping empty Risk Factors file (reason logged by extractRiskFactorData "
           + "above): {}", outputPath);
@@ -3514,10 +3573,12 @@ public class XbrlToParquetConverter implements FileConverter {
     try {
       LOGGER.debug(" About to write " + dataList.size() + " relationship records to " + outputPath);
 
-      if (!dataList.isEmpty()) {
+      if (!dataList.isEmpty() && isTableEnabled("xbrl_relationships")) {
         storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlRelationship", "xbrl_relationships");
         LOGGER.info(String.format("Wrote %d linkbase relationships to %s",
             linkbaseRelationships, outputPath));
+      } else if (!dataList.isEmpty()) {
+        LOGGER.debug("Skipping xbrl_relationships write (not in enabledTables): " + outputPath);
       } else {
         // Empty now means the filing published no linkbases at all, so there is nothing to
         // record. A filing that has them but could not be read throws instead of arriving here.
@@ -4415,13 +4476,17 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns = loadInsiderTransactionColumns();
-      storageProvider.writeAvroParquet(outputPath, columns, transactions, "InsiderTransaction", "insider_transactions");
-      LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputPath);
+      if (isTableEnabled("insider_transactions")) {
+        storageProvider.writeAvroParquet(outputPath, columns, transactions, "InsiderTransaction", "insider_transactions");
+        LOGGER.debug(" Successfully wrote insider transactions parquet file: " + outputPath);
 
-      // CRITICAL: Add insider file to outputFiles so addToManifest() can detect it
-      outputFiles.add(outputPath);
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Added insider file to outputFiles: {}", outputPath);
+        // CRITICAL: Add insider file to outputFiles so addToManifest() can detect it
+        outputFiles.add(outputPath);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Added insider file to outputFiles: {}", outputPath);
+        }
+      } else {
+        LOGGER.debug("Skipping insider_transactions write (not in enabledTables): " + outputPath);
       }
 
       LOGGER.info("Converted Form " + filingType + " to insider transactions: "
@@ -4431,7 +4496,9 @@ public class XbrlToParquetConverter implements FileConverter {
       String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
           relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
       writeMetadataToParquet(doc, metadataPath, cik, filingType, filingDate, accession, sourcePath);
-      outputFiles.add(metadataPath);
+      if (isTableEnabled("filing_metadata")) {
+        outputFiles.add(metadataPath);
+      }
 
       // Create vectorized chunks for insider forms if text similarity is enabled
       // Note: For now, we're creating a minimal vectorized file for insider forms
@@ -5115,7 +5182,9 @@ public class XbrlToParquetConverter implements FileConverter {
     String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
         relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
     writeHintBasedMetadata(null, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
-    outputFiles.add(metadataPath);
+    if (isTableEnabled("filing_metadata")) {
+      outputFiles.add(metadataPath);
+    }
 
     if (isHtml) {
       List<Map<String, Object>> mdaData = new ArrayList<>();
@@ -5125,7 +5194,9 @@ public class XbrlToParquetConverter implements FileConverter {
         String mdaPath = storageProvider.resolvePath(targetDirectoryPath,
             relativePartitionPath + "/" + String.format("%s_%s_mda.parquet", cik, uniqueId));
         writeMDAToParquetFromData(mdaData, mdaPath);
-        outputFiles.add(mdaPath);
+        if (isTableEnabled("mda_sections")) {
+          outputFiles.add(mdaPath);
+        }
       }
     }
 
@@ -5318,8 +5389,12 @@ public class XbrlToParquetConverter implements FileConverter {
     List<Map<String, Object>> dataList = new ArrayList<>();
     dataList.add(data);
 
-    storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
-    LOGGER.info("Wrote {} filing metadata to {}", filingType, outputPath);
+    if (isTableEnabled("filing_metadata")) {
+      storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
+      LOGGER.info("Wrote {} filing metadata to {}", filingType, outputPath);
+    } else {
+      LOGGER.debug("Skipping filing_metadata write (not in enabledTables): " + outputPath);
+    }
   }
 
   /**
@@ -5510,7 +5585,9 @@ public class XbrlToParquetConverter implements FileConverter {
         String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
             relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
         writeHintBasedMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourcePath);
-        outputFiles.add(metadataPath);
+        if (isTableEnabled("filing_metadata")) {
+          outputFiles.add(metadataPath);
+        }
       }
 
       // 2. Existing earnings extraction (unchanged)
@@ -5604,14 +5681,18 @@ public class XbrlToParquetConverter implements FileConverter {
       // -> inventoryFromCompletedTables -> FileInventory.isComplete).
       String earningsPath = storageProvider.resolvePath(targetDirectoryPath,
           relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, uniqueId));
-      storageProvider.writeAvroParquet(earningsPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
-      outputFiles.add(earningsPath);
-      if (!earningsRecords.isEmpty()) {
-        LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
+      if (isTableEnabled("earnings_transcripts")) {
+        storageProvider.writeAvroParquet(earningsPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
+        outputFiles.add(earningsPath);
+        if (!earningsRecords.isEmpty()) {
+          LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
+        } else {
+          LOGGER.debug("0 earnings paragraphs for cik={} accession={}: no EX-99.x exhibit content "
+              + "and no earnings-related phrases matched (most 8-Ks carry no earnings release)",
+              cik, accession);
+        }
       } else {
-        LOGGER.debug("0 earnings paragraphs for cik={} accession={}: no EX-99.x exhibit content "
-            + "and no earnings-related phrases matched (most 8-Ks carry no earnings release)",
-            cik, accession);
+        LOGGER.debug("Skipping earnings_transcripts write (not in enabledTables): " + earningsPath);
       }
 
       // 4. Extract ALL item sections + merge with earnings chunks
@@ -7003,17 +7084,22 @@ public class XbrlToParquetConverter implements FileConverter {
 
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
           AbstractSecDataDownloader.loadTableColumns("institutional_holdings");
-      storageProvider.writeAvroParquet(outputPath, columns, holdings,
-          "InstitutionalHolding", "institutional_holdings");
-      outputFiles.add(outputPath);
-
-      LOGGER.info("Converted 13F-HR to institutional holdings: {} records", holdings.size());
+      if (isTableEnabled("institutional_holdings")) {
+        storageProvider.writeAvroParquet(outputPath, columns, holdings,
+            "InstitutionalHolding", "institutional_holdings");
+        outputFiles.add(outputPath);
+        LOGGER.info("Converted 13F-HR to institutional holdings: {} records", holdings.size());
+      } else {
+        LOGGER.debug("Skipping institutional_holdings write (not in enabledTables): " + outputPath);
+      }
 
       // Write filing_metadata using primary doc (has company info, period, etc.)
       String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
           relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
       writeMetadataToParquet(primaryDoc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
-      outputFiles.add(metadataPath);
+      if (isTableEnabled("filing_metadata")) {
+        outputFiles.add(metadataPath);
+      }
 
     } catch (IncompleteFetchException e) {
       throw e;
@@ -7415,24 +7501,31 @@ public class XbrlToParquetConverter implements FileConverter {
 
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
           AbstractSecDataDownloader.loadTableColumns("beneficial_ownership");
-      storageProvider.writeAvroParquet(outputPath, columns, ownershipRecords,
-          "BeneficialOwnership", "beneficial_ownership");
-      outputFiles.add(outputPath);
-
-      LOGGER.info("Converted {} to beneficial ownership: {} records", filingType, ownershipRecords.size());
+      if (isTableEnabled("beneficial_ownership")) {
+        storageProvider.writeAvroParquet(outputPath, columns, ownershipRecords,
+            "BeneficialOwnership", "beneficial_ownership");
+        outputFiles.add(outputPath);
+        LOGGER.info("Converted {} to beneficial ownership: {} records", filingType, ownershipRecords.size());
+      } else {
+        LOGGER.debug("Skipping beneficial_ownership write (not in enabledTables): " + outputPath);
+      }
 
       // Write filing_metadata
       if (xmlDoc != null) {
         String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
             relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
         writeMetadataToParquet(xmlDoc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
-        outputFiles.add(metadataPath);
+        if (isTableEnabled("filing_metadata")) {
+          outputFiles.add(metadataPath);
+        }
       } else {
         // Write 8K-style metadata from HTML
         String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
             relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
         writeHintBasedMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
-        outputFiles.add(metadataPath);
+        if (isTableEnabled("filing_metadata")) {
+          outputFiles.add(metadataPath);
+        }
       }
 
       // Extract Item 4 (purpose of transaction) for vectorized_chunks
