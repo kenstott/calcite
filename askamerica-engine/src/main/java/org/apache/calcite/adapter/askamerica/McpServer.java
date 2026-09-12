@@ -3241,6 +3241,7 @@ public class McpServer {
                         enforceClaimsArrayPresence(secs);
                     }
                     enforceExclusionDisclosure(secs);
+                    enforceHighSeverityDisclosure(secs);
                     enforceTableProvenance(secs);
                     enforceStatisticalProvenance(secs);
                     enforceRecurringEventRecency(secs);
@@ -4709,6 +4710,19 @@ public class McpServer {
     private static final java.util.concurrent.atomic.AtomicInteger CALL_SEQ =
         new java.util.concurrent.atomic.AtomicInteger();
 
+    /** Fields on a diagnostic warning that actually identify WHERE the problem is (a column, a
+     *  table, a year, a place), as opposed to a magnitude/count field (rows_affected,
+     *  example_value, window_basis) that describes the problem's size without pinning it down
+     *  to something a caller could name in a disclosure sentence. Deliberately an allowlist,
+     *  not a blocklist -- a new diagnostic type's fields default to NOT being checked until
+     *  explicitly added here, since an unreviewed field could be a generic count that would
+     *  make {@link #enforceHighSeverityDisclosure} refuse on a coincidence rather than a real
+     *  undisclosed identifier. */
+    private static final java.util.Set<String> HIGH_DIAGNOSTIC_IDENTIFYING_FIELDS =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "column", "table", "year", "place_id", "county_fips", "state_fips", "series",
+            "series_id", "field"));
+
     private static void recordCall(String tool, JsonNode args, long ms, int rows,
             ObjectNode diagnostics, String error) {
         if (CALL_LOG.size() >= CALL_LOG_MAX) {
@@ -4754,14 +4768,40 @@ public class McpServer {
         if (diagnostics != null) {
             ArrayNode types = e.putArray("diagnostic_types");
             JsonNode inner = diagnostics.path("diagnostics");
+            ArrayNode highDiag = null;
             for (JsonNode w : inner.path("warnings")) {
                 String type = w.path("type").asText("");
-                types.add(type + ":" + w.path("severity").asText(""));
+                String severity = w.path("severity").asText("");
+                types.add(type + ":" + severity);
                 if ("explicit_exclusion".equals(type) && w.has("predicates")) {
                     e.set("exclusions", w.get("predicates"));
                 }
                 if ("sample_attrition".equals(type) && w.has("dropped_units")) {
                     e.set("dropped_units", w.get("dropped_units"));
+                }
+                // These two types already have their own dedicated disclosure gate
+                // (enforceExclusionDisclosure, enforceRecipeConsulted) -- don't double-police
+                // them here.
+                if ("high".equals(severity) && !"explicit_exclusion".equals(type)
+                        && !"recipe_not_consulted".equals(type)) {
+                    java.util.List<String> keyTerms = new java.util.ArrayList<>();
+                    for (String field : HIGH_DIAGNOSTIC_IDENTIFYING_FIELDS) {
+                        JsonNode v = w.get(field);
+                        if (v != null && v.isValueNode() && !v.isNull()) {
+                            keyTerms.add(v.asText());
+                        }
+                    }
+                    if (!keyTerms.isEmpty()) {
+                        if (highDiag == null) {
+                            highDiag = e.putArray("high_diagnostics");
+                        }
+                        ObjectNode hd = highDiag.addObject();
+                        hd.put("type", type);
+                        ArrayNode kt = hd.putArray("key_terms");
+                        for (String term : keyTerms) {
+                            kt.add(term);
+                        }
+                    }
                 }
             }
         }
@@ -5021,6 +5061,97 @@ public class McpServer {
             + "valid outcome (the catalog has no recipe for this yet) and does not block the "
             + "publish once you have actually called it, but silently proceeding without "
             + "calling it at all does.");
+    }
+
+    /** Broader than {@link #DISCLOSURE_WORDS} on purpose -- this gate polices "was this
+     *  specific high-severity problem disclosed" for diagnostic types whose own wording talks
+     *  about reliability/coverage, not necessarily exclusion, so "unreliable"/"caveat"/
+     *  "limitation"/coverage-gap language counts too. */
+    private static final java.util.regex.Pattern CAVEAT_WORDS = java.util.regex.Pattern
+        .compile("(?i)exclud|omitt|dropped|left out|not included|removed from|without |"
+            + "unreliable|caveat|limitation|caution|not reliable|coverage gap|not published|"
+            + "not (?:as )?trustworthy|treat.{0,20}as unreliable");
+
+    /**
+     * A high-severity diagnostic (broken_field, low_coverage, ...) that fired on a query whose
+     * result feeds the published report, and names a specific column/table/year/place the
+     * problem applies to, must be disclosed near THAT identifier -- a generic caveat elsewhere
+     * in the report does not count, the same proximity-based standard {@link
+     * #enforceExclusionDisclosure} already applies to hand-excluded units. explicit_exclusion
+     * and recipe_not_consulted are exempted since they already have their own dedicated gates.
+     * Measured live (q7, 2026-09-11 and q92, 2026-09-12): a {@code broken_field:high} on the
+     * exact table feeding a dashboard, and a {@code low_coverage:high} on two specific metros'
+     * house-price rows, both fired and were never mentioned anywhere near the affected
+     * column/metro in the final report -- only a general, unrelated caveat existed elsewhere.
+     */
+    private static void enforceHighSeverityDisclosure(java.util.List<ReportPage.Section> secs) {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        java.util.LinkedHashMap<String, java.util.List<String>> byType = new java.util.LinkedHashMap<>();
+        for (ObjectNode e : snapshot) {
+            for (JsonNode hd : e.path("high_diagnostics")) {
+                String type = hd.path("type").asText("");
+                java.util.List<String> terms = byType.computeIfAbsent(type,
+                    k -> new java.util.ArrayList<>());
+                for (JsonNode kt : hd.path("key_terms")) {
+                    String t = kt.asText();
+                    if (t.length() >= 2 && !terms.contains(t)) {
+                        terms.add(t);
+                    }
+                }
+            }
+        }
+        if (byType.isEmpty()) {
+            return;
+        }
+        StringBuilder text = new StringBuilder();
+        for (ReportPage.Section sec : secs) {
+            text.append(sec.heading == null ? "" : sec.heading).append('\n')
+                .append(sec.html == null ? "" : sec.html).append('\n');
+        }
+        String body = text.toString().replaceAll("<[^>]+>", " ");
+        String lower = body.toLowerCase(java.util.Locale.ROOT);
+        java.util.LinkedHashMap<String, java.util.List<String>> undisclosed = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<String, java.util.List<String>> ent : byType.entrySet()) {
+            for (String term : ent.getValue()) {
+                String termLower = term.toLowerCase(java.util.Locale.ROOT);
+                boolean nearCaveat = false;
+                int from = 0;
+                int idx;
+                while ((idx = lower.indexOf(termLower, from)) >= 0) {
+                    int winStart = Math.max(0, idx - DISCLOSURE_PROXIMITY_CHARS);
+                    int winEnd = Math.min(body.length(), idx + termLower.length()
+                        + DISCLOSURE_PROXIMITY_CHARS);
+                    if (CAVEAT_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                        nearCaveat = true;
+                        break;
+                    }
+                    from = idx + termLower.length();
+                }
+                if (!nearCaveat) {
+                    undisclosed.computeIfAbsent(ent.getKey(), k -> new java.util.ArrayList<>())
+                        .add(term);
+                }
+            }
+        }
+        if (undisclosed.isEmpty()) {
+            return;
+        }
+        StringBuilder msg = new StringBuilder(
+            "This report cannot be published yet: a high-severity data-quality diagnostic "
+            + "fired on a query this session and the specific column/table/year/place it names "
+            + "is never mentioned near a caveat anywhere in the report -- a caveat elsewhere in "
+            + "the report about something else does not count. ");
+        for (java.util.Map.Entry<String, java.util.List<String>> ent : undisclosed.entrySet()) {
+            msg.append(ent.getKey()).append(": ").append(String.join(", ", ent.getValue()))
+                .append(". ");
+        }
+        msg.append("Fix: add a sentence next to each affected figure naming the specific "
+            + "problem and what it means for that figure's reliability, then call "
+            + "publish_report again.");
+        throw new IllegalArgumentException(msg.toString());
     }
 
     private static void enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
