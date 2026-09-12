@@ -321,7 +321,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:25Z"
+      checkedAt: "2026-09-12T00:08:34Z"
     partitions: *standard_partitions
     comment: >
       American Community Survey population demographics including total population,
@@ -406,7 +406,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:26Z"
+      checkedAt: "2026-09-12T00:08:35Z"
     partitions: *standard_partitions
     comment: >
       Household median income and per capita income from the ACS 5-Year survey,
@@ -485,7 +485,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:26Z"
+      checkedAt: "2026-09-12T00:08:35Z"
     partitions: *standard_partitions
     comment: >
       Housing unit counts, occupancy status (occupied/vacant), median home value, and
@@ -577,7 +577,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 39272
-      checkedAt: "2026-09-11T00:00:27Z"
+      checkedAt: "2026-09-12T00:08:36Z"
     partitions: *standard_partitions
     comment: >
       Educational attainment counts for population 25 and over from the ACS 5-Year survey,
@@ -680,7 +680,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 42545
-      checkedAt: "2026-09-11T00:00:28Z"
+      checkedAt: "2026-09-12T00:08:37Z"
     partitions: *standard_partitions
     comment: >
       Labor force status counts (civilian labor force, employed, unemployed, not in labor
@@ -771,7 +771,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:28Z"
+      checkedAt: "2026-09-12T00:08:37Z"
     partitions: *standard_partitions
     comment: >
       Poverty universe (population for whom poverty status is determined) and count below
@@ -857,7 +857,7 @@ partitionedTables:
       contiguous: false
       years: [2000, 2010, 2020]
       rowCount: 9817
-      checkedAt: "2026-09-11T00:00:29Z"
+      checkedAt: "2026-09-12T00:08:38Z"
     partitions: *standard_partitions
     comment: >
       Decennial Census total population plus White/Black/Asian-alone race counts, at state
@@ -952,7 +952,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:29Z"
+      checkedAt: "2026-09-12T00:08:39Z"
     partitions: *standard_partitions
     comment: >
       Population counts by race (White, Black, American Indian/Alaska Native, Asian, Pacific
@@ -1103,7 +1103,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:30Z"
+      checkedAt: "2026-09-12T00:08:40Z"
     partitions: *standard_partitions
     comment: >
       Median age and population counts by age bracket (under 5, 5-17, 18-64, 65+) from the
@@ -1193,7 +1193,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:31Z"
+      checkedAt: "2026-09-12T00:08:41Z"
     partitions: *standard_partitions
     comment: >
       Commute mode counts (drove alone, carpooled, public transit, walked, bicycled, worked
@@ -1334,7 +1334,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 39272
-      checkedAt: "2026-09-11T00:00:32Z"
+      checkedAt: "2026-09-12T00:08:42Z"
     partitions: *standard_partitions
     comment: >
       Health insurance coverage counts (with/without coverage, public, private) from the ACS
@@ -1437,7 +1437,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:33Z"
+      checkedAt: "2026-09-12T00:08:43Z"
     partitions: *standard_partitions
     comment: >
       Population 5+ counts by language spoken at home (English only, Spanish, Spanish with
@@ -1568,7 +1568,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 39272
-      checkedAt: "2026-09-11T00:00:33Z"
+      checkedAt: "2026-09-12T00:08:44Z"
     partitions: *standard_partitions
     comment: >
       Population counts with any disability and by disability type (hearing, vision,
@@ -1685,7 +1685,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:34Z"
+      checkedAt: "2026-09-12T00:08:45Z"
     partitions: *standard_partitions
     comment: >
       Veteran and nonveteran population counts, with a male/female veteran breakdown, from
@@ -1795,7 +1795,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 45818
-      checkedAt: "2026-09-11T00:00:35Z"
+      checkedAt: "2026-09-12T00:08:46Z"
     partitions: *standard_partitions
     comment: >
       Population counts by prior-year residence (same house, moved within county, moved
@@ -1918,7 +1918,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:36Z"
+      checkedAt: "2026-09-12T00:08:47Z"
     partitions: *standard_partitions
     comment: >
       Employed civilian population counts by broad occupation category (management/business/
@@ -2040,7 +2040,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:37Z"
+      checkedAt: "2026-09-12T00:08:48Z"
     partitions: *standard_partitions
     comment: >
       Employed civilian population counts across 13 broad industry sectors (agriculture,
@@ -2242,7 +2242,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 22910
-      checkedAt: "2026-09-11T00:00:38Z"
+      checkedAt: "2026-09-12T00:08:48Z"
     partitions: *standard_partitions
     comment: >
       Household counts with/without an internet subscription and with/without a computer,
@@ -2365,7 +2365,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 45818
-      checkedAt: "2026-09-11T00:00:38Z"
+      checkedAt: "2026-09-12T00:08:49Z"
     partitions: *standard_partitions
     comment: >
       Household counts by vehicle availability (no vehicle available vs. total
@@ -2448,7 +2448,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:39Z"
+      checkedAt: "2026-09-12T00:08:50Z"
     partitions: *standard_partitions
     comment: >
       Population counts by nativity and citizenship (native born, foreign born, naturalized
@@ -2597,7 +2597,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:40Z"
+      checkedAt: "2026-09-12T00:08:51Z"
     partitions: *standard_partitions
     comment: >
       Marital status counts (never married, married, separated, widowed, divorced) by sex,
@@ -2723,7 +2723,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:41Z"
+      checkedAt: "2026-09-12T00:08:52Z"
     partitions: *standard_partitions
     comment: >
       Household counts by type (family vs nonfamily, married-couple, single householder with
@@ -2864,7 +2864,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 49091
-      checkedAt: "2026-09-11T00:00:42Z"
+      checkedAt: "2026-09-12T00:08:53Z"
     partitions: *standard_partitions
     comment: >
       Occupied housing unit counts by tenure (owner-occupied vs renter-occupied), plus
@@ -2980,12 +2980,12 @@ partitionedTables:
   - name: acs_housing_tenure_by_age
     pattern: "type=acs/year=*/geography=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
-      minYear: 2010
+      minYear: 2009
       maxYear: 2023
-      distinctYears: 14
+      distinctYears: 15
       contiguous: true
-      rowCount: 45818
-      checkedAt: "2026-09-11T00:00:43Z"
+      rowCount: 49091
+      checkedAt: "2026-09-12T00:08:54Z"
     partitions: *standard_partitions
     comment: >
       Occupied housing unit counts split by tenure (owner-occupied vs renter-occupied)
@@ -3442,7 +3442,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 45818
-      checkedAt: "2026-09-11T00:00:44Z"
+      checkedAt: "2026-09-12T00:08:56Z"
     partitions: *standard_partitions
     comment: >
       Household counts by ACS income bracket (under $10k through $200k+) plus
@@ -3566,7 +3566,7 @@ partitionedTables:
       contiguous: false
       years: [2000, 2010, 2020]
       rowCount: 9817
-      checkedAt: "2026-09-11T00:00:45Z"
+      checkedAt: "2026-09-12T00:08:56Z"
     partitions: *standard_partitions
     comment: >
       Total, occupied, and vacant housing unit counts from the Decennial Census, at state
@@ -3657,7 +3657,7 @@ partitionedTables:
       contiguous: false
       years: [2019, 2021, 2022, 2023]
       rowCount: 13094
-      checkedAt: "2026-09-11T00:00:45Z"
+      checkedAt: "2026-09-12T00:08:57Z"
     partitions: *standard_partitions
     comment: >
       Population Estimates Program (PEP) annual population estimate, at state and county
@@ -3774,7 +3774,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 8297538
-      checkedAt: "2026-09-11T00:00:46Z"
+      checkedAt: "2026-09-12T00:08:58Z"
     partitions: *standard_partitions
     comment: >
       County Business Patterns provides annual data on business establishments,
@@ -3870,7 +3870,7 @@ partitionedTables:
       contiguous: false
       years: [2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2021, 2022, 2023, 2024]
       rowCount: 988
-      checkedAt: "2026-09-11T00:00:47Z"
+      checkedAt: "2026-09-12T00:08:59Z"
     partitions: *standard_partitions
     comment: >
       ACS 1-Year population estimates (total, male, female population, median
@@ -3972,7 +3972,7 @@ partitionedTables:
       contiguous: false
       years: [2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2021, 2022, 2023, 2024]
       rowCount: 988
-      checkedAt: "2026-09-11T00:00:47Z"
+      checkedAt: "2026-09-12T00:09:00Z"
     partitions: *standard_partitions
     comment: >
       Household median income and per capita income from the ACS 1-Year survey,
@@ -4068,7 +4068,7 @@ partitionedTables:
       contiguous: false
       years: [2017, 2022]
       rowCount: 1645274
-      checkedAt: "2026-09-11T00:00:48Z"
+      checkedAt: "2026-09-12T00:09:01Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -4188,7 +4188,7 @@ partitionedTables:
       contiguous: false
       years: [1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2015, 2019, 2020, 2023, 2024]
       rowCount: 73436
-      checkedAt: "2026-09-11T00:00:49Z"
+      checkedAt: "2026-09-12T00:09:02Z"
     partitions: *standard_partitions
     comment: >
       Small Area Income and Poverty Estimates (SAIPE) annual estimates of median household
@@ -4284,7 +4284,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 57483
-      checkedAt: "2026-09-11T00:00:50Z"
+      checkedAt: "2026-09-12T00:09:03Z"
     partitions: *standard_partitions
     comment: >
       Small Area Health Insurance Estimates (SAHIE) annual estimates of insured/uninsured
@@ -4374,7 +4374,7 @@ partitionedTables:
       distinctYears: 31
       contiguous: true
       rowCount: 1581
-      checkedAt: "2026-09-11T00:00:51Z"
+      checkedAt: "2026-09-12T00:09:04Z"
     partitions: *standard_partitions
     comment: >
       Business Dynamics Statistics annual job creation, job destruction, net job creation,
@@ -4475,7 +4475,7 @@ partitionedTables:
       contiguous: false
       years: [2017, 2021, 2022, 2023]
       rowCount: 204
-      checkedAt: "2026-09-11T00:00:51Z"
+      checkedAt: "2026-09-12T00:09:04Z"
     partitions: *standard_partitions
     comment: >
       Annual Business Survey (ABS) employer-firm counts, sales receipts, employee counts,
@@ -4566,7 +4566,7 @@ partitionedTables:
       contiguous: false
       years: [2012, 2013, 2014, 2015, 2016, 2017, 2021, 2022, 2023]
       rowCount: 8183108
-      checkedAt: "2026-09-11T00:00:52Z"
+      checkedAt: "2026-09-12T00:09:05Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -4957,7 +4957,7 @@ partitionedTables:
       contiguous: false
       years: [2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019, 2020, 2021, 2022, 2023]
       rowCount: 38659158
-      checkedAt: "2026-09-11T00:01:14Z"
+      checkedAt: "2026-09-12T00:09:24Z"
     partitions:
       style: hive
       columns:
@@ -5113,7 +5113,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 728
-      checkedAt: "2026-09-11T00:01:15Z"
+      checkedAt: "2026-09-12T00:09:25Z"
     partitions: *standard_partitions
     comment: >
       Median earnings in the past 12 months by sex and educational attainment, for
@@ -5360,7 +5360,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 728
-      checkedAt: "2026-09-11T00:01:15Z"
+      checkedAt: "2026-09-12T00:09:26Z"
     partitions: *standard_partitions
     comment: >
       Joint nativity-by-education counts for the population 25 years and over,
@@ -5509,7 +5509,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 732
-      checkedAt: "2026-09-11T00:01:16Z"
+      checkedAt: "2026-09-12T00:09:26Z"
     partitions: *standard_partitions
     comment: >
       Median household income and household counts by nativity of the
@@ -5637,7 +5637,7 @@ partitionedTables:
       contiguous: false
       years: [1996, 1998, 2000, 2002, 2004, 2006, 2008, 2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024]
       rowCount: 765
-      checkedAt: "2026-09-11T00:01:16Z"
+      checkedAt: "2026-09-12T00:09:27Z"
     partitions:
       style: hive
       columnDefinitions:
