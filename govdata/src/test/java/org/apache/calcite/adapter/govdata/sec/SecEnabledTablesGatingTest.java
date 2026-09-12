@@ -20,6 +20,13 @@ import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,6 +37,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -141,5 +149,54 @@ class SecEnabledTablesGatingTest {
 
     assertTrue(anyEndsWith(outputFiles, "_facts.parquet"), "empty set: facts must be written");
     assertTrue(anyEndsWith(outputFiles, "_metadata.parquet"), "empty set: metadata must be written");
+  }
+
+  /** Captures log events from a named logger while active, for asserting on messages a test
+   * can't observe through outputFiles alone (e.g. that extraction was skipped, not just its
+   * output left unreported). */
+  private static final class CapturingAppender extends AbstractAppender {
+    private final List<String> messages = new CopyOnWriteArrayList<>();
+
+    CapturingAppender() {
+      super("test-capture-" + java.util.UUID.randomUUID(), null, null, false, Property.EMPTY_ARRAY);
+    }
+
+    @Override public void append(LogEvent event) {
+      messages.add(event.getMessage().getFormattedMessage());
+    }
+
+    boolean anyContains(String substring) {
+      return messages.stream().anyMatch(m -> m.contains(substring));
+    }
+  }
+
+  @Test
+  @Tag("integration")
+  void scopedRunSkipsExtractionNotJustTheOutputListForDisabledTables() throws Exception {
+    // Regression for kenstott/govdata-ops#243: enabledTables gating originally only withheld a
+    // disabled table's output path from outputFiles — the underlying extraction (XBRL DOM walk,
+    // HTML chunking, linkbase XML parsing) ran unconditionally regardless. Real work with real
+    // cost (writeRelationshipsToParquet does live XSD downloads per relationship, logged here)
+    // happened for every table on every run, whether or not that table was ever going to be
+    // used. Proving this via log capture, not outputFiles, since a skipped extraction leaves no
+    // output file either way — the distinguishing signal is whether the extraction ITSELF ran.
+    Logger xbrlLogger =
+        (Logger) LoggerContext.getContext(false).getLogger(XbrlToParquetConverter.class);
+    CapturingAppender appender = new CapturingAppender();
+    appender.start();
+    xbrlLogger.addAppender(appender);
+    xbrlLogger.setLevel(Level.DEBUG);
+    try {
+      convert(new HashSet<>(Collections.singletonList("filing_metadata")));
+    } finally {
+      xbrlLogger.removeAppender(appender);
+      appender.stop();
+    }
+
+    assertFalse(appender.anyContains("linkbase relationships"),
+        "xbrl_relationships extraction must not run at all when scoped out, not just be "
+            + "unreported: " + appender.messages);
+    assertTrue(appender.anyContains("Skipping financial_line_items extraction"),
+        "the skip itself must be logged for the disabled table: " + appender.messages);
   }
 }

@@ -166,7 +166,9 @@ dependencies {
     implementation("software.amazon.awssdk:netty-nio-client")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
-    testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
+    // Compile scope (not just testRuntimeOnly) so tests can attach a capturing Appender directly
+    // to a logger, e.g. to prove extraction genuinely didn't run rather than just went unreported.
+    testImplementation("org.apache.logging.log4j:log4j-core:2.23.1")
 
     // Runtime logging for ETL runner (included in shadow JAR)
     runtimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")

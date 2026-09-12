@@ -518,65 +518,78 @@ public class XbrlToParquetConverter implements FileConverter {
       String riskFactorsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_risk_factors.parquet", cik, uniqueId));
       String relationshipsPath = storageProvider.resolvePath(targetDirectoryPath, relativePartitionPath + "/" + String.format("%s_%s_relationships.parquet", cik, uniqueId));
 
-      // Convert financial facts to Parquet (returns extracted data for reuse by vectorization)
+      // Convert financial facts to Parquet (returns extracted data for reuse by vectorization).
+      // Skipped entirely — not just un-reported — when disabled: enableVectorization is
+      // hardcoded false at both SecSchemaFactory call sites today, so an empty factsData here
+      // never reaches the vectorization branch below; if that ever changes, this table's
+      // vectorization would need its own extraction path rather than reusing this one.
       List<Map<String, Object>> factsData;
-      LOGGER.debug(" Starting facts.parquet generation for: " + fileName + " -> " + factsPath);
-      try {
-        factsData = writeFactsToParquet(doc, factsPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
-        // Paths are already full paths from storageProvider.resolvePath()
-        if (isTableEnabled("financial_line_items")) {
+      if (isTableEnabled("financial_line_items")) {
+        LOGGER.debug(" Starting facts.parquet generation for: " + fileName + " -> " + factsPath);
+        try {
+          factsData = writeFactsToParquet(doc, factsPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
           outputFiles.add(factsPath);
+          LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
+        } catch (Exception e) {
+          LOGGER.error("Exception during facts.parquet creation for {}: {}", fileName, e.getMessage());
+          throw e;
         }
-        LOGGER.debug(" Successfully created facts.parquet: " + factsPath);
-      } catch (Exception e) {
-        LOGGER.error("Exception during facts.parquet creation for {}: {}", fileName, e.getMessage());
-        throw e;
+      } else {
+        factsData = java.util.Collections.emptyList();
+        LOGGER.debug("Skipping financial_line_items extraction (not in enabledTables): " + factsPath);
       }
 
       // Write filing metadata
-      writeMetadataToParquet(doc, metadataPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
       if (isTableEnabled("filing_metadata")) {
+        writeMetadataToParquet(doc, metadataPath, cik, filingType, actualFilingDate, accession, sourceFilePath);
         outputFiles.add(metadataPath);
       }
 
       // Convert contexts to Parquet
-      writeContextsToParquet(doc, contextsPath, cik, filingType, actualFilingDate, accession);
       if (isTableEnabled("filing_contexts")) {
+        writeContextsToParquet(doc, contextsPath, cik, filingType, actualFilingDate, accession);
         outputFiles.add(contextsPath);
       }
 
-      // Extract MD&A ONCE and use for both mda_sections and vectorized_chunks
-      List<Map<String, Object>> mdaData = extractMDAData(doc, cik, filingType, actualFilingDate, accession, sourceFilePath);
-      writeMDAToParquetFromData(mdaData, mdaPath);
+      // Extract MD&A ONCE and use for both mda_sections and vectorized_chunks. Same
+      // enableVectorization caveat as factsData above — skipped outright when disabled.
+      List<Map<String, Object>> mdaData;
       if (isTableEnabled("mda_sections")) {
+        mdaData = extractMDAData(doc, cik, filingType, actualFilingDate, accession, sourceFilePath);
+        writeMDAToParquetFromData(mdaData, mdaPath);
         outputFiles.add(mdaPath);
+      } else {
+        mdaData = java.util.Collections.emptyList();
+        LOGGER.debug("Skipping mda_sections extraction (not in enabledTables): " + mdaPath);
       }
 
       // Extract Item 1A Risk Factors (10-K only; a no-op returning an empty list otherwise)
-      List<Map<String, Object>> riskFactorData =
-          extractRiskFactorData(cik, filingType, actualFilingDate, accession, sourceFilePath);
-      writeRiskFactorsToParquetFromData(riskFactorData, riskFactorsPath);
-      // Reported only when a file was actually written. writeRiskFactorsToParquetFromData skips
-      // the write for an empty extraction — every 10-Q and 8-K, and any 10-K whose filer is a
-      // smaller reporting company exempt from Item 1A — and this list is what
-      // SecSchemaFactory#buildInventoryFromOutputFiles turns into the filing's staging markers.
-      // Reporting a path with no object behind it would record a risk_factors marker for filings
-      // that produced no risk factors.
-      if (!riskFactorData.isEmpty() && isTableEnabled("risk_factor_sections")) {
-        outputFiles.add(riskFactorsPath);
+      if (isTableEnabled("risk_factor_sections")) {
+        List<Map<String, Object>> riskFactorData =
+            extractRiskFactorData(cik, filingType, actualFilingDate, accession, sourceFilePath);
+        writeRiskFactorsToParquetFromData(riskFactorData, riskFactorsPath);
+        // Reported only when a file was actually written. writeRiskFactorsToParquetFromData skips
+        // the write for an empty extraction — every 10-Q and 8-K, and any 10-K whose filer is a
+        // smaller reporting company exempt from Item 1A — and this list is what
+        // SecSchemaFactory#buildInventoryFromOutputFiles turns into the filing's staging markers.
+        // Reporting a path with no object behind it would record a risk_factors marker for filings
+        // that produced no risk factors.
+        if (!riskFactorData.isEmpty()) {
+          outputFiles.add(riskFactorsPath);
+        }
       }
 
       // Extract and write XBRL relationships
-      LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
-      try {
-        writeRelationshipsToParquet(doc, relationshipsPath, cik, accession, filingType, actualFilingDate, sourceFilePath);
-        if (isTableEnabled("xbrl_relationships")) {
+      if (isTableEnabled("xbrl_relationships")) {
+        LOGGER.debug(" Starting relationships.parquet generation for: " + fileName + " -> " + relationshipsPath);
+        try {
+          writeRelationshipsToParquet(doc, relationshipsPath, cik, accession, filingType, actualFilingDate, sourceFilePath);
           outputFiles.add(relationshipsPath);
+          LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
+        } catch (Exception e) {
+          LOGGER.error("Exception during relationships.parquet creation for {}: {}", fileName, e.getMessage());
+          throw e;
         }
-        LOGGER.debug(" Successfully created relationships.parquet: " + relationshipsPath);
-      } catch (Exception e) {
-        LOGGER.error("Exception during relationships.parquet creation for {}: {}", fileName, e.getMessage());
-        throw e;
       }
 
       // Create vectorized chunks with contextual enrichment if enabled
