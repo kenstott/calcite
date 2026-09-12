@@ -52,6 +52,13 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
@@ -99,6 +106,88 @@ public class HttpSource implements DataSource {
   private static final Pattern VAR_PATTERN = Pattern.compile("\\{([^}]+)\\}");
   @SuppressWarnings("UnusedVariable")
   private static final Pattern ENV_PATTERN = Pattern.compile("env:(.+)");
+
+  // DNS resolution for HttpURLConnection happens before the socket-level connect that
+  // setConnectTimeout bounds, and has no JDK-level timeout of its own - a stalled/blackholed
+  // resolver blocks the calling thread indefinitely with zero CPU and no log output, regardless
+  // of connectTimeout/readTimeout. Confirmed live across three unrelated upstream hosts
+  // (kenstott/govdata-ops#236/#139/#121): identical near-zero-CPU, multi-hour hangs that
+  // outlasted every configured timeout, which is what a DNS-layer stall looks like rather than
+  // upstream-specific slowness. connectWithDeadline wraps the connect+status-line call (the one
+  // call that triggers DNS resolution) with a hard deadline covering DNS through connect+read as
+  // one unit, using a daemon thread pool so an abandoned connect attempt never blocks JVM exit.
+  private static final ExecutorService CONNECT_DEADLINE_EXECUTOR =
+      Executors.newCachedThreadPool(new ThreadFactory() {
+        @Override public Thread newThread(Runnable r) {
+          Thread t = new Thread(r, "http-source-connect-deadline");
+          t.setDaemon(true);
+          return t;
+        }
+      });
+
+  // Added to connectTimeout+readTimeout to derive each call's deadline: DNS resolution isn't
+  // bounded by either of those, so the wrapper needs its own margin on top of them rather than
+  // reusing readTimeout's value (which would leave DNS with no budget of its own).
+  private static final long DNS_DEADLINE_BUFFER_MS = 30_000L;
+
+  /**
+   * Connects {@code conn} and returns its response code with a hard deadline covering DNS
+   * resolution through connect and the response status line as one unit - see
+   * {@link #CONNECT_DEADLINE_EXECUTOR}'s field doc for why this exists. The deadline is derived
+   * from {@code conn}'s own already-configured {@code connectTimeout}/{@code readTimeout}
+   * (call site's single source of truth) plus {@link #DNS_DEADLINE_BUFFER_MS} for the otherwise
+   * unbounded DNS step.
+   *
+   * <p>{@link HttpURLConnection#getResponseCode()} implicitly connects if not already connected,
+   * so this replaces both a standalone {@code conn.connect()} and the {@code getResponseCode()}
+   * call that follows it — for a request with no body to send. A POST/PUT request that writes a
+   * body first must instead call {@link #connectOnlyWithDeadline} before
+   * {@code conn.getOutputStream()}, since that call implicitly connects too, earlier than this
+   * one — see that method's doc.
+   */
+  private static int connectWithDeadline(HttpURLConnection conn) throws IOException {
+    return runWithConnectDeadline(conn, conn::getResponseCode);
+  }
+
+  /**
+   * Connects {@code conn} alone (no response read) with the same hard deadline as
+   * {@link #connectWithDeadline}. Required before {@code conn.getOutputStream()} on a POST/PUT
+   * request: writing the body implicitly connects first (DNS resolution included), which would
+   * otherwise happen with no deadline at all before {@link #connectWithDeadline}'s later
+   * {@code getResponseCode()} call ever runs. Calling {@code connect()} here first means
+   * {@code getOutputStream()} and the subsequent {@code getResponseCode()} both run against an
+   * already-connected connection, so neither re-triggers DNS resolution.
+   */
+  private static void connectOnlyWithDeadline(HttpURLConnection conn) throws IOException {
+    runWithConnectDeadline(conn, () -> {
+      conn.connect();
+      return null;
+    });
+  }
+
+  private static <T> T runWithConnectDeadline(HttpURLConnection conn,
+      java.util.concurrent.Callable<T> task) throws IOException {
+    long deadlineMs = conn.getConnectTimeout() + conn.getReadTimeout() + DNS_DEADLINE_BUFFER_MS;
+    Future<T> future = CONNECT_DEADLINE_EXECUTOR.submit(task);
+    try {
+      return future.get(deadlineMs, TimeUnit.MILLISECONDS);
+    } catch (TimeoutException e) {
+      future.cancel(true);
+      conn.disconnect();
+      throw new IOException("Connection deadline exceeded (" + deadlineMs + "ms) for "
+          + conn.getURL() + " - likely a stalled DNS resolution or blackholed connect, neither "
+          + "bounded by connectTimeout/readTimeout", e);
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof IOException) {
+        throw (IOException) cause;
+      }
+      throw new IOException("Connection failed: " + conn.getURL(), cause);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while connecting: " + conn.getURL(), e);
+    }
+  }
 
   private final HttpSourceConfig config;
   private final Map<String, CacheEntry> cache;
@@ -1078,7 +1167,7 @@ public class HttpSource implements DataSource {
       conn.setRequestProperty(e.getKey(), e.getValue());
     }
     applyAuth(conn, variables);
-    int status = conn.getResponseCode();
+    int status = connectWithDeadline(conn);
     if (status >= 400) {
       // A 403 from an S3-backed source can mean two very different things: a genuine gap
       // (weekend/holiday/future date — safe to skip via skipOn) or InvalidObjectState — the
@@ -1381,13 +1470,14 @@ public class HttpSource implements DataSource {
           conn.setRequestProperty("Content-Type", contentType);
         }
         LOGGER.debug("Sending batched body: {} bytes", bodyContent.length());
+        connectOnlyWithDeadline(conn);
         try (OutputStream os = conn.getOutputStream()) {
           os.write(bodyContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
           os.flush();
         }
       }
 
-      int responseCode = conn.getResponseCode();
+      int responseCode = connectWithDeadline(conn);
       LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), urlString, responseCode);
 
       if (responseCode >= 200 && responseCode < 300) {
@@ -1578,7 +1668,7 @@ public class HttpSource implements DataSource {
       conn.setReadTimeout(120000);
       applyHeadersAndAuth(conn, variables);
 
-      int responseCode = conn.getResponseCode();
+      int responseCode = connectWithDeadline(conn);
       if (responseCode < 200 || responseCode >= 300) {
         String errorBody = readResponse(conn.getErrorStream());
         throw new IOException("URL resolver HTTP " + responseCode + " for " + resolverUrl
@@ -1658,6 +1748,7 @@ public class HttpSource implements DataSource {
             conn.setRequestProperty("Content-Type", contentType);
           }
           LOGGER.debug("Sending body: {}", bodyContent);
+          connectOnlyWithDeadline(conn);
           try (OutputStream os = conn.getOutputStream()) {
             os.write(bodyContent.getBytes(StandardCharsets.UTF_8));
             os.flush();
@@ -1665,7 +1756,7 @@ public class HttpSource implements DataSource {
         }
       }
 
-      int responseCode = conn.getResponseCode();
+      int responseCode = connectWithDeadline(conn);
       LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), urlString, responseCode);
 
       if (responseCode >= 200 && responseCode < 300) {
@@ -3667,8 +3758,7 @@ public class HttpSource implements DataSource {
       conn.setReadTimeout(60000);
       conn.setInstanceFollowRedirects(true);
       applyProbeHeaders(conn, vars);
-      conn.connect();
-      int code = conn.getResponseCode();
+      int code = connectWithDeadline(conn);
       LOGGER.debug("Freshness HEAD {} -> {}", urlString, code);
       Map<String, String> headers = captureHeaders(conn);
       return new ProbeResult(headers, null);
@@ -3690,7 +3780,7 @@ public class HttpSource implements DataSource {
       conn.setReadTimeout(30000);
       conn.setInstanceFollowRedirects(true);
       applyProbeHeaders(conn, vars);
-      int code = conn.getResponseCode();
+      int code = connectWithDeadline(conn);
       LOGGER.debug("Freshness GET {} -> {}", urlString, code);
       Map<String, String> headers = captureHeaders(conn);
       String body = null;
@@ -3728,11 +3818,12 @@ public class HttpSource implements DataSource {
       if (conn.getRequestProperty("Content-Type") == null) {
         conn.setRequestProperty("Content-Type", "application/json");
       }
+      connectOnlyWithDeadline(conn);
       try (OutputStream os = conn.getOutputStream()) {
         os.write(requestBody.getBytes(StandardCharsets.UTF_8));
         os.flush();
       }
-      int code = conn.getResponseCode();
+      int code = connectWithDeadline(conn);
       LOGGER.debug("Freshness GraphQL POST {} -> {}", urlString, code);
       Map<String, String> headers = captureHeaders(conn);
       String body = null;
