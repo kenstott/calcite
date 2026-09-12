@@ -299,6 +299,21 @@ partitionedTables:
       automatically — a low row count for only the single most recent year
       is expected, not a defect.
 
+      Externally-compiled "federal R&D by field" series (e.g. AAAS,
+      secondary policy trackers) report R&D total (research + development),
+      not research alone, and will differ from this table by the
+      development share of a given field — larger for fields with a
+      substantial development component (life sciences via NIH, defense-
+      adjacent engineering), smaller elsewhere. NCSES does not publish
+      "development by detailed field" as its own crosscut — Table 83
+      breaks development out only by funding agency, never by field of
+      science — so any "R&D by field" figure necessarily combines Table
+      91's research-by-field with an outside-NCSES allocation of
+      development spending across fields under each compiler's own
+      methodology. Both are correct at what they claim to measure; use
+      this table for research-only field breakdowns, and NCSES agency-
+      level tables (82, 83) or a third-party compiler for R&D total.
+
     dimensions:
       type:
         - nsf_rd_by_field
