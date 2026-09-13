@@ -42,6 +42,7 @@ public class EntityBridgeOrganizer {
     if (jdbcUrl == null) {
       throw new IllegalStateException("CALCITE_TRACKER_PG_URL not set");
     }
+    jdbcUrl = ensureSocketTimeout(jdbcUrl);
     String user = System.getenv("CALCITE_TRACKER_PG_USER");
     String password = System.getenv("CALCITE_TRACKER_PG_PASSWORD");
     String parquetDir = System.getenv("GOVDATA_PARQUET_DIR");
@@ -75,6 +76,14 @@ public class EntityBridgeOrganizer {
     EntityBridgeListener listener = new EntityBridgeListener();
     listener.buildBridges(pgConn, readDir, writeDir);
     LOGGER.info("[entity-bridge] entity resolution complete");
+  }
+
+  private static String ensureSocketTimeout(String jdbcUrl) {
+    if (jdbcUrl.contains("socketTimeout")) {
+      return jdbcUrl;
+    }
+    String separator = jdbcUrl.contains("?") ? "&" : "?";
+    return jdbcUrl + separator + "socketTimeout=60000";
   }
 
   private static Connection openPgConnection(String jdbcUrl, String user, String password)

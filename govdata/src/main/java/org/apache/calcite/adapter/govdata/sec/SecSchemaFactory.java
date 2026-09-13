@@ -2455,6 +2455,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // Build request with conditional GET support
           java.net.HttpURLConnection conn =
               (java.net.HttpURLConnection) java.net.URI.create(submissionsUrl).toURL().openConnection();
+          conn.setConnectTimeout(30000);
+          conn.setReadTimeout(60000);
           conn.setRequestMethod("GET");
           conn.setRequestProperty("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
           conn.setRequestProperty("Accept", "application/json");

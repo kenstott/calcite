@@ -401,6 +401,14 @@ public class ChunkOrganizer {
     pg.commit();
   }
 
+  private static String ensureSocketTimeout(String jdbcUrl) {
+    if (jdbcUrl.contains("socketTimeout")) {
+      return jdbcUrl;
+    }
+    String separator = jdbcUrl.contains("?") ? "&" : "?";
+    return jdbcUrl + separator + "socketTimeout=60000";
+  }
+
   /** Standalone entry point for {@code x-schema.sh}. Reads {@code CALCITE_TRACKER_PG_URL}/
    *  {@code _USER}/{@code _PASSWORD} and {@code AWS_*} (all exempt from the model-operand guard
    *  as run/infra config -- see {@code .claude/hooks/model-operand-guard.py}'s EXEMPT_PREFIX)
@@ -412,6 +420,7 @@ public class ChunkOrganizer {
     if (jdbcUrl == null) {
       throw new IllegalStateException("CALCITE_TRACKER_PG_URL not set");
     }
+    jdbcUrl = ensureSocketTimeout(jdbcUrl);
     String user = System.getenv("CALCITE_TRACKER_PG_USER");
     String password = System.getenv("CALCITE_TRACKER_PG_PASSWORD");
     String base = System.getenv("GOVDATA_PARQUET_DIR");
