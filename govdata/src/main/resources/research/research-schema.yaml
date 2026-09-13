@@ -266,38 +266,64 @@ partitionedTables:
     comment: >
       NSF NCSES Survey of Federal Funds for R&D — total federal obligations for
       RESEARCH (basic + applied, all funding agencies, all performers combined)
-      broken out by detailed field of R&D, FYs 2016-2025. Values in current
-      USD millions. Closes the all-agency/all-performer field-of-science gap
-      that nsf_federal_rd_obligations (rd_field hard-coded to "All fields")
-      and nsf_herd_by_institution (real rd_field column, but scoped to
+      broken out by detailed field of R&D, FYs 1993-2025 (FYs 1993-2003 and
+      2004-14 from NCSES's own long-run historical tables in publication
+      nsf14316, FYs 2016-2025 from the current edition; FY2015 is not yet
+      sourced — a single-year gap between the two vintages, tracked in
+      govdata-ops#257/#145). Values in current USD millions. Closes the
+      all-agency/all-performer field-of-science gap that
+      nsf_federal_rd_obligations (rd_field hard-coded to "All fields") and
+      nsf_herd_by_institution (real rd_field column, but scoped to
       university-performed R&D only) each leave open on their own. Does not
       cover experimental development obligations by field — NCSES's own field
       taxonomy was historically collected for research only, and the field
       breakdown for development obligations is not published as its own
       crosscut in this table.
 
-      field_level encodes the row's place in NCSES's own field hierarchy (read
-      from the source XLSX cell's indentation, not inferred): 0 = grand total
-      ("All fields"), 1 = a broad field of R&D, 2 = a detailed sub-field
-      nested under the preceding level-1 row. Level-1 rows sum to the level-0
-      total; level-2 rows sum to their enclosing level-1 row. Pick one level
-      to aggregate on — summing across levels double-counts, the same
-      rollup-vs-leaf discipline as energy.eia_electricity_generation's
-      sector_is_rollup/fuel_is_rollup flags. A field's taxonomy label can
-      differ across the 2021 field-of-R&D revision (e.g. "Computer sciences
-      and mathematics" pre-2021 vs. "Computer and information sciences"
-      post-2021); both eras' labels are preserved as-is from the source. A
-      field/year cell marked "NA" in the source is dropped — no row is
-      emitted for it at all, not a row with a null value — because NCSES
-      uses NA for two different reasons this table can't tell apart: a field
-      that didn't exist under that year's taxonomy, or a "(preliminary)"
-      most-recent year published only at the level-0/level-1 grain (NCSES
-      withholds level-2 sub-field detail until the following year's edition
-      finalizes it), which is why the newest year always has far fewer rows
-      than the years before it. Re-running this table's full-refresh fetch
-      after NCSES publishes the next edition picks up the finalized detail
-      automatically — a low row count for only the single most recent year
-      is expected, not a defect.
+      field_level encodes the row's place in NCSES's own field hierarchy: 0 =
+      grand total ("All fields"), 1 = a broad field of R&D, 2 = a detailed
+      sub-field nested under the preceding level-1 row. Level-1 rows sum to
+      the level-0 total; level-2 rows sum to their enclosing level-1 row. Pick
+      one level to aggregate on — summing across levels double-counts, the
+      same rollup-vs-leaf discipline as energy.eia_electricity_generation's
+      sector_is_rollup/fuel_is_rollup flags. The FYs 2016-2025 source encodes
+      this via each field-name cell's own style indent; the FYs 1993-2014
+      historical tables (a different NCSES publication era) instead encode it
+      via 4 leading non-breaking-space characters per level baked into the
+      field-name string itself — confirmed live 2026-09-13 against table 134
+      (FYs 2004-14): 0/4/8 leading NBSPs map to level 0/1/2 exactly.
+      NsfRdByFieldTransformer tries the style indent first and falls back to
+      counting NBSPs only when the style carries none, so this is transparent
+      to callers — both vintages populate field_level identically. A field's
+      taxonomy label can differ across the 2021 field-of-R&D revision (e.g.
+      "Computer sciences and mathematics" pre-2021 vs. "Computer and
+      information sciences" post-2021); both eras' labels are preserved as-is
+      from the source. A field/year cell marked "NA" in the source is dropped
+      — no row is emitted for it at all, not a row with a null value —
+      because NCSES uses NA for two different reasons this table can't tell
+      apart: a field that didn't exist under that year's taxonomy, or a
+      "(preliminary)" most-recent year published only at the
+      level-0/level-1 grain (NCSES withholds level-2 sub-field detail until
+      the following year's edition finalizes it), which is why the newest
+      year always has far fewer rows than the years before it. Re-running
+      this table's full-refresh fetch after NCSES publishes the next edition
+      picks up the finalized detail automatically — a low row count for only
+      the single most recent year is expected, not a defect. The same
+      mechanism explains why FYs 2013-14 carry only 9 rows apiece (level 0-1
+      only) against 41 for every other year in the FYs 1993-2014 range —
+      confirmed live 2026-09-13, they were the newest, still-preliminary years
+      as of the nsf14316 (FYs 2012-14) edition this table's historical rows
+      are sourced from, and no later edition's equivalent long-run table has
+      been located yet to backfill their level-2 detail (see govdata-ops#257).
+
+      The FYs 1993-2014 historical vintages are sourced from NCSES publication
+      nsf14316 (FYs 2012-14 edition) via its own long-run tables 133 and 134.
+      The original nsf.gov/statistics/nsf14316/ URLs are dead — NSF now serves
+      an "Archive Goodbye" redirect for that whole publication era with no
+      static-file replacement — so these two are fetched from the Wayback
+      Machine's mirror instead (re-verify-if-404s risk, same pattern already
+      accepted for other individually-hosted sources in this codebase; a
+      Wayback snapshot URL is otherwise permanent).
 
       Externally-compiled "federal R&D by field" series (e.g. AAAS,
       secondary policy trackers) report R&D total (research + development),
@@ -317,6 +343,16 @@ partitionedTables:
     dimensions:
       type:
         - nsf_rd_by_field
+      # Three discrete NCSES publication vintages, each a single self-contained XLSX
+      # covering many fiscal years at once (not one file per year) — fetched exactly
+      # once per value, same source_type dispatch pattern as health.cdc_mortality's
+      # annual/weekly_precovid/weekly_covid split. urlRules below routes hist_2004_2014
+      # and hist_1993_2003 to their historical files; current falls through to this
+      # table's base url (the live nsf26316 edition, FYs 2016-2025).
+      vintage:
+        - current
+        - hist_2004_2014
+        - hist_1993_2003
 
     columns:
       - name: year
@@ -344,6 +380,17 @@ partitionedTables:
         format: TEXT   # NsfRdByFieldTransformer re-downloads the XLSX and emits JSON rows
       rawCache:
         enabled: true
+      urlRules:
+        # NCSES publication nsf14316 (FYs 2012-14 edition), tables 133/134 — each a
+        # single long-run table spanning many years. Original nsf.gov/statistics/
+        # URLs are dead (NSF's "Archive Goodbye" redirect); fetched via their
+        # permanent Wayback Machine snapshot instead. Confirmed live 2026-09-13.
+        - url: "https://web.archive.org/web/20150629045504if_/http://www.nsf.gov/statistics/nsf14316/tables/tab134.xlsx"
+          variableMatch:
+            vintage: hist_2004_2014
+        - url: "https://web.archive.org/web/20150629045708if_/http://www.nsf.gov/statistics/nsf14316/tables/tab133.xlsx"
+          variableMatch:
+            vintage: hist_1993_2003
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfRdByFieldTransformer"
 

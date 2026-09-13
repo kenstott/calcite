@@ -36,11 +36,36 @@ import java.io.ByteArrayInputStream;
  * rows sum to the level-0 total; level-2 rows sum to their enclosing level-1 row. Both levels
  * are emitted — callers pick one level to aggregate on, the same rollup-vs-leaf discipline
  * already applied to energy.eia_electricity_generation's sector/fuel rollup flags.
+ *
+ * <p>NCSES's pre-2016 editions (e.g. the FY2004-14 and FY1993-2003 long-run historical
+ * tables) encode this same hierarchy differently: instead of a real cell-style indent
+ * (style {@code alignment/@indent}, read via {@link Cell#getCellStyle()}), the field-name
+ * string itself carries literal leading non-breaking-space (U+00A0) characters — 4 per
+ * level. Confirmed live 2026-09-13 against NCSES publication nsf14316's table 134 (FYs
+ * 2004-14): every style's {@code indent} attribute is absent/zero, but "All fields" has
+ * zero leading NBSPs, a level-1 field like "Computer sciences and mathematics" has
+ * exactly 4, and its level-2 children ("Computer sciences", "Mathematics", ...) have
+ * exactly 8 — otherwise byte-identical row/column layout (same header row, same blank
+ * spacer rows between data rows, same "NA"/"*" markers) to the current-edition files.
+ * {@link #fieldLevel} tries the style indent first and falls back to counting leading
+ * NBSPs (divided by 4) only when the style indent is zero and the raw string actually
+ * starts with one — current-edition files are unaffected since their indent always comes
+ * through the style.
  */
 public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
 
-  private static final int HEADER_ROW = 3;
-  private static final int DATA_START_ROW = 4;
+  /**
+   * Literal header-row marker in column 0 ("Field", followed by fiscal-year column
+   * headers). The header row's own position is NOT fixed — confirmed live 2026-09-13:
+   * the current-edition file and NCSES publication nsf14316's table 134 both have it at
+   * row index 3 (title spans 3 rows), but that same publication's table 133 has it at
+   * row index 2 (title spans only 2 rows) — a one-row difference within the SAME
+   * publication. A hardcoded row index silently parsed zero records for table 133 (the
+   * "header" row it read was actually the blank spacer row below the real header, whose
+   * getLastCellNum() left the data-column loop with nothing to iterate). Locating the
+   * header by content instead of position is immune to this.
+   */
+  private static final String HEADER_MARKER = "Field";
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -73,27 +98,30 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
       return "[]";
     }
 
-    Row headerRow = sheet.getRow(HEADER_ROW);
-    if (headerRow == null) {
-      LOGGER.error("NSF R&D by field: header row {} missing", HEADER_ROW);
+    int headerRowIdx = findHeaderRow(sheet);
+    if (headerRowIdx < 0) {
+      LOGGER.error("NSF R&D by field: no row with column 0 == \"{}\" found", HEADER_MARKER);
       return "[]";
     }
+    Row headerRow = sheet.getRow(headerRowIdx);
 
     ArrayNode result = MAPPER.createArrayNode();
     int lastCol = headerRow.getLastCellNum();
 
-    for (int r = DATA_START_ROW; r <= sheet.getLastRowNum(); r++) {
+    for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
       Row row = sheet.getRow(r);
       if (row == null) {
         continue;
       }
       Cell fieldCell = row.getCell(0);
-      String field = cellString(fieldCell);
-      if (field == null || field.trim().isEmpty()) {
+      String rawField = cellString(fieldCell);
+      if (rawField == null || stripNbsp(rawField).trim().isEmpty()) {
         continue;
       }
-      field = field.trim();
-      int fieldLevel = fieldCell.getCellStyle().getIndention();
+      int fieldLevel = fieldLevel(fieldCell, rawField);
+      // .trim() only strips <= U+0020 and leaves a pre-2016 file's leading NBSP
+      // (U+00A0) indent markers in place — strip those explicitly first.
+      String field = stripNbsp(rawField).trim();
 
       for (int c = 1; c < lastCol; c++) {
         Integer year = parseYearHeader(cellString(headerRow.getCell(c)));
@@ -115,6 +143,52 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
 
     LOGGER.debug("NSF R&D by field: parsed {} rows", result.size());
     return result.toString();
+  }
+
+  /**
+   * Returns the field-hierarchy level (0/1/2) for a field-name cell, trying the
+   * current-edition encoding (real cell-style indent) first and falling back to the
+   * pre-2016 encoding (leading NBSP count / 4) when the style carries no indent but the
+   * raw string starts with one. See the class Javadoc for how this was confirmed.
+   */
+  private int fieldLevel(Cell fieldCell, String rawField) {
+    int styleIndent = fieldCell.getCellStyle().getIndention();
+    if (styleIndent != 0) {
+      return styleIndent;
+    }
+    int nbsp = 0;
+    while (nbsp < rawField.length() && rawField.charAt(nbsp) == ' ') {
+      nbsp++;
+    }
+    return nbsp / 4;
+  }
+
+  /** Strips only leading U+00A0 (non-breaking space) characters, not regular whitespace. */
+  private String stripNbsp(String s) {
+    int i = 0;
+    while (i < s.length() && s.charAt(i) == '\u00A0') {
+      i++;
+    }
+    return s.substring(i);
+  }
+
+  /**
+   * Scans from the top of the sheet for the row whose column-0 cell is exactly
+   * {@link #HEADER_MARKER} ("Field"), returning its 0-based row index or -1 if not found.
+   * The title block above it spans a different number of rows across NCSES table
+   * vintages (see the class Javadoc), so its position cannot be assumed.
+   */
+  private int findHeaderRow(Sheet sheet) {
+    for (int r = 0; r <= sheet.getLastRowNum(); r++) {
+      Row row = sheet.getRow(r);
+      if (row == null) {
+        continue;
+      }
+      if (HEADER_MARKER.equals(cellString(row.getCell(0)))) {
+        return r;
+      }
+    }
+    return -1;
   }
 
   /**
