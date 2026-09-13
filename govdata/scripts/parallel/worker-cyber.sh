@@ -113,14 +113,14 @@ case "$MODE" in
 
   historical)
     # Backfill: only the NVD publish-dated tables have a year axis. vulnerabilities /
-    # vulnerability_cwes window over pub year/quarter (GOVDATA_START_YEAR-bounded), so a
-    # historical run genuinely backfills them. Everything else in cyber is a current-snapshot
+    # vulnerability_cwes / vulnerability_cpes window over pub year/quarter (GOVDATA_START_YEAR-bounded),
+    # so a historical run genuinely backfills them. Everything else in cyber is a current-snapshot
     # or delta feed with no history to backfill — the catalog/IOC/ATT&CK tables would just
     # re-pull the current dump (redundant with daily), and threat_pulses' historical `replace`
     # would clobber the version history daily accumulates via `append`. So historical scopes
-    # cyber_vuln to just those two tables and skips cyber_threat entirely (it is daily-only).
+    # cyber_vuln to just those three tables and skips cyber_threat entirely (it is daily-only).
     if should_run "cyber_vuln"; then
-      run_cyber_model "cyber_vuln" "vuln-$MODE" '"vulnerabilities","vulnerability_cwes"'
+      run_cyber_model "cyber_vuln" "vuln-$MODE" '"vulnerabilities","vulnerability_cwes","vulnerability_cpes"'
     fi
     ;;
 
