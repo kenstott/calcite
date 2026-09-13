@@ -2639,8 +2639,16 @@ constraints:
         targetTable: eia_power_plants
         targetColumns: [plant_id]
 
-  eia_fossil_fuel_production:
+  eia_crude_oil_production:
     primaryKey: [eia_area_code, fuel_type, process_code, production_year, production_month]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  eia_natural_gas_production:
+    primaryKey: [eia_area_code, process_code, production_year, production_month]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -2761,6 +2769,42 @@ views:
       FROM eia_electricity_generation
       WHERE geo_level = 'state' AND sector_code = '99'
       GROUP BY state_abbr, generation_year
+
+  - name: eia_fossil_fuel_production
+    comment: >
+      Combined view of crude oil and natural gas production by state and month.
+      Unions eia_crude_oil_production (barrels) and eia_natural_gas_production
+      (cubic feet). production_unit distinguishes measurement units — units are
+      NOT convertible between fuels. Use fuel_type to filter or group. For
+      single-fuel queries, prefer the base tables directly for better performance.
+    sql: >
+      SELECT
+        production_year,
+        production_month,
+        eia_area_code,
+        state_abbr,
+        fuel_type,
+        process_code,
+        process_name,
+        production_volume,
+        production_unit,
+        series_id,
+        series_description
+      FROM eia_crude_oil_production
+      UNION ALL
+      SELECT
+        production_year,
+        production_month,
+        eia_area_code,
+        state_abbr,
+        'Natural Gas' AS fuel_type,
+        process_code,
+        process_name,
+        production_volume,
+        production_unit,
+        series_id,
+        series_description
+      FROM eia_natural_gas_production
 
   - name: utility_scorecard
     comment: >
