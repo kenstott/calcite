@@ -226,6 +226,56 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/resear
       WHERE award_amount IS NOT NULL AND (award_amount < 0 OR award_amount > 50000000));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: nih_publications (NIH RePORTER; FY2022-2024 recent-years window, appl_id -> pmid links)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T2_row_count',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END, n, 1,
+  'At least one publication link present for the DQ-scoped fiscal year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL appl_id or pmid rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true)
+      WHERE appl_id IS NULL OR pmid IS NULL);
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (appl_id, pmid) rows within the same fiscal_year slice'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT appl_id, pmid, fiscal_year, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true)
+  GROUP BY appl_id, pmid, fiscal_year HAVING COUNT(*) > 1
+));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T7_appl_id_in_awards',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
+  'Publication appl_ids with no matching row in nih_award_projects (would break the join this table exists for)'
+FROM (SELECT COUNT(DISTINCT p.appl_id) AS n
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true) p
+      LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true) a
+        ON p.appl_id = a.appl_id
+      WHERE a.appl_id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: nsf_herd_by_institution
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

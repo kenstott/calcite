@@ -576,6 +576,143 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: nih_publications
+    # Publications keep accruing against a project's appl_id well after the fiscal year closes
+    # (a grant's papers get indexed in PubMed over following years), so like nih_award_projects
+    # this reopens recent years rather than freezing them on first success.
+    lookbackPeriods: 2
+    pattern: "type=nih_publications/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    freshness:
+      type: hash
+    comment: >
+      Long-format (appl_id, pmid) publication links from RePORTER's POST /v2/publications/search
+      API — one row per funded-project/publication pair per fiscal year, joinable back to
+      nih_award_projects.appl_id. Closes the funding-to-output gap: nih_award_projects,
+      nsf_federal_rd_obligations, and nsf_herd_by_institution all carry funding totals or
+      award-level funding size, but none carries an output measure to compute a genuine
+      agency-funding-volatility-vs-research-output relationship.
+
+      RePORTER's publications endpoint takes a batch of appl_ids as its criteria rather than a
+      year/agency filter directly, so this table's provider first re-walks /v2/projects/search
+      for the same (year, agency_ic) slice nih_award_projects uses (fetching only appl_id, not
+      the full award record) to get that slice's appl_id population, then batches those appl_ids
+      (500 per call, RePORTER's own page-size convention) into /v2/publications/search calls.
+
+      **Cross-linked appl_id filtering**: the publications response's applid field is not
+      necessarily one of the appl_ids just queried — confirmed live, a batch of FY2023/FIC
+      appl_ids surfaced a linked FY2025/NHGRI appl_id in the same response (a renewal-year
+      continuation of the same underlying project, credited on the same publication). Rows are
+      kept only when applid is a member of the batch queried, so every row's fiscal_year/slice
+      is guaranteed accurate; the cross-linked appl_id is captured correctly when its own (year,
+      agency_ic) slice is walked instead.
+
+      **No publication year**: the /v2/publications/search response carries no year field
+      (confirmed live) — fiscal_year here is the *funding* fiscal year of the (year, agency_ic)
+      slice being walked, i.e. when the underlying grant was active, not when the paper was
+      published. A paper can appear against several fiscal_year rows if its funding project
+      spanned multiple years; dedupe on (pmid) rather than (appl_id, pmid) for a
+      publication-count analysis that should not double-count a still-appearing paper across
+      the grant's renewal years. Enriching with a real publication year (e.g. via NIH's iCite
+      /api/pubs?pmids= side-fetch) is a separate follow-up, not blocking this table.
+
+      **Scope**: NIH only. NSF's publication linkage is an inline field
+      (`publicationResearch`) on its own Award API record rather than a separate paginated
+      endpoint and needs its own extraction pass — tracked as follow-on work, not this table.
+      Patent linkage (NIH-award-to-patent) has no public RePORTER/iCite endpoint at all; USPTO
+      PatentsView plus a government-interest-clause parse would be a genuinely separate,
+      harder build.
+
+      Scoped to the same recent-years trend window as nih_award_projects (FY2022+) rather than
+      RePORTER's full FY1985+ history — lower minYear on the year dimension to reach further
+      back.
+
+    dimensions:
+      type:
+        - nih_publications
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2022}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        minYear: 2022
+        dataLag: 0
+      agency_ic:
+        - NCI
+        - NIGMS
+        - NHLBI
+        - NIAID
+        - NICHD
+        - NIDDK
+        - NINDS
+        - NIMH
+        - NIA
+        - NIDA
+        - NEI
+        - NIAAA
+        - NIDCR
+        - NIEHS
+        - NIAMS
+        - NCATS
+        - NHGRI
+        - NIMHD
+        - NCCIH
+        - NIBIB
+        - NLM
+        - FIC
+        - NIDCD
+        - OD
+
+    columns:
+      - name: appl_id
+        type: long
+        nullable: false
+        comment: RePORTER application id — FK to nih_award_projects.appl_id
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Funding fiscal year of the (year, agency_ic) slice this link was collected under — NOT the publication's own year (RePORTER exposes none)
+      - name: core_project_num
+        type: string
+        nullable: true
+        comment: Full project number, stable across a project's renewal years
+      - name: pmid
+        type: long
+        nullable: false
+        comment: PubMed ID of the linked publication
+
+    source:
+      type: http
+      url: "https://api.reporter.nih.gov/v2/publications/search"
+      method: POST
+      # Pages (both the internal appl_id-collection pages and the publications pages) are read
+      # through the raw cache, one entry per (year, IC, phase, offset) — see the provider.
+      rawCache:
+        enabled: true
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.research.NihReporterPublicationsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nih_publications/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nih_publications
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # --- HIGHER EDUCATION R&D (HERD) — institution microdata -------------------
   - name: nsf_herd_by_institution
     # NCSES restates prior-year figures on every annual release (see schema header
