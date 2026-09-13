@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.83.1](https://github.com/kenstott/calcite/compare/engine-v0.83.0...engine-v0.83.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* **ref:** enrich gleif_cik lookup with name-matched SEC filing_metadata mappings ([6068dfe](https://github.com/kenstott/calcite/commit/6068dfe263217f109fa60f7821b5091646a31429))
+
 ## [0.83.0](https://github.com/kenstott/calcite/compare/engine-v0.82.1...engine-v0.83.0) (2026-09-13)
 
 
