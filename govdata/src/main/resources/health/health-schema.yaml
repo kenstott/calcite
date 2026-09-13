@@ -5792,6 +5792,157 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # VA MEDICAL FACILITIES — HIFLD/VA ArcGIS FeatureServer (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: va_medical_facilities
+    # ArcGIS FeatureServer serves an ETag on a HEAD (verified live), so this gates on the
+    # resource's own ETag rather than hashing the response body — same pattern as
+    # housing.opportunity_zones and housing.hud_subsidized_housing.
+    freshness:
+      type: etag
+    pattern: "type=va_medical_facilities/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Veterans Health Administration (VHA) medical-facility roster with geocoding —
+      station number, facility type, name, address, city, state, ZIP, and (lat, lon).
+      Static-snapshot table: the whole layer is re-paginated and the partition overwritten
+      each run; history lives in Iceberg snapshots. Enables drive-time / distance-to-nearest
+      VA-medical-facility computation for a veteran-population question (e.g. joined to
+      census.acs_veterans by state or county). Cross-checked live 2026-09-13 against the real
+      Palo Alto VA Medical Center (STA_NO='640'): city=Palo Alto CA 94304, LAT/LON =
+      (37.40132, -122.13911), matches the real 3801 Miranda Ave campus location.
+
+      Facility-type coverage (facility_type, 1696 rows total, confirmed live 2026-09-13):
+      PCCBOC 414, OOS 400, VTCR 318, MSCBOC 289, VAMC 171, MVCTR 73, DRRTP 15, HCC 12, CLC 2,
+      MCS 2 — these 10 codes are the complete set present in the layer. VTCR (Vet Center) and
+      MVCTR (Mobile Vet Center) together are 391 rows (23% of the table) — Vet Centers ARE
+      included here, correcting this table's earlier sourcing research, which had assumed
+      (without checking the live facility_type distribution) that this HIFLD layer was
+      VHA-medical-only. None of the 10 codes correspond to a National Cemetery Administration
+      or Veterans Benefits Administration facility, so this layer does not carry cemeteries or
+      benefits regional offices; VA's own Facilities API (developer.va.gov, self-service API
+      key required) would be needed to add them.
+
+      Source: the HIFLD-hosted mirror of VA's VAST (VHA Site Tracking) database at
+      services2.arcgis.com/VFLAJVozK0rtzQmT — an individually-hosted ArcGIS mirror
+      re-verifying VA's public-domain federal data (same accepted mirror pattern as
+      housing.opportunity_zones). Re-verify-if-404s risk: if the HIFLD mirror stops serving
+      this layer, the fallback is VA's own developer.va.gov Facilities API, which needs an
+      instant-issuance self-service key and would broaden coverage to Vet Centers, cemeteries,
+      and benefits offices in return.
+
+      street_address (from ArcGIS S_ADD1) is populated almost exclusively for Vet
+      Center/Mobile Vet Center rows (VTCR 307/318, MVCTR 73/73 — confirmed live) — every
+      other facility_type, including VAMC itself (1/171), mostly carries city/state/ZIP
+      without a street. Use (city, state, zip) as the mailing/routing granularity when
+      street_address is missing; (lat, lon) remain populated for every row and are the
+      reliable input for distance computation.
+
+    dimensions:
+      type:
+        - va_medical_facilities
+
+    columns:
+      - name: station_number
+        type: string
+        nullable: false
+        comment: VA station number (STA_NO) — unique facility ID within the VHA system (PK)
+      - name: parent_station_number
+        type: string
+        nullable: true
+        comment: Station number of the parent facility (PAR_STA_NO), when this row is a satellite/sub-facility
+      - name: facility_type
+        type: string
+        nullable: true
+        comment: >
+          Short code identifying the facility category — VAMC (medical center), HCC (Health
+          Care Center), MSCBOC/PCCBOC (Community-Based Outpatient Clinic variants), CLC
+          (Community Living Center), DRRTP (Domiciliary Residential Rehabilitation), OOS (Other
+          Outpatient Service), VTCR (Vet Center), MVCTR (Mobile Vet Center), MCS (a small,
+          otherwise-unconfirmed clinic code — 2 rows). VA's own facility-type taxonomy; see the
+          table comment for the full observed distribution and what's NOT included.
+      - name: facility_name
+        type: string
+        nullable: true
+        comment: Facility display name (STA_NAME), e.g. 'Palo Alto VA Medical Center'
+      - name: street_address
+        type: string
+        nullable: true
+        comment: >
+          Street address (S_ADD1). Populated almost exclusively for Vet Center/Mobile Vet
+          Center rows; NULL for most VAMC/CBOC/HCC rows, which carry city/state/ZIP without a
+          street. (lat, lon) remain populated for every row.
+      - name: city
+        type: string
+        nullable: true
+        comment: City (S_CITY)
+      - name: state
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation (S_STATE)
+      - name: zip
+        type: string
+        nullable: true
+        comment: 5-digit ZIP code (S_ZIP)
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (CNAME) — as published by HIFLD, not joined to a FIPS code here
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Facility latitude (LAT) — populated for every row (unlike street_address)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Facility longitude (LON) — populated for every row (unlike street_address)
+      - name: homeless_poc
+        type: string
+        nullable: true
+        comment: Name of the facility's Homeless Program point of contact (Homeless_POC), when set
+      - name: homeless_poc_email
+        type: string
+        nullable: true
+        comment: Email address of the Homeless Program point of contact (Homeless_POC_Email), when set
+
+    source:
+      type: http
+      url: "https://services2.arcgis.com/VFLAJVozK0rtzQmT/arcgis/rest/services/Veterans_Health_Administration_Medical_Facilities/FeatureServer/0/query?where=1%3D1&outFields=STA_NO,PAR_STA_NO,S_ABBR,STA_NAME,S_ADD1,S_CITY,S_STATE,S_ZIP,CNAME,LAT,LON,Homeless_POC,Homeless_POC_Email&returnGeometry=false&f=json&resultRecordCount=2000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.HifldVaMedicalFacilitiesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=va_medical_facilities/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: va_medical_facilities
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
 # ============================================================================
 # Views
 # ============================================================================

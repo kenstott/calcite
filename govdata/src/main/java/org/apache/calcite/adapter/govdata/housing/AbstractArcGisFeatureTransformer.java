@@ -44,7 +44,7 @@ import java.util.NoSuchElementException;
  * is appended per page. Rows are produced lazily one page at a time (contract of
  * {@link StreamingResponseTransformer}), so memory stays O(page) regardless of layer size.
  */
-abstract class AbstractArcGisFeatureTransformer implements StreamingResponseTransformer {
+public abstract class AbstractArcGisFeatureTransformer implements StreamingResponseTransformer {
 
   protected static final ObjectMapper MAPPER = new ObjectMapper();
 

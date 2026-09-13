@@ -1862,6 +1862,90 @@ SELECT 'health', tbl, 'existence',
 FROM counts;
 
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: va_medical_facilities (new 13 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'va_medical_facilities', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true));
+
+-- T2: row_count (~1,696 features per prior live check)
+INSERT INTO dq_results
+SELECT 'health', 'va_medical_facilities', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 VA medical facility records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — street_address, homeless_poc, homeless_poc_email are excluded here
+-- because the source publishes them for only a fraction of rows (street_address is
+-- populated almost exclusively for Vet Center/Mobile Vet Center rows, NULL for most
+-- VAMC/CBOC/HCC rows; only a subset of facilities have a Homeless Program POC).
+INSERT INTO dq_results
+SELECT 'health', 'va_medical_facilities', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'street_address', 'homeless_poc', 'homeless_poc_email')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'health', 'va_medical_facilities', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls (station_number NOT NULL)
+INSERT INTO dq_results
+SELECT 'health', 'va_medical_facilities', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL station_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true) WHERE station_number IS NULL);
+
+-- T7: state coverage (VA operates facilities in every state and several territories;
+-- 50 is a safe floor)
+INSERT INTO dq_results
+SELECT 'health', 'va_medical_facilities', 'T7_state_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Distinct states with VA medical facilities'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true) WHERE state IS NOT NULL);
+
+-- T8: geocoding present (every row must have a real lat/lon — the reason this table exists
+-- is to enable distance computation; a null lat/lon renders the row useless for that)
+INSERT INTO dq_results
+SELECT 'health', 'va_medical_facilities', 'T8_geocoding_present',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows with NULL latitude or longitude'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_medical_facilities', allow_moved_paths := true)
+  WHERE latitude IS NULL OR longitude IS NULL
+);
+
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
