@@ -143,6 +143,9 @@ DAILY_ONLY_GROUPS=(
   # CDC WONDER XML API tables — isolated from health-cdc-geo because WONDER enforces a strict
   # 15-second minimum between requests (HTTP 429 otherwise), unlike data.cdc.gov Socrata.
   "health-wonder|cdc_wonder_cancer_incidence,cdc_wonder_std_morbidity,cdc_wonder_tb,cdc_wonder_natality,cdc_wonder_cause_of_death,cdc_wonder_cause_of_death_2018_2024,cdc_wonder_multiple_cause_of_death,cdc_wonder_multiple_cause_of_death_2018_2024,cdc_wonder_vaers"
+  # HIFLD ArcGIS VA facility roster — single static snapshot, own group since it's a distinct
+  # provider (ArcGIS FeatureServer) from every group above.
+  "health-va|va_medical_facilities"
 )
 
 run_daily_only_health_tables() {
