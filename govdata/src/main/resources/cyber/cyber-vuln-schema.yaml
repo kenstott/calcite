@@ -414,6 +414,151 @@ partitionedTables:
         incrementalKeys: [type, year, quarter]
 
   # ==========================================================================
+  # NVD VULNERABILITY CPES — CVE → affected vendor/product junction
+  # ==========================================================================
+  - name: vulnerability_cpes
+    freshness:
+      type: count
+      count_probe:
+        url: "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1"
+        path: totalResults
+    pattern: "type=vulnerability_cpes/year=*/quarter=*/*.parquet"
+    dqRowLimit: 5000
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+        - name: quarter
+          type: INTEGER
+
+    comment: >
+      Junction table of CVE→affected CPE (vendor/product/version) pairs,
+      materialized from NVD's configurations[].nodes[].cpeMatch[] array at
+      ingest time. One row per (cve_id, cpe_criteria) pair. Enables per-vendor
+      exploitation analysis (join to kev_catalog on cve_id, aggregate by
+      vendor) that the base vulnerabilities table cannot answer alone.
+      CPE 2.3 format: cpe:2.3:{part}:{vendor}:{product}:{version}:...
+      part = 'a' (application), 'o' (OS), or 'h' (hardware).
+
+    columns:
+      - name: cve_id
+        type: string
+        nullable: false
+        comment: CVE identifier
+      - name: cpe_criteria
+        type: string
+        nullable: false
+        comment: Full CPE 2.3 string (unparsed)
+      - name: part
+        type: string
+        nullable: true
+        comment: CPE part — 'a' (application), 'o' (OS), 'h' (hardware)
+      - name: vendor
+        type: string
+        nullable: true
+        comment: Vendor identifier from CPE (e.g., 'microsoft', 'cisco', 'apple')
+      - name: product
+        type: string
+        nullable: true
+        comment: Product identifier from CPE (e.g., 'windows_10', 'ios')
+      - name: version
+        type: string
+        nullable: true
+        comment: Version string from CPE (may be '*' or literal version)
+      - name: vulnerable
+        type: boolean
+        nullable: true
+        comment: True if this CPE match indicates vulnerable configuration
+      - name: version_start_including
+        type: string
+        nullable: true
+        comment: Version range start (inclusive)
+      - name: version_start_excluding
+        type: string
+        nullable: true
+        comment: Version range start (exclusive)
+      - name: version_end_including
+        type: string
+        nullable: true
+        comment: Version range end (inclusive)
+      - name: version_end_excluding
+        type: string
+        nullable: true
+        comment: Version range end (exclusive)
+      - name: pub_year
+        type: integer
+        nullable: true
+        comment: Year from CVE-YYYY-NNN (drives year partition routing)
+      - name: pub_month
+        type: integer
+        nullable: true
+        comment: Month placeholder 1 (CVE-year-only routing → Q1)
+
+    source:
+      type: http
+      url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+      method: GET
+      parameters:
+        pubStartDate: "{pubStartDate}"
+        pubEndDate: "{pubEndDate}"
+      headers:
+        apiKey: "${CYBER_NVD_API_KEY:}"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          limitParam: resultsPerPage
+          offsetParam: startIndex
+          pageSize: 2000
+          countPath: totalResults
+      rateLimit:
+        requestsPerSecond: 1.5
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdPublishedWindowDimensionResolver"
+      responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdVulnCpesResponseTransformer"
+
+    dimensions:
+      type:
+        - vulnerability_cpes
+      pubStartDate:
+        type: custom
+        effectiveYearField: pub_year
+        effectiveMonthField: pub_month
+        properties:
+          startYear: "${GOVDATA_START_YEAR:1999}"
+          tipDays: "90"
+          tipChunkDays: "1"
+      pubEndDate:
+        type: custom
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type={type}/year={year}/quarter={quarter}/"
+      partition:
+        columns: [type, year, quarter]
+      options:
+        compression: snappy
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+        batchPartitionColumns: [type, year, quarter]
+        incrementalKeys: [type, year, quarter]
+
+  # ==========================================================================
   # CISA KEV CATALOG — Known Exploited Vulnerabilities
   # ==========================================================================
   - name: kev_catalog
@@ -1122,6 +1267,15 @@ constraints:
         targetTable: cwe_catalog
         targetColumns: [cwe_id]
         comment: Links CVE-CWE pair to CWE taxonomy entry
+
+  vulnerability_cpes:
+    primaryKey: [type, cve_id, cpe_criteria]
+    foreignKeys:
+      - columns: [cve_id]
+        targetSchema: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+        targetTable: vulnerabilities
+        targetColumns: [cve_id]
+        comment: Links CPE affected-product back to NVD canonical CVE record
 
   kev_cwes:
     primaryKey: [type, cve_id, cwe_id]
