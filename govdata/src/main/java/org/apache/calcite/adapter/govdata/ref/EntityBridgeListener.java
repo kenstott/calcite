@@ -1561,7 +1561,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
       this.src = new ResultSetIterator(conn,
           "SELECT canonical_entity_id, canonical_column, source_key, match_confidence, "
           + "lei, sec_cik, gleif_legal_name, name_raw, support_count FROM all_org_mentions "
-          + "ORDER BY canonical_entity_id");
+          + "ORDER BY canonical_entity_id, "
+          + "CASE WHEN match_confidence = 'high' THEN 0 ELSE 1 END");
       advanceLookahead();
     }
 
