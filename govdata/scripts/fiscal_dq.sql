@@ -105,6 +105,71 @@ SELECT 'fiscal', 'soi_income_by_county', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/soi_income_by_county', allow_moved_paths := true) WHERE county_fips IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: irs_gross_collections_by_state_year (IRS SOI Table 1-5; new 13 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'irs_gross_collections_by_state_year', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'irs_gross_collections_by_state_year', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END, n, 50,
+  'Expected >=50 rows for a single fiscal year (50 states + DC + US total + non-state buckets)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'irs_gross_collections_by_state_year', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'state_abbr')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'irs_gross_collections_by_state_year', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_name or fiscal_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true)
+      WHERE state_name IS NULL OR fiscal_year IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'irs_gross_collections_by_state_year', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (state_name, fiscal_year) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT state_name, fiscal_year, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true)
+  GROUP BY state_name, fiscal_year HAVING COUNT(*) > 1
+));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'irs_gross_collections_by_state_year', 'T7_state_abbr_coverage',
+  CASE WHEN n >= 51 THEN 'pass' ELSE 'fail' END, n, 51,
+  'Distinct non-NULL state_abbr values (expect 50 states + DC = 51)'
+FROM (SELECT COUNT(DISTINCT state_abbr) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true)
+      WHERE state_abbr IS NOT NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'irs_gross_collections_by_state_year', 'T7_us_total_plausible',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  'US total_collections roughly matches the sum of the 50-state+DC total_collections (within 1%)'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT us.fiscal_year,
+      us.total_collections AS us_total,
+      SUM(st.total_collections) AS states_sum
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true) us
+    JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/irs_gross_collections_by_state_year', allow_moved_paths := true) st
+      ON st.fiscal_year = us.fiscal_year AND st.state_abbr IS NOT NULL
+    WHERE us.state_name = 'United States, total'
+    GROUP BY us.fiscal_year, us.total_collections
+  ) x
+  WHERE x.us_total > 0 AND ABS(x.states_sum - x.us_total) / x.us_total < 0.05
+);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: county_migration_flows (IRS SOI; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

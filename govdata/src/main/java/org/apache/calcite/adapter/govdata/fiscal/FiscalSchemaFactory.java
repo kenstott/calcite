@@ -31,6 +31,7 @@ import java.util.Set;
  * <ul>
  *   <li><b>IRS SOI</b> — {@code soi_income_by_zip}, {@code soi_income_by_county},
  *       {@code county_migration_flows} (bulk CSV by 2-digit year),
+ *       {@code irs_gross_collections_by_state_year} (Table 1-5 bulk XLSX by 2-digit year),
  *       {@code exempt_org_master} (EO BMF regional shards),
  *       {@code exempt_org_990} (Form 990 e-file XML zips)</li>
  *   <li><b>USAspending</b> — {@code usaspending_by_agency},
@@ -53,6 +54,7 @@ public class FiscalSchemaFactory implements GovDataSubSchemaFactory {
     m.put("soi_income_by_zip", "irs");
     m.put("soi_income_by_county", "irs");
     m.put("county_migration_flows", "irs");
+    m.put("irs_gross_collections_by_state_year", "irs");
     m.put("exempt_org_master", "irs");
     m.put("exempt_org_990", "irs");
     m.put("usaspending_by_agency", "usaspending");

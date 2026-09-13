@@ -2120,6 +2120,162 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # IRS SOI TABLE 1-5 — GROSS COLLECTIONS BY TYPE OF TAX AND STATE (payroll/FICA,
+  # corporate, excise, estate/gift — the receipts types federal_spending_vs_income_tax_by_state_year
+  # explicitly lacks). new 13 Sep 2026.
+  # ---------------------------------------------------------------------------
+  - name: irs_gross_collections_by_state_year
+    freshness:
+      type: last_modified
+    pattern: "type=irs_gross_collections_by_state_year/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      IRS SOI Table 1-5, "Gross Collections, by Type of Tax and State" — one row per
+      state/area per fiscal year, wide across the 11 tax-collection measures the table
+      publishes. Sourced to close the gap federal_spending_vs_income_tax_by_state_year
+      documents explicitly: that table carries individual income tax only, so a
+      balance-of-payments computation built from it alone makes every state look
+      net-positive (confirmed against the NY State Comptroller's official FFY2023
+      report, whose Rockefeller/OMB methodology finds NJ/MA/WA as real net donors).
+      business_income_taxes (corporate) and excise_taxes here close the biggest part of
+      that gap.
+
+      **Structural IRS limitation — cannot be fixed at ETL time**: IRS combines FICA
+      with individual income tax withheld (individual_withheld_and_fica_tax), and SECA
+      with individual income tax payments (individual_payments_and_seca_tax), in this
+      state-level report. A clean payroll/FICA-only-by-state figure is not obtainable
+      from any IRS SOI state-grain publication — this is the same reason
+      federal_spending_vs_income_tax_by_state_year never carried it. The combined
+      columns are still the correct denominator for a balance-of-payments computation
+      (each captures both components), just not separable into payroll-tax-alone.
+
+      Non-state rows are kept, not dropped, matching soi_income_by_county's kept
+      county-total convention: 'United States, total' (the national aggregate) and three
+      non-state buckets IRS reports separately ('U.S. Armed Service members overseas and
+      Territories other than Puerto Rico', 'Puerto Rico', 'International', 'Undistributed')
+      all get state_abbr NULL — filter WHERE state_abbr IS NOT NULL for a clean 50+DC sum.
+
+      Source: irs.gov/pub/irs-soi/{YY}dbs01t05co.xlsx (FY2019-2024 combined tax-type
+      workbook; sheet name and filename convention both changed for FY2025 — see the
+      source block). Scoped to FY2019+ (this modern combined-workbook format) rather
+      than IRS's full history back to the 1990s — pre-2019 files are the legacy .xls
+      binary format with a plausibly different layout, unverified and out of scope here.
+
+    dimensions:
+      type:
+        - irs_gross_collections_by_state_year
+      year:
+        type: yearRange
+        # yearRange is the RAW (pre-dataLag) dimension value, matching soi_income_by_county's own
+        # convention (see its comment) — {year_short} in the URL and this table's fiscal_year
+        # column both resolve from effective_year = year - dataLag, so minYear=2020 here reaches
+        # back to FY2019 (the oldest year in the modern combined-workbook format this table is
+        # scoped to), not FY2020.
+        start: "${GOVDATA_START_YEAR:2020}"
+        minYear: 2020
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1
+
+    columns:
+      - name: state_name
+        type: string
+        nullable: false
+        comment: State/area name exactly as published (e.g. 'United States, total', 'Puerto Rico')
+      - <<: *state_abbr_column
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year
+      - name: total_collections
+        type: double
+        nullable: true
+        comment: Total Internal Revenue collections, $1000s (includes penalties and interest)
+      - name: business_income_taxes
+        type: double
+        nullable: true
+        comment: Corporation income tax (Form 1120 series) + tax-exempt unrelated business income (Form 990-T), $1000s
+      - name: individual_employment_estate_total
+        type: double
+        nullable: true
+        comment: Subtotal of individual income tax, employment taxes, and estate/trust income tax, $1000s
+      - name: individual_withheld_and_fica_tax
+        type: double
+        nullable: true
+        comment: Individual income tax withheld COMBINED with FICA payroll tax — IRS does not report these separately by state, $1000s
+      - name: individual_payments_and_seca_tax
+        type: double
+        nullable: true
+        comment: Individual income tax payments COMBINED with SECA self-employment tax — IRS does not report these separately by state, $1000s
+      - name: unemployment_insurance_tax
+        type: double
+        nullable: true
+        comment: Federal unemployment insurance tax (FUTA), $1000s
+      - name: railroad_retirement_tax
+        type: double
+        nullable: true
+        comment: Railroad retirement tax, $1000s
+      - name: estate_and_trust_income_tax
+        type: double
+        nullable: true
+        comment: Estate and trust income tax, $1000s
+      - name: estate_tax
+        type: double
+        nullable: true
+        comment: Estate (inheritance) tax, $1000s
+      - name: gift_tax
+        type: double
+        nullable: true
+        comment: Gift tax, $1000s
+      - name: excise_taxes
+        type: double
+        nullable: true
+        comment: Federal excise taxes, $1000s
+
+    source:
+      type: http
+      url: "https://www.irs.gov/pub/irs-soi/{year_short}dbs01t05co.xlsx"
+      method: GET
+      # FY2025 renamed both the file and its internal sheet ("Table 1-5" vs "Table 5") —
+      # confirmed live 13 Sep 2026. The transformer reads the first sheet by index so the
+      # sheet-name change is transparent; only the URL needs the override. Re-verify this
+      # pattern when FY2026 publishes — one data point isn't enough to know if the
+      # hyphenated name is IRS's new standard or a one-off.
+      # yearRange matches the RAW (pre-dataLag) year dimension value, not effective_year —
+      # same convention as soi_income_by_county's own urlRules override (see its comment).
+      # dataLag=1, so effective_year=2025 (the FY2025 file) needs raw yearRange [2026, 2026].
+      urlRules:
+        - url: "https://www.irs.gov/pub/irs-soi/{year_short}db-1-05-co.xlsx"
+          yearRange: [2026, 2026]
+      response:
+        format: TEXT   # IrsGrossCollectionsByStateTransformer re-downloads the XLSX and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.IrsGrossCollectionsByStateTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=irs_gross_collections_by_state_year/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: irs_gross_collections_by_state_year
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # IRS SOI COUNTY-TO-COUNTY MIGRATION — countyoutflow{YYZZ}.csv (delta by year)
   # ---------------------------------------------------------------------------
   - name: county_migration_flows
