@@ -1089,7 +1089,9 @@ public class McpServer {
             + "info/caution/high, the grain, the observation count, and the declared coverage "
             + "windows of the tables involved. Read it before answering: a 'high' warning "
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
-            + "health, only that no listed defect was detected."
+            + "health, only that no listed defect was detected. This SQL dialect does NOT "
+            + "accept Postgres/DuckDB-shell `expr::type` cast syntax (it parses as a cryptic "
+            + "syntax error at the `:`) — use `CAST(expr AS type)` instead."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
@@ -3257,7 +3259,7 @@ public class McpServer {
                     addIfPresent(gateProblems, enforceHighSeverityDisclosure(secs));
                     addIfPresent(gateProblems, enforceTableProvenance(secs));
                     addIfPresent(gateProblems, enforceStatisticalProvenance(secs));
-                    addIfPresent(gateProblems, enforceRecurringEventRecency(secs));
+                    addIfPresent(gateProblems, enforceRecurringEventRecency(rTitle, rSub, secs));
                     addIfPresent(gateProblems, enforceRecipeConsulted());
                     if (!gateProblems.isEmpty()) {
                         StringBuilder combined = new StringBuilder(
@@ -5492,7 +5494,7 @@ public class McpServer {
             + "remains the (?:most recent|only)");
 
     /**
-     * A report about a named RECURRING event category (a trade war, a shutdown, a recession...)
+     * A report ABOUT a named RECURRING event category (a trade war, a shutdown, a recession...)
      * that cites no source dated within the last two years, AND never explicitly says recency
      * was considered, is refused -- on the theory that a genuinely current answer would have at
      * least one recent citation, or an explicit statement that none exists, even when the bulk
@@ -5505,6 +5507,17 @@ public class McpServer {
      * claims-array and pinocchios gates already taught this session: prose guidance a model can
      * silently not follow needs a mechanical backstop.
      *
+     * <p>The phrase match is deliberately restricted to the report's own {@code title}/{@code
+     * subtitle}, not the full body. Measured live (q134, 2026-09-12): a report on an unrelated
+     * teacher-pay question mentioned "recession" once in passing (a cited source's own title),
+     * the gate fired anyway, and rather than removing the incidental mention the run bolted on
+     * two irrelevant recession-forecast citations just to clear it -- degrading the report to
+     * satisfy a gate that had no business firing, since the piece was never ABOUT a recession.
+     * Requiring the phrase to be load-bearing (named in the title/subtitle a caller wrote to
+     * describe their own piece) keeps the q82 case caught -- that report's title named the
+     * trade war directly -- while a passing mention buried in body prose or a source citation
+     * no longer trips it.
+     *
      * <p>Deliberately loose about what counts as "recent enough": ANY four-digit year at or
      * after (this year - 1) appearing anywhere in the report body clears it, since the goal is
      * only to catch the specific failure of citing NOTHING but old material, with no
@@ -5515,17 +5528,19 @@ public class McpServer {
      * naming the episode's year alone (an old year on its own looks identical to an accidental
      * default to the best-documented historical instance).
      */
-    private static String enforceRecurringEventRecency(java.util.List<ReportPage.Section> secs) {
+    private static String enforceRecurringEventRecency(String title, String subtitle,
+            java.util.List<ReportPage.Section> secs) {
+        String titleText = (title == null ? "" : title) + " " + (subtitle == null ? "" : subtitle);
+        java.util.regex.Matcher phrase = RECURRING_EVENT_PHRASE.matcher(titleText);
+        if (!phrase.find()) {
+            return null;
+        }
         StringBuilder text = new StringBuilder();
         for (ReportPage.Section sec : secs) {
             text.append(sec.heading == null ? "" : sec.heading).append('\n')
                 .append(sec.html == null ? "" : sec.html).append('\n');
         }
         String body = text.toString().replaceAll("<[^>]+>", " ");
-        java.util.regex.Matcher phrase = RECURRING_EVENT_PHRASE.matcher(body);
-        if (!phrase.find()) {
-            return null;
-        }
         int currentYear = java.time.LocalDate.now().getYear();
         java.util.regex.Matcher yr = java.util.regex.Pattern.compile("\\b(19|20)\\d{2}\\b")
             .matcher(body);
