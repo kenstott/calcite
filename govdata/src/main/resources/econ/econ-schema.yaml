@@ -4085,6 +4085,165 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- MONTHLY TREASURY STATEMENT OUTLAYS BY FUNCTION ---
+  - name: mts_outlays_by_function
+    pattern: "type=mts_outlays_by_function/year=*/mts_outlays_by_function.parquet"
+    # Treasury releases MTS ~8th business day after month-end; reopen the 2 most recently
+    # published fiscal years so a lookback-window fetch picks up any prior-month restatement.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    partitions: *standard_partitions
+    comment: >
+      Treasury Monthly Treasury Statement (MTS) Table 9 — federal receipts and outlays by OMB
+      budget function/subfunction, published monthly (~8th business day after month-end), well
+      ahead of OMB's own annual Historical Tables (see federal_outlays_by_function, which is
+      the finalized full-year series with roughly a year's lag). Use this table for a
+      current-fiscal-year "how much has been spent so far" question; use
+      federal_outlays_by_function once the fiscal year closes and OMB's next edition finalizes
+      it. Despite the "Table 9 — Summary" name in Treasury's own documentation, this table IS
+      the by-function breakdown (confirmed live 2026-09-13): 33 classification_desc line items
+      per record_date, covering both the receipts side (Individual Income Taxes, Corporation
+      Income Taxes, Social Insurance and Retirement Receipts, Excise Taxes, and others) and the
+      outlays side (National Defense, Medicare, Social Security, Net Interest, and others) via
+      line_code_nbr (receipts: roughly 10-120; outlays: roughly 130-340). One row per
+      (record_date, classification_desc) — current_fytd_rcpt_outly_amt is the fiscal-year-to-date
+      cumulative figure as of that month-end, current_month_rcpt_outly_amt is that single
+      month's amount, and prior_fytd_rcpt_outly_amt is the same fiscal-year-to-date point in the
+      PRIOR fiscal year (Treasury's own year-over-year comparison column). Cross-checked live:
+      FY2026 YTD through 2026-06-30 gives Net Interest (line_code_nbr='320') /
+      Total (line_code_nbr='340') = 827.2B / 5517.9B = 14.99%.
+
+      The year dimension/partition below is CALENDAR year (Jan-Dec), not fiscal year — the
+      ETL framework has no year+1 template variable to express an Oct-Sep fetch range in one
+      filter string, so this iterates by calendar year instead (confirmed live 2026-09-13:
+      a `record_date:gte:{year}-01-01,record_date:lte:{year}-12-31` filter returns all 12
+      months in one unpaginated call, same as avg_interest_rates' proven pattern). Every row
+      still carries its own authoritative record_fiscal_year/record_fiscal_quarter columns
+      from the source — filter on those for a fiscal-year query, not on the calendar-year
+      partition.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - mts_outlays_by_function
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2015}"  # API confirmed live back to CY2015 (covers FY2016's Oct-Dec 2015 months)
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+        releaseMonth: 1  # Current year has partial-year data all year; no full-year release gate
+
+    columns:
+      - name: record_date
+        type: date
+        nullable: true
+        comment: Month-end date of this MTS snapshot (YYYY-MM-DD)
+      - name: classification_desc
+        type: string
+        nullable: true
+        comment: >
+          OMB budget-function or receipts-category label, verbatim from Treasury (e.g.
+          "National Defense", "Medicare", "Social Security", "Net Interest", "Individual Income
+          Taxes"). Pair with line_code_nbr to distinguish receipts from outlays reliably —
+          labels are not consistently prefixed.
+      - name: line_code_nbr
+        type: string
+        nullable: true
+        comment: >
+          Treasury's own line code for this classification. Receipts lines run roughly 10-120,
+          outlays lines roughly 130-340 (confirmed: '320'=Net Interest, '340'=Total outlays);
+          use this rather than parsing classification_desc to separate receipts from outlays.
+      - name: current_month_rcpt_outly_amt
+        type: double
+        nullable: true
+        comment: This single month's receipt or outlay amount, in dollars.
+      - name: current_fytd_rcpt_outly_amt
+        type: double
+        nullable: true
+        comment: >
+          Fiscal-year-to-date cumulative amount through this record_date, in dollars — the
+          figure to use for a "how much so far this fiscal year" question.
+      - name: prior_fytd_rcpt_outly_amt
+        type: double
+        nullable: true
+        comment: >
+          The same fiscal-year-to-date point in the PRIOR fiscal year, in dollars — Treasury's
+          own year-over-year comparison column, not a rolled-forward value from this table's
+          own prior rows.
+      - name: record_fiscal_year
+        type: integer
+        nullable: true
+        comment: Federal fiscal year of this record
+      - name: record_fiscal_quarter
+        type: integer
+        nullable: true
+        comment: Federal fiscal quarter (1-4) of this record
+
+    # API Configuration
+    download:
+      enabled: true
+      method: GET
+      baseUrl: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_9"
+      authentication:
+        type: none
+      queryParams:
+        filter:
+          type: expression
+          value: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort:
+          type: constant
+          value: "-record_date"
+        page[size]:
+          type: constant
+          value: "1000"
+      cachePattern: "type=mts_outlays_by_function/year=*/mts_table_9.json"
+
+    # HTTP Source configuration for EtlPipeline. Confirmed live 2026-09-13: a full
+    # calendar-year filter range returns every published month (up to 12) in one
+    # unpaginated call — 33 line items x N months, single page.
+    source:
+      type: http
+      url: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_9"
+      method: GET
+      parameters:
+        filter: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort: "-record_date"
+        page[size]: "1000"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=mts_outlays_by_function/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- FEDERAL OUTLAYS BY BUDGET FUNCTION ---
   - name: federal_outlays_by_function
     pattern: "type=federal_outlays_by_function/*.parquet"

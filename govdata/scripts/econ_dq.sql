@@ -1153,6 +1153,69 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/f
       WHERE year = 2024 AND function_code IN ('570','650') AND outlays_millions < 100000);
 
 -- ============================================================================
+-- mts_outlays_by_function (Treasury Monthly Treasury Statement Table 9, new 13 Sep 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'mts_outlays_by_function', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/mts_outlays_by_function', allow_moved_paths := true) LIMIT 1));
+
+-- 33 classification lines x ~12 months x N calendar years since 2015 — a conservative floor
+INSERT INTO dq_results
+SELECT 'econ', 'mts_outlays_by_function', 'row_count',
+  CASE WHEN n >= 300 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '300',
+  CASE WHEN n >= 300 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/mts_outlays_by_function', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'mts_outlays_by_function', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/mts_outlays_by_function', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'econ', 'mts_outlays_by_function', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/mts_outlays_by_function', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
+
+-- exactly 33 classification lines per record_date (confirmed live 2026-09-13)
+INSERT INTO dq_results
+SELECT 'econ', 'mts_outlays_by_function', 'pk_shape',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'record_dates without exactly 33 distinct line_code_nbr rows'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT record_date, COUNT(DISTINCT line_code_nbr) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/mts_outlays_by_function', allow_moved_paths := true)
+  GROUP BY record_date HAVING COUNT(DISTINCT line_code_nbr) <> 33));
+
+-- Net Interest (line_code_nbr='320') FYTD must always be a positive fraction of Total
+-- outlays (line_code_nbr='340') — a sanity floor that would catch a mis-mapped column or
+-- a receipts/outlays sign error.
+INSERT INTO dq_results
+SELECT 'econ', 'mts_outlays_by_function', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'record_dates where Net Interest FYTD (320) is not a positive value less than Total FYTD (340)'
+FROM (
+  SELECT COUNT(*) AS bad FROM (
+    SELECT
+      MAX(CASE WHEN line_code_nbr = '320' THEN current_fytd_rcpt_outly_amt END) AS net_interest,
+      MAX(CASE WHEN line_code_nbr = '340' THEN current_fytd_rcpt_outly_amt END) AS total
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/mts_outlays_by_function', allow_moved_paths := true)
+    GROUP BY record_date
+  )
+  WHERE net_interest IS NULL OR total IS NULL OR net_interest <= 0 OR net_interest >= total
+);
+
+-- ============================================================================
 -- ces_revision_vintages (BLS CES vintage-data product, new 6 Sep 2026)
 -- ============================================================================
 
