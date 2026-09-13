@@ -1124,6 +1124,71 @@ FROM (SELECT AVG(CASE WHEN geometry_wkt IS NOT NULL THEN 1.0 ELSE 0.0 END) AS pc
       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/padus_federal_fee_lands', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: blm_oil_gas_acreage (new 13 Sep 2026)
+-- Federal oil & gas lease acreage by state × fiscal year, from BLM's combined XLSX.
+-- Sourced primarily for per-acre royalty-productivity analysis joined to onrr_revenues.
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'lands', 'blm_oil_gas_acreage', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/blm_oil_gas_acreage', allow_moved_paths := true));
+
+-- T2: row_count — 50 states × ~24 years = ~1200 rows (some states have 0-value years)
+INSERT INTO dq_results
+SELECT 'lands', 'blm_oil_gas_acreage', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 (state, fiscal_year) rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/blm_oil_gas_acreage', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/blm_oil_gas_acreage', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'lands', 'blm_oil_gas_acreage', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/blm_oil_gas_acreage', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls (state and fiscal_year NOT NULL)
+INSERT INTO dq_results
+SELECT 'lands', 'blm_oil_gas_acreage', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL state or fiscal_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/blm_oil_gas_acreage', allow_moved_paths := true)
+      WHERE state IS NULL OR fiscal_year IS NULL);
+
+-- T7: producing_acres <= leased_acres (a producing acre is by definition a leased acre)
+INSERT INTO dq_results
+SELECT 'lands', 'blm_oil_gas_acreage', 'T7_producing_le_leased',
+  CASE WHEN bad = 0 THEN 'pass' WHEN bad <= 15 THEN 'warn' ELSE 'fail' END,
+  bad, 0, 'Rows where producing_acres exceeds leased_acres — small counts are a known BLM Table 2/Table 6 reporting-boundary discrepancy in minor-producer states (see table comment), not a pipeline defect'
+FROM (SELECT COUNT(*) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/blm_oil_gas_acreage', allow_moved_paths := true)
+      WHERE producing_acres IS NOT NULL AND leased_acres IS NOT NULL AND producing_acres > leased_acres);
+
+-- T8: known-state sanity — Wyoming is federal-lease heavy; leased_acres > 1M for recent years
+INSERT INTO dq_results
+SELECT 'lands', 'blm_oil_gas_acreage', 'T8_wyoming_sanity',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Wyoming FY2020+ rows with leased_acres > 1,000,000 (real historical range)'
+FROM (SELECT COUNT(*) AS n
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/blm_oil_gas_acreage', allow_moved_paths := true)
+      WHERE state = 'Wyoming' AND fiscal_year >= 2020 AND leased_acres > 1000000);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

@@ -90,8 +90,8 @@ ENDJSON
 run_ungrouped_lands_tables() {
   local start="$1" end="$2" unassigned _t quoted=""
   unassigned="$(unassigned_schema_tables lands all \
-    "once|national_forests,nps_units,blm_field_offices,padus_federal_fee_lands,va_facilities,forest_inventory,forest_metrics,fia_plots,fia_seedlings,fia_invasives,fia_down_woody_debris,fia_pop_evaluations,fia_tree_grm,fia_pop_stratum,fia_pop_plot_stratum_assgn,fia_pop_estn_unit,fia_pop_eval_grp,fia_pop_eval_attribute" \
-    "historical|timber_sales,nps_visitation,onrr_revenues,pilt_county_payments,va_facilities,blm_field_offices,national_forests,nps_units,padus_federal_fee_lands,forest_inventory,forest_metrics")" || return 1
+    "once|national_forests,nps_units,blm_field_offices,padus_federal_fee_lands,va_facilities,blm_oil_gas_acreage,forest_inventory,forest_metrics,fia_plots,fia_seedlings,fia_invasives,fia_down_woody_debris,fia_pop_evaluations,fia_tree_grm,fia_pop_stratum,fia_pop_plot_stratum_assgn,fia_pop_estn_unit,fia_pop_eval_grp,fia_pop_eval_attribute" \
+    "historical|timber_sales,nps_visitation,onrr_revenues,pilt_county_payments,va_facilities,blm_field_offices,blm_oil_gas_acreage,national_forests,nps_units,padus_federal_fee_lands,forest_inventory,forest_metrics")" || return 1
 
   [ -n "$unassigned" ] || return 0
   IFS=',' read -ra _un <<< "$unassigned"
@@ -119,7 +119,7 @@ case "$MODE" in
     START=${GOVDATA_START_YEAR:-2010}
     END=$((INCREMENTAL_YEAR - 1))
     run_lands_model "lands-once-static" \
-      '"national_forests", "nps_units", "blm_field_offices", "padus_federal_fee_lands", "va_facilities"' "$START" "$END"
+      '"national_forests", "nps_units", "blm_field_offices", "padus_federal_fee_lands", "va_facilities", "blm_oil_gas_acreage"' "$START" "$END"
     run_lands_model "lands-once-inventory" \
       '"forest_inventory"' "$START" "$END"
     run_lands_model "lands-once-metrics" \
@@ -172,6 +172,11 @@ case "$MODE" in
     # lands-historical-timber instead and touched blm_field_offices not at all).
     run_lands_model "lands-historical-blm-field-offices" \
       '"blm_field_offices"' "$START" "$END"
+    # blm_oil_gas_acreage: single BLM combined XLSX (all fiscal years in one file), no year
+    # dimension — same "once"-shaped static-snapshot pattern as blm_field_offices and
+    # va_facilities above, dispatched unconditionally so a scoped force-reprocess.sh reaches it.
+    run_lands_model "lands-historical-blm-oil-gas-acreage" \
+      '"blm_oil_gas_acreage"' "$START" "$END"
     if [ "$MODE" = "historical" ]; then
       # Full manual/`all` backfill: also do the remaining non-period tables (the per-year pool
       # slots do not; blm_field_offices is now covered unconditionally above).
@@ -210,6 +215,10 @@ case "$MODE" in
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "va_facilities"; then
       run_lands_model "lands-daily-va-facilities" \
         '"va_facilities"' "$START"
+    fi
+    if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "blm_oil_gas_acreage"; then
+      run_lands_model "lands-daily-blm-oil-gas-acreage" \
+        '"blm_oil_gas_acreage"' "$START"
     fi
     if $FORCE || table_in_window "$LANDS_SCHEMA_YAML" "timber_sales"; then
       run_lands_model "lands-daily-timber" \

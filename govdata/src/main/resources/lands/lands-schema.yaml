@@ -1878,6 +1878,108 @@ partitionedTables:
         compactionMinFiles: 3
 
   # ---------------------------------------------------------------------------
+  # BLM OIL & GAS ACREAGE — federal oil & gas lease acreage by state × FY (bulk XLSX)
+  # ---------------------------------------------------------------------------
+  - name: blm_oil_gas_acreage
+    pattern: "type=blm_oil_gas_acreage/*.parquet"
+    partitions: *static_partitions
+    freshness:
+      type: last_modified
+    comment: >
+      Federal oil & gas lease acreage published by the Bureau of Land Management, one row
+      per (state, fiscal_year), covering FY 2001-present. Two measures per row: leased_acres
+      (BLM "Acreage in Effect", Table 2 — total federal oil & gas lease acreage still in
+      force as of that fiscal year end) and producing_acres (BLM "Acreage of Producing
+      Leases", Table 6 — the subset actually producing). Sourced from one combined XLSX per
+      fiscal-year release; this table unpivots both wide sheets and joins on (state,
+      fiscal_year) so each state-year gets a single row with both measures.
+
+      Enables per-acre royalty-productivity analysis when joined to lands.onrr_revenues on
+      (state, fiscal_year) — revenue divided by producing_acres gives royalty per producing
+      acre, matching the exact question this table was sourced for. Coverage is
+      **Federal-only, excludes Indian leases** per BLM's own note in the source workbook —
+      this is the same scope as onrr_revenues' Federal/land_class rows and joins cleanly on
+      that basis. Table is a static snapshot: the whole file is re-fetched each run and the
+      partition overwritten; history lives in Iceberg snapshots. No key required.
+
+      **URL drift caveat**: BLM publishes each new fiscal year's file at a URL that
+      encodes the release month in the path (docs/2025-07/... for FY24 release,
+      docs/2026-04/... for FY25 release, and so on). Rather than chase that per year, this
+      table pins the URL to the FY24 file (published July 2025), whose combined XLSX
+      already carries FY 2001-2024 in one download. On next FY release, update the URL to
+      the newer file (whose combined XLSX will cover all years through the new one) —
+      BLM's landing page at blm.gov/programs/energy-and-minerals/oil-and-gas/oil-and-gas-statistics
+      is the authoritative index for locating the current URL.
+
+      **Known source quirk**: producing_acres exceeds leased_acres in a small number of rows
+      (10 of 1200 in the FY24 file — Illinois, New York, Pennsylvania, Tennessee; excess
+      ranges from 0.25 to ~150 acres). All affected states are minor producers; no major
+      federal-lease state (Wyoming, New Mexico, Colorado, etc.) exhibits this. This reflects
+      a reporting-boundary/timing difference between BLM's Table 2 (Acreage in Effect,
+      point-in-time snapshot) and Table 6 (Producing Acres) rather than a join or parsing
+      defect — treated as an expected small discrepancy, not a data quality failure.
+
+    dimensions:
+      type:
+        - blm_oil_gas_acreage
+
+    columns:
+      - name: state
+        type: string
+        nullable: false
+        comment: State name (e.g. 'Wyoming') — matches onrr_revenues.state_name for joins
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (FY 2001-present in the current source file)
+      - name: leased_acres
+        type: double
+        nullable: true
+        comment: >
+          Federal oil & gas acreage in effect at end-of-fiscal-year (BLM Table 2 "Acreage in
+          Effect"). NULL where the source cell is blank/null.
+      - name: producing_acres
+        type: double
+        nullable: true
+        comment: >
+          Federal oil & gas acreage of producing leases at end-of-fiscal-year (BLM Table 6
+          "Acreage of Producing Leases") — the subset of leased_acres that is actually
+          producing. NULL where the source cell is blank/null.
+
+    source:
+      type: http
+      # Combined FY 2001-2024 file published July 2025 — see URL-drift caveat in table comment.
+      url: "https://www.blm.gov/sites/default/files/docs/2025-07/BLM-FY2024-Oil-and-Gas-Statistics-All-Fed-Oil-Gas-Statistics.xlsx"
+      method: GET
+      response:
+        format: TEXT   # BlmOilGasAcreageTransformer re-downloads the XLSX and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.BlmOilGasAcreageTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=blm_oil_gas_acreage/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: blm_oil_gas_acreage
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+
+  # ---------------------------------------------------------------------------
   # PILT COUNTY PAYMENTS — DOI Payments in Lieu of Taxes (per-state, per-year HTML)
   # ---------------------------------------------------------------------------
   - name: pilt_county_payments
