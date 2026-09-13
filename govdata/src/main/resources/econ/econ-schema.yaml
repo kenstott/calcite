@@ -1898,6 +1898,9 @@ partitionedTables:
     # freshness-gated snapshot re-fetched and overwritten whenever BLS updates the file,
     # not a year-partitioned history. Confirmed live: oe.data.1.AllData currently carries
     # only reference year 2025 for every series, including these three occupation codes.
+    # SOURCE-CHANGE DETECTION: OewsSourceStructureValidator will catch if BLS ever shifts from
+    # snapshot to time-series model (multiple years in response) and fail with a clear error
+    # pointing to file a defect, rather than silently ingesting partial/wrong data.
     freshness:
       type: hash
     pattern: "type=state_occupation_employment/*.parquet"
