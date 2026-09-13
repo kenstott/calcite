@@ -1946,6 +1946,88 @@ FROM (
 );
 
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ssa_oasdi_county (new 13 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true));
+
+-- T2: row_count (a single state/year DQ slice: ~1 total row + N counties)
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T2_row_count',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'At least one row present for the DQ-scoped state/year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — county_fips excluded (NULL by design on each state's total row)
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'county_fips')
+  )
+);
+
+-- T6: pk_nulls (state_abbr, county_name, data_year required)
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL state_abbr, county_name, or data_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true)
+      WHERE state_abbr IS NULL OR county_name IS NULL OR data_year IS NULL);
+
+-- T6: pk_dupes
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (state_abbr, county_fips, data_year) rows (county_fips NULL only for the one total row per state/year)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT state_abbr, county_fips, data_year, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true)
+  GROUP BY state_abbr, county_fips, data_year HAVING COUNT(*) > 1
+));
+
+-- T7: disabled_workers_count present and plausible (the SSDI figure this table exists for)
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T7_disabled_workers_present',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows with NULL disabled_workers_count'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true)
+      WHERE disabled_workers_count IS NULL);
+
+-- T7: total_count roughly equals the sum of its 7 named components (within rounding)
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T7_total_count_reconciles',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'Rows where total_count differs from the sum of its 7 beneficiary-type components by >1%'
+FROM (
+  SELECT COUNT(*) AS bad FROM (
+    SELECT total_count,
+      (COALESCE(retired_workers_count,0) + COALESCE(spouses_retirement_count,0)
+       + COALESCE(children_retirement_count,0) + COALESCE(widowers_parents_count,0)
+       + COALESCE(children_survivors_count,0) + COALESCE(disabled_workers_count,0)
+       + COALESCE(spouses_disability_count,0) + COALESCE(children_disability_count,0)) AS component_sum
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true)
+    WHERE total_count IS NOT NULL AND total_count > 0
+  ) x
+  WHERE ABS(x.total_count - x.component_sum) / x.total_count > 0.01
+);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

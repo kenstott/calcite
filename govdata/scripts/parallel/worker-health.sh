@@ -117,6 +117,10 @@ ALL_MODE_GROUPS=(
   "health-cms-medicaid|cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home,cms_pos_termination_history,hospital_cost_report_financials"
   "health-rxnorm|rxnorm_drugs"
   "health-hrsa|ahrf_physician_supply"
+  # SSA OASDI county beneficiary data — own group since it's a distinct source (ssa.gov) from
+  # every group above, and its (state x year) dimension cross-product (50 states x ~21 years)
+  # is worth isolating for failure/rate-limit reasons the way CDC WONDER is above.
+  "health-ssa|ssa_oasdi_county"
 )
 
 # Run the grouped health tables. Called from both historical and daily — same rationale as every

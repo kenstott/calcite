@@ -5943,6 +5943,246 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  - name: ssa_oasdi_county
+    # Static per-(state,year) annual snapshot file; Last-Modified gates re-fetch/re-materialize.
+    freshness:
+      type: last_modified
+    pattern: "type=ssa_oasdi_county/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    comment: >
+      SSA "OASDI Beneficiaries by State and County" (Tables 4 & 5, December snapshot) —
+      one row per county per state per year (plus one state-total row per state/year),
+      wide across the 8 beneficiary-type breakdowns SSA publishes: retired workers,
+      spouses/children of retired workers, widow(er)s-and-parents, children of deceased
+      workers (survivors), and — the reason this table was sourced —
+      **disabled_workers_count/amount**, the SSDI caseload/payment figures no other table
+      in this warehouse carries (census.acs_disability is self-reported disability
+      prevalence, a different measure entirely). Sourced for shock-vs-disability-rolls
+      analysis (Autor-Dorn-Hanson style): actual program enrollment against a labor-market
+      shock, rather than a self-reported-prevalence proxy.
+
+      Deliberately excludes the same tables' "Aged 65 or older, by sex" (Men/Women)
+      columns — a different demographic cross-tab of the same totals, not part of the
+      beneficiary-type breakdown this table carries.
+
+      **Coverage**: 50 states, no DC (SSA's per-state directory listing has no dc.xlsx —
+      confirmed live 13 Sep 2026; DC's OASDI figures exist only in the national/state-level
+      Table 2/3 files, out of scope for this county-grain table) and no territories (PR/VI
+      are published but excluded — no matching geo.counties FK). county_fips is NULL for
+      each state's own total row (SSA labels it "Total, <State>" with its own state FIPS in
+      the ANSI-code column rather than a real county code) — kept, not dropped, matching
+      this schema's kept-total-row convention elsewhere; filter WHERE county_fips IS NOT
+      NULL for a clean county-only sum.
+
+      **Akamai UA gate**: www.ssa.gov 403s a blank UA and a plain "GovData/1.0" identifier
+      alike (confirmed live) but passes "Wget/1.21.3" — the opposite of CDC WONDER/BLS's own
+      UA gotchas (those block a self-identifying UA and require blank/curl-like instead). The
+      gate applies to the FIRST request, not just a re-download — both the source: block's
+      headers and SsaOasdiCountyTransformer's own re-download need this UA set explicitly.
+
+      minYear 2005 (raw, pre-dataLag) reaches back to the oldest XLSX-format county file,
+      FY2004 (2003 and earlier are PDF-only scans, not worth backfilling).
+
+    dimensions:
+      type:
+        - ssa_oasdi_county
+      state:
+        - al
+        - ak
+        - az
+        - ar
+        - ca
+        - co
+        - ct
+        - de
+        - fl
+        - ga
+        - hi
+        - id
+        - il
+        - in
+        - ia
+        - ks
+        - ky
+        - la
+        - me
+        - md
+        - ma
+        - mi
+        - mn
+        - ms
+        - mo
+        - mt
+        - ne
+        - nv
+        - nh
+        - nj
+        - nm
+        - ny
+        - nc
+        - nd
+        - oh
+        - ok
+        - or
+        - pa
+        - ri
+        - sc
+        - sd
+        - tn
+        - tx
+        - ut
+        - vt
+        - va
+        - wa
+        - wv
+        - wi
+        - wy
+      year:
+        type: yearRange
+        # yearRange is the RAW (pre-dataLag) dimension value; {effective_year} in the URL and
+        # this table's data_year column both resolve from effective_year = year - dataLag, so
+        # minYear 2005 reaches FY2004 (the oldest XLSX-format file) — same raw/effective
+        # convention as fiscal.irs_gross_collections_by_state_year (see its comment for the
+        # live-confirmed mismatch this avoids).
+        start: "${GOVDATA_START_YEAR:2005}"
+        minYear: 2005
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1
+
+    columns:
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter USPS state code (FK to geo.state_ref) — from which per-state file this row came, not a published column
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS (FK to geo.counties); NULL on each state's own total row
+      - name: county_name
+        type: string
+        nullable: false
+        comment: County name, or "Total, <State>" for the state-total row
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: December-snapshot year this file reports (SSA's own report year, not a fiscal year)
+      - name: total_count
+        type: double
+        nullable: true
+        comment: Total OASDI beneficiaries in current-payment status
+      - name: retired_workers_count
+        type: double
+        nullable: true
+      - name: spouses_retirement_count
+        type: double
+        nullable: true
+        comment: Spouses of retired workers
+      - name: children_retirement_count
+        type: double
+        nullable: true
+        comment: Children of retired workers
+      - name: widowers_parents_count
+        type: double
+        nullable: true
+        comment: Widow(er)s and parents (survivors)
+      - name: children_survivors_count
+        type: double
+        nullable: true
+        comment: Children of deceased workers (survivors)
+      - name: disabled_workers_count
+        type: double
+        nullable: true
+        comment: Disabled workers — the SSDI caseload figure this table was sourced for
+      - name: spouses_disability_count
+        type: double
+        nullable: true
+        comment: Spouses of disabled workers
+      - name: children_disability_count
+        type: double
+        nullable: true
+        comment: Children of disabled workers
+      - name: total_amount
+        type: double
+        nullable: true
+        comment: Total monthly benefit amount, $1000s
+      - name: retired_workers_amount
+        type: double
+        nullable: true
+        comment: $1000s
+      - name: spouses_retirement_amount
+        type: double
+        nullable: true
+        comment: $1000s
+      - name: children_retirement_amount
+        type: double
+        nullable: true
+        comment: $1000s
+      - name: widowers_parents_amount
+        type: double
+        nullable: true
+        comment: $1000s
+      - name: children_survivors_amount
+        type: double
+        nullable: true
+        comment: $1000s
+      - name: disabled_workers_amount
+        type: double
+        nullable: true
+        comment: Disabled-worker monthly benefit amount, $1000s — the SSDI payment figure this table was sourced for
+      - name: spouses_disability_amount
+        type: double
+        nullable: true
+        comment: $1000s
+      - name: children_disability_amount
+        type: double
+        nullable: true
+        comment: $1000s
+
+    source:
+      type: http
+      url: "https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/{effective_year}/{state}.xlsx"
+      method: GET
+      # HttpSource's own initial fetch needs this UA too, not just the transformer's re-download
+      # below — confirmed live: without it, HttpSource's own GET 403s before the transformer ever
+      # runs (Akamai gates the FIRST request, not just a specific re-download call).
+      headers:
+        User-Agent: "Wget/1.21.3"
+      response:
+        format: TEXT   # SsaOasdiCountyTransformer overrides transform() to set the Wget UA and re-download
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.SsaOasdiCountyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ssa_oasdi_county/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: ssa_oasdi_county
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # Views
 # ============================================================================
