@@ -77,7 +77,7 @@ public class CensusPepDimensionResolver implements DimensionResolver {
   // Latest published PEP vintage. pep/charv serves every year it covers (2021..this) via the
   // YEAR predicate, so this is a fixed value — bump it when the Census Bureau releases a new
   // vintage (and revisit the year-range floor / dataLag in census-schema.yaml's pep block).
-  private static final String CURRENT_VINTAGE = "2023";
+  private static final String CURRENT_VINTAGE = "2024";
 
   @Override public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
