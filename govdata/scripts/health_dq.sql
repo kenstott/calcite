@@ -2028,6 +2028,78 @@ FROM (
   WHERE ABS(x.total_count - x.component_sum) / x.total_count > 0.01
 );
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: medicare_geographic_variation (new 13 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'medicare_geographic_variation', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true));
+
+-- T2: row_count (~37,000 rows across 2014-2024, National+State+County x 3 age levels)
+INSERT INTO dq_results
+SELECT 'health', 'medicare_geographic_variation', 'T2_row_count',
+  CASE WHEN n >= 30000 THEN 'pass' ELSE 'fail' END,
+  n, 30000, 'Expected at least 30000 rows across the full 2014-2024 file'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — geo_fips excluded (NULL by design for National rows and the 'ZZ' bucket)
+INSERT INTO dq_results
+SELECT 'health', 'medicare_geographic_variation', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'geo_fips')
+  )
+);
+
+-- T6: pk_nulls (data_year, geo_level, age_level required)
+INSERT INTO dq_results
+SELECT 'health', 'medicare_geographic_variation', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL data_year, geo_level, or age_level rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true)
+      WHERE data_year IS NULL OR geo_level IS NULL OR age_level IS NULL);
+
+-- T6: pk_dupes
+INSERT INTO dq_results
+SELECT 'health', 'medicare_geographic_variation', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (data_year, geo_level, geo_desc, age_level) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT data_year, geo_level, geo_desc, age_level, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true)
+  GROUP BY data_year, geo_level, geo_desc, age_level HAVING COUNT(*) > 1
+));
+
+-- T7: geo_level values are exactly the 3 expected
+INSERT INTO dq_results
+SELECT 'health', 'medicare_geographic_variation', 'T7_geo_level_values',
+  CASE WHEN n = 3 THEN 'pass' ELSE 'warn' END,
+  n, 3, 'Distinct geo_level values (expect National, State, County)'
+FROM (SELECT COUNT(DISTINCT geo_level) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true));
+
+-- T7: total_medicare_payment_per_capita in a plausible range where present (not suppressed)
+INSERT INTO dq_results
+SELECT 'health', 'medicare_geographic_variation', 'T7_per_capita_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'Rows with total_medicare_payment_per_capita outside a plausible [500, 50000] USD range'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true)
+      WHERE total_medicare_payment_per_capita IS NOT NULL
+        AND (total_medicare_payment_per_capita < 500 OR total_medicare_payment_per_capita > 50000));
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

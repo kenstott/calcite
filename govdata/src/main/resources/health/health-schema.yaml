@@ -6183,6 +6183,182 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: medicare_geographic_variation
+    # CMS publishes one combined CSV covering all years (2014-2024, currently) rather than a
+    # per-year file, so there is no year dimension to iterate on the URL — the whole file is
+    # re-fetched and the single [type] partition overwritten each run (same shape as
+    # cms_pos_facilities/cms_pos_termination_history, this table's closest siblings). YEAR is a
+    # plain data column read from the file's own YEAR field, not a partition dimension.
+    freshness:
+      type: hash
+    pattern: "type=medicare_geographic_variation"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS "Medicare Geographic Variation - by National, State & County" Public Use File —
+      one row per (year, geography, age group), 2014-2024. Sourced to close the Medicare
+      fee-for-service spending-by-state gap #67 identified: USAspending's award-based
+      federal-spending totals omit ~$1.0T (FY2023) in Medicare FFS payments entirely, since
+      they never post as discrete awards.
+
+      **Curated subset, not the full PUF**: CMS's source file has ~250 columns — payment,
+      standardized-payment, and utilization-rate detail broken out separately for inpatient,
+      outpatient, ASC, SNF, IRF, LTCH, home health, hospice, ED, procedures, tests, imaging,
+      DME, ambulance, and several Prevention Quality Indicator (PQI) admission-rate measures,
+      each further split by raw vs. per-capita vs. per-user vs. pct-of-total. This table
+      carries only the headline totals (total/inpatient/outpatient/DME/hospice payment and
+      per-capita figures) plus beneficiary counts and Medicare Advantage participation —
+      the columns the spending-by-state question needs. Extending to the full category
+      breakdown is a straightforward follow-up (same source, same grain) if a future need
+      requires inpatient-specific or PQI-specific detail.
+
+      **Standardized vs. raw payment**: total_medicare_stdz_payment removes each area's
+      geographic price adjustment (wage index, GPCI, etc.), isolating utilization intensity
+      from local price levels — the figure to compare *how much care* an area's beneficiaries
+      use. total_medicare_payment is the actual dollar amount paid — the figure for a
+      spending/fiscal question. Use stdz for utilization comparison, raw for spending totals.
+
+      **Suppression**: CMS suppresses small-cell values (denoted '*' in the source) for
+      privacy — these parse to NULL here via TRY_CAST rather than a fabricated 0. Small
+      counties and the '<65'/'>=65' age-group splits are the rows most often affected;
+      'All' age-group rows are rarely suppressed.
+
+      **Geography**: geo_level is 'National', 'State', or 'County'. geo_fips is the 2-digit
+      state FIPS or 5-digit county FIPS (FK to geo.state_ref/geo.counties); NULL for National
+      rows and for the 'ZZ' catch-all state code CMS uses for unknown/foreign/territory
+      beneficiaries (fully suppressed in every year checked). age_level is 'All', '<65', or
+      '>=65' — filter to 'All' for a single row per geography/year unless the age split
+      itself is needed.
+
+      **URL drift caveat**: CMS's data.cms.gov file path encodes an upload date
+      (sites/default/files/2026-04/...) that changes when CMS re-publishes the combined
+      file with a new year appended. Re-verify the URL against the dataset's landing page
+      (data.cms.gov/provider-summary-by-type-of-service/medicare-geographic-comparisons/
+      medicare-geographic-variation-by-national-state-county) if this table stops updating.
+
+    dimensions:
+      type:
+        - medicare_geographic_variation
+
+    columns:
+      - name: data_year
+        type: integer
+        nullable: false
+        expression: 'TRY_CAST(src."YEAR" AS INTEGER)'
+        comment: Calendar year this row reports (YEAR)
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: 'src."BENE_GEO_LVL"'
+        comment: "'National', 'State', or 'County' (BENE_GEO_LVL)"
+      - name: geo_desc
+        type: string
+        nullable: true
+        expression: 'src."BENE_GEO_DESC"'
+        comment: State abbreviation, or 'State-County name' for county rows (BENE_GEO_DESC)
+      - name: geo_fips
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."BENE_GEO_CD", '''')'
+        comment: 2-digit state or 5-digit county FIPS (FK to geo.state_ref/geo.counties); NULL for National rows and the 'ZZ' catch-all (BENE_GEO_CD)
+      - name: age_level
+        type: string
+        nullable: false
+        expression: 'src."BENE_AGE_LVL"'
+        comment: "'All', '<65', or '>=65' (BENE_AGE_LVL)"
+      - name: beneficiaries_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."BENES_TOTAL_CNT" AS BIGINT)'
+        comment: Total Medicare beneficiaries (BENES_TOTAL_CNT)
+      - name: beneficiaries_original_medicare
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."BENES_OM_CNT" AS BIGINT)'
+        comment: Beneficiaries in Original (fee-for-service) Medicare (BENES_OM_CNT)
+      - name: beneficiaries_medicare_advantage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."BENES_MA_CNT" AS BIGINT)'
+        comment: Beneficiaries in Medicare Advantage (BENES_MA_CNT)
+      - name: ma_participation_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."MA_PRTCPTN_RATE" AS DOUBLE)'
+        comment: Medicare Advantage participation rate (MA_PRTCPTN_RATE)
+      - name: total_medicare_payment
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."TOT_MDCR_PYMT_AMT" AS DOUBLE)'
+        comment: Total actual Medicare FFS payment, USD (TOT_MDCR_PYMT_AMT) — the spending-by-geography figure
+      - name: total_medicare_stdz_payment
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."TOT_MDCR_STDZD_PYMT_AMT" AS DOUBLE)'
+        comment: Total price-standardized Medicare FFS payment, USD (TOT_MDCR_STDZD_PYMT_AMT) — utilization-intensity figure, price effects removed
+      - name: total_medicare_payment_per_capita
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."TOT_MDCR_PYMT_PC" AS DOUBLE)'
+        comment: Actual Medicare FFS payment per beneficiary, USD (TOT_MDCR_PYMT_PC)
+      - name: total_medicare_stdz_payment_per_capita
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."TOT_MDCR_STDZD_PYMT_PC" AS DOUBLE)'
+        comment: Price-standardized Medicare FFS payment per beneficiary, USD (TOT_MDCR_STDZD_PYMT_PC)
+      - name: inpatient_payment_per_capita
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."IP_MDCR_PYMT_PC" AS DOUBLE)'
+        comment: Inpatient hospital Medicare payment per beneficiary, USD (IP_MDCR_PYMT_PC)
+      - name: outpatient_payment_per_capita
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."OP_MDCR_PYMT_PC" AS DOUBLE)'
+        comment: Outpatient hospital Medicare payment per beneficiary, USD (OP_MDCR_PYMT_PC)
+      - name: dme_payment_per_capita
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."DME_MDCR_PYMT_PC" AS DOUBLE)'
+        comment: Durable medical equipment Medicare payment per beneficiary, USD (DME_MDCR_PYMT_PC)
+      - name: hospice_payment_per_capita
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."HOSPC_MDCR_PYMT_PC" AS DOUBLE)'
+        comment: Hospice Medicare payment per beneficiary, USD (HOSPC_MDCR_PYMT_PC)
+
+    source:
+      type: http
+      url: "https://data.cms.gov/sites/default/files/2026-04/cc600d1e-d475-4b0e-80dc-1f64c01ca68c/2014-2024%20Original%20Medicare%20Geographic%20Variation%20Public%20Use%20File.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=medicare_geographic_variation/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: medicare_geographic_variation
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        overwritePartitions: true
+
 # ============================================================================
 # Views
 # ============================================================================

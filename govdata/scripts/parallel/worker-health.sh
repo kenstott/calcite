@@ -150,6 +150,9 @@ DAILY_ONLY_GROUPS=(
   # HIFLD ArcGIS VA facility roster — single static snapshot, own group since it's a distinct
   # provider (ArcGIS FeatureServer) from every group above.
   "health-va|va_medical_facilities"
+  # CMS Medicare Geographic Variation PUF — one combined multi-year CSV, no year dimension
+  # (see the table's own comment), so it's a snapshot re-fetched/overwritten like the group above.
+  "health-medicare-geo|medicare_geographic_variation"
 )
 
 run_daily_only_health_tables() {
