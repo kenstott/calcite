@@ -61,23 +61,49 @@ public class NvdVulnCwesResponseTransformer implements ResponseTransformer {
         if (cveId == null) {
           continue;
         }
+
+        Integer pubYear = null;
+        Integer pubMonth = null;
+        Integer pubQuarter = null;
+        String[] cveParts = cveId.split("-");
+        if (cveParts.length >= 2) {
+          try {
+            pubYear = Integer.parseInt(cveParts[1]);
+          } catch (NumberFormatException ignored) {
+            // non-standard CVE id
+          }
+        }
+        // Extract month and quarter from published timestamp (ISO 8601: YYYY-MM-DDTHH:MM:SSZ)
+        String published = cve.path("published").asText(null);
+        if (published != null && published.length() >= 7) {
+          try {
+            pubMonth = Integer.parseInt(published.substring(5, 7));
+            if (pubMonth >= 1 && pubMonth <= 12) {
+              pubQuarter = (pubMonth - 1) / 3 + 1;
+            }
+          } catch (NumberFormatException ignored) {
+            // malformed date
+          }
+        }
+
         List<String> cweIds = extractCweIds(cve);
         for (String cweId : cweIds) {
           ObjectNode row = MAPPER.createObjectNode();
           row.put("cve_id", cveId);
           row.put("cwe_id", cweId);
-          // Emit pub_year/pub_month as real row values for partition routing (the writer's
-          // fan-out reads them per-row before DuckDB evaluates any computed expression). CWE
-          // rows have no published date, so derive the year from CVE-YYYY-NNNN; quarter = Q1.
-          String[] cveParts = cveId.split("-");
-          if (cveParts.length >= 2) {
-            try {
-              row.put("pub_year", Integer.parseInt(cveParts[1]));
-            } catch (NumberFormatException ignored) {
-              // non-standard CVE id — leave pub_year unset
-            }
+          if (pubYear != null) {
+            row.put("pub_year", pubYear);
           }
-          row.put("pub_month", 1);
+          if (pubMonth != null) {
+            row.put("pub_month", pubMonth);
+          } else {
+            row.putNull("pub_month");
+          }
+          if (pubQuarter != null) {
+            row.put("quarter", pubQuarter);
+          } else {
+            row.putNull("quarter");
+          }
           rows.add(row);
         }
       }
