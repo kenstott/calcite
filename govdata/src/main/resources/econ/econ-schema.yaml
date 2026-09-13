@@ -2196,6 +2196,164 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- NATIONAL WAGES (QCEW) ---
+  - name: national_wages
+    pattern: "type=national_wages/frequency=*/year=*/national_wages.parquet"
+    # Same BLS per-year zip as state_wages (filtered to area_fips='US000' below), so the
+    # same preliminary-to-final rewrite applies — see the comment on state_wages.
+    lookbackPeriods: 2
+    # Same ETag freshness signal as state_wages — see the comment on its freshness: block.
+    freshness:
+      type: etag
+    partitions: *standard_partitions
+    comment: >
+      National establishment counts, employment levels, total wages, and average weekly wage
+      from BLS QCEW (Quarterly Census of Employment and Wages), broken out by NAICS industry
+      code (industry_code) and ownership sector (own_code) — the national-aggregate
+      counterpart to state_wages. Sources BLS's own published national total for each
+      industry/ownership cell, not a sum of state_wages rows: summing state_wages across
+      states systematically understates industries where several states suppress the cell for
+      disclosure reasons (disclosure_code='N') — confirmed live 2026-09 on NAICS 3352
+      (household appliance manufacturing, own_code='5'/private): only ~39-46 of 51
+      jurisdictions report a non-suppressed value in state_wages, giving a state-sum
+      employment figure of 32,911-36,179 for FY2023, while this table's own national row for
+      the same industry/ownership cell (area_fips='US000', agglvl_code='16') reports 63,044 —
+      matching BLS's own published national CES/QCEW figure for that industry directly. Use
+      this table whenever a query needs a true national total for a specific industry or
+      ownership cross-section; state_wages remains the source for state-level detail.
+
+      agglvl_code at the national grain: '10' = grand total (all industries, all ownerships,
+      own_code always '0'); '11'-'15' = successively finer NAICS depth (sector through
+      6-digit) at own_code='0' (all ownerships combined); '16'-'18' = the same NAICS depths
+      broken out per ownership sector (own_code='1'/federal, '2'/state, '3'/local, '5'/private
+      — pick the sector via own_code, matching state_wages' own_code semantics); '94'/'95' are
+      two standing summary rows at industry_code='10' for own_code='8' (federal government
+      excluding some categories) and '9' (total government), not industry detail. Any
+      industry-specific national query must pin agglvl_code together with industry_code and
+      own_code, the same discipline state_wages documents for its own agglvl_code column.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - national_wages  # Static table type
+      frequency:
+        - annual
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:1990}"  # QCEW data only available from 1990
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1       # QCEW annual data is released with ~1 year lag
+        releaseMonth: 9  # Released in September (with Q1 data of following year)
+
+    # Source columns from QCEW CSV (matching actual file structure — same columns as
+    # state_wages, just a different area_fips row filter)
+    columns:
+      - name: area_fips
+        type: string
+        nullable: true
+        comment: Always 'US000' — BLS's national aggregation area code.
+      - name: own_code
+        type: string
+        nullable: true
+        comment: >
+          Ownership sector: 0=total (all ownerships), 1=federal government, 2=state government,
+          3=local government, 5=private. See the table comment's agglvl_code walkthrough for
+          which agglvl_code values carry a real (non-'0') own_code.
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: >
+          NAICS industry code; '10'=total, all industries. Pair with the matching
+          agglvl_code — see the table comment.
+      - name: agglvl_code
+        type: string
+        nullable: true
+        comment: >
+          QCEW aggregation level at the national grain — see the table comment for the full
+          '10'-'18'/'94'/'95' walkthrough. Any industry-specific query must pin agglvl_code
+          together with industry_code and own_code.
+      - name: annual_avg_estabs
+        type: int
+        nullable: true
+        comment: Average annual establishment count, national total for the industry_code/own_code/agglvl_code cell.
+      - name: annual_avg_emplvl
+        type: int
+        nullable: true
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_emplvl" AS INTEGER) END'
+        comment: >
+          Average annual employment level, BLS's own published national total (not a sum of
+          state_wages rows — see the table comment). NULL when BLS disclosure_code = 'N';
+          national-grain cells are suppressed far less often than state/county cells but the
+          same defensive handling is applied for consistency with state_wages/county_qcew.
+      - name: total_annual_wages
+        type: long
+        nullable: true
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."total_annual_wages" AS BIGINT) END'
+        comment: Total annual wages in dollars, national total. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
+      - name: annual_avg_wkly_wage
+        type: int
+        nullable: true
+        expression: 'CASE WHEN src."disclosure_code" = ''N'' THEN NULL ELSE TRY_CAST(src."annual_avg_wkly_wage" AS INTEGER) END'
+        comment: Average weekly wage in dollars, national. NULL when BLS disclosure_code = 'N' — see annual_avg_emplvl.
+      - name: disclosure_code
+        type: string
+        nullable: true
+        comment: >
+          BLS suppression flag, verbatim from the source. 'N' means annual_avg_emplvl,
+          total_annual_wages and annual_avg_wkly_wage are suppressed to NULL in this table;
+          annual_avg_estabs is disclosed regardless. Blank means no suppression.
+
+    # API Configuration
+    download:
+      bulkDownload: qcew_annual_bulk
+
+    # HTTP Source configuration for EtlPipeline (bulk download)
+    # Downloads ZIP file and extracts CSV content — same shared file as state_wages/
+    # county_wages/county_qcew/metro_wages, filtered to the national aggregation row.
+    source:
+      type: http
+      url: "https://data.bls.gov/cew/data/files/{effective_year}/csv/{effective_year}_{frequency}_singlefile.zip"
+      method: GET
+      extractPattern: "*.csv"  # Extract CSV from ZIP archive
+      # Row filter: national-level data has the literal area_fips value 'US000' — confirmed
+      # live 2026-09-13 against the real 2023 annual singlefile.
+      rowFilter:
+        column: area_fips
+        pattern: "^US000$"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=national_wages/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- METRO INDUSTRY ---
   - name: metro_industry
     # BLS revises the prior 1-2 months on every monthly release and restates the
