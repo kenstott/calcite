@@ -1056,6 +1056,9 @@ partitionedTables:
         snapshotRetentionDays: 7
         sortOrder: [cik, accession_number, linkbase_type, from_concept]
         batchPartitionColumns: [year]
+        # Row density (~30M records/year × 4 fields sorted) exceeds per-worker heap
+        # for the compaction sort; compaction runs in dedicated maintenance jobs.
+        compactionMinFiles: 999
 
   # ==========================================================================
   # INSIDER TRANSACTIONS
