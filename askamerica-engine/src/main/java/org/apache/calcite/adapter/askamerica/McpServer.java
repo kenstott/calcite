@@ -1089,9 +1089,7 @@ public class McpServer {
             + "info/caution/high, the grain, the observation count, and the declared coverage "
             + "windows of the tables involved. Read it before answering: a 'high' warning "
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
-            + "health, only that no listed defect was detected. This SQL dialect does NOT "
-            + "accept Postgres/DuckDB-shell `expr::type` cast syntax (it parses as a cryptic "
-            + "syntax error at the `:`) — use `CAST(expr AS type)` instead."
+            + "health, only that no listed defect was detected."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
