@@ -1032,6 +1032,31 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "SELECT lei, LPAD(cik, 10, '0') AS cik FROM iceberg_scan('"
         + loc(base, "ref", "gleif_cik_mapping")
         + "', allow_moved_paths=true) WHERE lei IS NOT NULL AND cik IS NOT NULL");
+
+    // gleif_cik_mapping (GLEIF's own RegistrationAuthorityID='RA000665' data) covers only a
+    // small subset of SEC filers — mega-caps like Apple, Microsoft, Alphabet have LEIs in
+    // gleif_entities but no CIK linkage recorded via that authority mechanism. Enrich the
+    // lookup by joining gleif_entities.legal_name to sec.filing_metadata.company_name (both
+    // normalized) — the SEC filing metadata authoritatively links CIKs to filer names, and
+    // GLEIF's own legal_name for the same entity typically normalizes to the same value.
+    // QUALIFY keeps at most one (lei, cik) pair per LEI so downstream LEFT JOINs on lei do
+    // not multiply matched-name rows. Only inserts LEIs not already present in gleif_cik.
+    execute(conn,
+        "INSERT INTO gleif_cik "
+        + "SELECT lei, cik FROM ("
+        + "  SELECT ge.lei, LPAD(fm.cik, 10, '0') AS cik "
+        + "  FROM (SELECT lei, norm_org_name(legal_name) AS norm_name "
+        + "        FROM iceberg_scan('" + loc(base, "ref", "gleif_entities")
+        + "', allow_moved_paths=true) "
+        + "        WHERE lei IS NOT NULL AND legal_name IS NOT NULL) ge "
+        + "  JOIN (SELECT DISTINCT cik, norm_org_name(company_name) AS norm_name "
+        + "        FROM iceberg_scan('" + loc(base, "sec", "filing_metadata")
+        + "', allow_moved_paths=true) "
+        + "        WHERE cik IS NOT NULL AND company_name IS NOT NULL) fm "
+        + "    ON ge.norm_name = fm.norm_name "
+        + "  WHERE ge.lei NOT IN (SELECT lei FROM gleif_cik) "
+        + "  QUALIFY row_number() OVER (PARTITION BY ge.lei ORDER BY fm.cik) = 1"
+        + ")");
   }
 
   /** Opens DuckDB for standalone orchestrator (no TableContext/StorageProvider). */
