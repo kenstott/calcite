@@ -143,6 +143,16 @@ public class EtlPipeline {
       new ConcurrentHashMap<String, String>();
 
   /**
+   * Period-completion keys of the periods the lookback reopened this run. Populated by
+   * {@link #reopenLookbackPeriods} during Phase 2 and read in {@link #processSingleBatch} to
+   * drop a reopened unit's raw cache entry before fetching: an entry is validated by existence
+   * alone, so without dropping it the reopen is handed back the very bytes it exists to
+   * refresh, and the head period freezes at whatever its first fetch saw. The fetch
+   * repopulates the entry, so the cache stays a faithful mirror of the latest fetch.
+   */
+  private final Set<String> lookbackReopenedPeriodKeys = new HashSet<String>();
+
+  /**
    * Per-combo completion marks for combos SUCCESSFULLY written this run, captured by
    * {@link #markCombosProcessed} but not applied to the tracker until {@code writer.commit()}
    * succeeds — same reasoning as {@link #pendingUnitFreshnessTokens} above, applied to the more
@@ -2252,6 +2262,24 @@ public class EtlPipeline {
       ((HttpSource) dataSource).invalidateRawCache(variables);
     }
 
+    // A lookback-reopened unit must reach the source for the same reason: the raw cache is
+    // validated by existence alone, so without dropping the entry the reopen is handed back
+    // the very bytes it exists to refresh, and the head period freezes at whatever its first
+    // fetch saw. The fetch below repopulates the entry, so the cache stays a faithful mirror
+    // of the latest fetch. Gates above already drop the entry on their own paths; a second
+    // drop here is a no-op.
+    if (!hashFreshnessActive && dataSource instanceof HttpSource
+        && !lookbackReopenedPeriodKeys.isEmpty()) {
+      for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
+        if (IncrementalTracker.hasCanonicalPeriod(combo)
+            && lookbackReopenedPeriodKeys.contains(
+                IncrementalTracker.periodCompletionKey(pipelineName, combo))) {
+          ((HttpSource) dataSource).invalidateRawCache(variables);
+          break;
+        }
+      }
+    }
+
     // Fetch data via the (re-runnable) source chain — the expensive network I/O. The
     // hash-freshness branch below drains this once to compute a streaming hash, then re-fetches
     // from the now-warm raw cache for the write, so a large dataset is never held in memory.
@@ -3715,9 +3743,12 @@ public class EtlPipeline {
       if (!IncrementalTracker.hasCanonicalPeriod(combo)) {
         continue;
       }
-      if (reopenKeys.contains(IncrementalTracker.periodCompletionKey(pipelineName, combo))
-          && unprocessedIndices.add(i)) {
-        reopened++;
+      if (reopenKeys.contains(IncrementalTracker.periodCompletionKey(pipelineName, combo))) {
+        lookbackReopenedPeriodKeys.add(
+            IncrementalTracker.periodCompletionKey(pipelineName, combo));
+        if (unprocessedIndices.add(i)) {
+          reopened++;
+        }
       }
     }
     if (reopened > 0) {
