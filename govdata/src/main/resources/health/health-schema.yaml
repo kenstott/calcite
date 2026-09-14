@@ -25,6 +25,22 @@ dimension_templates:
     start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
+  # VA Access to Care facility wait-time source ({state} query param). Same 50-states + DC +
+  # PR set as housing.hmda_lar; YAML anchors don't cross files so it's redefined here.
+  va_states: &va_states
+    type: list
+    values: ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID",
+             "IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO",
+             "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
+             "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR"]
+
+  # apptType codes the source actually recognizes (confirmed live 14 Sep 2026 — every other
+  # integer in 0-40 returns a byte-identical fallback response labeled ApptTypeName='unknown',
+  # so those are excluded here rather than ingested as duplicate rows).
+  va_appt_types: &va_appt_types
+    type: list
+    values: ["1","3","4","5","6","7","11","12","13","16","17","18","19","20","24","25","28","29","30","31"]
+
 # Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may
 # override any key by restating it after the merge (YAML merge-key semantics). Kept as an anchor
 # rather than repeated per table so the schema's compaction policy is stated in exactly one place.
@@ -6102,6 +6118,224 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
         compactionMinFiles: 3
+        overwritePartitions: true
+
+  - name: va_access_to_care_wait_times
+    # Freshness gate: the live PWT scheduling-system query has no Last-Modified/ETag, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged (fails
+    # open on a missing prior token) — same pattern as environment.drinking_water_violations,
+    # another state-dimension efservice-style live query.
+    freshness:
+      type: hash
+    pattern: "type=va_access_to_care_wait_times/state=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: state
+          type: VARCHAR
+    comment: >
+      VA Access to Care facility-level appointment wait times, by facility and specialty —
+      closes the wait-time/access-to-care gap in va_medical_facilities (which carries only
+      identity/location). One row per (facility, specialty) as of the source's daily
+      sliceEndDate. established_patient_wait_days / new_patient_wait_days are VA's own
+      "estWaitTime"/"newWaitTime" days-to-third-next-available-appointment metrics;
+      avg_wait_time_days is carried but was N/A for every row observed live 14 Sep 2026 (VA
+      appears to have stopped publishing it — not fabricated as zero). Covers 20 specialty
+      categories (AUDIOLOGY, CARDIOLOGY, DENTAL, DERMATOLOGY, ENDOCRINOLOGY,
+      GASTROENTEROLOGY, NEUROLOGY, OB/GYN, OCCUPATIONAL THERAPY, ORTHOPEDICS, PAIN MEDICINE,
+      PHYSICAL THERAPY, PODIATRY, PRIMARY CARE, PULMONOLOGY, SLEEP MEDICINE, UROLOGY,
+      WOMEN'S HEALTH, OPHTHALMOLOGY, OPTOMETRY) — no dedicated Mental Health code exists in
+      this legacy system (confirmed live: every apptType integer not in this list returns a
+      byte-identical fallback response, not a Mental Health metric). The source's
+      `patientType` query parameter (New_Patient/Established_Patient) was confirmed live to
+      have no effect on the response — every row already carries both wait-time columns
+      regardless — so it is a fixed request parameter here, not a dimension.
+
+      Snapshot table: the whole cross-product (state x specialty) is re-fetched and each
+      state partition overwritten every run; history lives in Iceberg snapshots, not a year
+      dimension. Source: VA's own public www.accesstocare.va.gov/PWT/getRawData API (no key,
+      no auth; verified live against the real Antelope Valley VA Clinic, Lancaster CA —
+      matches its known address and reported a 15-day AUDIOLOGY wait as of 2026-09-13).
+      Coverage: 50 states + DC + PR (same set as housing.hmda_lar).
+
+      **Truncation risk**: the source returns a fixed legacy 32,768-byte response buffer,
+      null-padded — not paginated. The largest state/specialty observed live (TX, PRIMARY
+      CARE) used 28,841 bytes (88% of capacity); if a single state's facility count grows
+      enough to exceed the buffer, that state's response would silently truncate mid-row
+      rather than error. Re-verify content length if a future DQ run shows an implausibly
+      low per-state facility count.
+
+    dimensions:
+      type:
+        - va_access_to_care_wait_times
+      state: *va_states
+      appt_type: *va_appt_types
+
+    columns:
+      - name: facility_id
+        type: string
+        nullable: false
+        expression: 'src."facilityID"'
+        comment: VA station ID (PK component; joins to health.va_medical_facilities.station_number)
+      - name: visn
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."VISN" AS INTEGER)'
+        comment: Veterans Integrated Service Network number
+      - name: facility_name
+        type: string
+        nullable: true
+        expression: 'src."name"'
+      - name: facility_type
+        type: string
+        nullable: true
+        expression: 'src."type"'
+        comment: e.g. 'Clinic', 'Health Care System'
+      - name: address
+        type: string
+        nullable: true
+        expression: 'src."address"'
+      - name: city
+        type: string
+        nullable: true
+        expression: 'src."city"'
+      - name: state
+        type: string
+        nullable: true
+        expression: 'src."state"'
+      - name: zip
+        type: string
+        nullable: true
+        expression: 'src."zip"'
+      - name: phone
+        type: string
+        nullable: true
+        expression: 'src."phone"'
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."latitude" AS DOUBLE)'
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."longitude" AS DOUBLE)'
+      - name: appt_type_name
+        type: string
+        nullable: true
+        expression: 'src."ApptTypeName"'
+        comment: Specialty/appointment category name, as published by the source (PK component)
+      - name: established_patient_wait_days
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."estWaitTime" AS INTEGER)'
+        comment: Days to third-next-available appointment for an established patient; null for the source's 'N/A' sentinel
+      - name: new_patient_wait_days
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."newWaitTime" AS INTEGER)'
+        comment: Days to third-next-available appointment for a new patient; null for the source's 'N/A' sentinel
+      - name: avg_wait_time_days
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."avgWaitTime" AS INTEGER)'
+        comment: Carried for schema completeness; observed N/A (null) for every row live 14 Sep 2026 — see table comment
+      - name: same_day_access
+        type: string
+        nullable: true
+        expression: 'src."sameDayAccess"'
+        comment: "'True'/'False' — facility offers same-day access for this specialty"
+      - name: slice_end_date
+        type: string
+        nullable: true
+        expression: 'src."sliceEndDate"'
+        comment: >
+          As-of date/time of this metric slice (MM/DD/YYYY HH:MM:SS). The sentinel
+          '01/01/0001 00:00:00' means this facility/specialty has no current wait-time
+          slice (both wait-day columns are null in that case, not fabricated as zero).
+      - name: has_emergency_dept
+        type: string
+        nullable: true
+        expression: 'src."ED"'
+      - name: has_urgent_care
+        type: string
+        nullable: true
+        expression: 'src."UC"'
+      - name: same_day_primary_care
+        type: string
+        nullable: true
+        expression: 'src."SameDayPC"'
+      - name: same_day_mental_health
+        type: string
+        nullable: true
+        expression: 'src."SameDayMH"'
+      - name: walk_in_primary_care
+        type: string
+        nullable: true
+        expression: 'src."WalkInPC"'
+      - name: walk_in_mental_health
+        type: string
+        nullable: true
+        expression: 'src."WalkInMH"'
+      - name: telehealth_primary_care
+        type: string
+        nullable: true
+        expression: 'src."TelehealthPC"'
+      - name: telehealth_mental_health
+        type: string
+        nullable: true
+        expression: 'src."TelehealthMH"'
+      - name: non_va_wait_days
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."NonVAWaitTime" AS INTEGER)'
+        comment: Community Care (non-VA referral) wait days, when published; null for the source's 'N/A' sentinel
+      - name: pct_accepting_medicaid
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PercentAcceptingMedicaid" AS DOUBLE)'
+      - name: pct_accepting_medicare
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PercentAcceptingMedicare" AS DOUBLE)'
+      - name: metro_area
+        type: string
+        nullable: true
+        expression: 'src."MetroArea"'
+      - name: data_source_system
+        type: string
+        nullable: true
+        expression: 'src."Datasource"'
+        comment: Underlying VA scheduling system the metric was sourced from (e.g. 'VistA'); blank when the row has no current slice
+
+    source:
+      type: http
+      url: "https://www.accesstocare.va.gov/PWT/getRawData?location={state}&radius=500&apptType={appt_type}&patientType=New_Patient&MaxWaitTime=-1&sortOrder=FacilityName&format=csv"
+      method: GET
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 3.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=va_access_to_care_wait_times/state=*/"
+      partition:
+        columns: [type, state]
+      iceberg:
+        <<: *compaction_defaults
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: va_access_to_care_wait_times
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
         overwritePartitions: true
 
   - name: ssa_oasdi_county

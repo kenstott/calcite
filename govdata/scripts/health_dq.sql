@@ -2051,6 +2051,89 @@ FROM (
 
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: va_access_to_care_wait_times (new 14 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'va_access_to_care_wait_times', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true));
+
+-- T2: row_count (52 states x 20 specialties; a few hundred PWT-enrolled facilities nationally)
+INSERT INTO dq_results
+SELECT 'health', 'va_access_to_care_wait_times', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'Expected at least 5000 facility x specialty wait-time rows nationally'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — avg_wait_time_days excluded: confirmed live 14 Sep 2026 that the source
+-- no longer publishes this metric for any row (see table comment); not a defect.
+INSERT INTO dq_results
+SELECT 'health', 'va_access_to_care_wait_times', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'state', 'avg_wait_time_days')
+  )
+);
+
+-- T5: all_same_value — avg_wait_time_days excluded for the same reason as T4 above.
+INSERT INTO dq_results
+SELECT 'health', 'va_access_to_care_wait_times', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type', 'avg_wait_time_days')
+  )
+);
+
+-- T6: pk_nulls (facility_id, appt_type_name together form the PK)
+INSERT INTO dq_results
+SELECT 'health', 'va_access_to_care_wait_times', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL facility_id or appt_type_name rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true) WHERE facility_id IS NULL OR appt_type_name IS NULL);
+
+-- T7: state coverage (same floor as va_medical_facilities)
+INSERT INTO dq_results
+SELECT 'health', 'va_access_to_care_wait_times', 'T7_state_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Distinct states with VA access-to-care wait-time records'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true) WHERE state IS NOT NULL);
+
+-- T8: pk_duplication guard (facility_id, appt_type_name) must be unique
+INSERT INTO dq_results
+SELECT 'health', 'va_access_to_care_wait_times', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (facility_id, appt_type_name) pairs'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT facility_id, appt_type_name
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_access_to_care_wait_times', allow_moved_paths := true)
+    GROUP BY facility_id, appt_type_name
+    HAVING COUNT(*) > 1
+  )
+);
+
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: ssa_oasdi_county (new 13 Sep 2026)
 -- ─────────────────────────────────────────────────────────────
 
