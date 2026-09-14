@@ -461,6 +461,8 @@ WITH counts AS (
   SELECT 'cfs_sctg_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_sctg_ref', allow_moved_paths := true) LIMIT 1))
   UNION ALL
   SELECT 'cfs_mode_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_mode_ref', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'atc_facility_staffing'  , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true) LIMIT 1))
 )
 SELECT 'transport', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
@@ -518,6 +520,49 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
       WHERE (decimal_latitude IS NOT NULL AND (decimal_latitude < 13 OR decimal_latitude > 72))
          OR (decimal_longitude IS NOT NULL AND (decimal_longitude < -180 OR decimal_longitude > -64)));
 
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: atc_facility_staffing (FAA Controller Workforce Plan appendix; current-plan
+-- snapshot, single PDF fetch — AtcFacilityStaffingTransformer already cross-checks its own
+-- parsed rows against the PDF's printed "En Route Total"/"Terminal Total" subtotals and
+-- throws on any mismatch, so these checks cover shape/domain, not re-deriving those sums)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'atc_facility_staffing', 'T2_row_count',
+  CASE WHEN n BETWEEN 250 AND 400 THEN 'pass' ELSE 'fail' END, n, 313,
+  'Expected ~313 ATC facilities (23 En Route + ~290 Terminal as of the 2025-2028 plan); range tolerates facility-count drift across future plan editions'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'atc_facility_staffing', 'T5_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate facility_id rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT facility_id, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true)
+    GROUP BY facility_id HAVING COUNT(*) > 1
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'transport', 'atc_facility_staffing', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL facility_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true) WHERE facility_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'atc_facility_staffing', 'T7_facility_type_domain',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'facility_type values outside {En Route, Terminal}'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true)
+      WHERE facility_type NOT IN ('En Route', 'Terminal'));
+
+INSERT INTO dq_results
+SELECT 'transport', 'atc_facility_staffing', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name != 'type'));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: cfs_sctg_ref / cfs_mode_ref (CFS PUF Data Users Guide appendix code lists; static,

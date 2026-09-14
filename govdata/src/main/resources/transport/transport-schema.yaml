@@ -2460,6 +2460,127 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # ATC FACILITY STAFFING — FAA Controller Workforce Plan appendix (snapshot, annual PDF)
+  # ---------------------------------------------------------------------------
+  - name: atc_facility_staffing
+    # Freshness gate: static PDF path FAA overwrites in place when a new plan is published;
+    # it serves a real Last-Modified on a HEAD (verified live). year below is a cache-buster
+    # only (not a partition column) so a daily/DQ re-run within the same calendar year does
+    # not re-fetch, matching the cms_hospital_quality/cms_nursing_home convention for a
+    # single evergreen URL with no per-period URL of its own.
+    freshness:
+      type: last_modified
+    pattern: "type=atc_facility_staffing/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FAA Air Traffic Controller Workforce Plan, Appendix "Facility Staffing Targets" — one
+      row per En Route (ARTCC) or Terminal (Tower/TRACON) ATC facility: its CRWG
+      (Collaborative Resource Workgroup) staffing target, current CPC/CPC-IT/developmental/
+      total on-board counts, and the plan's 3-year CPC attrition projection
+      (projected_attrition_yr1/yr2/yr3, relative to as_of_date's year — the plan's own
+      column headers are absolute calendar years that shift with every edition, e.g.
+      "2025*/2026*/2027*" in the 2025-2028 plan). ~313 facilities (23 En Route, ~290
+      Terminal) as of the 2025-2028 plan. Parsed via AtcFacilityStaffingTransformer, which
+      re-derives and cross-checks the PDF's own "En Route Total"/"Terminal Total" subtotal
+      rows against the parsed facility rows and fails loudly on any mismatch. Current-plan
+      snapshot only — FAA does not publish prior editions at a stable URL, so no history is
+      retained upstream to backfill (same treatment as cms_pos_facilities/faa_aircraft_master
+      for a periodically-overwritten single-URL source). Source: FAA Office of Finance and
+      Management, Controller Workforce Plan (Section 221 of Public Law 108-176, as amended).
+      Does NOT carry FAA runway incursion data — no clean self-service source for that was
+      found as of 2026-09 (see govdata-ops#285): FAA's own runway-incursion Tableau
+      dashboard (explore.dot.gov) and its USDOT-datahub Socrata mirror are both
+      inaccessible without credentials/an access grant this corpus does not have.
+
+    dimensions:
+      type:
+        - atc_facility_staffing
+      year: ["${GOVDATA_CURRENT_YEAR}"]
+
+    columns:
+      - name: facility_id
+        type: string
+        nullable: false
+        comment: FAA facility identifier (PK; e.g. "ZAB" ARTCC, "ORD" tower, "C90" TRACON)
+      - name: facility_name
+        type: string
+        nullable: false
+        comment: Facility name including its type suffix (e.g. "Albuquerque ARTCC", "Chicago TRACON")
+      - name: facility_type
+        type: string
+        nullable: false
+        comment: 'En Route (ARTCC) or Terminal (Tower/TRACON/Control Facility), derived from facility_name''s suffix'
+      - name: crwg_target
+        type: integer
+        nullable: false
+        comment: Collaborative Resource Workgroup (ATO/NATCA) facility-by-facility controller staffing target; CPCs count toward this target
+      - name: cpc
+        type: integer
+        nullable: false
+        comment: Certified Professional Controllers currently on board
+      - name: cpc_it
+        type: integer
+        nullable: false
+        comment: CPCs-in-training currently on board (certified at a prior facility, training at this one)
+      - name: developmental
+        type: integer
+        nullable: false
+        comment: Developmental (not yet fully certified) controllers currently on board
+      - name: total_onboard
+        type: integer
+        nullable: false
+        comment: Total controller headcount on board (CPC + CPC-IT + developmental, rounded by FAA)
+      - name: projected_attrition_yr1
+        type: integer
+        nullable: false
+        comment: Forecast CPC attrition count for the calendar year after as_of_date's year (e.g. 2025 in the 2025-2028 plan, whose as_of_date is in 2024)
+      - name: projected_attrition_yr2
+        type: integer
+        nullable: false
+        comment: Forecast CPC attrition count for as_of_date's year + 2
+      - name: projected_attrition_yr3
+        type: integer
+        nullable: false
+        comment: Forecast CPC attrition count for as_of_date's year + 3
+      - name: as_of_date
+        type: string
+        nullable: false
+        comment: Date the on-board counts (crwg_target/cpc/cpc_it/developmental/total_onboard) are actual as of, per the plan's own footnote
+      - name: plan_period
+        type: string
+        nullable: false
+        comment: Cover title of the workforce plan edition this snapshot was parsed from (e.g. "2025-2028")
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "atc_facility_staffing"'
+
+    source:
+      type: http
+      url: "https://www.faa.gov/about/office_org/headquarters_offices/afn/offices/finance/offices/office-financial-labor-analysis/plans/controller-workforce.pdf"
+      method: GET
+      response:
+        format: TEXT   # AtcFacilityStaffingTransformer re-downloads the PDF and emits JSON rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.AtcFacilityStaffingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=atc_facility_staffing/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: atc_facility_staffing
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # CFS SHIPMENTS — Commodity Flow Survey Public Use File (snapshot, bulk CSV)
   # ---------------------------------------------------------------------------
   - name: cfs_shipments
