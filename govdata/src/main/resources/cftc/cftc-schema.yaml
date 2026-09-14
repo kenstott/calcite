@@ -98,8 +98,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 3
       contiguous: true
-      rowCount: 195846138
-      checkedAt: "2026-09-12T00:10:32Z"
+      rowCount: 197631566
+      checkedAt: "2026-09-14T21:00:08Z"
     # DQ sample cap (GOVDATA_DQ mode only; prod ignores it and loads everything).
     # Fetch-unit here is one daily file per (asset_class, year, month, day) — e.g. a
     # single RATES day is ~23.5k rows. The cap stops each daily fetch-unit at 2000 rows,
@@ -1180,7 +1180,7 @@ partitionedTables:
       distinctYears: 21
       contiguous: true
       rowCount: 184514
-      checkedAt: "2026-09-12T00:10:33Z"
+      checkedAt: "2026-09-14T21:00:13Z"
     partitions:
       style: hive
       columnDefinitions:
