@@ -514,6 +514,143 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # CDE POLICE EMPLOYMENT BY AGENCY - LEOKA agency-year sworn-officer counts,
+  # keyed on ORI so (ori, year) rolls up cleanly to county via cde_agencies.
+  # New 14 Sep 2026.
+  # ---------------------------------------------------------------------------
+  - name: cde_police_employment_by_agency
+    # Same lookback rationale as cde_police_employment — LEOKA restates recent years on every
+    # release as agencies file late/amended personnel counts. The fetch is 26k+ per-ORI calls per
+    # year, so a lookback re-run is real work; the raw cache absorbs unchanged responses.
+    lookbackPeriods: 3
+    freshness:
+      type: hash
+    pattern: "type=pe_by_agency/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI CDE LEOKA (Law Enforcement Officers Killed and Assaulted) Police Employee data at
+      AGENCY-year grain — one row per (ori, year) with the same total-sworn-officer and civilian
+      counts that cde_police_employment carries at state grain, plus the county the FBI itself
+      publishes for each ORI. Sourced to close the gap #266 identified: no table gave
+      county-grain sworn-officer headcount over time, so a policing-intensity-vs-crime-rate
+      analysis at county grain was structurally impossible from this schema.
+
+      Roll-up: GROUP BY county_name (or JOIN cde_agencies via ori for canonical county naming and
+      geo.counties FK linkage) collapses this to county-year. GROUP BY state_abbr recovers
+      cde_police_employment's totals — both are LEOKA-derived, but the state-grain table pulls
+      the CDE API's state aggregate directly while this table sums per-agency reports, so tiny
+      differences can appear on years with late-arriving amendments between the two API paths'
+      snapshots.
+
+      **Source**: two live endpoints, chained in the DataProvider —
+      api.usa.gov/crime/fbi/cde/agency/byStateAbbr/{state} gives each state's ORI list plus
+      FBI's own county label per agency, then cde.ucr.cjis.gov/LATEST/pe/agency/{ori}?from=Y&to=Y
+      returns that agency's PE record for the year. Confirmed live 2026-09-14 (Nome PD
+      AK0010600 FY2020 = 9 male + 1 female officers, matching a real small Alaska department).
+
+      **NULL-response filtering**: the pe/agency endpoint returns a fully-null envelope for ORIs
+      that never reported PE data in the queried year. Those rows are dropped rather than stored
+      as all-NULL counts — a real "no data" from LEOKA is the same as "agency did not report",
+      not a distinguishable state worth carrying. Row count per year therefore reflects only
+      agencies that actually reported.
+
+      **County-name convention**: FBI publishes county as UPPER-CASE with hyphens
+      ('KENAI PENINSULA'), 'NOT SPECIFIED' for state-police/university/airport/tribal agencies
+      that don't sit in a single county, and occasional multi-county strings for agencies
+      spanning two counties. Kept verbatim from the source; a downstream view can normalize to
+      geo.counties.county_name (title case) via UPPER() / TRIM() plus the NOT-SPECIFIED filter.
+
+      **API key**: uses API_DATA_GOV env var (same key already used by cde_agencies). The PE
+      endpoint itself is keyless; only the agency-list call routes through api.usa.gov.
+
+    dimensions:
+      type:
+        - pe_by_agency
+      year: *crime_year_range
+      state_abbr: *all_state_abbrs
+
+    columns:
+      - name: ori
+        type: string
+        nullable: false
+        comment: 9-character ORI identifier (PK partial, FK to cde_agencies.ori)
+      - <<: *year_column
+      - <<: *state_abbr_column
+      - name: agency_name
+        type: string
+        nullable: true
+        comment: Agency name as published by FBI (e.g., 'Nome Police Department')
+      - name: agency_type_name
+        type: string
+        nullable: true
+        comment: Agency type (City, County, State Police, Tribal, University or College, Other)
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name as FBI publishes it (UPPER-CASE, hyphenated; 'NOT SPECIFIED' for state/university/airport/tribal agencies not tied to one county)
+      - name: male_officers
+        type: long
+        nullable: true
+        comment: Male sworn officer count
+      - name: female_officers
+        type: long
+        nullable: true
+        comment: Female sworn officer count
+      - name: male_civilians
+        type: long
+        nullable: true
+        comment: Male civilian employee count
+      - name: female_civilians
+        type: long
+        nullable: true
+        comment: Female civilian employee count
+      - name: participated_population
+        type: long
+        nullable: true
+        comment: Population this agency's ORI covers per FBI's own coverage estimate
+      - name: officers_per_1000
+        type: double
+        nullable: true
+        comment: Law enforcement employees per 1,000 people covered (rate = (officers+civilians)/participated_population*1000)
+
+    source:
+      # The URL below is nominal — the DataProvider issues its own chained HTTP calls (see the
+      # provider class). It's set so HttpSource's rate-limit throttle is applied (10 req/s
+      # matches sibling CDE tables). The provider's raw-cache is keyed per call, not by this URL.
+      type: http
+      url: "https://cde.ucr.cjis.gov/LATEST/pe/agency/"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 10.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.crime.CdeAgencyPoliceEmploymentProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pe_by_agency/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: cde_police_employment_by_agency
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
   # CDE HATE CRIMES - Hate crime statistics by state
   # ---------------------------------------------------------------------------
   - name: cde_hate_crimes

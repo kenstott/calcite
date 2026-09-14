@@ -235,6 +235,74 @@ SELECT 'crime', 'cde_police_employment', 'T8_worker_coverage',
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment', allow_moved_paths := true);
 
 -- ============================================================================
+-- cde_police_employment_by_agency (agency-year sworn-officer counts; new 14 Sep 2026)
+-- ============================================================================
+INSERT INTO dq_results
+SELECT 'crime', 'cde_police_employment_by_agency', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'iceberg_scan row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true);
+
+INSERT INTO dq_results
+SELECT 'crime', 'cde_police_employment_by_agency', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'at least one agency-year row present in DQ slice'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true) LIMIT 3;
+
+-- T4: no fully-null columns (county_name allowed NULL because FBI publishes NULL for some agencies)
+INSERT INTO dq_results
+SELECT 'crime', 'cde_police_employment_by_agency', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  CASE WHEN COUNT(*) = 0 THEN 'no fully-null columns' ELSE 'fully-null: ' || STRING_AGG(column_name, ', ') END
+FROM (
+  SELECT column_name FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true))
+  WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'crime', 'cde_police_employment_by_agency', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'ori IS NULL OR year IS NULL OR state_abbr IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true)
+WHERE ori IS NULL OR year IS NULL OR state_abbr IS NULL;
+
+-- T6: pk_dupes (ori,year unique)
+INSERT INTO dq_results
+SELECT 'crime', 'cde_police_employment_by_agency', 'T6_pk_dupes',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (ori, year) rows'
+FROM (
+  SELECT ori, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true)
+  GROUP BY ori, year HAVING COUNT(*) > 1
+);
+
+-- T7: officer counts plausibly non-negative and bounded
+INSERT INTO dq_results
+SELECT 'crime', 'cde_police_employment_by_agency', 'T7_officer_counts_plausible',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, 'male_officers or female_officers negative or > 60000 (NYPD scale is upper bound)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true)
+WHERE (male_officers IS NOT NULL AND (male_officers < 0 OR male_officers > 60000))
+   OR (female_officers IS NOT NULL AND (female_officers < 0 OR female_officers > 60000));
+
+-- T7: ori→cde_agencies join reachability (every ori should join)
+INSERT INTO dq_results
+SELECT 'crime', 'cde_police_employment_by_agency', 'T7_ori_join_coverage',
+  CASE WHEN missing = 0 THEN 'pass' WHEN missing <= 5 THEN 'warn' ELSE 'fail' END,
+  missing, 0, 'ORIs in this table with no matching row in cde_agencies (should be 0 or very small; new agencies mid-cadence can lag)'
+FROM (
+  SELECT COUNT(DISTINCT p.ori) AS missing
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment_by_agency', allow_moved_paths := true) p
+  LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_agencies', allow_moved_paths := true) a
+    ON a.ori = p.ori
+  WHERE a.ori IS NULL
+);
+
+-- ============================================================================
 -- cde_hate_crimes (bias/incident stats by state/year; partitioned by type/year)
 -- ============================================================================
 
