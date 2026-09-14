@@ -109,13 +109,20 @@ abstract class AbstractFdicTransformer implements ResponseTransformer {
    * banks.data.fdic.gov/api/locations — every STCNTY=00 row is a "(FRGN)"-suffixed office in
    * London, Nassau, Grand Cayman, Singapore, etc. with no US state at all), not a real county.
    * Passing it through as-is would read as a valid-looking 2-digit FIPS fragment.
+   *
+   * <p>Values are left-padded with zeros to the canonical 5-digit FIPS format. FDIC's JSON
+   * strips leading zeros from numeric-looking strings, so a state with a leading-zero FIPS
+   * (Alabama=01, Arizona=04, California=06, …) surfaces here as a 4-digit value (e.g. "4023"
+   * for Yuma County AZ) that silently breaks equi-joins against the 5-digit convention used
+   * by geo.counties and every other FIPS-keyed table in the warehouse.
    */
   protected static void putCountyFips(ObjectNode row, String col, JsonNode rec, String field) {
     JsonNode v = rec.path(field);
     if (v.isMissingNode() || v.isNull() || "00".equals(v.asText())) {
       row.putNull(col);
     } else {
-      row.put(col, v.asText());
+      String text = v.asText();
+      row.put(col, String.format("%05d", Integer.parseInt(text)));
     }
   }
 
