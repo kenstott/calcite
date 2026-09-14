@@ -114,7 +114,7 @@ ALL_MODE_GROUPS=(
   "health-who|who_gho_indicators"
   "health-trials|clinical_trials,clinical_trial_conditions,clinical_trial_interventions"
   "health-cdc|cdc_covid_vaccinations,cdc_mortality,cdc_brfss"
-  "health-cms-medicaid|cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home,cms_pos_termination_history,hospital_cost_report_financials"
+  "health-cms-medicaid|cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home,cms_nursing_home_deficiencies,cms_pos_termination_history,hospital_cost_report_financials"
   "health-rxnorm|rxnorm_drugs"
   "health-hrsa|ahrf_physician_supply"
   # SSA OASDI county beneficiary data — own group since it's a distinct source (ssa.gov) from

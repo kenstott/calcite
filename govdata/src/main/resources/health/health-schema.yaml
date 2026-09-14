@@ -2901,6 +2901,167 @@ partitionedTables:
         overwritePartitions: true
 
   # ==========================================================================
+  # CMS NURSING HOME HEALTH DEFICIENCIES — citation-level multi-year history
+  # ==========================================================================
+  - name: cms_nursing_home_deficiencies
+    # Same CMS datastore query API family as cms_nursing_home — ETag gate on HEAD.
+    freshness:
+      type: etag
+    releaseWindow:
+      months: [1,2,3,4,5,6,7,8,9,10,11,12] # CMS refreshes monthly
+    pattern: "type=cms_nursing_home_deficiencies"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS Provider Data Catalog "Health Deficiencies" (dataset r5ix-sfxw), one row per
+      citation (PK: ccn + survey_date + deficiency_tag_number + inspection_cycle).
+      Multi-year citation-level history of nursing-home health deficiencies, carrying
+      the Scope-Severity code (CMS's G–L actual-harm/immediate-jeopardy scale),
+      correction status, and inspection cycle per citation. Complements
+      cms_nursing_home (single-snapshot facility-level provider information) with the
+      trailing-window, severity-filtered citation detail needed for repeat-violation
+      analysis. Source: data.cms.gov/provider-data/dataset/r5ix-sfxw.
+
+    columns:
+      - name: ccn
+        type: string
+        nullable: false
+        comment: CMS Certification Number — PK component
+      - name: provider_name
+        type: string
+        nullable: true
+        comment: Facility legal/doing-business-as name
+      - name: address
+        type: string
+        nullable: true
+        comment: Facility street address
+      - name: city
+        type: string
+        nullable: true
+        comment: City or town
+      - name: state
+        type: string
+        nullable: true
+        comment: FK to geo.state_ref.state_abbr
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: ZIP code
+      - name: survey_date
+        type: string
+        nullable: false
+        comment: Date of the survey/inspection — PK component
+      - name: survey_type
+        type: string
+        nullable: true
+        comment: Health or Fire Safety
+      - name: deficiency_prefix
+        type: string
+        nullable: true
+        comment: F (federal) or state-specific prefix
+      - name: deficiency_category
+        type: string
+        nullable: true
+        comment: Category grouping (e.g. Resident Assessment and Care Planning Deficiencies)
+      - name: deficiency_tag_number
+        type: string
+        nullable: false
+        comment: CMS deficiency tag number — PK component
+      - name: deficiency_description
+        type: string
+        nullable: true
+        comment: Narrative description of the deficiency
+      - name: scope_severity_code
+        type: string
+        nullable: true
+        comment: CMS Scope-Severity code (A–L; G–L = actual harm / immediate jeopardy)
+      - name: deficiency_corrected
+        type: string
+        nullable: true
+        comment: Correction status (e.g. Deficient Provider has date of correction, Past Non-Compliance)
+      - name: correction_date
+        type: string
+        nullable: true
+        comment: Date the deficiency was corrected
+      - name: inspection_cycle
+        type: string
+        nullable: false
+        comment: Inspection cycle number — PK component
+      - name: standard_deficiency
+        type: string
+        nullable: true
+        comment: Y/N — cited on a standard survey
+      - name: complaint_deficiency
+        type: string
+        nullable: true
+        comment: Y/N — cited on a complaint survey
+      - name: infection_control_inspection_deficiency
+        type: string
+        nullable: true
+        comment: Y/N — cited on an infection-control focused inspection
+      - name: citation_under_idr
+        type: string
+        nullable: true
+        comment: Y/N — citation under Informal Dispute Resolution
+      - name: citation_under_iidr
+        type: string
+        nullable: true
+        comment: Y/N — citation under Independent Informal Dispute Resolution
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "cms_nursing_home_deficiencies"'
+
+    source:
+      type: http
+      url: "https://data.cms.gov/provider-data/api/1/datastore/query/r5ix-sfxw/0"
+      method: GET
+      parameters:
+        "limit": "1500"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1500
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsNursingHomeDeficienciesResponseTransformer"
+
+    dimensions:
+      type:
+        - cms_nursing_home_deficiencies
+      # Single cache-buster combo — same rationale as cms_nursing_home (see its comment).
+      year: ["${GOVDATA_CURRENT_YEAR}"]
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+
+  # ==========================================================================
   # HRSA AREA HEALTH RESOURCES FILE — county-level physician supply (annual snapshot)
   # ==========================================================================
   - name: ahrf_physician_supply
@@ -6979,6 +7140,20 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links facility state to geographic data
+
+  cms_nursing_home_deficiencies:
+    primaryKey: [ccn, survey_date, deficiency_tag_number, inspection_cycle]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links facility state to geographic data
+      - columns: [ccn]
+        targetSchema: "${HEALTH_SCHEMA_NAME:health}"
+        targetTable: cms_nursing_home
+        targetColumns: [ccn]
+        comment: Links citation to facility provider information
 
   ahrf_physician_supply:
     primaryKey: [county_fips]

@@ -1354,6 +1354,109 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/c
       WHERE total_health_deficiencies IS NOT NULL AND total_health_deficiencies <> '');
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cms_nursing_home_deficiencies
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true));
+
+-- T2: row_count (~419K citations)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T2_row_count',
+  CASE WHEN n >= 400000 THEN 'pass' ELSE 'fail' END,
+  n, 400000, 'Expected at least 400K CMS health deficiency citations'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      -- survey_type is always 'Health' (Fire Safety Deficiencies are a separate CMS dataset),
+      -- deficiency_prefix is always 'F' (federal tag) — both real constants, excluded from warn.
+      AND column_name NOT IN ('type', 'survey_type', 'deficiency_prefix')
+  )
+);
+
+-- T6: pk_nulls (ccn, survey_date, deficiency_tag_number NOT NULL)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL PK-component rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true)
+      WHERE ccn IS NULL OR survey_date IS NULL OR deficiency_tag_number IS NULL);
+
+-- T7: state coverage (citations in all 50 states + territories)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T7_state_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Distinct states with deficiency citations'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true)
+      WHERE state IS NOT NULL);
+
+-- T7: scope_severity_code values valid (A–L scale)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T7_severity_codes_valid',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'scope_severity_code outside A–L'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true)
+      WHERE scope_severity_code IS NOT NULL
+        AND scope_severity_code <> ''
+        AND scope_severity_code NOT IN ('A','B','C','D','E','F','G','H','I','J','K','L'));
+
+-- T7: serious citations present (G–L severity = actual harm / immediate jeopardy)
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T7_serious_citations_present',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
+  n, 1, 'Rows with G–L scope_severity_code'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true)
+      WHERE scope_severity_code IN ('G','H','I','J','K','L'));
+
+-- T8: PK duplication guard
+INSERT INTO dq_results
+SELECT 'health', 'cms_nursing_home_deficiencies', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate PK rows (ccn + survey_date + deficiency_tag_number + inspection_cycle)'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT ccn, survey_date, deficiency_tag_number, inspection_cycle, COUNT(*) AS cnt
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_nursing_home_deficiencies', allow_moved_paths := true)
+    GROUP BY ccn, survey_date, deficiency_tag_number, inspection_cycle
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: medicaid_drug_utilization
 -- ─────────────────────────────────────────────────────────────
 
