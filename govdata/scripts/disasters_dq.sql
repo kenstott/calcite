@@ -364,6 +364,89 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disaster
          OR (risk_national_rank IS NOT NULL AND (risk_national_rank < 0 OR risk_national_rank > 1)));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: fema_nri_earthquake_by_county (static snapshot, new 11 Sep 2026)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true));
+
+-- one row per county: 3,142 in the FEMA NRI layer (verified live at onboard)
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T2_row_count',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END, n, 3000, 'Expected ~3142 county rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true) LIMIT 3;
+
+-- earthquake_events is excluded: FEMA's current NRI layer returns null for EVERY county
+-- (verified live at onboard 2026-09-11 and again 2026-09-14 — ERQK_EVNTS is null even for
+-- San Francisco/Los Angeles), so this column is expectedly all-null, not an ingestion gap.
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'earthquake_events')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'earthquake_events')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true) WHERE county_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true)
+  GROUP BY county_fips HAVING COUNT(*) > 1));
+
+-- county_fips must be a well-formed 5-digit FIPS code
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T7_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with malformed (non-5-digit) county_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true)
+      WHERE county_fips NOT SIMILAR TO '[0-9]{5}');
+
+-- rating vocabulary is NRI's 5-value scale; percentiles are 0-100
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T7_rating_domain',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'earthquake_risk_rating outside the NRI 5-value scale'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true)
+      WHERE earthquake_risk_rating IS NOT NULL
+        AND earthquake_risk_rating NOT IN ('Very Low', 'Relatively Low', 'Relatively Moderate', 'Relatively High', 'Very High'));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T7_percentile_bounds',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with an NRI percentile outside [0,100]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true)
+      WHERE (risk_national_pctl IS NOT NULL AND (risk_national_pctl < 0 OR risk_national_pctl > 100))
+         OR (risk_state_pctl IS NOT NULL AND (risk_state_pctl < 0 OR risk_state_pctl > 100))
+         OR (earthquake_eal_score IS NOT NULL AND earthquake_eal_score < 0));
+
+-- known-exposure regression guard: San Francisco County CA sits on the San Andreas and
+-- must rate Relatively High or above; Story County IA mid-continent must rate Very Low
+-- (both verified live against the NRI at onboard)
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T7_known_exposure',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'San Francisco CA high + Story IA very-low anchor rows present'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true)
+      WHERE (county_fips = '06075' AND earthquake_risk_rating IN ('Relatively High', 'Very High'))
+         OR (county_fips = '19169' AND earthquake_risk_rating = 'Very Low'));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

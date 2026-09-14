@@ -6,7 +6,8 @@
 --         clinical_trial_conditions, clinical_trial_interventions, cdc_covid_vaccinations,
 --         cms_hospital_quality, medicaid_drug_utilization, cdc_mortality, cdc_brfss,
 --         cms_open_payments, rxnorm_drugs, who_gho_indicators, cms_pos_facilities,
---         ahrf_physician_supply
+--         ahrf_physician_supply, cms_pos_termination_history, hospital_cost_report_financials,
+--         chr_premature_death_trends
 -- All tables are Iceberg; reads via iceberg_scan.
 -- Partition columns per table:
 --   Most tables: 'type'
@@ -2099,6 +2100,228 @@ SELECT 'health', 'medicare_geographic_variation', 'T7_per_capita_plausible',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicare_geographic_variation', allow_moved_paths := true)
       WHERE total_medicare_payment_per_capita IS NOT NULL
         AND (total_medicare_payment_per_capita < 500 OR total_medicare_payment_per_capita > 50000));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cms_pos_termination_history (static snapshot; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T2_row_count',
+  CASE WHEN n >= 40000 THEN 'pass' ELSE 'fail' END, n, 40000, 'Expected >=40000 termination-history rows (44,707 at onboard, same POS facility universe as cms_pos_facilities)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL provider_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true) WHERE provider_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate provider_number rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT provider_number, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true)
+  GROUP BY provider_number HAVING COUNT(*) > 1
+));
+
+-- T7: is_terminated must be derived exactly from termination_date presence (the table
+-- comment's contract), and terminated rows must carry a plausibly-dated event
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T7_is_terminated_consistent',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows where is_terminated disagrees with termination_date presence'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true)
+      WHERE is_terminated <> (termination_date IS NOT NULL));
+
+-- T7: termination dates must be plausible — not a broken-date sentinel (pre-1900) and not
+-- future. CMS's own POS data contains one genuine legacy value (Shriners Hospitals,
+-- CCN 19038E, terminated 1963-05-07 pre-Medicare), so the bound is widened to 1900
+-- rather than Medicare's 1965 start.
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T7_termination_date_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Terminated rows with a sentinel (pre-1900) or future termination_date'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true)
+      WHERE termination_date IS NOT NULL
+        AND (termination_date < DATE '1900-01-01' OR termination_date > CURRENT_DATE));
+
+-- T7 regression guard: a real, well-known closure must be present and correctly coded —
+-- Hahnemann University Hospital (CCN 390290) closed 2019-09-06, code 01
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T7_known_closure_present',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1, 'Hahnemann University Hospital 390290 terminated 2019-09-06 code 01'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true)
+      WHERE provider_number = '390290'
+        AND is_terminated AND termination_code = '01' AND termination_date = DATE '2019-09-06');
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: hospital_cost_report_financials (CMS HCRIS, snapshot; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END, n, 5000, 'Expected >=5000 hospital cost reports (6,103 FY2023 at onboard ~ one per US hospital)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+-- T5: fiscal_year is excluded — CMS replaces this dataset in place with the newest
+-- final-settled fiscal year (FY2023 at onboard), so fiscal_year is legitimately constant
+-- across the whole table on every load (see the table comment in health-schema.yaml).
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'fiscal_year')));
+
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL provider_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true) WHERE provider_number IS NULL);
+
+-- T6 dupes: the natural key is (provider_number, fiscal_year, report_record_number) —
+-- (provider_number, fiscal_year) alone is NOT unique at source: a change-of-ownership
+-- or rename splits a hospital's fiscal year into two non-overlapping report periods
+-- (9 such CCN-pairs in FY2023, e.g. EVEREST REHABILITATION → ROGERS REHABILITATION 2023,
+-- Jan-Feb and Mar-Dec), each with a distinct report_record_number.
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (provider_number, fiscal_year, report_record_number) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT provider_number, fiscal_year, report_record_number, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true)
+  GROUP BY provider_number, fiscal_year, report_record_number HAVING COUNT(*) > 1
+));
+
+-- T7: fiscal_year in a sane window (Medicare cost reports cannot pre-date 2010-ish and
+-- cannot post-date next year); revenue of a real hospital is non-negative
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T7_fiscal_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with fiscal_year outside [2010, current year + 2]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true)
+      WHERE fiscal_year IS NOT NULL
+        AND (fiscal_year < 2010 OR fiscal_year > YEAR(CURRENT_DATE) + 2));
+
+-- T7 regression guard: a major academic medical center's headline numbers must be present —
+-- Mayo Clinic Hospital Rochester (CCN 240010) reported ~$3.70B net patient revenue, ~$1.24B
+-- net income for FY2023 (verified live at onboard)
+INSERT INTO dq_results
+SELECT 'health', 'hospital_cost_report_financials', 'T7_mayo_headline',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1, 'Mayo Clinic Hospital Rochester 240010 present with FY2023 revenue in billions'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hospital_cost_report_financials', allow_moved_paths := true)
+      WHERE provider_number = '240010' AND fiscal_year = 2023
+        AND net_patient_revenue BETWEEN 3.0e9 AND 5.0e9
+        AND net_income BETWEEN 0.5e9 AND 2.0e9);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: chr_premature_death_trends (CHR trends, snapshot; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T2_row_count',
+  CASE WHEN n >= 70000 THEN 'pass' ELSE 'fail' END, n, 70000, 'Expected >=70000 premature-death trend rows (76,378 at onboard: nation/state/county * 46 yearspans)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+-- T5: trend_break_flag and differ_flag are excluded — CHR codes both flags as exactly
+-- '1' or NULL (verified against the DQ build 2026-09-14), so each is legitimately
+-- single-valued, the same "expectedly single value" exception census applies to
+-- pep_population.density.
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'trend_break_flag', 'differ_flag')));
+
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL fips_code or yearspan rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true)
+      WHERE fips_code IS NULL OR yearspan IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (fips_code, yearspan) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT fips_code, yearspan, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true)
+  GROUP BY fips_code, yearspan HAVING COUNT(*) > 1
+));
+
+-- T7: geo_level is exactly the 3-grain vocabulary, and rate is a positive YPLL rate
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T7_geo_level_values',
+  CASE WHEN n = 3 THEN 'pass' ELSE 'warn' END, n, 3, 'Distinct geo_level values (expect nation, state, county)'
+FROM (SELECT COUNT(DISTINCT geo_level) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T7_period_end_year_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with period_end_year outside [1997, current year] (CHR trends starts 1997-1999)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true)
+      WHERE period_end_year IS NOT NULL
+        AND (period_end_year < 1997 OR period_end_year > YEAR(CURRENT_DATE)));
+
+INSERT INTO dq_results
+SELECT 'health', 'chr_premature_death_trends', 'T7_rate_plausible',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0, 'County rows with premature_death_rate outside a plausible (0, 100000] YPLL-per-100k range'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/chr_premature_death_trends', allow_moved_paths := true)
+      WHERE geo_level = 'county' AND premature_death_rate IS NOT NULL
+        AND (premature_death_rate <= 0 OR premature_death_rate > 100000));
 
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results

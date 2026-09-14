@@ -75,6 +75,7 @@ FROM (
   UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'decennial_housing',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'pep_population',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population',          allow_moved_paths := true) LIMIT 1) t)
@@ -141,6 +142,7 @@ FROM (
   UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)), 9000
   UNION ALL SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)), 10000
   UNION ALL SELECT 'decennial_housing',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',       allow_moved_paths := true)), 5000
   UNION ALL SELECT 'pep_population',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population',          allow_moved_paths := true)), 2000
@@ -195,6 +197,7 @@ SELECT 'acs_marital_status'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'acs_household_type'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_housing_tenure'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_housing_tenure_by_age' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true) LIMIT 1;
+SELECT 'acs_housing_year_built_detail' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_income_distribution'AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution',allow_moved_paths := true) LIMIT 1;
 SELECT 'decennial_housing'      AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',      allow_moved_paths := true) LIMIT 1;
 SELECT 'pep_population'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population',         allow_moved_paths := true) LIMIT 1;
@@ -243,6 +246,7 @@ INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_null_cols', '
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure_by_age', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'acs_housing_year_built_detail', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'geography');
 INSERT INTO dq_results SELECT 'census', 'acs_income_distribution', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'decennial_housing', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 -- pep_population: `density` is only provided by the <=2020 PEP vintage; the 2021+ pep/charv
@@ -301,6 +305,7 @@ INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_same_value', 
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure_by_age', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+INSERT INTO dq_results SELECT 'census', 'acs_housing_year_built_detail', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'year', 'geography');
 INSERT INTO dq_results SELECT 'census', 'acs_income_distribution', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'decennial_housing', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'pep_population', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
@@ -393,6 +398,68 @@ FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing', allow_moved_paths := true)
   WHERE total_housing_units IS NOT NULL AND total_housing_units < 0
+);
+
+-- acs_housing_year_built_detail: total_units must be >= 0
+INSERT INTO dq_results
+SELECT
+  'census', 'acs_housing_year_built_detail', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where total_units is negative'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)
+  WHERE total_units IS NOT NULL AND total_units < 0
+);
+
+-- acs_housing_year_built_detail: the ten B25034 brackets are a partition of the table's
+-- own total — they must sum to total_units exactly (verified live at onboard: Kings County
+-- NY 2023 sums to the unit; ACS B25034_002E..011E == B25034_001E by construction)
+INSERT INTO dq_results
+SELECT
+  'census', 'acs_housing_year_built_detail', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where the ten built-brackets do not sum to total_units'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)
+  WHERE total_units IS NOT NULL AND built_2020_or_later IS NOT NULL AND built_2010_to_2019 IS NOT NULL
+    AND built_2000_to_2009 IS NOT NULL AND built_1990_to_1999 IS NOT NULL AND built_1980_to_1989 IS NOT NULL
+    AND built_1970_to_1979 IS NOT NULL AND built_1960_to_1969 IS NOT NULL AND built_1950_to_1959 IS NOT NULL
+    AND built_1940_to_1949 IS NOT NULL AND built_1939_or_earlier IS NOT NULL
+    AND built_2020_or_later + built_2010_to_2019 + built_2000_to_2009 + built_1990_to_1999
+      + built_1980_to_1989 + built_1970_to_1979 + built_1960_to_1969 + built_1950_to_1959
+      + built_1940_to_1949 + built_1939_or_earlier <> total_units
+);
+
+-- acs_housing_year_built_detail: must cover all 51 US states+DC at state level
+INSERT INTO dq_results
+SELECT
+  'census', 'acs_housing_year_built_detail', 'expected_values',
+  CASE WHEN n >= 51 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '51',
+  'distinct state codes at state geography (expecting 51 — 50 states + DC)'
+FROM (
+  SELECT COUNT(DISTINCT state) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)
+  WHERE geography = 'state'
+);
+
+-- acs_housing_year_built_detail: no duplicate (year, geography, state/county_fips) rows
+INSERT INTO dq_results
+SELECT
+  'census', 'acs_housing_year_built_detail', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (year, geography, state, county) rows'
+FROM (
+  SELECT COUNT(*) AS bad FROM (
+    SELECT year, geography, state, county, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)
+    GROUP BY year, geography, state, county HAVING COUNT(*) > 1
+  )
 );
 
 -- county_fips integrity: if county is present, county_fips must be 5 characters
