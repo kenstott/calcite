@@ -4551,7 +4551,8 @@ partitionedTables:
         # idempotent. Throttling is the job of the freshness gate, not a per-run year window.
         # End is an open-ended sentinel, NOT a real cutoff: World Bank only returns years that
         # exist (<= current), so a far-future end never over-fetches and never freezes the table at
-        # a fixed year; the yearFilter (end: current) does the precise upper trim on write. The 2000
+        # a fixed year; the yearFilter's own ${GOVDATA_END_YEAR} end bound does the precise upper trim
+        # on write. The 2000
         # floor (not the start) is what bounds row count under per_page=20000 (~266 rows/yr → the
         # single-call limit is reached ~year 2075, the only real ceiling here).
         date: "2000:2100"
