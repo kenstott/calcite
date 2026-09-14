@@ -2183,10 +2183,18 @@ public class McpServer {
             + "and ordinary web research (web_search, web_fetch) with the same thoroughness and "
             + "cross-referencing an analyst with no connector at all would use for the same "
             + "question, not a lighter pass because a specialized tool exists elsewhere in your "
-            + "toolset. Measured live, 2026-09-12: a run facing a genuine gap made two shallow "
-            + "fetches and stopped, producing a thinner answer than an unaided researcher on the "
-            + "identical question — the connector having nothing to offer is not a reason to "
-            + "research less than you would with no connector at all.",
+            + "toolset. MANDATORY on a confirmed gap: read at least 5 distinct, substantive "
+            + "sources via web_fetch before treating research as complete — actual documents "
+            + "read, not search-result snippets. Measured live, TWO separate runs (2026-09-12, "
+            + "2026-09-14) facing a genuine gap each stopped after exactly 2 web_fetch calls and "
+            + "published — one producing a thinner answer than an unaided researcher on the "
+            + "identical question, the other missing the single most load-bearing fact "
+            + "(a documented policy shift) every unaided persona on the same question found. "
+            + "Two is not enough for any question with more than one sub-part — multiple "
+            + "categories, a national AND a regional figure, a cause with a documented history. "
+            + "Falling short of 5 is a signal research stopped early, not that the topic is "
+            + "thin, and the connector having nothing to offer is never a reason to research "
+            + "less than you would with no connector at all.",
             schema(externalProps, new String[]{})));
 
         ObjectNode recipeProps = MAPPER.createObjectNode();
@@ -3273,6 +3281,7 @@ public class McpServer {
                     addIfPresent(gateProblems, enforceStatisticalProvenance(secs));
                     addIfPresent(gateProblems, enforceRecurringEventRecency(rTitle, rSub, secs));
                     addIfPresent(gateProblems, enforceRecipeConsulted());
+                    addIfPresent(gateProblems, enforceResearchDepthOnGap());
                     if (!gateProblems.isEmpty()) {
                         StringBuilder combined = new StringBuilder(
                             "This report cannot be published yet -- " + gateProblems.size()
@@ -5128,6 +5137,88 @@ public class McpServer {
             + "valid outcome (the catalog has no recipe for this yet) and does not block the "
             + "publish once you have actually called it, but silently proceeding without "
             + "calling it at all does.";
+    }
+
+    /** Below this many distinct URLs fetched, a pure-web-fallback report is refused by {@link
+     *  #enforceResearchDepthOnGap()}. Chosen from two measured live failures at 1-2 fetches,
+     *  not a guess at what "enough" looks like in the abstract. */
+    private static final int MIN_FETCHES_ON_PURE_FALLBACK = 5;
+
+    /**
+     * A "pure web fallback" report -- no {@code query} call anywhere this session returned any
+     * rows, meaning askamerica's own data had nothing to contribute to this question -- gets
+     * held to two things an unaided web-only researcher couldn't skip either: actually
+     * checking whether the corpus covers this before assuming it doesn't, and then researching
+     * the open web as deeply as that researcher would need to. Measured live, THREE separate
+     * runs on the same question: 2026-09-12 and an early 2026-09-14 rerun each stopped after
+     * 1-2 {@code web_fetch} calls and published -- one producing a measurably thinner answer
+     * than an unaided persona on the identical question, the other missing the single most
+     * load-bearing fact (a documented policy shift) every unaided persona found. Advisory text
+     * on {@code suggest_external_sources} alone did not fix either -- neither run called that
+     * tool at all, so the guidance never entered its context. A hard fetch-count gate fixed
+     * the depth problem (a later 2026-09-14 rerun was refused at 2 fetches, retried at 5, and
+     * published a materially better answer) but exposed a second failure the fetch count alone
+     * didn't catch: that same corrected run skipped {@code search_catalog}/{@code list_tables}/
+     * {@code describe_table} entirely, going straight to the web without ever checking whether
+     * the corpus actually covered the question -- assuming absence instead of confirming it.
+     * Both checks are therefore gated here, not just the one that failed most recently.
+     *
+     * <p>Only engages when askamerica genuinely had nothing: any {@code query} call this
+     * session that returned at least one row means real warehouse data fed the report, and
+     * this gate does not apply, however many or few URLs were fetched or catalog calls made
+     * alongside it -- a hybrid report is not the failure mode this catches.
+     */
+    private static String enforceResearchDepthOnGap() {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        boolean productiveQuery = false;
+        boolean catalogChecked = false;
+        java.util.Set<String> fetchedUrls = new java.util.HashSet<>();
+        for (ObjectNode e : snapshot) {
+            String tool = e.path("tool").asText("");
+            if ("query".equals(tool) && e.path("rows").asInt(0) > 0) {
+                productiveQuery = true;
+            }
+            if ("search_catalog".equals(tool) || "list_tables".equals(tool)
+                    || "describe_table".equals(tool)) {
+                catalogChecked = true;
+            }
+            if ("web_fetch".equals(tool)) {
+                String url = e.path("args").path("url").asText(null);
+                if (url != null && !url.isEmpty()) {
+                    fetchedUrls.add(url);
+                }
+            }
+        }
+        if (productiveQuery) {
+            return null;
+        }
+        boolean enoughFetches = fetchedUrls.size() >= MIN_FETCHES_ON_PURE_FALLBACK;
+        if (catalogChecked && enoughFetches) {
+            return null;
+        }
+        StringBuilder msg = new StringBuilder(
+            "no query call anywhere this session returned any rows -- askamerica's own data "
+            + "had nothing to contribute to this question. ");
+        if (!catalogChecked) {
+            msg.append("search_catalog, list_tables, and describe_table were NEVER called "
+                + "this session -- before falling back to the open web, actually check the "
+                + "catalog and confirm the gap is real, rather than assuming coverage is "
+                + "absent. ");
+        }
+        if (!enoughFetches) {
+            msg.append("Only ").append(fetchedUrls.size()).append(" distinct URL(s) were "
+                + "fetched via web_fetch. A confirmed gap changes WHERE the answer comes "
+                + "from, not how hard to look for it: fetch and read at least ")
+                .append(MIN_FETCHES_ON_PURE_FALLBACK)
+                .append(" distinct, substantive sources (actual documents read, not "
+                + "search-result snippets) before publishing. The connector having nothing "
+                + "to offer is never a reason to research less than you would with no "
+                + "connector at all.");
+        }
+        return msg.toString();
     }
 
     /** Broader than {@link #DISCLOSURE_WORDS} on purpose -- this gate polices "was this
