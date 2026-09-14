@@ -1801,6 +1801,27 @@ public class McpServer {
             + "across two periods or populations of different size.",
             schema(giniProps, new String[]{"sql", "value_col"})));
 
+        ObjectNode hhiProps = MAPPER.createObjectNode();
+        hhiProps.set("sql", prop("string",
+            "SQL SELECT returning one row per unit (firm, grantee, plant) with its nonnegative "
+            + "amount column."));
+        hhiProps.set("value_col", prop("string",
+            "Numeric, nonnegative column holding each unit's amount (market share basis, "
+            + "funding, output) to measure concentration over."));
+        tools.add(
+            tool("hhi_concentration",
+            "Herfindahl-Hirschman Index (0-10,000 scale; DOJ/FTC merger-guideline concentration "
+            + "measure) for a distribution of amounts across units — sum of each unit's "
+            + "percentage-point share squared, so it is driven by the LARGEST few units rather "
+            + "than the whole distribution's shape the way gini_coefficient is. Use this "
+            + "specifically when a question asks about market/industry concentration, a "
+            + "'top player getting bigger' dynamic, or cites a published HHI threshold; use "
+            + "gini_coefficient instead when the question is about even-ness across the WHOLE "
+            + "distribution rather than the leader's share. The two can diverge — a rising HHI "
+            + "with a flat Gini means the leader is pulling ahead while everyone else stays "
+            + "the same relative to each other.",
+            schema(hhiProps, new String[]{"sql", "value_col"})));
+
         ObjectNode partialCorrProps = MAPPER.createObjectNode();
         partialCorrProps.set("sql", prop("string",
             "SQL SELECT returning the x, y, and control columns, one row per observation."));
@@ -3071,6 +3092,15 @@ public class McpServer {
                     diagnostics = r.diagnostics;
                     break;
                 }
+                case "hhi_concentration": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    log.println("[askamerica-mcp] tool=hhi_concentration value_col=" + valueCol);
+                    StatsOutput r = hhiConcentrationTool(sql, valueCol);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
                 case "partial_correlation": {
                     String sql = args.path("sql").asText();
                     String x = args.path("x").asText();
@@ -4069,8 +4099,12 @@ public class McpServer {
         }
         ArrayNode hits = Catalog.search(query.trim(), limit);
         ArrayNode extSources = ExternalSources.matchesFor(query.trim(), 5);
+        String opener = searchCatalogSessionOpener();
         if (hits.size() == 0) {
             ObjectNode empty = MAPPER.createObjectNode();
+            if (opener != null) {
+                empty.put("before_you_start", opener);
+            }
             empty.put("matches", 0);
             empty.put("query", query.trim());
             empty.put("hint",
@@ -4085,6 +4119,9 @@ public class McpServer {
             return empty.toString();
         }
         ObjectNode out = MAPPER.createObjectNode();
+        if (opener != null) {
+            out.put("before_you_start", opener);
+        }
         out.set("matches", hits);
         addUnmatchedTerms(out, query.trim(), hits);
         if (extSources.size() > 0) {
@@ -5548,6 +5585,9 @@ public class McpServer {
             new String[]{"hypothesis_test"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)Gini coefficient"),
             new String[]{"gini_coefficient"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)\\bHHI\\b|Herfindahl[- ]Hirschman"),
+            new String[]{"hhi_concentration"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)quantile binning"),
             new String[]{"quantile_binning_test"});
     }
@@ -9146,6 +9186,15 @@ public class McpServer {
         return statsResult(out, sql, java.util.Collections.<String>emptyList(), ex);
     }
 
+    private static StatsOutput hhiConcentrationTool(String sql, String valueCol) throws Exception {
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, new String[]{valueCol});
+        double[] value = ex.column(valueCol);
+        StatsEngine.HHIResult result = StatsEngine.hhiConcentration(value);
+        ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, java.util.Collections.<String>emptyList(), ex);
+    }
+
     private static StatsOutput partialCorrelationTool(String sql, String x, String y,
             List<String> controls) throws Exception {
         List<String> cols = new ArrayList<>();
@@ -9425,6 +9474,47 @@ public class McpServer {
     /** Fires the recipe reminder at most once per session, on the first search_catalog. */
     private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_REMINDED =
         new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** Fires the session-opening note at most once per session, on the first search_catalog --
+     *  same chokepoint {@link #RECIPE_REMINDED} already uses, and for the same reason: it is
+     *  where a run orients itself before choosing a method, not after. See {@link
+     *  #searchCatalogSessionOpener()}. */
+    private static final java.util.concurrent.atomic.AtomicBoolean SESSION_OPENING_SHOWN =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * A short note prepended ONCE, ahead of the matches themselves, the first time
+     * search_catalog is called this session -- content that reads as something that just
+     * happened in response to this call, not standing documentation competing with everything
+     * else in the instructions preamble or a tool description read at every tool-selection
+     * decision.
+     *
+     * <p>Two things measured live this session belong here specifically because neither has a
+     * mechanical backstop the way {@link #enforceResearchDepthOnGap} does: (1) a confirmed gap
+     * is not license to sample a few examples when the question implies a full universe --
+     * askamerica cleared every other requirement on one run while spot-checking 2 of ~164 VA
+     * facilities instead of attempting the systematic sweep an unaided persona ran against the
+     * same public API; (2) an empty or thin catalog match is not evidence the corpus lacks the
+     * answer until list_tables/describe_table confirm it.
+     *
+     * @return the note text, or null when already shown this session
+     */
+    private static String searchCatalogSessionOpener() {
+        if (!SESSION_OPENING_SHOWN.compareAndSet(false, true)) {
+            return null;
+        }
+        return "The catalog search results are below, but before you consider that a verdict on "
+            + "coverage: an empty or thin match here means keep checking (list_tables, "
+            + "describe_table) before concluding the corpus lacks the answer, not that it does. "
+            + "And whether this call finds the answer here or you end up researching the open "
+            + "web instead, hold yourself to the same standard either way -- assess "
+            + "independently, before you publish, whether what you have is an EXHAUSTIVE study "
+            + "for a question of this scope. Where the question implies a full universe (every "
+            + "state, every facility, every county), that means attempting to enumerate it, not "
+            + "sampling a few illustrative examples, regardless of which source -- this corpus "
+            + "or the web -- ends up answering it. This note appears once, at the start of this "
+            + "session.";
+    }
 
     /**
      * A standalone diagnostics envelope reminding the caller to consult the recipe catalog.

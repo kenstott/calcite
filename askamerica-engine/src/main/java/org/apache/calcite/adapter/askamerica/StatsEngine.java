@@ -2172,6 +2172,81 @@ final class StatsEngine {
         }
     }
 
+    /** Herfindahl-Hirschman Index for a distribution of nonnegative amounts (market share per
+     *  firm, funding per grantee, output per plant) — the standard antitrust/economics
+     *  concentration measure, distinct from Gini: HHI is driven by the LARGEST few shares (it's
+     *  the sum of each share squared), where Gini weighs the whole distribution's shape. Two
+     *  distributions can have the same Gini but very different HHI if one has a single dominant
+     *  player and the other doesn't. Reported on the standard 0-10,000 scale (sum of
+     *  percentage-point shares squared) used by DOJ/FTC merger-guideline thresholds, so a result
+     *  is directly comparable to published concentration benchmarks without rescaling. */
+    static HHIResult hhiConcentration(double[] value) {
+        int n = value.length;
+        if (n < 1) {
+            throw new IllegalArgumentException("hhi_concentration needs at least 1 observation, "
+                + "got " + n);
+        }
+        double total = 0;
+        for (double v : value) {
+            if (v < 0) {
+                throw new IllegalArgumentException("hhi_concentration requires nonnegative "
+                    + "values — a negative amount (e.g. a net loss) has no defined market share "
+                    + "and breaks the concentration measure; filter it out or clip to 0 before "
+                    + "calling");
+            }
+            total += v;
+        }
+        if (total == 0) {
+            throw new IllegalArgumentException("hhi_concentration: values sum to 0 — nothing to "
+                + "measure concentration over");
+        }
+        double hhi = 0;
+        double topShare = 0;
+        for (double v : value) {
+            double sharePct = 100.0 * v / total;
+            hhi += sharePct * sharePct;
+            if (sharePct > topShare) {
+                topShare = sharePct;
+            }
+        }
+        return new HHIResult(hhi, topShare, total, n);
+    }
+
+    static final class HHIResult {
+        final double hhi;
+        final double topSharePct;
+        final double total;
+        final int n;
+
+        HHIResult(double hhi, double topSharePct, double total, int n) {
+            this.hhi = hhi;
+            this.topSharePct = topSharePct;
+            this.total = total;
+            this.n = n;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("hhi", hhi);
+            out.put("top_unit_share_pct", topSharePct);
+            out.put("total", total);
+            out.put("n", n);
+            // DOJ/FTC 2023 Merger Guidelines thresholds, the standard published reference band.
+            String band = hhi < 1000 ? "unconcentrated" : hhi < 1800 ? "moderately concentrated"
+                : "highly concentrated";
+            out.put("concentration_band", band);
+            out.put("note", "HHI = sum of each unit's percentage-point share squared, "
+                + "0-10,000 scale (10,000 = one unit holds everything). Bands are the DOJ/FTC "
+                + "merger-guideline thresholds (<1000 unconcentrated, 1000-1800 moderately "
+                + "concentrated, >1800 highly concentrated) — a recognized external benchmark, "
+                + "not specific to this dataset. Unlike gini_coefficient, HHI is dominated by "
+                + "the largest few units (see top_unit_share_pct); a rising HHI with a flat "
+                + "Gini usually means the LEADER is pulling further ahead, not that the whole "
+                + "distribution is spreading unevenly.");
+            return out;
+        }
+    }
+
     /** Pearson correlation between x and y AFTER regressing out a set of control variables from
      *  each — the correlation that would remain if the controls were held fixed. With no
      *  controls this is exactly the ordinary Pearson correlation and its significance test.
