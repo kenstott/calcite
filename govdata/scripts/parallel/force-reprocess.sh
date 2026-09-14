@@ -318,13 +318,32 @@ export GOVDATA_TABLES="$TABLES"
 RUN_POOL="$SCRIPT_DIR/run-pool.sh"
 
 if ! $SKIP_HISTORICAL; then
-  SLOT="${SCHEMA}:${START_YEAR}-${END_YEAR}"
-  echo "── Historical: ${SLOT} (GOVDATA_FORCE_REPROCESS_TABLES=${TABLES}) ──"
-  if $DRY_RUN; then
-    echo "  [DRY RUN] Would run: $RUN_POOL $SLOT"
-  else
-    bash "$RUN_POOL" "$SLOT"
-  fi
+  # SEC schemas (sec_primary/sec_secondary/sec_13f) require one worker.sh invocation per
+  # single 4-digit year — worker.sh's own validation rejects a range as mode. Every other
+  # schema's EtlRunner accepts a startYear/endYear range in one invocation.
+  case "$SCHEMA" in
+    sec_primary|sec_secondary|sec_13f)
+      SLOTS=()
+      for y in $(seq "$START_YEAR" "$END_YEAR"); do
+        SLOTS+=("${SCHEMA}:${y}")
+      done
+      echo "── Historical: ${SLOTS[*]} (GOVDATA_FORCE_REPROCESS_TABLES=${TABLES}) ──"
+      if $DRY_RUN; then
+        echo "  [DRY RUN] Would run: $RUN_POOL ${SLOTS[*]}"
+      else
+        bash "$RUN_POOL" "${SLOTS[@]}"
+      fi
+      ;;
+    *)
+      SLOT="${SCHEMA}:${START_YEAR}-${END_YEAR}"
+      echo "── Historical: ${SLOT} (GOVDATA_FORCE_REPROCESS_TABLES=${TABLES}) ──"
+      if $DRY_RUN; then
+        echo "  [DRY RUN] Would run: $RUN_POOL $SLOT"
+      else
+        bash "$RUN_POOL" "$SLOT"
+      fi
+      ;;
+  esac
   echo ""
 fi
 
