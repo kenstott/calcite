@@ -1978,6 +1978,7 @@ partitionedTables:
     # BLS publishes the entire OE-program series set as TSV with no key and no daily limit,
     # avoiding the ~500/day cap on the registered api.bls.gov path. Confirmed live 5 Sep 2026:
     # rowFilter matches 160 rows (54 state-level areas x 3 occupations, minus 2 suppressed cells).
+    # Year partitioning is handled at materialization time; all years land in year=* partition.
     source:
       type: http
       url: "https://download.bls.gov/pub/time.series/oe/oe.data.1.AllData"
@@ -2004,9 +2005,9 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=state_occupation_employment/"
+        pattern: "type=state_occupation_employment/year=*/"
       partition:
-        columns: [type]
+        columns: [type, year]  # year partition enables historical backfill alongside current snapshot
       options:
         compression: snappy
         batchSize: 50000
