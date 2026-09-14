@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -169,7 +170,10 @@ public class IcebergHealSortOrderTest {
 
   @Test void compactionStillBinPacksWhenNoOrderIsDeclared() throws Exception {
     // A table that declares nothing has nothing to sort. Bin-packing is correct here and must
-    // stay cheap — inheriting must not turn into sorting-by-default.
+    // stay cheap — inheriting must not turn into sorting-by-default. Row sequence across file
+    // boundaries is not part of the contract without a declared order — scan planning promises
+    // no stable manifest order — so the checks are on content and on the absence of a sort,
+    // not on sequence.
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     assertTrue(writer.declaredSortOrder().isEmpty(), "precondition: no order declared");
 
@@ -179,8 +183,15 @@ public class IcebergHealSortOrderTest {
     List<String> before = namesIn(2024);
     writer.compactSmallFiles(128L * 1024 * 1024, 2, 128L * 1024 * 1024);
 
-    assertEquals(before, namesIn(2024),
-        "with no declared order, compaction must not reorder rows");
+    List<String> after = namesIn(2024);
+    List<String> sortedBefore = new ArrayList<>(before);
+    Collections.sort(sortedBefore);
+    List<String> sortedAfter = new ArrayList<>(after);
+    Collections.sort(sortedAfter);
+    assertEquals(sortedBefore, sortedAfter,
+        "bin-packing must not lose, duplicate, or alter rows");
+    assertNotEquals(sortedAfter, after,
+        "with no declared order, compaction must stay bin-packing, not sort");
   }
 
   @Test void recordingTheDeclaredOrderRoundTripsAndIgnoresEmpty() throws Exception {
