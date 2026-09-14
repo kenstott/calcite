@@ -32,11 +32,13 @@ import java.util.Map;
 /**
  * DataProvider for a single CFDA/assistance-listing number's award-level records
  * from USAspending {@code POST /api/v2/search/spending_by_award/}. Shared by
- * {@code broadband_reconnect_awards} (CFDA 10.752) and
- * {@code broadband_bead_state_allocations} (CFDA 11.035) — the {@code cfda_number}
- * dimension (a single-value {@code type: list}) selects which program a given
- * table pulls, so both tables reuse this one provider rather than duplicating the
- * pagination/mapping logic for what is otherwise an identical request shape.
+ * {@code broadband_reconnect_awards} (CFDA 10.752), {@code broadband_arra_awards}
+ * (CFDA 11.557 + 10.855), {@code broadband_bead_state_allocations} (CFDA 11.035),
+ * and {@code usaspending_bridge_awards} (CFDA 20.263 + 20.264) — the
+ * {@code cfda_number} dimension (a {@code type: list}, one value per fetch) selects
+ * which program a given table pulls, so every table reuses this one provider
+ * rather than duplicating the pagination/mapping logic for what is otherwise an
+ * identical request shape.
  *
  * <p>Award-type codes 02/03/04/05 (block/formula/project/cooperative-agreement
  * grants) cover both target programs; neither issues contracts or loans. Pages

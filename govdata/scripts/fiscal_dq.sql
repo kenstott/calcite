@@ -941,6 +941,53 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/b
   WHERE award_id IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- usaspending_bridge_awards (FHWA Bridge Formula Program CFDA 20.263 +
+-- Bridge Investment Program CFDA 20.264 awards; snapshot)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_bridge_awards', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_bridge_awards', allow_moved_paths := true));
+
+-- T2: row_count. Confirmed live 14 Sep 2026: 3,380 awards under CFDA 20.263 +
+-- 33 under CFDA 20.264.
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_bridge_awards', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 award rows (3413 confirmed live 14 Sep 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_bridge_awards', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_bridge_awards', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — cfda_number is a real, expected two-value column (this
+-- table is bridge-program-only by design), excluded alongside the partition column.
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_bridge_awards', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_bridge_awards', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'cfda_number')));
+
+-- awarding_agency is a real constant (DOT/FHWA runs both bridge programs),
+-- excluded alongside the partition/CFDA columns.
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_bridge_awards', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_bridge_awards', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'cfda_number', 'awarding_agency')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_bridge_awards', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL award_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_bridge_awards', allow_moved_paths := true)
+  WHERE award_id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
 -- broadband_bead_state_allocations (NTIA BEAD CFDA 11.035 awards; snapshot)
 -- ─────────────────────────────────────────────────────────────
 

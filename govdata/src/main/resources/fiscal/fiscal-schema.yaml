@@ -3735,6 +3735,137 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # USASPENDING BRIDGE AWARDS — USAspending spending_by_award (CFDA 20.263 + 20.264)
+  # ---------------------------------------------------------------------------
+  - name: usaspending_bridge_awards
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=usaspending_bridge_awards/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FHWA bridge-specific award-level grants from USAspending — one row per award,
+      with recipient, dollar amount, performance period, and recipient location
+      (county-grain via county_fips; state_abbr supports GROUP BY state totals).
+      Covers the IIJA Bridge Formula Program (CFDA 20.263, formula funds
+      apportioned to every state DOT for bridge replacement/rehabilitation) and
+      the discretionary Bridge Investment Program (CFDA 20.264, competitive large
+      -bridge awards). Verified live 2026-09-14: real large bridge projects (e.g.
+      CFDA 20.263's Vincent Thomas Bridge deck replacement in Los Angeles County
+      CA, $152.6M; CFDA 20.264's Brent Spence Bridge Corridor OH/KY, $400M).
+      recipient_name/state_abbr/county_fips are the state DOT's registered
+      address, not necessarily the bridge's physical location — the same
+      convention as this table's sibling USAspending award tables
+      (broadband_reconnect_awards, broadband_arra_awards); the award
+      description usually names the specific bridge/corridor. Closes the
+      program-level counterpart to usaspending_by_state (which carries only an
+      undifferentiated per-state total with no program breakdown): filtering
+      this table to cfda_number = '20.263' isolates Bridge Formula Program
+      dollars per state, the gap this table was built for. A full crawl each
+      run (not year-partitioned): the award-search endpoint has no reliable
+      date-filter parameter that matches how award records are dated
+      (obligation vs. performance-start vary by award), and the result set is
+      small enough (low thousands of awards across both CFDA numbers,
+      confirmed live: 3,380 for 20.263 + 33 for 20.264) that a full refresh is
+      cheap. The Competitive Highway Bridge Program (CFDA 20.267) and
+      Competitive Type 3 Highway Bridge Program (20.198) exist in the CFDA
+      catalog but had zero awarded grants as of 2026-09-14 — not included here;
+      add them if/when they start awarding. Source:
+      api.usaspending.gov/api/v2/search/spending_by_award/ (program_numbers
+      filter, award types 02/03/04/05 — grants only, no contracts/loans in
+      either program).
+
+    dimensions:
+      type:
+        - usaspending_bridge_awards
+      cfda_number:
+        type: list
+        values: ["20.263", "20.264"]
+
+    columns:
+      - name: cfda_number
+        type: string
+        nullable: false
+        comment: CFDA/Assistance Listing number (20.263 = Bridge Formula Program, 20.264 = Bridge Investment Program)
+      - name: award_id
+        type: string
+        nullable: false
+        comment: USAspending award identifier (PK)
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: Award recipient (state DOT for nearly all awards in both programs)
+      - name: award_amount
+        type: double
+        nullable: true
+        comment: Award amount (USD)
+      - name: start_date
+        type: string
+        nullable: true
+        comment: Period-of-performance start date (YYYY-MM-DD)
+      - name: end_date
+        type: string
+        nullable: true
+        comment: Period-of-performance end date (YYYY-MM-DD)
+      - name: awarding_agency
+        type: string
+        nullable: true
+        comment: Awarding federal agency (Department of Transportation/FHWA for both programs)
+      - name: description
+        type: string
+        nullable: true
+        comment: Award description as filed by the awarding agency (typically names the specific bridge/corridor)
+      - <<: *state_abbr_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: Recipient county name as reported by USAspending
+      - name: city_name
+        type: string
+        nullable: true
+        comment: Recipient city
+      - name: zip5
+        type: string
+        nullable: true
+        comment: Recipient 5-digit ZIP
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_award/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAwardSearchProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_bridge_awards/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_bridge_awards
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # BROADBAND BEAD STATE ALLOCATIONS — USAspending spending_by_award (CFDA 11.035, snapshot)
   # ---------------------------------------------------------------------------
   - name: broadband_bead_state_allocations
