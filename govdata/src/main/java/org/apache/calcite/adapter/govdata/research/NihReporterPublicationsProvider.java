@@ -64,8 +64,11 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   private static final String PROJECTS_ENDPOINT = "https://api.reporter.nih.gov/v2/projects/search";
   private static final String PUBLICATIONS_ENDPOINT = "https://api.reporter.nih.gov/v2/publications/search";
   private static final int PAGE_SIZE = 500;
-  // RePORTER's own documented ceiling: offset + limit must not exceed this.
+  // Projects endpoint: offset + limit must not exceed 14999.
   private static final int MAX_OFFSET = 14999;
+  // Publications endpoint: offset + limit must not exceed 10000 (stricter than projects).
+  // Confirmed live via curl: offset=9500 succeeds, offset=10000 returns HTTP 400.
+  private static final int MAX_PUBLICATIONS_OFFSET = 9500;
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
@@ -138,7 +141,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       idsJson.append(applIdBatch.get(i));
     }
     int offset = 0;
-    while (offset <= MAX_OFFSET) {
+    while (offset <= MAX_PUBLICATIONS_OFFSET) {
       String body = "{\"criteria\":{\"appl_ids\":[" + idsJson + "]},\"offset\":" + offset
           + ",\"limit\":" + PAGE_SIZE + "}";
       JsonNode root = postJson(PUBLICATIONS_ENDPOINT, body, rawCache,
