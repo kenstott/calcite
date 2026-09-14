@@ -352,6 +352,13 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
   # the catchup, and it still cannot run more than once per interval.
   CATCHUP_STAMP="${HOME}/.r2-sync-state/.catchup-last"
   mkdir -p "$(dirname "$CATCHUP_STAMP")"
+  # A failure that returns inside this window never got past catchup-sync-r2.sh's own
+  # schema-listing precondition check — it did no real work (a genuine full-fleet pass
+  # takes minutes, not seconds). Charging that the same 24h budget as a real failure
+  # leaves the fleet without the backstop for a day over a precondition bug that may
+  # already be fixed by the time the next cycle would have fired anyway.
+  CATCHUP_FASTFAIL_THRESHOLD="${GOVDATA_R2_CATCHUP_FASTFAIL_THRESHOLD:-60}"
+  CATCHUP_FASTFAIL_RETRY="${GOVDATA_R2_CATCHUP_FASTFAIL_RETRY:-300}"
   (
     while true; do
       _last=0
@@ -366,14 +373,22 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
         mv -f "$CATCHUP_LOG" "$CATCHUP_LOG.1"
       fi
       echo "[$(ts)] R2 catchup starting" >> "$CATCHUP_LOG"
+      _start=$(date +%s)
       if "$SCRIPT_DIR/catchup-sync-r2.sh" >> "$CATCHUP_LOG" 2>&1; then
         echo "[$(ts)] R2 catchup complete" >> "$CATCHUP_LOG"
+        date +%s > "$CATCHUP_STAMP"
       else
-        echo "[$(ts)] R2 catchup FAILED (will retry next cycle)" >> "$CATCHUP_LOG"
-        log_error "WARNING: R2 catchup sync failed (will retry next cycle)"
+        _elapsed=$(( $(date +%s) - _start ))
+        if [ "$_elapsed" -lt "$CATCHUP_FASTFAIL_THRESHOLD" ]; then
+          echo "[$(ts)] R2 catchup FAILED after ${_elapsed}s (precondition failure, retrying in ${CATCHUP_FASTFAIL_RETRY}s)" >> "$CATCHUP_LOG"
+          log_error "WARNING: R2 catchup sync failed fast (${_elapsed}s, precondition check) — retrying in ${CATCHUP_FASTFAIL_RETRY}s instead of the full interval"
+          echo $(( $(date +%s) + CATCHUP_FASTFAIL_RETRY - CATCHUP_INTERVAL )) > "$CATCHUP_STAMP"
+        else
+          echo "[$(ts)] R2 catchup FAILED (will retry next cycle)" >> "$CATCHUP_LOG"
+          log_error "WARNING: R2 catchup sync failed (will retry next cycle)"
+          date +%s > "$CATCHUP_STAMP"
+        fi
       fi
-      # Stamp on both outcomes: an unstamped failure would spin the loop on the next pass.
-      date +%s > "$CATCHUP_STAMP"
     done
   ) &
   _catchup_pid=$!
