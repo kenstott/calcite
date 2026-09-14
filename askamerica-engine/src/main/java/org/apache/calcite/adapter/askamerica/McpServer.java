@@ -1001,7 +1001,13 @@ public class McpServer {
             + "endpoint, external_sources: [...] and external_sources_caveat — the same "
             + "candidates suggest_external_sources would return for this query, surfaced here so "
             + "a coverage gap and a live alternative show up in one call instead of two. Read "
-            + "external_sources_caveat before using any of them: they are not askamerica data.",
+            + "external_sources_caveat before using any of them: they are not askamerica data. "
+            + "No matches, or matches that don't actually cover the question, is not the end of "
+            + "research — it means this corpus isn't where the answer lives, not that the "
+            + "question is unanswerable. Research it the rest of the way with web_search and "
+            + "web_fetch at the same depth and number of independent sources a competent analyst "
+            + "with no data connector at all would use — a thin answer because your own tool "
+            + "came up empty is a worse outcome than not having the tool.",
             schema(searchProps, new String[]{"query"})));
 
         ObjectNode listTablesProps = MAPPER.createObjectNode();
@@ -2172,7 +2178,15 @@ public class McpServer {
             + "cannot fill. Call this ONLY after search_catalog and describe_table show the "
             + "data is genuinely absent, or the question falls outside a table's declared "
             + "coverage window. Returns endpoint pointers and usage caveats — it does not "
-            + "fetch anything, and the results are not askamerica data.",
+            + "fetch anything, and the results are not askamerica data. A confirmed gap changes "
+            + "WHERE the answer comes from, not how hard to look for it: pursue these endpoints "
+            + "and ordinary web research (web_search, web_fetch) with the same thoroughness and "
+            + "cross-referencing an analyst with no connector at all would use for the same "
+            + "question, not a lighter pass because a specialized tool exists elsewhere in your "
+            + "toolset. Measured live, 2026-09-12: a run facing a genuine gap made two shallow "
+            + "fetches and stopped, producing a thinner answer than an unaided researcher on the "
+            + "identical question — the connector having nothing to offer is not a reason to "
+            + "research less than you would with no connector at all.",
             schema(externalProps, new String[]{})));
 
         ObjectNode recipeProps = MAPPER.createObjectNode();
