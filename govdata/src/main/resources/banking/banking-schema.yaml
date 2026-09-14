@@ -1391,10 +1391,12 @@ partitionedTables:
       Loan amounts arrive in thousands of USD from the source and are carried
       through unchanged. Joins to geo.counties via county_fips. Source:
       ffiec.gov/sites/default/files/data/cra/flat-files/{yy}exp_aggr.zip
-      (one ZIP per activity year, extracting the cra{year}_Aggr_A11.dat
-      fixed-width member; 145-char record layout parsed directly by
-      CraSmallBusinessLendingTransformer — see that class for why this table
-      cannot use the shared file/etl HTTP+FIXED_WIDTH path).
+      (one ZIP per activity year; 2016+ zips carry the per-table member
+      cra{year}_Aggr_A11.dat, earlier years a single combined exp_aggr.dat
+      holding every aggregate table — CraSmallBusinessLendingTransformer
+      handles both and filters the combined stream to A1-1 records; 116-char
+      fixed-width record layout parsed directly by that class — see it for
+      why this table cannot use the shared file/etl HTTP+FIXED_WIDTH path).
 
     dimensions:
       type:
@@ -1509,11 +1511,16 @@ partitionedTables:
       # Two-digit year in the URL — 96exp_aggr.zip through 24exp_aggr.zip.
       # {year_short} is the file-adapter's built-in 2-digit rendering of the
       # combination's year (effective_year when dataLag is set, else year).
+      # Member naming differs by era (see the table comment above): 2016+ zips
+      # carry cra{year}_Aggr_A11.dat, earlier years a combined exp_aggr.dat.
       # This host's Cloudflare gate fingerprints the TLS/HTTP client itself
       # (confirmed live: java.net.HttpURLConnection gets a 403 challenge page
       # regardless of headers; java.net.http.HttpClient over HTTP/2 does not),
-      # so the actual fetch is done by CraSmallBusinessLendingTransformer
-      # (below), which reads these headers via RequestContext rather than
+      # and it is volume-triggered (confirmed live: back-to-back requests trip
+      # it for every subsequent request; a single isolated request after a
+      # quiet period succeeds) — so the actual fetch is done by
+      # CraSmallBusinessLendingTransformer (below), which paces and retries
+      # accordingly, reading these headers via RequestContext rather than
       # HttpSource applying them — see that class's doc for the full story.
       url: "https://www.ffiec.gov/sites/default/files/data/cra/flat-files/{year_short}exp_aggr.zip"
       method: GET

@@ -54,10 +54,11 @@ import java.util.zip.ZipInputStream;
  * the source's declared {@code headers:} are read from {@link RequestContext} and
  * attached here rather than by {@code HttpSource} (matching the same "opens its
  * own connection" pattern documented on {@link NcuaBranchLocationsTransformer}).
- * The 145-char fixed-width A1-1 record layout is parsed directly, replicating
+ * The 116-char fixed-width A1-1 record layout is parsed directly, replicating
  * {@code banking/cra_aggregate_a11_layout.json}'s column positions rather than
  * routing through {@code file/etl}'s FIXED_WIDTH response path (unavailable once
- * the fetch itself is transformer-owned).
+ * the fetch itself is transformer-owned). Two eras of ZIP member naming are
+ * handled - see {@link #findAggregateA11Entry}.
  */
 public class CraSmallBusinessLendingTransformer implements StreamingResponseTransformer {
 
@@ -139,12 +140,14 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
     if (entry == null) {
       zis.close();
       // Every configured activity year (1996+) publishes an A1-1 aggregate, so a ZIP that
-      // downloaded successfully but doesn't contain the expected member is not "this year
-      // has no data" (that's what the source's own 404 already communicates, upstream in
-      // openZip) - it means this table's own name-matching assumption doesn't hold for this
-      // file. Throwing surfaces it as an error the pipeline can retry/report on, rather than
-      // silently completing with zero rows and no way to tell it apart from a real empty year.
-      throw new IOException("CRA: no *_Aggr_A11.dat entry found in " + url);
+      // downloaded successfully but doesn't contain an A1-1 member under either naming era
+      // is not "this year has no data" (that's what the source's own 404 already
+      // communicates, upstream in openZip) - it means this table's own name-matching
+      // assumption doesn't hold for this file. Throwing surfaces it as an error the
+      // pipeline can retry/report on, rather than silently completing with zero rows and
+      // no way to tell it apart from a real empty year.
+      throw new IOException(
+          "CRA: no A1-1 member (*_Aggr_A11.dat or exp_aggr.dat) found in " + url);
     }
     LOGGER.debug("CRA: streaming {} from {}", entry.getName(), url);
 
@@ -159,7 +162,7 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
         try {
           String line;
           while (pending.isEmpty() && (line = reader.readLine()) != null) {
-            if (!line.isEmpty()) {
+            if (!line.isEmpty() && isAggregateA11Line(line)) {
               pending.add(parseLine(line));
             }
           }
@@ -191,7 +194,8 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
     };
   }
 
-  private static Map<String, Object> parseLine(String line) {
+  /** Parses one 116-char fixed-width A1-1 record. Package-private for unit test access. */
+  static Map<String, Object> parseLine(String line) {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     String stateFips = null;
     String countyCode = null;
@@ -223,16 +227,30 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
     return row;
   }
 
-  /** Finds the ZIP member whose name ends with {@code _Aggr_A11.dat} (case-sensitive, matching
-   * FFIEC's own naming, e.g. {@code cra2024_Aggr_A11.dat}). */
-  private static ZipEntry findAggregateA11Entry(ZipInputStream zis, String url) throws IOException {
+  /** Finds the ZIP member carrying the A1-1 table. Two eras of member naming exist:
+   * 2016-onward expanded-aggregate zips carry one member per table, the A1-1 member named
+   * like {@code cra2016_Aggr_A11.dat}; earlier years (confirmed live for 2011 and 2013)
+   * instead carry a single combined member {@code exp_aggr.dat} holding every aggregate
+   * table (A1-1, A1-1a, A1-2/A1-2a, A2-*) concatenated - for those,
+   * {@link #isAggregateA11Line} filters the A1-1 records out of the combined stream.
+   * Package-private for unit test access. */
+  static ZipEntry findAggregateA11Entry(ZipInputStream zis, String url) throws IOException {
     ZipEntry entry;
     while ((entry = zis.getNextEntry()) != null) {
-      if (entry.getName().endsWith("_Aggr_A11.dat")) {
+      String name = entry.getName();
+      if (name.endsWith("_Aggr_A11.dat") || name.equalsIgnoreCase("exp_aggr.dat")) {
         return entry;
       }
     }
     return null;
+  }
+
+  /** True only for the A1-1 table's own records - {@code "A1-1 "} with the trailing space,
+   * which is what excludes the sibling {@code A1-1a} table (and the A1-2/A2-* tables) inside
+   * a combined {@code exp_aggr.dat} stream. A no-op filter on the modern per-table member,
+   * whose records are all A1-1. Package-private for unit test access. */
+  static boolean isAggregateA11Line(String line) {
+    return line.startsWith("A1-1 ");
   }
 
   /** Retries {@link #openZip} on a transient failure. A 404 (source hasn't published this
