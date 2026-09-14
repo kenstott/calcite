@@ -75,6 +75,19 @@ _resolve_java21() {
 GOVDATA_JAVA_BIN="$(_resolve_java21)"
 export GOVDATA_JAVA_BIN
 
+# ── rclone on PATH regardless of invocation context ─────────────────────────────
+# sync-to-r2.sh shells out to `rclone` directly (no absolute path, unlike
+# GOVDATA_JAVA_BIN above). That resolves fine from an interactive login shell, but
+# systemd's govdata-scheduled.service runs with the unit's own minimal PATH
+# (/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin), which does not
+# include ~/.local/bin — where rclone is actually installed on this box. Every
+# rclone call then silently resolves to nothing (stderr is redirected to
+# /dev/null throughout sync-to-r2.sh), and `rclone lsf` returns empty instead of
+# erroring, which sync-to-r2.sh's own empty-listing check reports as "no schemas
+# found under govdata-parquet-v1" — indistinguishable from a real MinIO outage.
+[ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:$PATH"
+export PATH
+
 # ── Worker scratch directory (must be disk-backed, not tmpfs) ──────────────────
 # Workers stage GB-scale artifacts in the JVM temp dir: source ZIPs (patents ships
 # a 384MB one), raw HTTP page caches, SEC staging batches, and DuckDB sort/join
