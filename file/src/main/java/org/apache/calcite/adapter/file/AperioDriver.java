@@ -56,16 +56,26 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
 
         String remainder = url.substring(getConnectStringPrefix().length());
 
+        Properties params = new Properties(info);
+        // Without this, a VALUES row constructor with ragged-width string literals types its
+        // column as CHAR(n) (n = widest literal) and blank-pads every shorter one, so an
+        // equi-join against a VARCHAR column silently drops every row except the literals
+        // tied for widest. Widening ragged VALUES/UNION columns to VARCHAR at the
+        // type-derivation stage avoids the padding; an explicit property or URL parameter
+        // still wins over this default.
+        if (!params.containsKey("conformance.raggedUnionTypesToVarying")) {
+            params.setProperty("conformance.raggedUnionTypesToVarying", "true");
+        }
+
         // Delegate to a plain Calcite driver throughout: super.connect would route through the
         // inherited UnregisteredDriver.connect, whose acceptsURL() uses our overridden prefix
         // ("jdbc:aperio:") and rejects the "jdbc:calcite:" URL, returning null.
         if (remainder.startsWith("model=")) {
             return new org.apache.calcite.jdbc.Driver()
-                .connect("jdbc:calcite:model=" + remainder.substring(6), info);
+                .connect("jdbc:calcite:model=" + remainder.substring(6), params);
         }
 
         String path;
-        Properties params = new Properties(info);
 
         int queryIndex = remainder.indexOf('?');
         if (queryIndex != -1) {

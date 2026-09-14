@@ -2,10 +2,10 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**263 requirements across 4 adapters.**
+**264 requirements across 4 adapters.**
 
 
-## file  (189: 159 complete, 12 in-progress, 15 proposed, 3 rejected)
+## file  (190: 160 complete, 12 in-progress, 15 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -198,6 +198,7 @@
 | [x] | FILE-187 | SHOULD | behavioral | aperio-uri / multiple directories via glob | Multiple source directories are expressed with a Java-glob, not a separate list: FileSchema resolves director… | file/AperioDriverOperandTest#globParamForwardedForMultiDire… |
 | [~] | FILE-188 | SHOULD | behavioral | aperio-uri / consumer uri emission | The consumer URI for a lake is derived by AperioDriver.deriveConsumerUri(storage, schema): the lake location … | file/AperioDriverOperandTest#deriveConsumerUriPointsAtLakeR… |
 | [x] | FILE-189 | SHOULD | behavioral | aperio-uri / persistent remote-read cache | The DuckDB query engine loads the cache_httpfs community extension by default (non-Windows; WSL included) and… | — |
+| [x] | FILE-190 | MUST | behavioral | aperio-uri / connection defaults | AperioDriver defaults conformance.raggedUnionTypesToVarying=true on the delegated Calcite connection; an expl… | file/AperioDriverConformanceTest |
 
 ## govdata  (74: 74 accepted)
 

@@ -46,6 +46,7 @@ jdbc:aperio:model=/path/to/model.json
 | `filePattern` | Glob filter (e.g. `*.csv`) | (all) | `APERIO_FILE_PATTERN` |
 | `excludePattern` | Glob exclusion pattern | | `APERIO_EXCLUDE_PATTERN` |
 | `storageType` | `s3`, `http`, or `https` | (local) | `APERIO_STORAGE_TYPE` |
+| `conformance.raggedUnionTypesToVarying` | Widen ragged VALUES/UNION string columns to VARCHAR instead of CHAR(n) blank-padding | `true` | |
 
 ### S3 parameters
 

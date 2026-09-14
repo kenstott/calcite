@@ -3618,3 +3618,24 @@
     cache. Caveats: cache_httpfs is http/s3 only (a local/SMB mount is already 'local' to DuckDB so this
     cache does not apply there) and is unavailable on native Windows (WSL is fine)."
   since: 2026-07
+
+- id: FILE-190
+  module: file
+  status: complete
+  group: aperio-uri
+  category: connection defaults
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: connection
+  description: >
+    AperioDriver defaults conformance.raggedUnionTypesToVarying=true on the delegated Calcite
+    connection; an explicit property or URL parameter overrides it. Without the default, a ragged
+    VALUES row constructor types its string column as CHAR(n) (n = widest literal) and blank-pads
+    every shorter literal, so an equi-join against a VARCHAR column silently drops every literal
+    narrower than the widest. The default widens ragged VALUES/UNION string columns to VARCHAR at
+    the type-derivation stage, the same default GovDataDriver applies to jdbc:govdata: connections.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (connect)
+  tests:
+    - file/AperioDriverConformanceTest
+  since: 2026-09
