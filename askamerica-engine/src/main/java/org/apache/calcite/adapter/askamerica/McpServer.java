@@ -1026,9 +1026,14 @@ public class McpServer {
             + "No matches, or matches that don't actually cover the question, is not the end of "
             + "research — it means this corpus isn't where the answer lives, not that the "
             + "question is unanswerable. Research it the rest of the way with web_search and "
-            + "web_fetch at the same depth and number of independent sources a competent analyst "
-            + "with no data connector at all would use — a thin answer because your own tool "
-            + "came up empty is a worse outcome than not having the tool.",
+            + "web_fetch, and before publishing assess for yourself, independently, whether what "
+            + "you have constitutes an EXHAUSTIVE study for a question of this scope — not "
+            + "whether you did a passing amount. If the question implies a full universe (every "
+            + "state, every facility, every county), a handful of illustrative examples is not "
+            + "exhaustive, even where every other requirement is satisfied; a competent analyst "
+            + "with no connector at all would attempt to enumerate that universe, not sample it. "
+            + "A thin answer because your own tool came up empty is a worse outcome than not "
+            + "having the tool.",
             schema(searchProps, new String[]{"query"})));
 
         ObjectNode listTablesProps = MAPPER.createObjectNode();
@@ -2204,18 +2209,21 @@ public class McpServer {
             + "and ordinary web research (web_search, web_fetch) with the same thoroughness and "
             + "cross-referencing an analyst with no connector at all would use for the same "
             + "question, not a lighter pass because a specialized tool exists elsewhere in your "
-            + "toolset. MANDATORY on a confirmed gap: read at least 5 distinct, substantive "
-            + "sources via web_fetch before treating research as complete — actual documents "
-            + "read, not search-result snippets. Measured live, TWO separate runs (2026-09-12, "
-            + "2026-09-14) facing a genuine gap each stopped after exactly 2 web_fetch calls and "
-            + "published — one producing a thinner answer than an unaided researcher on the "
-            + "identical question, the other missing the single most load-bearing fact "
-            + "(a documented policy shift) every unaided persona on the same question found. "
-            + "Two is not enough for any question with more than one sub-part — multiple "
-            + "categories, a national AND a regional figure, a cause with a documented history. "
-            + "Falling short of 5 is a signal research stopped early, not that the topic is "
-            + "thin, and the connector having nothing to offer is never a reason to research "
-            + "less than you would with no connector at all.",
+            + "toolset. Before publishing, assess independently whether your research "
+            + "constitutes an EXHAUSTIVE study for a question of this scope — actual documents "
+            + "read via web_fetch, not search-result snippets, and where the question implies a "
+            + "full universe (every state, every facility, every county), an attempt to "
+            + "enumerate that universe rather than a handful of illustrative examples. Measured "
+            + "live, TWO separate runs (2026-09-12, 2026-09-14) facing a genuine gap each "
+            + "stopped after exactly 2 web_fetch calls and published — one producing a thinner "
+            + "answer than an unaided researcher on the identical question, the other missing "
+            + "the single most load-bearing fact (a documented policy shift) every unaided "
+            + "persona on the same question found. Two is never enough for a question with more "
+            + "than one sub-part — multiple categories, a national AND a regional figure, a "
+            + "cause with a documented history — and clearing whatever minimum this session "
+            + "happens to enforce is not itself evidence the research is complete: the "
+            + "connector having nothing to offer is never a reason to research less than you "
+            + "would with no connector at all.",
             schema(externalProps, new String[]{})));
 
         ObjectNode recipeProps = MAPPER.createObjectNode();
@@ -5231,13 +5239,18 @@ public class McpServer {
         }
         if (!enoughFetches) {
             msg.append("Only ").append(fetchedUrls.size()).append(" distinct URL(s) were "
-                + "fetched via web_fetch. A confirmed gap changes WHERE the answer comes "
-                + "from, not how hard to look for it: fetch and read at least ")
+                + "fetched via web_fetch -- below even the bare minimum sanity-check floor of ")
                 .append(MIN_FETCHES_ON_PURE_FALLBACK)
-                .append(" distinct, substantive sources (actual documents read, not "
-                + "search-result snippets) before publishing. The connector having nothing "
-                + "to offer is never a reason to research less than you would with no "
-                + "connector at all.");
+                .append(" this session enforces. A confirmed gap changes WHERE the answer "
+                + "comes from, not how hard to look for it: fetch and read enough distinct, "
+                + "substantive sources (actual documents, not search-result snippets) to make "
+                + "this an EXHAUSTIVE study for a question of this scope, not a passing amount "
+                + "-- where the question implies a full universe (every state, every facility, "
+                + "every county), that means attempting to enumerate it, not sampling a few "
+                + "examples. Clearing this floor is not itself evidence the research is "
+                + "complete, only that it isn't the worst failure mode measured in production. "
+                + "The connector having nothing to offer is never a reason to research less "
+                + "than you would with no connector at all.");
         }
         return msg.toString();
     }
