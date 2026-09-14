@@ -292,7 +292,7 @@ partitionedTables:
         format: json
       rateLimit:
         requestsPerSecond: 10.0
-        retryOn: [429, 503]
+        retryOn: [403, 429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
@@ -393,7 +393,7 @@ partitionedTables:
         format: json
       rateLimit:
         requestsPerSecond: 10.0
-        retryOn: [429, 503]
+        retryOn: [403, 429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
@@ -487,7 +487,7 @@ partitionedTables:
         format: json
       rateLimit:
         requestsPerSecond: 10.0
-        retryOn: [429, 503]
+        retryOn: [403, 429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
@@ -624,7 +624,7 @@ partitionedTables:
         format: json
       rateLimit:
         requestsPerSecond: 10.0
-        retryOn: [429, 503]
+        retryOn: [403, 429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
