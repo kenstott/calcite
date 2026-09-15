@@ -5576,6 +5576,23 @@ public class McpServer {
             + "regression (?:of|predicting|shows|showed)|test(?:ed)? (?:for|whether)|"
             + "p\\s*[<=]\\s*0|p-value");
 
+    /** Marks a statistical-method mention as an EXTERNAL source's result, not a claim that
+     *  askamerica itself ran the method this session — a citation like "Weill (2023) finds a
+     *  diff-in-differences..." or "a Federal Reserve working paper's DiD result" reads as a
+     *  run-claim to {@link #STAT_CLAIM_WORDS} (it contains "finds"/"result") with no way to
+     *  tell it apart from "we computed this" by verb shape alone. Measured live (q173,
+     *  2026-09-15): a report correctly attributing a Fed working paper's own DiD finding was
+     *  rejected nine times in a row by {@link #enforceStatisticalProvenance} before the model
+     *  worked around it by rewording away from any verb this gate recognizes — the guard was
+     *  right that no {@code diff_in_diff} call backed the number, but wrong that this needed
+     *  policing at all, since the report never claimed askamerica ran it. A citation marker
+     *  anywhere in the same window defuses the check the way an in-session tool call would. */
+    private static final java.util.regex.Pattern EXTERNAL_SOURCE_ATTRIBUTION = java.util.regex.Pattern
+        .compile("(?i)\\((?:19|20)\\d{2}\\)|et al\\.?|\\bworking paper\\b|\\bpaper'?s\\b|"
+            + "\\bstudy'?s\\b|\\bstudies\\b|\\baccording to\\b|\\bpublished (?:in|by)\\b|"
+            + "\\bresearchers?\\b|\\bpress release\\b|\\bjournal\\b|\\banalysis by\\b|"
+            + "\\bfinding(?:s)? (?:from|by|in)\\b|\\breport (?:from|by)\\b|\\bcited\\b");
+
     /** Named statistical method -> the MCP tool(s) that actually perform it. A report claiming
      *  one of these ran needs a matching call somewhere in {@code calls.jsonl}; naming the
      *  method as a general concept with no run-claim verb nearby is not policed. */
@@ -5655,7 +5672,9 @@ public class McpServer {
                 }
                 int winStart = Math.max(0, mm.start() - DISCLOSURE_PROXIMITY_CHARS);
                 int winEnd = Math.min(body.length(), mm.end() + DISCLOSURE_PROXIMITY_CHARS);
-                if (STAT_CLAIM_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                String window = body.substring(winStart, winEnd);
+                if (STAT_CLAIM_WORDS.matcher(window).find()
+                        && !EXTERNAL_SOURCE_ATTRIBUTION.matcher(window).find()) {
                     unsupported.add(mm.group().trim() + " (needs one of: "
                         + String.join(", ", ent.getValue()) + ")");
                 }
