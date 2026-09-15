@@ -42,6 +42,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -63,6 +64,8 @@ public class IcebergCompactionSortSmokeTest {
   private Table table;
   private StorageProvider storageProvider;
 
+  private static final String BUDGET_PROPERTY = "calcite.iceberg.sort.memory.budget.bytes";
+
   private static final Schema SCHEMA = new Schema(
       Types.NestedField.optional(1, "name", Types.StringType.get()),
       Types.NestedField.optional(2, "id", Types.IntegerType.get()),
@@ -83,19 +86,34 @@ public class IcebergCompactionSortSmokeTest {
 
   /** One row as the writer's map form. */
   private static Map<String, Object> row(String name, int id) {
+    return row(name, id, 2024);
+  }
+
+  /** One row in a given year partition, as the writer's map form. */
+  private static Map<String, Object> row(String name, int id, int year) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("name", name);
     m.put("id", id);
-    m.put("year", 2024);
+    m.put("year", year);
     return m;
+  }
+
+  private static Map<String, String> partitionOf(int year) {
+    Map<String, String> partition = new HashMap<>();
+    partition.put("year", String.valueOf(year));
+    return partition;
   }
 
   /** Writes one small file per call so compaction has several to merge. */
   private void writeFile(IcebergTableWriter writer, List<Map<String, Object>> rows)
       throws Exception {
-    Map<String, String> partition = new HashMap<>();
-    partition.put("year", "2024");
-    DataFile file = writer.writeRecords(rows, partition);
+    writeFile(writer, 2024, rows);
+  }
+
+  /** Writes one small file into the given year partition. */
+  private void writeFile(IcebergTableWriter writer, int year, List<Map<String, Object>> rows)
+      throws Exception {
+    DataFile file = writer.writeRecords(rows, partitionOf(year));
     assertNotNull(file, "each write should produce a data file");
     table.newAppend().appendFile(file).commit();
   }
@@ -190,5 +208,93 @@ public class IcebergCompactionSortSmokeTest {
     List<String> actual = new ArrayList<>(after);
     Collections.sort(actual);
     assertEquals(expected, actual, "an unsortable sortOrder must still preserve every row");
+  }
+
+  @Test void overBudgetCompactionSortsViaTheExternalMerge() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    // Six files whose rows interleave across the whole alphabet, so a correct result cannot
+    // come from any single run being emitted in order.
+    writeFile(writer, Arrays.asList(row("zebra", 1), row("alpha", 2)));
+    writeFile(writer, Arrays.asList(row("mango", 3), row("beta", 4)));
+    writeFile(writer, Arrays.asList(row("yak", 5), row("cherry", 6)));
+    writeFile(writer, Arrays.asList(row("delta", 7), row("walrus", 8)));
+    writeFile(writer, Arrays.asList(row("echo", 9), row("violet", 10)));
+    writeFile(writer, Arrays.asList(row("foxtrot", 11), row("umbra", 12)));
+
+    List<String> expected = readNamesInFileOrder();
+    Collections.sort(expected);
+
+    // A 1-byte budget forces the compaction down the spill-and-merge path — the case that
+    // previously WARNed and rewrote unsorted.
+    String previous = System.getProperty(BUDGET_PROPERTY);
+    System.setProperty(BUDGET_PROPERTY, "1");
+    int compacted;
+    try {
+      compacted = writer.compactSmallFiles(
+          128L * 1024 * 1024, 2, 100L * 1024 * 1024, 7, Arrays.asList("name"));
+    } finally {
+      if (previous == null) {
+        System.clearProperty(BUDGET_PROPERTY);
+      } else {
+        System.setProperty(BUDGET_PROPERTY, previous);
+      }
+    }
+
+    assertEquals(1, compacted, "the single year=2024 partition should be compacted");
+    assertEquals(expected, readNamesInFileOrder(),
+        "over-budget compaction must still sort, via the external merge");
+    table.refresh();
+    assertEquals("name", table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
+        "every live file was rewritten in order, so the table must record the claim");
+  }
+
+  @Test void compactionRecordsSortedByWhenEveryPartitionIsRewrittenInOrder() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));
+    writeFile(writer, 2024, Arrays.asList(row("mango", 3, 2024), row("beta", 4, 2024)));
+    writeFile(writer, 2023, Arrays.asList(row("delta", 3, 2023), row("apple", 4, 2023)));
+    writeFile(writer, 2023, Arrays.asList(row("yak", 5, 2023), row("cherry", 6, 2023)));
+
+    int compacted = writer.compactSmallFiles(
+        128L * 1024 * 1024, 2, 100L * 1024 * 1024, 7, Arrays.asList("name"));
+
+    assertEquals(2, compacted, "both partitions should be compacted");
+    table.refresh();
+    assertEquals("name", table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
+        "a run that re-sorts every live file of every partition records the claim");
+  }
+
+  @Test void compactionRecordsNothingWhenAPartitionIsLeftUntouched() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));
+    writeFile(writer, 2024, Arrays.asList(row("mango", 3, 2024), row("beta", 4, 2024)));
+    // One file in year=2023: below minFilesToCompact, so that partition is not rewritten and
+    // its order is unknown to this run.
+    writeFile(writer, 2023, Arrays.asList(row("delta", 3, 2023), row("apple", 4, 2023)));
+
+    int compacted = writer.compactSmallFiles(
+        128L * 1024 * 1024, 2, 100L * 1024 * 1024, 7, Arrays.asList("name"));
+
+    assertEquals(1, compacted, "only the year=2024 partition qualifies");
+    table.refresh();
+    assertNull(table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
+        "a run that leaves any partition untouched must not claim the table is sorted");
+  }
+
+  @Test void replacePartitionsInvalidatesSortedBy() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeFile(writer, 2024, Arrays.asList(row("zebra", 1), row("alpha", 2)));
+    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
+    table.refresh();
+    assertEquals("name", table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
+        "precondition: the table records itself as sorted");
+
+    DataFile replacement = writer.writeRecords(
+        Arrays.asList(row("omega", 3), row("bravo", 4)), partitionOf(2024));
+    writer.replacePartitionsDataFiles(Collections.singletonList(replacement));
+
+    table.refresh();
+    assertNull(table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
+        "a wholesale replacement discards the order the replaced files had");
   }
 }

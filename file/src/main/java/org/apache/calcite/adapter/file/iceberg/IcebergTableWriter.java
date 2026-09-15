@@ -276,11 +276,22 @@ public class IcebergTableWriter {
   /**
    * Replaces all data in the affected partitions with the given files.
    * Use for reference tables that should be fully overwritten each run.
+   *
+   * <p>A wholesale replacement discards whatever order the replaced files had, so the
+   * {@link #SORTED_BY_PROPERTY} claim — "the data was fully rewritten in this order" — stops
+   * holding the moment a partition is replaced and is removed first. The post-write compaction
+   * records it again if it re-sorts every live file; a later heal is otherwise not misled into
+   * a no-op by a stale claim.
    */
   public void replacePartitionsDataFiles(List<DataFile> allDataFiles) {
     if (allDataFiles.isEmpty()) {
       LOGGER.debug("No data files to replace partitions");
       return;
+    }
+    if (table.properties().containsKey(SORTED_BY_PROPERTY)) {
+      underCommitLock(() -> table.updateProperties().remove(SORTED_BY_PROPERTY).commit());
+      LOGGER.info("Invalidated {} on {}: partition data is being wholesale-replaced",
+          SORTED_BY_PROPERTY, table.name());
     }
     LOGGER.info("Replace-partitions committing {} data files to Iceberg table {}",
         allDataFiles.size(), table.name());
@@ -1517,10 +1528,16 @@ public class IcebergTableWriter {
    *
    * <p>Safe to do in memory here, and only here: this path operates exclusively on files below
    * {@code smallFileSizeBytes} (10MB by default), so a partition's candidate set is bounded by
-   * that times the file count rather than by table size. the sort memory budget caps
-   * it regardless, and exceeding the cap falls back to the previous streaming rewrite — still a
-   * correct compaction, just unsorted. Rewriting already-compacted large files needs a merge
-   * that spills, and is deliberately NOT attempted here.
+   * that times the file count rather than by table size. The sort memory budget caps it
+   * regardless; over the cap the same file set is rewritten by the external merge, which
+   * spill-sorts with heap bounded by one sorted run plus the merge frontier rather than by
+   * partition size. Rewriting already-compacted large files is deliberately NOT attempted here.
+   *
+   * <p>When a run rewrites every live file of every partition in {@code sortOrder} — the shape
+   * of a wholesale rebuild, whose fresh files are all small — the table is left fully sorted
+   * and records {@link #SORTED_BY_PROPERTY}, so a subsequent heal is a correct no-op. A run
+   * that leaves any partition partially or wholly untouched records nothing: rows it did not
+   * rewrite are rows it knows nothing about the order of.
    */
   public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
       long smallFileSizeBytes, int retentionDays, java.util.List<String> sortOrder)
@@ -1544,6 +1561,12 @@ public class IcebergTableWriter {
     }
 
     int compactedPartitions = 0;
+    // Tracks whether this run is rewriting every live file of every partition in sortOrder —
+    // the only condition under which the table may record the sorted-by claim. A partition left
+    // untouched (too few small files) or only partially rewritten (some files above the small
+    // threshold) keeps rows whose order this run knows nothing about.
+    boolean fullySorted = sortOrder != null && !sortOrder.isEmpty()
+        && !partitionFiles.isEmpty();
     for (Map.Entry<String, List<FileScanTask>> entry : partitionFiles.entrySet()) {
       String partitionKey = entry.getKey();
       List<FileScanTask> tasks = entry.getValue();
@@ -1559,11 +1582,28 @@ public class IcebergTableWriter {
       if (smallFiles.size() >= minFilesToCompact) {
         LOGGER.info("Compacting partition {} with {} small files", partitionKey, smallFiles.size());
         try {
-          compactPartition(smallFiles, targetFileSizeBytes, sortOrder);
+          boolean sorted = compactPartition(smallFiles, targetFileSizeBytes, sortOrder);
           compactedPartitions++;
+          if (!sorted || smallFiles.size() != tasks.size()) {
+            fullySorted = false;
+          }
         } catch (Throwable e) {
           LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
+          fullySorted = false;
         }
+      } else {
+        fullySorted = false;
+      }
+    }
+
+    if (fullySorted) {
+      String sortedBy = String.join(",", sortOrder);
+      if (!sortedBy.equals(table.properties().get(SORTED_BY_PROPERTY))) {
+        // A properties commit under the same lock as every other metadata commit here — the
+        // Hadoop catalog's version-hint pointer is non-atomic (see recordDeclaredSortOrder).
+        underCommitLock(() -> table.updateProperties().set(SORTED_BY_PROPERTY, sortedBy).commit());
+        LOGGER.info("Recorded {}={} on {}: every live file was rewritten in that order",
+            SORTED_BY_PROPERTY, sortedBy, table.name());
       }
     }
 
@@ -1750,11 +1790,11 @@ public class IcebergTableWriter {
    * record per run resident. Peak heap is therefore bounded by the larger of one input file and
    * the merge frontier, not by partition size.
    *
-   * @param force bypasses the {@link #SORTED_BY_PROPERTY} idempotency check. Nothing invalidates
-   *     that property if the table's data is later replaced wholesale (a full rebuild after a
-   *     schema/column-set change, e.g.), so it can go stale and falsely claim already-sorted
-   *     while the fresh files are actually unordered. Use only after confirming that live (e.g.
-   *     via file-level min/max ranges overlapping instead of forming disjoint slices).
+   * @param force bypasses the {@link #SORTED_BY_PROPERTY} idempotency check. Wholesale
+   *     replacement through {@link #replacePartitionsDataFiles} removes the property before
+   *     committing, so a stale claim is possible only when data changed without it — an
+   *     ordinary append, say. Use only after confirming staleness live (e.g. via file-level
+   *     min/max ranges overlapping instead of forming disjoint slices).
    * @return number of partitions rewritten
    */
   public int healSortOrder(java.util.List<String> sortOrder, long targetFileSizeBytes,
@@ -1829,7 +1869,7 @@ public class IcebergTableWriter {
    * <p>The runs are local Parquet with the table's own schema, so the same reader and writer
    * serve both passes and there is no bespoke spill format to keep in sync with schema changes.
    */
-  private void rewritePartitionExternallySorted(List<FileScanTask> files,
+  private boolean rewritePartitionExternallySorted(List<FileScanTask> files,
       long targetFileSizeBytes, java.util.List<String> sortOrder) throws IOException {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
@@ -1847,7 +1887,7 @@ public class IcebergTableWriter {
       totalBytes += task.file().fileSizeInBytes();
     }
     if (totalRecords == 0) {
-      return;
+      return false;
     }
 
     StructLike partitionData = files.get(0).file().partition();
@@ -1881,7 +1921,7 @@ public class IcebergTableWriter {
         }
       }
       if (runs.isEmpty()) {
-        return;
+        return false;
       }
       LOGGER.info("External sort: {} runs spilled to {}", runs.size(), spillDir);
 
@@ -1954,7 +1994,7 @@ public class IcebergTableWriter {
 
       if (newFiles.isEmpty()) {
         LOGGER.warn("External sort produced no files for partition; leaving it untouched");
-        return;
+        return false;
       }
       LOGGER.info("External sort wrote {} records to {} files", written, newFiles.size());
 
@@ -1981,6 +2021,7 @@ public class IcebergTableWriter {
         LOGGER.debug("Spill dir {} not removed (may hold files from a failed run)", spillDir);
       }
     }
+    return true;
   }
 
   /** One open sorted run plus its current head record, for the merge queue. */
@@ -2015,8 +2056,8 @@ public class IcebergTableWriter {
   /**
    * Above this, a partition is not sorted in memory.
    *
-   * <p>Compaction falls back to an unsorted rewrite; heal switches to the external merge. Tunable
-   * via {@code calcite.iceberg.sort.memory.budget.bytes} because the right value depends on the
+   * <p>Both compaction and heal switch to the external merge over the budget. Tunable via
+   * {@code calcite.iceberg.sort.memory.budget.bytes} because the right value depends on the
    * heap the ETL worker was given, which this class cannot know — and because a test needs to
    * force the external path without materialising half a gigabyte.
    */
@@ -2077,10 +2118,10 @@ public class IcebergTableWriter {
     return 512L * 1024 * 1024;
   }
 
-  private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes,
+  private boolean compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes,
       java.util.List<String> sortOrder) throws IOException {
     if (smallFiles.isEmpty()) {
-      return;
+      return false;
     }
 
     Schema schema = table.schema();
@@ -2098,7 +2139,7 @@ public class IcebergTableWriter {
     }
 
     if (totalRecords == 0) {
-      return;
+      return false;
     }
 
     // Java reader: uses table.io() FileIO which has S3 credentials already configured
@@ -2120,20 +2161,21 @@ public class IcebergTableWriter {
     int totalWritten = 0;
 
     // Sorting requires seeing every row before writing the first, so the rows are buffered.
-    // Bounded by the small-file threshold (these are all <10MB files) and hard-capped by
-    // the sort memory budget; over the cap, sorting is skipped rather than risking the heap.
+    // Bounded by the small-file threshold (these are all <10MB files), with the sort memory
+    // budget as a hard cap; over the cap the rewrite goes through the external merge, which
+    // spill-sorts the same file set with heap bounded by one run plus the merge frontier.
     List<Record> sortBuffer = null;
     java.util.Comparator<Record> sortComparator = null;
+    boolean sorted = false;
     if (sortOrder != null && !sortOrder.isEmpty()) {
-      if (!fitsInSortMemory(totalBytes)) {
-        LOGGER.warn("Partition holds {} bytes of small files, above the {} byte sort budget — "
-            + "compacting UNSORTED. Files are still merged; min/max pruning on {} will not "
-            + "improve.", totalBytes, sortMemoryBudgetBytes(), sortOrder);
-      } else {
-        sortComparator = recordComparator(schema, sortOrder);
-        if (sortComparator != null) {
-          sortBuffer = new ArrayList<>((int) Math.min(totalRecords, Integer.MAX_VALUE));
-        }
+      sortComparator = recordComparator(schema, sortOrder);
+      if (sortComparator != null && !fitsInSortMemory(totalBytes)) {
+        sorted = rewritePartitionExternallySorted(smallFiles, targetFileSizeBytes, sortOrder);
+        return sorted;
+      }
+      if (sortComparator != null) {
+        sortBuffer = new ArrayList<>((int) Math.min(totalRecords, Integer.MAX_VALUE));
+        sorted = true;
       }
     }
 
@@ -2241,7 +2283,7 @@ public class IcebergTableWriter {
 
     if (newFiles.isEmpty()) {
       LOGGER.warn("No records written during compaction");
-      return;
+      return false;
     }
 
     LOGGER.info("Java compaction wrote {} records to {} files", totalWritten, newFiles.size());
@@ -2264,6 +2306,7 @@ public class IcebergTableWriter {
     });
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
+    return sorted;
   }
 
 
