@@ -562,7 +562,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 861886
-      checkedAt: "2026-09-12T00:16:38Z"
+      checkedAt: "2026-09-15T21:55:43Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Month (GSOM) data. Includes temperature
@@ -668,8 +668,8 @@ partitionedTables:
       maxYear: 2025
       distinctYears: 17
       contiguous: true
-      rowCount: 820971
-      checkedAt: "2026-09-12T00:16:39Z"
+      rowCount: 820949
+      checkedAt: "2026-09-15T21:55:45Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Year (GSOY) data — annual temperature,
@@ -864,8 +864,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 96114838
-      checkedAt: "2026-09-12T00:16:43Z"
+      rowCount: 127994838
+      checkedAt: "2026-09-15T21:55:55Z"
     partitions: *standard_partitions
     comment: >
       NOAA GHCN-Daily station observations from NCEI annual bulk files
@@ -988,7 +988,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 2744712
-      checkedAt: "2026-09-12T00:16:45Z"
+      checkedAt: "2026-09-15T21:55:58Z"
     partitions: *drought_partitions
     comment: >
       National Drought Monitor weekly county-level drought severity from the USDM API
@@ -1110,8 +1110,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 16
       contiguous: true
-      rowCount: 3729954
-      checkedAt: "2026-09-12T00:16:48Z"
+      rowCount: 3736644
+      checkedAt: "2026-09-15T21:56:07Z"
     partitions: *hms_partitions
     comment: >
       NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
@@ -1215,8 +1215,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 459507
-      checkedAt: "2026-09-12T00:16:51Z"
+      rowCount: 459870
+      checkedAt: "2026-09-15T21:56:13Z"
     comment: >
       Raw NOAA HMS smoke plume polygon geometries retained for spatial re-analysis.
       One row per smoke polygon per day. Geometry stored as WKT for direct use with
