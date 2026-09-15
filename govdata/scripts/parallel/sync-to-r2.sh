@@ -14,7 +14,7 @@
 # last completed slice instead of re-scanning the backlog (the failure mode that let an
 # 11-day backlog wedge indefinitely — one giant --max-age pass that kept erroring out before
 # it ever reached the sentinel write). Slice width is GOVDATA_R2_SYNC_SLICE seconds
-# (default 6h): smaller slices stamp progress more often and bound the retry window a
+# (default 24h): smaller slices stamp progress more often and bound the retry window a
 # persistent error (e.g. an R2 502) can wedge to one slice.
 #
 # Live ETL writers are not held for or specially detected. A file a writer's own compaction
@@ -289,6 +289,27 @@ if [ -n "$SCHEMAS_FILTER" ]; then
     exit 2
   fi
   _schemas=("${_filtered[@]}")
+fi
+
+# Move known high-velocity, continuously-written schemas to the front of the walk. Strict
+# alphabetical order means a schema with live always-on ETL workers (e.g. sec) sits behind
+# every slower/larger schema that happens to sort earlier, so its pointer publish — the whole
+# point of a "minutes-fresh" pass — waits on all of them first. Reordering costs nothing (the
+# schema list is already in hand) and does not change per-schema correctness, since each
+# schema's sentinel and pin logic are independent of visit order.
+PRIORITY_SCHEMAS="${GOVDATA_R2_SYNC_PRIORITY_SCHEMAS:-sec}"
+if [ -n "$PRIORITY_SCHEMAS" ]; then
+  IFS=', ' read -r -a _priority <<< "$PRIORITY_SCHEMAS"
+  _head=()
+  _tail=()
+  for _s in "${_schemas[@]}"; do
+    _is_priority=false
+    for _p in "${_priority[@]}"; do
+      [ "$_s" = "$_p" ] && { _is_priority=true; break; }
+    done
+    if $_is_priority; then _head+=("$_s"); else _tail+=("$_s"); fi
+  done
+  _schemas=("${_head[@]}" "${_tail[@]}")
 fi
 
 log_info "sync-to-r2: ${#_schemas[@]} schema(s); slice=${SLICE}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
