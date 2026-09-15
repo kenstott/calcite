@@ -125,10 +125,19 @@ case "$MODE" in
     ;;
 
   daily)
-    # Refresh: run every table. Each self-manages first-load-vs-incremental and its own
-    # cadence from its dataset_type / freshness / releaseWindow config (empty enabledTables = all).
+    # Refresh: run every table except the three NVD pub-date-partitioned ones
+    # (vulnerabilities / vulnerability_cwes / vulnerability_cpes). Those use
+    # materialize.iceberg.overwritePartitions with batchPartitionColumns
+    # [type, year, quarter] and each self-manages via pubStartDate/pubEndDate's
+    # narrow tip window (tipDays: 90) — dynamic-partition-overwrite semantics
+    # replace an entire (year, quarter) partition with whatever the tip window's
+    # rows contain for it, so a small daily batch touching an old NVD-revised
+    # CVE would wipe that partition's full historical row count. historical
+    # mode's full-range window is the only mode that may safely touch them; see
+    # its case below.
     if should_run "cyber_vuln"; then
-      run_cyber_model "cyber_vuln" "vuln-$MODE" ''
+      run_cyber_model "cyber_vuln" "vuln-$MODE" \
+        '"cwe_catalog","kev_catalog","kev_cwes","osv_vulnerabilities","vuln_cross_refs","advisories"'
     fi
     if should_run "cyber_threat"; then
       run_cyber_model "cyber_threat" "threat-$MODE" ''
