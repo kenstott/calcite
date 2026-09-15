@@ -396,18 +396,24 @@ public class EntityBridgeListener implements TableLifecycleListener {
     long orgBridgeRowCount = writeTableBridges("entity_org_bridge", orgBridgeIter, writeBase);
     long canonicalOrgRowCount = writeTableBridges("canonical_org_entity", pivotOrg(conn), writeBase);
 
+    List<Integer> materializedPersonIdx = new ArrayList<Integer>();
     for (int i = 0; i < PERSON_SOURCES.size(); i++) {
-      stagePersonSource(conn, base, i, PERSON_SOURCES.get(i));
+      if (stagePersonSource(conn, base, i, PERSON_SOURCES.get(i))) {
+        materializedPersonIdx.add(i);
+      }
     }
     List<Map<String, Object>> personBridgeRows = new ArrayList<Map<String, Object>>();
-    for (int i = 0; i < PERSON_SOURCES.size(); i++) {
-      for (int j = i + 1; j < PERSON_SOURCES.size(); j++) {
+    for (int ii = 0; ii < materializedPersonIdx.size(); ii++) {
+      int i = materializedPersonIdx.get(ii);
+      for (int jj = ii + 1; jj < materializedPersonIdx.size(); jj++) {
+        int j = materializedPersonIdx.get(jj);
         personBridgeRows.addAll(
             matchPersonPair(conn, i, j, PERSON_SOURCES.get(i), PERSON_SOURCES.get(j), runId));
       }
     }
     long canonicalPersonRowCount =
-        writeTableBridges("canonical_person_entity", pivotPerson(conn, personBridgeRows), writeBase);
+        writeTableBridges("canonical_person_entity",
+            pivotPerson(conn, personBridgeRows, materializedPersonIdx), writeBase);
 
     writeTableBridgesSync("entity_person_bridge", personBridgeRows, writeBase);
 
@@ -650,13 +656,13 @@ public class EntityBridgeListener implements TableLifecycleListener {
   // Person track
   // ========================================================================
 
-  private void stagePersonSource(Connection conn, String base, int idx, PersonSource src)
+  private boolean stagePersonSource(Connection conn, String base, int idx, PersonSource src)
       throws SQLException {
     String loc = loc(base, src.schema, src.physicalTable);
     if (!sourceIsMaterialized(conn, loc)) {
       LOGGER.warn("EntityBridgeListener person source {}.{}: skipped — not materialized at {}",
           src.schema, src.physicalTable, loc);
-      return;
+      return false;
     }
     // GROUP BY dedup, matching the org-track fix — see runOrgSource for why QUALIFY
     // row_number() OVER (...) is unsafe here (forces a full-table sort/rank before
@@ -691,6 +697,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
         .append(src.extraWhere != null ? "AND (" + src.extraWhere + ") " : "")
         .append(") t GROUP BY source_key");
     execute(conn, sql.toString());
+    return true;
   }
 
   private List<Map<String, Object>> matchPersonPair(Connection conn, int i, int j, PersonSource a,
@@ -749,14 +756,15 @@ public class EntityBridgeListener implements TableLifecycleListener {
    * person-type registry grew to 7 sources.
    */
   private CloseableRowIterator pivotPerson(Connection conn,
-      List<Map<String, Object>> personBridgeRows) throws SQLException {
+      List<Map<String, Object>> personBridgeRows, List<Integer> materializedPersonIdx)
+      throws SQLException {
     UnionFind uf = new UnionFind();
     Map<String, String> bestConfidence = new HashMap<String, String>();
     Map<String, String> mentionCanonicalColumn = new HashMap<String, String>();
     Map<String, String> mentionNameRaw = new LinkedHashMap<String, String>();
     Map<String, String> mentionSourceKey = new HashMap<String, String>();
 
-    for (int idx = 0; idx < PERSON_SOURCES.size(); idx++) {
+    for (int idx : materializedPersonIdx) {
       PersonSource src = PERSON_SOURCES.get(idx);
       List<Map<String, Object>> mentions = queryRows(conn,
           "SELECT source_key, name_raw FROM person_stage_" + idx);
