@@ -1500,7 +1500,7 @@ partitionedTables:
     pattern: "type=epa_facilities/*.parquet"
     partitions: *static_partitions
     comment: >
-      EPA ECHO Exporter — one row per regulated facility (~1.5M) with registry
+      EPA ECHO Exporter — one row per regulated facility (~3.2M) with registry
       identity, location (address, lat/lon, NAICS/SIC codes), and a rolled-up
       compliance/enforcement summary: inspection count and last-inspection date,
       formal enforcement action count, total penalties, significant-noncompliance
@@ -1519,9 +1519,12 @@ partitionedTables:
     columns:
       - name: registry_id
         type: string
-        nullable: false
+        nullable: true
         expression: 'src."REGISTRY_ID"'
-        comment: FRS registry id (PK)
+        comment: >
+          FRS registry id (PK). Nullable: the keyless ECHO Exporter bulk feed
+          itself omits REGISTRY_ID for a small fraction of facilities, and there
+          is no other natural key to substitute.
       - name: facility_name
         type: string
         nullable: true
@@ -1577,8 +1580,13 @@ partitionedTables:
       - name: snc_flag
         type: string
         nullable: true
-        expression: 'src."FAC_SNC_FLG"'
-        comment: Significant non-compliance flag
+        expression: 'CASE WHEN TRY_CAST(src."FAC_PROGRAMS_WITH_SNC" AS INTEGER) > 0 THEN ''Y'' ELSE ''N'' END'
+        comment: >
+          Significant non-compliance flag. Derived from FAC_PROGRAMS_WITH_SNC
+          (count of programs currently in SNC), not FAC_SNC_FLG — EPA no longer
+          populates FAC_SNC_FLG in the ECHO Exporter feed (constant 'N'), while
+          FAC_PROGRAMS_WITH_SNC varies and agrees with the per-statute
+          CWA/RCRA/SDWA_SNC_FLAG columns in the same source.
       - name: inspection_count
         type: integer
         nullable: true
