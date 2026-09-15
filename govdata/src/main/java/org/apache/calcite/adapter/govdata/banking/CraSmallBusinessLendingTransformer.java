@@ -318,6 +318,18 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
       throw new SkippedBatchException("CRA aggregate file not yet published (HTTP 404): " + url);
     }
     if (code < 200 || code >= 300) {
+      // Cloudflare marks a bot-management action (a served challenge, not a pass-through) with
+      // its own cf-mitigated response header - confirmed live: present with value "challenge"
+      // on every CAPTCHA-blocked 403 seen from this host, absent on every genuine 200. A 403
+      // with this header is the same gate isZipMagic below catches for a 200 response, not a
+      // generic HTTP error, and must get the same longer CAPTCHA backoff - the plain
+      // per-attempt linear backoff below (5s/10s/15s/20s, ~50s total) cannot outlast the
+      // gate's own ~30-minute challenge-cookie TTL, so misclassifying it here left every
+      // retry attempt in this file's own history doomed before it started.
+      if (isCloudflareChallenge(response.headers())) {
+        throw new FfiecCaptchaException(
+            "CRA aggregate download blocked by Cloudflare challenge (HTTP " + code + "): " + url);
+      }
       throw new IOException("CRA aggregate download HTTP " + code + ": " + url);
     }
     // FFIEC's Cloudflare gate can return 200 OK with a CAPTCHA HTML page instead of a zip
@@ -346,6 +358,14 @@ public class CraSmallBusinessLendingTransformer implements StreamingResponseTran
           + " - likely FFIEC CAPTCHA/challenge; snippet: " + snippet);
     }
     return new ZipInputStream(sniffable);
+  }
+
+  /** True when Cloudflare's own bot-management header marks this response as a served
+   * challenge/mitigation rather than a pass-through - confirmed live: present (value
+   * "challenge") on every CAPTCHA-blocked response from this host, absent on every genuine
+   * response. Package-private for unit test access. */
+  static boolean isCloudflareChallenge(java.net.http.HttpHeaders headers) {
+    return headers.firstValue("cf-mitigated").isPresent();
   }
 
   /** Marks a non-zip response body as CAPTCHA/challenge-shaped rather than a generic transient

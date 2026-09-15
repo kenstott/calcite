@@ -16,7 +16,9 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.http.HttpHeaders;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -72,6 +74,28 @@ class CraSmallBusinessLendingTransformerTest {
     // PK\x99\x99 - starts with the two ASCII bytes of "PK" but no valid zip trailer.
     assertFalse(CraSmallBusinessLendingTransformer.isZipMagic(
         new byte[] {(byte) 0x50, (byte) 0x4B, (byte) 0x99, (byte) 0x99}));
+  }
+
+  /**
+   * Regression for kenstott/govdata-ops#309: FFIEC's gate returns HTTP 403 (not 200-with-HTML)
+   * for a CAPTCHA-blocked request just as often as the 200-with-HTML case #241 already covers -
+   * confirmed live by direct fetch (cf-mitigated: challenge header present on every blocked
+   * response, absent on every genuine one). Before this fix, a 403 always fell into the
+   * generic-IOException branch and got the short linear backoff regardless of cause, so a
+   * real challenge could never survive to the next retry.
+   */
+  @Test void cfMitigatedHeaderMarksAChallengeResponse() {
+    HttpHeaders headers = HttpHeaders.of(
+        java.util.Collections.singletonMap("cf-mitigated", Arrays.asList("challenge")),
+        (k, v) -> true);
+    assertTrue(CraSmallBusinessLendingTransformer.isCloudflareChallenge(headers));
+  }
+
+  @Test void absentCfMitigatedHeaderIsNotAChallengeResponse() {
+    HttpHeaders headers = HttpHeaders.of(
+        java.util.Collections.singletonMap("content-type", Arrays.asList("application/zip")),
+        (k, v) -> true);
+    assertFalse(CraSmallBusinessLendingTransformer.isCloudflareChallenge(headers));
   }
 
   /**
