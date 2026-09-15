@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.84.0](https://github.com/kenstott/calcite/compare/engine-v0.83.0...engine-v0.84.0) (2026-09-15)
+
+
+### Features
+
+* **askamerica-engine:** add enforceResearchDepthOnGap publish_report gate ([09a0457](https://github.com/kenstott/calcite/commit/09a045759e8ed5693493d1e77d3cd110e4ae9f39))
+* **askamerica-engine:** add hhi_concentration tool and a once-per-session catalog-search note ([507352a](https://github.com/kenstott/calcite/commit/507352ad8f7f46700bc0c6d224d7dbc897e38ee3))
+* **askamerica-engine:** extend STANDING STATISTICAL PRACTICE to pure web-fallback data ([5abb925](https://github.com/kenstott/calcite/commit/5abb9253397231ac88625bcf389ef7e603a9990e))
+* **govdata/cyber_vuln:** add vulnerability_cpes junction table ([a137853](https://github.com/kenstott/calcite/commit/a1378536eef746c986e0209bb2d89987c2246021))
+* **govdata/econ:** add econ.mts_outlays_by_function (Treasury MTS current-year outlays) ([342cb5e](https://github.com/kenstott/calcite/commit/342cb5ec7bb5ee9241117162f1795303310ca783))
+* **govdata/econ:** add econ.national_wages (BLS QCEW national aggregate) ([ef3df04](https://github.com/kenstott/calcite/commit/ef3df04192b251fcfa521828fa271847c16d22c6))
+* **govdata/energy:** add fossil_fuel_production view unioning crude and gas ([7e40f72](https://github.com/kenstott/calcite/commit/7e40f720db180ac383d4614efb57e085d3e74154))
+* **govdata/energy:** add OEWS source-change detector for API backfill ([6faf5dc](https://github.com/kenstott/calcite/commit/6faf5dc4926dca0919a64c1983b4d22d9e69a240))
+* **govdata/energy:** separate crude oil and natural gas into distinct tables ([122d1af](https://github.com/kenstott/calcite/commit/122d1af4a6fc6d8ff91925ada986434a163a9d5a))
+* **govdata/health:** add health.va_medical_facilities (HIFLD VA facility roster) ([0e5f527](https://github.com/kenstott/calcite/commit/0e5f5271b64bc0a8dba68ac537f274a512af0ae4))
+* **govdata/research:** backfill nsf_rd_by_field FYs 1993-2014 from NCSES historical tables ([5aa671e](https://github.com/kenstott/calcite/commit/5aa671e0ba73e28e76dc6210eb512ba03c737a34))
+* **govdata:** add fiscal.irs_gross_collections_by_state_year (IRS SOI Table 1-5) ([433cf6d](https://github.com/kenstott/calcite/commit/433cf6d6a3d614d2bb86331588582293f657ddb2))
+* **govdata:** add health.medicare_geographic_variation (CMS Medicare FFS spending) ([b437a09](https://github.com/kenstott/calcite/commit/b437a09db138fb9913c0974d634e5b83f7e2da55))
+* **govdata:** add health.ssa_oasdi_county (SSA OASDI county beneficiary data) ([1ba1035](https://github.com/kenstott/calcite/commit/1ba1035906f0f5775c31b7823f8a6bb4edb1e27a))
+* **govdata:** add lands.blm_oil_gas_acreage (BLM leased/producing acreage by state/FY) ([f57b0ea](https://github.com/kenstott/calcite/commit/f57b0eac4b707f2b2764814633435eb62cc2a2d3))
+* **govdata:** add research.nih_publications (NIH award-to-publication links) ([a06c55f](https://github.com/kenstott/calcite/commit/a06c55f583110c3ccbe1eb2949be5ffe275f7bfc))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** name gini_coefficient/hhi_concentration in the external-data statistical-rigor instruction ([0077f88](https://github.com/kenstott/calcite/commit/0077f88120f6fc80393150c61a1ab352b28d26b7))
+* **askamerica-engine:** nudge search_catalog/suggest_external_sources toward complete research on a genuine gap ([935d3ea](https://github.com/kenstott/calcite/commit/935d3ea75543dae16ca9b186037cc64151876d21))
+* **askamerica-engine:** point external-data statistical rigor at query(), not Bash/python3 ([b4e7b11](https://github.com/kenstott/calcite/commit/b4e7b11616eaefa25144f03810e0e25d5b0f6923))
+* **askamerica-engine:** recognize describe_table as real table provenance ([2d13b78](https://github.com/kenstott/calcite/commit/2d13b7824c5867360fc0e4162ea0b2ea2f9abc97))
+* **askamerica-engine:** reframe research-depth guidance from a numeric target to a qualitative exhaustiveness standard ([10c935d](https://github.com/kenstott/calcite/commit/10c935d48c9ba795a81f73df8e9f17cbace3f62b))
+* **govdata/census:** update PEP dimension resolver to support Census Vintage 2024 ([#183](https://github.com/kenstott/calcite/issues/183)) ([e74d0b0](https://github.com/kenstott/calcite/commit/e74d0b0495bd4c07de1bb1bdf0ed0ae0873a4a9a))
+* **govdata/cyber:** add vulnerability_cpes to worker-cyber.sh historical mode ([4c1c7be](https://github.com/kenstott/calcite/commit/4c1c7be08e2d6b5f97fefdf32f1c275501ab59ea))
+* **govdata/cyber:** parse pub_month and quarter from CVE published in CWE transformer ([c48e1ff](https://github.com/kenstott/calcite/commit/c48e1ff9520139f22db6ccb619231eac0b5bcc64))
+* **govdata/cyber:** parse pub_month and quarter from CVE published timestamp ([58017fb](https://github.com/kenstott/calcite/commit/58017fbe7dc75c6950cd28fade366becc548736e))
+* **govdata/health:** assign va_medical_facilities to a worker-health.sh group ([dcd4688](https://github.com/kenstott/calcite/commit/dcd46887127ebbc7c69108b9d8440ba55ae78867))
+* **govdata/sec:** add socket timeouts to prevent indefinite hangs on dead connections ([#252](https://github.com/kenstott/calcite/issues/252)) ([a9a2b2a](https://github.com/kenstott/calcite/commit/a9a2b2ac3e4808c89ad67c38f46982601ac0fc2a))
+* **govdata/sec:** defer xbrl_relationships compaction to maintenance jobs ([aa05250](https://github.com/kenstott/calcite/commit/aa05250454438beb3e5ad6162f86364668825051))
+* **ref:** enrich gleif_cik lookup with name-matched SEC filing_metadata mappings ([6068dfe](https://github.com/kenstott/calcite/commit/6068dfe263217f109fa60f7821b5091646a31429))
+
 ## [0.83.0](https://github.com/kenstott/calcite/compare/engine-v0.82.1...engine-v0.83.0) (2026-09-13)
 
 
