@@ -142,8 +142,12 @@ mkdir -p "$STATE_DIR"
 # this pass never transferred. Reading it first removes the race, because a value captured
 # before the copy can only reference metadata older than the copy window.
 #
-# Sequence per table: capture the value, copy the data, confirm the metadata it names is on
-# R2, then publish that pinned value.
+# Sequence per table: capture the value as a cheap pre-filter (skip a table whose R2 hint
+# already matches AND was previously closure-verified), otherwise resolve and copy that
+# table's FULL dependency closure (sync_iceberg_table_closure, common.sh — metadata.json,
+# manifest-list, every manifest, every data/delete file), then publish the resolved version.
+# The closure resolve re-reads version-hint.text itself rather than trusting the captured
+# value, so it can only ever publish a version whose entire chain it just confirmed copied.
 
 # _capture_pins <schema> → lines of "<table>\t<version>", one per Iceberg table.
 # A directory with no readable version-hint.text is not a Hadoop-catalog table and is skipped.
@@ -158,7 +162,7 @@ _capture_pins() {
 
 # _apply_pins <schema> <pins> → 0 if every pointer was published, 1 if any was held back.
 _apply_pins() {
-  local s=$1 pins=$2 t v rc=0 present cur manifest_list _pub=0 _same=0 _held=0
+  local s=$1 pins=$2 t v rc=0 cur resolved _pub=0 _same=0 _held=0
   if [ -z "$pins" ]; then
     log_info "sync-to-r2: [$s] no Iceberg pointers to publish"
     return 0
@@ -169,76 +173,34 @@ _apply_pins() {
       log_info "sync-to-r2: [$s/$t] would publish pointer v$v"
       continue
     fi
-    present=$(rclone lsf "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" 2>/dev/null || true)
-    if [ -z "$present" ]; then
-      # The pinned version can fall outside this slice's age window — that gap is precisely how
-      # a dangling pointer arises. Move the one file it names rather than advancing past it.
-      # Iceberg metadata is immutable per version, so this transfer never needs repeating.
-      log_info "sync-to-r2: [$s/$t] pinned v$v not on R2 yet — copying that file explicitly"
-      rclone copyto "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" \
-                    "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" 2>/dev/null || true
-      present=$(rclone lsf "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" 2>/dev/null || true)
-    fi
-    if [ -z "$present" ]; then
-      # Hold the previous pointer. A mirror readable at an older snapshot is strictly better
-      # than one advertising a version that resolves to nothing.
-      log_error "sync-to-r2: [$s/$t] v$v still absent on R2 — pointer HELD at its previous value"
-      rc=1
-      _held=$(( _held + 1 ))
-      continue
-    fi
-    # Skip the write when R2 already advertises this version. Checked AFTER the presence
-    # test above, deliberately: a pointer published by an older revision of this script was
-    # never verified, so an unchanged hint can still name metadata that is missing. Comparing
-    # first would skip exactly the tables that need repairing. This trades a PUT for a GET on
-    # the common steady-state path, where most tables have not committed since the last pass.
+    # Skip only when R2 already advertises this exact version AND that version was published
+    # by this closure-verified path (stamped in STATE_DIR after a successful publish below).
+    # An unstamped match means the hint was written by an older revision of this script that
+    # verified at most metadata.json + the manifest-list — a manifest or data file the
+    # manifest-list itself references (the file whose absence surfaces to a reader as
+    # "HTTP GET ... -m1.avro (404)") could still be missing, and would stay missing forever
+    # once this cheap check started trusting an unverified match.
     cur=$(rclone cat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
-    if [ "$cur" = "$v" ]; then
+    if [ "$cur" = "$v" ] && [ "$(cat "$STATE_DIR/.closure-verified-$s-$t" 2>/dev/null || true)" = "$v" ]; then
       _same=$(( _same + 1 ))
       continue
     fi
-    # v$v.metadata.json existing on R2 is not sufficient: a reader follows it to its current
-    # snapshot's manifest-list .avro next, a distinct file committed at the newest edge of
-    # this schema's slice window that the data pass may not have reached yet. Same
-    # immutable-once-written guarantee as the metadata.json check above, so verify/copy it
-    # too before advertising v$v — this is the exact file whose absence surfaces to a reader
-    # as "HTTP GET ... snap-*.avro (404)".
-    manifest_list=$(rclone cat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/v${v}.metadata.json" 2>/dev/null \
-      | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-except ValueError:
-    sys.exit(0)
-csid = d.get('current-snapshot-id')
-for snap in d.get('snapshots') or []:
-    if snap.get('snapshot-id') == csid:
-        print((snap.get('manifest-list') or '').rsplit('/', 1)[-1])
-        break
-" 2>/dev/null || true)
-    if [ -n "$manifest_list" ]; then
-      present=$(rclone lsf "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/${manifest_list}" 2>/dev/null || true)
-      if [ -z "$present" ]; then
-        log_info "sync-to-r2: [$s/$t] v$v's manifest-list not on R2 yet — copying that file explicitly"
-        rclone copyto "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/${manifest_list}" \
-                      "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/${manifest_list}" 2>/dev/null || true
-        present=$(rclone lsf "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/${manifest_list}" 2>/dev/null || true)
-      fi
-      if [ -z "$present" ]; then
-        log_error "sync-to-r2: [$s/$t] v$v's manifest-list still absent on R2 — pointer HELD at its previous value"
-        rc=1
-        _held=$(( _held + 1 ))
-        continue
-      fi
-    fi
-    if printf '%s' "$v" | rclone rcat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null; then
-      log_info "sync-to-r2: [$s/$t] pointer published: v$v (was v${cur:-none})"
-      _pub=$(( _pub + 1 ))
-    else
-      log_error "sync-to-r2: [$s/$t] pointer write failed — held at its previous value"
+    # Resolve and copy the FULL dependency closure (metadata.json, manifest-list, every
+    # manifest, every data/delete file) before publishing — not just the two top levels of
+    # the chain. The bulk slice-drain pass above is bound to this pass's modtime window and
+    # can lag arbitrarily far behind a table whose backlog hasn't been reached yet (see
+    # govdata-ops#299); this closure copy bypasses that window entirely for exactly the files
+    # the pointer we're about to advertise depends on, the same way the old metadata.json/
+    # manifest-list explicit-copy fallback did for the two levels it covered.
+    if ! resolved=$(sync_iceberg_table_closure "$MINIO_REMOTE" "$R2_REMOTE" "${BUCKETS[0]}" "$s" "$t"); then
+      log_error "sync-to-r2: [$s/$t] closure verify/copy failed — pointer HELD at its previous value (v${cur:-none})"
       rc=1
       _held=$(( _held + 1 ))
+      continue
     fi
+    echo "$resolved" > "$STATE_DIR/.closure-verified-$s-$t"
+    log_info "sync-to-r2: [$s/$t] pointer published: v$resolved (was v${cur:-none})"
+    _pub=$(( _pub + 1 ))
   done <<< "$pins"
   log_info "sync-to-r2: [$s] pointers: $_pub published, $_same already current, $_held held"
   return $rc

@@ -285,6 +285,59 @@ resolve_classpath() {
   echo "$jar"
 }
 
+# sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
+# Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
+# single read of version-hint.text, then metadata.json + manifest-list + every manifest +
+# every data/delete file it names), copies exactly that closure MinIO -> R2 (copy-only,
+# idempotent), then publishes the resolved version as R2's version-hint.text. Never advances
+# the pointer unless the whole closure copy already succeeded, so a caller never needs a
+# separate "verify this one file" step — the closure IS the complete dependency set a reader
+# needs, at every level (manifest-list, manifest, data file), not just the top of the chain.
+# Prints the resolved version to stdout on success; returns nonzero (nothing published) on
+# any failure, so R2's pointer is left at whatever it already named.
+sync_iceberg_table_closure() {
+  local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5
+  local jar; jar=$(resolve_classpath) || return 1
+  local warehouse="s3://${bucket}/${schema}"
+
+  local resolved
+  if ! resolved=$(java -cp "$jar" org.apache.calcite.adapter.file.iceberg.ClosureResolver \
+      --warehouse "$warehouse" --table "$table" 2>&1); then
+    log_error "sync-to-r2: [$schema/$table] closure resolution FAILED:"
+    echo "$resolved" | tail -20 | while IFS= read -r line; do log_error "sync-to-r2:   $line"; done
+    return 1
+  fi
+
+  local version
+  version=$(echo "$resolved" | grep '^VERSION ' | awk '{print $2}')
+  if [ -z "$version" ]; then
+    log_error "sync-to-r2: [$schema/$table] no VERSION line in resolver output — treating as failure"
+    return 1
+  fi
+
+  local files_list
+  files_list=$(mktemp)
+  echo "$resolved" | grep -v '^VERSION ' > "$files_list"
+  local file_count
+  file_count=$(wc -l < "$files_list" | tr -d ' ')
+  log_info "sync-to-r2: [$schema/$table] resolved v$version, $file_count files in closure — verifying/copying"
+
+  if ! rclone copy "${minio_remote}:${bucket}/${schema}/${table}" "${r2_remote}:${bucket}/${schema}/${table}" \
+      --files-from "$files_list" --transfers 16 --checkers 32 2>&1 \
+      | while IFS= read -r line; do log_info "sync-to-r2: [$schema/$table] $line"; done; then
+    log_error "sync-to-r2: [$schema/$table] closure copy FAILED — version-hint.text NOT advanced"
+    rm -f "$files_list"
+    return 1
+  fi
+  rm -f "$files_list"
+
+  if ! printf '%s' "$version" | rclone rcat "${r2_remote}:${bucket}/${schema}/${table}/metadata/version-hint.text"; then
+    log_error "sync-to-r2: [$schema/$table] closure copied but version-hint.text write FAILED — R2 still on its prior version, retry next pass"
+    return 1
+  fi
+  echo "$version"
+}
+
 # Generate a SEC filings model JSON for a year range
 # Usage: generate_sec_model <start_year> <end_year> <output_file>
 generate_sec_model() {
