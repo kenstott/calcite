@@ -403,6 +403,138 @@ partitionedTables:
         # re-run, since there's no partition to key an append off of.
         overwritePartitions: true
 
+  # --- REFERENCE OEWS INDUSTRIES ---
+  - name: oe_industries
+    # Code list, not a time series: hash avoids refetching unchanged content and there is
+    # no period dimension to restate.
+    freshness:
+      type: hash
+    pattern: "oe_industries.parquet"
+    comment: >
+      BLS OEWS (Occupational Employment and Wage Statistics) industry code reference table:
+      maps the ~445 NAICS-based industry codes used in OE-program series (sector-level codes
+      like '51--52' for Sector 51 - Information, plus 3/4/5-digit NAICS group codes) to their
+      names. Decodes industry_code in econ.industry_occupation_employment.
+    columns:
+      - name: industry_code
+        type: string
+        nullable: false
+        comment: 6-character OEWS industry code (sector-level codes contain literal '--', e.g. '51--52')
+      - name: industry_name
+        type: string
+        nullable: true
+        comment: Industry name (e.g., 'Sector 51 - Information')
+        source: industry_name
+      - name: display_level
+        type: integer
+        nullable: true
+        comment: NAICS nesting depth (0 = cross-industry total, 2 = sector, 3-4 = NAICS group)
+        source: display_level
+
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/oe/oe.industry"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # No year dimension: oe.industry is a single static BLS reference file with no year
+    # parameter and no year column.
+    dimensions:
+      type:
+        - oe_industries
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        overwritePartitions: true
+
+  # --- REFERENCE OEWS OCCUPATIONS ---
+  - name: oe_occupations
+    freshness:
+      type: hash
+    pattern: "oe_occupations.parquet"
+    comment: >
+      BLS OEWS occupation code reference table: maps ~1,100 SOC-based occupation codes
+      (major groups like '150000' Computer and Mathematical Occupations down to detailed
+      6-digit SOC codes) to their names. Decodes occupation_code in
+      econ.industry_occupation_employment and econ.state_occupation_employment.
+    columns:
+      - name: occupation_code
+        type: string
+        nullable: false
+        comment: 6-digit SOC-based occupation code (e.g. '150000' for a major group, '151252' for Software Developers)
+      - name: occupation_name
+        type: string
+        nullable: true
+        comment: Occupation name
+        source: occupation_name
+      - name: display_level
+        type: integer
+        nullable: true
+        comment: SOC nesting depth (0 = all occupations, 1 = major group, higher = more detailed)
+        source: display_level
+
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/oe/oe.occupation"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # No year dimension: oe.occupation is a single static BLS reference file with no year
+    # parameter and no year column.
+    dimensions:
+      type:
+        - oe_occupations
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        overwritePartitions: true
+
   # --- REFERENCE NIPA TABLES ---
   - name: nipa_tables
     pattern: "type=nipa_tables/*.parquet"
@@ -944,6 +1076,16 @@ constraints:
       physical discriminator ('naics_sectors') and carries no identity, so it is
       excluded from the logical key. This lets state_industry/metro_industry FKs
       reference the real primary key rather than a PK subset.
+
+  oe_industries:
+    primaryKey:
+      - industry_code
+    comment: Reference dimension table for BLS OEWS industry classifications (econ.industry_occupation_employment)
+
+  oe_occupations:
+    primaryKey:
+      - occupation_code
+    comment: Reference dimension table for BLS OEWS occupation classifications (econ.industry_occupation_employment, econ.state_occupation_employment)
 
   regional_linecodes:
     primaryKey:

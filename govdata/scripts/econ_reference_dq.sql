@@ -2,7 +2,7 @@
 -- Economic Reference Data Quality Checks
 -- Schema: econ_reference
 -- Tables: jolts_industries, jolts_dataelements, bls_geographies, naics_sectors,
---         nipa_tables, regional_linecodes, fred_series
+--         nipa_tables, regional_linecodes, fred_series, oe_industries, oe_occupations
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns per table.
 -- NOTE: fred_series T7 expects 5 distinct categories (5/7 configured; categories 1
@@ -282,6 +282,144 @@ SELECT 'econ_reference', 'naics_sectors', 'T7_expected_values',
 FROM (
   SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/naics_sectors', allow_moved_paths := true)
   WHERE supersector_code = '00000000'
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: oe_industries
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_industries', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_industries', allow_moved_paths := true));
+
+-- T2: row_count (BLS OEWS carries ~445 industry codes at the national level)
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_industries', 'T2_row_count',
+  CASE WHEN n >= 400 THEN 'pass' ELSE 'fail' END,
+  n, 400, 'Expected at least 400 OEWS industry codes'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_industries', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_industries', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_industries', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_industries', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_industries', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_industries', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+  )
+);
+
+-- T6: pk_nulls (industry_code NOT NULL)
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_industries', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL industry_code'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_industries', allow_moved_paths := true) WHERE industry_code IS NULL);
+
+-- T7: expected_values — Sector 51 (Information) must be present, since
+-- econ.industry_occupation_employment's rowFilter depends on this exact code existing
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_industries', 'T7_expected_values',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Expected Information sector code 51--52 to be present'
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_industries', allow_moved_paths := true)
+  WHERE industry_code = '51--52'
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: oe_occupations
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_occupations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_occupations', allow_moved_paths := true));
+
+-- T2: row_count (BLS OEWS carries ~1,100 SOC-based occupation codes including detailed codes)
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_occupations', 'T2_row_count',
+  CASE WHEN n >= 800 THEN 'pass' ELSE 'fail' END,
+  n, 800, 'Expected at least 800 OEWS occupation codes'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_occupations', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_occupations', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_occupations', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_occupations', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_occupations', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_occupations', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+  )
+);
+
+-- T6: pk_nulls (occupation_code NOT NULL)
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_occupations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL occupation_code'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_occupations', allow_moved_paths := true) WHERE occupation_code IS NULL);
+
+-- T7: expected_values — Computer and Mathematical Occupations major group must be present,
+-- since econ.industry_occupation_employment's rowFilter depends on this exact code existing
+INSERT INTO dq_results
+SELECT 'econ_reference', 'oe_occupations', 'T7_expected_values',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Expected Computer and Mathematical Occupations code 150000 to be present'
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/oe_occupations', allow_moved_paths := true)
+  WHERE occupation_code = '150000'
 );
 
 -- ─────────────────────────────────────────────────────────────

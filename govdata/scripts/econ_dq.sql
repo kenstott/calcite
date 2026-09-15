@@ -189,6 +189,7 @@ SELECT 'trade_imports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'labor_productivity'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',     allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1;
 SELECT 'state_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1;
+SELECT 'industry_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true) LIMIT 1;
 
 -- ============================================================================
 -- T4: ALL-NULL COLUMNS — no column should be 100% NULL
@@ -1085,6 +1086,78 @@ SELECT 'econ', 'state_occupation_employment', 'expected_values',
   'rows where employment headcount is negative'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
       WHERE employment IS NOT NULL AND employment < 0);
+
+-- ============================================================================
+-- industry_occupation_employment (BLS OEWS national industry x occupation mix, new 14 Sep 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true) LIMIT 1));
+
+-- ~430 industries x ~23 major occupation groups = ~9,890 possible rows; small-count cells
+-- can be suppressed by BLS, so the floor is set a little below the live-confirmed 7,809.
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'row_count',
+  CASE WHEN n >= 7000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '7000',
+  CASE WHEN n >= 7000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('footnotes');  -- footnotes is legitimately empty on nearly every row
+
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'footnotes');  -- single-reference-year snapshot: year is expected constant; footnotes is legitimately empty on nearly every row
+
+-- occupation_code must be a major SOC group (2-digit group + '0000')
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with occupation_code not matching a major SOC group pattern (\d{2}0000)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true)
+      WHERE NOT regexp_matches(occupation_code, '^[0-9]{2}0000$'));
+
+-- industry_code must never be the cross-industry total (that slice is state_occupation_employment's job)
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with industry_code = 000000 (cross-industry total should not appear here)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true)
+      WHERE industry_code = '000000');
+
+-- employment headcount must be non-negative
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where employment headcount is negative'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true)
+      WHERE employment IS NOT NULL AND employment < 0);
+
+-- (series, industry_code, occupation_code) triple should have no duplicate series
+INSERT INTO dq_results
+SELECT 'econ', 'industry_occupation_employment', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'series values appearing more than once'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series, COUNT(*) AS c
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true)
+        GROUP BY series HAVING COUNT(*) > 1));
 
 -- ============================================================================
 -- federal_outlays_by_function (OMB Historical Table 3.2, new 5 Sep 2026)
