@@ -35,6 +35,8 @@ import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.parquet.Parquet;
 import org.apache.iceberg.types.Types;
 
+import com.google.common.util.concurrent.MoreExecutors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -250,6 +252,17 @@ public class IcebergTableWriter {
    * @param allDataFiles All data files to commit in a single transaction
    */
   public void bulkCommitDataFiles(List<DataFile> allDataFiles) {
+    bulkCommitDataFiles(allDataFiles, false);
+  }
+
+  /**
+   * Same as {@link #bulkCommitDataFiles(List)}, with the option to force manifest scanning onto
+   * the calling thread instead of Iceberg's process-wide {@code ThreadPools.getWorkerPool()}.
+   *
+   * @param runOnCallingThread true for a commit that must not depend on that shared pool still
+   *     being alive — see {@link #directExecutorIfRequested}
+   */
+  public void bulkCommitDataFiles(List<DataFile> allDataFiles, boolean runOnCallingThread) {
     if (allDataFiles.isEmpty()) {
       LOGGER.debug("No data files to bulk commit");
       return;
@@ -263,6 +276,7 @@ public class IcebergTableWriter {
     for (DataFile dataFile : allDataFiles) {
       append.appendFile(dataFile);
     }
+    directExecutorIfRequested(append, runOnCallingThread);
     underCommitLock(() -> {
       append.commit();
       // Ensure version-hint.text exists after commit (repairs orphaned tables)
@@ -284,6 +298,18 @@ public class IcebergTableWriter {
    * a no-op by a stale claim.
    */
   public void replacePartitionsDataFiles(List<DataFile> allDataFiles) {
+    replacePartitionsDataFiles(allDataFiles, false);
+  }
+
+  /**
+   * Same as {@link #replacePartitionsDataFiles(List)}, with the option to force manifest
+   * scanning onto the calling thread instead of Iceberg's process-wide
+   * {@code ThreadPools.getWorkerPool()}.
+   *
+   * @param runOnCallingThread true for a commit that must not depend on that shared pool still
+   *     being alive — see {@link #directExecutorIfRequested}
+   */
+  public void replacePartitionsDataFiles(List<DataFile> allDataFiles, boolean runOnCallingThread) {
     if (allDataFiles.isEmpty()) {
       LOGGER.debug("No data files to replace partitions");
       return;
@@ -300,12 +326,30 @@ public class IcebergTableWriter {
     for (DataFile dataFile : allDataFiles) {
       replace.addFile(dataFile);
     }
+    directExecutorIfRequested(replace, runOnCallingThread);
     underCommitLock(() -> {
       replace.commit();
       ensureVersionHint();
     });
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Replace-partitions commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
+  }
+
+  /**
+   * Iceberg's {@code SnapshotProducer} defaults manifest scanning to the shared, process-wide
+   * {@code ThreadPools.getWorkerPool()}, which Iceberg wraps in Guava's
+   * {@code MoreExecutors.getExitingExecutorService} — an executor that registers its own JVM
+   * shutdown hook to shut itself down. {@code Runtime.addShutdownHook} gives no ordering
+   * guarantee between independently-registered hooks, so a commit made from another shutdown
+   * hook (the SIGTERM emergency-commit path) can have its manifest-scan tasks rejected by that
+   * pool mid-shutdown. Routing such a commit through a direct (calling-thread, no-pool) executor
+   * removes the dependency on a resource this JVM cannot promise is still alive.
+   */
+  private void directExecutorIfRequested(
+      org.apache.iceberg.SnapshotUpdate<?> operation, boolean runOnCallingThread) {
+    if (runOnCallingThread) {
+      operation.scanManifestsWith(MoreExecutors.newDirectExecutorService());
+    }
   }
 
   /**

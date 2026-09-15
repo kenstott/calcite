@@ -1487,6 +1487,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * Iceberg append operation. Each chunk creates one snapshot.
    */
   private void commitInChunks(List<org.apache.iceberg.DataFile> files) throws IOException {
+    commitInChunks(files, false);
+  }
+
+  /**
+   * @param runOnCallingThread true only for the SIGTERM emergency-commit path, which must not
+   *     depend on Iceberg's shared worker pool still being alive — see
+   *     {@link IcebergTableWriter#replacePartitionsDataFiles(List, boolean)}.
+   */
+  private void commitInChunks(List<org.apache.iceberg.DataFile> files, boolean runOnCallingThread)
+      throws IOException {
     int total = files.size();
     if (overwritePartitions) {
       // replacePartitionsDataFiles fully replaces whatever partitions its files touch — it does
@@ -1523,11 +1533,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
       long commitStart = System.currentTimeMillis();
       if (!toReplace.isEmpty()) {
-        tableWriter.replacePartitionsDataFiles(toReplace);
+        tableWriter.replacePartitionsDataFiles(toReplace, runOnCallingThread);
         totalRecordsCommitted += sumRecordCounts(toReplace);
       }
       if (!toAppend.isEmpty()) {
-        tableWriter.bulkCommitDataFiles(toAppend);
+        tableWriter.bulkCommitDataFiles(toAppend, runOnCallingThread);
         totalRecordsCommitted += sumRecordCounts(toAppend);
       }
       totalCommittedFiles += toReplace.size() + toAppend.size();
@@ -1542,7 +1552,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       int end = Math.min(i + chunkSize, total);
       List<org.apache.iceberg.DataFile> chunk = files.subList(i, end);
       long commitStart = System.currentTimeMillis();
-      tableWriter.bulkCommitDataFiles(chunk);
+      tableWriter.bulkCommitDataFiles(chunk, runOnCallingThread);
       totalRecordsCommitted += sumRecordCounts(chunk);
       totalCommittedFiles += chunk.size();
       long elapsed = System.currentTimeMillis() - commitStart;
@@ -2893,7 +2903,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         + "will be re-fetched on next rebuild)",
         snapshot.size(), bufferedRowCount);
     try {
-      commitInChunks(snapshot);
+      commitInChunks(snapshot, true);
       LOGGER.warn("SIGTERM: emergency commit complete — {} files saved to Iceberg", snapshot.size());
     } catch (Exception e) {
       LOGGER.error("SIGTERM: emergency commit failed: {}", e.getMessage());
