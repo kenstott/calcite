@@ -379,6 +379,24 @@ INSERT INTO dq_results
 SELECT 'environment', 'epa_facilities', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL registry_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/epa_facilities', allow_moved_paths := true) WHERE registry_id IS NULL);
+-- T7: violation-frequency rollups — quarter counts are bounded by the 12-quarter
+-- window; the exceedance count is a non-negative count (null when none)
+INSERT INTO dq_results
+SELECT 'environment', 'epa_facilities', 'T7_qtrs_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'qtrs_in_noncompliance values outside 0..12'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/epa_facilities', allow_moved_paths := true)
+  WHERE qtrs_in_noncompliance NOT BETWEEN 0 AND 12
+     OR caa_qtrs_in_noncompliance NOT BETWEEN 0 AND 12
+     OR cwa_qtrs_in_noncompliance NOT BETWEEN 0 AND 12
+     OR rcra_qtrs_in_noncompliance NOT BETWEEN 0 AND 12
+     OR cwa_effluent_exceedance_count < 0);
+-- T7: the CWA effluent exceedance count is populated for a real slice of the
+-- CWA universe (~33k of 3.2M facilities in the full snapshot; ~1k in a 100k DQ sample)
+INSERT INTO dq_results
+SELECT 'environment', 'epa_facilities', 'T7_exceedance_coverage',
+  CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END, n, 500, 'Facilities with a CWA effluent exceedance count (DQ-sampled)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/epa_facilities', allow_moved_paths := true)
+  WHERE cwa_effluent_exceedance_count IS NOT NULL);
 
 -- ------------------------------------------------------------
 -- TABLE: drinking_water_violations (partition cols: type, state)

@@ -1504,7 +1504,10 @@ partitionedTables:
       identity, location (address, lat/lon, NAICS/SIC codes), and a rolled-up
       compliance/enforcement summary: inspection count and last-inspection date,
       formal enforcement action count, total penalties, significant-noncompliance
-      flag, and overall plus per-statute (CAA/CWA/RCRA/SDWA) compliance status.
+      flag, overall plus per-statute (CAA/CWA/RCRA/SDWA) compliance status, and
+      violation-frequency rollups — quarters (of the last 12) in noncompliance
+      overall and per statute (CAA/CWA/RCRA), plus the CWA effluent-limit
+      exceedance count over the last 13 quarters (null when none).
       Keyless weekly-snapshot bulk zip. registry_id links TRI/GHGRP frs_id; the
       facility_compliance view projects the compliance subset.
     dqRowLimit: 100000
@@ -1596,6 +1599,31 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."FAC_TOTAL_PENALTIES" AS DOUBLE)'
         comment: Total penalties (USD)
+      - name: qtrs_in_noncompliance
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."FAC_QTRS_WITH_NC" AS INTEGER)'
+        comment: Quarters (of last 12) in noncompliance/SNC/HPV, any program
+      - name: caa_qtrs_in_noncompliance
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."CAA_QTRS_WITH_NC" AS INTEGER)'
+        comment: Quarters (of last 12) in CAA noncompliance/HPV
+      - name: cwa_qtrs_in_noncompliance
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."CWA_QTRS_WITH_NC" AS INTEGER)'
+        comment: Quarters (of last 12) in CWA noncompliance/SNC
+      - name: rcra_qtrs_in_noncompliance
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."RCRA_QTRS_WITH_NC" AS INTEGER)'
+        comment: Quarters (of last 12) in RCRA noncompliance
+      - name: cwa_effluent_exceedance_count
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."CWA_13QTRS_EFFLNT_EXCEEDANCES" AS INTEGER)'
+        comment: CWA effluent-limit exceedance violations, last 13 quarters (null when none)
       - name: caa_compliance_status
         type: string
         nullable: true
@@ -2345,8 +2373,10 @@ views:
     comment: >
       Compliance/enforcement projection of epa_facilities — registry_id,
       facility_name, state_abbr, plus significant-noncompliance flag,
-      inspection count, formal enforcement action count, total penalties, and
-      overall plus per-statute (CAA/CWA/RCRA/SDWA) compliance status.
+      inspection count, formal enforcement action count, total penalties,
+      violation-frequency rollups (quarters in noncompliance overall and per
+      statute, CWA effluent exceedance count), and overall plus per-statute
+      (CAA/CWA/RCRA/SDWA) compliance status.
     sql: >
       SELECT
         registry_id,
@@ -2357,6 +2387,11 @@ views:
         inspection_count,
         formal_action_count,
         total_penalties,
+        qtrs_in_noncompliance,
+        caa_qtrs_in_noncompliance,
+        cwa_qtrs_in_noncompliance,
+        rcra_qtrs_in_noncompliance,
+        cwa_effluent_exceedance_count,
         caa_compliance_status,
         cwa_compliance_status,
         rcra_compliance_status,
