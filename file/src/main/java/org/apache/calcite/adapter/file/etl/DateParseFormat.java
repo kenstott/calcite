@@ -88,6 +88,21 @@ public enum DateParseFormat {
     }
   },
 
+  /**
+   * M/D/YYYY h:mm:ss AM/PM (12-hour clock) — e.g. 1/20/2000 12:00:00 AM.
+   * SQL-Server-style legacy government export shape (Cal-Access); DuckDB's
+   * {@code TRY_CAST(... AS TIMESTAMP)} returns NULL on the AM/PM suffix, so this
+   * needs an explicit {@code %p} strptime pattern rather than {@link #TIMESTAMP_TO_DATE}.
+   */
+  SLASH_DATETIME_AMPM {
+    @Override public String toExpression(String col) {
+      return nullSafe(col, "TRY_STRPTIME(" + col + ", '%-m/%-d/%Y %I:%M:%S %p')::DATE");
+    }
+    @Override public LocalDate parse(String raw) {
+      return parseOrNull(raw, s -> LocalDateTime.parse(s, FMT_SLASH_DATETIME_AMPM).toLocalDate());
+    }
+  },
+
   /** MMDDYYYY (no separator, left-zero-padded to 8 chars) — e.g. 12312024 or 1312024 */
   MMDDYYYY {
     @Override public String toExpression(String col) {
@@ -429,6 +444,9 @@ public enum DateParseFormat {
   private static final DateTimeFormatter FMT_SLASH_SHORT_YEAR =
       appendReducedYear(new DateTimeFormatterBuilder().appendPattern("MM/dd/"))
           .toFormatter(Locale.ENGLISH);
+
+  private static final DateTimeFormatter FMT_SLASH_DATETIME_AMPM =
+      DateTimeFormatter.ofPattern("M/d/uuuu h:mm:ss a", Locale.ENGLISH);
 
   private static final DateTimeFormatter FMT_MMDDYYYY =
       DateTimeFormatter.ofPattern("MMdduuuu", Locale.ENGLISH);

@@ -44,6 +44,21 @@ class DateParseFormatTest {
     assertEquals(LocalDate.of(2068, 1, 1), DateParseFormat.SLASH_SHORT_YEAR.parse("01/01/68"));
   }
 
+  @Test void testSlashDatetimeAmpm() {
+    // Cal-Access SQL-Server export shape; verified against DuckDB
+    // TRY_STRPTIME(x, '%-m/%-d/%Y %I:%M:%S %p') during development.
+    assertEquals(LocalDate.of(2000, 1, 20),
+        DateParseFormat.SLASH_DATETIME_AMPM.parse("1/20/2000 12:00:00 AM"));
+    assertEquals(LocalDate.of(2024, 6, 29),
+        DateParseFormat.SLASH_DATETIME_AMPM.parse("6/29/2024 11:59:59 PM"));
+    assertEquals(LocalDate.of(2024, 12, 5),
+        DateParseFormat.SLASH_DATETIME_AMPM.parse("12/05/2024 01:30:00 PM"));
+    assertNull(DateParseFormat.SLASH_DATETIME_AMPM.parse(""));
+    assertNull(DateParseFormat.SLASH_DATETIME_AMPM.parse(null));
+    assertThrows(DateTimeParseException.class,
+        () -> DateParseFormat.SLASH_DATETIME_AMPM.parse("1/20/2000"));
+  }
+
   @Test void testMmddyyyyPadsShortInput() {
     assertEquals(LocalDate.of(2024, 12, 31), DateParseFormat.MMDDYYYY.parse("12312024"));
     assertEquals(LocalDate.of(2024, 1, 31), DateParseFormat.MMDDYYYY.parse("1312024"));

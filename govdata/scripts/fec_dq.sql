@@ -4,11 +4,16 @@
 -- Tables: candidates, committees, candidate_committee_linkages, individual_contributions,
 --         committee_contributions, intercommittee_transactions, operating_expenditures,
 --         independent_expenditures, electioneering_communications, communication_costs,
---         candidate_summaries, committee_summaries
+--         candidate_summaries, committee_summaries, ca_contributions, ca_expenditures,
+--         ca_independent_expenditures, ca_filers
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns 'type' and 'year'.
 -- T6 skipped for independent_expenditures, electioneering_communications, communication_costs
 --    (all columns are nullable per schema definition).
+-- ca_* tables (Cal-Access, state-level) are a single ETag-gated snapshot, no year dimension —
+-- T4 excludes only 'type'. ca_independent_expenditures.entity_type is expected all-NULL
+-- (S496_CD has no ENTITY_CD source column) and is excluded from T4 for that reason, not
+-- treated as a defect.
 
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
 SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
@@ -61,6 +66,14 @@ FROM (
   SELECT 'candidate_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/fec/candidate_summaries')
   UNION ALL
   SELECT 'committee_summaries',                 COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/fec/committee_summaries')
+  UNION ALL
+  SELECT 'ca_contributions',                    COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions')
+  UNION ALL
+  SELECT 'ca_expenditures',                     COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures')
+  UNION ALL
+  SELECT 'ca_independent_expenditures',         COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures')
+  UNION ALL
+  SELECT 'ca_filers',                           COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers')
 );
 
 -- ─────────────────────────────────────────────────────────────
@@ -968,6 +981,342 @@ SELECT 'fec', 'committee_summaries', 'T7_committee_type_coverage',
   n, 5, 'Distinct committee_type values (expect at least 5 types)'
 FROM (SELECT COUNT(DISTINCT committee_type) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/committee_summaries', allow_moved_paths := true)
       WHERE committee_type IS NOT NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ca_contributions
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 itemized contribution records (dqRowLimit-capped sample)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name <> 'type'
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  )
+);
+
+-- T6: pk_nulls (filing_id/amend_id/line_item NOT NULL)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL filing_id/amend_id/line_item rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true)
+      WHERE filing_id IS NULL OR amend_id IS NULL OR line_item IS NULL);
+
+-- T7: rec_type constant (RCPT_CD.TSV also carries real Form 497 24-hour/10-day late
+-- contribution reports under rec_type E530, verified live: real donor names/amounts,
+-- not garbage)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T7_rec_type_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with rec_type not in (''RCPT'', ''E530'')'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true)
+      WHERE rec_type IS NOT NULL AND rec_type NOT IN ('RCPT', 'E530'));
+
+-- T7: amount not all null/zero
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T7_amount_populated',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Rows with a non-null, non-zero amount'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true)
+      WHERE amount IS NOT NULL AND amount <> 0);
+
+-- T8: PK duplication guard (form_type disambiguates paired sub-schedule records —
+-- e.g. an intermediary contribution's form_type I companion shares filing_id/amend_id/
+-- line_item with its form_type A underlying record)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_contributions', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, amend_id, line_item, form_type) rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT filing_id, amend_id, line_item, form_type, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_contributions', allow_moved_paths := true)
+    GROUP BY filing_id, amend_id, line_item, form_type
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ca_expenditures
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 itemized expenditure records (dqRowLimit-capped sample)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name <> 'type'
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  )
+);
+
+-- T6: pk_nulls (filing_id/amend_id/line_item NOT NULL)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL filing_id/amend_id/line_item rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true)
+      WHERE filing_id IS NULL OR amend_id IS NULL OR line_item IS NULL);
+
+-- T7: rec_type constant
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T7_rec_type_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with rec_type <> ''EXPN'''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true)
+      WHERE rec_type IS NOT NULL AND rec_type <> 'EXPN');
+
+-- T7: amount not all null/zero
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T7_amount_populated',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Rows with a non-null, non-zero amount'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true)
+      WHERE amount IS NOT NULL AND amount <> 0);
+
+-- T8: PK duplication guard (form_type disambiguates paired sub-schedule records —
+-- a Schedule D subvendor/agent detail row shares filing_id/amend_id/line_item with
+-- its Schedule E parent expenditure record)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_expenditures', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, amend_id, line_item, form_type) rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT filing_id, amend_id, line_item, form_type, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_expenditures', allow_moved_paths := true)
+    GROUP BY filing_id, amend_id, line_item, form_type
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ca_independent_expenditures
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'fec', 'ca_independent_expenditures', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'fec', 'ca_independent_expenditures', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Expected at least 50 Form 496 late-IE records (small table)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols (entity_type excluded — S496_CD has no ENTITY_CD source column)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_independent_expenditures', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'entity_type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'fec', 'ca_independent_expenditures', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  )
+);
+
+-- T6: pk_nulls (filing_id/amend_id/line_item NOT NULL)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_independent_expenditures', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL filing_id/amend_id/line_item rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true)
+      WHERE filing_id IS NULL OR amend_id IS NULL OR line_item IS NULL);
+
+-- T7: rec_type constant
+INSERT INTO dq_results
+SELECT 'fec', 'ca_independent_expenditures', 'T7_rec_type_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with rec_type <> ''S496'''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true)
+      WHERE rec_type IS NOT NULL AND rec_type <> 'S496');
+
+-- T8: PK duplication guard
+INSERT INTO dq_results
+SELECT 'fec', 'ca_independent_expenditures', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, amend_id, line_item) rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT filing_id, amend_id, line_item, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_independent_expenditures', allow_moved_paths := true)
+    GROUP BY filing_id, amend_id, line_item
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ca_filers
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'fec', 'ca_filers', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'fec', 'ca_filers', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 filer registry records'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'fec', 'ca_filers', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name <> 'type'
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'fec', 'ca_filers', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  )
+);
+
+-- T6: pk_nulls (filer_id NOT NULL)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_filers', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL xref_filer_id/filer_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers', allow_moved_paths := true)
+      WHERE xref_filer_id IS NULL OR filer_id IS NULL);
+
+-- T7: filer_id populated and plausible (numeric-looking Cal-Access IDs)
+INSERT INTO dq_results
+SELECT 'fec', 'ca_filers', 'T7_filer_id_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'filer_id values that are not purely numeric'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/ca_filers', allow_moved_paths := true)
+      WHERE filer_id IS NOT NULL AND NOT regexp_matches(filer_id, '^[0-9]+$'));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

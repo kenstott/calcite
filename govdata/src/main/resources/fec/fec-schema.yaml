@@ -131,6 +131,248 @@ bulkDownloads:
 
 column_templates:
 
+  # --- Cal-Access shared columns (RCPT/EXPN carry the same denormalized race columns) ---
+  # Individual per-column anchors, not a grouped-list anchor: ColumnConfig.fromList (file/etl)
+  # only accepts Map items from a table's columns: list and silently skips anything else, so
+  # `- *someListAnchor` (a list nested inside the columns list) would silently drop every column
+  # in the group with no error. Matches the single-column-anchor convention already used above
+  # (candidate_id_column, etc.) rather than inventing a group-splice pattern SnakeYAML doesn't
+  # actually support for sequences.
+
+  ca_filing_id_column: &ca_filing_id_column
+    name: filing_id
+    type: long
+    nullable: false
+    comment: Cal-Access filing ID (PK component; joins across all CA tables)
+    source: FILING_ID
+
+  ca_amend_id_column: &ca_amend_id_column
+    name: amend_id
+    type: integer
+    nullable: false
+    comment: Amendment sequence (0 = original filing)
+    source: AMEND_ID
+
+  ca_line_item_column: &ca_line_item_column
+    name: line_item
+    type: integer
+    nullable: false
+    comment: Line item number within the filing's schedule
+    source: LINE_ITEM
+
+  ca_rec_type_column: &ca_rec_type_column
+    name: rec_type
+    type: string
+    nullable: true
+    comment: Record type — constant per file (RCPT in RCPT_CD, EXPN in EXPN_CD, S496 in S496_CD)
+    source: REC_TYPE
+
+  ca_form_type_column: &ca_form_type_column
+    name: form_type
+    type: string
+    nullable: true
+    comment: Schedule/form code (A=contributions, E=expenditures, F496=late IE, ...)
+    source: FORM_TYPE
+
+  ca_transaction_id_column: &ca_transaction_id_column
+    name: transaction_id
+    type: string
+    nullable: true
+    comment: Filer-assigned transaction ID
+    source: TRAN_ID
+
+  ca_entity_type_column: &ca_entity_type_column
+    name: entity_type
+    type: string
+    nullable: true
+    comment: >
+      Entity code (IND=individual, COM=committee, OTH=other, PTY=party,
+      SCC=small contributor committee). Always NULL on ca_independent_expenditures —
+      S496_CD has no ENTITY_CD column in the source.
+    source: ENTITY_CD
+
+  ca_treasurer_name_last_column: &ca_treasurer_name_last_column
+    name: treasurer_name_last
+    type: string
+    nullable: true
+    comment: Committee treasurer last name
+    source: TRES_NAML
+
+  ca_treasurer_name_first_column: &ca_treasurer_name_first_column
+    name: treasurer_name_first
+    type: string
+    nullable: true
+    comment: Committee treasurer first name
+    source: TRES_NAMF
+
+  ca_treasurer_name_title_column: &ca_treasurer_name_title_column
+    name: treasurer_name_title
+    type: string
+    nullable: true
+    comment: Committee treasurer name title
+    source: TRES_NAMT
+
+  ca_treasurer_name_suffix_column: &ca_treasurer_name_suffix_column
+    name: treasurer_name_suffix
+    type: string
+    nullable: true
+    comment: Committee treasurer name suffix
+    source: TRES_NAMS
+
+  ca_treasurer_city_column: &ca_treasurer_city_column
+    name: treasurer_city
+    type: string
+    nullable: true
+    comment: Treasurer address city
+    source: TRES_CITY
+
+  ca_treasurer_state_column: &ca_treasurer_state_column
+    name: treasurer_state
+    type: string
+    nullable: true
+    comment: Treasurer address state
+    source: TRES_ST
+
+  ca_treasurer_zip_column: &ca_treasurer_zip_column
+    name: treasurer_zip
+    type: string
+    nullable: true
+    comment: Treasurer address ZIP
+    source: TRES_ZIP4
+
+  ca_candidate_name_last_column: &ca_candidate_name_last_column
+    name: candidate_name_last
+    type: string
+    nullable: true
+    comment: Candidate last name (denormalized race context for this item)
+    source: CAND_NAML
+
+  ca_candidate_name_first_column: &ca_candidate_name_first_column
+    name: candidate_name_first
+    type: string
+    nullable: true
+    comment: Candidate first name
+    source: CAND_NAMF
+
+  ca_candidate_name_title_column: &ca_candidate_name_title_column
+    name: candidate_name_title
+    type: string
+    nullable: true
+    comment: Candidate name title
+    source: CAND_NAMT
+
+  ca_candidate_name_suffix_column: &ca_candidate_name_suffix_column
+    name: candidate_name_suffix
+    type: string
+    nullable: true
+    comment: Candidate name suffix
+    source: CAND_NAMS
+
+  ca_office_code_column: &ca_office_code_column
+    name: office_code
+    type: string
+    nullable: true
+    comment: Office sought code (e.g. ASM=Assembly, SEN=Senate, GOV=Governor)
+    source: OFFICE_CD
+
+  ca_office_description_column: &ca_office_description_column
+    name: office_description
+    type: string
+    nullable: true
+    comment: Office sought description (e.g. STATE ASSEMBLY, STATE SENATE)
+    source: OFFIC_DSCR
+
+  ca_jurisdiction_code_column: &ca_jurisdiction_code_column
+    name: jurisdiction_code
+    type: string
+    nullable: true
+    comment: Jurisdiction code (ST=statewide, ASM/SEN district, local)
+    source: JURIS_CD
+
+  ca_jurisdiction_description_column: &ca_jurisdiction_description_column
+    name: jurisdiction_description
+    type: string
+    nullable: true
+    comment: Jurisdiction description
+    source: JURIS_DSCR
+
+  ca_district_number_column: &ca_district_number_column
+    name: district_number
+    type: string
+    nullable: true
+    comment: Legislative district number (for Assembly/Senate races)
+    source: DIST_NO
+
+  ca_office_seat_holder_code_column: &ca_office_seat_holder_code_column
+    name: office_seat_holder_code
+    type: string
+    nullable: true
+    comment: Office sought/held indicator
+    source: OFF_S_H_CD
+
+  ca_ballot_measure_name_column: &ca_ballot_measure_name_column
+    name: ballot_measure_name
+    type: string
+    nullable: true
+    comment: Ballot measure name (for ballot-measure committees)
+    source: BAL_NAME
+
+  ca_ballot_measure_number_column: &ca_ballot_measure_number_column
+    name: ballot_measure_number
+    type: string
+    nullable: true
+    comment: Ballot measure number
+    source: BAL_NUM
+
+  ca_ballot_measure_jurisdiction_column: &ca_ballot_measure_jurisdiction_column
+    name: ballot_measure_jurisdiction
+    type: string
+    nullable: true
+    comment: Ballot measure jurisdiction
+    source: BAL_JURIS
+
+  ca_support_oppose_column: &ca_support_oppose_column
+    name: support_oppose
+    type: string
+    nullable: true
+    comment: Support/oppose indicator (S=support, O=oppose) for candidate/measure items
+    source: SUP_OPP_CD
+
+  ca_memo_code_column: &ca_memo_code_column
+    name: memo_code
+    type: string
+    nullable: true
+    comment: Memo code (item is informational, not counted in totals)
+    source: MEMO_CODE
+
+  ca_memo_refno_column: &ca_memo_refno_column
+    name: memo_refno
+    type: string
+    nullable: true
+    comment: Memo reference number (links memo item to parent transaction)
+    source: MEMO_REFNO
+
+  ca_back_reference_transaction_id_column: &ca_back_reference_transaction_id_column
+    name: back_reference_transaction_id
+    type: string
+    nullable: true
+    comment: Back-reference transaction ID (amendment linkage)
+    source: BAKREF_TID
+
+  ca_xref_schedule_column: &ca_xref_schedule_column
+    name: xref_schedule
+    type: string
+    nullable: true
+    comment: Cross-reference schedule name
+    source: XREF_SCHNM
+
+  ca_xref_match_column: &ca_xref_match_column
+    name: xref_match
+    type: string
+    nullable: true
+    comment: Cross-reference match indicator
+    source: XREF_MATCH
+
   # --- Candidate Columns ---
 
   candidate_id_column: &candidate_id_column
@@ -2332,6 +2574,752 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ==========================================================================
+  # CA_CONTRIBUTIONS — California Cal-Access itemized contributions (RCPT_CD)
+  # ==========================================================================
+  # State-level counterpart to individual_contributions/committee_contributions: California's
+  # full campaign-finance database export (dbwebexport.zip), CDN-fronted, keyless, refreshed
+  # daily. One row per contribution line item across all CA state candidate, party, and
+  # ballot-measure committees since 2000. Cross-Schema note: filer/committee IDs (CMTE_ID,
+  # treasurer/candidate names) are Cal-Access's own filer_id space — distinct from FEC's
+  # candidate_id/committee_id, so no FK to the federal tables above.
+  - name: ca_contributions
+    # Freshness gate: campaignfinance.cdn.sos.ca.gov returns a real ETag on the zip (confirmed
+    # live 2026-09-14, CloudFront+S3) — skips the ~1.6GB re-download when unchanged.
+    freshness:
+      type: etag
+    pattern: "type=ca_contributions/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Itemized contributions received by California state candidates, parties, and
+      ballot-measure committees (Cal-Access Form 401/460/465 Schedule A/C/I), including
+      intermediary/conduit and loan-interest detail. One row per contribution line item;
+      PK is (filing_id, amend_id, line_item, form_type) — an intermediary contribution
+      files a companion record (form_type I) alongside its underlying contribution
+      (form_type A) sharing the same filing_id/amend_id/line_item, so form_type is
+      required to disambiguate. rec_type is 'RCPT' for the vast majority of rows but a
+      real minority (~0.006%) are 'E530' — Form 497 24-hour/10-day late contribution
+      reports, co-mingled into the same TSV by the source. Source: Cal-Access
+      full-database export, RCPT_CD.TSV member. Covers 2000-present. A small number of
+      source rows (<0.001%) have a NULL filing_id/amend_id/line_item — a known
+      Cal-Access export data-quality gap,
+      not a transform defect.
+
+    dimensions:
+      type:
+        - ca_contributions
+
+    columns:
+      - *ca_filing_id_column
+      - *ca_amend_id_column
+      - *ca_line_item_column
+      - *ca_rec_type_column
+      - *ca_form_type_column
+      - *ca_transaction_id_column
+      - *ca_entity_type_column
+      - name: contributor_name_last
+        type: string
+        nullable: true
+        comment: Contributor last/entity name
+        source: CTRIB_NAML
+      - name: contributor_name_first
+        type: string
+        nullable: true
+        comment: Contributor first name
+        source: CTRIB_NAMF
+      - name: contributor_name_title
+        type: string
+        nullable: true
+        comment: Contributor name title
+        source: CTRIB_NAMT
+      - name: contributor_name_suffix
+        type: string
+        nullable: true
+        comment: Contributor name suffix
+        source: CTRIB_NAMS
+      - name: contributor_city
+        type: string
+        nullable: true
+        comment: Contributor address city
+        source: CTRIB_CITY
+      - name: contributor_state
+        type: string
+        nullable: true
+        comment: Contributor address state
+        source: CTRIB_ST
+      - name: contributor_zip
+        type: string
+        nullable: true
+        comment: Contributor address ZIP
+        source: CTRIB_ZIP4
+      - name: contributor_employer
+        type: string
+        nullable: true
+        comment: Contributor employer
+        source: CTRIB_EMP
+      - name: contributor_occupation
+        type: string
+        nullable: true
+        comment: Contributor occupation
+        source: CTRIB_OCC
+      - name: contributor_self_employed
+        type: string
+        nullable: true
+        comment: Self-employed indicator
+        source: CTRIB_SELF
+      - name: transaction_type
+        type: string
+        nullable: true
+        comment: Transaction type code
+        source: TRAN_TYPE
+      - name: receipt_date
+        type: date
+        nullable: true
+        comment: Date the contribution was received
+        source: RCPT_DATE
+        dateFormat: SLASH_DATETIME_AMPM
+      - name: date_thru
+        type: date
+        nullable: true
+        comment: Period-covered end date (for periodic/in-kind items)
+        source: DATE_THRU
+        dateFormat: SLASH_DATETIME_AMPM
+      - name: amount
+        type: double
+        nullable: true
+        comment: Contribution amount
+        source: AMOUNT
+      - name: cumulative_ytd
+        type: double
+        nullable: true
+        comment: Cumulative year-to-date amount from this contributor
+        source: CUM_YTD
+      - name: cumulative_other
+        type: double
+        nullable: true
+        comment: Cumulative other-period amount
+        source: CUM_OTH
+      - name: contribution_description
+        type: string
+        nullable: true
+        comment: Free-text description (e.g. in-kind contribution detail)
+        source: CTRIB_DSCR
+      - name: committee_id
+        type: string
+        nullable: true
+        comment: Cal-Access filer ID of the receiving committee (join to ca_filers.filer_id)
+        source: CMTE_ID
+      - *ca_treasurer_name_last_column
+      - *ca_treasurer_name_first_column
+      - *ca_treasurer_name_title_column
+      - *ca_treasurer_name_suffix_column
+      - *ca_treasurer_city_column
+      - *ca_treasurer_state_column
+      - *ca_treasurer_zip_column
+      - name: intermediary_name_last
+        type: string
+        nullable: true
+        comment: Intermediary/conduit last name (Form 401/460 Schedule I)
+        source: INTR_NAML
+      - name: intermediary_name_first
+        type: string
+        nullable: true
+        comment: Intermediary first name
+        source: INTR_NAMF
+      - name: intermediary_name_title
+        type: string
+        nullable: true
+        comment: Intermediary name title
+        source: INTR_NAMT
+      - name: intermediary_name_suffix
+        type: string
+        nullable: true
+        comment: Intermediary name suffix
+        source: INTR_NAMS
+      - name: intermediary_city
+        type: string
+        nullable: true
+        comment: Intermediary address city
+        source: INTR_CITY
+      - name: intermediary_state
+        type: string
+        nullable: true
+        comment: Intermediary address state
+        source: INTR_ST
+      - name: intermediary_zip
+        type: string
+        nullable: true
+        comment: Intermediary address ZIP
+        source: INTR_ZIP4
+      - name: intermediary_employer
+        type: string
+        nullable: true
+        comment: Intermediary employer
+        source: INTR_EMP
+      - name: intermediary_occupation
+        type: string
+        nullable: true
+        comment: Intermediary occupation
+        source: INTR_OCC
+      - name: intermediary_self_employed
+        type: string
+        nullable: true
+        comment: Intermediary self-employed indicator
+        source: INTR_SELF
+      - *ca_candidate_name_last_column
+      - *ca_candidate_name_first_column
+      - *ca_candidate_name_title_column
+      - *ca_candidate_name_suffix_column
+      - *ca_office_code_column
+      - *ca_office_description_column
+      - *ca_jurisdiction_code_column
+      - *ca_jurisdiction_description_column
+      - *ca_district_number_column
+      - *ca_office_seat_holder_code_column
+      - *ca_ballot_measure_name_column
+      - *ca_ballot_measure_number_column
+      - *ca_ballot_measure_jurisdiction_column
+      - *ca_support_oppose_column
+      - *ca_memo_code_column
+      - *ca_memo_refno_column
+      - *ca_back_reference_transaction_id_column
+      - *ca_xref_schedule_column
+      - *ca_xref_match_column
+      - name: interest_rate
+        type: double
+        nullable: true
+        comment: Loan interest rate (loan-shaped contributions only)
+        source: INT_RATE
+      - name: intermediary_committee_id
+        type: string
+        nullable: true
+        comment: Intermediary's own Cal-Access filer ID, when the intermediary is a committee
+        source: INTR_CMTEID
+
+    source:
+      type: http
+      url: "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
+      method: GET
+      extractPattern: "*/RCPT_CD.TSV"
+      response:
+        format: csv
+        delimiter: "\t"
+        # Cal-Access TSVs have no real quoting convention (SQL Server bulk TSV export); a
+        # literal " in a contributor/employer name is legitimate data, not a quote wrapper.
+        # Same reasoning as the FEC pipe-delimited files above.
+        quoted: false
+        hasHeader: true
+        pagination:
+          type: CSV_STREAM
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ca_contributions/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+        emptyResultTtlMillis: 86400000
+      iceberg:
+        catalogType: hadoop
+        overwritePartitions: true
+        batchPartitionColumns: [type]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ==========================================================================
+  # CA_EXPENDITURES — California Cal-Access itemized expenditures (EXPN_CD)
+  # ==========================================================================
+  - name: ca_expenditures
+    # Freshness gate: same ETag-based probe as ca_contributions (same source zip).
+    freshness:
+      type: etag
+    pattern: "type=ca_expenditures/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Itemized expenditures by California state candidates, parties, and ballot-measure
+      committees (Cal-Access Form 401/460/465 Schedule D/E). One row per expenditure line
+      item; PK is (filing_id, amend_id, line_item, form_type) — Schedule D (subvendor/agent
+      detail, form_type D) files a companion record alongside its Schedule E parent
+      (form_type E) sharing the same filing_id/amend_id/line_item, so form_type is required
+      to disambiguate. Source: Cal-Access full-database export, EXPN_CD.TSV member. Covers
+      2000-present. A small number of source rows (<0.001%) have a NULL
+      filing_id/amend_id/line_item — a known Cal-Access export data-quality gap, not a
+      transform defect.
+
+    dimensions:
+      type:
+        - ca_expenditures
+
+    columns:
+      - *ca_filing_id_column
+      - *ca_amend_id_column
+      - *ca_line_item_column
+      - *ca_rec_type_column
+      - *ca_form_type_column
+      - *ca_transaction_id_column
+      - *ca_entity_type_column
+      - name: payee_name_last
+        type: string
+        nullable: true
+        comment: Payee last/entity name
+        source: PAYEE_NAML
+      - name: payee_name_first
+        type: string
+        nullable: true
+        comment: Payee first name
+        source: PAYEE_NAMF
+      - name: payee_name_title
+        type: string
+        nullable: true
+        comment: Payee name title
+        source: PAYEE_NAMT
+      - name: payee_name_suffix
+        type: string
+        nullable: true
+        comment: Payee name suffix
+        source: PAYEE_NAMS
+      - name: payee_city
+        type: string
+        nullable: true
+        comment: Payee address city
+        source: PAYEE_CITY
+      - name: payee_state
+        type: string
+        nullable: true
+        comment: Payee address state
+        source: PAYEE_ST
+      - name: payee_zip
+        type: string
+        nullable: true
+        comment: Payee address ZIP
+        source: PAYEE_ZIP4
+      - name: expenditure_date
+        type: date
+        nullable: true
+        comment: Expenditure date
+        source: EXPN_DATE
+        dateFormat: SLASH_DATETIME_AMPM
+      - name: amount
+        type: double
+        nullable: true
+        comment: Expenditure amount
+        source: AMOUNT
+      - name: cumulative_ytd
+        type: double
+        nullable: true
+        comment: Cumulative year-to-date amount to this payee
+        source: CUM_YTD
+      - name: cumulative_other
+        type: double
+        nullable: true
+        comment: Cumulative other-period amount
+        source: CUM_OTH
+      - name: check_number
+        type: string
+        nullable: true
+        comment: Check number
+        source: EXPN_CHKNO
+      - name: expenditure_code
+        type: string
+        nullable: true
+        comment: Expenditure category code (e.g. WEB, TRC, POL, CTB, IND)
+        source: EXPN_CODE
+      - name: expenditure_description
+        type: string
+        nullable: true
+        comment: Free-text expenditure description
+        source: EXPN_DSCR
+      - name: agent_name_last
+        type: string
+        nullable: true
+        comment: Agent/intermediary last name making the expenditure on the filer's behalf
+        source: AGENT_NAML
+      - name: agent_name_first
+        type: string
+        nullable: true
+        comment: Agent first name
+        source: AGENT_NAMF
+      - name: agent_name_title
+        type: string
+        nullable: true
+        comment: Agent name title
+        source: AGENT_NAMT
+      - name: agent_name_suffix
+        type: string
+        nullable: true
+        comment: Agent name suffix
+        source: AGENT_NAMS
+      - name: committee_id
+        type: string
+        nullable: true
+        comment: Cal-Access filer ID of the spending committee (join to ca_filers.filer_id)
+        source: CMTE_ID
+      - *ca_treasurer_name_last_column
+      - *ca_treasurer_name_first_column
+      - *ca_treasurer_name_title_column
+      - *ca_treasurer_name_suffix_column
+      - *ca_treasurer_city_column
+      - *ca_treasurer_state_column
+      - *ca_treasurer_zip_column
+      - *ca_candidate_name_last_column
+      - *ca_candidate_name_first_column
+      - *ca_candidate_name_title_column
+      - *ca_candidate_name_suffix_column
+      - *ca_office_code_column
+      - *ca_office_description_column
+      - *ca_jurisdiction_code_column
+      - *ca_jurisdiction_description_column
+      - *ca_district_number_column
+      - *ca_office_seat_holder_code_column
+      - *ca_ballot_measure_name_column
+      - *ca_ballot_measure_number_column
+      - *ca_ballot_measure_jurisdiction_column
+      - *ca_support_oppose_column
+      - *ca_memo_code_column
+      - *ca_memo_refno_column
+      - *ca_back_reference_transaction_id_column
+      - *ca_xref_schedule_column
+      - *ca_xref_match_column
+      - name: general_from_election_fund
+        type: string
+        nullable: true
+        comment: General-purpose-from-election-fund flag
+        source: G_FROM_E_F
+
+    source:
+      type: http
+      url: "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
+      method: GET
+      extractPattern: "*/EXPN_CD.TSV"
+      response:
+        format: csv
+        delimiter: "\t"
+        quoted: false
+        hasHeader: true
+        pagination:
+          type: CSV_STREAM
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ca_expenditures/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+        emptyResultTtlMillis: 86400000
+      iceberg:
+        catalogType: hadoop
+        overwritePartitions: true
+        batchPartitionColumns: [type]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ==========================================================================
+  # CA_INDEPENDENT_EXPENDITURES — Cal-Access late independent-expenditure reports (S496_CD)
+  # ==========================================================================
+  - name: ca_independent_expenditures
+    # Freshness gate: same ETag-based probe as ca_contributions (same source zip).
+    freshness:
+      type: etag
+    pattern: "type=ca_independent_expenditures/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      California Form 496 "24/48-hour" late independent-expenditure reports — the state's
+      closest counterpart to FEC independent_expenditures / the "dark money" IE disclosure
+      this gap was filed for. One row per IE line item; PK is (filing_id, amend_id,
+      line_item). Unlike ca_contributions/ca_expenditures, Form 496 carries no denormalized
+      committee/candidate/race columns in the source file itself (entity_type is always NULL
+      here — S496_CD has no ENTITY_CD column) — resolve the spender/target via the CVR cover
+      page (not yet sourced) or the filing_id. Source: Cal-Access full-database export,
+      S496_CD.TSV member. Covers 2000-present.
+
+    dimensions:
+      type:
+        - ca_independent_expenditures
+
+    columns:
+      - *ca_filing_id_column
+      - *ca_amend_id_column
+      - *ca_line_item_column
+      - *ca_rec_type_column
+      - *ca_form_type_column
+      - *ca_transaction_id_column
+      - *ca_entity_type_column
+      - name: amount
+        type: double
+        nullable: true
+        comment: Independent expenditure amount
+        source: AMOUNT
+      - name: expenditure_date
+        type: date
+        nullable: true
+        comment: Independent expenditure date
+        source: EXP_DATE
+        dateFormat: SLASH_DATETIME_AMPM
+      - name: expenditure_description
+        type: string
+        nullable: true
+        comment: Free-text description (e.g. "mailer")
+        source: EXPN_DSCR
+      - name: memo_code
+        type: string
+        nullable: true
+        comment: Memo code (item is informational, not counted in totals)
+        source: MEMO_CODE
+      - name: memo_refno
+        type: string
+        nullable: true
+        comment: Memo reference number
+        source: MEMO_REFNO
+      - name: date_thru
+        type: date
+        nullable: true
+        comment: Period-covered end date
+        source: DATE_THRU
+        dateFormat: SLASH_DATETIME_AMPM
+
+    source:
+      type: http
+      url: "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
+      method: GET
+      extractPattern: "*/S496_CD.TSV"
+      response:
+        format: csv
+        delimiter: "\t"
+        quoted: false
+        hasHeader: true
+        pagination:
+          type: CSV_STREAM
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ca_independent_expenditures/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+        emptyResultTtlMillis: 86400000
+      iceberg:
+        catalogType: hadoop
+        overwritePartitions: true
+        batchPartitionColumns: [type]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ==========================================================================
+  # CA_FILERS — Cal-Access filer registry (FILERNAME_CD)
+  # ==========================================================================
+  - name: ca_filers
+    # Freshness gate: same ETag-based probe as ca_contributions (same source zip).
+    freshness:
+      type: etag
+    pattern: "type=ca_filers/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      California Cal-Access filer registry — every registered filer (candidate, committee,
+      party, ballot-measure committee, lobbyist client, etc.), one row per filer-name/status
+      record. filer_id is the join key to ca_contributions.committee_id and
+      ca_expenditures.committee_id. Source: Cal-Access full-database export,
+      FILERNAME_CD.TSV member. Not a strict 1-row-per-filer table — a filer with a name or
+      status change over time carries multiple rows (xref_filer_id + effective_date vary).
+      A small number of source rows (<0.01%) have a NULL xref_filer_id/filer_id — a known
+      Cal-Access export data-quality gap, not a transform defect.
+
+    dimensions:
+      type:
+        - ca_filers
+
+    columns:
+      - name: xref_filer_id
+        type: string
+        nullable: false
+        comment: Cross-reference filer ID
+        source: XREF_FILER_ID
+      - name: filer_id
+        type: string
+        nullable: false
+        comment: Cal-Access filer ID (join key from ca_contributions/ca_expenditures committee_id)
+        source: FILER_ID
+      - name: filer_type
+        type: string
+        nullable: true
+        comment: Filer type (e.g. CLIENT, RECIPIENT, CANDIDATE/OFFICEHOLDER, PARTY)
+        source: FILER_TYPE
+      - name: status
+        type: string
+        nullable: true
+        comment: Filer status (e.g. ACTIVE, INACTIVE, TERMINATED)
+        source: STATUS
+      - name: effective_date
+        type: date
+        nullable: true
+        comment: Date this name/status record became effective
+        source: EFFECT_DT
+        dateFormat: SLASH
+      - name: name_last
+        type: string
+        nullable: true
+        comment: Filer last/entity name
+        source: NAML
+      - name: name_first
+        type: string
+        nullable: true
+        comment: Filer first name
+        source: NAMF
+      - name: name_title
+        type: string
+        nullable: true
+        comment: Filer name title
+        source: NAMT
+      - name: name_suffix
+        type: string
+        nullable: true
+        comment: Filer name suffix
+        source: NAMS
+      - name: address1
+        type: string
+        nullable: true
+        comment: Address line 1
+        source: ADR1
+      - name: address2
+        type: string
+        nullable: true
+        comment: Address line 2
+        source: ADR2
+      - name: city
+        type: string
+        nullable: true
+        comment: >
+          City — Cal-Access occasionally concatenates "CITY, ST ZIP" into this field rather
+          than populating state/zip separately (observed live in sampled rows); carried as-is.
+        source: CITY
+      - name: state
+        type: string
+        nullable: true
+        comment: State
+        source: ST
+      - name: zip
+        type: string
+        nullable: true
+        comment: ZIP code
+        source: ZIP4
+      - name: phone
+        type: string
+        nullable: true
+        comment: Phone number
+        source: PHON
+      - name: fax
+        type: string
+        nullable: true
+        comment: Fax number
+        source: FAX
+      - name: email
+        type: string
+        nullable: true
+        comment: Email address
+        source: EMAIL
+
+    source:
+      type: http
+      url: "https://campaignfinance.cdn.sos.ca.gov/dbwebexport.zip"
+      method: GET
+      extractPattern: "*/FILERNAME_CD.TSV"
+      response:
+        format: csv
+        delimiter: "\t"
+        quoted: false
+        hasHeader: true
+        pagination:
+          type: CSV_STREAM
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ca_filers/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+        emptyResultTtlMillis: 86400000
+      iceberg:
+        catalogType: hadoop
+        overwritePartitions: true
+        batchPartitionColumns: [type]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2526,6 +3514,41 @@ constraints:
       - columns: [committee_id]
         targetTable: committees
         targetColumns: [committee_id]
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  ca_contributions:
+    primaryKey: [type, filing_id, amend_id, line_item, form_type]
+    foreignKeys:
+      - columns: [committee_id]
+        targetTable: ca_filers
+        targetColumns: [filer_id]
+        comment: Links contribution to receiving Cal-Access filer
+      - columns: [contributor_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  ca_expenditures:
+    primaryKey: [type, filing_id, amend_id, line_item, form_type]
+    foreignKeys:
+      - columns: [committee_id]
+        targetTable: ca_filers
+        targetColumns: [filer_id]
+        comment: Links expenditure to spending Cal-Access filer
+      - columns: [payee_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  ca_independent_expenditures:
+    primaryKey: [type, filing_id, amend_id, line_item]
+
+  ca_filers:
+    primaryKey: [type, xref_filer_id, filer_id, effective_date]
+    foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
