@@ -57,6 +57,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
+# Only one instance may run at a time. Two overlapping instances (e.g. the
+# run-scheduled.sh daemon and a manually-launched one) each derive a schema's pin
+# independently from MinIO's version-hint.text and verify+publish it to R2 on their own
+# timeline — a second instance can advance a table's R2 pointer past what the first one
+# already verified, without the first one's completed verification covering the second
+# instance's (newer) target version. A non-blocking lock makes that race impossible
+# instead of relying on operators to never run two copies.
+_LOCK_FILE="${HOME}/.r2-sync-state/.sync-to-r2.lock"
+mkdir -p "$(dirname "$_LOCK_FILE")"
+exec 200>"$_LOCK_FILE"
+if ! flock -n 200; then
+  log_error "sync-to-r2: another instance already holds the lock — exiting"
+  exit 0
+fi
+
 # Carry a signal through to the in-flight rclone. Without this the shell exits on TERM
 # while its foreground rclone keeps running as an orphan, so a copy to R2 continues
 # after the scheduler that owns it is gone.
