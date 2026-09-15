@@ -4871,6 +4871,18 @@ public class McpServer {
                     tablesArr.add(t);
                 }
             }
+        } else if (("describe_table".equals(tool) || "list_tables".equals(tool))
+                && args != null && args.hasNonNull("table") && args.hasNonNull("schema")) {
+            // describe_table/list_tables never carry a "sql" field, so without this branch a
+            // report correctly citing "confirmed via describe_table" for a table it genuinely
+            // inspected would be false-flagged by enforceTableProvenance below exactly as if it
+            // had never touched the table at all -- a describe_table call IS real provenance for
+            // a schema-shape claim ("this table lacks field X"), just not for a data-value claim.
+            String schema = args.get("schema").asText("").toLowerCase(java.util.Locale.ROOT);
+            String table = args.get("table").asText("").toLowerCase(java.util.Locale.ROOT);
+            if (!schema.isEmpty() && !table.isEmpty()) {
+                e.putArray("tables").add(schema + "." + table);
+            }
         }
         if (args != null && args.isObject()) {
             ObjectNode summary = MAPPER.createObjectNode();
@@ -5485,7 +5497,10 @@ public class McpServer {
     private static final java.util.regex.Pattern PROVENANCE_CLAIM_WORDS = java.util.regex.Pattern
         .compile("(?i)computed from|queried (?:directly|live|from)|sourced directly|"
             + "live[- ]scann?(?:ed)?|fetched directly from|pulled directly from|"
-            + "directly (?:via|from) the warehouse|warehouse[- ]native|live[- ]quer(?:y|ied)");
+            + "directly (?:via|from) the warehouse|warehouse[- ]native|live[- ]quer(?:y|ied)|"
+            + "confirmed (?:via|by|through)|inspect(?:ed|ing)|checked (?:its|the|both|all)?"
+            + "\\s*(?:schema|column|field)|column list|full column|does not (?:carry|have)|"
+            + "lacks? (?:the|a|any)?\\s*field");
 
     /**
      * A report claiming it queried, computed from, or live-scanned a table it never actually
