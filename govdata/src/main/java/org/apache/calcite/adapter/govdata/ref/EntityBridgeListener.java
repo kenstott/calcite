@@ -1076,6 +1076,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
       stmt.execute("SET memory_limit='2GB'");
       String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/entity-bridge-duckdb";
       stmt.execute("SET temp_directory='" + tempDir + "'");
+      stmt.execute("PRAGMA max_temp_directory_size='30GB'");
       try {
         stmt.execute("INSTALL parquet");
         stmt.execute("LOAD parquet");
@@ -1102,6 +1103,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
       stmt.execute("SET memory_limit='2GB'");
       String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/entity-bridge-duckdb";
       stmt.execute("SET temp_directory='" + tempDir + "'");
+      stmt.execute("PRAGMA max_temp_directory_size='30GB'");
       try {
         stmt.execute("INSTALL parquet");
         stmt.execute("LOAD parquet");
