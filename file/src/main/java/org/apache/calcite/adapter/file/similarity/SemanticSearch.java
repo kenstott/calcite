@@ -191,6 +191,34 @@ public final class SemanticSearch {
   }
 
   /**
+   * Expands glob patterns into the actual files that exist right now, via DuckDB {@code glob()},
+   * which returns zero rows rather than throwing when a pattern matches nothing -- unlike
+   * {@code read_parquet}, which errors the instant any one pattern in its list has no match.
+   *
+   * <p>Not every schema has reached the IVF-partitioned layout (or, before its first backlog run,
+   * even the flat one): {@link #defaultCodesGlobs} lists a fixed shape for every schema regardless
+   * of what has actually been produced yet. Passing an as-yet-nonexistent pattern straight to
+   * {@code read_parquet} fails that one call outright -- and since one call spans every schema at
+   * once, a single schema still waiting on compaction breaks the search for all of them. Resolving
+   * to real files first, and simply omitting a pattern with none, keeps every other schema
+   * searchable regardless of where any one of them is in the pipeline.
+   */
+  private static List<String> resolveCodesFiles(Connection c, List<String> globs)
+      throws SQLException {
+    List<String> files = new ArrayList<String>();
+    try (Statement st = c.createStatement()) {
+      for (String g : globs) {
+        try (ResultSet rs = st.executeQuery("SELECT file FROM glob('" + esc(g) + "')")) {
+          while (rs.next()) {
+            files.add(rs.getString(1));
+          }
+        }
+      }
+    }
+    return files;
+  }
+
+  /**
    * A relation over the given code paths, projected onto one column list.
    *
    * <p>The two shapes cannot be read together. A compacted path carries {@code centroid} in its
@@ -202,6 +230,11 @@ public final class SemanticSearch {
    * <p>Codes with no centroid are reported as -1, which the probe reads unconditionally: an
    * unassigned code has no partition to be skipped by, and dropping it would silently shrink the
    * searchable corpus to whatever happened to be embedded after centroids existed.
+   *
+   * <p>{@code paths} must already be resolved, existing files (see {@link #resolveCodesFiles}),
+   * never unexpanded glob patterns -- {@code read_parquet} throws on any list entry with zero
+   * matches, so an unresolved pattern for a schema that has not reached that shape yet would take
+   * down every other schema's search along with it.
    */
   private static String selectCodes(Connection c, List<String> paths) throws SQLException {
     List<String> flat = new ArrayList<String>();
@@ -449,7 +482,7 @@ public final class SemanticSearch {
     try {
       long[] w = packBits(v);
       Connection c = connection();
-      String src = localReady ? LOCAL_TABLE : selectCodes(c, codesGlobs());
+      String src = localReady ? LOCAL_TABLE : selectCodes(c, resolveCodesFiles(c, codesGlobs()));
       int prefilter = prefilterWidth(c, src);
 
       StringBuilder ham = new StringBuilder();
@@ -607,12 +640,18 @@ public final class SemanticSearch {
       }
 
       if (!haveTable || retired > 0) {
+        List<String> allFiles = new ArrayList<String>();
+        try (ResultSet rs = st.executeQuery("SELECT file FROM _vss_remote")) {
+          while (rs.next()) {
+            allFiles.add(rs.getString(1));
+          }
+        }
         st.execute("DROP TABLE IF EXISTS " + LOCAL_TABLE);
         st.execute("DELETE FROM " + LOCAL_SOURCE_TABLE);
         st.execute("CREATE TABLE " + LOCAL_TABLE + " AS SELECT * FROM "
-            + selectCodes(c, globs));
+            + selectCodes(c, allFiles));
         st.execute("INSERT INTO " + LOCAL_SOURCE_TABLE + " SELECT file FROM _vss_remote");
-        LOGGER.info("SEMANTIC_SEARCH loaded the codes locally ({} files)", globs.size());
+        LOGGER.info("SEMANTIC_SEARCH loaded the codes locally ({} files)", allFiles.size());
       } else {
         List<String> missing = new ArrayList<String>();
         try (ResultSet rs = st.executeQuery("SELECT file FROM _vss_remote WHERE file NOT IN "

@@ -407,6 +407,26 @@ public class SemanticSearchLocalCodesTest {
     }
   }
 
+  /** {@code calcite.vss.codes} lists every schema's flat AND ivf/ glob unconditionally
+   *  ({@link SemanticSearch#defaultCodesGlobs}), whether or not that schema has reached either
+   *  shape yet. A glob with zero matches must simply be left out of the query rather than making
+   *  {@code read_parquet} error out and take every other schema's search down with it -- this
+   *  reproduces the ops-repo defect where not one schema in production had ever compacted into
+   *  the ivf/ layout, so the fixed pattern's `.../ivf/**&#47;*.parquet` matched nothing anywhere. */
+  @Test void ignoresAGlobThatMatchesNoFiles() throws Exception {
+    Path codes = tmp.resolve("codes-a.parquet");
+    List<double[]> vectors = writeCodes(codes, "a", 50, 17L);
+    Path noSuchIvfDir = tmp.resolve("no-such-ivf-dir");
+    System.setProperty("calcite.vss.codes",
+        "['" + codes.toAbsolutePath() + "', '" + noSuchIvfDir.toAbsolutePath()
+            + "/**/*.parquet']");
+    System.clearProperty("calcite.vss.localDb");
+
+    List<Object[]> hits = SemanticSearch.searchVector(vectors.get(4), 3);
+
+    assertEquals("a4", hits.get(0)[0], "the real file's rows must still be searchable");
+  }
+
   /** Without the property nothing local is built, and search still works by reading the files
    *  directly -- the fallback that keeps standalone and test use unchanged. */
   @Test void worksWithoutALocalDatabase() throws Exception {
