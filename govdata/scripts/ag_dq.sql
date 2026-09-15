@@ -99,6 +99,89 @@ SELECT 'ag', 'nass_livestock_inventory', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_livestock_inventory', allow_moved_paths := true) WHERE short_desc IS NULL);
 
 -- ------------------------------------------------------------
+-- TABLE: nass_farm_operations (partition cols: type, year; PK id col: short_desc)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'nass_farm_operations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_farm_operations', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_farm_operations', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_farm_operations', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_farm_operations', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'nass_farm_operations', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_farm_operations', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+-- sector_desc/group_desc/commodity_desc are excluded: this table is intentionally scoped to
+-- NASS's FARM OPERATIONS commodity (ECONOMICS/FARMS & LAND & ASSETS) — constant across every
+-- year in production, not an ingestion gap.
+SELECT 'ag', 'nass_farm_operations', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_farm_operations', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'sector_desc', 'group_desc', 'commodity_desc')));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_farm_operations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_farm_operations', allow_moved_paths := true) WHERE short_desc IS NULL);
+
+-- ------------------------------------------------------------
+-- TABLE: nass_land_values (partition cols: type, year; PK id col: short_desc)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'nass_land_values', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_land_values', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_land_values', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_land_values', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_land_values', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'nass_land_values', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_land_values', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+-- sector_desc/group_desc/commodity_desc are excluded: this table is intentionally scoped to
+-- NASS's AG LAND commodity (ECONOMICS/FARMS & LAND & ASSETS) — constant across every year in
+-- production, not an ingestion gap.
+SELECT 'ag', 'nass_land_values', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_land_values', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'sector_desc', 'group_desc', 'commodity_desc')));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_land_values', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_land_values', allow_moved_paths := true) WHERE short_desc IS NULL);
+
+-- T7: land-value-per-acre series present -- the specific measure the
+-- farm-consolidation-vs-land-value analysis this table exists for depends on.
+-- Its absence would mean the SURVEY/ASSET VALUE rows never landed even though
+-- the table has other AG LAND rows (e.g. only CENSUS tenure statistics ingested).
+INSERT INTO dq_results
+SELECT 'ag', 'nass_land_values', 'T7_land_value_per_acre_present',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Rows with source_desc=SURVEY, statisticcat_desc=ASSET VALUE, unit_desc=$ / ACRE'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_land_values', allow_moved_paths := true)
+  WHERE source_desc = 'SURVEY' AND statisticcat_desc = 'ASSET VALUE' AND unit_desc = '$ / ACRE');
+
+-- ------------------------------------------------------------
 -- TABLE: rma_crop_insurance (partition cols: type, year; PK id col: commodity_code)
 -- ------------------------------------------------------------
 INSERT INTO dq_results

@@ -21,12 +21,13 @@ materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   USDA agricultural economics: crop production and livestock inventory (NASS
-  QuickStats), farm income and wealth (ERS), and crop insurance experience
-  (RMA Summary of Business); plus USGS estimated agricultural pesticide use by
-  county (NAWQA Pesticide National Synthesis Project). County- and state-level,
-  joinable to geo.counties / geo.states via state_fips_code + county_code, to
-  disasters (drought/storm) for yield-impact analysis, and to econ.fred_indicators
-  for commodity-price context.
+  QuickStats), Census of Agriculture farm counts/size and NASS Land Values
+  survey (NASS QuickStats), farm income and wealth (ERS), and crop insurance
+  experience (RMA Summary of Business); plus USGS estimated agricultural
+  pesticide use by county (NAWQA Pesticide National Synthesis Project). County-
+  and state-level, joinable to geo.counties / geo.states via state_fips_code +
+  county_code, to disasters (drought/storm) for yield-impact analysis, and to
+  econ.fred_indicators for commodity-price context.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -476,6 +477,187 @@ partitionedTables:
       format: iceberg
       output:
         pattern: "type=nass_livestock_inventory/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+  # ---------------------------------------------------------------------------
+  # NASS_FARM_OPERATIONS — farm counts and farm-size distribution (NASS QuickStats)
+  # ---------------------------------------------------------------------------
+  # commodity_desc=FARM OPERATIONS, no statisticcat filter (same unfiltered-breadth
+  # design as nass_crop_production): captures both source_desc=CENSUS (Census of
+  # Agriculture, every 5 years, county-dense — farm counts and size-class breakdowns)
+  # and source_desc=SURVEY (annual "Farms and Land in Farms" report, state-level
+  # only — no county grain outside Census years). Worst-case county-grain chunk
+  # verified live: TX 2017 COUNTY = 10,746 rows, well under the 50,000-row cap.
+  - name: nass_farm_operations
+    # Freshness gate: a REST query API has no meaningful Last-Modified for the underlying
+    # data, so this hashes the response body post-fetch to skip the materialize/commit when
+    # nothing changed since the last successful run (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=nass_farm_operations/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA NASS QuickStats farm counts and farm-size distribution — Census of
+      Agriculture (source_desc=CENSUS, every 5 years: 1997, 2002, 2007, 2012,
+      2017, 2022; county- and state-level) plus the annual "Farms and Land in
+      Farms" survey (source_desc=SURVEY, state-level only). Tall layout: filter
+      domain_desc='AREA OPERATED' + statisticcat_desc='OPERATIONS' for farm count
+      by acreage size class (domaincat_desc, e.g. 'AREA OPERATED: (1,000 OR MORE
+      ACRES)'), domain_desc='ECONOMIC CLASS' for farm count by sales-value size
+      class, or domain_desc='TOTAL' + statisticcat_desc='OPERATIONS' for the plain
+      total farm count. statisticcat_desc='AREA OPERATED' carries acres operated
+      (farm size in acres, not a count) under the same domain breakdowns. Also
+      carries organic-status, financing-source, and NAICS-classification breakdowns
+      for the same farm population — filter statisticcat_desc/domain_desc for the
+      measure needed. Joins to geo.counties via the derived county_fips column and
+      to geo.states via state_fips_code; combine with nass_land_values (land value
+      per acre) for farm-consolidation-vs-land-value analysis.
+
+    dimensions:
+      type:
+        - nass_farm_operations
+      agg_level_desc: *nass_agg_levels
+      state_alpha: *nass_states
+      year: *nass_year_range
+
+    columns: *nass_columns
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        sector_desc: "ECONOMICS"
+        group_desc: "FARMS & LAND & ASSETS"
+        commodity_desc: "FARM OPERATIONS"
+        agg_level_desc: "{agg_level_desc}"
+        state_alpha: "{state_alpha}"
+        year: "{effective_year}"
+      response:
+        format: json
+      rateLimit:
+        # Same NASS Azure Application Gateway WAF throttling behavior documented on
+        # nass_crop_production/nass_livestock_inventory above applies here — same host,
+        # same fan-out shape (2 agg_levels x 58 states x ~32 years).
+        requestsPerSecond: 1
+        retryOn: [429, 403, 500, 503]
+        maxRetries: 6
+        retryBackoffMs: 5000
+        # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
+        # state/year with no COUNTY-grain FARM OPERATIONS records (e.g. non-Census years
+        # have no county grain at all) — same idiom as the sibling NASS tables above.
+        skipOn: [400]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_farm_operations/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+  # ---------------------------------------------------------------------------
+  # NASS_LAND_VALUES — agricultural land value per acre (NASS QuickStats)
+  # ---------------------------------------------------------------------------
+  # commodity_desc=AG LAND, no statisticcat filter (same unfiltered-breadth design
+  # as nass_crop_production): captures the annual Land Values survey
+  # (source_desc=SURVEY, state-level, back to 1912 per NASS's own param catalog)
+  # plus Census of Agriculture county-level ag-land area/operations/tenure
+  # statistics (source_desc=CENSUS, every 5 years). Worst-case county-grain chunk
+  # verified live: TX 2017 COUNTY = 27,509 rows, under the 50,000-row cap.
+  - name: nass_land_values
+    # Freshness gate: a REST query API has no meaningful Last-Modified for the underlying
+    # data, so this hashes the response body post-fetch to skip the materialize/commit when
+    # nothing changed since the last successful run (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=nass_land_values/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA NASS QuickStats agricultural land value and tenure statistics. The
+      farm-consolidation-vs-land-value question this table exists for: filter
+      source_desc='SURVEY' + statisticcat_desc='ASSET VALUE' + unit_desc='$ / ACRE'
+      for the annual per-acre land value series (class_desc breaks it out by
+      'AG LAND, INCL BUILDINGS', 'CROPLAND', 'CROPLAND, IRRIGATED',
+      'CROPLAND, NON-IRRIGATED', 'PASTURELAND'), state-level only (agg_level_desc
+      never COUNTY for the survey). source_desc='CENSUS' rows (every 5 years:
+      1997, 2002, 2007, 2012, 2017, 2022) additionally carry county-level ag-land
+      area, farm-operation counts on that land, and landlord/tenant statistics
+      (statisticcat_desc AREA/OPERATIONS/TENANTS) — a different, land-tenure-focused
+      angle from nass_farm_operations' farm-population angle. Joins to geo.counties
+      via the derived county_fips column and to geo.states via state_fips_code;
+      combine with nass_farm_operations (farm count/size) for
+      farm-consolidation-vs-land-value analysis.
+
+    dimensions:
+      type:
+        - nass_land_values
+      agg_level_desc: *nass_agg_levels
+      state_alpha: *nass_states
+      year: *nass_year_range
+
+    columns: *nass_columns
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        sector_desc: "ECONOMICS"
+        group_desc: "FARMS & LAND & ASSETS"
+        commodity_desc: "AG LAND"
+        agg_level_desc: "{agg_level_desc}"
+        state_alpha: "{state_alpha}"
+        year: "{effective_year}"
+      response:
+        format: json
+      rateLimit:
+        # Same NASS Azure Application Gateway WAF throttling behavior documented on
+        # nass_crop_production/nass_livestock_inventory above applies here — same host,
+        # same fan-out shape (2 agg_levels x 58 states x ~32 years).
+        requestsPerSecond: 1
+        retryOn: [429, 403, 500, 503]
+        maxRetries: 6
+        retryBackoffMs: 5000
+        # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
+        # state/year with no COUNTY-grain AG LAND records (e.g. non-Census years have no
+        # county grain at all) — same idiom as the sibling NASS tables above.
+        skipOn: [400]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_land_values/year=*/"
       partition:
         columns: [type, year]
         valueSource:
@@ -1587,6 +1769,54 @@ constraints:
         comment: 5-digit county FIPS to geo.counties
 
   nass_livestock_inventory:
+    primaryKey:
+      - type
+      - year
+      - source_desc
+      - agg_level_desc
+      - state_fips_code
+      - county_code
+      - short_desc
+      - domaincat_desc
+      - reference_period_desc
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+        comment: NASS state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+  nass_farm_operations:
+    # Uniqueness = program source x geography x full data-item (short_desc) x
+    # domain category x reference period x year (same shape as nass_crop_production).
+    primaryKey:
+      - type
+      - year
+      - source_desc
+      - agg_level_desc
+      - state_fips_code
+      - county_code
+      - short_desc
+      - domaincat_desc
+      - reference_period_desc
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+        comment: NASS state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+  nass_land_values:
     primaryKey:
       - type
       - year
