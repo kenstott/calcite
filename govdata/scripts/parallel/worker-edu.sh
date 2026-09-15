@@ -91,7 +91,7 @@ run_ungrouped_edu_tables() {
   local start="$1" end="$2" unassigned _t quoted=""
   unassigned="$(unassigned_schema_tables edu all \
     "k12|ccd_districts,ccd_schools" \
-    "assessments|naep_scores,naep_achievement_levels,crdc_schools" \
+    "assessments|naep_scores,naep_achievement_levels,crdc_schools,district_assessments" \
     "ipeds|ipeds_institutions,ipeds_completions,ipeds_financials,ipeds_tuition" \
     "libraries|library_outlets" \
     "f33|f33_district_finance" \
@@ -125,7 +125,7 @@ run_historical_cadence() {
     '"ccd_districts", "ccd_schools"' "$START" "$END"
 
   run_edu_model "edu-initial-assessments" \
-    '"naep_scores", "naep_achievement_levels", "crdc_schools"' "$START" "$END"
+    '"naep_scores", "naep_achievement_levels", "crdc_schools", "district_assessments"' "$START" "$END"
 
   run_edu_model "edu-initial-ipeds" \
     '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"' "$START" "$END"
@@ -197,6 +197,14 @@ run_biennial_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
     run_edu_model "edu-biennial-naep" \
       '"naep_scores", "naep_achievement_levels"' "$BIENNIAL_START"
+  fi
+
+  # district_assessments' yearRange is capped at maxYear:2020 (source dormant since —
+  # verified live 2026-09-14); this call is a safe no-op until the source resumes
+  # publishing and the cap in edu-schema.yaml is bumped.
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "district_assessments"; then
+    run_edu_model "edu-biennial-district-assessments" \
+      '"district_assessments"' "$BIENNIAL_START"
   fi
 
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "crdc_schools"; then

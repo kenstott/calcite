@@ -2574,6 +2574,191 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  # ==========================================================================
+  # DISTRICT ASSESSMENTS — NCES EDFacts state-assessment proficiency, district grain
+  # Urban Institute API: school-districts/edfacts/assessments/{year}/{grade}/
+  # ~14,000 LEAs per (year, grade); years 2009-2018 and 2020 only (source has
+  # published nothing since; verified live 2026-09-14)
+  # ==========================================================================
+  - name: district_assessments
+    pattern: "year={year}/grade={grade}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+        - name: grade
+          type: INTEGER
+
+    # DQ sample cap (GOVDATA_DQ mode): each (year, grade) is a separate fetch-unit
+    # (100 combos: 10 years x 10 grades), so the cap samples every combo — bounding
+    # a ~1.4M-row full historical load down to a fast DQ run. Cache-safe.
+    dqRowLimit: 2000
+
+    comment: >
+      NCES EDFacts state-assessment proficiency results, district (LEA) grain —
+      the district-grain achievement side of a spend-vs-outcome analysis that
+      f33_district_finance's dollar figures need (see that table's comment,
+      and district_naep_spending's, both of which explicitly note the absence
+      of this data until now). One row per LEA x year x grade (3-12), math and
+      reading/language-arts side by side. Source: Urban Institute's Education
+      Data Portal mirror of NCES EDFacts (educationdata.urban.org, ODC-BY
+      v1.0 license — free redistribution with attribution, no key required),
+      itself sourced from state education agencies' federally-mandated
+      assessment reporting. leaid is the source's own 7-digit NCES LEA ID,
+      already zero-padded — joins directly to ccd_districts.leaid and
+      f33_district_finance.leaid. CRITICAL CAVEAT (source's own documented
+      limitation, not an artifact of this table): each state administers its
+      own assessment with its own standards and proficiency cutoffs, so
+      proficiency rates are NOT comparable across states — only meaningfully
+      comparable within the same state, or as a same-district trend over
+      time. This is a materially weaker comparability guarantee than SEDA's
+      cross-state-standardized scale; SEDA was evaluated as the ideal source
+      for this gap but its data use agreement explicitly bars redistribution
+      ("non-transferable" license) and for-profit use, so it could not be
+      onboarded here. Proficiency shares are reported as a range
+      (..._pct_prof_low/high) rather than a point estimate for small
+      subgroups, per the source's own student-privacy suppression rules —
+      the range narrows as the tested population grows; ..._pct_prof_midpt
+      is the source's own range midpoint, not independently computed here.
+      Virginia's 2016-17 grade 5-8 math results are flagged by the source
+      itself as erroneously low (users referred to VDOE's own reporting
+      instead) — left as-is here since this table mirrors the source
+      verbatim. This endpoint's "all students" aggregate is fetched (race/
+      sex/disability subgroup breakdowns live on separate sub-endpoints and
+      are out of scope for this table — one table mirrors one source
+      endpoint). Years 2009-2018 and 2020 only; the source has not published
+      2019 (which errors, not just 404s, on this endpoint) or any year after
+      2020, so this table cannot track current-year district achievement —
+      only the historical window that overlaps f33_district_finance. All six
+      numeric outcome fields (read/math _num_valid, _pct_prof_low/high/midpt)
+      can carry the source's own negative sentinel codes instead of a real
+      count or percentage — confirmed live via the source's own
+      api-variables endpoint: -1 = Missing/not reported, -2 = Not applicable,
+      -3 = Suppressed data (distinct from the _low/_high range-reporting
+      convention above, which only applies to genuine non-negative
+      percentages). Observed live on this table: -2 and -3 together on
+      6.3% of rows. These are meaningful metadata, not corrupted data,
+      so this raw table keeps them as-is — any aggregation (SUM/AVG/ratio)
+      MUST exclude negative values first (value < 0), or the sentinel codes
+      get silently averaged in as if they were real percentages.
+
+    columns:
+      - name: leaid
+        type: string
+        nullable: false
+        comment: >
+          NCES LEA ID (7-digit string, zero-padded by the source) — PK
+          component. FK to ccd_districts.leaid and f33_district_finance.leaid.
+      - name: year
+        type: int
+        nullable: false
+        comment: School year end year (e.g. 2018 = 2017-18) — PK component
+      - name: grade
+        type: int
+        nullable: false
+        comment: Tested grade, 3-12 — PK component. Source field grade_edfacts.
+      - name: lea_name
+        type: string
+        nullable: true
+        comment: District name, as reported to EDFacts (may differ slightly from ccd_districts.lea_name)
+      - name: fips
+        type: int
+        nullable: true
+        comment: State FIPS code — FK to geo.states.state_fips
+      - name: read_test_num_valid
+        type: int
+        nullable: true
+        comment: Number of students with a valid, reportable reading/language-arts assessment score. May carry a negative sentinel code (see table comment) instead of a real count.
+      - name: read_test_pct_prof_low
+        type: int
+        nullable: true
+        comment: Reading proficiency share, low end of the source's privacy-suppression range (percent). May carry a negative sentinel code (see table comment) instead of a real percentage.
+      - name: read_test_pct_prof_high
+        type: int
+        nullable: true
+        comment: Reading proficiency share, high end of the source's privacy-suppression range (percent). May carry a negative sentinel code (see table comment) instead of a real percentage.
+      - name: read_test_pct_prof_midpt
+        type: double
+        nullable: true
+        comment: Reading proficiency share, source's own midpoint of low/high (percent) — the usable point estimate where non-negative. May carry a negative sentinel code (see table comment) instead of a real percentage.
+      - name: math_test_num_valid
+        type: int
+        nullable: true
+        comment: Number of students with a valid, reportable math assessment score. May carry a negative sentinel code (see table comment) instead of a real count.
+      - name: math_test_pct_prof_low
+        type: int
+        nullable: true
+        comment: Math proficiency share, low end of the source's privacy-suppression range (percent). May carry a negative sentinel code (see table comment) instead of a real percentage.
+      - name: math_test_pct_prof_high
+        type: int
+        nullable: true
+        comment: Math proficiency share, high end of the source's privacy-suppression range (percent). May carry a negative sentinel code (see table comment) instead of a real percentage.
+      - name: math_test_pct_prof_midpt
+        type: double
+        nullable: true
+        comment: Math proficiency share, source's own midpoint of low/high (percent) — the usable point estimate where non-negative. May carry a negative sentinel code (see table comment) instead of a real percentage.
+
+    source:
+      type: http
+      url: "https://educationdata.urban.org/api/v1/school-districts/edfacts/assessments/{year}/grade-{grade}/"
+      method: GET
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: PAGE
+          pageSize: 10000
+          pageParam: "page"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 2
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+      incremental:
+        yearParam: "year"
+        yearRange:
+          start: "${GOVDATA_START_YEAR:2009}"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.DistrictAssessmentsResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2009}"
+        minYear: 2009
+        maxYear: 2020  # source has published nothing since 2020 (verified live 2026-09-14); bump if a newer cycle appears
+        excludeYears: [2019]  # not published on this endpoint — a live request errors (HTTP 500), not 404
+      grade:
+        - "3"
+        - "4"
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+        - "10"
+        - "11"
+        - "12"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year, grade]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
 # ============================================================================
 # Views
 # ============================================================================

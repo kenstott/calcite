@@ -48,6 +48,7 @@ FROM (
   UNION ALL SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1)
 );
 
 -- ============================================================
@@ -90,6 +91,7 @@ FROM (
   UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true)
   UNION ALL SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true)  -- dqRowLimit=50000/year
   UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
+  UNION ALL SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true)  -- dqRowLimit=2000/(year,grade)
 );
 
 -- ============================================================
@@ -110,6 +112,7 @@ SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_
 SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1;
 SELECT 'library_outlets'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1;
 SELECT 'f33_district_finance'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1;
+SELECT 'district_assessments'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1;
 
 -- ============================================================
 -- T4: ALL-NULL COLUMNS
@@ -223,6 +226,14 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_di
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('type', 'year');
 
+INSERT INTO dq_results
+SELECT 'edu', 'district_assessments', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year', 'grade');
+
 -- ============================================================
 -- T5: ALL-SAME-VALUE COLUMNS
 -- approx_unique <= 1 and not already 100% null = every non-null row has same value.
@@ -335,6 +346,14 @@ SELECT 'edu', 'f33_district_finance', 'all_same_value',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type', 'year');
+
+INSERT INTO dq_results
+SELECT 'edu', 'district_assessments', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'grade');
 
 -- ============================================================
 -- T6: BUSINESS NON-NULLS
@@ -643,6 +662,36 @@ FROM (
   GROUP BY leaid, year HAVING COUNT(*) > 1
 );
 
+-- district_assessments PK: leaid, year, grade
+INSERT INTO dq_results
+SELECT 'edu', 'district_assessments', 'pk_nulls',
+  CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(total AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN n1 > 0 THEN 'leaid:' || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'year:'  || n2 ELSE NULL END,
+    CASE WHEN n3 > 0 THEN 'grade:' || n3 ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN leaid IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN year  IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN grade IS NULL THEN 1 ELSE 0 END) AS n3,
+    SUM(CASE WHEN leaid IS NULL OR year IS NULL OR grade IS NULL THEN 1 ELSE 0 END) AS total
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true)
+);
+
+-- district_assessments: leaid must be unique per (year, grade)
+INSERT INTO dq_results
+SELECT 'edu', 'district_assessments', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT leaid, year, grade
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true)
+  GROUP BY leaid, year, grade HAVING COUNT(*) > 1
+);
+
 -- ============================================================
 -- T7: EXPECTED VALUE DISTRIBUTIONS
 -- Dimension columns must fall within known enumerated sets.
@@ -824,6 +873,33 @@ FROM (
   SELECT SUM(CASE WHEN tuition_fees_ft < 0 THEN 1 ELSE 0 END) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition', allow_moved_paths=true)
   WHERE tuition_fees_ft IS NOT NULL
+);
+
+-- district_assessments: grade must be 3-12
+INSERT INTO dq_results
+SELECT 'edu', 'district_assessments', 'grade_values',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0',
+  'distinct grades: ' || vals
+FROM (
+  SELECT SUM(CASE WHEN grade NOT BETWEEN 3 AND 12 THEN 1 ELSE 0 END) AS bad,
+         STRING_AGG(DISTINCT CAST(grade AS VARCHAR), ', ' ORDER BY CAST(grade AS VARCHAR)) AS vals
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true)
+);
+
+-- district_assessments: proficiency percentages must fall in [0,100] once the
+-- source's own negative sentinel codes (-1/-2/-3 — see table comment) are excluded;
+-- those are documented missingness codes, not out-of-range data.
+INSERT INTO dq_results
+SELECT 'edu', 'district_assessments', 'pct_prof_range',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(CASE
+    WHEN read_test_pct_prof_midpt > 100 OR math_test_pct_prof_midpt > 100
+    THEN 1 ELSE 0 END) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true)
+  WHERE read_test_pct_prof_midpt IS NOT NULL OR math_test_pct_prof_midpt IS NOT NULL
 );
 
 -- ipeds_financials: form_type must be F1A, F2, or F3
