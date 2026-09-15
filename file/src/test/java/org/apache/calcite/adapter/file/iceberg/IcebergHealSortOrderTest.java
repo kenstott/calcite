@@ -64,8 +64,6 @@ public class IcebergHealSortOrderTest {
   private Table table;
   private StorageProvider storageProvider;
 
-  private static final String BUDGET_PROPERTY = "calcite.iceberg.sort.memory.budget.bytes";
-
   private static final Schema SCHEMA = new Schema(
       Types.NestedField.optional(1, "name", Types.StringType.get()),
       Types.NestedField.optional(2, "id", Types.IntegerType.get()),
@@ -278,7 +276,7 @@ public class IcebergHealSortOrderTest {
     assertEquals(Arrays.asList("zebra", "alpha"), namesIn(2024), "data left untouched");
   }
 
-  @Test void healUsesTheExternalMergeWhenThePartitionExceedsTheBudget() throws Exception {
+  @Test void healUsesTheExternalMergeOnALargePartition() throws Exception {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Six files whose rows interleave across the whole alphabet, so a correct result cannot
     // come from any single run being emitted in order.
@@ -292,23 +290,12 @@ public class IcebergHealSortOrderTest {
     List<String> expected = new ArrayList<>(namesIn(2024));
     Collections.sort(expected);
 
-    // A 1-byte budget forces every partition down the spill-and-merge path. Without this the
-    // external merge is unreachable in a unit test, and it is the half of heal that carries the
-    // real risk: run spilling, the k-way merge, and record reuse across readers.
-    String previous = System.getProperty(BUDGET_PROPERTY);
-    System.setProperty(BUDGET_PROPERTY, "1");
-    try {
-      assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
-    } finally {
-      if (previous == null) {
-        System.clearProperty(BUDGET_PROPERTY);
-      } else {
-        System.setProperty(BUDGET_PROPERTY, previous);
-      }
-    }
+    // Heal always goes through the external merge — the half of heal that carries the real
+    // risk: run spilling, the k-way merge, and record reuse across readers.
+    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
 
     assertEquals(expected, namesIn(2024),
-        "the external merge must produce the same total order as an in-memory sort");
+        "the external merge must produce the correct total order");
   }
 
   @Test void emptySortOrderIsANoOp() throws Exception {

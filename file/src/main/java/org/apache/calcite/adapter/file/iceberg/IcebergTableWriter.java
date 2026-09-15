@@ -1526,12 +1526,10 @@ public class IcebergTableWriter {
    * reader can prune nothing and an equality predicate scans every row group. Sorting narrows
    * those ranges so the same predicate touches a handful of files.
    *
-   * <p>Safe to do in memory here, and only here: this path operates exclusively on files below
-   * {@code smallFileSizeBytes} (10MB by default), so a partition's candidate set is bounded by
-   * that times the file count rather than by table size. The sort memory budget caps it
-   * regardless; over the cap the same file set is rewritten by the external merge, which
-   * spill-sorts with heap bounded by one sorted run plus the merge frontier rather than by
-   * partition size. Rewriting already-compacted large files is deliberately NOT attempted here.
+   * <p>Sorting always goes through the external merge, which spill-sorts the file set with heap
+   * bounded by one sorted run plus the merge frontier rather than by partition size — no code
+   * path buffers a whole partition's decoded rows in memory on the strength of a size estimate.
+   * Rewriting already-compacted large files is deliberately NOT attempted here.
    *
    * <p>When a run rewrites every live file of every partition in {@code sortOrder} — the shape
    * of a wholesale rebuild, whose fresh files are all small — the table is left fully sorted
@@ -1785,10 +1783,9 @@ public class IcebergTableWriter {
    * automatically re-run as new data arrives — appends degrade clustering over time and a
    * periodic re-heal is a scheduling decision, not something inferred here.
    *
-   * <p>Memory: partitions within the sort memory budget sort in memory; larger ones
-   * use an external merge that spills sorted runs to local temp files and merges them with one
-   * record per run resident. Peak heap is therefore bounded by the larger of one input file and
-   * the merge frontier, not by partition size.
+   * <p>Memory: every partition sorts via an external merge that spills sorted runs to local
+   * temp files and merges them with one record per run resident. Peak heap is therefore bounded
+   * by the larger of one input file and the merge frontier, not by partition size.
    *
    * @param force bypasses the {@link #SORTED_BY_PROPERTY} idempotency check. Wholesale
    *     replacement through {@link #replacePartitionsDataFiles} removes the property before
@@ -1840,11 +1837,7 @@ public class IcebergTableWriter {
       }
       LOGGER.info("Healing partition {} of {}: {} files, {} bytes, sortOrder {}",
           entry.getKey(), table.name(), files.size(), bytes, sortOrder);
-      if (fitsInSortMemory(bytes)) {
-        compactPartition(files, targetFileSizeBytes, sortOrder);
-      } else {
-        rewritePartitionExternallySorted(files, targetFileSizeBytes, sortOrder);
-      }
+      rewritePartitionExternallySorted(files, targetFileSizeBytes, sortOrder);
       healed++;
     }
 
@@ -2053,71 +2046,6 @@ public class IcebergTableWriter {
     return out;
   }
 
-  /**
-   * Above this, a partition is not sorted in memory.
-   *
-   * <p>Both compaction and heal switch to the external merge over the budget. Tunable via
-   * {@code calcite.iceberg.sort.memory.budget.bytes} because the right value depends on the
-   * heap the ETL worker was given, which this class cannot know — and because a test needs to
-   * force the external path without materialising half a gigabyte.
-   */
-  /**
-   * Heap-to-disk expansion factor for deciding whether a partition can be sorted in memory.
-   *
-   * <p>Parquet on disk is compressed, dictionary-encoded and columnar; the buffer holds decoded
-   * Java {@code Record} objects with real String instances and per-object overhead. For
-   * string-heavy tables the second is an order of magnitude larger than the first, so comparing
-   * {@code fileSizeInBytes()} against a heap budget compares two things that are not alike —
-   * which is exactly how a ~400MB partition passed a 512MB check and then exhausted a 4GB heap
-   * decoding it.
-   *
-   * <p>Deliberately conservative: over-estimating costs a spill that was not strictly needed,
-   * while under-estimating costs an OutOfMemoryError partway through a rewrite. Tunable via
-   * {@code calcite.iceberg.sort.expansion.factor}.
-   */
-  private static long expansionFactor() {
-    String configured = System.getProperty("calcite.iceberg.sort.expansion.factor");
-    if (configured != null && !configured.isEmpty()) {
-      try {
-        long f = Long.parseLong(configured.trim());
-        if (f > 0) {
-          return f;
-        }
-        LOGGER.warn("Ignoring non-positive calcite.iceberg.sort.expansion.factor '{}'", configured);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Ignoring non-numeric calcite.iceberg.sort.expansion.factor '{}'", configured);
-      }
-    }
-    return 12L;
-  }
-
-  /**
-   * Whether {@code fileBytes} of Parquet can be decoded and sorted within the heap budget.
-   *
-   * <p>Compares ESTIMATED HEAP, not file size — see {@link #expansionFactor()}.
-   */
-  private static boolean fitsInSortMemory(long fileBytes) {
-    long estimatedHeap = fileBytes * expansionFactor();
-    boolean fits = estimatedHeap <= sortMemoryBudgetBytes();
-    LOGGER.info("Sort sizing: {} bytes on disk ~= {} bytes decoded (x{}), budget {} -> {}",
-        fileBytes, estimatedHeap, expansionFactor(), sortMemoryBudgetBytes(),
-        fits ? "in-memory" : "external merge");
-    return fits;
-  }
-
-  private static long sortMemoryBudgetBytes() {
-    String configured = System.getProperty("calcite.iceberg.sort.memory.budget.bytes");
-    if (configured != null && !configured.isEmpty()) {
-      try {
-        return Long.parseLong(configured.trim());
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Ignoring non-numeric calcite.iceberg.sort.memory.budget.bytes '{}'",
-            configured);
-      }
-    }
-    return 512L * 1024 * 1024;
-  }
-
   private boolean compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes,
       java.util.List<String> sortOrder) throws IOException {
     if (smallFiles.isEmpty()) {
@@ -2160,23 +2088,14 @@ public class IcebergTableWriter {
     int currentRecordCount = 0;
     int totalWritten = 0;
 
-    // Sorting requires seeing every row before writing the first, so the rows are buffered.
-    // Bounded by the small-file threshold (these are all <10MB files), with the sort memory
-    // budget as a hard cap; over the cap the rewrite goes through the external merge, which
-    // spill-sorts the same file set with heap bounded by one run plus the merge frontier.
-    List<Record> sortBuffer = null;
-    java.util.Comparator<Record> sortComparator = null;
-    boolean sorted = false;
-    if (sortOrder != null && !sortOrder.isEmpty()) {
-      sortComparator = recordComparator(schema, sortOrder);
-      if (sortComparator != null && !fitsInSortMemory(totalBytes)) {
-        sorted = rewritePartitionExternallySorted(smallFiles, targetFileSizeBytes, sortOrder);
-        return sorted;
-      }
-      if (sortComparator != null) {
-        sortBuffer = new ArrayList<>((int) Math.min(totalRecords, Integer.MAX_VALUE));
-        sorted = true;
-      }
+    // Sorted compaction always goes through the external merge (bounded heap: one spill run
+    // plus the merge frontier, never the whole partition) rather than sizing a partition against
+    // a decoded-bytes estimate and buffering it in memory when the estimate looks safe — no
+    // fixed disk-to-heap multiplier holds across every table's column/string shape, and a wrong
+    // guess buffers an unbounded batch straight into an OutOfMemoryError.
+    if (sortOrder != null && !sortOrder.isEmpty()
+        && recordComparator(schema, sortOrder) != null) {
+      return rewritePartitionExternallySorted(smallFiles, targetFileSizeBytes, sortOrder);
     }
 
     try {
@@ -2192,12 +2111,6 @@ public class IcebergTableWriter {
             .build()) {
 
           for (Record record : records) {
-            if (sortBuffer != null) {
-              // GenericParquetReaders may reuse the record instance across iterations, so the
-              // row must be copied before it is retained past this loop turn.
-              sortBuffer.add(copyRecord(record));
-              continue;
-            }
             if (currentWriter == null) {
               // Same empty-partition-path guard as writeRecords: an unpartitioned spec yields ""
               // here, and "data//compacted_x.parquet" is rejected by S3/MinIO with HTTP 400.
@@ -2230,40 +2143,6 @@ public class IcebergTableWriter {
         } catch (Exception e) {
           LOGGER.warn("Failed to read file {}: {}", dataFile.path(), e.getMessage());
         }
-      }
-
-      if (sortBuffer != null) {
-        sortBuffer.sort(sortComparator);
-        LOGGER.info("Sorted {} records by {} before writing", sortBuffer.size(), sortOrder);
-        for (Record record : sortBuffer) {
-          if (currentWriter == null) {
-            String outputPath = dataLocation + "/"
-                + (partitionPath.isEmpty() ? "" : partitionPath + "/")
-                + "compacted_" + java.util.UUID.randomUUID().toString().substring(0, 8)
-                + ".parquet";
-            if (outputPath.startsWith("s3://")) {
-              outputPath = "s3a://" + outputPath.substring(5);
-            }
-            OutputFile outputFile = table.io().newOutputFile(outputPath);
-            currentWriter = Parquet.writeData(outputFile)
-                .schema(schema)
-                .withSpec(spec)
-                .withPartition(partitionKey)
-                .createWriterFunc(GenericParquetWriter::buildWriter)
-                .overwrite()
-                .build();
-            currentRecordCount = 0;
-          }
-          currentWriter.write(record);
-          currentRecordCount++;
-          totalWritten++;
-          if (currentRecordCount >= recordsPerFile) {
-            currentWriter.close();
-            newFiles.add(currentWriter.toDataFile());
-            currentWriter = null;
-          }
-        }
-        sortBuffer = null;
       }
 
       if (currentWriter != null) {
@@ -2306,7 +2185,7 @@ public class IcebergTableWriter {
     });
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
-    return sorted;
+    return false;
   }
 
 

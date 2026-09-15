@@ -64,8 +64,6 @@ public class IcebergCompactionSortSmokeTest {
   private Table table;
   private StorageProvider storageProvider;
 
-  private static final String BUDGET_PROPERTY = "calcite.iceberg.sort.memory.budget.bytes";
-
   private static final Schema SCHEMA = new Schema(
       Types.NestedField.optional(1, "name", Types.StringType.get()),
       Types.NestedField.optional(2, "id", Types.IntegerType.get()),
@@ -173,8 +171,7 @@ public class IcebergCompactionSortSmokeTest {
     writeFile(writer, Arrays.asList(row("mango", 3), row("beta", 4)));
     writeFile(writer, Arrays.asList(row("yak", 5), row("cherry", 6)));
 
-    // No sortOrder: compaction must still merge the files, just without reordering. This is
-    // the pre-existing behaviour and the fallback path when a sort budget is exceeded.
+    // No sortOrder: compaction must still merge the files, just without reordering.
     int compacted = writer.compactSmallFiles(
         128L * 1024 * 1024, 2, 100L * 1024 * 1024, 7, Collections.<String>emptyList());
     assertEquals(1, compacted);
@@ -210,7 +207,7 @@ public class IcebergCompactionSortSmokeTest {
     assertEquals(expected, actual, "an unsortable sortOrder must still preserve every row");
   }
 
-  @Test void overBudgetCompactionSortsViaTheExternalMerge() throws Exception {
+  @Test void largePartitionCompactionSortsViaTheExternalMerge() throws Exception {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Six files whose rows interleave across the whole alphabet, so a correct result cannot
     // come from any single run being emitted in order.
@@ -224,25 +221,13 @@ public class IcebergCompactionSortSmokeTest {
     List<String> expected = readNamesInFileOrder();
     Collections.sort(expected);
 
-    // A 1-byte budget forces the compaction down the spill-and-merge path — the case that
-    // previously WARNed and rewrote unsorted.
-    String previous = System.getProperty(BUDGET_PROPERTY);
-    System.setProperty(BUDGET_PROPERTY, "1");
-    int compacted;
-    try {
-      compacted = writer.compactSmallFiles(
-          128L * 1024 * 1024, 2, 100L * 1024 * 1024, 7, Arrays.asList("name"));
-    } finally {
-      if (previous == null) {
-        System.clearProperty(BUDGET_PROPERTY);
-      } else {
-        System.setProperty(BUDGET_PROPERTY, previous);
-      }
-    }
+    // Sorted compaction always goes through the external merge, regardless of partition size.
+    int compacted = writer.compactSmallFiles(
+        128L * 1024 * 1024, 2, 100L * 1024 * 1024, 7, Arrays.asList("name"));
 
     assertEquals(1, compacted, "the single year=2024 partition should be compacted");
     assertEquals(expected, readNamesInFileOrder(),
-        "over-budget compaction must still sort, via the external merge");
+        "compaction must sort via the external merge");
     table.refresh();
     assertEquals("name", table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
         "every live file was rewritten in order, so the table must record the claim");
