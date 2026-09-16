@@ -1015,12 +1015,28 @@ public class DuckDBJdbcSchemaFactory {
    * True if the exception is DuckDB's single-process file-lock conflict on a database file
    * (another OS process already has the catalog open). Walks the cause chain.
    */
+  /**
+   * Recognizes DuckDB's single-writer-lock conflict across platforms. Unix/macOS DuckDB reports
+   * this as "Could not set lock on file ...: Conflicting lock is held ..."; Windows reports a
+   * completely different phrasing surfaced from the OS's own sharing-violation error instead —
+   * "IO Error: Cannot open file \"...\": The process cannot access the file because it is being
+   * used by another process. File is already open in &lt;exe&gt; (PID N)". Observed live
+   * (2026-09-15, real Windows install): a second concurrent process (a second open Claude
+   * Desktop thread spawning its own engine process against the same shared catalog) hit exactly
+   * this and got the raw IO error verbatim, because neither original substring matched it — the
+   * numbered-copy fallback below never engaged, silently, on every Windows install this could
+   * ever have affected. Matching only Unix wording was never validated against a real Windows
+   * error string; this file's own dev/test environment is macOS.
+   */
   private static boolean isCatalogLockConflict(SQLException e) {
     for (Throwable t = e; t != null; t = t.getCause()) {
       String msg = t.getMessage();
       if (msg != null) {
         String lower = msg.toLowerCase(java.util.Locale.ROOT);
-        if (lower.contains("could not set lock") || lower.contains("conflicting lock")) {
+        if (lower.contains("could not set lock") || lower.contains("conflicting lock")
+            || lower.contains("being used by another process")
+            || lower.contains("sharing violation")
+            || (lower.contains("cannot open file") && lower.contains("already open in"))) {
           return true;
         }
       }
