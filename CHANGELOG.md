@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.88.0](https://github.com/kenstott/calcite/compare/engine-v0.87.0...engine-v0.88.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** recognize "askamerica help" as an explicit orientation trigger ([d42f55e](https://github.com/kenstott/calcite/commit/d42f55e49536220e91d171e6dcfab98ff63e9735))
+
 ## [0.87.0](https://github.com/kenstott/calcite/compare/engine-v0.86.3...engine-v0.87.0) (2026-09-16)
 
 
