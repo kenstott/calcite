@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.86.3](https://github.com/kenstott/calcite/compare/engine-v0.86.2...engine-v0.86.3) (2026-09-16)
+
+
+### Bug Fixes
+
+* **file:** seed numbered catalog copies from the bundled jar, not the live base file ([c576fab](https://github.com/kenstott/calcite/commit/c576faba6f11d3c80e6fe3f4abea53df18e9e31d))
+
 ## [0.86.2](https://github.com/kenstott/calcite/compare/engine-v0.86.1...engine-v0.86.2) (2026-09-16)
 
 
