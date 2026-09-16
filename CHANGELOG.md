@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.85.0](https://github.com/kenstott/calcite/compare/engine-v0.84.0...engine-v0.85.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** auto-upload publish_report to Studies for registered accounts ([b26ca7c](https://github.com/kenstott/calcite/commit/b26ca7cab6482ff48f097f7bcb809714e8fb4c79))
+* **askamerica-engine:** offer a shareable report instead of mandating one silently ([1737a3c](https://github.com/kenstott/calcite/commit/1737a3ca8f41b40738be85b9b74b5dd6243d3fea))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** exempt external-source citations from statistical-provenance check ([31631ff](https://github.com/kenstott/calcite/commit/31631ffe6f873dfd84455dda17d5f62b4a10b97b))
+* **askamerica-engine:** warn real users that publish_report's link is ephemeral ([8ac2127](https://github.com/kenstott/calcite/commit/8ac2127ad59f08bd6253679aff8af951c3385b4e))
+
 ## [0.84.0](https://github.com/kenstott/calcite/compare/engine-v0.83.0...engine-v0.84.0) (2026-09-15)
 
 
