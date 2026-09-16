@@ -3405,6 +3405,20 @@ public class McpServer {
                     // markdown-renders tool-result text, Claude included.
                     String linkLabel = (rTitle == null || rTitle.isEmpty())
                         ? "Open the report" : rTitle;
+                    // A registered account gets its durable Studies link automatically here --
+                    // never rely on the model remembering a second tool call after the fact, the
+                    // same reason every other disclosure requirement in this file is a publish
+                    // gate rather than a prompt suggestion. Skipped entirely in EVAL_MODE so a
+                    // comparative-eval run never posts real content to a real Studies account.
+                    String durableNote = "";
+                    if (!EVAL_MODE && url != null && ACCOUNT != null && LAST_REPORT != null) {
+                        UploadResult auto = doUploadReport(ACCOUNT, LAST_REPORT);
+                        durableNote = auto.url != null
+                            ? "\n\nA permanent copy is also saved to your Studies page: " + auto.url
+                            : "\n\nCould not save a permanent copy automatically (" + auto.error
+                                + ") — the local link above will stop working once this process "
+                                + "exits; call `upload_report` yourself to retry.";
+                    }
                     String linkLine = url == null
                         ? "Report built (" + html.length() + " bytes) but no local server is "
                             + "available to serve it."
@@ -3415,14 +3429,16 @@ public class McpServer {
                         + (boardSvg == null ? "" : ", dashboard inlined")
                         + ". This link is served locally by this engine process and stops "
                         + "working the moment this process exits — it is NOT a durable URL, "
-                        + "regardless of how self-contained the page itself is. If the reader "
-                        + "will want to reopen this later, revisit it after the conversation "
-                        + "ends, or share it with someone else, call `register` once (if not "
-                        + "already done this session) and then `upload_report` right after "
-                        + "this call to get a permanent Studies-page link instead — do this "
-                        + "proactively rather than waiting to be asked, since the local link "
-                        + "silently going dead is not something the reader can detect in "
-                        + "advance."
+                        + "regardless of how self-contained the page itself is."
+                        + (!durableNote.isEmpty() ? durableNote
+                            : (EVAL_MODE ? "" : " If the reader will want to reopen this later, "
+                                + "revisit it after the conversation ends, or share it with "
+                                + "someone else, call `register` once (if not already done this "
+                                + "session) and then `upload_report` right after this call to "
+                                + "get a permanent Studies-page link instead — do this "
+                                + "proactively rather than waiting to be asked, since the local "
+                                + "link silently going dead is not something the reader can "
+                                + "detect in advance."))
                         + evalReportNote;
                     // Every report's first section is required to be the summary (see this
                     // tool's own "sections" schema). Order is: the dashboard image (already
@@ -10762,20 +10778,39 @@ public class McpServer {
      * to the caller's Studies page via POST /v1/studies/reports. Takes no arguments of its
      * own — there is exactly one thing to upload, whatever publish_report last built.
      */
-    private static String uploadReport() {
-        Account acct = ACCOUNT;
-        if (acct == null) {
-            return "Not registered yet — call register first, then upload_report.";
+    /** Outcome of a durable-upload attempt, whether triggered explicitly by the {@code
+     *  upload_report} tool or automatically from {@code publish_report}. Exactly one of
+     *  {@code url} or {@code error} is set. */
+    private static final class UploadResult {
+        final String url;
+        final String error;
+
+        private UploadResult(String url, String error) {
+            this.url = url;
+            this.error = error;
         }
-        LastReport report = LAST_REPORT;
-        if (report == null) {
-            return "No report has been published yet this session — call publish_report first, "
-                + "then upload_report.";
+
+        static UploadResult ok(String url) {
+            return new UploadResult(url, null);
         }
+
+        static UploadResult failed(String error) {
+            return new UploadResult(null, error);
+        }
+    }
+
+    /**
+     * POSTs {@code report} to the account's Studies page. Pulled out of {@link #uploadReport()}
+     * so {@code publish_report} can call it automatically for an already-registered account
+     * (see the call site there) without duplicating the HTTP handling -- a caller who already
+     * registered once should never need to remember a second tool call just to keep a report
+     * from dying with this process.
+     */
+    private static UploadResult doUploadReport(Account acct, LastReport report) {
         String apiKey = UsageMetering.resolveApiKey(null);
         if (apiKey == null || apiKey.isEmpty()) {
-            return "No engine API key is configured — upload_report needs the same key used to "
-                + "connect to askamerica.";
+            return UploadResult.failed("No engine API key is configured — upload needs the same "
+                + "key used to connect to askamerica.");
         }
         HttpURLConnection c = null;
         try {
@@ -10801,23 +10836,39 @@ public class McpServer {
                 JsonNode resp = MAPPER.readTree(c.getInputStream());
                 String reportUrl = resp.path("url").asText(null);
                 log.println("[askamerica-mcp] upload_report succeeded (HTTP " + code + ")");
-                return "Uploaded: " + reportUrl;
+                return UploadResult.ok(reportUrl);
             }
             if (code == 401 || code == 403) {
                 log.println("[askamerica-mcp] upload_report rejected: HTTP " + code);
-                return "Upload rejected (HTTP " + code + ") — the API key is invalid or has "
-                    + "been revoked. Do not retry; the account holder needs a new key.";
+                return UploadResult.failed("Upload rejected (HTTP " + code + ") — the API key "
+                    + "is invalid or has been revoked. Do not retry; the account holder needs a "
+                    + "new key.");
             }
             log.println("[askamerica-mcp] upload_report failed: HTTP " + code);
-            return "Could not upload (HTTP " + code + "). Nothing was published — please retry.";
+            return UploadResult.failed("Could not upload (HTTP " + code + "). Nothing was "
+                + "published — please retry.");
         } catch (Exception e) {
             log.println("[askamerica-mcp] upload_report error: " + e.getMessage());
-            return "Could not upload: " + e.getMessage() + ". Please retry.";
+            return UploadResult.failed("Could not upload: " + e.getMessage() + ". Please retry.");
         } finally {
             if (c != null) {
                 c.disconnect();
             }
         }
+    }
+
+    private static String uploadReport() {
+        Account acct = ACCOUNT;
+        if (acct == null) {
+            return "Not registered yet — call register first, then upload_report.";
+        }
+        LastReport report = LAST_REPORT;
+        if (report == null) {
+            return "No report has been published yet this session — call publish_report first, "
+                + "then upload_report.";
+        }
+        UploadResult result = doUploadReport(acct, report);
+        return result.url != null ? "Uploaded: " + result.url : result.error;
     }
 
     private static void persistAccount(Account acct) {
