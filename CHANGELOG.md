@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.89.0](https://github.com/kenstott/calcite/compare/engine-v0.88.0...engine-v0.89.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** lazily download the pgwire-govdata bundle on first use ([b5846f6](https://github.com/kenstott/calcite/commit/b5846f677e59be2cf08ca736f17affecf1101a3c))
+* **askamerica-engine:** opt-in thin-client mode over shared pgwire-govdata ([a52704f](https://github.com/kenstott/calcite/commit/a52704ff6682c8f17747b14452ea26fd7b2088c5))
+* **pgwire-calcite:** opt-in idle-shutdown when connection count hits zero ([8c567e0](https://github.com/kenstott/calcite/commit/8c567e006e23fed68f57eddaeaae8d8639908468))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** fix real spawn/connect bugs found via live e2e test ([1c13ba1](https://github.com/kenstott/calcite/commit/1c13ba15917aeedadb39ca5964709a71cb7f9d8a))
+* **pgwire:** dedupe bundled jar versions; tolerate not-yet-ETL'd tables ([dfd2077](https://github.com/kenstott/calcite/commit/dfd2077624cbe992595bae3544d984d9a0588363))
+
 ## [0.88.0](https://github.com/kenstott/calcite/compare/engine-v0.87.0...engine-v0.88.0) (2026-09-16)
 
 
