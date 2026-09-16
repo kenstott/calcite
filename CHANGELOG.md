@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.86.0](https://github.com/kenstott/calcite/compare/engine-v0.85.0...engine-v0.86.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** require a defect/sourcing classification on report_issue ([2ec2bfd](https://github.com/kenstott/calcite/commit/2ec2bfd418b85f54a1753ecf0d1607ba1e4109f2))
+
+
+### Bug Fixes
+
+* **file:** recognize Windows' file-locking error text in the DuckDB catalog fallback ([58c0100](https://github.com/kenstott/calcite/commit/58c01009183f87024873cda68ed436668f9c1e63))
+
 ## [0.85.0](https://github.com/kenstott/calcite/compare/engine-v0.84.0...engine-v0.85.0) (2026-09-16)
 
 
