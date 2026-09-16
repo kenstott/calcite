@@ -154,7 +154,9 @@ public class McpServer {
         return (raw == null || raw.isEmpty()) ? 30L : Long.parseLong(raw);
     }
 
-    private static PrintStream log;
+    // Package-private (not private): PgwireGovDataConnector shares this same diagnostic
+    // stream so its spawn/connect logging interleaves with the rest of the engine's log.
+    static PrintStream log;
 
     public static void main(String[] args) throws Exception {
         boolean mcpMode = false;
@@ -2536,6 +2538,13 @@ public class McpServer {
     }
 
     static Connection getSchemaConnection(final String schemaName) throws Exception {
+        // Opt-in (ASKAMERICA_PGWIRE_MODE=1, kenstott/calcite#364): every schema is mounted on
+        // one shared server-side catalog, so one shared client connection answers for all of
+        // them — bypass the per-schema embedded-DuckDB path below entirely. Not the default yet;
+        // see PgwireGovDataConnector's class javadoc for what's still unverified.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return PgwireGovDataConnector.getSharedConnection();
+        }
         Connection existing = schemaConns.get(schemaName);
         if (existing != null) {
             Long openedAt = schemaConnOpenedAtMillis.get(schemaName);
@@ -11031,6 +11040,14 @@ public class McpServer {
      * before ever re-extracting, so a later process restart won't overwrite this rebuild.
      */
     private static String updateSchema() throws Exception {
+        // Not reachable over the shared pgwire connection (kenstott/calcite#364): it isn't a
+        // CalciteConnection to unwrap, and a schema rebuild there would affect every process
+        // sharing the server, not just this one. No side-channel admin path exists yet.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return "update_schema is not available while ASKAMERICA_PGWIRE_MODE is enabled "
+                + "(this engine is a thin client of a shared pgwire-govdata server; "
+                + "rebuild that server's catalog directly instead).";
+        }
         Connection conn = getCatalogConnection();
         org.apache.calcite.jdbc.CalciteConnection calciteConn =
             conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
@@ -11069,6 +11086,14 @@ public class McpServer {
         }
         String normalized = limit.trim();
         System.setProperty("calcite.duckdb.memoryLimit", normalized);
+
+        // Same reason as update_schema: the shared pgwire connection isn't a CalciteConnection,
+        // and DuckDB's memory_limit there is server-wide, shared across every connected client.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return "set_memory_limit is not available while ASKAMERICA_PGWIRE_MODE is enabled "
+                + "(this engine is a thin client of a shared pgwire-govdata server; "
+                + "set its memory limit directly instead).";
+        }
 
         Connection conn = getCatalogConnection();
         org.apache.calcite.jdbc.CalciteConnection calciteConn =

@@ -70,6 +70,10 @@ dependencies {
     // parser-factory connection property (see McpServer's connection setup), not a dialect
     // switch on GovDataDriver's own shared default, so only this engine's connections change.
     implementation(project(":babel"))
+    // PostgreSQL wire-protocol client, for the shared pgwire-govdata singleton connection
+    // (McpServer's PgwireGovDataConnector, kenstott/calcite#364) — an alternative to each
+    // McpServer process embedding its own DuckDB connection to the govdata catalog file.
+    implementation("org.postgresql:postgresql")
     implementation("com.formdev:flatlaf:3.3")
     implementation("org.knowm.xchart:xchart:4.0.4")
     // PDF-to-text for web_fetch (McpServer). Not previously a real dependency here —
