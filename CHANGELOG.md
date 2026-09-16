@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.86.2](https://github.com/kenstott/calcite/compare/engine-v0.86.1...engine-v0.86.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* **file:** close TOCTOU race in stale-copy cleanup that could delete an in-use catalog ([a84db7e](https://github.com/kenstott/calcite/commit/a84db7ea6798cc9a3c91fbba2e8e4312998839ea))
+
 ## [0.86.1](https://github.com/kenstott/calcite/compare/engine-v0.86.0...engine-v0.86.1) (2026-09-16)
 
 
