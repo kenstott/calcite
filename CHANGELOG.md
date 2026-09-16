@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.91.0](https://github.com/kenstott/calcite/compare/engine-v0.90.1...engine-v0.91.0) (2026-09-16)
+
+
+### Features
+
+* bundle pgwire-govdata + a shared EMBED() service into the MSI installer ([79c476a](https://github.com/kenstott/calcite/commit/79c476a0758e7a10b647460a5d33ae61e31b73d7))
+
 ## [0.90.1](https://github.com/kenstott/calcite/compare/engine-v0.90.0...engine-v0.90.1) (2026-09-16)
 
 
