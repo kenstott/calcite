@@ -328,7 +328,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 102000
-      checkedAt: "2026-09-15T21:38:25Z"
+      checkedAt: "2026-09-16T21:59:16Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE summarized crime rates by state and offense type. Includes offense rate,
@@ -439,7 +439,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 867
-      checkedAt: "2026-09-15T21:38:28Z"
+      checkedAt: "2026-09-16T21:59:17Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE police employment data by state and year. Includes officers per 1,000
@@ -532,7 +532,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 113901
-      checkedAt: "2026-09-15T21:38:32Z"
+      checkedAt: "2026-09-16T21:59:18Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE LEOKA (Law Enforcement Officers Killed and Assaulted) Police Employee data at
@@ -668,7 +668,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 251277
-      checkedAt: "2026-09-15T21:38:35Z"
+      checkedAt: "2026-09-16T21:59:19Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE hate crime statistics by state and year. Flattened from nested sections
@@ -738,7 +738,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 12312
-      checkedAt: "2026-09-15T21:38:37Z"
+      checkedAt: "2026-09-16T21:59:19Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE use of force data by state and year, flattened into generic
@@ -810,7 +810,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 3121536
-      checkedAt: "2026-09-16T01:07:54Z"
+      checkedAt: "2026-09-16T21:59:21Z"
     # DQ sample cap (GOVDATA_DQ mode): the national Return A file unpivots to ~313k rows/year
     # (≈26k agencies × 12 months). Cap each year's sample; applied after the month-unpivot
     # transformer so it bounds output rows. Cache-safe — the fixed-width raw cache is written in
@@ -1552,7 +1552,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 153459
-      checkedAt: "2026-09-15T21:38:43Z"
+      checkedAt: "2026-09-16T21:59:22Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE arrest data by state, aggregated to annual (Jan-Dec) totals for all
@@ -1629,7 +1629,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 116178
-      checkedAt: "2026-09-15T21:38:46Z"
+      checkedAt: "2026-09-16T21:59:22Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE Supplementary Homicide Report data, aggregated to annual (Jan-Dec)
@@ -1704,7 +1704,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 71043
-      checkedAt: "2026-09-15T21:38:48Z"
+      checkedAt: "2026-09-16T21:59:23Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE Law Enforcement Officers Killed and Assaulted (LEOKA) data.
@@ -1854,7 +1854,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 9537
-      checkedAt: "2026-09-15T21:38:50Z"
+      checkedAt: "2026-09-16T21:59:23Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE supplemental property crime data. Stolen and recovered property
@@ -2041,7 +2041,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 20878
-      checkedAt: "2026-09-15T21:38:52Z"
+      checkedAt: "2026-09-16T21:59:24Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS personal victimization microdata, one row
@@ -2193,7 +2193,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2168279
-      checkedAt: "2026-09-15T21:38:54Z"
+      checkedAt: "2026-09-16T21:59:25Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS personal population data. Demographic
@@ -2326,7 +2326,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 81536
-      checkedAt: "2026-09-15T21:38:57Z"
+      checkedAt: "2026-09-16T21:59:26Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS household victimization microdata, one row
@@ -2453,7 +2453,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1538219
-      checkedAt: "2026-09-15T21:38:59Z"
+      checkedAt: "2026-09-16T21:59:27Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS household population data — demographic
