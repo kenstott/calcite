@@ -71,6 +71,14 @@ public class DuckDBJdbcSchemaFactory {
   private static final int MAX_CATALOG_LOCK_FALLBACKS = 16;
 
   /**
+   * One-time-per-JVM guard for {@link #cleanupStaleNumberedCopies(String)} — the scan itself is
+   * cheap (a handful of lock-check opens), but there is no reason to repeat it once per schema
+   * mounted in this process, only once per process lifetime.
+   */
+  private static final java.util.concurrent.atomic.AtomicBoolean STALE_COPY_CLEANUP_DONE =
+      new java.util.concurrent.atomic.AtomicBoolean(false);
+
+  /**
    * Iceberg views satisfied by a catalog that already defined them — no object-store call.
    *
    * @see #icebergViewsReused()
@@ -421,6 +429,7 @@ public class DuckDBJdbcSchemaFactory {
       // collide, so they open directly.
       Connection setupConn = null;
       if (catalogPath != null) {
+        cleanupStaleNumberedCopies(baseCatalogPath);
         for (int lockAttempt = 0; ; lockAttempt++) {
           boolean seeded = false;
           if (lockAttempt > 0) {
@@ -1054,6 +1063,85 @@ public class DuckDBJdbcSchemaFactory {
       return catalogPath.substring(0, catalogPath.length() - suffix.length()) + "_" + n + suffix;
     }
     return catalogPath + "_" + n;
+  }
+
+  /**
+   * Reclaims {@code {name}_N.duckdb} fallback copies left behind by a past concurrency spike.
+   * Nothing ever deleted these on its own: {@link #seedCatalogCopy} only ever creates them, and
+   * once a numbered copy exists it is reused indefinitely (self-healing its own views on each
+   * open, per {@code viewExists}/{@code recreatedIcebergTables} below), so a peak of N concurrent
+   * processes at any point in this catalog's history leaves N-1 multi-GB files sitting on disk
+   * forever even if concurrency never returns — unbounded, since nothing bounds it but {@link
+   * #MAX_CATALOG_LOCK_FALLBACKS}. Raised live, 2026-09-15, right after fixing the Windows
+   * lock-detection gap that makes this fallback actually engage on Windows.
+   *
+   * <p>Safe by construction: a numbered copy is only ever deleted after this method itself
+   * successfully opens it (proving no other process currently holds DuckDB's single-writer lock
+   * on it — the same lock check {@link #isCatalogLockConflict} already relies on elsewhere in
+   * this file), and closes that check connection again immediately before deleting. A copy an
+   * open error reports as locked is left alone untouched. Runs once per JVM ({@link
+   * #STALE_COPY_CLEANUP_DONE}), right before the lock-fallback loop below ever needs to decide
+   * whether to create a new numbered copy of its own.
+   */
+  private static void cleanupStaleNumberedCopies(String baseCatalogPath) {
+    if (!STALE_COPY_CLEANUP_DONE.compareAndSet(false, true)) {
+      return;
+    }
+    File base = new File(baseCatalogPath);
+    File dir = base.getParentFile();
+    if (dir == null || !dir.isDirectory()) {
+      return;
+    }
+    String suffix = ".duckdb";
+    String baseName = base.getName();
+    String stem = baseName.endsWith(suffix)
+        ? baseName.substring(0, baseName.length() - suffix.length()) : baseName;
+    // Matches "{stem}_{digits}.duckdb" exactly -- never the base file itself, never an unrelated
+    // file that merely starts with the same stem.
+    java.util.regex.Pattern numberedName =
+        java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(stem) + "_\\d+\\.duckdb");
+    File[] candidates = dir.listFiles((d, name) -> numberedName.matcher(name).matches());
+    if (candidates == null) {
+      return;
+    }
+    int reclaimed = 0;
+    long reclaimedBytes = 0;
+    for (File candidate : candidates) {
+      String candidatePath = candidate.getAbsolutePath();
+      long size = candidate.length();
+      Connection probe = null;
+      try {
+        probe = DriverManager.getConnection("jdbc:duckdb:" + candidatePath);
+      } catch (SQLException openErr) {
+        if (!isCatalogLockConflict(openErr)) {
+          LOGGER.debug("Leaving stale-copy candidate '{}' alone (non-lock open error): {}",
+              candidatePath, openErr.getMessage());
+        }
+        continue;
+      } finally {
+        if (probe != null) {
+          try {
+            probe.close();
+          } catch (SQLException ignored) {
+            // Best-effort: an unclosable check connection is not a reason to skip deleting the
+            // file underneath it -- the delete below either succeeds or the OS refuses it.
+          }
+        }
+      }
+      // No other process held the lock a moment ago -- delete the .duckdb and any .wal sibling
+      // (an unflushed WAL from whichever process last used this copy) to actually reclaim space.
+      if (candidate.delete()) {
+        reclaimed++;
+        reclaimedBytes += size;
+        new File(candidatePath + ".wal").delete();
+      } else {
+        LOGGER.debug("Could not delete unused stale catalog copy '{}'", candidatePath);
+      }
+    }
+    if (reclaimed > 0) {
+      LOGGER.info("Reclaimed {} unused fallback catalog copy(ies) ({} MB) for '{}'",
+          reclaimed, reclaimedBytes / (1024 * 1024), baseCatalogPath);
+    }
   }
 
   /**
