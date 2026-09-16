@@ -88,13 +88,23 @@ final class PgwireGovDataConnector {
 
   private PgwireGovDataConnector() {}
 
+  /**
+   * On by default (kenstott/calcite#364). The embedded per-process DuckDB engine this replaces
+   * has no working default on a machine with more than one Claude Desktop install (standalone +
+   * MSIX/Store) — every launch spawns two McpServer processes racing for the same catalog
+   * write-lock, permanently duplicating disk/memory and paying a reseed cost on every single
+   * start, not as a rare edge case. Set ASKAMERICA_PGWIRE_MODE=0 (or false) to opt back into the
+   * old embedded-only behavior. getSchemaConnection() falls back to embedded automatically if
+   * the shared server can't be reached or spawned at all, so this default does not remove the
+   * embedded path — it only stops requiring an operator to know to turn pgwire on by hand.
+   */
   static boolean isEnabled() {
-    return truthy(System.getenv("ASKAMERICA_PGWIRE_MODE"))
-        || truthy(System.getProperty("ASKAMERICA_PGWIRE_MODE"));
+    return !falsy(System.getenv("ASKAMERICA_PGWIRE_MODE"))
+        && !falsy(System.getProperty("ASKAMERICA_PGWIRE_MODE"));
   }
 
-  private static boolean truthy(String v) {
-    return v != null && (v.equals("1") || v.equalsIgnoreCase("true"));
+  private static boolean falsy(String v) {
+    return v != null && (v.equals("0") || v.equalsIgnoreCase("false"));
   }
 
   private static String host() {

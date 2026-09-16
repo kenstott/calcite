@@ -2549,12 +2549,21 @@ public class McpServer {
     }
 
     static Connection getSchemaConnection(final String schemaName) throws Exception {
-        // Opt-in (ASKAMERICA_PGWIRE_MODE=1, kenstott/calcite#364): every schema is mounted on
-        // one shared server-side catalog, so one shared client connection answers for all of
-        // them — bypass the per-schema embedded-DuckDB path below entirely. Not the default yet;
-        // see PgwireGovDataConnector's class javadoc for what's still unverified.
+        // On by default (kenstott/calcite#364): every schema is mounted on one shared
+        // server-side catalog, so one shared client connection answers for all of them —
+        // bypass the per-schema embedded-DuckDB path below entirely. A failure to reach or
+        // spawn the shared server (no network for the first-run bundle download, no bundled
+        // launcher resolvable, the spawn itself crashing) falls through to the embedded path
+        // below rather than failing the tool call outright — this is what makes an always-on
+        // default safe rather than a hard dependency on the shared server always working.
         if (PgwireGovDataConnector.isEnabled()) {
-            return PgwireGovDataConnector.getSharedConnection();
+            try {
+                return PgwireGovDataConnector.getSharedConnection();
+            } catch (Exception e) {
+                log.println("[askamerica-mcp] pgwire-govdata unavailable ("
+                    + e.getClass().getSimpleName() + ": " + e.getMessage()
+                    + ") — falling back to the embedded engine for '" + schemaName + "'.");
+            }
         }
         Connection existing = schemaConns.get(schemaName);
         if (existing != null) {
