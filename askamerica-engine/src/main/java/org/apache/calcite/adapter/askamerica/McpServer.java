@@ -1137,7 +1137,10 @@ public class McpServer {
             + "info/caution/high, the grain, the observation count, and the declared coverage "
             + "windows of the tables involved. Read it before answering: a 'high' warning "
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
-            + "health, only that no listed defect was detected."
+            + "health, only that no listed defect was detected. "
+            + "If this turns out to be your last query before writing the final answer: "
+            + "offer the reader a shareable report (see publish_report) rather than leaving "
+            + "the finding as chat text alone with no way to revisit or send it."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
@@ -1955,7 +1958,10 @@ public class McpServer {
             + "every mark has an id (mark-*, series-*, xtick-*) and every label a class, so "
             + "each of those is a targeted change. Re-render only when the data itself changes. "
             + "Do not move plotted geometry — the coordinates are derived from the values you "
-            + "passed, so shifting a mark makes the picture disagree with its own numbers.",
+            + "passed, so shifting a mark makes the picture disagree with its own numbers. "
+            + "Once this chart is genuinely the whole deliverable, offer the reader a "
+            + "permanent, shareable version of it via publish_report rather than leaving only "
+            + "an inline image that dies with this chat.",
             schema(chartProps, new String[]{})));
 
         ObjectNode dashProps = MAPPER.createObjectNode();
@@ -2009,10 +2015,11 @@ public class McpServer {
             + "that should be compared so they share one axis domain. "
             + "THIS CALL ALONE RETURNS ONLY THE BOARD — no narrative, sourcing or caveats travel "
             + "with it. That is enough for a chart embedded in an answer you are writing "
-            + "yourself, but for any question worth more than a sentence the deliverable is "
-            + "publish_report, not this call in isolation: pass these same panels via its "
-            + "dashboard argument and it composes the board and inlines it under your prose in "
-            + "one page.",
+            + "yourself, but you have just built the board for a question worth more than a "
+            + "sentence — this is exactly the moment to OFFER the reader a full report, not "
+            + "assume either way: pass these same panels via publish_report's dashboard "
+            + "argument only once they say yes, and it composes the board and inlines it under "
+            + "your prose in one page.",
             schema(dashProps, new String[]{"panels"})));
 
         ObjectNode pubProps = MAPPER.createObjectNode();
@@ -2166,10 +2173,11 @@ public class McpServer {
         tools.add(
             tool("publish_report",
             "Publish a complete answer — narrative, dashboard and citations — as one "
-            + "self-contained HTML page, and return its link. THIS IS THE DELIVERABLE for any "
-            + "question worth more than a sentence: the reader gets the finding, the figures, "
-            + "the caveats and the sourcing in one page they can open, save, print or send, "
-            + "instead of a chart plus prose they have to reassemble. Pass the dashboard "
+            + "self-contained HTML page, and return its link. For a question worth more than a "
+            + "sentence, THIS IS WHAT TO OFFER THE READER (see the top-level instructions on "
+            + "when to offer vs. call this outright): the finding, the figures, the caveats "
+            + "and the sourcing in one page they can open, save, print or send, instead of a "
+            + "chart plus prose they have to reassemble. Pass the dashboard "
             + "argument to compose and inline the board in the same call. Costs about twenty "
             + "tokens to return, because what comes back is a link rather than the page. "
             + "REQUIRES question_coverage — see its own description; this is not optional "
