@@ -254,7 +254,8 @@ public class SetupWindow {
             // from the wizard and looks identical to success.
             setStatus("Done! Updated " + written.size()
                 + (written.size() == 1 ? " config file. " : " config files. ")
-                + "Restart Claude Desktop to activate.", true);
+                + "Restart Claude Desktop to activate. Tip: type \"askamerica help\" in a new "
+                + "chat any time to see what it can do.", true);
             statusLabel.setToolTipText(written.toString());
             configureBtn.setText("Configure again");
         } catch (Exception ex) {
