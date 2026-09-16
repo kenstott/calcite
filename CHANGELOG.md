@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.91.1](https://github.com/kenstott/calcite/compare/engine-v0.91.0...engine-v0.91.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ci:** stop a symlink miss from turning into cp -R / on macOS ([a9783c2](https://github.com/kenstott/calcite/commit/a9783c2e784301db20a76633301f494191a49a1d))
+
 ## [0.91.0](https://github.com/kenstott/calcite/compare/engine-v0.90.1...engine-v0.91.0) (2026-09-16)
 
 
