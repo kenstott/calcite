@@ -3413,7 +3413,16 @@ public class McpServer {
                         + "the whole answer in one page: " + secs.size() + " section(s), "
                         + srcs.size() + " citation(s)"
                         + (boardSvg == null ? "" : ", dashboard inlined")
-                        + ". It is self-contained and local to this machine."
+                        + ". This link is served locally by this engine process and stops "
+                        + "working the moment this process exits — it is NOT a durable URL, "
+                        + "regardless of how self-contained the page itself is. If the reader "
+                        + "will want to reopen this later, revisit it after the conversation "
+                        + "ends, or share it with someone else, call `register` once (if not "
+                        + "already done this session) and then `upload_report` right after "
+                        + "this call to get a permanent Studies-page link instead — do this "
+                        + "proactively rather than waiting to be asked, since the local link "
+                        + "silently going dead is not something the reader can detect in "
+                        + "advance."
                         + evalReportNote;
                     // Every report's first section is required to be the summary (see this
                     // tool's own "sections" schema). Order is: the dashboard image (already
