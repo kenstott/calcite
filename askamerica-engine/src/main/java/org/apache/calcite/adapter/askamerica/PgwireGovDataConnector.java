@@ -58,14 +58,30 @@ final class PgwireGovDataConnector {
   }
 
   private static final String DEFAULT_HOST = "127.0.0.1";
-  private static final int DEFAULT_PORT = 5433;
+  // NOT 5433 — that's pgwire-calcite's own shared default, reused by every pgwire-* adapter
+  // (file, splunk, sharepoint, cloudops, govdata alike). A machine that also runs one of the
+  // others locally (e.g. pgwire-file for DataGrip) would have this connector silently attach
+  // to the wrong catalog on 5433 instead of ever spawning pgwire-govdata itself — connect()
+  // only checks that *some* valid PG connection answers, not which adapter it is. A distinct
+  // default sidesteps the collision; verifyIsGovData() below is the backstop for the case
+  // where an operator points ASKAMERICA_PGWIRE_PORT at a shared port anyway.
+  private static final int DEFAULT_PORT = 45433;
   /** How long to wait for a direct connect attempt before assuming nothing is listening. */
   private static final int CONNECT_TIMEOUT_MILLIS = 2000;
-  /** How long to wait for a freshly spawned server to start accepting connections. */
-  private static final int SPAWN_TIMEOUT_MILLIS = 60_000;
+  /**
+   * How long to wait for a freshly spawned server to start accepting connections. Matches the
+   * embedded path's own 600s latch wait (getSchemaConnection) rather than something shorter:
+   * a spawn that can't reuse an already-seeded catalog (GOVDATA_DUCKDB_CATALOG unset, or a
+   * genuinely first-ever install) cold-mounts all 26 schemas from S3/Iceberg metadata, which
+   * takes minutes, not seconds — confirmed live (a 60s timeout here failed a real spawn that
+   * was still actively mounting schemas, not stuck).
+   */
+  private static final int SPAWN_TIMEOUT_MILLIS = 600_000;
   private static final int SPAWN_POLL_INTERVAL_MILLIS = 500;
   /** Idle grace period passed to the spawned server (see pgwire-calcite's idle-shutdown watcher). */
   private static final String IDLE_SHUTDOWN_SECONDS = "120";
+  /** Per-query timeout passed to the spawned server's --statement-timeout-ms (see spawnIfPossible). */
+  private static final String STATEMENT_TIMEOUT_MS = "30000";
 
   private static final Object LOCK = new Object();
   private static volatile Connection sharedConnection;
@@ -158,12 +174,54 @@ final class PgwireGovDataConnector {
       Properties props = new Properties();
       props.setProperty("user", "askamerica");
       props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_MILLIS / 1000));
-      return DriverManager.getConnection(
+      // Bounds EVERY query on this connection, not just the identity check below — a shared
+      // server that wedges mid-query (seen live: information_schema.schemata queries hang
+      // indefinitely against pgwire-calcite, no error, no response) must not silently freeze
+      // whatever MCP tool call is waiting on it forever.
+      props.setProperty("socketTimeout", "30");
+      Connection c = DriverManager.getConnection(
           "jdbc:postgresql://" + host() + ":" + port() + "/govdata", props);
+      if (!verifyIsGovData(c)) {
+        log().println("[askamerica-mcp] Something is listening on " + host() + ":" + port()
+            + " but it isn't pgwire-govdata (sec.filing_metadata not queryable) — treating the "
+            + "port as unavailable rather than using the wrong catalog. Point "
+            + "ASKAMERICA_PGWIRE_PORT at a free port for this connector, or free this one.");
+        closeQuietly(c);
+        return null;
+      }
+      return c;
     } catch (SQLException e) {
       log().println("[askamerica-mcp] pgwire-govdata port is open but JDBC connect failed: "
           + e.getMessage());
       return null;
+    }
+  }
+
+  /**
+   * Backstop against ASKAMERICA_PGWIRE_PORT (or the default, if an operator ever changes it to
+   * match pgwire-calcite's own shared 5433) pointing at a DIFFERENT pgwire-* adapter (file,
+   * splunk, sharepoint, cloudops) that happens to answer on this port — the postgresql driver's
+   * "/govdata" database name in the connect URL is only a label these lightweight servers
+   * report back, not something they actually validate against the connecting client. Queries a
+   * real table every govdata deployment always has, NOT information_schema (see the
+   * socketTimeout comment above — schemata lookups hang against this server, so this is not
+   * just a style choice).
+   */
+  private static boolean verifyIsGovData(Connection c) {
+    try (java.sql.Statement st = c.createStatement();
+         java.sql.ResultSet rs = st.executeQuery(
+             "SELECT 1 FROM sec.filing_metadata LIMIT 1")) {
+      return rs.next();
+    } catch (SQLException e) {
+      return false;
+    }
+  }
+
+  private static void closeQuietly(Connection c) {
+    try {
+      c.close();
+    } catch (SQLException ignored) {
+      // best-effort — the connection is being discarded either way
     }
   }
 
@@ -194,7 +252,27 @@ final class PgwireGovDataConnector {
     }
     try {
       ProcessBuilder pb = new ProcessBuilder(launcher.getAbsolutePath(),
-          "--host", host(), "--port", String.valueOf(port()));
+          "--host", host(), "--port", String.valueOf(port()),
+          // Server-wide default (state.py: statement_timeout_ms=0, i.e. unlimited, unless a
+          // launcher flag sets it). Without this, one hung query — from any of the many
+          // clients sharing this server, or from the server's own internal catalog
+          // introspection — holds CalciteBackend's single execution lock forever and wedges
+          // every other connected client too. Confirmed live: an information_schema query
+          // that never returned left even an unrelated psql session hanging on a
+          // previously-instant, unrelated query against the same server.
+          "--statement-timeout-ms", STATEMENT_TIMEOUT_MS,
+          // Must match the connProps set below in getSchemaConnection's embedded-mode init
+          // thread, or query behavior silently differs between the two modes (#364's own
+          // "must verify" list, confirmed live). --fun alone does NOT fix this: a bare
+          // reserved word like YEAR used as a column name (SELECT ... year FROM crime.cde_reta)
+          // fails to parse under Calcite's default core grammar regardless of --lex/--fun —
+          // only swapping in babel's parser (SqlBabelParserImpl, confirmed present in
+          // pgwire-govdata's bundled jars) actually accepts it, same reason the embedded engine
+          // sets it. --jdbc-prop is pgwire-calcite's generic passthrough to the JDBC Properties
+          // object (launcher.py: "--jdbc-prop", forwarded verbatim by calcite_backend.py).
+          "--fun", "standard,postgresql,spatial,mssql,bigquery",
+          "--jdbc-prop",
+          "parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY");
       pb.environment().put("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", IDLE_SHUTDOWN_SECONDS);
       // Reuse the exact catalog file this engine's own embedded mode already seeds/maintains
       // (~/.mcp_askamerica/.duckdb/govdata.duckdb by default — see McpServer's ASKAMERICA_DATA_DIR
@@ -205,16 +283,37 @@ final class PgwireGovDataConnector {
         pb.environment().put("GOVDATA_DUCKDB_CATALOG",
             new File(new File(dataDir, ".duckdb"), "govdata.duckdb").getAbsolutePath());
       }
-      pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-      pb.redirectError(ProcessBuilder.Redirect.DISCARD);
-      pb.redirectInput(ProcessBuilder.Redirect.DISCARD);
+      // NOT Redirect.DISCARD: a spawn that fails immediately (bad credentials, a missing env
+      // var, a packaging defect) would otherwise leave zero diagnostic trail whatsoever — the
+      // caller just sees a generic "did not start accepting connections" timeout minutes
+      // later. Confirmed live: with DISCARD, a spawn crashing instantly on a missing
+      // GOVDATA_PARQUET_DIR looked identical to one that was still slowly mounting 26 schemas
+      // — completely undiagnosable without re-running the launcher by hand. A rotating-by-size
+      // convention isn't needed: PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS means this process's
+      // lifetime, and therefore its log, is naturally bounded.
+      File logFile = new File(cacheDirLogPath());
+      pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
+      pb.redirectError(ProcessBuilder.Redirect.appendTo(logFile));
+      // NOT Redirect.DISCARD here — that's a WRITE-only redirect (valid for output/error,
+      // for a process's own writes to /dev/null); applying it to stdin threw
+      // "IllegalArgumentException: Redirect invalid for reading: WRITE" and made every spawn
+      // attempt fail, confirmed live. The spawned server never reads stdin at all, so simply
+      // not touching redirectInput (default PIPE, left unread and unwritten) is correct.
       Process p = pb.start();
       log().println("[askamerica-mcp] Spawned pgwire-govdata (pid " + p.pid() + "): "
-          + launcher.getAbsolutePath());
+          + launcher.getAbsolutePath() + " — log: " + logFile);
     } catch (Exception e) {
       log().println("[askamerica-mcp] Failed to spawn pgwire-govdata: "
           + e.getClass().getSimpleName() + ": " + e.getMessage());
     }
+  }
+
+  /** Where a spawned server's stdout/stderr goes — beside the launcher itself, not under the
+   * per-process data dir, since that path may not be resolved yet if a caller reaches
+   * spawnIfPossible before McpServer's own ASKAMERICA_DATA_DIR init has run. */
+  private static String cacheDirLogPath() {
+    String home = System.getProperty("user.home", "");
+    return new File(new File(home, ".askamerica"), "pgwire-govdata/spawn.log").getAbsolutePath();
   }
 
   private static File resolveLauncher() {
