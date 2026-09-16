@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.86.1](https://github.com/kenstott/calcite/compare/engine-v0.86.0...engine-v0.86.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **file:** reclaim unused DuckDB lock-conflict fallback catalog copies ([339da75](https://github.com/kenstott/calcite/commit/339da753d887a97475133276c4225aaedd13a9fa))
+
 ## [0.86.0](https://github.com/kenstott/calcite/compare/engine-v0.85.0...engine-v0.86.0) (2026-09-16)
 
 
