@@ -2213,6 +2213,20 @@ public class McpServer {
             schema(MAPPER.createObjectNode(), new String[]{})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
+        ObjectNode reportTypeProp = prop(
+            "string",
+            "Which of the two kinds this is — always pick one, there is no third option: "
+                + "'defect' — a table or column EXISTS and returned a value, but the value is "
+                + "wrong, inconsistent, or internally contradictory (a query error after "
+                + "retrying, an implausible aggregate, two fields that should reconcile but "
+                + "don't). 'sourcing' — the data plain isn't here: search_catalog/describe_table "
+                + "confirm no table covers this measure, or a table's declared coverage window "
+                + "doesn't reach the period asked about. Downstream triage files these into "
+                + "different queues (a defect gets root-caused and fixed in place; a sourcing "
+                + "gap gets evaluated for a new ingest), so guessing wrong sends it to the wrong "
+                + "team, not just the wrong label.");
+        reportTypeProp.putArray("enum").add("defect").add("sourcing");
+        reportProps.set("type", reportTypeProp);
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
         reportProps.set(
             "body",
@@ -2224,8 +2238,11 @@ public class McpServer {
             tool("report_issue",
             "Record a data quality issue, query error, or missing data to a local issue log. "
             + "Use this when a query fails unexpectedly after retrying, data appears incorrect, "
-            + "or a schema/table is missing. Do not use for routine SQL errors the user can correct.",
-            schema(reportProps, new String[]{"subject", "body"})));
+            + "or a schema/table is missing. Do not use for routine SQL errors the user can "
+            + "correct. Every report MUST be classified via `type` (defect or sourcing) — an "
+            + "unclassified report cannot be routed and is effectively invisible to whichever "
+            + "team should act on it.",
+            schema(reportProps, new String[]{"type", "subject", "body"})));
 
         ObjectNode externalProps = MAPPER.createObjectNode();
         externalProps.set(
@@ -2705,10 +2722,20 @@ public class McpServer {
                     break;
                 }
                 case "report_issue": {
+                    String issueType = args.path("type").asText("");
+                    if (!"defect".equals(issueType) && !"sourcing".equals(issueType)) {
+                        return errorResponse(id, -32602,
+                            "report_issue requires \"type\" to be exactly \"defect\" or "
+                                + "\"sourcing\", got " + jsonStr(issueType) + " — pick whichever "
+                                + "actually applies rather than omitting it or inventing a third "
+                                + "value; see the tool's own description for how to tell them "
+                                + "apart.");
+                    }
                     String subject = args.path("subject").asText();
                     String issueBody = args.path("body").asText();
-                    log.println("[askamerica-mcp] tool=report_issue subject=" + subject);
-                    text = reportIssue(subject, issueBody);
+                    log.println("[askamerica-mcp] tool=report_issue type=" + issueType
+                        + " subject=" + subject);
+                    text = reportIssue(issueType, subject, issueBody);
                     break;
                 }
                 case "deliver_report": {
@@ -10683,7 +10710,7 @@ public class McpServer {
      * a report; telling them it was filed when it was not is worse than telling them to
      * retry.
      */
-    private static String reportIssue(String subject, String body) {
+    private static String reportIssue(String type, String subject, String body) {
         HttpURLConnection c = null;
         try {
             String payload = "{"
@@ -10691,6 +10718,7 @@ public class McpServer {
                 + "\"build\":" + jsonStr(BUILD_ID) + ","
                 + "\"session_id\":" + jsonStr(SESSION_ID) + ","
                 + "\"reported_at\":" + jsonStr(java.time.Instant.now().toString()) + ","
+                + "\"type\":" + jsonStr(type) + ","
                 + "\"subject\":" + jsonStr(subject) + ","
                 + "\"body\":" + jsonStr(body)
                 + "}";
