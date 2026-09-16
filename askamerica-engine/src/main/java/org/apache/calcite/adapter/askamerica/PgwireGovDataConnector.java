@@ -175,7 +175,15 @@ final class PgwireGovDataConnector {
   private static void spawnIfPossible() {
     File launcher = resolveLauncher();
     if (launcher == null) {
-      log().println("[askamerica-mcp] No bundled pgwire-govdata launcher found; "
+      // Not bundled with the installer (that packaging work is separate, still open in
+      // kenstott/calcite#364) — lazily download+extract the airgapped bundle on this first
+      // use of pgwire mode instead. Never throws; returns null on any failure, in which case
+      // the caller's poll loop simply times out and getSchemaConnection() falls back to the
+      // embedded engine.
+      launcher = PgwireGovDataInstaller.ensureLauncher();
+    }
+    if (launcher == null) {
+      log().println("[askamerica-mcp] No pgwire-govdata launcher available; "
           + "will fall back to the embedded engine.");
       return;
     }
