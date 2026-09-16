@@ -102,7 +102,26 @@ def build_context(conn) -> tuple:
 
     # Columns per table.
     for schema, name, tm in table_keys:
-        crs = md.getColumns(None, schema, name, "%")
+        try:
+            crs = md.getColumns(None, schema, name, "%")
+        except Exception as e:
+            # A table declared in the schema whose ETL hasn't (fully) materialized it yet
+            # must not abort catalog population for the whole server. Seen live: a table
+            # mid-ETL whose Iceberg directory exists but has no version-hint.text pointer
+            # yet — normal, expected transient state for a warehouse this large, not
+            # corruption. FileSchema's own per-table metadata recording already tolerates
+            # this gracefully for tables missing outright ("Run ETL to materialize..."),
+            # but this walks EVERY table's columns eagerly at startup (unlike the embedded
+            # engine's connections, which only ever touch a table a query actually names),
+            # so one still-materializing table anywhere in a 26-schema warehouse would
+            # otherwise take the whole shared server down before it can serve anyone else.
+            # Leave column_types[tm.table_id] at the empty list already set above — the
+            # table is still listed, just with no discoverable columns yet, consistent
+            # with this module's existing "well-formed empty" handling for adapters with
+            # no PK/FK metadata.
+            log.warning("getColumns failed for %s.%s (%s: %s) — leaving it column-less",
+                        schema, name, type(e).__name__, e)
+            continue
         cols: List[ColumnMeta] = []
         for r in _rows(crs):
             type_name = r.get("TYPE_NAME") or "VARCHAR"

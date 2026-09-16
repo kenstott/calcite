@@ -68,6 +68,16 @@ jobs:
           done
           # the adapter module's own output is a classes dir on the cp -> use its built jar
           cp -n ${{ matrix.adapter.module }}/build/libs/*.jar out/jars/ 2>/dev/null || true
+          # The two `cp -n` loops above merge jars from two INDEPENDENTLY resolved Gradle
+          # classpaths (this adapter's own runtimeClasspath, plus the shared Arrow one) --
+          # `cp -n` dedupes only by exact filename, so if either classpath resolved a shared
+          # artifact (e.g. jackson-core) to a different version, both versions land here and
+          # coexist on the classpath with no guarantee the JVM links compatible versions of
+          # related jars. Observed live 2026-09-16: jackson-dataformat-yaml calling a
+          # jackson-core method only present in the newer of two jackson-core jars that had
+          # both been bundled -- a NoSuchMethodError that crashed pgwire-govdata on every
+          # startup. Keep exactly the highest version of each artifact.
+          python3 pgwire-calcite/scripts/dedupe_jars.py out/jars
           echo "bundled $(ls out/jars | wc -l) jars for ${{ matrix.adapter.name }}"
       - name: Build vector/compat UDF jar + Java launcher (shared)
         working-directory: pgwire-calcite
@@ -76,6 +86,10 @@ jobs:
           bash packaging/build-launcher.sh
       - run: |
           cp pgwire-calcite/vendor/jars/*.jar out/jars/
+          # vendor/jars is a third, independent jar source (see the dedupe_jars.py call in
+          # the `jars` job above for why this matters) -- rerun the same pass now that it's
+          # merged in too.
+          python3 pgwire-calcite/scripts/dedupe_jars.py out/jars
           cp pgwire-calcite/packaging/pgwire-launcher.jar out/
       - uses: actions/upload-artifact@v4
         with:

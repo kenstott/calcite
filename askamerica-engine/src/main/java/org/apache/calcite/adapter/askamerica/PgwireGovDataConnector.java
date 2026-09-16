@@ -98,6 +98,11 @@ final class PgwireGovDataConnector {
     }
   }
 
+  /** Human-readable target for diagnostics — never includes credentials. */
+  static String describeTarget() {
+    return host() + ":" + port();
+  }
+
   /**
    * Returns the shared pgwire connection, spawning the server if nothing is listening yet.
    * Cached across calls (all 26 schemas share it); re-validated and reconnected if it has died.

@@ -240,18 +240,29 @@ public class McpServer {
             long t0 = System.currentTimeMillis();
             try {
                 getCatalogConnection();
-                // Loading the JAR-bundled seed catalog and rebuilding every view from Iceberg
-                // metadata end in the same mounted state, so without these counts a mount that
-                // spent minutes on object-store round trips is indistinguishable in the log from
-                // one that started instantly. Printed to this stream, not through SLF4J, because
-                // the shaded jar's logging binding drops adapter logs entirely.
-                log.println("[askamerica-mcp] All schemas mounted in "
-                    + (System.currentTimeMillis() - t0) + "ms"
-                    + " — catalog=" + new java.io.File(
-                        System.getProperty("govdata.operating.dir.base", "?"),
-                        ".duckdb/govdata.duckdb")
-                    + " icebergViewsReused=" + DuckDBJdbcSchemaFactory.icebergViewsReused()
-                    + " icebergViewsRebuilt=" + DuckDBJdbcSchemaFactory.icebergViewsCreated());
+                if (PgwireGovDataConnector.isEnabled()) {
+                    // The counters/catalog path below describe the embedded DuckDB engine,
+                    // which this mode never instantiates (getSchemaConnection's pgwire
+                    // short-circuit runs before GovDataDriver is ever constructed) — printing
+                    // them here would report misleading zeros for a mount that actually
+                    // succeeded through the shared pgwire-govdata server instead.
+                    log.println("[askamerica-mcp] All schemas mounted in "
+                        + (System.currentTimeMillis() - t0) + "ms via shared pgwire-govdata ("
+                        + PgwireGovDataConnector.describeTarget() + ")");
+                } else {
+                    // Loading the JAR-bundled seed catalog and rebuilding every view from Iceberg
+                    // metadata end in the same mounted state, so without these counts a mount that
+                    // spent minutes on object-store round trips is indistinguishable in the log from
+                    // one that started instantly. Printed to this stream, not through SLF4J, because
+                    // the shaded jar's logging binding drops adapter logs entirely.
+                    log.println("[askamerica-mcp] All schemas mounted in "
+                        + (System.currentTimeMillis() - t0) + "ms"
+                        + " — catalog=" + new java.io.File(
+                            System.getProperty("govdata.operating.dir.base", "?"),
+                            ".duckdb/govdata.duckdb")
+                        + " icebergViewsReused=" + DuckDBJdbcSchemaFactory.icebergViewsReused()
+                        + " icebergViewsRebuilt=" + DuckDBJdbcSchemaFactory.icebergViewsCreated());
+                }
             } catch (Throwable e) {
                 log.println("[askamerica-mcp] Schema warm-up failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
