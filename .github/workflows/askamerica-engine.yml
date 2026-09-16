@@ -399,23 +399,39 @@ jobs:
           fi
           echo "Found $ASSET"
 
+          # A dedicated mktemp -d, not /tmp directly, for the extraction destination --
+          # confirmed live this matters: macOS's /tmp is a symlink to /private/tmp, and
+          # `find /tmp -maxdepth 1 -type d -name "pgwire-govdata-*"` matched NOTHING through
+          # it (silently -- no error, just an empty result), which made $EXTRACTED empty and
+          # `cp -R "$EXTRACTED"/.` become `cp -R /.` -- copying the ENTIRE root filesystem
+          # into the staging dir until the runner's disk filled. A dedicated scratch dir
+          # side-steps the symlink question entirely, and the explicit empty-check below
+          # means a similar failure fails loudly instead of silently substituting "/".
+          WORKDIR=$(mktemp -d)
           URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET}"
-          curl -sL -o /tmp/pgwire-govdata.tar.gz "$URL"
-          curl -sL -o /tmp/pgwire-govdata.tar.gz.sha256 "${URL}.sha256"
-          EXPECTED=$(tr -d '[:space:]' < /tmp/pgwire-govdata.tar.gz.sha256)
+          curl -sL -o "$WORKDIR/pgwire-govdata.tar.gz" "$URL"
+          curl -sL -o "$WORKDIR/pgwire-govdata.tar.gz.sha256" "${URL}.sha256"
+          EXPECTED=$(tr -d '[:space:]' < "$WORKDIR/pgwire-govdata.tar.gz.sha256")
           if command -v sha256sum >/dev/null 2>&1; then
-            ACTUAL=$(sha256sum /tmp/pgwire-govdata.tar.gz | awk '{print $1}')
+            ACTUAL=$(sha256sum "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
           else
-            ACTUAL=$(shasum -a 256 /tmp/pgwire-govdata.tar.gz | awk '{print $1}')
+            ACTUAL=$(shasum -a 256 "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
           fi
           if [ "$EXPECTED" != "$ACTUAL" ]; then
             echo "::error::pgwire-govdata sha256 mismatch: expected $EXPECTED got $ACTUAL"
             exit 1
           fi
-          tar -xzf /tmp/pgwire-govdata.tar.gz -C /tmp
-          EXTRACTED=$(find /tmp -maxdepth 1 -type d -name "pgwire-govdata-*" | head -1)
+          mkdir "$WORKDIR/extracted"
+          tar -xzf "$WORKDIR/pgwire-govdata.tar.gz" -C "$WORKDIR/extracted"
+          EXTRACTED=$(find "$WORKDIR/extracted" -mindepth 1 -maxdepth 1 -type d | head -1)
+          if [ -z "$EXTRACTED" ] || [ ! -d "$EXTRACTED" ]; then
+            echo "::error::tar extraction produced no directory under $WORKDIR/extracted"
+            ls -la "$WORKDIR/extracted"
+            exit 1
+          fi
           mkdir -p askamerica-engine/build/pgwire-govdata-staged
           cp -R "$EXTRACTED"/. askamerica-engine/build/pgwire-govdata-staged/
+          rm -rf "$WORKDIR"
           echo "Staged pgwire-govdata bundle: $(du -sh askamerica-engine/build/pgwire-govdata-staged | cut -f1)"
 
       - name: Import Apple signing certificate (macOS only)
