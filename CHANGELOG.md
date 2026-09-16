@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.90.1](https://github.com/kenstott/calcite/compare/engine-v0.90.0...engine-v0.90.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** "askamerica help" now answers with the right content ([9e94dcc](https://github.com/kenstott/calcite/commit/9e94dcc61703ca4bd46ec54732490d3c895dfc8c))
+* **askamerica-engine:** use the AskAmerica brand icon for the Windows installer ([fdd9d27](https://github.com/kenstott/calcite/commit/fdd9d27fb09831baf1030eee4b75ada6030781f4))
+
 ## [0.90.0](https://github.com/kenstott/calcite/compare/engine-v0.89.0...engine-v0.90.0) (2026-09-16)
 
 
