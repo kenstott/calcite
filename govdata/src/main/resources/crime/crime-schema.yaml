@@ -810,7 +810,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 3121536
-      checkedAt: "2026-09-15T21:38:40Z"
+      checkedAt: "2026-09-16T01:07:54Z"
     # DQ sample cap (GOVDATA_DQ mode): the national Return A file unpivots to ~313k rows/year
     # (≈26k agencies × 12 months). Cap each year's sample; applied after the month-unpivot
     # transformer so it bounds output rows. Cache-safe — the fixed-width raw cache is written in
@@ -837,7 +837,7 @@ partitionedTables:
       - name: state
         type: string
         nullable: true
-        comment: Return A header field state
+        comment: FBI Return A internal state numbering, NOT a FIPS code (e.g. Texas is '42', not '48'); cross-reference agency_state_name or geo.states for the FIPS crosswalk
       - name: ori
         type: string
         nullable: false
@@ -1081,7 +1081,7 @@ partitionedTables:
       - name: unfounded_assault_total
         type: long
         nullable: true
-        comment: Monthly count of unfounded assault total
+        comment: Monthly count of unfounded assault total, all assault types combined (aggravated + simple); the aggravated-assault-only figure is with_a_gun + with_a_knife + other_weapon + unarmed, excluding simple
       - name: unfounded_assault_with_a_gun
         type: long
         nullable: true
@@ -1193,7 +1193,7 @@ partitionedTables:
       - name: actual_assault_total
         type: long
         nullable: true
-        comment: Monthly count of actual assault total
+        comment: Monthly count of actual assault total, all assault types combined (aggravated + simple) — NOT the published "aggravated assault" figure used in state Crime Index/Part I statistics, which is with_a_gun + with_a_knife + other_weapon + unarmed (excluding simple)
       - name: actual_assault_with_a_gun
         type: long
         nullable: true
@@ -1305,7 +1305,7 @@ partitionedTables:
       - name: total_cleared_assault_total
         type: long
         nullable: true
-        comment: Monthly count of total cleared assault total
+        comment: Monthly count of total cleared assault total, all assault types combined (aggravated + simple); the aggravated-assault-only figure is with_a_gun + with_a_knife + other_weapon + unarmed, excluding simple
       - name: total_cleared_assault_with_a_gun
         type: long
         nullable: true
@@ -1417,7 +1417,7 @@ partitionedTables:
       - name: cleared_18_assault_total
         type: long
         nullable: true
-        comment: Monthly count of cleared 18 assault total
+        comment: Monthly count of cleared 18 assault total, all assault types combined (aggravated + simple); the aggravated-assault-only figure is with_a_gun + with_a_knife + other_weapon + unarmed, excluding simple
       - name: cleared_18_assault_with_a_gun
         type: long
         nullable: true
