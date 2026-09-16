@@ -565,7 +565,13 @@ tasks.register<Exec>("jpackage") {
         *(if (os.contains("win"))
             arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut",
                     "--win-dir-chooser",
-                    "--resource-dir", winResourceDir)
+                    "--resource-dir", winResourceDir,
+                    // Explicit rather than relying on jpackage's implicit "<name>.ico in
+                    // --resource-dir" convention (which would need the file named exactly
+                    // "AskAmerica MCP.ico", space and all, to match --name below) — without
+                    // this the MSI, its Start-menu/desktop shortcuts, and the installed EXE
+                    // all fell back to jpackage's generic default icon.
+                    "--icon", "$winResourceDir/askamerica.ico")
         else emptyArray()),
         // Linux: add an application-menu entry for the setup wizard.
         *(if (!isMac && !os.contains("win"))
