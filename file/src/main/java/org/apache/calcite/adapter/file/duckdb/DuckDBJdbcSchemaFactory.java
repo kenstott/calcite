@@ -1167,15 +1167,102 @@ public class DuckDBJdbcSchemaFactory {
     }
   }
 
+  /** Resource path of the bundled seed zip inside this jar -- mirrors {@code
+   *  GovDataSeedInstaller.SEED_ZIP_RESOURCE} in the govdata module. Read by resource name, not
+   *  by a compile-time dependency: govdata depends on file, not the reverse, and a classloader
+   *  resource lookup needs no such dependency since both classes end up on the same shaded-jar
+   *  classpath at runtime regardless of the Gradle module graph. */
+  private static final String BUNDLED_SEED_ZIP_RESOURCE = "/duckdb/seed/govdata-seed.zip";
+
+  /** The one entry inside the seed zip this method cares about -- the catalog file itself. The
+   *  zip also carries per-schema {@code .aperio/<schema>/.conversions.json} trackers, but those
+   *  are shared at the operating-directory level by every catalog file under it (base and every
+   *  numbered copy alike) and were already extracted once when the base catalog was first
+   *  installed, so a numbered copy needs nothing from the zip beyond this one entry. */
+  private static final String BUNDLED_SEED_CATALOG_ENTRY = ".duckdb/govdata.duckdb";
+
+  /**
+   * Seeds a numbered fallback catalog directly from this jar's own bundled seed zip, entirely
+   * independent of the live base catalog file. Tried FIRST, ahead of {@link
+   * #seedCatalogCopyFromBaseFile} -- not merely as a faster alternative, but because copying the
+   * live base file is fundamentally unreliable on Windows: a second process cannot even {@code
+   * Files.copy} a file a first process holds open, not just fail to open it directly. Observed
+   * live, 2026-09-15/16: {@code seedCatalogCopyFromBaseFile}'s copy failed with "The process
+   * cannot access the file because it is being used by another process" -- the identical Windows
+   * sharing-violation text {@link #isCatalogLockConflict} already recognizes for a direct open --
+   * while the base catalog was simply being read by another live process, nothing more unusual
+   * than that. The bundled zip inside this .jar is a completely different, static file nothing
+   * else on the machine ever holds open, so extracting from it has no lock contention to race
+   * against in the first place, on any platform.
+   *
+   * @return true if the numbered file was populated from the bundled seed, false if this jar
+   *     was built with no bundled seed at all (a cold-start jar, not built via
+   *     {@code bundleGovdataSeed}) or the extraction failed for some other reason -- the caller
+   *     falls back to {@link #seedCatalogCopyFromBaseFile} in either case.
+   */
+  private static boolean seedCatalogCopyFromBundledJar(String numberedCatalogPath) {
+    File numbered = new File(numberedCatalogPath);
+    if (numbered.exists()) {
+      return false;
+    }
+    try (java.io.InputStream zipStream =
+             DuckDBJdbcSchemaFactory.class.getResourceAsStream(BUNDLED_SEED_ZIP_RESOURCE)) {
+      if (zipStream == null) {
+        LOGGER.debug("No bundled seed zip ({}) on this jar's classpath; falling back to "
+            + "copying the live base catalog", BUNDLED_SEED_ZIP_RESOURCE);
+        return false;
+      }
+      java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(zipStream);
+      java.util.zip.ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        if (!BUNDLED_SEED_CATALOG_ENTRY.equals(entry.getName())) {
+          continue;
+        }
+        File parent = numbered.getParentFile();
+        if (parent != null) {
+          java.nio.file.Files.createDirectories(parent.toPath());
+        }
+        java.nio.file.Files.copy(zis, numbered.toPath());
+        LOGGER.info("Seeded DuckDB catalog copy {} from this jar's bundled seed ({})",
+            numberedCatalogPath, BUNDLED_SEED_ZIP_RESOURCE);
+        return true;
+      }
+      LOGGER.debug("Bundled seed zip has no {} entry; falling back to copying the live base "
+          + "catalog", BUNDLED_SEED_CATALOG_ENTRY);
+      return false;
+    } catch (java.io.IOException e) {
+      LOGGER.warn("Could not seed catalog copy {} from this jar's bundled seed ({}); falling "
+          + "back to copying the live base catalog", numberedCatalogPath, e.getMessage());
+      new File(numberedCatalogPath).delete();
+      return false;
+    }
+  }
+
+  /**
+   * Seeds a numbered fallback catalog, trying the immutable jar-bundled seed first ({@link
+   * #seedCatalogCopyFromBundledJar}) since it has no lock contention with anything else on the
+   * machine, then falling back to copying the live base file ({@link
+   * #seedCatalogCopyFromBaseFile}) only if that's unavailable (a cold-start jar with no bundled
+   * seed) -- the base-file copy is kept as a fallback, not removed, since it is still strictly
+   * better than the last resort (an empty catalog rebuilt live) when it does work.
+   */
+  private static boolean seedCatalogCopy(String baseCatalogPath, String numberedCatalogPath) {
+    return seedCatalogCopyFromBundledJar(numberedCatalogPath)
+        || seedCatalogCopyFromBaseFile(baseCatalogPath, numberedCatalogPath);
+  }
+
   /**
    * Seeds a numbered fallback catalog by copying the already-built base catalog file, so its views
    * satisfy {@code CREATE VIEW IF NOT EXISTS} and the fallback skips re-reading Iceberg metadata
    * for every view. Copies only the base {@code .duckdb} file (never the live {@code .wal}), so it
    * cannot capture a half-written WAL. Best-effort: returns false (caller opens an empty file and
    * rebuilds the views) when the numbered file already exists, the base is absent/empty, or the
-   * copy fails.
+   * copy fails -- including, on Windows, simply because another process currently has the base
+   * file open; see {@link #seedCatalogCopyFromBundledJar}, which is tried first and does not
+   * share this failure mode.
    */
-  private static boolean seedCatalogCopy(String baseCatalogPath, String numberedCatalogPath) {
+  private static boolean seedCatalogCopyFromBaseFile(String baseCatalogPath,
+      String numberedCatalogPath) {
     try {
       File base = new File(baseCatalogPath);
       File numbered = new File(numberedCatalogPath);
