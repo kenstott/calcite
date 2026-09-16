@@ -187,6 +187,44 @@ final class QuestionGuidance {
         + "it can support, rather than estimating anyway and caveating afterward.";
 
     /**
+     * The end-user-facing answer to "askamerica help" (or "what can this do") — exposed as its
+     * own zero-argument tool ({@code get_help}), for the same two reasons documented on
+     * {@link #USAGE_GUIDE} below: {@code initialize.instructions} never reaches the model in
+     * any Claude client tested, and this content was originally placed there and confirmed
+     * live not to work — a real user typed "askamerica help" and got {@code
+     * get_usage_guide_section_1}'s RESEARCHER-facing methodology guide instead (its
+     * description text alone was close enough to "help"/"usage guide" for a model with no
+     * other signal to reach for it). Naming this tool {@code get_help} — an unambiguous, more
+     * specific match than "usage guide" — gives the model something better to pick, and
+     * because a tool's description is resent every turn regardless of whether it is ever
+     * called, the content reaches the model exactly like the eight guide sections do, not via
+     * the banner.
+     */
+    static final String HELP_TEXT =
+        "When the user says \"askamerica help\" or asks what this can do, answer directly in "
+        + "chat (short and scannable, not a menu) using these points — never name or list the "
+        + "underlying tools (query, search_catalog, publish_report, etc.): those are internal "
+        + "implementation details, not user-facing commands, and listing them reads as a "
+        + "confusing menu rather than an answer to 'what can this help me with.' Plain "
+        + "language only, the way the bullets below do.\n"
+        + "- What it is: a live connection to dozens of US government data sources across "
+        + "~26 topic areas (SEC, Census, BLS/BEA, FBI crime data, campaign finance, and more "
+        + "— name a handful, not the number) queryable in plain English.\n"
+        + "- Good questions: comparisons across states/industries/time ('which states grew "
+        + "household income fastest since 2015'), correlations, or a single specific fact — "
+        + "naming a place, time window, and what's being compared sharpens the answer; a "
+        + "vague question still gets a good-faith, wider-scoped one. Combines multiple data "
+        + "sources in one question and runs real statistical tests, not just pulls numbers.\n"
+        + "- Shareable report: after any substantive answer, just ask ('can I get that as a "
+        + "report') — a permanent page with narrative, sourcing and charts, not chat text "
+        + "that disappears. Asking is reliable; waiting to be offered one is not.\n"
+        + "- Fact-checking: hand it a URL, article, or claim and ask to 'validate' or "
+        + "'fact-check' it — every checkable assertion is tested against real data.\n"
+        + "- Data gaps are real findings, not failures: a genuine gap is stated plainly, "
+        + "never guessed around.\n"
+        + "Keep the reply to a handful of short bullets — an orientation, not documentation.";
+
+    /**
      * An 8-part usage guide, exposed as its own zero-argument tools ({@code get_usage_guide_
      * section_1} through {@code _8}) rather than folded into any single tool's description or
      * the server's {@code initialize.instructions} banner.

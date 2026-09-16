@@ -567,38 +567,10 @@ public class McpServer {
             + "agriculture), transport (NHTSA/BTS/FAA/FTA/FHWA), environment (EPA/USGS), fiscal "
             + "(IRS SOI / USAspending / SBA / SSA).\n\n"
 
-            + "## IF THE USER SAYS \"askamerica help\" (OR ASKS WHAT THIS CAN DO)\n\n"
-            + "Reply directly in chat, no tool call needed, with a short, scannable summary "
-            + "covering these points — not the full text of these instructions, a curated "
-            + "summary a first-time user can act on immediately. **Never name or list the "
-            + "underlying tools (query, search_catalog, publish_report, etc.) — those are "
-            + "internal implementation details for addressing a research question, not "
-            + "user-facing commands, and listing them would read as a confusing menu of "
-            + "things to invoke rather than an answer to 'what can this help me with.' "
-            + "Describe capabilities in plain language only, the way the bullets below do.**\n"
-            + "- What it is: a live connection to ~25 US government data sources (SEC, "
-            + "Census, BLS/BEA, FBI crime data, campaign finance, and more — name a handful, "
-            + "not the full schema list above) queryable in plain English.\n"
-            + "- What makes a good question: comparisons across states, industries, or time "
-            + "('which states grew household income fastest since 2015'), correlations "
-            + "('does X relate to Y'), or a single specific fact — naming a place, a time "
-            + "window, and what's being compared sharpens the answer; a broad or vague "
-            + "question still gets a good-faith one, just a wider-scoped answer. It can also "
-            + "combine multiple data sources in one question (e.g. crime rates against "
-            + "economic indicators by county) and run real statistical tests, not just pull "
-            + "numbers.\n"
-            + "- How to get a shareable report: after any substantive answer, just ask for "
-            + "one — 'can I get that as a report' / 'give me a link I can share' — and it "
-            + "comes back as a permanent page with the narrative, sourcing and any charts, "
-            + "not just chat text that disappears with the conversation. Say this explicitly: "
-            + "asking is reliable, waiting to be offered one is not.\n"
-            + "- Fact-checking: hand it a URL, pasted article, or claim and ask to 'validate' "
-            + "or 'fact-check' it — every checkable assertion gets tested against the actual "
-            + "data, not just researched.\n"
-            + "- Data gaps are real findings, not failures: if something genuinely isn't in "
-            + "this corpus, it says so plainly rather than guessing.\n"
-            + "Keep it to a handful of short bullets — this is an orientation, not "
-            + "documentation.\n\n"
+            // The "askamerica help" orientation used to live here. Confirmed live it never
+            // reached the model — this whole banner has the same documented reachability
+            // problem QuestionGuidance.USAGE_GUIDE's class doc describes — so it moved to the
+            // get_help tool's description instead (see QuestionGuidance.HELP_TEXT).
 
             + "## VALIDATING AN ARTICLE OR A CLAIM\n\n"
             + "When the user hands you a URL, a pasted article, or a quoted passage and asks "
@@ -1206,6 +1178,15 @@ public class McpServer {
             + "see; silence from it is not approval."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(critiqueProps, new String[]{"sql"})));
+
+        // Dedicated "askamerica help" tool, named unambiguously — see QuestionGuidance.
+        // HELP_TEXT's class doc: a real user typing "askamerica help" got
+        // get_usage_guide_section_1's RESEARCHER-facing methodology guide instead, because
+        // that tool's description was the closest name match available with nothing more
+        // specific to reach for. get_help is that more specific match.
+        tools.add(
+            tool("get_help", QuestionGuidance.HELP_TEXT,
+            schema(MAPPER.createObjectNode(), new String[]{})));
 
         // Eight small, self-contained tools rather than one large one or a return to the
         // (silently unreachable) initialize.instructions banner — see QuestionGuidance.
@@ -2735,13 +2716,19 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=list_schemas");
                     text = listSchemas();
                     break;
+                case "get_help": {
+                    log.println("[askamerica-mcp] tool=get_help");
+                    text = QuestionGuidance.HELP_TEXT;
+                    break;
+                }
                 case "get_usage_guide_section_1":
                 case "get_usage_guide_section_2":
                 case "get_usage_guide_section_3":
                 case "get_usage_guide_section_4":
                 case "get_usage_guide_section_5":
                 case "get_usage_guide_section_6":
-                case "get_usage_guide_section_7": {
+                case "get_usage_guide_section_7":
+                case "get_usage_guide_section_8": {
                     int sectionNum = Integer.parseInt(
                         name.substring("get_usage_guide_section_".length()));
                     log.println("[askamerica-mcp] tool=" + name);
