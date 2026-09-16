@@ -481,8 +481,20 @@ public class SetupWindow {
         return l;
     }
 
+    /**
+     * A plain JLabel never wraps — it truncates instead, which is how the completion message
+     * ("Done! ... Restart Claude Desktop to activate. Tip: ...") was reported clipped on
+     * Windows. HTML content in a JLabel DOES wrap, but only within an explicit pixel width —
+     * without one, Swing sizes the label to fit the text on a single line regardless, same as
+     * plain text. 400px matches the API key field / configure button width above.
+     */
+    private static String escapeHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     private void setStatus(String msg, Boolean success) {
-        statusLabel.setText(msg);
+        statusLabel.setText("<html><div style='width:400px;text-align:center;'>"
+            + escapeHtml(msg) + "</div></html>");
         if (Boolean.TRUE.equals(success)) {
             statusLabel.setForeground(new Color(0x28C840));
         } else if (Boolean.FALSE.equals(success)) {
@@ -490,5 +502,12 @@ public class SetupWindow {
         } else {
             statusLabel.setForeground(DIM);
         }
+        // The window is packed once at construction, sized for the initial single-line " "
+        // placeholder — a wrapped, multi-line status (the completion message routinely runs
+        // to 3 lines at the 400px wrap width above) would otherwise be clipped at the bottom
+        // of that fixed, non-resizable frame instead of growing to fit. setResizable(false)
+        // only blocks the user dragging a resize handle; it does not block a programmatic
+        // pack().
+        frame.pack();
     }
 }
