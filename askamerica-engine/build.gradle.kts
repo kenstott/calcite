@@ -451,6 +451,10 @@ val launcherJar by tasks.registering(Jar::class) {
         include("**/McpServerLauncher.class")
         include("**/EngineInstaller.class")
         include("**/EngineInstaller\$*.class")
+        // EngineInstaller.DialogProgress's window icon (loadAppIcons()) — this jar runs
+        // standalone before the fat engine jar is ever downloaded, so the icon resources
+        // have to live here too, not just in the main jar SetupWindow reads from.
+        include("icons/*.png")
     }
     manifest {
         attributes["Main-Class"] = "org.apache.calcite.adapter.askamerica.McpServerLauncher"
@@ -458,10 +462,21 @@ val launcherJar by tasks.registering(Jar::class) {
     dependsOn(tasks.compileJava)
 }
 
+// Staged by CI's "Ensure pgwire-govdata bundle for this version" step (askamerica-engine.yml)
+// before jpackage runs. Absent in a plain local `./gradlew jpackage` — the resulting local
+// installer just has no bundled pgwire-govdata, matching today's lazy-download behavior,
+// which is a fine local-dev fallback, not something to fail the build over.
+val pgwireGovdataStagedDir = File(projectDir, "build/pgwire-govdata-staged")
+
 tasks.register<Copy>("prepareJpackageInput") {
     dependsOn(launcherJar)
     from(launcherJar.get().archiveFile)
     into(jpackageInputDirFile)
+    if (pgwireGovdataStagedDir.isDirectory) {
+        from(pgwireGovdataStagedDir) {
+            into("pgwire-govdata")
+        }
+    }
 }
 
 tasks.register<Exec>("jlinkRuntime") {

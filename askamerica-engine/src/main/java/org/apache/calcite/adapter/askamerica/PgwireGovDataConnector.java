@@ -261,7 +261,18 @@ final class PgwireGovDataConnector {
       return;
     }
     try {
-      ProcessBuilder pb = new ProcessBuilder(launcher.getAbsolutePath(),
+      java.util.List<String> command = new java.util.ArrayList<>();
+      // ProcessBuilder does not reliably run a .bat directly on every JDK/Windows
+      // combination (CreateProcess needs an actual executable; whether a bare .bat path is
+      // transparently resolved through cmd.exe is not something to depend on unverified) —
+      // invoke it explicitly through cmd.exe /c, which is documented, unambiguous behavior.
+      if (isWindows() && launcher.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".bat")) {
+        command.add("cmd.exe");
+        command.add("/c");
+      }
+      command.add(launcher.getAbsolutePath());
+      ProcessBuilder pb = new ProcessBuilder(command);
+      pb.command().addAll(java.util.Arrays.asList(
           "--host", host(), "--port", String.valueOf(port()),
           // Server-wide default (state.py: statement_timeout_ms=0, i.e. unlimited, unless a
           // launcher flag sets it). Without this, one hung query — from any of the many
@@ -282,7 +293,7 @@ final class PgwireGovDataConnector {
           // object (launcher.py: "--jdbc-prop", forwarded verbatim by calcite_backend.py).
           "--fun", "standard,postgresql,spatial,mssql,bigquery",
           "--jdbc-prop",
-          "parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY");
+          "parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY"));
       pb.environment().put("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", IDLE_SHUTDOWN_SECONDS);
       // Reuse the exact catalog file this engine's own embedded mode already seeds/maintains
       // (~/.mcp_askamerica/.duckdb/govdata.duckdb by default — see McpServer's ASKAMERICA_DATA_DIR
@@ -332,14 +343,36 @@ final class PgwireGovDataConnector {
       File f = new File(override);
       return f.isFile() ? f : null;
     }
+    // Bundled directly with the installer (McpServerLauncher sets this to
+    // <installdir>/app/pgwire-govdata) — the common case once a release actually stages
+    // one; checked before the lazy-download cache so an installer that already carries the
+    // bundle never re-downloads it. Absent (property unset, or the directory not present —
+    // a local dev build, or an older installer built before this existed) falls through.
+    String bundled = System.getProperty("askamerica.bundled.pgwire.dir");
+    if (bundled != null && !bundled.isEmpty()) {
+      File f = launcherPathUnder(new File(bundled));
+      if (f.isFile()) {
+        return f;
+      }
+    }
     String home = System.getProperty("user.home");
     if (home == null || home.isEmpty()) {
       return null;
     }
-    boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT)
-        .contains("win");
-    String binName = windows ? "pgwire-govdata.exe" : "pgwire-govdata";
-    File f = new File(new File(new File(home, ".askamerica"), "pgwire-govdata/bin"), binName);
+    File f = launcherPathUnder(new File(new File(home, ".askamerica"), "pgwire-govdata"));
     return f.isFile() ? f : null;
+  }
+
+  /** {@code base/bin/pgwire-govdata} (or {@code .bat} on Windows — no compiled Windows
+   * executable exists, see the CI-side "Stage adapter launcher (Windows)" step) under a
+   * pgwire-govdata bundle root, whether that root is the bundled-with-installer copy or
+   * the lazy-download cache — same internal layout either way. */
+  private static File launcherPathUnder(File base) {
+    String binName = isWindows() ? "pgwire-govdata.bat" : "pgwire-govdata";
+    return new File(new File(base, "bin"), binName);
+  }
+
+  private static boolean isWindows() {
+    return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
   }
 }

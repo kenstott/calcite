@@ -73,6 +73,7 @@ def transpile_pg_to_calcite(
     """
     if vector_enabled:
         sql = transforms.rewrite_vector_ops(sql)
+        sql = transforms.rewrite_embed_calls(sql)
     tree = parse_one(sql, read="postgres")
     tree = transforms.apply(tree, json_enabled=json_enabled)
     return tree.sql(dialect=Calcite)

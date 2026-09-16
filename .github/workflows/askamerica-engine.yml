@@ -11,6 +11,15 @@ on:
         required: true
         default: '0.1.0'
 
+# actions: write is needed by the installer job's "Ensure pgwire-govdata bundle" step,
+# which dispatches the separate "pgwire-adapters release" workflow (its `release: types:
+# [created]` trigger does not fire reliably — confirmed live, every prior run this
+# project has ever had was a manual workflow_dispatch) when this version's bundle isn't
+# already published.
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   # ── GovData ETL JAR (used by run-all-dq.sh on ingest servers) ────────────
   govdata-jar:
@@ -333,6 +342,81 @@ jobs:
         with:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
+
+      # Bundles pgwire-govdata (and, via it, the EMBED() model — see
+      # pgwire-adapters-release.yml) directly into the installer, so a fresh install never
+      # needs a first-run download at all. That separate release workflow's own `release:
+      # types: [created]` trigger does not fire reliably (confirmed live: every prior run
+      # this project has had was a manual workflow_dispatch) -- so this step is
+      # self-sufficient: it dispatches that workflow itself if this version's bundle isn't
+      # already published, then waits.
+      - name: Ensure pgwire-govdata bundle for this version
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          TAG="engine-v${VERSION}"
+          case "${{ matrix.os }}" in
+            windows-latest) VARIANT=windows-x86_64 ;;
+            macos-latest)   VARIANT=macos-arm64 ;;
+            ubuntu-latest)  VARIANT=linux-x86_64 ;;
+            *) echo "unknown matrix.os ${{ matrix.os }}"; exit 1 ;;
+          esac
+          ASSET="pgwire-govdata-${VERSION}-${VARIANT}.tar.gz"
+
+          have_asset() {
+            gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
+              --jq ".assets[].name" 2>/dev/null | grep -qx "$ASSET"
+          }
+
+          if ! have_asset; then
+            echo "No $ASSET on $TAG yet."
+            # Avoid dispatching 3x (once per OS in this matrix) if a run for this version
+            # is already in flight from another leg or a prior manual trigger.
+            IN_FLIGHT=$(gh run list --repo "${{ github.repository }}" \
+              --workflow "pgwire-adapters release" \
+              --json status --jq '[.[] | select(.status=="in_progress" or .status=="queued")] | length')
+            if [ "${IN_FLIGHT:-0}" = "0" ]; then
+              echo "Dispatching pgwire-adapters release for $VERSION"
+              gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" \
+                -f version="$VERSION"
+            else
+              echo "A pgwire-adapters release run is already in flight -- waiting on it."
+            fi
+            echo "Waiting for $ASSET to appear on $TAG (up to 45 min)..."
+            found=0
+            for i in $(seq 1 90); do
+              sleep 30
+              if have_asset; then found=1; break; fi
+            done
+            if [ "$found" != "1" ]; then
+              echo "::error::$ASSET never appeared on $TAG after 45 minutes"
+              exit 1
+            fi
+          fi
+          echo "Found $ASSET"
+
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET}"
+          curl -sL -o /tmp/pgwire-govdata.tar.gz "$URL"
+          curl -sL -o /tmp/pgwire-govdata.tar.gz.sha256 "${URL}.sha256"
+          EXPECTED=$(tr -d '[:space:]' < /tmp/pgwire-govdata.tar.gz.sha256)
+          if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL=$(sha256sum /tmp/pgwire-govdata.tar.gz | awk '{print $1}')
+          else
+            ACTUAL=$(shasum -a 256 /tmp/pgwire-govdata.tar.gz | awk '{print $1}')
+          fi
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::pgwire-govdata sha256 mismatch: expected $EXPECTED got $ACTUAL"
+            exit 1
+          fi
+          tar -xzf /tmp/pgwire-govdata.tar.gz -C /tmp
+          EXTRACTED=$(find /tmp -maxdepth 1 -type d -name "pgwire-govdata-*" | head -1)
+          mkdir -p askamerica-engine/build/pgwire-govdata-staged
+          cp -R "$EXTRACTED"/. askamerica-engine/build/pgwire-govdata-staged/
+          echo "Staged pgwire-govdata bundle: $(du -sh askamerica-engine/build/pgwire-govdata-staged | cut -f1)"
 
       - name: Import Apple signing certificate (macOS only)
         if: matrix.os == 'macos-latest'

@@ -21,9 +21,11 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Toolkit;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -82,6 +84,7 @@ public class SetupWindow {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
         frame.setBackground(BG);
+        frame.setIconImages(loadAppIcons());
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(BG);
@@ -455,6 +458,30 @@ public class SetupWindow {
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────
+
+    /**
+     * A plain {@code JFrame} shows Java's generic default icon (the coffee cup) in its title
+     * bar, taskbar entry, and Alt-Tab switcher unless {@code setIconImage(s)} is called
+     * explicitly — jpackage's {@code --icon} only covers the packaged EXE/shortcuts/Add-Remove-
+     * Programs entry, not a running Swing window's own icon. Multiple sizes (not just one) so
+     * Windows can pick the sharpest one for each context instead of scaling a single size up
+     * or down.
+     */
+    private static List<Image> loadAppIcons() {
+        List<Image> icons = new ArrayList<>();
+        for (int size : new int[]{16, 32, 48, 64, 128, 256}) {
+            try (InputStream in = SetupWindow.class.getResourceAsStream(
+                    "/icons/askamerica-" + size + ".png")) {
+                if (in != null) {
+                    icons.add(javax.imageio.ImageIO.read(in));
+                }
+            } catch (IOException ignored) {
+                // Missing/unreadable icon resource must never block the setup window itself
+                // from opening — worst case, this one size is absent from the list.
+            }
+        }
+        return icons;
+    }
 
     private static JLabel label(String text, boolean dim) {
         JLabel l = new JLabel(text);

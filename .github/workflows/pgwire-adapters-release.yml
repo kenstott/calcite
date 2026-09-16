@@ -152,7 +152,13 @@ jobs:
           # [tool.uv.sources] (pyproject.toml) for local dev; ship a real install
           # (an editable install points at this checkout's absolute path, which
           # will not exist on the machine the bundle is extracted on).
-          uv pip install --python ../bundle/cpython --no-editable ./vendor/buenavista ".[oidc]"
+          # EMBED() (embedder.py) needs fastembed (onnxruntime, no torch) -- only the
+          # govdata variant has any use for it, so only its bundle pays the size cost.
+          EXTRAS=".[oidc]"
+          if [[ "${{ matrix.adapter.name }}" == "govdata" ]]; then
+            EXTRAS=".[oidc,embed]"
+          fi
+          uv pip install --python ../bundle/cpython --no-editable ./vendor/buenavista "$EXTRAS"
           # `uv venv` makes cpython/bin/python an ABSOLUTE symlink to $PYBIN.
           # Rewrite it relative so the whole bundle (cpython/ + python/ together)
           # is relocatable to any absolute path. pyvenv.cfg's `home` line stays
@@ -171,6 +177,25 @@ jobs:
           print(f"bin/python -> {rel}")
           PY
 
+      - name: Pre-download EMBED() model into the bundle (govdata only)
+        if: matrix.adapter.name == 'govdata'
+        working-directory: pgwire-calcite
+        run: |
+          # Downloaded HERE (network available in CI) so the shipped bundle needs no
+          # network at all -- embedder.py's local_files_only=True refuses to touch the
+          # network at runtime, using only what's in this directory. Same model
+          # askamerica-engine's embed.py/vss-local.py already use (384-d, mean-pooled,
+          # L2-normalized) -- see embedder.py's module doc for why the vectors are not
+          # guaranteed to numerically match that pipeline's, only fastembed's own.
+          PYBIN=../bundle/cpython/bin/python
+          [[ "$RUNNER_OS" == "Windows" ]] && PYBIN=../bundle/cpython/Scripts/python.exe
+          "$PYBIN" -c "
+          from fastembed import TextEmbedding
+          TextEmbedding(model_name='snowflake/snowflake-arctic-embed-xs', cache_dir='../bundle/model/embedder')
+          print('embedder model cached')
+          "
+          du -sh ../bundle/model/embedder
+
       - name: Minimal bundled JRE (jlink)
         run: |
           "$JAVA_HOME/bin/jlink" --add-modules java.base,java.sql,java.naming,java.management,jdk.unsupported \
@@ -185,11 +210,22 @@ jobs:
           # instead of the generic "postgres". Extra args (e.g. --port, --auth, --database) are
           # appended after and win. (${{ matrix.adapter.name }} is substituted by the runner
           # even inside the quoted heredoc; $HERE/$@ stay literal for the generated script.)
+          #
+          # Windows gets its OWN launcher, not this bash script run through some shell nobody
+          # can assume is on PATH: a stock Windows machine has no bash at all. Confirmed live
+          # this was ALWAYS broken there, independent of anything else -- this exact heredoc
+          # was generated identically for windows-x86_64 too, an unusable artifact PgwireGov
+          # DataConnector could never actually run. See the "Windows launcher" step below.
+          if [[ "$RUNNER_OS" != "Windows" ]]; then
           cat > "bundle/bin/pgwire-${{ matrix.adapter.name }}" <<'SH'
           #!/usr/bin/env bash
           HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
           ls "$HERE"/jars/*.jar | paste -sd: - > "$HERE/jars.classpath"
           export PGWIRE_CALCITE_CLASSPATH_FILE="$HERE/jars.classpath"
+          # embedder.py's is_available() checks this directory's existence -- harmless when
+          # absent (every adapter but govdata; embedder.py is only ever imported once EMBED()
+          # actually appears in a query, per its own is_available() gate).
+          export EMBED_MODEL_CACHE_DIR="$HERE/model/embedder"
           exec "$HERE/jre/bin/java" \
             "-Dpgwire.python=$HERE/cpython/bin/python" \
             -jar "$HERE/pgwire-launcher.jar" \
@@ -197,6 +233,31 @@ jobs:
             --database ${{ matrix.adapter.name }} "$@"
           SH
           chmod +x "bundle/bin/pgwire-${{ matrix.adapter.name }}"
+          fi
+
+      - name: Stage adapter launcher (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bundle\bin | Out-Null
+          # Single-quoted PowerShell here-string: 100% literal, no PowerShell variable
+          # expansion at all -- required because the BATCH content itself is full of
+          # %HERE%/%%f/!CP! syntax that must reach the file untouched. The adapter name
+          # is substituted afterward with a plain string replace, not interpolation.
+          $bat = @'
+          @echo off
+          setlocal enabledelayedexpansion
+          for %%i in ("%~dp0..") do set "HERE=%%~fi"
+          set "CP="
+          for %%f in ("%HERE%\jars\*.jar") do set "CP=!CP!%%f;"
+          > "%HERE%\jars.classpath" echo !CP!
+          set "PGWIRE_CALCITE_CLASSPATH_FILE=%HERE%\jars.classpath"
+          set "EMBED_MODEL_CACHE_DIR=%HERE%\model\embedder"
+          "%HERE%\jre\bin\java.exe" "-Dpgwire.python=%HERE%\cpython\Scripts\python.exe" -jar "%HERE%\pgwire-launcher.jar" --backend calcite --model "%HERE%\model\model.json" --database __ADAPTER__ %*
+          '@
+          $bat = $bat.Replace("__ADAPTER__", "${{ matrix.adapter.name }}")
+          Set-Content -Path "bundle\bin\pgwire-${{ matrix.adapter.name }}.bat" -Value $bat -Encoding ASCII -NoNewline
+          Get-Content "bundle\bin\pgwire-${{ matrix.adapter.name }}.bat"
 
       - name: Pack tarball + sha256
         run: |

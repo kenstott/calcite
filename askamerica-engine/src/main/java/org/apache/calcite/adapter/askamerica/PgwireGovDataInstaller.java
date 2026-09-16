@@ -121,7 +121,12 @@ final class PgwireGovDataInstaller {
 
     private static File launcherPath(Path base) {
         boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
-        String binName = windows ? "pgwire-govdata.exe" : "pgwire-govdata";
+        // NOT .exe: the Windows leg of this bundle is a generated .bat (see
+        // pgwire-adapters-release.yml's "Stage adapter launcher (Windows)" step) — there is
+        // no compiled Windows executable at all. Confirmed live this mismatch meant a fully
+        // successful download+extraction was still reported as "no launcher binary found"
+        // on Windows, unconditionally, independent of anything else.
+        String binName = windows ? "pgwire-govdata.bat" : "pgwire-govdata";
         return new File(new File(base.toFile(), "bin"), binName);
     }
 

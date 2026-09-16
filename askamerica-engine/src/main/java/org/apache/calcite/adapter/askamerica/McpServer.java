@@ -1288,6 +1288,15 @@ public class McpServer {
             "How many chunks to return. Default 10, capped at 50. Ask for more than you need: "
             + "the top hits are frequently boilerplate, so a short list can contain no real "
             + "match at all."));
+        // No auto-provisioning exists for the embedder (unlike the engine jar and
+        // pgwire-govdata, both of which self-install on first use) — only a manual operator
+        // script (govdata/scripts/vss-embed-setup.sh) that nobody runs on a real Claude
+        // Desktop install. Advertising this tool unconditionally means every real install
+        // gets offered a capability guaranteed to fail with "no embedder configured" the
+        // instant it's called. Gate registration on the same properties
+        // configureQueryEmbedder() (called at startup, before toolDefs() is ever built) uses
+        // to decide whether an embedder is actually reachable.
+        if (embedderConfigured()) {
         tools.add(
             tool("semantic_search",
             "Search the FILING TEXT by meaning rather than by keyword — MD&A, risk factors, "
@@ -1318,6 +1327,7 @@ public class McpServer {
             + "attack_techniques hits (methodology, not an event) from ioc_urls/actual indicator "
             + "hits. Do not expect the embedding score alone to make any of these distinctions.",
             schema(semProps, new String[]{"query"})));
+        }
 
         ObjectNode relProps = MAPPER.createObjectNode();
         relProps.set("lei", prop("string",
@@ -4079,6 +4089,27 @@ public class McpServer {
      * would be far worse than none, because query vectors from a different pipeline than the
      * corpus still return rows, just silently mis-ranked.
      */
+    /**
+     * Whether {@code configureQueryEmbedder()} (called once at startup, before toolDefs() is
+     * ever built) found or was given a usable embedder. Same three properties it resolves —
+     * checked here rather than cached separately so there is exactly one source of truth for
+     * "is an embedder actually reachable."
+     */
+    private static boolean embedderConfigured() {
+        // In pgwire mode, SEMANTIC_SEARCH/EMBED execute wherever Calcite actually runs — the
+        // shared pgwire-govdata server's own JVM (started via JPype from Python), not this
+        // client process — so this client's own local calcite.embed.* properties describe
+        // nothing relevant. The pgwire-govdata bundle always carries the embedder (see
+        // pgwire-adapters-release.yml's "Pre-download EMBED() model" step and
+        // pgwire_calcite/embedder.py), so pgwire mode alone is the correct signal here.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return true;
+        }
+        return !System.getProperty("calcite.embed.command", "").isEmpty()
+            || !System.getProperty("calcite.embed.home", "").isEmpty()
+            || !System.getProperty("calcite.embed.script", "").isEmpty();
+    }
+
     private static void configureQueryEmbedder() {
         if (!System.getProperty("calcite.embed.command", "").isEmpty()
             || !System.getProperty("calcite.embed.home", "").isEmpty()

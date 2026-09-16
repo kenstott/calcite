@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.askamerica;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.GraphicsEnvironment;
+import java.awt.Image;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,6 +28,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -256,6 +259,30 @@ final class EngineInstaller {
         System.err.println("[askamerica-launcher] " + message);
     }
 
+    /**
+     * A plain {@code JFrame} shows Java's generic default icon (the coffee cup) unless
+     * {@code setIconImage(s)} is called explicitly — jpackage's {@code --icon} only covers the
+     * packaged EXE/shortcuts/Add-Remove-Programs entry, not a Swing window's own icon. Multiple
+     * sizes so Windows can pick the sharpest one for each context (title bar vs. Alt-Tab)
+     * instead of scaling a single size. This class runs in the thin jpackage launcher, so the
+     * icon resources must be present in ITS jar too — see build.gradle.kts's launcherJar task.
+     */
+    private static List<Image> loadAppIcons() {
+        List<Image> icons = new ArrayList<>();
+        for (int size : new int[]{16, 32, 48, 64, 128, 256}) {
+            try (InputStream in = EngineInstaller.class.getResourceAsStream(
+                    "/icons/askamerica-" + size + ".png")) {
+                if (in != null) {
+                    icons.add(javax.imageio.ImageIO.read(in));
+                }
+            } catch (IOException ignored) {
+                // Missing/unreadable icon resource must never block the progress window
+                // itself from opening — worst case, this one size is absent from the list.
+            }
+        }
+        return icons;
+    }
+
     private static void download(String url, Path dest, boolean serverMode)
         throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder()
@@ -357,6 +384,7 @@ final class EngineInstaller {
                 SwingUtilities.invokeAndWait(() -> {
                     frame = new JFrame("AskAmerica MCP");
                     frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+                    frame.setIconImages(loadAppIcons());
                     JPanel p = new JPanel(new BorderLayout(0, 12));
                     p.setBorder(BorderFactory.createEmptyBorder(24, 28, 24, 28));
                     JLabel label = new JLabel("Setting up AskAmerica engine (one-time, ~"

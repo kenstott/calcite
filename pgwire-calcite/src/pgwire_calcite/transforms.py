@@ -69,6 +69,43 @@ class UnsupportedConstruct(ValueError):
     """A PG construct with no safe Calcite mapping. Rejected, never guessed."""
 
 
+# EMBED('text') -- a single-quoted SQL string literal argument, '' escaping a literal
+# quote (standard SQL). Anything else (a column reference, a parameter, a function
+# call as the argument) is intentionally NOT matched: EMBED is only ever meant to
+# turn a fixed piece of query text into a vector, computed once per statement here in
+# Python, never per-row inside Calcite/DuckDB.
+_EMBED_CALL = re.compile(r"(?i)\bEMBED\(\s*'((?:[^']|'')*)'\s*\)")
+
+
+def rewrite_embed_calls(sql: str) -> str:
+    """Replace every ``EMBED('text')`` call with a literal ``ARRAY[v1, v2, ...]``.
+
+    Calcite has no EMBED function and never will — the whole reason this runs here,
+    at the text level, before the SQL is even parsed, is that turning text into a
+    vector needs a model loaded in THIS process (see embedder.py's module doc for
+    why that model is loaded once here rather than once per MCP client). Raises
+    UnsupportedConstruct (not a silent no-op, not a fallback) when EMBED is used but
+    no bundled model is configured on this server — a query with EMBED in it must
+    fail with a clear reason, never quietly return unranked/wrong rows.
+    """
+    if not _EMBED_CALL.search(sql):
+        return sql
+    from pgwire_calcite import embedder
+
+    if not embedder.is_available():
+        _reject(
+            "EMBED() was used but this server has no bundled embedding model "
+            "configured (EMBED_MODEL_CACHE_DIR unset or missing)"
+        )
+
+    def _repl(m: "re.Match[str]") -> str:
+        text = m.group(1).replace("''", "'")
+        vector = embedder.embed_text(text)
+        return "ARRAY[" + ", ".join(repr(v) for v in vector) + "]"
+
+    return _EMBED_CALL.sub(_repl, sql)
+
+
 _REJECTED_FUNCTIONS = {
     "generate_series": "generate_series() has no Calcite-core equivalent",
     "string_to_array": "array constructors are not mapped to Calcite",
