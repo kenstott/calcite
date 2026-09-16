@@ -205,7 +205,16 @@ jobs:
           name="pgwire-${{ matrix.adapter.name }}-${VER}-${{ matrix.os.variant }}"
           mv bundle "$name"
           tar -czf "${name}.tar.gz" "$name"
-          (command -v sha256sum && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
+          # `command -v sha256sum` is checked only for its exit status -- redirected to
+          # /dev/null so its own stdout (the binary's path, e.g. "/usr/bin/sha256sum") does
+          # not leak into the pipe ahead of the real hash line on any runner where
+          # sha256sum exists. Without the redirect, awk '{print $1}' emits BOTH lines'
+          # first field -- "/usr/bin/sha256sum" then the real hash -- producing a two-line
+          # .sha256 file whose first line is not a hash at all. Confirmed live: this exact
+          # bug made every pgwire-govdata download fail PgwireGovDataInstaller's integrity
+          # check (comparing against the literal string "/usr/bin/sha256sum"), on every
+          # platform whose runner has sha256sum (not macOS, which falls through to shasum).
+          (command -v sha256sum >/dev/null 2>&1 && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
             | awk '{print $1}' > "${name}.tar.gz.sha256"
           echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
 
