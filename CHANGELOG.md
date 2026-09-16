@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.90.0](https://github.com/kenstott/calcite/compare/engine-v0.89.0...engine-v0.90.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** coach question-asking in the askamerica help response ([d4c7e23](https://github.com/kenstott/calcite/commit/d4c7e23fc15da297248bc4b409a16b08c7e482f4))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** wrap the setup wizard's status text instead of truncating ([e8d7f60](https://github.com/kenstott/calcite/commit/e8d7f6089dfb51e13c82e936e1660a6140d8243b))
+
 ## [0.89.0](https://github.com/kenstott/calcite/compare/engine-v0.88.0...engine-v0.89.0) (2026-09-16)
 
 
