@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.87.0](https://github.com/kenstott/calcite/compare/engine-v0.86.3...engine-v0.87.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** reinforce the offer-a-report nudge in tool descriptions ([a8b89f3](https://github.com/kenstott/calcite/commit/a8b89f3092f4342e3da5bee40b88530f8ab8a3de))
+
 ## [0.86.3](https://github.com/kenstott/calcite/compare/engine-v0.86.2...engine-v0.86.3) (2026-09-16)
 
 
