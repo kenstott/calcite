@@ -79,6 +79,14 @@ public class DuckDBJdbcSchemaFactory {
       new java.util.concurrent.atomic.AtomicBoolean(false);
 
   /**
+   * Minimum time since last modification before {@link #cleanupStaleNumberedCopies(String)}
+   * will even consider a numbered copy -- see the safety-gate comment at its one call site.
+   * Ten minutes comfortably exceeds how long a seed-then-open sequence on one file could
+   * plausibly take, while still reclaiming genuinely abandoned copies promptly.
+   */
+  private static final long STALE_COPY_MIN_AGE_MILLIS = 10 * 60 * 1000L;
+
+  /**
    * Iceberg views satisfied by a catalog that already defined them — no object-store call.
    *
    * @see #icebergViewsReused()
@@ -1109,6 +1117,21 @@ public class DuckDBJdbcSchemaFactory {
     for (File candidate : candidates) {
       String candidatePath = candidate.getAbsolutePath();
       long size = candidate.length();
+      // Safety gate against the exact race this check-then-delete pattern is otherwise
+      // vulnerable to: another process can be between finishing seedCatalogCopy (which
+      // writes/touches this file) and its own subsequent DriverManager.getConnection() on the
+      // same path -- a window in which the file briefly has no open handle at all, so the lock
+      // check below would see it as "free" even though it is about to be used. Observed live,
+      // 2026-09-15: a numbered copy vanished from under a process mid-seed, and that process's
+      // own connect() then silently created a fresh EMPTY file at the now-vacant path instead
+      // of erroring, triggering a many-minutes from-scratch view rebuild with no other symptom
+      // than a suspiciously small catalog and a slowly growing WAL. A copy modified in the
+      // last few minutes is left alone unconditionally, lock state notwithstanding -- cleanup
+      // only ever targets copies old enough that no live seed-then-open sequence could still be
+      // in flight on them.
+      if (System.currentTimeMillis() - candidate.lastModified() < STALE_COPY_MIN_AGE_MILLIS) {
+        continue;
+      }
       Connection probe = null;
       try {
         probe = DriverManager.getConnection("jdbc:duckdb:" + candidatePath);
