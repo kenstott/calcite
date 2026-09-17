@@ -16,18 +16,20 @@
 # limitations under the License.
 #
 # x-schema.sh — runs the two cross-schema sweeps: the entity-bridge sweep
-# (EntityBridgeOrganizer.main) and the chunk-parsing sweep (ChunkOrganizer.main), in that order.
+# (EntityBridgeOrganizer.main), which always runs, and the chunk-parsing sweep
+# (ChunkOrganizer.main), which only runs when GOVDATA_XSCHEMA_RUN_CHUNKS=true (see below).
 # Together they are the "x-schema" step in the daily -> x-schema -> vss -> historical sequence
 # run-pool.sh drives.
 #
-# One sweep over every registered source (see ChunkOrganizer.java's ROW_CONCAT_SOURCES /
-# DOCUMENT_BLOB_SOURCES) across every schema, including SEC's own mda_sections/
-# earnings_transcripts -- SEC is chunked here, in this one centralized sweep, not by a
-# per-schema writer during its own ETL run. Organizes text into chunk rows in Postgres's
-# vc_staging (the sole durable copy -- backed up via the existing nightly pg_dump, not a
-# second Iceberg copy; see ChunkOrganizer's class javadoc). Runs AFTER daily ETL (every
-# source needs to already be materialized) and BEFORE vss-local.sh (which embeds vc_staging's
-# un-coded backlog) -- ordering enforced by run-pool.sh's call sequence, not by this script.
+# The chunk sweep's one pass over every registered source (see ChunkOrganizer.java's
+# ROW_CONCAT_SOURCES / DOCUMENT_BLOB_SOURCES) across every schema, including SEC's own
+# mda_sections/earnings_transcripts -- SEC is chunked here, in this one centralized sweep, not by
+# a per-schema writer during its own ETL run -- when enabled, organizes text into chunk rows in
+# Postgres's vc_staging (the sole durable copy -- backed up via the existing nightly pg_dump, not
+# a second Iceberg copy; see ChunkOrganizer's class javadoc). When it runs, it runs AFTER daily
+# ETL (every source needs to already be materialized) and BEFORE vss-local.sh (which embeds
+# vc_staging's un-coded backlog) -- ordering enforced by run-pool.sh's call sequence, not by this
+# script.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -77,9 +79,18 @@ if ! run_step "building entity bridges across all schemas" \
   exit 1
 fi
 
-if ! run_step "sweeping every registered source into vc_staging" \
-    "${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-}" \
-    org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then
-  echo "ERROR: ChunkOrganizer failed" >&2
-  exit 1
+# ChunkOrganizer's chunk/embedding sweep has no resumable checkpoint or row/time cap sized for
+# full production scale -- it is validated against the DQ bucket with minimal samples only, by
+# defect-register-runner, until that work lands. Opt in explicitly once it's cleared for
+# production; the entity-bridge sweep above is unaffected either way, since the two are
+# independent.
+if [ "${GOVDATA_XSCHEMA_RUN_CHUNKS:-false}" = "true" ]; then
+  if ! run_step "sweeping every registered source into vc_staging" \
+      "${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-}" \
+      org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then
+    echo "ERROR: ChunkOrganizer failed" >&2
+    exit 1
+  fi
+else
+  echo "[x-schema] skipping ChunkOrganizer sweep (set GOVDATA_XSCHEMA_RUN_CHUNKS=true to enable)"
 fi
