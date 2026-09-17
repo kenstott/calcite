@@ -168,6 +168,19 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
+  # PJM Base Residual Auction (BRA) delivery-year range. "year" is the delivery year's
+  # START (e.g. year=2024 for the "2024/2025" delivery year), used directly to build the
+  # per-delivery-year auction-results URL — no publish/data lag: PJM posts each delivery
+  # year's BRA results as soon as that auction clears, typically 1-3 years ahead of the
+  # delivery year itself. Verified live 2026-09-17: a real xlsx exists for every delivery
+  # year 2021/2022 through 2028/2029; 2029/2030 has not cleared yet (PjmCapacityAuctionTransformer
+  # treats the resulting HTML landing page as "no data yet", not an error). Bump `end` as
+  # later auctions clear.
+  pjm_bra_years: &pjm_bra_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2021}"
+    end: "2028"
+
   # EIA fossil fuel production (crude API) year range
   eia_fossil_years: &eia_fossil_years
     type: yearRange
@@ -1181,6 +1194,107 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: eia_capacity_changes
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # PJM BASE RESIDUAL AUCTION (BRA) CAPACITY CLEARING PRICES
+  # ---------------------------------------------------------------------------
+  - name: pjm_capacity_auction_prices
+    freshness:
+      type: hash
+    pattern: "type=pjm_bra/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      PJM Base Residual Auction (BRA) capacity clearing prices by LDA (Locational
+      Deliverability Area / pricing zone) and delivery year, sourced from PJM's public
+      per-delivery-year auction-results workbook (pjm.com/markets-and-operations/rpm.aspx
+      — no PJM Data Miner API key required). One row per LDA per delivery year: 'RTO' is
+      the system-wide unconstrained zone; other LDAs (e.g. 'EMAAC', 'COMED', 'DPLSOUTH')
+      layer a locational_price_adder on top when that zone is import-constrained. This is
+      the actual capacity-procurement price mechanism behind PJM-region wholesale
+      capacity costs — e.g. the RTO resource_clearing_price rose from $28.92/MW-day
+      (2024/2025) to $269.92 (2025/2026) to $329.17 (2026/2027), a documented driver of
+      PJM-region retail cost pressure. Currently covers only the Base Residual Auction
+      (see auction_type); PJM's Incremental Auctions (1st/2nd/3rd IA) and other ISOs/RTOs
+      (MISO, ERCOT, CAISO, NYISO, SPP) publish similar structured auction results and are
+      a natural follow-on, not yet ingested (kenstott/govdata-ops#330).
+
+    dimensions:
+      type:
+        - pjm_bra
+      year: *pjm_bra_years
+
+    columns:
+      - name: delivery_year
+        type: integer
+        nullable: false
+        comment: >
+          Delivery year — the start of the one-year capacity delivery period (e.g. 2024
+          for the "2024/2025" delivery year).
+      - name: lda
+        type: string
+        nullable: false
+        comment: >
+          Locational Deliverability Area / pricing zone code (e.g. 'RTO' for the
+          system-wide unconstrained zone, 'EMAAC', 'COMED', 'DPLSOUTH'). The set of LDAs
+          reported varies by delivery year as PJM adds, splits, or retires constrained
+          areas — do not assume a fixed zone list across years.
+      - name: system_marginal_price
+        type: double
+        nullable: true
+        comment: >
+          System Marginal Price — the clearing price for Capacity Performance Resources
+          in the unconstrained area of RTO, in $/MW-day. Identical across every LDA row
+          for a given delivery_year; the zone-specific price is resource_clearing_price.
+      - name: locational_price_adder
+        type: double
+        nullable: true
+        comment: >
+          Locational Price Adder for this LDA relative to its immediate higher-level LDA,
+          in $/MW-day. Zero for an unconstrained zone.
+      - name: resource_clearing_price
+        type: double
+        nullable: true
+        comment: >
+          Resource Clearing Price = system_marginal_price + locational_price_adder, in
+          $/MW-day — the actual capacity price paid to cleared resources in this LDA.
+      - name: auction_type
+        type: string
+        nullable: false
+        comment: >
+          Auction type; currently always 'Base Residual Auction' (BRA) — PJM's primary,
+          delivery-year-ahead capacity auction. Constant until Incremental Auctions are
+          added (see table comment), so excluded from the all-same-value DQ check.
+
+    source:
+      type: http
+      url: "https://www.pjm.com/-/media/DotCom/markets-ops/rpm/rpm-auction-info/{effective_year}-{effective_year}/{effective_year}-{effective_year}-base-residual-auction-results.xlsx"
+      method: GET
+      # Bulk-XLSX pipeline: PjmCapacityAuctionTransformer rebuilds the real two-year-folder
+      # URL itself and re-downloads (the URL above is a throwaway fetch the framework
+      # issues before the transformer runs — see eia_power_plants for the same pattern).
+      parallel: 1
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.PjmCapacityAuctionTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pjm_bra/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: pjm_capacity_auction_prices
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]

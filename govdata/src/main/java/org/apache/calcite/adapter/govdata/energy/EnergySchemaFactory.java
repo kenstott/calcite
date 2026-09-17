@@ -54,6 +54,10 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
       "ev_charging_stations"
   ));
 
+  private static final Set<String> PJM_TABLES = new HashSet<>(Arrays.asList(
+      "pjm_capacity_auction_prices"
+  ));
+
   @Override
   public String getSchemaResourceName() {
     return "/energy/energy-schema.yaml";
@@ -90,6 +94,10 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
     for (final String tableName : NREL_TABLES) {
       builder.isEnabled(tableName,
           ctx -> apiDataGovPresent && isTableEnabled(tableName, "nrel", enabledSources));
+    }
+
+    for (final String tableName : PJM_TABLES) {
+      builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "pjm", enabledSources));
     }
 
     LOGGER.debug("Configured ENERGY schema hooks: enabledSources={}",

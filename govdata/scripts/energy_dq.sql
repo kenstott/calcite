@@ -8,7 +8,8 @@
 --         eia_capacity_changes, eia_fossil_fuel_production,
 --         eia_state_energy_consumption, eia_natural_gas_storage,
 --         eia_petroleum_stocks, eia_crude_oil_imports, eia_refinery_operations,
---         eia_coal_mines, ev_charging_stations, eia_drilling_activity
+--         eia_coal_mines, ev_charging_stations, eia_drilling_activity,
+--         pjm_capacity_auction_prices
 -- Storage: Iceberg (iceberg_scan)
 --
 -- Worker coverage verified by T8 checks:
@@ -500,6 +501,82 @@ FROM (
   WHERE change_type IS NOT NULL
     AND change_type NOT IN ('Planned Addition', 'Planned Retirement', 'New Unit',
                             'Retirement', 'Addition', 'Cancellation')
+) t;
+
+-- ============================================================
+-- pjm_capacity_auction_prices
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'pjm_capacity_auction_prices', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/pjm_capacity_auction_prices', allow_moved_paths := true);
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT
+  'energy', 'pjm_capacity_auction_prices', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 10 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 10, 'expected >= 10 LDA-year clearing-price rows (one delivery year has ~15-17 LDAs)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/pjm_capacity_auction_prices', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/pjm_capacity_auction_prices', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'pjm_capacity_auction_prices', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/pjm_capacity_auction_prices', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'pjm_capacity_auction_prices', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/pjm_capacity_auction_prices', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- auction_type is a real, expected constant until Incremental Auctions are added (see table comment)
+    AND column_name NOT IN ('type', 'year', 'auction_type')
+) t;
+
+-- T6: pk_nulls (delivery_year, lda NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'pjm_capacity_auction_prices', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'delivery_year IS NULL OR lda IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/pjm_capacity_auction_prices', allow_moved_paths := true)
+WHERE delivery_year IS NULL OR lda IS NULL;
+
+-- T7: expected_values — resource_clearing_price >= system_marginal_price (adder is non-negative)
+INSERT INTO dq_results
+SELECT
+  'energy', 'pjm_capacity_auction_prices', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'resource_clearing_price < system_marginal_price'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/pjm_capacity_auction_prices', allow_moved_paths := true)
+  WHERE resource_clearing_price IS NOT NULL AND system_marginal_price IS NOT NULL
+    AND resource_clearing_price < system_marginal_price
 ) t;
 
 -- ============================================================
