@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.91.2](https://github.com/kenstott/calcite/compare/engine-v0.91.1...engine-v0.91.2) (2026-09-17)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** remove the embedded-engine fallback, propagate real errors ([b1083ba](https://github.com/kenstott/calcite/commit/b1083ba61574d6b1bc9c8c722459558d77706c8d))
+* **ci:** retry the pgwire-govdata download on transient curl failures ([6e68684](https://github.com/kenstott/calcite/commit/6e6868474ec88b3040dbc707bc963690814ba027))
+
 ## [0.91.1](https://github.com/kenstott/calcite/compare/engine-v0.91.0...engine-v0.91.1) (2026-09-16)
 
 
