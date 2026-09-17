@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.91.4](https://github.com/kenstott/calcite/compare/engine-v0.91.3...engine-v0.91.4) (2026-09-17)
+
+
+### Bug Fixes
+
+* **ci:** rewrite the Windows venv's pyvenv.cfg home path at launch, not build time ([a144df8](https://github.com/kenstott/calcite/commit/a144df84b3fb75ebb8802d833c5071ccb7d866e7))
+
 ## [0.91.3](https://github.com/kenstott/calcite/compare/engine-v0.91.2...engine-v0.91.3) (2026-09-17)
 
 
