@@ -17,7 +17,7 @@ on:
 # project has ever had was a manual workflow_dispatch) when this version's bundle isn't
 # already published.
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
