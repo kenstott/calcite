@@ -153,7 +153,21 @@ public class SecFilingCache implements AutoCloseable {
     int cntTrackerIncomplete = 0;
 
     java.util.Set<String> seenAccessions = new java.util.HashSet<String>();
+    // Time-based, not count-based: per-candidate cost varies (an 8-K needing the earnings-items
+    // lookup makes a live EDGAR request; most candidates are pure in-memory tracker checks), so
+    // elapsed time between log lines is the signal that tells an operator this is still making
+    // progress rather than stalled.
+    int scanned = 0;
+    long filterStart = System.currentTimeMillis();
+    long lastProgressLogAt = filterStart;
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      scanned++;
+      long now = System.currentTimeMillis();
+      if (now - lastProgressLogAt >= 30_000) {
+        LOGGER.info("filterUnprocessed: scanned {}/{} candidates ({}ms elapsed), {} queued so far",
+            scanned, candidates.size(), now - filterStart, toProcess.size());
+        lastProgressLogAt = now;
+      }
       // EDGAR's full index lists ownership filings (Forms 3/4/5, SC 13D/G) once per CIK involved —
       // the issuer AND every reporting owner — so ~43% of an all-filer year's rows repeat a filing
       // already decided (454,073 candidates for 2025 cover only 258,803 distinct accessions). An
