@@ -52,6 +52,7 @@ from buenavista.postgres import (
 )
 
 from pgwire_calcite.auth import is_personal_access_token
+from pgwire_calcite import metering
 from pgwire_calcite.throttle import LockedOut, login_throttle, subject_key, throttled_auth
 from pgwire_calcite.types import QueryResult as TrinoResult
 
@@ -308,6 +309,12 @@ class CalciteQueryResult(BVQueryResult):
         )
         self._head: list | None = None
         self._closed = False
+        # Usage metering (kenstott/calcite#364): sampled as rows are actually
+        # streamed to the client, reported once on close(). See metering.py's
+        # module doc for why this lives here rather than on the Java side.
+        self._meter_sql = original_sql
+        self._meter_start = time.monotonic()
+        self._sampler = metering.EgressSampler(len(self._cols))
         ctypes = result.column_types
         if not ctypes or any(not t for t in ctypes):
             self._head = next(self._batch_iter, [])
@@ -345,6 +352,7 @@ class CalciteQueryResult(BVQueryResult):
             if self._pending_idx < len(self._pending):
                 row = self._pending[self._pending_idx]
                 self._pending_idx += 1
+                self._sampler.observe(row)
                 yield row
                 continue
             if self._closed:
@@ -360,6 +368,8 @@ class CalciteQueryResult(BVQueryResult):
         if self._closed:
             return
         self._closed = True
+        duration_ms = int((time.monotonic() - self._meter_start) * 1000)
+        self._sampler.finish(self._meter_sql, duration_ms)
         self._head = None
         self._pending, self._pending_idx = [], 0
         close = getattr(self._batch_iter, "close", None)
@@ -562,6 +572,14 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             from pgwire_calcite.authz import enforce_query
 
             enforce_query(_grants, self.role_id or "", stripped)
+
+        # Usage quota (kenstott/calcite#364): a no-op when ASKAMERICA_API_KEY isn't
+        # set (local dev / self-hosted runs). Checked per query, same cadence as
+        # askamerica-engine's embedded-mode UsageMetering.StatementHandler; cheap
+        # thanks to metering.py's 60s cache. Raises PermissionError, already an
+        # established, handled error type on this exact call path (enforce_query
+        # above raises the same type for the same reason).
+        metering.enforce_quota()
 
         # Non-catalog execution seam: Phase 0 StubBackend -> Phase 1 CalciteBackend.
         # stream=True selects the Arrow batch-streaming path at the wire (Phase 3);
