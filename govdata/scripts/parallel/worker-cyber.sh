@@ -51,6 +51,40 @@ mkdir -p "$MODEL_DIR"
 CYBER_VULN_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/cyber/cyber-vuln-schema.yaml"
 CYBER_THREAT_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/cyber/cyber-threat-schema.yaml"
 
+# Self-contained schema+year conflict guard, same pattern worker.sh uses: this script is
+# run directly (not only through run-pool.sh), so it registers its own PID per real schema
+# and calls check_schema_year_conflict itself rather than relying on the pool's admission
+# check, which never runs for a direct invocation.
+PID_DIR="$SCRIPT_DIR/runs/pids"
+mkdir -p "$PID_DIR"
+read -r _self_start_year _self_end_year <<< "$(_year_range_from_mode "$MODE")"
+_CYBER_REGISTERED_IDS=()
+_cyber_cleanup_registrations() {
+  local _ec=$? _wid
+  for _wid in "${_CYBER_REGISTERED_IDS[@]}"; do
+    echo "$_ec" > "$PID_DIR/${_wid}.exit" 2>/dev/null
+    rm -f "$PID_DIR/${_wid}.foreground" 2>/dev/null
+  done
+}
+trap _cyber_cleanup_registrations EXIT
+register_cyber_schema() {
+  local _schema=$1
+  local _wid="worker-${_schema}-${MODE}"
+  local _existing_pid=""
+  [ -f "$PID_DIR/${_wid}.pid" ] && _existing_pid=$(head -1 "$PID_DIR/${_wid}.pid" 2>/dev/null | tr -d '[:space:]')
+  # A live PID already registered under this exact identity means a pool launch got here
+  # first and already passed admission -- trust it, don't re-check or re-register.
+  if [ -n "$_existing_pid" ] && kill -0 "$_existing_pid" 2>/dev/null; then
+    return 0
+  fi
+  check_schema_year_conflict "$PID_DIR" "$_schema" "$_self_start_year" "$_self_end_year" || exit 1
+  echo $$ > "$PID_DIR/${_wid}.pid"
+  touch "$PID_DIR/${_wid}.foreground"
+  rm -f "$PID_DIR/${_wid}.exit"
+  _CYBER_REGISTERED_IDS+=("$_wid")
+}
+should_run "cyber_vuln" && register_cyber_schema "cyber_vuln"
+should_run "cyber_threat" && register_cyber_schema "cyber_threat"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
