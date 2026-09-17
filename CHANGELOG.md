@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.92.0](https://github.com/kenstott/calcite/compare/engine-v0.91.5...engine-v0.92.0) (2026-09-17)
+
+
+### Features
+
+* **pgwire-calcite:** server-side usage metering + quota enforcement ([5cac251](https://github.com/kenstott/calcite/commit/5cac2519f3ce24bdf087e0063c53a526bf3cba58))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** revert WixUIBannerBmp/WixUIDialogBmp override, breaks Windows build ([b656ec2](https://github.com/kenstott/calcite/commit/b656ec2fc5467ab203da19deafb6aecd2f44b098))
+
 ## [0.91.5](https://github.com/kenstott/calcite/compare/engine-v0.91.4...engine-v0.91.5) (2026-09-17)
 
 
