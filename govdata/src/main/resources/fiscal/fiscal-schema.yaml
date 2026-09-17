@@ -3630,8 +3630,8 @@ partitionedTables:
       recipient location (county-grain via county_fips). Covers both ARRA broadband
       programs: NTIA's Broadband Technology Opportunities Program (BTOP, CFDA 11.557,
       middle-mile/institutional/public-computing infrastructure) and RUS's Broadband
-      Initiatives Program (BIP, CFDA 10.855, last-mile rural infrastructure). Verified
-      live 2026-09-11: real awards under both programs (e.g. BTOP's EAGLE-NET ALLIANCE,
+      Initiatives Program (BIP, CFDA 10.855, last-mile rural infrastructure). DQ-validated
+      2026-09-11: real awards under both programs (e.g. BTOP's EAGLE-NET ALLIANCE,
       $100.6M, Broomfield County CO; BIP awards to rural school districts and health
       clinics). Closes the ARRA third of the "federal broadband award geography" sourcing
       gap alongside broadband_reconnect_awards (ReConnect) and
@@ -3639,8 +3639,9 @@ partitionedTables:
       FCC/USAC-administered, not CFDA awards — see broadband_high_cost_disbursements
       (carrier/state grain — RDOF has no address-level source publicly available) and
       broadband_caf_deployment_locations. A one-time, closed-out 2009-2011 program: full
-      crawl each run (not year-partitioned), whole result set small enough (low hundreds
-      of awards across both CFDA numbers) that a full refresh is cheap. Source:
+      crawl each run (not year-partitioned), whole result set small enough (low thousands
+      of awards across both CFDA numbers, DQ-confirmed: 241 for 11.557 + 2,454 for
+      10.855) that a full refresh is cheap. Source:
       api.usaspending.gov/api/v2/search/spending_by_award/ (program_numbers filter,
       award types 02/03/04/05 — grants only, no contracts/loans in either program).
 
@@ -3750,7 +3751,7 @@ partitionedTables:
       Covers the IIJA Bridge Formula Program (CFDA 20.263, formula funds
       apportioned to every state DOT for bridge replacement/rehabilitation) and
       the discretionary Bridge Investment Program (CFDA 20.264, competitive large
-      -bridge awards). Verified live 2026-09-14: real large bridge projects (e.g.
+      -bridge awards). DQ-validated 2026-09-14: real large bridge projects (e.g.
       CFDA 20.263's Vincent Thomas Bridge deck replacement in Los Angeles County
       CA, $152.6M; CFDA 20.264's Brent Spence Bridge Corridor OH/KY, $400M).
       recipient_name/state_abbr/county_fips are the state DOT's registered
@@ -3766,7 +3767,7 @@ partitionedTables:
       date-filter parameter that matches how award records are dated
       (obligation vs. performance-start vary by award), and the result set is
       small enough (low thousands of awards across both CFDA numbers,
-      confirmed live: 3,380 for 20.263 + 33 for 20.264) that a full refresh is
+      DQ-confirmed: 3,380 for 20.263 + 33 for 20.264) that a full refresh is
       cheap. The Competitive Highway Bridge Program (CFDA 20.267) and
       Competitive Type 3 Highway Bridge Program (20.198) exist in the CFDA
       catalog but had zero awarded grants as of 2026-09-14 — not included here;
