@@ -42,13 +42,9 @@ import java.util.Properties;
  * serves every schema this engine's tools ask for — there is no per-schema connection to manage
  * on this side at all.
  *
- * <p><b>Opt-in, off by default.</b> Swapping the embedded engine for a thin pgwire client is a
- * fundamental deployment-shape change, and #364's own "must verify before writing code" list
- * (UDF/settings parity with the embedded connection, whether {@code updateSchema()}/
- * {@code setMemoryLimit()}'s {@code unwrap(CalciteConnection.class)} calls have any pgwire
- * equivalent, statistical-tool UDF reachability, behavior when the shared server crashes
- * mid-session) has not been validated yet. Set {@code ASKAMERICA_PGWIRE_MODE=1} to opt in;
- * unset, every process keeps embedding DuckDB exactly as before.
+ * <p><b>On by default.</b> See {@link #isEnabled()}'s own doc for why, and for the deliberate
+ * absence of a silent fallback to the embedded path on a pgwire failure — set {@code
+ * ASKAMERICA_PGWIRE_MODE=0} to opt back into embedded-only as an explicit operator choice.
  */
 final class PgwireGovDataConnector {
   // Read dynamically, not cached: McpServer.log is null until McpServer.main() assigns it,
@@ -120,7 +116,12 @@ final class PgwireGovDataConnector {
     }
     try {
       return Integer.parseInt(p.trim());
+    // Substitution itself is safe, and logged below (not silent): an operator-set port
+    // typo should be noticed, not silently substituted.
+    // fallback-guard: allow -- see log line below, this is the noticed case
     } catch (NumberFormatException e) {
+      log().println("[askamerica-mcp] ASKAMERICA_PGWIRE_PORT=\"" + p
+          + "\" is not a valid port number — using the default (" + DEFAULT_PORT + ") instead.");
       return DEFAULT_PORT;
     }
   }
@@ -178,6 +179,9 @@ final class PgwireGovDataConnector {
     // and uniformly to know whether to spawn.
     try (Socket probe = new Socket()) {
       probe.connect(new InetSocketAddress(host(), port()), CONNECT_TIMEOUT_MILLIS);
+    // null means "nothing listening," never confused with a real connection; the caller's
+    // `if (c != null)` check is exactly this distinction.
+    // fallback-guard: allow -- null is the documented "nothing listening" sentinel
     } catch (Exception e) {
       return null;
     }
@@ -201,6 +205,8 @@ final class PgwireGovDataConnector {
         return null;
       }
       return c;
+    // Logged below, and null means "not connected," never confused with a real connection.
+    // fallback-guard: allow -- see log line below
     } catch (SQLException e) {
       log().println("[askamerica-mcp] pgwire-govdata port is open but JDBC connect failed: "
           + e.getMessage());
@@ -223,6 +229,10 @@ final class PgwireGovDataConnector {
          java.sql.ResultSet rs = st.executeQuery(
              "SELECT 1 FROM sec.filing_metadata LIMIT 1")) {
       return rs.next();
+    // false ("not verified as govdata") is the safe direction to fail toward: the caller
+    // discards this connection and spawns its own rather than trusting an unverified one.
+    // Logged by the caller when this returns false.
+    // fallback-guard: allow -- safe-direction sentinel, see comment above
     } catch (SQLException e) {
       return false;
     }

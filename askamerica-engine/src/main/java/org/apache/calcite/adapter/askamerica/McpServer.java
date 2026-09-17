@@ -501,6 +501,7 @@ public class McpServer {
                 default:
                     return errorResponse(id, -32601, "Method not found: " + method);
             }
+        // fallback-guard: allow -- real JSON-RPC protocol error below, not a substituted value
         } catch (Throwable e) {
             // Deliberately Throwable, not Exception: a Calcite planner AssertionError (or any
             // other Error) previously slipped past this catch entirely. Because dispatch() runs
@@ -518,6 +519,8 @@ public class McpServer {
                 log.println("[askamerica-mcp]   caused by: " + cause.getMessage());
                 cause = cause.getCause();
             }
+            // fallback-guard: allow -- real JSON-RPC protocol error, not a substituted value;
+            // this is the last-resort translation of an uncaught Throwable into a response
             return errorResponse(id, -32603, compactErrorMessage(e));
         }
     }
@@ -3739,6 +3742,9 @@ public class McpServer {
                 default:
                     return errorResponse(id, -32602, "Unknown tool: " + name);
             }
+        // isError=true result below marks this as a business-logic failure, distinguishable
+        // from a real result; not a silent substitution.
+        // fallback-guard: allow -- see comment above
         } catch (Exception e) {
             long ms = System.currentTimeMillis() - t0;
             String compact = compactErrorMessage(e);
@@ -3788,6 +3794,8 @@ public class McpServer {
             ObjectNode errBody = MAPPER.createObjectNode();
             errBody.set("content", errContent);
             errBody.put("isError", true);
+            // fallback-guard: allow -- isError=true marks this as a business-logic failure,
+            // distinguishable from a real result; not a silent substitution
             return result(id, errBody);
         }
 
@@ -4057,6 +4065,9 @@ public class McpServer {
     private static int countRows(String json) {
         try {
             return MAPPER.readTree(json).size();
+        // -1 is the established "unknown/inapplicable" sentinel used elsewhere in this file
+        // for a row count that could not be determined -- never confused with a real count.
+        // fallback-guard: allow -- documented sentinel, see comment above
         } catch (Exception e) {
             return -1;
         }
@@ -6223,6 +6234,8 @@ public class McpServer {
         try {
             return SqlParser.create("VALUES 1").getMetadata()
                 .isReservedWord(token.toUpperCase(java.util.Locale.ROOT));
+        // false ("not reserved") fails toward no special handling, not a fake positive.
+        // fallback-guard: allow -- safe-direction sentinel, see comment above
         } catch (RuntimeException e) {
             return false;
         }
@@ -7821,6 +7834,9 @@ public class McpServer {
             ObjectNode out = MAPPER.createObjectNode();
             out.set("diagnostics", inner);
             return out;
+        // null already means "nothing to report" on this function's normal path too --
+        // not distinguishable from a failure, but not a substituted value either.
+        // fallback-guard: allow -- consistent with this function's normal null case
         } catch (Exception e) {
             return null;
         }
@@ -8684,6 +8700,8 @@ public class McpServer {
         try {
             int y = Integer.parseInt(raw.trim());
             return (y >= 1800 && y <= 2200) ? Integer.valueOf(y) : null;
+        // Null rather than a guess -- documented above: never deflated against an assumed year.
+        // fallback-guard: allow -- documented null-not-a-guess convention
         } catch (NumberFormatException e) {
             return null;
         }
@@ -9272,6 +9290,8 @@ public class McpServer {
         }
         try {
             return Integer.valueOf(raw.trim());
+        // Documented above: null when it holds neither -- not a substituted value.
+        // fallback-guard: allow -- documented null convention, see method doc
         } catch (NumberFormatException e) {
             return null;
         }
@@ -9537,6 +9557,9 @@ public class McpServer {
     private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit) {
         try {
             return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit);
+        // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
+        // with a successful diagnostics result.
+        // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
@@ -9758,6 +9781,9 @@ public class McpServer {
         try {
             return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
                 totalRows, dropped, droppedLabels);
+        // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
+        // with a successful diagnostics result.
+        // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
@@ -10129,6 +10155,9 @@ public class McpServer {
                 }
                 return out.toString();
             }
+        // The error text itself is returned as the tool's answer -- distinguishable from a
+        // successful parse result, not a substituted value.
+        // fallback-guard: allow -- error text is the answer, see comment above
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch xlsx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as an .xlsx workbook: " + e.getMessage()
@@ -10194,6 +10223,7 @@ public class McpServer {
                 }
                 return out.toString();
             }
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch pdf parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .pdf file: " + e.getMessage();
@@ -10328,6 +10358,7 @@ public class McpServer {
                         + "relevant part.");
             }
             return out.toString();
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch docx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .docx file: " + e.getMessage()
@@ -10428,6 +10459,7 @@ public class McpServer {
                     + "are the relevant ones.");
             }
             return out.toString();
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch pptx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .pptx file: " + e.getMessage()
@@ -10466,6 +10498,7 @@ public class McpServer {
             out.put("markdown", markdown);
             out.put("truncated", truncated);
             return out.toString();
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch HTML parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as HTML: " + e.getMessage();
@@ -10539,6 +10572,9 @@ public class McpServer {
             FetchedContent fetched;
             try {
                 fetched = fetchUrlContent(urlStr, method, body, bodyContentType);
+            // fe.getMessage() below is the error text itself returned as the answer,
+            // distinguishable from a successful fetch.
+            // fallback-guard: allow -- see comment above
             } catch (FetchException fe) {
                 log.println("[askamerica-mcp] web_fetch fetch error: " + fe.getMessage());
                 return fe.getMessage();
@@ -10556,6 +10592,9 @@ public class McpServer {
                     log.println("[askamerica-mcp] web_fetch url=" + urlStr + " gunzipped "
                         + bytes.length + " -> " + decompressed.length + " bytes");
                     bytes = decompressed;
+                // out below carries an explicit "error" field, not the undecompressed bytes --
+                // distinguishable from a successful decompress.
+                // fallback-guard: allow -- explicit error field, see comment above
                 } catch (java.io.IOException ge) {
                     ObjectNode out = MAPPER.createObjectNode();
                     out.put("source_url", urlStr);
@@ -10669,6 +10708,9 @@ public class McpServer {
                 return "html";
             }
             return "text";
+        // "unknown" is a third, distinct outcome from this function's other two ("html"/"text")
+        // -- not confused with either.
+        // fallback-guard: allow -- distinct sentinel, see comment above
         } catch (java.nio.charset.CharacterCodingException notUtf8) {
             return "unknown";
         }
@@ -10838,6 +10880,8 @@ public class McpServer {
             log.println("[askamerica-mcp] report_issue rejected: HTTP " + code);
             return "Could not record the issue (HTTP " + code
                 + "). Nothing was filed — please retry, or report it at askamerica.ai.";
+        // Explicit failure message returned as the answer -- distinguishable from success.
+        // fallback-guard: allow -- explicit failure message, see comment above
         } catch (Exception e) {
             log.println("[askamerica-mcp] report_issue error: " + e.getMessage());
             return "Could not record the issue: " + e.getMessage()
@@ -10889,6 +10933,7 @@ public class McpServer {
             }
             log.println("[askamerica-mcp] register rejected: HTTP " + code);
             return "Could not register (HTTP " + code + "). Nothing was saved — please retry.";
+        // fallback-guard: allow -- explicit failure message, same pattern as report_issue
         } catch (Exception e) {
             log.println("[askamerica-mcp] register error: " + e.getMessage());
             return "Could not register: " + e.getMessage() + ". Please retry.";
@@ -10973,6 +11018,9 @@ public class McpServer {
             log.println("[askamerica-mcp] upload_report failed: HTTP " + code);
             return UploadResult.failed("Could not upload (HTTP " + code + "). Nothing was "
                 + "published — please retry.");
+        // UploadResult.failed(...) is an explicit failure sentinel -- not confused with a
+        // successful UploadResult.ok(...).
+        // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
             log.println("[askamerica-mcp] upload_report error: " + e.getMessage());
             return UploadResult.failed("Could not upload: " + e.getMessage() + ". Please retry.");
@@ -11029,6 +11077,9 @@ public class McpServer {
             }
             return new Account(node.path("name").asText(null), node.path("org").asText(null),
                 studiesUrl);
+        // Low severity: a corrupt account file just means re-registration is asked for --
+        // not a wrong-data risk, only a re-prompt.
+        // fallback-guard: allow -- low-severity, see comment above
         } catch (Exception e) {
             return null;
         }
@@ -11152,16 +11203,23 @@ public class McpServer {
     }
 
     private static boolean loadTelemetryOptIn() {
+        java.io.File f =
+            new java.io.File(System.getProperty("user.home"), ".askamerica/telemetry.json");
+        if (!f.exists()) {
+            return true;
+        }
         try {
-            java.io.File f =
-                new java.io.File(System.getProperty("user.home"), ".askamerica/telemetry.json");
-            if (!f.exists()) {
-                return true;
-            }
             JsonNode node = MAPPER.readTree(f);
             return node.path("optIn").asBoolean(true);
+        // A corrupt/unreadable preference file must fail toward LESS sharing, not more --
+        // the opposite of the !f.exists() default above, which is the documented
+        // fresh-install case, not an error case.
+        // fallback-guard: allow -- privacy-safe direction on read failure, see comment above
         } catch (Exception e) {
-            return true;
+            log.println("[askamerica-mcp] Could not read telemetry preference from "
+                + f.getAbsolutePath() + " (" + e.getClass().getSimpleName() + ": "
+                + e.getMessage() + ") — defaulting to opted out until it can be read.");
+            return false;
         }
     }
 
