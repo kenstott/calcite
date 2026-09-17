@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.91.3](https://github.com/kenstott/calcite/compare/engine-v0.91.2...engine-v0.91.3) (2026-09-17)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** mark reviewed fallback catches, fix telemetry fail-direction ([d1d36d3](https://github.com/kenstott/calcite/commit/d1d36d3a984a35cee43eb7638a2c7e57d246f534))
+
 ## [0.91.2](https://github.com/kenstott/calcite/compare/engine-v0.91.1...engine-v0.91.2) (2026-09-17)
 
 
