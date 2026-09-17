@@ -185,12 +185,11 @@ public class SplunkDriver extends org.apache.calcite.jdbc.Driver {
       // Create enhanced schema with new features
       createEnhancedSchema(calciteConnection, props, splunkConnection);
 
-      // Set default schema so unqualified table names resolve correctly
-      // Support configurable default schema via 'schema' or 'currentSchema' properties
-      String defaultSchema = props.defaultSchema;
-      if (defaultSchema == null || defaultSchema.trim().isEmpty()) {
-        defaultSchema = "splunk"; // Default fallback
-      }
+      // Set default schema so unqualified table names resolve correctly. Same name
+      // createEnhancedSchema just registered the Splunk schema under (resolveSchemaName) — must
+      // stay the same value in both places, or setSchema() points at a name nothing was
+      // registered under.
+      String defaultSchema = resolveSchemaName(props);
       calciteConnection.setSchema(defaultSchema);
 
       if (props.debug) {
@@ -553,6 +552,18 @@ public class SplunkDriver extends org.apache.calcite.jdbc.Driver {
   }
 
   /**
+   * The schema name to register the Splunk schema under and to set as the connection's current
+   * schema — the 'schema'/'currentSchema' connection property when set, else "splunk".
+   */
+  private static String resolveSchemaName(ConnectionProperties props) {
+    String schemaName = props.defaultSchema;
+    if (schemaName == null || schemaName.trim().isEmpty()) {
+      return "splunk";
+    }
+    return schemaName.trim();
+  }
+
+  /**
    * Creates the enhanced Splunk schema with CIM models and custom tables.
    */
   private void createEnhancedSchema(CalciteConnection calciteConnection,
@@ -624,11 +635,16 @@ public class SplunkDriver extends org.apache.calcite.jdbc.Driver {
     operand.put("datamodelCacheTtl", props.datamodelCacheTtl);
     operand.put("refreshDatamodels", props.refreshDatamodels);
 
-    // Create the enhanced schema using SplunkSchemaFactory
+    // Create the enhanced schema using SplunkSchemaFactory, registered under the configured
+    // schema name ('schema'/'currentSchema' connection property, same value connect() uses for
+    // calciteConnection.setSchema() below) so a caller that sets a custom schema name actually
+    // finds it registered under that name, not always under the literal "splunk" regardless of
+    // configuration. Defaults to "splunk" when unset, preserving prior behavior.
+    String schemaName = resolveSchemaName(props);
     try {
       SplunkSchemaFactory factory = new SplunkSchemaFactory();
-      Schema splunkSchema = factory.create(rootSchema, "splunk", operand);
-      rootSchema.add("splunk", splunkSchema);
+      Schema splunkSchema = factory.create(rootSchema, schemaName, operand);
+      rootSchema.add(schemaName, splunkSchema);
     } catch (Exception e) {
       throw new SQLException("Failed to create Splunk schema: " + e.getMessage(), e);
     }
