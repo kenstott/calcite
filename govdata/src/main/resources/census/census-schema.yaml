@@ -1785,6 +1785,220 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS VETERANS BY PERIOD - Period of military service for civilian veterans
+  # ---------------------------------------------------------------------------
+  - name: acs_veterans_by_period
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Civilian veterans 18 years and over broken down by period of military service
+      (Gulf War II/post-9/11, Gulf War I, Vietnam era, Korean War, World War II, and the
+      between-conflict gaps), from ACS table B21002, at state and county levels. Complements
+      acs_veterans (total veteran/nonveteran counts, no period breakdown).
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: veterans_with_period_reported
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_001E" AS BIGINT)'
+        comment: Civilian veterans 18 years and over with period of service classified
+      - name: veterans_with_period_reported_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_with_period_reported (Census variable B21002_001M; negative sentinels normalized to null)
+      - name: gulf_war_ii_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_002E" AS BIGINT)'
+        comment: Gulf War II (9/2001 or later) only, no Gulf War I, no Vietnam era — the post-9/11/recently-separated cohort
+      - name: gulf_war_ii_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for gulf_war_ii_only (Census variable B21002_002M; negative sentinels normalized to null)
+      - name: gulf_war_ii_and_gulf_war_i
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_003E" AS BIGINT)'
+        comment: Gulf War II and Gulf War I (8/1990-8/2001), no Vietnam era
+      - name: gulf_war_ii_and_gulf_war_i_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for gulf_war_ii_and_gulf_war_i (Census variable B21002_003M; negative sentinels normalized to null)
+      - name: gulf_war_ii_and_gulf_war_i_and_vietnam
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_004E" AS BIGINT)'
+        comment: Gulf War II, Gulf War I, and Vietnam era, all three
+      - name: gulf_war_ii_and_gulf_war_i_and_vietnam_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for gulf_war_ii_and_gulf_war_i_and_vietnam (Census variable B21002_004M; negative sentinels normalized to null)
+      - name: gulf_war_i_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_005E" AS BIGINT)'
+        comment: Gulf War I (8/1990-8/2001) only, no Vietnam era
+      - name: gulf_war_i_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_005M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_005M" AS BIGINT) END'
+        comment: 90% CI margin of error for gulf_war_i_only (Census variable B21002_005M; negative sentinels normalized to null)
+      - name: gulf_war_i_and_vietnam
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_006E" AS BIGINT)'
+        comment: Gulf War I and Vietnam era
+      - name: gulf_war_i_and_vietnam_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for gulf_war_i_and_vietnam (Census variable B21002_006M; negative sentinels normalized to null)
+      - name: vietnam_era_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_007E" AS BIGINT)'
+        comment: Vietnam era only, no Korean War, no World War II
+      - name: vietnam_era_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_007M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_007M" AS BIGINT) END'
+        comment: 90% CI margin of error for vietnam_era_only (Census variable B21002_007M; negative sentinels normalized to null)
+      - name: vietnam_era_and_korean_war
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_008E" AS BIGINT)'
+        comment: Vietnam era and Korean War, no World War II
+      - name: vietnam_era_and_korean_war_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_008M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_008M" AS BIGINT) END'
+        comment: 90% CI margin of error for vietnam_era_and_korean_war (Census variable B21002_008M; negative sentinels normalized to null)
+      - name: vietnam_era_and_korean_war_and_wwii
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_009E" AS BIGINT)'
+        comment: Vietnam era, Korean War, and World War II, all three
+      - name: vietnam_era_and_korean_war_and_wwii_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_009M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_009M" AS BIGINT) END'
+        comment: 90% CI margin of error for vietnam_era_and_korean_war_and_wwii (Census variable B21002_009M; negative sentinels normalized to null)
+      - name: korean_war_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_010E" AS BIGINT)'
+        comment: Korean War only, no Vietnam era, no World War II
+      - name: korean_war_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for korean_war_only (Census variable B21002_010M; negative sentinels normalized to null)
+      - name: korean_war_and_wwii
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_011E" AS BIGINT)'
+        comment: Korean War and World War II, no Vietnam era
+      - name: korean_war_and_wwii_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_011M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_011M" AS BIGINT) END'
+        comment: 90% CI margin of error for korean_war_and_wwii (Census variable B21002_011M; negative sentinels normalized to null)
+      - name: wwii_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_012E" AS BIGINT)'
+        comment: World War II only, no Korean War, no Vietnam era
+      - name: wwii_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_012M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_012M" AS BIGINT) END'
+        comment: 90% CI margin of error for wwii_only (Census variable B21002_012M; negative sentinels normalized to null)
+      - name: between_gulf_war_and_vietnam_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_013E" AS BIGINT)'
+        comment: Served between the Gulf War and Vietnam eras only (no named conflict)
+      - name: between_gulf_war_and_vietnam_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_013M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_013M" AS BIGINT) END'
+        comment: 90% CI margin of error for between_gulf_war_and_vietnam_only (Census variable B21002_013M; negative sentinels normalized to null)
+      - name: between_vietnam_and_korean_war_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_014E" AS BIGINT)'
+        comment: Served between the Vietnam and Korean War eras only (no named conflict)
+      - name: between_vietnam_and_korean_war_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_014M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_014M" AS BIGINT) END'
+        comment: 90% CI margin of error for between_vietnam_and_korean_war_only (Census variable B21002_014M; negative sentinels normalized to null)
+      - name: between_korean_war_and_wwii_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_015E" AS BIGINT)'
+        comment: Served between the Korean War and World War II eras only (no named conflict)
+      - name: between_korean_war_and_wwii_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_015M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_015M" AS BIGINT) END'
+        comment: 90% CI margin of error for between_korean_war_and_wwii_only (Census variable B21002_015M; negative sentinels normalized to null)
+      - name: pre_wwii_only
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21002_016E" AS BIGINT)'
+        comment: Served before World War II only
+      - name: pre_wwii_only_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21002_016M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21002_016M" AS BIGINT) END'
+        comment: 90% CI margin of error for pre_wwii_only (Census variable B21002_016M; negative sentinels normalized to null)
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B21002_001E,B21002_001M,B21002_002E,B21002_002M,B21002_003E,B21002_003M,B21002_004E,B21002_004M,B21002_005E,B21002_005M,B21002_006E,B21002_006M,B21002_007E,B21002_007M,B21002_008E,B21002_008M,B21002_009E,B21002_009M,B21002_010E,B21002_010M,B21002_011E,B21002_011M,B21002_012E,B21002_012M,B21002_013E,B21002_013M,B21002_014E,B21002_014M,B21002_015E,B21002_015M,B21002_016E,B21002_016M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_veterans_by_period
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS MIGRATION - Geographic mobility in the past year
   # ---------------------------------------------------------------------------
   - name: acs_migration
