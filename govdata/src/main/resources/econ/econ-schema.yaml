@@ -1759,6 +1759,341 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- APPAREL CPI ---
+  - name: apparel_cpi
+    # BLS republishes cu.data.13.USApparel on every monthly CPI release, same bulk-file
+    # cadence as food_cpi (cu.data.11.USFoodBeverage) — a HEAD probe of Last-Modified
+    # re-triggers ingest when the file changes.
+    freshness:
+      type: last_modified
+    pattern: "type=apparel_cpi/frequency=*/year=*/apparel_cpi.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Monthly CPI-U Apparel (SAA) index level and its subcomponents — Men's and boys'
+      apparel (SAA1), Women's and girls' apparel (SAA2), Footwear (SEAE), Infants' and
+      toddlers' apparel (SEAF), Jewelry and watches (SEAG) — U.S. city average only
+      (area 0000), not seasonally adjusted (base 1982-84=100, SEAG base December
+      1986=100). NATIONAL ONLY — confirmed against BLS's cu.series catalog, which does
+      not publish these apparel item codes at the region or metro level (only the
+      all-items aggregate SA0 is, in regional_cpi/metro_cpi). Values are index levels,
+      not rates — compute inflation as a period-over-period change.
+
+    dimensions:
+      type:
+        - apparel_cpi
+      frequency: *monthly_frequency
+
+    # BLS CU-program bulk flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS CPI series identifier. This table is long-format: one row per (series, period), so
+          ALWAYS filter on series. The 6 series loaded are: CUUR0000SAA (Apparel), CUUR0000SAA1
+          (Men's and boys' apparel), CUUR0000SAA2 (Women's and girls' apparel), CUUR0000SEAE
+          (Footwear), CUUR0000SEAF (Infants' and toddlers' apparel), CUUR0000SEAG (Jewelry and
+          watches). All are index levels, not rates — compute inflation as a period-over-period
+          change.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 for monthly)
+        source: period
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
+      - name: value
+        type: double
+        nullable: true
+        comment: Price index value (base period = 100)
+        source: value
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
+
+    # Bulk flat-file source — one file covers the full history for all US Apparel item
+    # series in a single small download, versus per-series/per-year API calls.
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/cu/cu.data.13.USApparel"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      # National U.S. city average (area 0000) only, NSA (CUUR), Apparel + the 5
+      # subcomponents listed in the table comment. Excludes size-class (N000/S000) rows
+      # and deeper item sub-splits (e.g. SEAA Men's apparel) that the bulk file also carries.
+      rowFilter:
+        column: series_id
+        pattern: '^CUUR0000(SAA|SAA1|SAA2|SEAE|SEAF|SEAG)$'
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=apparel_cpi/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # --- HOUSEHOLD FURNISHINGS CPI (furniture + appliances) ---
+  - name: household_furnishings_cpi
+    # BLS republishes cu.data.12.USHousing on every monthly CPI release, same bulk-file
+    # cadence as food_cpi/apparel_cpi — a HEAD probe of Last-Modified re-triggers ingest
+    # when the file changes.
+    freshness:
+      type: last_modified
+    pattern: "type=household_furnishings_cpi/frequency=*/year=*/household_furnishings_cpi.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Monthly CPI-U Furniture and bedding (SEHJ, + Bedroom/Living-kitchen-dining/Other
+      furniture subcomponents) and Appliances (SEHK, + Major appliances/Other appliances
+      subcomponents) index levels, U.S. city average only (area 0000), not seasonally
+      adjusted (base 1982-84=100 for the furniture series, base December 1997=100 for the
+      appliance series). Both item groups live in the same BLS bulk file
+      (cu.data.12.USHousing, the Housing major group), so they are combined into one
+      table rather than split across two. NATIONAL ONLY — confirmed against BLS's
+      cu.series catalog, which does not publish these item codes at the region or metro
+      level (only the all-items aggregate SA0 is, in regional_cpi/metro_cpi). Values are
+      index levels, not rates — compute inflation as a period-over-period change.
+
+    dimensions:
+      type:
+        - household_furnishings_cpi
+      frequency: *monthly_frequency
+
+    # BLS CU-program bulk flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS CPI series identifier. This table is long-format: one row per (series, period), so
+          ALWAYS filter on series. The 7 series loaded are: CUUR0000SEHJ (Furniture and bedding),
+          CUUR0000SEHJ01 (Bedroom furniture), CUUR0000SEHJ02 (Living room, kitchen, and dining
+          room furniture), CUUR0000SEHJ03 (Other furniture), CUUR0000SEHK (Appliances),
+          CUUR0000SEHK01 (Major appliances), CUUR0000SEHK02 (Other appliances). All are index
+          levels, not rates — compute inflation as a period-over-period change.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 for monthly)
+        source: period
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
+      - name: value
+        type: double
+        nullable: true
+        comment: Price index value (base period = 100)
+        source: value
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
+
+    # Bulk flat-file source — one file covers the full history for all US Housing item
+    # series in a single download, versus per-series/per-year API calls.
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/cu/cu.data.12.USHousing"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      # National U.S. city average (area 0000) only, NSA (CUUR), Furniture/bedding +
+      # Appliances and their subcomponents listed in the table comment. This bulk file
+      # also carries the rest of the Housing major group (shelter, utilities, etc.),
+      # which is out of scope here.
+      rowFilter:
+        column: series_id
+        pattern: '^CUUR0000(SEHJ|SEHJ01|SEHJ02|SEHJ03|SEHK|SEHK01|SEHK02)$'
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=household_furnishings_cpi/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # --- NEW VEHICLES CPI ---
+  - name: new_vehicles_cpi
+    # BLS republishes cu.data.14.USTransportation on every monthly CPI release, same
+    # bulk-file cadence as food_cpi/apparel_cpi — a HEAD probe of Last-Modified
+    # re-triggers ingest when the file changes.
+    freshness:
+      type: last_modified
+    pattern: "type=new_vehicles_cpi/frequency=*/year=*/new_vehicles_cpi.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Monthly CPI-U New vehicles (SETA01) index level and its New cars (SS45011) / New
+      trucks (SS45021) subcomponents, U.S. city average only (area 0000), not seasonally
+      adjusted (base 1982-84=100). Two related Transportation item codes are
+      deliberately excluded: SS4501A (New cars and trucks) and SS45031 (New motorcycles)
+      were both discontinued by BLS (last published 2022-03 and 2000-05 respectively) —
+      loading them would add all-null tails, not real coverage. NATIONAL ONLY —
+      confirmed against BLS's cu.series catalog, which does not publish new-vehicle item
+      codes at the region or metro level (only the all-items aggregate SA0 is, in
+      regional_cpi/metro_cpi). Values are index levels, not rates — compute inflation as
+      a period-over-period change. Note: the series CUUR0000SETA02 is Used cars and
+      trucks, not new vehicles — SETA01 is the correct new-vehicles code.
+
+    dimensions:
+      type:
+        - new_vehicles_cpi
+      frequency: *monthly_frequency
+
+    # BLS CU-program bulk flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS CPI series identifier. This table is long-format: one row per (series, period), so
+          ALWAYS filter on series. The 3 series loaded are: CUUR0000SETA01 (New vehicles),
+          CUUR0000SS45011 (New cars), CUUR0000SS45021 (New trucks). All are index levels, not
+          rates — compute inflation as a period-over-period change.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 for monthly)
+        source: period
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
+      - name: value
+        type: double
+        nullable: true
+        comment: Price index value (base period = 100)
+        source: value
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
+
+    # Bulk flat-file source — one file covers the full history for all US Transportation
+    # item series in a single download, versus per-series/per-year API calls.
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/cu/cu.data.14.USTransportation"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      # National U.S. city average (area 0000) only, NSA (CUUR), New vehicles + the 2
+      # live subcomponents listed in the table comment. This bulk file also carries the
+      # rest of the Transportation major group (motor fuel, used vehicles, airfares,
+      # etc.), which is out of scope here.
+      rowFilter:
+        column: series_id
+        pattern: '^CUUR0000(SETA01|SS45011|SS45021)$'
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=new_vehicles_cpi/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- STATE INDUSTRY ---
   - name: state_industry
     # BLS revises the prior 1-2 months on every monthly release and restates the
@@ -8684,6 +9019,24 @@ constraints:
       - year
 
   food_cpi:
+    primaryKey:
+      - type
+      - frequency
+      - year
+
+  apparel_cpi:
+    primaryKey:
+      - type
+      - frequency
+      - year
+
+  household_furnishings_cpi:
+    primaryKey:
+      - type
+      - frequency
+      - year
+
+  new_vehicles_cpi:
     primaryKey:
       - type
       - frequency

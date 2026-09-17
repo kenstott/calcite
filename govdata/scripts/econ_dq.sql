@@ -190,6 +190,9 @@ SELECT 'labor_productivity'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1;
 SELECT 'state_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1;
 SELECT 'industry_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true) LIMIT 1;
+SELECT 'apparel_cpi'             AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi',             allow_moved_paths := true) LIMIT 1;
+SELECT 'household_furnishings_cpi' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true) LIMIT 1;
+SELECT 'new_vehicles_cpi'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi',        allow_moved_paths := true) LIMIT 1;
 
 -- ============================================================================
 -- T4: ALL-NULL COLUMNS — no column should be 100% NULL
@@ -1381,6 +1384,188 @@ FROM (SELECT COUNT(*) AS bad FROM (
   GROUP BY series_id, reference_year, reference_month
   HAVING COUNT(*) > 1
 ) t WHERE spread_ratio > 0.15);
+
+-- ============================================================================
+-- apparel_cpi / household_furnishings_cpi / new_vehicles_cpi
+-- (category-level CPI alongside food_cpi, new 17 Sep 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'apparel_cpi', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi', allow_moved_paths := true) LIMIT 1));
+
+-- 6 series x full bulk-file history (oldest begins 1913, most 1935/1947/1986) = 5738
+-- rows confirmed live 17 Sep 2026; floor set a little below that.
+INSERT INTO dq_results
+SELECT 'econ', 'apparel_cpi', 'row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '5000',
+  CASE WHEN n >= 5000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'apparel_cpi', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('footnotes');  -- footnotes is legitimately empty on nearly every row
+
+INSERT INTO dq_results
+SELECT 'econ', 'apparel_cpi', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'footnotes');  -- footnotes is legitimately empty on nearly every row
+
+-- Apparel (SAA) index value should be > 0
+INSERT INTO dq_results
+SELECT 'econ', 'apparel_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where CUUR0000SAA value is <= 0'
+FROM (SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi', allow_moved_paths := true)
+  WHERE series = 'CUUR0000SAA' AND value IS NOT NULL AND value <= 0);
+
+-- series must be one of the 6 loaded series (rowFilter should already guarantee this)
+INSERT INTO dq_results
+SELECT 'econ', 'apparel_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series outside the 6 loaded apparel series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi', allow_moved_paths := true)
+      WHERE series NOT IN ('CUUR0000SAA', 'CUUR0000SAA1', 'CUUR0000SAA2', 'CUUR0000SEAE', 'CUUR0000SEAF', 'CUUR0000SEAG'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'apparel_cpi', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  '(series, year, period) triples appearing more than once'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series, year, period, COUNT(*) AS c
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi', allow_moved_paths := true)
+        GROUP BY series, year, period HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_furnishings_cpi', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true) LIMIT 1));
+
+-- 7 series x full bulk-file history (SEHJ begins 1935, the rest 1977/1997) = 3365
+-- rows confirmed live 17 Sep 2026; floor set a little below that.
+INSERT INTO dq_results
+SELECT 'econ', 'household_furnishings_cpi', 'row_count',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '3000',
+  CASE WHEN n >= 3000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_furnishings_cpi', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('footnotes');  -- footnotes is legitimately empty on nearly every row
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_furnishings_cpi', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'footnotes');  -- footnotes is legitimately empty on nearly every row
+
+-- Furniture and bedding (SEHJ) index value should be > 0
+INSERT INTO dq_results
+SELECT 'econ', 'household_furnishings_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where CUUR0000SEHJ value is <= 0'
+FROM (SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true)
+  WHERE series = 'CUUR0000SEHJ' AND value IS NOT NULL AND value <= 0);
+
+-- series must be one of the 7 loaded series (rowFilter should already guarantee this)
+INSERT INTO dq_results
+SELECT 'econ', 'household_furnishings_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series outside the 7 loaded furniture/appliance series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true)
+      WHERE series NOT IN ('CUUR0000SEHJ', 'CUUR0000SEHJ01', 'CUUR0000SEHJ02', 'CUUR0000SEHJ03', 'CUUR0000SEHK', 'CUUR0000SEHK01', 'CUUR0000SEHK02'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_furnishings_cpi', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  '(series, year, period) triples appearing more than once'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series, year, period, COUNT(*) AS c
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true)
+        GROUP BY series, year, period HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true) LIMIT 1));
+
+-- 3 series x full bulk-file history (SETA01/SS45011 begin 1935, SS45021 begins 1983) = 2545
+-- rows confirmed live 17 Sep 2026; floor set a little below that.
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'row_count',
+  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '2000',
+  CASE WHEN n >= 2000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('footnotes');  -- footnotes is legitimately empty on nearly every row
+
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'footnotes');  -- footnotes is legitimately empty on nearly every row
+
+-- New vehicles (SETA01) index value should be > 0
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where CUUR0000SETA01 value is <= 0'
+FROM (SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true)
+  WHERE series = 'CUUR0000SETA01' AND value IS NOT NULL AND value <= 0);
+
+-- series must be one of the 3 loaded series (rowFilter should already guarantee this)
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series outside the 3 loaded new-vehicle series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true)
+      WHERE series NOT IN ('CUUR0000SETA01', 'CUUR0000SS45011', 'CUUR0000SS45021'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  '(series, year, period) triples appearing more than once'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series, year, period, COUNT(*) AS c
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true)
+        GROUP BY series, year, period HAVING COUNT(*) > 1));
 
 -- ============================================================================
 -- RESULTS SUMMARY
