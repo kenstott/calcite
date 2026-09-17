@@ -82,6 +82,53 @@ esac
 WORKER_ID="worker-${SCHEMA}-${MODE}"
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
+# Self-contained schema+year conflict guard. check_schema_year_conflict() previously only
+# ran inside run-pool.sh's own admission logic (fill_pool()) -- fine for jobs launched
+# through the pool, but a caller invoking this script directly gets zero protection.
+# Confirmed live 2026-09-15: two independently, directly-launched `worker.sh sec_primary
+# 2019` processes ran concurrently for ~2 hours (one orphaned to init, the other from an
+# untracked shell) before being caught by hand -- neither went through run-pool.sh, the
+# guard never ran, and the PID file for the slot was silently overwritten by whichever
+# launch wrote it last, with no warning either time. Killing one collaterally crashed the
+# other (they were also colliding on shared /tmp staging files) -- no Iceberg damage this
+# time (snapshot history and row counts verified intact), but it was close. Checking here
+# too closes the gap regardless of invocation path, the same self-contained pattern
+# applied to x-schema.sh/vss-local.sh's exclusivity claim earlier the same day.
+PID_DIR="$SCRIPT_DIR/runs/pids"
+mkdir -p "$PID_DIR"
+read -r _self_start_year _self_end_year <<< "$(_year_range_from_mode "$MODE")"
+# Only self-register if nothing already holds a live, valid registration for this exact
+# worker identity. When launched through run-pool.sh's own detached-launcher wrapper, that
+# registration already exists (the wrapper writes it before invoking this script) and must
+# be left alone, not clobbered with a different PID here.
+_existing_worker_pid=""
+[ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_worker_pid=$(head -1 "$PID_DIR/${WORKER_ID}.pid" 2>/dev/null | tr -d '[:space:]')
+_is_pool_launched=false
+if [ -n "$_existing_worker_pid" ] && kill -0 "$_existing_worker_pid" 2>/dev/null; then
+  _is_pool_launched=true
+fi
+# Skip conflict check if this is a pool-launched worker (pool already checked at admission time)
+if [ "$_is_pool_launched" = false ]; then
+  if ! check_schema_year_conflict "$PID_DIR" "$SCHEMA" "$_self_start_year" "$_self_end_year"; then
+    exit 1
+  fi
+fi
+if [ -z "$_existing_worker_pid" ] || ! kill -0 "$_existing_worker_pid" 2>/dev/null; then
+  echo $$ > "$PID_DIR/${WORKER_ID}.pid"
+  # .foreground: explicit opt-in telling check_schema_year_conflict() to trust this pid
+  # file via kill -0 alone -- this process's own /proc/self/cmdline never contains the
+  # pid-file's path the way the wrapper's does, since it wasn't passed one (see that
+  # function's identity-check comment in common.sh; worker-dq-run.sh uses the same marker
+  # for the same reason).
+  touch "$PID_DIR/${WORKER_ID}.foreground"
+  rm -f "$PID_DIR/${WORKER_ID}.exit"
+  _worker_cleanup_self_registration() {
+    echo $? > "$PID_DIR/${WORKER_ID}.exit" 2>/dev/null
+    rm -f "$PID_DIR/${WORKER_ID}.foreground" 2>/dev/null
+  }
+  trap _worker_cleanup_self_registration EXIT
+fi
+
 # ── Split-schema table sets ────────────────────────────────────────────────────
 # housing/transport/environment/ag/disasters each MIX year-addressable tables (one
 # ETL slot per year — real parallelism, no redundant download) with snapshot or
