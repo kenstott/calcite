@@ -100,6 +100,7 @@ public class SplunkClientModule
         addParam(params, "password", config.getPassword());
         addParam(params, "app", config.getApp());
         addParam(params, "datamodelFilter", config.getDatamodelFilter());
+        addParam(params, "schema", config.getSchema());
         if (config.isDisableSslValidation()) {
             params.add("disableSslValidation=true");
         }
