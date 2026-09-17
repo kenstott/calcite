@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Include>
-  <!-- WixUI standard dialog art, replacing the generic default. Sizes are WixUI's own
-       fixed conventions: banner 493x58 (top of most wizard pages), dialog 493x312
-       (Welcome/Exit page background). Built from web/icon.svg's brand colors/glyph. -->
-  <WixVariable Id="WixUIBannerBmp" Value="$(var.JpConfigDir)/banner.bmp" />
-  <WixVariable Id="WixUIDialogBmp" Value="$(var.JpConfigDir)/dialog.bmp" />
-</Include>
+<!-- Custom WixUIBannerBmp/WixUIDialogBmp overrides were tried here and reverted: they
+     broke candle.exe on Windows CI (exit code 5, no error text surfaced; jpackage only
+     shows the underlying WiX tool's own output when jpackage itself is run with the
+     verbose flag, which this build did not pass at the time). banner.bmp/dialog.bmp
+     are still checked in under this directory; re-add the WixVariable pair once the
+     actual WiX error is captured and understood, not blind. -->
+<Include/>

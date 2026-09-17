@@ -556,6 +556,11 @@ tasks.register<Exec>("jpackage") {
     commandLine(
         jpackageTool,
         "--type", packageType,
+        // Without this, a WiX (candle.exe/light.exe) failure on Windows surfaces only a
+        // bare exit code with no error text at all -- confirmed live (exit code 5, zero
+        // diagnostic output) chasing a real WixVariable-related failure with no way to see
+        // what WiX actually objected to.
+        "--verbose",
         "--name", "AskAmerica MCP",
         "--app-version", version,
         "--vendor", "AskAmerica",
