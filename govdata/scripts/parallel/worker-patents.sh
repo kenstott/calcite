@@ -37,6 +37,36 @@ WORKER_ID="worker-patents-${MODE}"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
 
+# Self-contained schema+year conflict guard, same pattern worker.sh uses: this script is
+# run directly (not only through run-pool.sh), so it registers its own PID per schema and
+# calls check_schema_year_conflict itself rather than relying on the pool's admission
+# check, which never runs for a direct invocation.
+PID_DIR="$SCRIPT_DIR/runs/pids"
+mkdir -p "$PID_DIR"
+read -r _self_start_year _self_end_year <<< "$(_year_range_from_mode "$MODE")"
+_existing_worker_pid=""
+[ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_worker_pid=$(head -1 "$PID_DIR/${WORKER_ID}.pid" 2>/dev/null | tr -d '[:space:]')
+_is_pool_launched=false
+if [ -n "$_existing_worker_pid" ] && kill -0 "$_existing_worker_pid" 2>/dev/null; then
+  _is_pool_launched=true
+fi
+# Skip conflict check if this is a pool-launched worker (pool already checked at admission time)
+if [ "$_is_pool_launched" = false ]; then
+  if ! check_schema_year_conflict "$PID_DIR" "patents" "$_self_start_year" "$_self_end_year"; then
+    exit 1
+  fi
+fi
+if [ -z "$_existing_worker_pid" ] || ! kill -0 "$_existing_worker_pid" 2>/dev/null; then
+  echo $$ > "$PID_DIR/${WORKER_ID}.pid"
+  touch "$PID_DIR/${WORKER_ID}.foreground"
+  rm -f "$PID_DIR/${WORKER_ID}.exit"
+  _worker_cleanup_self_registration() {
+    echo $? > "$PID_DIR/${WORKER_ID}.exit" 2>/dev/null
+    rm -f "$PID_DIR/${WORKER_ID}.foreground" 2>/dev/null
+  }
+  trap _worker_cleanup_self_registration EXIT
+fi
+
 PATENTS_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/patents/patents-schema.yaml"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
