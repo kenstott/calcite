@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.91.5](https://github.com/kenstott/calcite/compare/engine-v0.91.4...engine-v0.91.5) (2026-09-17)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** pin Windows MSI UpgradeCode, add branded installer graphics ([71c3b4a](https://github.com/kenstott/calcite/commit/71c3b4aef319222154ee39261abe3e6a9b253a45))
+* **file,govdata:** don't create per-schema operating dirs for read-only connections ([2bf33a7](https://github.com/kenstott/calcite/commit/2bf33a7508f8ac475d364a0efb7776b9292b75a8))
+* **govdata:** delete the temp model file right after connect, sweep old leftovers ([6788579](https://github.com/kenstott/calcite/commit/678857977008eb69b36c2a029a5da0c5cb7c87c1))
+
 ## [0.91.4](https://github.com/kenstott/calcite/compare/engine-v0.91.3...engine-v0.91.4) (2026-09-17)
 
 
