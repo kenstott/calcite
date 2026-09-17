@@ -586,7 +586,16 @@ tasks.register<Exec>("jpackage") {
                     // "AskAmerica MCP.ico", space and all, to match --name below) — without
                     // this the MSI, its Start-menu/desktop shortcuts, and the installed EXE
                     // all fell back to jpackage's generic default icon.
-                    "--icon", "$winResourceDir/askamerica.ico")
+                    "--icon", "$winResourceDir/askamerica.ico",
+                    // FIXED, never-changing UUID -- must be identical across every future
+                    // release. Without --win-upgrade-uuid, jpackage mints a fresh random
+                    // UpgradeCode on every build, so main.wxs's <Upgrade Id="$(var.
+                    // JpProductUpgradeCode)"> can never match a previously installed
+                    // version's UpgradeCode: JP_UPGRADABLE_FOUND never fires, and Windows
+                    // Installer offers only Repair/Remove instead of installing the new
+                    // version. Confirmed live installing 0.91.4 over 0.91.3. Generated once
+                    // via `python3 -c "import uuid; print(uuid.uuid4())"` -- do not regenerate.
+                    "--win-upgrade-uuid", "E661CE71-AEB5-4FD3-B203-55E775A04C4C")
         else emptyArray()),
         // Linux: add an application-menu entry for the setup wizard.
         *(if (!isMac && !os.contains("win"))
