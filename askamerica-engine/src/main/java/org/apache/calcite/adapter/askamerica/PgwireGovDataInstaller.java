@@ -59,37 +59,60 @@ final class PgwireGovDataInstaller {
     }
 
     /**
+     * Thrown for a genuine installation failure (download error, sha256 mismatch, extraction
+     * failure) — as opposed to {@code ensureLauncher()} returning null, which is reserved for
+     * "nothing to install" (no asset published for this OS at all). The distinction matters:
+     * callers must NOT silently swallow this into a generic downstream timeout, which is
+     * exactly what buried the actual cause of a real, hours-long production failure earlier
+     * (a CI sha256-generation bug) behind a meaningless "did not start accepting connections"
+     * message.
+     */
+    static final class InstallFailedException extends RuntimeException {
+        InstallFailedException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    /**
      * Downloads and extracts the bundle if not already present, returning the resolved launcher
-     * binary. Returns null (never throws) on any failure — the caller falls back to the embedded
-     * engine, which must never be blocked by this best-effort convenience path.
+     * binary. Returns null ONLY when there is genuinely nothing to install (no matching asset
+     * published for this OS) — every other failure throws InstallFailedException with the
+     * specific cause, never silently swallowed.
      */
     static File ensureLauncher() {
         File already = launcherPath(cacheDir());
         if (already.isFile()) {
             return already;
         }
+        String variant = osVariant();
+        String json;
         try {
-            String variant = osVariant();
-            String json = fetchLatestReleaseJson();
-            String tag = firstMatch(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
-            String assetUrl = firstMatch(json,
-                "\"browser_download_url\"\\s*:\\s*\"([^\"]*pgwire-govdata-[^\"]*-"
-                + Pattern.quote(variant) + "\\.tar\\.gz)\"");
-            if (assetUrl == null) {
-                report("No pgwire-govdata-*-" + variant + ".tar.gz asset in the latest release ("
-                    + tag + ") — falling back to the embedded engine.");
-                return null;
-            }
-            String sha256Url = assetUrl + ".sha256";
-            String expectedSha256 = null;
-            try {
-                expectedSha256 = fetchText(sha256Url);
-            } catch (IOException | InterruptedException e) {
-                report("Could not fetch " + sha256Url + " (" + e.getMessage()
-                    + ") — proceeding without integrity verification.");
-            }
+            json = fetchLatestReleaseJson();
+        } catch (Exception e) {
+            throw new InstallFailedException(
+                "Could not reach the GitHub releases API to look up pgwire-govdata: "
+                + e.getMessage(), e);
+        }
+        String tag = firstMatch(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
+        String assetUrl = firstMatch(json,
+            "\"browser_download_url\"\\s*:\\s*\"([^\"]*pgwire-govdata-[^\"]*-"
+            + Pattern.quote(variant) + "\\.tar\\.gz)\"");
+        if (assetUrl == null) {
+            report("No pgwire-govdata-*-" + variant + ".tar.gz asset in the latest release ("
+                + tag + ") — nothing to install.");
+            return null;
+        }
+        String sha256Url = assetUrl + ".sha256";
+        String expectedSha256 = null;
+        try {
+            expectedSha256 = fetchText(sha256Url);
+        } catch (IOException | InterruptedException e) {
+            report("Could not fetch " + sha256Url + " (" + e.getMessage()
+                + ") — proceeding without integrity verification.");
+        }
 
-            report("Downloading pgwire-govdata (" + variant + ", one-time) from " + assetUrl);
+        report("Downloading pgwire-govdata (" + variant + ", one-time) from " + assetUrl);
+        try {
             Path tmp = Files.createTempFile("pgwire-govdata-", ".tar.gz");
             try {
                 download(assetUrl, tmp);
@@ -101,22 +124,22 @@ final class PgwireGovDataInstaller {
             } finally {
                 Files.deleteIfExists(tmp);
             }
-            File launcher = launcherPath(cacheDir());
-            if (!launcher.isFile()) {
-                report("Extracted pgwire-govdata bundle but no launcher binary found at "
-                    + launcher + " — falling back to the embedded engine.");
-                return null;
-            }
-            if (!launcher.canExecute()) {
-                launcher.setExecutable(true);
-            }
-            report("pgwire-govdata ready at " + launcher);
-            return launcher;
         } catch (Exception e) {
-            report("Failed to install pgwire-govdata (" + e.getClass().getSimpleName() + ": "
-                + e.getMessage() + ") — falling back to the embedded engine.");
-            return null;
+            throw new InstallFailedException(
+                "Failed to install pgwire-govdata from " + assetUrl + ": "
+                + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
         }
+        File launcher = launcherPath(cacheDir());
+        if (!launcher.isFile()) {
+            throw new InstallFailedException(
+                "Extracted pgwire-govdata from " + assetUrl + " but no launcher binary found "
+                + "at " + launcher + " — the bundle's layout may have changed.", null);
+        }
+        if (!launcher.canExecute()) {
+            launcher.setExecutable(true);
+        }
+        report("pgwire-govdata ready at " + launcher);
+        return launcher;
     }
 
     private static File launcherPath(Path base) {

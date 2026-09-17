@@ -2550,19 +2550,18 @@ public class McpServer {
     static Connection getSchemaConnection(final String schemaName) throws Exception {
         // On by default (kenstott/calcite#364): every schema is mounted on one shared
         // server-side catalog, so one shared client connection answers for all of them —
-        // bypass the per-schema embedded-DuckDB path below entirely. A failure to reach or
-        // spawn the shared server (no network for the first-run bundle download, no bundled
-        // launcher resolvable, the spawn itself crashing) falls through to the embedded path
-        // below rather than failing the tool call outright — this is what makes an always-on
-        // default safe rather than a hard dependency on the shared server always working.
+        // bypass the per-schema embedded-DuckDB path below entirely. Deliberately NO
+        // fallback to the embedded path on a pgwire failure: two data-access paths that
+        // could each be seeded from a different build (askamerica-engine.yml and
+        // pgwire-adapters-release.yml are separate CI pipelines) is exactly the
+        // multiple-divergent-instance problem this whole design exists to eliminate — a
+        // silent fallback would trade a loud, actionable pgwire failure for a quiet,
+        // possibly-inconsistent second version of the data. If pgwire is unreachable, the
+        // caller gets a clear error naming why; ASKAMERICA_PGWIRE_MODE=0 is the only
+        // supported way to run on the embedded path, as a deliberate operator choice, not
+        // an automatic degradation.
         if (PgwireGovDataConnector.isEnabled()) {
-            try {
-                return PgwireGovDataConnector.getSharedConnection();
-            } catch (Exception e) {
-                log.println("[askamerica-mcp] pgwire-govdata unavailable ("
-                    + e.getClass().getSimpleName() + ": " + e.getMessage()
-                    + ") — falling back to the embedded engine for '" + schemaName + "'.");
-            }
+            return PgwireGovDataConnector.getSharedConnection();
         }
         Connection existing = schemaConns.get(schemaName);
         if (existing != null) {

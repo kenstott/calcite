@@ -94,9 +94,10 @@ final class PgwireGovDataConnector {
    * MSIX/Store) — every launch spawns two McpServer processes racing for the same catalog
    * write-lock, permanently duplicating disk/memory and paying a reseed cost on every single
    * start, not as a rare edge case. Set ASKAMERICA_PGWIRE_MODE=0 (or false) to opt back into the
-   * old embedded-only behavior. getSchemaConnection() falls back to embedded automatically if
-   * the shared server can't be reached or spawned at all, so this default does not remove the
-   * embedded path — it only stops requiring an operator to know to turn pgwire on by hand.
+   * embedded-only path, as a deliberate operator choice — getSchemaConnection() does NOT fall
+   * back to it automatically on a pgwire failure. Two data-access paths that could each be
+   * seeded from a different build is exactly the multiple-divergent-instance problem this
+   * design exists to eliminate; a pgwire failure surfaces as a loud, clear error instead.
    */
   static boolean isEnabled() {
     return !falsy(System.getenv("ASKAMERICA_PGWIRE_MODE"))
@@ -240,24 +241,27 @@ final class PgwireGovDataConnector {
    * located. Race-safe by construction: if two processes spawn simultaneously, only one can
    * actually bind the port — the loser's spawned server exits immediately on bind failure, and
    * both processes' poll loops converge on whichever one won. Silently does nothing (leaving the
-   * caller's poll loop to time out and the whole connector call to throw) if no bundled launcher
-   * can be found — that failure is expected to be caught by {@code McpServer} and treated as
-   * "fall back to the embedded engine," not a hard error, since not every install has the
-   * pgwire-govdata bundle co-installed yet.
+   * caller's poll loop to time out) if no launcher can be found at all — {@code
+   * getSchemaConnection()} then throws a clear error naming the failure. Deliberately NOT a
+   * fallback to the embedded engine: see getSchemaConnection()'s doc for why a silent
+   * second data-access path is exactly the problem this design exists to eliminate.
    */
   private static void spawnIfPossible() {
     File launcher = resolveLauncher();
     if (launcher == null) {
-      // Not bundled with the installer (that packaging work is separate, still open in
-      // kenstott/calcite#364) — lazily download+extract the airgapped bundle on this first
-      // use of pgwire mode instead. Never throws; returns null on any failure, in which case
-      // the caller's poll loop simply times out and getSchemaConnection() falls back to the
-      // embedded engine.
+      // Not bundled with the installer for an older build, or a local dev run — lazily
+      // download+extract the airgapped bundle on this first use of pgwire mode instead.
+      // Returns null ONLY when there's genuinely nothing published for this OS; any real
+      // failure (bad download, bad sha256, bad extraction) throws InstallFailedException
+      // deliberately uncaught here, so it propagates straight through connect() instead of
+      // being swallowed into a meaningless downstream timeout — confirmed live that a swallowed
+      // sha256 mismatch cost hours to trace precisely because it looked like a generic hang.
       launcher = PgwireGovDataInstaller.ensureLauncher();
     }
     if (launcher == null) {
-      log().println("[askamerica-mcp] No pgwire-govdata launcher available; "
-          + "will fall back to the embedded engine.");
+      log().println("[askamerica-mcp] No pgwire-govdata launcher available "
+          + "(not bundled, and no matching release asset exists for this OS) — the "
+          + "connection attempt will time out and fail.");
       return;
     }
     try {
