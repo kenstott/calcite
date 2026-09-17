@@ -92,4 +92,46 @@ class NsfRdByFieldTransformerTest {
     }
     assertTrue(sawGrandTotal, "expected an 'All fields' (level 0) row");
   }
+
+  /**
+   * Covers govdata-ops#325: the FY2015 gap is sourced from NCSES's Data Explorer-era
+   * table 123, which spans FYs 2009-18 in one file — far more years than the single-year
+   * gap it exists to close. Confirms {@code vintage=hist_2015} filters output down to
+   * FY2015 only, and that this file's style-indent step (2/4 for level 1/2, double the
+   * current edition's 1/2) is correctly normalized to field_level 0/1/2.
+   */
+  @Test @Tag("integration") void parsesDataExplorerEraTableFilteredToFy2015() throws Exception {
+    String url = "https://web.archive.org/web/20190617181329if_/"
+        + "https://ncsesdata.nsf.gov/fedfunds/2017/excel/ffs17-dt-tab123.xlsx";
+    RequestContext context = RequestContext.builder().url(url)
+        .dimensionValues(java.util.Collections.singletonMap("vintage", "hist_2015"))
+        .build();
+
+    String json = new NsfRdByFieldTransformer().transform(null, context);
+    JsonNode rows = new ObjectMapper().readTree(json);
+    assertTrue(rows.isArray() && rows.size() > 0, "expected parsed rows from table 123");
+
+    boolean sawGrandTotal = false;
+    boolean sawLevel1 = false;
+    boolean sawLevel2 = false;
+    for (JsonNode row : rows) {
+      String field = row.get("rd_field").asText();
+      int level = row.get("field_level").asInt();
+      int year = row.get("year").asInt();
+      assertEquals(2015, year, "hist_2015 must filter out every other year in the file: " + row);
+      if ("All fields".equals(field)) {
+        assertEquals(0, level, "'All fields' must be level 0: " + row);
+        sawGrandTotal = true;
+      } else if ("Computer sciences and mathematics".equals(field)) {
+        assertEquals(1, level, "broad field must be level 1: " + row);
+        sawLevel1 = true;
+      } else if ("Computer sciences".equals(field)) {
+        assertEquals(2, level, "sub-field must be level 2: " + row);
+        sawLevel2 = true;
+      }
+    }
+    assertTrue(sawGrandTotal, "expected an 'All fields' (level 0) row");
+    assertTrue(sawLevel1, "expected a level-1 broad-field row");
+    assertTrue(sawLevel2, "expected a level-2 sub-field row");
+  }
 }

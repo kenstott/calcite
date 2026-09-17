@@ -51,6 +51,15 @@ import java.io.ByteArrayInputStream;
  * NBSPs (divided by 4) only when the style indent is zero and the raw string actually
  * starts with one — current-edition files are unaffected since their indent always comes
  * through the style.
+ *
+ * <p>A third encoding, from NCSES's intermediate "Data Explorer" era (e.g.
+ * {@code ncsesdata.nsf.gov/fedfunds/2017/excel/ffs17-dt-tab123.xlsx}, used to backfill the
+ * single FY2015 gap — govdata-ops#325), does use a real style indent like the current
+ * edition, but at double the step size (2/4 for level 1/2, not 1/2) — confirmed live
+ * 2026-09-17. {@link #fieldLevel} normalizes for this by dividing the raw style indent by
+ * the smallest positive indent found anywhere in the sheet's field column, rather than
+ * assuming a step of 1; the current edition's own smallest positive indent is already 1,
+ * so this is a no-op for it.
  */
 public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
 
@@ -67,9 +76,19 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
    */
   private static final String HEADER_MARKER = "Field";
 
+  /**
+   * Vintage that sources NCSES's Data Explorer-era table 123 (FYs 2009-18, one file
+   * spanning far more years than the single FY2015 gap it exists to close). Every other
+   * year in that file is already covered by the {@code current} or {@code hist_2004_2014}
+   * vintage, so this vintage's rows are filtered down to FY2015 only to avoid emitting
+   * duplicate (year, rd_field) rows for the years those vintages already source.
+   */
+  private static final String VINTAGE_HIST_2015 = "hist_2015";
+
   @Override
   public String transform(String response, RequestContext context) {
     String url = context.getUrl();
+    String vintage = context.getDimensionValues().get("vintage");
     XSSFWorkbook workbook = null;
     try {
       byte[] bytes = downloadBytes(url);
@@ -77,7 +96,8 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
       // guard (min inflate ratio). The source is a trusted federal publication, so relax it.
       ZipSecureFile.setMinInflateRatio(0.0);
       workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes));
-      return parseFieldTable(workbook);
+      Integer onlyYear = VINTAGE_HIST_2015.equals(vintage) ? Integer.valueOf(2015) : null;
+      return parseFieldTable(workbook, onlyYear);
     } catch (Exception e) {
       throw new RuntimeException("Failed to parse NSF R&D-by-field XLSX from " + url, e);
     } finally {
@@ -91,7 +111,7 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
     }
   }
 
-  private String parseFieldTable(XSSFWorkbook workbook) {
+  private String parseFieldTable(XSSFWorkbook workbook, Integer onlyYear) {
     Sheet sheet = workbook.getSheetAt(0);
     if (sheet == null) {
       LOGGER.error("NSF R&D by field: workbook has no sheets");
@@ -105,6 +125,7 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
     }
     Row headerRow = sheet.getRow(headerRowIdx);
 
+    int indentUnit = findIndentUnit(sheet, headerRowIdx);
     ArrayNode result = MAPPER.createArrayNode();
     int lastCol = headerRow.getLastCellNum();
 
@@ -118,7 +139,7 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
       if (rawField == null || stripNbsp(rawField).trim().isEmpty()) {
         continue;
       }
-      int fieldLevel = fieldLevel(fieldCell, rawField);
+      int fieldLevel = fieldLevel(fieldCell, rawField, indentUnit);
       // .trim() only strips <= U+0020 and leaves a pre-2016 file's leading NBSP
       // (U+00A0) indent markers in place — strip those explicitly first.
       String field = stripNbsp(rawField).trim();
@@ -126,6 +147,9 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
       for (int c = 1; c < lastCol; c++) {
         Integer year = parseYearHeader(cellString(headerRow.getCell(c)));
         if (year == null) {
+          continue;
+        }
+        if (onlyYear != null && !onlyYear.equals(year)) {
           continue;
         }
         Double value = readValue(row, c);
@@ -146,15 +170,44 @@ public class NsfRdByFieldTransformer extends EiaBulkXlsxTransformer {
   }
 
   /**
+   * Returns the smallest positive style indent found in the field-name column below the
+   * header row, used as the "one level" unit by {@link #fieldLevel}. Different NCSES
+   * publication eras step the style indent by a different amount per level (1 in the
+   * current edition, 2 in the Data Explorer era — see the class Javadoc); dividing by the
+   * file's own smallest positive indent normalizes both to 0/1/2 without needing to know
+   * which era produced the file. Defaults to 1 (a no-op divisor) when no row carries a
+   * real style indent at all — the NBSP-encoded pre-2016 files, whose levels come from
+   * {@link #fieldLevel}'s NBSP fallback instead.
+   */
+  private int findIndentUnit(Sheet sheet, int headerRowIdx) {
+    int minPositive = 0;
+    for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
+      Row row = sheet.getRow(r);
+      if (row == null) {
+        continue;
+      }
+      Cell fieldCell = row.getCell(0);
+      if (fieldCell == null) {
+        continue;
+      }
+      int indent = fieldCell.getCellStyle().getIndention();
+      if (indent > 0 && (minPositive == 0 || indent < minPositive)) {
+        minPositive = indent;
+      }
+    }
+    return minPositive > 0 ? minPositive : 1;
+  }
+
+  /**
    * Returns the field-hierarchy level (0/1/2) for a field-name cell, trying the
    * current-edition encoding (real cell-style indent) first and falling back to the
    * pre-2016 encoding (leading NBSP count / 4) when the style carries no indent but the
    * raw string starts with one. See the class Javadoc for how this was confirmed.
    */
-  private int fieldLevel(Cell fieldCell, String rawField) {
+  private int fieldLevel(Cell fieldCell, String rawField, int indentUnit) {
     int styleIndent = fieldCell.getCellStyle().getIndention();
     if (styleIndent != 0) {
-      return styleIndent;
+      return Math.round(styleIndent / (float) indentUnit);
     }
     int nbsp = 0;
     while (nbsp < rawField.length() && rawField.charAt(nbsp) == ' ') {

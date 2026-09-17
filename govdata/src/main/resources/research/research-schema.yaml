@@ -268,9 +268,10 @@ partitionedTables:
       RESEARCH (basic + applied, all funding agencies, all performers combined)
       broken out by detailed field of R&D, FYs 1993-2025 (FYs 1993-2003 and
       2004-14 from NCSES's own long-run historical tables in publication
-      nsf14316, FYs 2016-2025 from the current edition; FY2015 is not yet
-      sourced — a single-year gap between the two vintages, tracked in
-      govdata-ops#257/#145). Values in current USD millions. Closes the
+      nsf14316, FY2015 from NCSES's Data Explorer-era table 123 filtered to
+      that single year, FYs 2016-2025 from the current edition — a contiguous
+      FY1993-2025 run, closing the single-year gap tracked in
+      govdata-ops#257/#145/#325). Values in current USD millions. Closes the
       all-agency/all-performer field-of-science gap that
       nsf_federal_rd_obligations (rd_field hard-coded to "All fields") and
       nsf_herd_by_institution (real rd_field column, but scoped to
@@ -291,10 +292,14 @@ partitionedTables:
       historical tables (a different NCSES publication era) instead encode it
       via 4 leading non-breaking-space characters per level baked into the
       field-name string itself — confirmed live 2026-09-13 against table 134
-      (FYs 2004-14): 0/4/8 leading NBSPs map to level 0/1/2 exactly.
-      NsfRdByFieldTransformer tries the style indent first and falls back to
-      counting NBSPs only when the style carries none, so this is transparent
-      to callers — both vintages populate field_level identically. A field's
+      (FYs 2004-14): 0/4/8 leading NBSPs map to level 0/1/2 exactly. The FY2015
+      source (NCSES's intermediate "Data Explorer" era) uses a real style
+      indent like the current edition, but at double the step size (2/4 for
+      level 1/2, not 1/2) — confirmed live 2026-09-17.
+      NsfRdByFieldTransformer normalizes the style indent to the file's own
+      smallest positive indent before dividing, and falls back to counting
+      NBSPs only when the style carries none, so all three vintages populate
+      field_level identically. A field's
       taxonomy label can differ across the 2021 field-of-R&D revision (e.g.
       "Computer sciences and mathematics" pre-2021 vs. "Computer and
       information sciences" post-2021); both eras' labels are preserved as-is
@@ -315,6 +320,8 @@ partitionedTables:
       as of the nsf14316 (FYs 2012-14) edition this table's historical rows
       are sourced from, and no later edition's equivalent long-run table has
       been located yet to backfill their level-2 detail (see govdata-ops#257).
+      FY2015 itself is fully finalized (41 rows, full level-2 detail) — it was
+      not the preliminary year of the edition it is sourced from (see below).
 
       The FYs 1993-2014 historical vintages are sourced from NCSES publication
       nsf14316 (FYs 2012-14 edition) via its own long-run tables 133 and 134.
@@ -324,6 +331,16 @@ partitionedTables:
       Machine's mirror instead (re-verify-if-404s risk, same pattern already
       accepted for other individually-hosted sources in this codebase; a
       Wayback snapshot URL is otherwise permanent).
+
+      FY2015 is sourced from a third NCSES vintage: table 123 of the
+      ncsesdata.nsf.gov "Data Explorer" era (edition fedfunds/2017, itself
+      spanning FYs 2009-18 in one file — confirmed live 2026-09-17). Only
+      FY2015 is kept from it; FYs 2009-14 and 2016-18 in that same file are
+      discarded because the hist_2004_2014 and current vintages already
+      source those years, and keeping them too would emit duplicate
+      (year, rd_field) rows. The original ncsesdata.nsf.gov URL is dead (404,
+      no redirect) — fetched via its Wayback Machine mirror instead, same
+      re-verify-if-404s risk as the two nsf14316 vintages above.
 
       Externally-compiled "federal R&D by field" series (e.g. AAAS,
       secondary policy trackers) report R&D total (research + development),
@@ -343,16 +360,19 @@ partitionedTables:
     dimensions:
       type:
         - nsf_rd_by_field
-      # Three discrete NCSES publication vintages, each a single self-contained XLSX
+      # Four discrete NCSES publication vintages, each a single self-contained XLSX
       # covering many fiscal years at once (not one file per year) — fetched exactly
       # once per value, same source_type dispatch pattern as health.cdc_mortality's
-      # annual/weekly_precovid/weekly_covid split. urlRules below routes hist_2004_2014
-      # and hist_1993_2003 to their historical files; current falls through to this
-      # table's base url (the live nsf26316 edition, FYs 2016-2025).
+      # annual/weekly_precovid/weekly_covid split. urlRules below routes hist_2004_2014,
+      # hist_1993_2003, and hist_2015 to their historical files; current falls through
+      # to this table's base url (the live nsf26316 edition, FYs 2016-2025). hist_2015's
+      # source file itself spans FYs 2009-18 — NsfRdByFieldTransformer filters its output
+      # to FY2015 only so it doesn't duplicate years the other vintages already source.
       vintage:
         - current
         - hist_2004_2014
         - hist_1993_2003
+        - hist_2015
 
     columns:
       - name: year
@@ -391,6 +411,13 @@ partitionedTables:
         - url: "https://web.archive.org/web/20150629045708if_/http://www.nsf.gov/statistics/nsf14316/tables/tab133.xlsx"
           variableMatch:
             vintage: hist_1993_2003
+        # NCSES Data Explorer-era table 123 (fedfunds/2017 edition), FYs 2009-18 in one
+        # file. Original ncsesdata.nsf.gov URL is dead (404); fetched via its permanent
+        # Wayback Machine snapshot instead. Confirmed live 2026-09-17 — see the table
+        # comment for why only FY2015 of this file's 10 years is kept.
+        - url: "https://web.archive.org/web/20190617181329if_/https://ncsesdata.nsf.gov/fedfunds/2017/excel/ffs17-dt-tab123.xlsx"
+          variableMatch:
+            vintage: hist_2015
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfRdByFieldTransformer"
 
