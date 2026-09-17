@@ -141,7 +141,12 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             # python-build-standalone on Windows ships python.exe at the distribution root
             # (no bin/ and no python3.12-named binary), and a Windows venv has no symlink to
-            # rewrite: Scripts/python.exe is a redirector, not a link.
+            # rewrite: Scripts/python.exe is a compiled launcher stub, not a link, and it
+            # reads pyvenv.cfg's `home` line at EVERY invocation to find the real interpreter
+            # to exec. `uv venv` writes `home` as THIS RUNNER's absolute path -- confirmed
+            # live this breaks every single launch on an actual Windows install ("No Python
+            # at '<CI runner path>'"). See "Make Windows venv relocatable" below, which
+            # replaces it with a placeholder the generated .bat resolves at each launch.
             PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name python.exe | head -1)"
           else
             PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
@@ -195,6 +200,19 @@ jobs:
           print('embedder model cached')
           "
           du -sh ../bundle/model/embedder
+
+      - name: Make Windows venv relocatable
+        if: runner.os == 'Windows'
+        working-directory: pgwire-calcite
+        run: |
+          # Must run AFTER every CI-side use of cpython/Scripts/python.exe (the embed
+          # pre-download step above included) -- this runner's own path in `home` is still
+          # correct up to this point. Swap in a placeholder now; the generated .bat (see
+          # "Stage adapter launcher (Windows)" below) resolves it to the real install path,
+          # via %HERE%, on every launch -- the Windows equivalent of the relative symlink
+          # POSIX bundles get from the step above.
+          sed -i 's|^home = .*$|home = __PGWIRE_PYTHON_HOME__|' ../bundle/cpython/pyvenv.cfg
+          cat ../bundle/cpython/pyvenv.cfg
 
       - name: Minimal bundled JRE (jlink)
         run: |
@@ -253,6 +271,13 @@ jobs:
           > "%HERE%\jars.classpath" echo !CP!
           set "PGWIRE_CALCITE_CLASSPATH_FILE=%HERE%\jars.classpath"
           set "EMBED_MODEL_CACHE_DIR=%HERE%\model\embedder"
+          rem The venv's launcher stub (cpython\Scripts\python.exe) reads pyvenv.cfg's `home`
+          rem line at every invocation to find the real interpreter to exec. It was built on
+          rem a CI runner and ships with a placeholder there (see "Make Windows venv
+          rem relocatable" in the release workflow) -- resolve it to THIS install's actual
+          rem path before every launch, since that varies per machine.
+          for /d %%d in ("%HERE%\python\cpython-*") do set "PYHOME=%%~fd"
+          if defined PYHOME powershell -NoProfile -Command "(Get-Content -Raw '%HERE%\cpython\pyvenv.cfg') -replace [regex]::Escape('__PGWIRE_PYTHON_HOME__'), '%PYHOME%' | Set-Content -NoNewline '%HERE%\cpython\pyvenv.cfg'"
           "%HERE%\jre\bin\java.exe" "-Dpgwire.python=%HERE%\cpython\Scripts\python.exe" -jar "%HERE%\pgwire-launcher.jar" --backend calcite --model "%HERE%\model\model.json" --database __ADAPTER__ %*
           '@
           $bat = $bat.Replace("__ADAPTER__", "${{ matrix.adapter.name }}")
