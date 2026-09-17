@@ -409,8 +409,13 @@ jobs:
           # means a similar failure fails loudly instead of silently substituting "/".
           WORKDIR=$(mktemp -d)
           URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET}"
-          curl -sL -o "$WORKDIR/pgwire-govdata.tar.gz" "$URL"
-          curl -sL -o "$WORKDIR/pgwire-govdata.tar.gz.sha256" "${URL}.sha256"
+          # --retry: confirmed live this matters -- curl exited 92 (CURLE_HTTP2_STREAM, a
+          # transient HTTP/2 framing error against GitHub's release CDN) on an otherwise-fine
+          # download, aborting the whole step under set -e with no output at all. The same
+          # class of transient infra flake as the services.gradle.org resets seen earlier
+          # today; retrying is the correct response, not treating it as a real failure.
+          curl -sL --retry 3 --retry-delay 2 -o "$WORKDIR/pgwire-govdata.tar.gz" "$URL"
+          curl -sL --retry 3 --retry-delay 2 -o "$WORKDIR/pgwire-govdata.tar.gz.sha256" "${URL}.sha256"
           EXPECTED=$(tr -d '[:space:]' < "$WORKDIR/pgwire-govdata.tar.gz.sha256")
           if command -v sha256sum >/dev/null 2>&1; then
             ACTUAL=$(sha256sum "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
