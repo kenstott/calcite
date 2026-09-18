@@ -5178,12 +5178,60 @@ public class McpServer {
     // ── Per-process tool-call log ─────────────────────────────────────────────
 
     /** Every tool call this process has served, oldest first, capped so a runaway session
-     *  cannot grow it without bound. One process serves one client session, so this is the
-     *  session's audit trail: what was asked of the warehouse, in what order, how long it
-     *  took, and what the server warned about. */
+     *  cannot grow it without bound. "One process serves one client session" does NOT hold in
+     *  practice -- Claude Desktop connects an MCP server once per app launch and reuses that
+     *  same process across every chat window opened afterward, with no protocol-level signal
+     *  marking where one conversation ends and the next begins. Confirmed live (2026-09-18): a
+     *  report-validation check cited a SQL exclusion predicate from a completely unrelated,
+     *  hours-earlier test conversation as if it belonged to the report just being published.
+     *  Read this directly only for a true whole-process dump (eval mode's writeCallLog, which
+     *  legitimately wants everything since each eval run gets its own fresh process); every
+     *  provenance/disclosure check that means "what did THIS conversation actually do" must go
+     *  through {@link #recentCallLogSnapshot()} instead. */
     private static final java.util.List<ObjectNode> CALL_LOG =
         java.util.Collections.synchronizedList(new java.util.ArrayList<ObjectNode>());
     private static final int CALL_LOG_MAX = 2000;
+
+    /**
+     * How far back a report-validation check may reach into {@link #CALL_LOG} and still
+     * plausibly be looking at calls from the conversation actually publishing right now. This
+     * is a mitigation, not a real fix -- MCP over a shared stdio connection gives a server no
+     * way to know a new conversation started, so a second conversation opened inside this
+     * window still shares the first one's predicates. It exists to bound the specific failure
+     * already observed (stale predicates from HOURS earlier), not to guarantee correctness for
+     * two conversations in quick succession.
+     */
+    private static final java.time.Duration CALL_LOG_RELEVANCE_WINDOW =
+        java.time.Duration.ofHours(2);
+
+    /** {@link #CALL_LOG}, filtered to entries within {@link #CALL_LOG_RELEVANCE_WINDOW} of now
+     *  -- see that field's javadoc for why the filter exists. A malformed/missing timestamp is
+     *  kept rather than dropped, so a defect in timestamp writing fails open (over-inclusive,
+     *  same as the old unfiltered behavior) rather than silently hiding real recent calls. */
+    private static java.util.List<ObjectNode> recentCallLogSnapshot() {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        java.time.Instant cutoff = java.time.Instant.now().minus(CALL_LOG_RELEVANCE_WINDOW);
+        java.util.List<ObjectNode> recent = new java.util.ArrayList<>(snapshot.size());
+        for (ObjectNode e : snapshot) {
+            String ts = e.path("ts").asText(null);
+            if (ts == null) {
+                recent.add(e);
+                continue;
+            }
+            try {
+                if (!java.time.Instant.parse(ts).isBefore(cutoff)) {
+                    recent.add(e);
+                }
+            } catch (java.time.format.DateTimeParseException ex) {
+                recent.add(e);
+            }
+        }
+        return recent;
+    }
+
     private static final java.util.concurrent.atomic.AtomicInteger CALL_SEQ =
         new java.util.concurrent.atomic.AtomicInteger();
 
@@ -5543,10 +5591,7 @@ public class McpServer {
         if (RECIPE_CONSULTED.get()) {
             return null;
         }
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         boolean fired = false;
         for (ObjectNode e : snapshot) {
             for (JsonNode t : e.path("diagnostic_types")) {
@@ -5601,10 +5646,7 @@ public class McpServer {
      * alongside it -- a hybrid report is not the failure mode this catches.
      */
     private static String enforceResearchDepthOnGap() {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         boolean productiveQuery = false;
         boolean catalogChecked = false;
         java.util.Set<String> fetchedUrls = new java.util.HashSet<>();
@@ -5680,10 +5722,7 @@ public class McpServer {
      * column/metro in the final report -- only a general, unrelated caveat existed elsewhere.
      */
     private static String enforceHighSeverityDisclosure(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         java.util.LinkedHashMap<String, java.util.List<String>> byType = new java.util.LinkedHashMap<>();
         for (ObjectNode e : snapshot) {
             for (JsonNode hd : e.path("high_diagnostics")) {
@@ -5749,10 +5788,7 @@ public class McpServer {
     }
 
     private static String enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         java.util.LinkedHashSet<String> predicates = new java.util.LinkedHashSet<>();
         // key term per predicate: the quoted literal if present, else the column/identifier the
         // predicate tests (e.g. "metro_nonmetro" out of "metro_nonmetro IS NOT NULL").
@@ -5869,10 +5905,7 @@ public class McpServer {
      * gate has any business policing.
      */
     private static String enforceTableProvenance(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         java.util.Set<String> queried = new java.util.HashSet<>();
         for (ObjectNode e : snapshot) {
             for (JsonNode t : e.path("tables")) {
@@ -5990,10 +6023,7 @@ public class McpServer {
      * ("an OLS regression could test this") is not policed.
      */
     private static String enforceStatisticalProvenance(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         java.util.Set<String> toolsCalled = new java.util.HashSet<>();
         for (ObjectNode e : snapshot) {
             toolsCalled.add(e.path("tool").asText(""));
@@ -6310,10 +6340,7 @@ public class McpServer {
      *  behind every figure is on the page a reader is handed rather than only the calls the
      *  author chose to cite. Skipped when nothing ran. */
     private static ReportPage.Section queryAppendix() {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         StringBuilder sb = new StringBuilder();
         int n = 0;
         for (ObjectNode e : snapshot) {
