@@ -69,6 +69,122 @@ public class McpServer {
 
     static final String BUILD_ID = "telemetry-v13";
 
+    /**
+     * MCP Apps (spec 2026-01-26) {@code ui://} resource URI for the chart/dashboard viewer
+     * widget. Any tool whose {@code _meta.ui.resourceUri} names this gets its result rendered
+     * by {@link #CHART_VIEWER_HTML} in a host-controlled sandboxed iframe, instead of (or
+     * alongside) the plain content blocks a non-MCP-Apps host reads. See
+     * {@link #toolWithChartViewer(String, String, ObjectNode)}.
+     */
+    static final String CHART_VIEWER_RESOURCE_URI = "ui://askamerica/chart-viewer.html";
+
+    /**
+     * The widget itself: a self-contained page with no external script/style/font references,
+     * so it satisfies the spec's restrictive default CSP ({@code script-src 'self'
+     * 'unsafe-inline'; img-src 'self' data:; connect-src 'none'}) without this server having to
+     * declare any {@code _meta.ui.csp} override on the resource below.
+     *
+     * <p>Hand-rolled against the wire protocol directly (JSON-RPC over {@code postMessage}) —
+     * no {@code @modelcontextprotocol/ext-apps} SDK exists for a Java server to reach for, and
+     * pulling in a JS build toolchain for one static page is not worth it. The three messages
+     * this needs are: send {@code ui/initialize} once on load, send
+     * {@code ui/notifications/initialized} once the host replies, then listen forever for
+     * {@code ui/notifications/tool-result} and render whatever content blocks arrive. Text
+     * blocks are filtered by the same {@code annotations.audience} tagging the plain
+     * tools/call path already sets (see the {@code content.add(...)} calls in
+     * {@code handleToolsCall}) — an assistant-only block (the raw SVG source, the diagnostics
+     * envelope) is exactly as inappropriate to show a human here as it is in a chat transcript.
+     */
+    static final String CHART_VIEWER_HTML = "<!doctype html>\n"
+        + "<html><head><meta charset=\"utf-8\">\n"
+        + "<style>\n"
+        + "  html,body{margin:0;padding:0;background:transparent;"
+        + "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}\n"
+        + "  #chart-img{max-width:100%;display:block;}\n"
+        + "  .chart-text{padding:8px 10px;color:#333;font-size:13px;line-height:1.4;"
+        + "white-space:pre-wrap;}\n"
+        + "</style></head>\n"
+        + "<body>\n"
+        + "<div id=\"root\"><div class=\"chart-text\">Loading chart…</div></div>\n"
+        + "<script>\n"
+        + "(function(){\n"
+        + "  var pending = {};\n"
+        + "  var nextId = 1;\n"
+        + "  function send(method, params, notify){\n"
+        + "    var msg = {jsonrpc:\"2.0\", method: method, params: params || {}};\n"
+        + "    if(!notify){ msg.id = nextId++; }\n"
+        + "    window.parent.postMessage(msg, \"*\");\n"
+        + "    return msg.id;\n"
+        + "  }\n"
+        + "  function request(method, params){\n"
+        + "    return new Promise(function(resolve, reject){\n"
+        + "      var id = send(method, params, false);\n"
+        + "      pending[id] = {resolve:resolve, reject:reject};\n"
+        + "    });\n"
+        + "  }\n"
+        + "  function audienceOk(block){\n"
+        + "    var a = block.annotations && block.annotations.audience;\n"
+        + "    return !a || a.indexOf(\"user\") !== -1;\n"
+        + "  }\n"
+        + "  function renderResult(params){\n"
+        + "    var content = (params && params.content) || [];\n"
+        + "    var root = document.getElementById(\"root\");\n"
+        + "    root.innerHTML = \"\";\n"
+        + "    var shown = false;\n"
+        + "    for(var i=0;i<content.length;i++){\n"
+        + "      var block = content[i];\n"
+        + "      if(!audienceOk(block)) continue;\n"
+        + "      if(block.type === \"image\" && block.data){\n"
+        + "        var img = document.createElement(\"img\");\n"
+        + "        img.id = \"chart-img\";\n"
+        + "        img.src = \"data:\" + (block.mimeType || \"image/png\") + \";base64,\" "
+        + "+ block.data;\n"
+        + "        root.appendChild(img);\n"
+        + "        shown = true;\n"
+        + "      } else if(block.type === \"text\" && block.text){\n"
+        + "        var p = document.createElement(\"div\");\n"
+        + "        p.className = \"chart-text\";\n"
+        + "        p.textContent = block.text;\n"
+        + "        root.appendChild(p);\n"
+        + "        shown = true;\n"
+        + "      }\n"
+        + "    }\n"
+        + "    if(!shown){\n"
+        + "      root.innerHTML = '<div class=\"chart-text\">No chart in this result.</div>';\n"
+        + "    }\n"
+        + "  }\n"
+        + "  window.addEventListener(\"message\", function(ev){\n"
+        + "    var msg = ev.data;\n"
+        + "    if(!msg || msg.jsonrpc !== \"2.0\") return;\n"
+        + "    if(msg.id !== undefined && (msg.result !== undefined "
+        + "|| msg.error !== undefined)){\n"
+        + "      var p = pending[msg.id];\n"
+        + "      if(p){\n"
+        + "        delete pending[msg.id];\n"
+        + "        if(msg.error){ p.reject(msg.error); } else { p.resolve(msg.result); }\n"
+        + "      }\n"
+        + "      return;\n"
+        + "    }\n"
+        + "    if(msg.method === \"ui/notifications/tool-result\"){\n"
+        + "      renderResult(msg.params);\n"
+        + "    } else if(msg.method === \"ui/notifications/tool-cancelled\"){\n"
+        + "      document.getElementById(\"root\").innerHTML = "
+        + "'<div class=\"chart-text\">Cancelled.</div>';\n"
+        + "    }\n"
+        + "  });\n"
+        + "  request(\"ui/initialize\", {\n"
+        + "    capabilities: {},\n"
+        + "    clientInfo: {name:\"AskAmerica Chart Viewer\", version:\"1.0.0\"},\n"
+        + "    protocolVersion: \"2026-01-26\",\n"
+        + "    appCapabilities: {tools:{listChanged:false}, "
+        + "availableDisplayModes:[\"inline\"]}\n"
+        + "  }).then(function(){\n"
+        + "    send(\"ui/notifications/initialized\", {}, true);\n"
+        + "  });\n"
+        + "})();\n"
+        + "</script>\n"
+        + "</body></html>\n";
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** Tool definitions, built on first use by {@link #toolDefs()}. */
@@ -489,6 +605,10 @@ public class McpServer {
                 // stay answerable while a query runs, like tools/list above.
                 case "prompts/list":     return result(id, QuestionGuidance.promptsList());
                 case "prompts/get":      return handlePromptsGet(id, params);
+                // MCP Apps resource fetch — see CHART_VIEWER_RESOURCE_URI. Touches no schema,
+                // same reasoning as the other pre-query-safe methods above.
+                case "resources/list":   return handleResourcesList(id);
+                case "resources/read":   return handleResourcesRead(id, params);
                 case "tools/call": {
                     String tool = params.path("name").asText("");
                     if (LOCK_FREE_TOOLS.contains(tool)) {
@@ -553,6 +673,10 @@ public class McpServer {
         // them is uneven, which is why the same teaching also lives in the tool descriptions
         // — those every capable client reads. This is the bonus channel, not the primary one.
         capabilities.set("prompts", MAPPER.createObjectNode());
+        // Declared so a host can fetch CHART_VIEWER_RESOURCE_URI via resources/read — required
+        // for MCP Apps rendering, but otherwise inert: a host with no resources support simply
+        // never calls resources/read, same as it already ignores an unrecognized _meta field.
+        capabilities.set("resources", MAPPER.createObjectNode());
 
         ObjectNode body = MAPPER.createObjectNode();
         body.put("protocolVersion", "2024-11-05");
@@ -997,6 +1121,38 @@ public class McpServer {
             + "publish_report the same way — it is the deliverable at that point, not a "
             + "nice-to-have, and a chart plus prose the reader has to reassemble by hand is "
             + "never an acceptable substitute for it.");
+        return result(id, body);
+    }
+
+    /** The one MCP Apps resource this server serves — see {@link #CHART_VIEWER_RESOURCE_URI}. */
+    private static ObjectNode handleResourcesList(JsonNode id) {
+        ObjectNode res = MAPPER.createObjectNode();
+        res.put("uri", CHART_VIEWER_RESOURCE_URI);
+        res.put("name", "Chart Viewer");
+        res.put("description",
+            "Renders the image and narrative text from render_chart/compose_dashboard "
+            + "results as an interactive MCP Apps widget.");
+        res.put("mimeType", "text/html;profile=mcp-app");
+        ArrayNode resources = MAPPER.createArrayNode();
+        resources.add(res);
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("resources", resources);
+        return result(id, body);
+    }
+
+    private static ObjectNode handleResourcesRead(JsonNode id, JsonNode params) {
+        String uri = params.path("uri").asText("");
+        if (!CHART_VIEWER_RESOURCE_URI.equals(uri)) {
+            return errorResponse(id, -32602, "Unknown resource: " + uri);
+        }
+        ObjectNode content = MAPPER.createObjectNode();
+        content.put("uri", CHART_VIEWER_RESOURCE_URI);
+        content.put("mimeType", "text/html;profile=mcp-app");
+        content.put("text", CHART_VIEWER_HTML);
+        ArrayNode contents = MAPPER.createArrayNode();
+        contents.add(content);
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("contents", contents);
         return result(id, body);
     }
 
@@ -1981,7 +2137,7 @@ public class McpServer {
         chartProps.set(
             "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
         tools.add(
-            tool("render_chart",
+            toolWithChartViewer("render_chart",
             "Render ONE chart (line, bar, pie, scatter, or bubble). Returns TWO blocks: a PNG "
             + "for the reader, and the same chart as editable SVG for you. PREFER "
             + "compose_dashboard whenever the answer has more than one figure worth showing — "
@@ -2043,7 +2199,7 @@ public class McpServer {
             + "panel looks wrong.");
         dashProps.set("panels", panelsProp);
         tools.add(
-            tool("compose_dashboard",
+            toolWithChartViewer("compose_dashboard",
             "THE DEFAULT WAY TO VISUALISE AN ANSWER. Composes charts and headline numbers into "
             + "ONE dashboard, returned as a PNG plus a single self-contained SVG you can "
             + "publish as an artifact or drop into an HTML page. Use this rather than several "
@@ -11424,6 +11580,24 @@ public class McpServer {
         t.put("name", name);
         t.put("description", description);
         t.set("inputSchema", inputSchema);
+        return t;
+    }
+
+    /**
+     * Same as {@link #tool(String, String, ObjectNode)}, plus the MCP Apps
+     * {@code _meta.ui.resourceUri} pointer (spec 2026-01-26) that lets a host render this
+     * tool's result inside the {@link #CHART_VIEWER_RESOURCE_URI} widget instead of (or
+     * alongside) the plain content blocks. A host with no MCP Apps support simply ignores an
+     * unrecognized {@code _meta} field, so this is additive, never a behavior change for one.
+     */
+    private static ObjectNode toolWithChartViewer(String name, String description,
+        ObjectNode inputSchema) {
+        ObjectNode t = tool(name, description, inputSchema);
+        ObjectNode ui = MAPPER.createObjectNode();
+        ui.put("resourceUri", CHART_VIEWER_RESOURCE_URI);
+        ObjectNode meta = MAPPER.createObjectNode();
+        meta.set("ui", ui);
+        t.set("_meta", meta);
         return t;
     }
 
