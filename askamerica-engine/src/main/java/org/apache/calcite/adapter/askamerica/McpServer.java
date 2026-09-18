@@ -3847,6 +3847,14 @@ public class McpServer {
             imageBlock.put("type", "image");
             imageBlock.put("data", java.util.Base64.getEncoder().encodeToString(chartPng));
             imageBlock.put("mimeType", "image/png");
+            // Without this, a client has no signal that the image is meant for the human to
+            // actually look at (vs. incidental data the model alone should read) and is free to
+            // bury it inside the raw tool-call detail — see the MCP spec's own image-content
+            // example, which tags exactly this case with audience:["user"].
+            ObjectNode imageAnnotations = MAPPER.createObjectNode();
+            imageAnnotations.putArray("audience").add("user");
+            imageAnnotations.put("priority", 0.9);
+            imageBlock.set("annotations", imageAnnotations);
             content.add(imageBlock);
         }
         ObjectNode textBlock = MAPPER.createObjectNode();
