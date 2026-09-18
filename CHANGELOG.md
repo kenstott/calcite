@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.94.3](https://github.com/kenstott/calcite/compare/engine-v0.94.2...engine-v0.94.3) (2026-09-18)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** stop flagging pct_chg columns as broken_field ([11e263a](https://github.com/kenstott/calcite/commit/11e263a24186f67985486570292d811be60a7f6c))
+
 ## [0.94.2](https://github.com/kenstott/calcite/compare/engine-v0.94.1...engine-v0.94.2) (2026-09-18)
 
 
