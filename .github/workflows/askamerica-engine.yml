@@ -350,7 +350,22 @@ jobs:
       # this project has had was a manual workflow_dispatch) -- so this step is
       # self-sufficient: it dispatches that workflow itself if this version's bundle isn't
       # already published, then waits.
+      #
+      # NOT on macOS: the bundle's jars carry native libraries (duckdb_jdbc, tokenizers,
+      # netty, onnxruntime, zstd-jni, jna, snappy-java, and the shaded sih-aperio jar that
+      # re-bundles several of these) that are unsigned inside their jar entries. Apple's
+      # notary service scans recursively into every jar/zip in the app bundle -- codesign
+      # on the assembled .app never reaches those nested entries, since they are zip
+      # contents, not files on disk -- so embedding this bundle made every macOS
+      # notarization submission fail (confirmed live via `xcrun notarytool log`, 2026-09-18:
+      # ~40 "binary is not signed" / "no secure timestamp" errors, all under
+      # pgwire-govdata/jars/). `prepareJpackageInput` in build.gradle.kts already treats a
+      # missing staged dir as the local-dev fallback (no bundled pgwire-govdata, matching
+      # PgwireGovDataInstaller's lazy-download-on-first-use path) -- skipping this step for
+      # macOS reaches that same fallback deliberately, keeping the notarized .app thin
+      # instead of re-signing dozens of nested native libraries on every build.
       - name: Ensure pgwire-govdata bundle for this version
+        if: matrix.os != 'macos-latest'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
