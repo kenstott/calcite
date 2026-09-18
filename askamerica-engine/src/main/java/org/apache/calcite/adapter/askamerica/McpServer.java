@@ -5193,43 +5193,43 @@ public class McpServer {
     private static final int CALL_LOG_MAX = 2000;
 
     /**
-     * How far back a report-validation check may reach into {@link #CALL_LOG} and still
-     * plausibly be looking at calls from the conversation actually publishing right now. This
-     * is a mitigation, not a real fix -- MCP over a shared stdio connection gives a server no
-     * way to know a new conversation started, so a second conversation opened inside this
-     * window still shares the first one's predicates. It exists to bound the specific failure
-     * already observed (stale predicates from HOURS earlier), not to guarantee correctness for
-     * two conversations in quick succession.
+     * {@link #CALL_LOG}, cut down to calls that plausibly belong to the report being validated
+     * right now, not a stale earlier conversation sharing the same long-lived process (see
+     * {@link #CALL_LOG}'s javadoc for why that happens). The boundary is the most recent PRIOR
+     * {@code publish_report} call, if any -- everything from just after it onward is kept, and
+     * everything at-or-before it is dropped as belonging to whatever report that call
+     * concluded (successfully or not; a rejected attempt still marks "the model believed it was
+     * done building a report here").
+     *
+     * <p>Deliberately NOT {@code compose_dashboard}, even though it can also mark the end of a
+     * prior, unrelated conversation: {@code compose_dashboard} is routinely called as an
+     * intermediate step of the CURRENT report too (queries first produce the data, then
+     * compose_dashboard turns it into panels, then publish_report), so treating it as a cutoff
+     * would drop that same report's own supporting queries -- turning this into a false
+     * negative on exactly the disclosure check it's meant to protect.
+     *
+     * <p>This is a mitigation, not a complete fix: a conversation that calls compose_dashboard
+     * and stops (no publish_report) leaves no boundary behind it, so a LATER, unrelated
+     * publish_report elsewhere in the same process can still reach back past it. MCP over a
+     * shared stdio connection gives a server no protocol-level way to know a new conversation
+     * started at all; this uses the one real signal CALL_LOG actually contains for "a report
+     * concluded here" instead of guessing from a time window.
      */
-    private static final java.time.Duration CALL_LOG_RELEVANCE_WINDOW =
-        java.time.Duration.ofHours(2);
-
-    /** {@link #CALL_LOG}, filtered to entries within {@link #CALL_LOG_RELEVANCE_WINDOW} of now
-     *  -- see that field's javadoc for why the filter exists. A malformed/missing timestamp is
-     *  kept rather than dropped, so a defect in timestamp writing fails open (over-inclusive,
-     *  same as the old unfiltered behavior) rather than silently hiding real recent calls. */
     private static java.util.List<ObjectNode> recentCallLogSnapshot() {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
             snapshot = new java.util.ArrayList<>(CALL_LOG);
         }
-        java.time.Instant cutoff = java.time.Instant.now().minus(CALL_LOG_RELEVANCE_WINDOW);
-        java.util.List<ObjectNode> recent = new java.util.ArrayList<>(snapshot.size());
-        for (ObjectNode e : snapshot) {
-            String ts = e.path("ts").asText(null);
-            if (ts == null) {
-                recent.add(e);
-                continue;
-            }
-            try {
-                if (!java.time.Instant.parse(ts).isBefore(cutoff)) {
-                    recent.add(e);
-                }
-            } catch (java.time.format.DateTimeParseException ex) {
-                recent.add(e);
+        int boundary = -1;
+        for (int i = snapshot.size() - 1; i >= 0; i--) {
+            if ("publish_report".equals(snapshot.get(i).path("tool").asText(""))) {
+                boundary = i;
+                break;
             }
         }
-        return recent;
+        return boundary < 0
+            ? snapshot
+            : new java.util.ArrayList<>(snapshot.subList(boundary + 1, snapshot.size()));
     }
 
     private static final java.util.concurrent.atomic.AtomicInteger CALL_SEQ =
