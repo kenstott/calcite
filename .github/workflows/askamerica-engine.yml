@@ -618,11 +618,24 @@ jobs:
           fi
           PKG=$(find askamerica-engine/build/jpackage -name "*.pkg" | head -1)
           echo "Notarizing $PKG"
-          xcrun notarytool submit "$PKG" \
+          SUBMIT_JSON=$(xcrun notarytool submit "$PKG" \
             --apple-id "$APPLE_NOTARYTOOL_APPLE_ID" \
             --password "$APPLE_NOTARYTOOL_PASSWORD" \
             --team-id "$APPLE_NOTARYTOOL_TEAM_ID" \
-            --wait
+            --wait --output-format json)
+          echo "$SUBMIT_JSON"
+          SUBMIT_ID=$(echo "$SUBMIT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+          STATUS=$(echo "$SUBMIT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])")
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization rejected (status: $STATUS) — fetching rejection log"
+            xcrun notarytool log "$SUBMIT_ID" \
+              --apple-id "$APPLE_NOTARYTOOL_APPLE_ID" \
+              --password "$APPLE_NOTARYTOOL_PASSWORD" \
+              --team-id "$APPLE_NOTARYTOOL_TEAM_ID"
+            # Non-fatal per the comment above, but the log printed here is what a
+            # "could not verify... free of malware" report on the shipped PKG needs.
+            exit 1
+          fi
           xcrun stapler staple "$PKG"
           echo "Notarization and stapling complete"
 
