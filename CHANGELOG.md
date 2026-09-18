@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.94.0](https://github.com/kenstott/calcite/compare/engine-v0.93.0...engine-v0.94.0) (2026-09-18)
+
+
+### Features
+
+* **file:** reuse per-table Iceberg row counts across a session's schema-tree rebuilds ([9057689](https://github.com/kenstott/calcite/commit/90576898c1703f0e51634fd559358d3ee6f9ba51))
+
+
+### Bug Fixes
+
+* **ci:** don't bundle pgwire-govdata into the macOS installer, notarization requires it thin ([dd4c66c](https://github.com/kenstott/calcite/commit/dd4c66c3b18a1e119d45adf90936b200650176d1))
+* **ci:** surface Apple notarytool rejection log instead of silently shipping unsigned PKG ([c3eff20](https://github.com/kenstott/calcite/commit/c3eff2053a81c4ce0024d41cb8ede5389c21decb))
+* **file:** cache per-column NDV (publishedNdv) the same way row counts are cached ([a124606](https://github.com/kenstott/calcite/commit/a124606264f9612edf54b7060fa0fe63ab5c48ca))
+* **file:** COUNT(*) falling back to a full scan on a null/wrong context classloader ([fbee122](https://github.com/kenstott/calcite/commit/fbee1223a5b6a7133fe3a4a2f8b308aebb0a9b4b))
+* **file:** mark every genuinely-nullable InformationSchema column as such ([b8d5b56](https://github.com/kenstott/calcite/commit/b8d5b56ad10f5ebceabe96efcdc0451bc0b042ed))
+* **pgwire-govdata:** missing env vars crashed every launch, cache the catalog walk ([4462863](https://github.com/kenstott/calcite/commit/446286301abc7cf404722bdb96c23b240ba90768))
+* route information_schema through Calcite instead of pgwire's own DuckDB reimplementation ([6ddd3e5](https://github.com/kenstott/calcite/commit/6ddd3e56fc3de337d2c1fdefd542eb9d888194b1))
+
 ## [0.93.0](https://github.com/kenstott/calcite/compare/engine-v0.92.0...engine-v0.93.0) (2026-09-18)
 
 
