@@ -455,6 +455,18 @@ public class IcebergTable extends AbstractTable
    */
   private synchronized Map<String, Long> publishedNdv() {
     if (publishedNdv == null) {
+      // Same per-query schema-tree-rebuild problem this class's row-count field had before
+      // IcebergSchemaCache.lookupRowCount/recordStatistics fixed it -- this instance field is
+      // discarded on every rebuild, so consult the same static, JVM-wide cache here too.
+      // Confirmed live (2026-09-18): a publish_report call timed out inside exactly this method,
+      // re-loading the table fresh (loadIcebergTable(), NOT the pinned icebergTable() handle --
+      // see this method's own doc for why) on every planner call that needed a cardinality
+      // estimate for a GROUP BY column.
+      Map<String, Long> cached = IcebergSchemaCache.lookupNdv(source.path());
+      if (cached != null) {
+        publishedNdv = cached;
+        return publishedNdv;
+      }
       try {
         publishedNdv =
             org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(
@@ -465,6 +477,7 @@ public class IcebergTable extends AbstractTable
         LOGGER.debug("Could not read published cardinality: {}", t.toString());
         publishedNdv = java.util.Collections.emptyMap();
       }
+      IcebergSchemaCache.recordNdv(source.path(), publishedNdv);
     }
     return publishedNdv;
   }

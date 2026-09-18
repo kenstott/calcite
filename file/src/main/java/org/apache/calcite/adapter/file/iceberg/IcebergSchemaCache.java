@@ -142,6 +142,9 @@ public final class IcebergSchemaCache {
     /** The Iceberg snapshot ID {@link #rowCount} was computed from, or null. Diagnostic only --
      * lookup() does not compare it against the table's current snapshot. */
     public Long statsSnapshotId;
+    /** Per-column distinct-value count (lower-cased column name -> NDV), or null when never
+     * recorded. Same trust model as {@link #rowCount} -- see {@link #lookupNdv}. */
+    public Map<String, Long> ndv;
 
     public TableSchema() {
     }
@@ -319,6 +322,50 @@ public final class IcebergSchemaCache {
     ensureLoaded();
     TableSchema entry = ENTRIES.get(tablePath);
     return entry != null ? entry.rowCount : null;
+  }
+
+  /**
+   * Per-column NDV map previously recorded for this table via {@link #recordNdv}, or null if
+   * none has been recorded yet. Same bypass-of-{@code trusted} rationale as
+   * {@link #lookupRowCount}: a same-session, same-JVM live computation, not unverified
+   * published data.
+   *
+   * @param tablePath table root; returns null when null
+   */
+  public static Map<String, Long> lookupNdv(String tablePath) {
+    if (!ENABLED || tablePath == null) {
+      return null;
+    }
+    ensureLoaded();
+    TableSchema entry = ENTRIES.get(tablePath);
+    return entry != null ? entry.ndv : null;
+  }
+
+  /**
+   * Records a table's live-computed per-column NDV map in memory, merging into an existing
+   * entry when present. Mirrors {@link #recordStatistics}: added because
+   * {@code IcebergTable.publishedNdv()}'s own instance field is exactly as useless across the
+   * per-query schema-tree rebuilds as {@code cachedRowCount} was before that fix -- confirmed
+   * live (2026-09-18) via a publish_report call that timed out inside
+   * {@code IcebergTable.getDistinctRowCount()} -> {@code publishedNdv()} -> a fresh
+   * {@code loadIcebergTable()} on every rebuild, for the cost-based planner's per-GROUP-BY-column
+   * cardinality estimate.
+   *
+   * @param tablePath table root; ignored when null
+   * @param ndv the computed NDV map (lower-cased column name -> distinct count)
+   */
+  public static void recordNdv(String tablePath, Map<String, Long> ndv) {
+    if (!ENABLED || tablePath == null) {
+      return;
+    }
+    ensureLoaded();
+    TableSchema entry = ENTRIES.get(tablePath);
+    if (entry == null) {
+      entry = new TableSchema();
+      entry.path = tablePath;
+      ENTRIES.put(tablePath, entry);
+    }
+    entry.ndv = ndv;
   }
 
   /**
