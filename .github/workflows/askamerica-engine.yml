@@ -389,17 +389,24 @@ jobs:
 
           if ! have_asset; then
             echo "No $ASSET on $TAG yet."
-            # Avoid dispatching 3x (once per OS in this matrix) if a run for this version
-            # is already in flight from another leg or a prior manual trigger.
+            # Avoid dispatching 3x (once per OS in this matrix) if a run for THIS version is
+            # already in flight from another leg or a prior manual trigger -- filtered by
+            # displayTitle (see pgwire-adapters-release.yml's run-name), not just "any run",
+            # since an in-flight run left over from a DIFFERENT version satisfies neither this
+            # check nor the wait loop below it: the asset it produces is tagged for its own
+            # version, never for $TAG. Confirmed live (2026-09-18): three releases cut in quick
+            # succession each saw a stale older-version run in flight, skipped dispatching, and
+            # then hung the full 45-minute wait below for an asset nothing was ever building.
             IN_FLIGHT=$(gh run list --repo "${{ github.repository }}" \
               --workflow "pgwire-adapters release" \
-              --json status --jq '[.[] | select(.status=="in_progress" or .status=="queued")] | length')
+              --json status,displayTitle \
+              --jq "[.[] | select((.status==\"in_progress\" or .status==\"queued\") and (.displayTitle | contains(\"$VERSION\")))] | length")
             if [ "${IN_FLIGHT:-0}" = "0" ]; then
               echo "Dispatching pgwire-adapters release for $VERSION"
               gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" \
                 -f version="$VERSION"
             else
-              echo "A pgwire-adapters release run is already in flight -- waiting on it."
+              echo "A pgwire-adapters release run for $VERSION is already in flight -- waiting on it."
             fi
             echo "Waiting for $ASSET to appear on $TAG (up to 45 min)..."
             found=0

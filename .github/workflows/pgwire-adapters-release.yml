@@ -3,6 +3,14 @@
 # pgwire-calcite server (shared) bundled with that adapter's runtime jars + its model.json + a
 # launcher that starts the calcite backend against that model. Mirrors pgwire-calcite-release.yml.
 name: pgwire-adapters release
+# Surfaces the target version in `gh run list`'s displayTitle/name (default title for a
+# workflow_dispatch run carries no input values at all) -- askamerica-engine.yml's "Ensure
+# pgwire-govdata bundle" step greps this to tell an in-flight run for THIS version apart from
+# one left over from a different release, a real bug found live (2026-09-18): three releases
+# cut in quick succession (0.94.1/0.94.2/0.94.3) each saw a stale in-flight run for an OLDER
+# version and skipped dispatching its own, so the asset it was actually waiting on never got
+# built and the installer jobs hung the full 45 minutes before failing.
+run-name: "pgwire-adapters release ${{ inputs.version || 'auto' }}"
 
 on:
   workflow_dispatch:
