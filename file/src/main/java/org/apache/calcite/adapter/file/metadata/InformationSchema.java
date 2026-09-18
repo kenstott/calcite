@@ -196,6 +196,21 @@ public class InformationSchema extends AbstractSchema {
     return restriction == null || restriction.contains(name.toLowerCase(Locale.ROOT));
   }
 
+  /**
+   * Adds a column declared NULLABLE. Standard SQL's information_schema tables carry mostly
+   * optional/advisory columns -- real values only where the underlying source actually has one
+   * (a table comment, a numeric precision, a collation) -- and Calcite's builder defaults a bare
+   * {@code .add(name, type)} to NOT NULL. Arrow's JDBC-to-vector serialization trusts that
+   * declared nullability rather than checking {@code ResultSet.wasNull()} itself, so a real null
+   * reaching a NOT-NULL-declared column crashes with a bare {@code NullPointerException} in
+   * {@code ArrowVectorIterator.next} -- confirmed live, 2026-09-18, across multiple tables in
+   * this class, latent until information_schema queries started reaching this code (see
+   * TablesTable.getRowType's own fix for the first-found instance and its longer explanation).
+   */
+  private static void addNullable(RelDataTypeFactory.Builder builder, String name, SqlTypeName type) {
+    builder.add(name, type).nullable(true);
+  }
+
   private final SchemaPlus rootSchema;
   private final String catalogName;
 
@@ -256,16 +271,16 @@ public class InformationSchema extends AbstractSchema {
    */
   private class SchemataTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-      return typeFactory.builder()
-          .add("CATALOG_NAME", SqlTypeName.VARCHAR)
-          .add("SCHEMA_NAME", SqlTypeName.VARCHAR)
-          .add("SCHEMA_OWNER", SqlTypeName.VARCHAR)
-          .add("DEFAULT_CHARACTER_SET_CATALOG", SqlTypeName.VARCHAR)
-          .add("DEFAULT_CHARACTER_SET_SCHEMA", SqlTypeName.VARCHAR)
-          .add("DEFAULT_CHARACTER_SET_NAME", SqlTypeName.VARCHAR)
-          .add("SQL_PATH", SqlTypeName.VARCHAR)
-          .add("REMARKS", SqlTypeName.VARCHAR)
-          .build();
+      RelDataTypeFactory.Builder builder = typeFactory.builder();
+      builder.add("CATALOG_NAME", SqlTypeName.VARCHAR);
+      builder.add("SCHEMA_NAME", SqlTypeName.VARCHAR);
+      addNullable(builder, "SCHEMA_OWNER", SqlTypeName.VARCHAR);
+      addNullable(builder, "DEFAULT_CHARACTER_SET_CATALOG", SqlTypeName.VARCHAR);
+      addNullable(builder, "DEFAULT_CHARACTER_SET_SCHEMA", SqlTypeName.VARCHAR);
+      addNullable(builder, "DEFAULT_CHARACTER_SET_NAME", SqlTypeName.VARCHAR);
+      addNullable(builder, "SQL_PATH", SqlTypeName.VARCHAR);
+      addNullable(builder, "REMARKS", SqlTypeName.VARCHAR);
+      return builder.build();
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {
@@ -427,53 +442,57 @@ public class InformationSchema extends AbstractSchema {
    */
   private class ColumnsTable extends AbstractTable implements ScannableTable, FilterableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-      return typeFactory.builder()
-          .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
-          .add("TABLE_SCHEMA", SqlTypeName.VARCHAR)
-          .add("TABLE_NAME", SqlTypeName.VARCHAR)
-          .add("COLUMN_NAME", SqlTypeName.VARCHAR)
-          .add("ORDINAL_POSITION", SqlTypeName.INTEGER)
-          .add("COLUMN_DEFAULT", SqlTypeName.VARCHAR)
-          .add("IS_NULLABLE", SqlTypeName.VARCHAR)
-          .add("DATA_TYPE", SqlTypeName.VARCHAR)
-          .add("CHARACTER_MAXIMUM_LENGTH", SqlTypeName.INTEGER)
-          .add("CHARACTER_OCTET_LENGTH", SqlTypeName.INTEGER)
-          .add("NUMERIC_PRECISION", SqlTypeName.INTEGER)
-          .add("NUMERIC_PRECISION_RADIX", SqlTypeName.INTEGER)
-          .add("NUMERIC_SCALE", SqlTypeName.INTEGER)
-          .add("DATETIME_PRECISION", SqlTypeName.INTEGER)
-          .add("INTERVAL_TYPE", SqlTypeName.VARCHAR)
-          .add("INTERVAL_PRECISION", SqlTypeName.INTEGER)
-          .add("CHARACTER_SET_CATALOG", SqlTypeName.VARCHAR)
-          .add("CHARACTER_SET_SCHEMA", SqlTypeName.VARCHAR)
-          .add("CHARACTER_SET_NAME", SqlTypeName.VARCHAR)
-          .add("COLLATION_CATALOG", SqlTypeName.VARCHAR)
-          .add("COLLATION_SCHEMA", SqlTypeName.VARCHAR)
-          .add("COLLATION_NAME", SqlTypeName.VARCHAR)
-          .add("DOMAIN_CATALOG", SqlTypeName.VARCHAR)
-          .add("DOMAIN_SCHEMA", SqlTypeName.VARCHAR)
-          .add("DOMAIN_NAME", SqlTypeName.VARCHAR)
-          .add("UDT_CATALOG", SqlTypeName.VARCHAR)
-          .add("UDT_SCHEMA", SqlTypeName.VARCHAR)
-          .add("UDT_NAME", SqlTypeName.VARCHAR)
-          .add("SCOPE_CATALOG", SqlTypeName.VARCHAR)
-          .add("SCOPE_SCHEMA", SqlTypeName.VARCHAR)
-          .add("SCOPE_NAME", SqlTypeName.VARCHAR)
-          .add("MAXIMUM_CARDINALITY", SqlTypeName.INTEGER)
-          .add("DTD_IDENTIFIER", SqlTypeName.VARCHAR)
-          .add("IS_SELF_REFERENCING", SqlTypeName.VARCHAR)
-          .add("IS_IDENTITY", SqlTypeName.VARCHAR)
-          .add("IDENTITY_GENERATION", SqlTypeName.VARCHAR)
-          .add("IDENTITY_START", SqlTypeName.VARCHAR)
-          .add("IDENTITY_INCREMENT", SqlTypeName.VARCHAR)
-          .add("IDENTITY_MAXIMUM", SqlTypeName.VARCHAR)
-          .add("IDENTITY_MINIMUM", SqlTypeName.VARCHAR)
-          .add("IDENTITY_CYCLE", SqlTypeName.VARCHAR)
-          .add("IS_GENERATED", SqlTypeName.VARCHAR)
-          .add("GENERATION_EXPRESSION", SqlTypeName.VARCHAR)
-          .add("IS_UPDATABLE", SqlTypeName.VARCHAR)
-          .add("REMARKS", SqlTypeName.VARCHAR)  // Standard JDBC column for column comments
-          .build();
+      // Only the identity/required columns stay NOT NULL; everything else here is advisory
+      // (numeric precision, collation, identity metadata, comments, ...) and genuinely absent
+      // for most columns in practice -- see addNullable's own doc for why that has to be
+      // declared, not just true at the data level.
+      RelDataTypeFactory.Builder builder = typeFactory.builder();
+      builder.add("TABLE_CATALOG", SqlTypeName.VARCHAR);
+      builder.add("TABLE_SCHEMA", SqlTypeName.VARCHAR);
+      builder.add("TABLE_NAME", SqlTypeName.VARCHAR);
+      builder.add("COLUMN_NAME", SqlTypeName.VARCHAR);
+      builder.add("ORDINAL_POSITION", SqlTypeName.INTEGER);
+      addNullable(builder, "COLUMN_DEFAULT", SqlTypeName.VARCHAR);
+      builder.add("IS_NULLABLE", SqlTypeName.VARCHAR);
+      builder.add("DATA_TYPE", SqlTypeName.VARCHAR);
+      addNullable(builder, "CHARACTER_MAXIMUM_LENGTH", SqlTypeName.INTEGER);
+      addNullable(builder, "CHARACTER_OCTET_LENGTH", SqlTypeName.INTEGER);
+      addNullable(builder, "NUMERIC_PRECISION", SqlTypeName.INTEGER);
+      addNullable(builder, "NUMERIC_PRECISION_RADIX", SqlTypeName.INTEGER);
+      addNullable(builder, "NUMERIC_SCALE", SqlTypeName.INTEGER);
+      addNullable(builder, "DATETIME_PRECISION", SqlTypeName.INTEGER);
+      addNullable(builder, "INTERVAL_TYPE", SqlTypeName.VARCHAR);
+      addNullable(builder, "INTERVAL_PRECISION", SqlTypeName.INTEGER);
+      addNullable(builder, "CHARACTER_SET_CATALOG", SqlTypeName.VARCHAR);
+      addNullable(builder, "CHARACTER_SET_SCHEMA", SqlTypeName.VARCHAR);
+      addNullable(builder, "CHARACTER_SET_NAME", SqlTypeName.VARCHAR);
+      addNullable(builder, "COLLATION_CATALOG", SqlTypeName.VARCHAR);
+      addNullable(builder, "COLLATION_SCHEMA", SqlTypeName.VARCHAR);
+      addNullable(builder, "COLLATION_NAME", SqlTypeName.VARCHAR);
+      addNullable(builder, "DOMAIN_CATALOG", SqlTypeName.VARCHAR);
+      addNullable(builder, "DOMAIN_SCHEMA", SqlTypeName.VARCHAR);
+      addNullable(builder, "DOMAIN_NAME", SqlTypeName.VARCHAR);
+      addNullable(builder, "UDT_CATALOG", SqlTypeName.VARCHAR);
+      addNullable(builder, "UDT_SCHEMA", SqlTypeName.VARCHAR);
+      addNullable(builder, "UDT_NAME", SqlTypeName.VARCHAR);
+      addNullable(builder, "SCOPE_CATALOG", SqlTypeName.VARCHAR);
+      addNullable(builder, "SCOPE_SCHEMA", SqlTypeName.VARCHAR);
+      addNullable(builder, "SCOPE_NAME", SqlTypeName.VARCHAR);
+      addNullable(builder, "MAXIMUM_CARDINALITY", SqlTypeName.INTEGER);
+      addNullable(builder, "DTD_IDENTIFIER", SqlTypeName.VARCHAR);
+      addNullable(builder, "IS_SELF_REFERENCING", SqlTypeName.VARCHAR);
+      addNullable(builder, "IS_IDENTITY", SqlTypeName.VARCHAR);
+      addNullable(builder, "IDENTITY_GENERATION", SqlTypeName.VARCHAR);
+      addNullable(builder, "IDENTITY_START", SqlTypeName.VARCHAR);
+      addNullable(builder, "IDENTITY_INCREMENT", SqlTypeName.VARCHAR);
+      addNullable(builder, "IDENTITY_MAXIMUM", SqlTypeName.VARCHAR);
+      addNullable(builder, "IDENTITY_MINIMUM", SqlTypeName.VARCHAR);
+      addNullable(builder, "IDENTITY_CYCLE", SqlTypeName.VARCHAR);
+      addNullable(builder, "IS_GENERATED", SqlTypeName.VARCHAR);
+      addNullable(builder, "GENERATION_EXPRESSION", SqlTypeName.VARCHAR);
+      addNullable(builder, "IS_UPDATABLE", SqlTypeName.VARCHAR);
+      addNullable(builder, "REMARKS", SqlTypeName.VARCHAR);  // Standard JDBC column for column comments
+      return builder.build();
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {
@@ -713,17 +732,19 @@ public class InformationSchema extends AbstractSchema {
   private class KeyColumnUsageTable extends AbstractTable
       implements ScannableTable, FilterableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-      return typeFactory.builder()
-          .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
-          .add("CONSTRAINT_SCHEMA", SqlTypeName.VARCHAR)
-          .add("CONSTRAINT_NAME", SqlTypeName.VARCHAR)
-          .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
-          .add("TABLE_SCHEMA", SqlTypeName.VARCHAR)
-          .add("TABLE_NAME", SqlTypeName.VARCHAR)
-          .add("COLUMN_NAME", SqlTypeName.VARCHAR)
-          .add("ORDINAL_POSITION", SqlTypeName.INTEGER)
-          .add("POSITION_IN_UNIQUE_CONSTRAINT", SqlTypeName.INTEGER)
-          .build();
+      RelDataTypeFactory.Builder builder = typeFactory.builder();
+      builder.add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR);
+      builder.add("CONSTRAINT_SCHEMA", SqlTypeName.VARCHAR);
+      builder.add("CONSTRAINT_NAME", SqlTypeName.VARCHAR);
+      builder.add("TABLE_CATALOG", SqlTypeName.VARCHAR);
+      builder.add("TABLE_SCHEMA", SqlTypeName.VARCHAR);
+      builder.add("TABLE_NAME", SqlTypeName.VARCHAR);
+      builder.add("COLUMN_NAME", SqlTypeName.VARCHAR);
+      builder.add("ORDINAL_POSITION", SqlTypeName.INTEGER);
+      // Only meaningful for FOREIGN KEY rows; null for PRIMARY KEY/UNIQUE rows -- confirmed
+      // set to null in scan() below.
+      addNullable(builder, "POSITION_IN_UNIQUE_CONSTRAINT", SqlTypeName.INTEGER);
+      return builder.build();
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {
