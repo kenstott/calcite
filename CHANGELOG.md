@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.94.2](https://github.com/kenstott/calcite/compare/engine-v0.94.1...engine-v0.94.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** suggest example questions, not a bare command phrase ([cce4d74](https://github.com/kenstott/calcite/commit/cce4d74c36d04ee05eb57896790ac6f21c2f42fb))
+
 ## [0.94.1](https://github.com/kenstott/calcite/compare/engine-v0.94.0...engine-v0.94.1) (2026-09-18)
 
 
