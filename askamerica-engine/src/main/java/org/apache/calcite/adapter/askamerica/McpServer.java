@@ -3860,6 +3860,12 @@ public class McpServer {
         ObjectNode textBlock = MAPPER.createObjectNode();
         textBlock.put("type", "text");
         textBlock.put("text", text);
+        // This is the narrative answer — the markdown a reader actually wants — not internal
+        // bookkeeping, so tag it for the user same as the image, not just the model.
+        ObjectNode textAnnotations = MAPPER.createObjectNode();
+        textAnnotations.putArray("audience").add("user").add("assistant");
+        textAnnotations.put("priority", 0.8);
+        textBlock.set("annotations", textAnnotations);
         content.add(textBlock);
 
         // The same scene as editable markup, alongside the picture. The PNG is what a host
@@ -3872,6 +3878,11 @@ public class McpServer {
             ObjectNode svgBlock = MAPPER.createObjectNode();
             svgBlock.put("type", "text");
             svgBlock.put("text", chartSvg);
+            // Raw markup, not prose — audience:assistant-only keeps a client from dumping
+            // ~7,000 tokens of SVG source into the visible chat the way it would a real answer.
+            ObjectNode svgAnnotations = MAPPER.createObjectNode();
+            svgAnnotations.putArray("audience").add("assistant");
+            svgBlock.set("annotations", svgAnnotations);
             content.add(svgBlock);
         }
 
@@ -3884,6 +3895,10 @@ public class McpServer {
             ObjectNode diagBlock = MAPPER.createObjectNode();
             diagBlock.put("type", "text");
             diagBlock.put("text", diagnostics.toString());
+            // Machinery for the model to act on, not something a reader should see verbatim.
+            ObjectNode diagAnnotations = MAPPER.createObjectNode();
+            diagAnnotations.putArray("audience").add("assistant");
+            diagBlock.set("annotations", diagAnnotations);
             content.add(diagBlock);
         }
         // A tool with no diagnostics envelope still owes the caller the rewrite it made.
@@ -3893,6 +3908,9 @@ public class McpServer {
             ObjectNode noticeBlock = MAPPER.createObjectNode();
             noticeBlock.put("type", "text");
             noticeBlock.put("text", "Note: " + standaloneRepair);
+            ObjectNode noticeAnnotations = MAPPER.createObjectNode();
+            noticeAnnotations.putArray("audience").add("user").add("assistant");
+            noticeBlock.set("annotations", noticeAnnotations);
             content.add(noticeBlock);
         }
 
