@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.93.0](https://github.com/kenstott/calcite/compare/engine-v0.92.0...engine-v0.93.0) (2026-09-18)
+
+
+### Features
+
+* **trino-splunk:** expose a 'schema' catalog property ([4a042e8](https://github.com/kenstott/calcite/commit/4a042e8724fd1d846ba58e1c63e7f67b51986494))
+
+
+### Bug Fixes
+
+* **splunk:** register the Splunk schema under the configured name, not a hardcoded literal ([28db96c](https://github.com/kenstott/calcite/commit/28db96ca1a14040c8a2c8f74981af4d18042ef4c))
+
 ## [0.92.0](https://github.com/kenstott/calcite/compare/engine-v0.91.5...engine-v0.92.0) (2026-09-17)
 
 
