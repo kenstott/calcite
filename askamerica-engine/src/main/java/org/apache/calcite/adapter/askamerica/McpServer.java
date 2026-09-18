@@ -2212,10 +2212,17 @@ public class McpServer {
         }
         tools.add(
             tool("publish_report",
-            "Publish a complete answer — narrative, dashboard and citations — as one "
-            + "self-contained HTML page, and return its link. For a question worth more than a "
-            + "sentence, THIS IS WHAT TO OFFER THE READER (see the top-level instructions on "
-            + "when to offer vs. call this outright): the finding, the figures, the caveats "
+            "Build a complete answer — narrative, dashboard and citations — as one "
+            + "self-contained HTML page, and return a LOCAL, EPHEMERAL link to it (dies with "
+            + "this process — it does not survive past this session). Despite the tool name, "
+            + "this is the 'show me a report' / 'show report' action, not the 'publish' or "
+            + "'share' one: when the user says 'show report', call this alone. When the user "
+            + "says 'publish report' or 'share report', that means they want a DURABLE, "
+            + "shareable link instead — call this first (it also builds the page upload_report "
+            + "needs), then register (once per account) then upload_report, and return the "
+            + "durable link upload_report gives back, not this one. For a question worth more "
+            + "than a sentence, THIS IS WHAT TO OFFER THE READER (see the top-level instructions "
+            + "on when to offer vs. call this outright): the finding, the figures, the caveats "
             + "and the sourcing in one page they can open, save, print or send, instead of a "
             + "chart plus prose they have to reassemble. Pass the dashboard "
             + "argument to compose and inline the board in the same call. Costs about twenty "
@@ -2247,11 +2254,15 @@ public class McpServer {
             tool("upload_report",
             "Publish the report most recently built by publish_report to the caller's Studies "
             + "page — durably, under their registered name, unlike publish_report's local link "
-            + "which dies with this process. Takes no arguments: it always uploads whatever "
-            + "publish_report last built in this session. Requires register to have been called "
-            + "first (errors otherwise); also errors if publish_report has not been called yet "
-            + "this session. The uploaded report cannot be edited afterward — only deleted, from "
-            + "the account's own Studies page once logged in there.",
+            + "which dies with this process. This is the actual 'publish report' / 'share "
+            + "report' action: when the user asks to publish or share (as opposed to just "
+            + "'show') a report, this — preceded by publish_report to build the page, and by "
+            + "register once per account — is what to call, and its returned link is the one "
+            + "to hand back, not publish_report's local one. Takes no arguments: it always "
+            + "uploads whatever publish_report last built in this session. Requires register to "
+            + "have been called first (errors otherwise); also errors if publish_report has not "
+            + "been called yet this session. The uploaded report cannot be edited afterward — "
+            + "only deleted, from the account's own Studies page once logged in there.",
             schema(MAPPER.createObjectNode(), new String[]{})));
 
         tools.add(
@@ -3620,14 +3631,18 @@ public class McpServer {
                         + (dTitle == null ? "" : " '" + dTitle + "'") + " — "
                         + (panels.size() - stats) + " chart panel(s), " + stats
                         + " stat tile(s).\n\n"
-                        + (dashUrl == null ? ""
-                            : "GIVE THE READER THIS LINK: " + dashUrl + "\n"
-                            + "It opens the dashboard full size in a browser, on this machine "
-                            + "only. Share the link — do NOT paste the SVG below into your "
-                            + "reply. The SVG is roughly 7,000 tokens; the link is twenty, and "
-                            + "it shows the same picture.\n\n")
+                        // Dropped the "GIVE THE READER THIS LINK" instruction here (2026-09-18):
+                        // confirmed live that the calling model does not reliably relay a raw
+                        // http://127.0.0.1 link into its own reply even when told to verbatim —
+                        // the PNG below is already the deliverable, and this link is ephemeral
+                        // (dies with the process) and machine-local-only regardless, so a link
+                        // that silently never reaches the reader added confusion without
+                        // reliable benefit. dashUrl itself is kept (not removed) since
+                        // oversizeSvgNotice below still needs it as the only fetch path for an
+                        // SVG too large to inline.
                         + "The image above is the same board as a PNG, already viewable "
-                        + "inline."
+                        + "inline. For a real, shareable link (not tied to this machine or "
+                        + "session), call register once and then upload_report."
                         + (wantSvg
                             ? (oversizeSvgNotice(chartSvg, dashUrl) == null
                                 ? " The block after this is the SVG source you asked for. Panel "
