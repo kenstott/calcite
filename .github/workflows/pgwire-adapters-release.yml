@@ -223,6 +223,19 @@ jobs:
         run: |
           mkdir -p bundle/model bundle/bin
           cp "pgwire-${{ matrix.adapter.name }}/model.json" bundle/model/model.json
+          # Pre-built catalog cache (populate_state_cached in pgwire_calcite/catalog_populate.py):
+          # skips the live JDBC/Iceberg walk of every table on first connect, which otherwise
+          # costs minutes on a schema this size and made every fresh install's first query time
+          # out client-side (confirmed live, 2026-09-18). Its filename is keyed by model.json's
+          # own content hash, so shipping it alongside model.json here is the only wiring
+          # needed -- the runtime path computation independently lands on the same name. Only
+          # present for adapters that have generated one; not every adapter's schema is large
+          # enough to need it.
+          shopt -s nullglob
+          for cache_file in "pgwire-${{ matrix.adapter.name }}"/catalog-cache-*.pkl; do
+            cp "$cache_file" "bundle/model/$(basename "$cache_file")"
+          done
+          shopt -u nullglob
           # Adapter-specific entry: starts the calcite backend against this adapter's model.
           # --database defaults the reported catalog name to the adapter's topic (e.g. govdata)
           # instead of the generic "postgres". Extra args (e.g. --port, --auth, --database) are

@@ -23,7 +23,10 @@ import java.net.Socket;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Map;
 import java.util.Properties;
+
+import org.apache.calcite.adapter.govdata.R2CredentialProvider;
 
 /**
  * Client side of the pgwire-govdata shared-server design (kenstott/calcite#364).
@@ -309,6 +312,68 @@ final class PgwireGovDataConnector {
           "--jdbc-prop",
           "parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY"));
       pb.environment().put("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", IDLE_SHUTDOWN_SECONDS);
+      // The bundled schema YAML resolves every table's warehousePath from
+      // ${GOVDATA_PARQUET_DIR}, with no default — the spawned process crashes on connect
+      // ("Environment variable 'GOVDATA_PARQUET_DIR' is not defined") without it. This was a
+      // previously-diagnosed failure mode (see the log-redirect comment below) whose
+      // diagnosability got fixed but whose actual cause never did: a plain env var is never
+      // set here at all. Real per-user R2 credentials still resolve independently inside the
+      // spawned process, via its own bundled R2CredentialProvider reading the inherited
+      // ASKAMERICA_API_KEY/FREE_ASKAMERICA_KEY env var (ProcessBuilder inherits the full
+      // parent environment by default) and the shared ~/.askamerica/credentials.json cache —
+      // this only supplies the bucket location, mirroring GovDataDriver.resolveDataDirectory's
+      // own fallback chain (explicit override, else this default) so both connection paths
+      // resolve to the same bucket when run side by side.
+      String parquetDir = System.getenv("GOVDATA_PARQUET_DIR");
+      if (parquetDir == null || parquetDir.isEmpty()) {
+        parquetDir = System.getProperty("GOVDATA_PARQUET_DIR");
+      }
+      if (parquetDir == null || parquetDir.isEmpty()) {
+        parquetDir = "s3://govdata-parquet-v1";
+      }
+      pb.environment().put("GOVDATA_PARQUET_DIR", parquetDir);
+      // pgwire-govdata's bundled model.json (pgwire-govdata/model.json in this repo, packaged
+      // into the release tarball) references ${AWS_ACCESS_KEY_ID}, ${AWS_SECRET_ACCESS_KEY},
+      // ${AWS_ENDPOINT_OVERRIDE} and ${AWS_REGION:auto} directly, with no default for the
+      // first three -- the spawned process crashes on connect without them, confirmed live
+      // (2026-09-18, right after the GOVDATA_PARQUET_DIR fix above got past its own identical
+      // failure mode). These are the same R2 credentials McpServer's ensureFreshR2Credentials
+      // resolves for embedded mode (disk cache at ~/.askamerica/credentials.json, refreshed
+      // via the inherited ASKAMERICA_API_KEY/FREE_ASKAMERICA_KEY env var when stale) -- reuse
+      // that exact resolution here rather than requiring the end user to configure any of
+      // this themselves; the API key is the only credential a user ever provides.
+      try {
+        Map<String, String> creds =
+            R2CredentialProvider.resolveOrFetch(R2CredentialProvider.credentialApiKey());
+        pb.environment().put("AWS_ACCESS_KEY_ID", creds.getOrDefault("accessKeyId", ""));
+        pb.environment().put("AWS_SECRET_ACCESS_KEY", creds.getOrDefault("secretAccessKey", ""));
+        pb.environment().put("AWS_ENDPOINT_OVERRIDE", creds.getOrDefault("endpoint", ""));
+        String region = creds.get("region");
+        if (region != null && !region.isEmpty()) {
+          pb.environment().put("AWS_REGION", region);
+        }
+        // These R2 credentials are short-lived (see the cache's expiresAtMillis) and MUST be
+        // signed with their session token -- confirmed live (2026-09-18) via a raw boto3
+        // GetObject: identical access/secret key without the session token fails every
+        // request with 403 SignatureDoesNotMatch (not a scope/permission error -- the server
+        // computes a different signature entirely), and the exact same request succeeds once
+        // the token is included. toS3Properties (file/.../S3FileIOTables.java) already reads
+        // this from an s3Config "sessionToken" key -- pgwire-govdata's model.json didn't
+        // reference it in any schema's s3Config/storageConfig at all until this same change,
+        // which is why bulk DuckDB-native reads worked (a different credential path) while
+        // every Java-side Iceberg metadata read (comments, columns, statistics, version-hint)
+        // failed identically across every schema and table tried.
+        String sessionToken = creds.get("sessionToken");
+        if (sessionToken != null && !sessionToken.isEmpty()) {
+          pb.environment().put("AWS_SESSION_TOKEN", sessionToken);
+        }
+      } catch (Exception e) {
+        // Do not claim a working fallback (mirrors ensureFreshR2Credentials's own contract):
+        // log the real failure and let the spawned process fail loudly on the missing env
+        // var, rather than silently launching a server that can never actually connect.
+        log().println("[askamerica-mcp] R2 credential resolution for pgwire-govdata FAILED: "
+            + e.getMessage() + " — the spawned server will likely fail to connect.");
+      }
       // Reuse the exact catalog file this engine's own embedded mode already seeds/maintains
       // (~/.mcp_askamerica/.duckdb/govdata.duckdb by default — see McpServer's ASKAMERICA_DATA_DIR
       // resolution) rather than letting the spawned server default to its own relative path and
