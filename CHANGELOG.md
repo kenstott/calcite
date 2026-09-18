@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.94.4](https://github.com/kenstott/calcite/compare/engine-v0.94.3...engine-v0.94.4) (2026-09-18)
+
+
+### Bug Fixes
+
+* **ci:** scope pgwire-adapters-release in-flight check to the target version ([be58c19](https://github.com/kenstott/calcite/commit/be58c19fcee4651bff4f4653813fc175a390b8ab))
+
 ## [0.94.3](https://github.com/kenstott/calcite/compare/engine-v0.94.2...engine-v0.94.3) (2026-09-18)
 
 
