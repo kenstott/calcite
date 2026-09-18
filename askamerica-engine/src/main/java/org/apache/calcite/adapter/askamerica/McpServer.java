@@ -3523,20 +3523,16 @@ public class McpServer {
                     // markdown-renders tool-result text, Claude included.
                     String linkLabel = (rTitle == null || rTitle.isEmpty())
                         ? "Open the report" : rTitle;
-                    // A registered account gets its durable Studies link automatically here --
-                    // never rely on the model remembering a second tool call after the fact, the
-                    // same reason every other disclosure requirement in this file is a publish
-                    // gate rather than a prompt suggestion. Skipped entirely in EVAL_MODE so a
-                    // comparative-eval run never posts real content to a real Studies account.
-                    String durableNote = "";
-                    if (!EVAL_MODE && url != null && ACCOUNT != null && LAST_REPORT != null) {
-                        UploadResult auto = doUploadReport(ACCOUNT, LAST_REPORT);
-                        durableNote = auto.url != null
-                            ? "\n\nA permanent copy is also saved to your Studies page: " + auto.url
-                            : "\n\nCould not save a permanent copy automatically (" + auto.error
-                                + ") — the local link above will stop working once this process "
-                                + "exits; call `upload_report` yourself to retry.";
-                    }
+                    // Deliberately NOT auto-uploaded durably here, even when an account is
+                    // already registered: "show report"/publish_report alone means the reader
+                    // gets the ephemeral local link only. A durable copy is a separate ask —
+                    // "publish report" or "share report" — which the calling model routes to
+                    // upload_report itself (see that tool's own description). Auto-uploading on
+                    // every publish_report call regardless of the user's own wording was tried
+                    // and reverted (2026-09-18): it silently answered "show" and "share" the
+                    // same way, which is exactly the distinction the caller asked for. Skipped
+                    // entirely in EVAL_MODE either way, so a comparative-eval run never posts
+                    // real content to a real Studies account.
                     String linkLine = url == null
                         ? "Report built (" + html.length() + " bytes) but no local server is "
                             + "available to serve it."
@@ -3548,15 +3544,10 @@ public class McpServer {
                         + ". This link is served locally by this engine process and stops "
                         + "working the moment this process exits — it is NOT a durable URL, "
                         + "regardless of how self-contained the page itself is."
-                        + (!durableNote.isEmpty() ? durableNote
-                            : (EVAL_MODE ? "" : " If the reader will want to reopen this later, "
-                                + "revisit it after the conversation ends, or share it with "
-                                + "someone else, call `register` once (if not already done this "
-                                + "session) and then `upload_report` right after this call to "
-                                + "get a permanent Studies-page link instead — do this "
-                                + "proactively rather than waiting to be asked, since the local "
-                                + "link silently going dead is not something the reader can "
-                                + "detect in advance."))
+                        + (EVAL_MODE ? "" : " If the reader asked to publish or share this "
+                            + "(rather than just see it), call `register` once (if not already "
+                            + "done this session) and then `upload_report` right after this call "
+                            + "to get a permanent Studies-page link instead.")
                         + evalReportNote;
                     // Every report's first section is required to be the summary (see this
                     // tool's own "sections" schema). Order is: the dashboard image (already
