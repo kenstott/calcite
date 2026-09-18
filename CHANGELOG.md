@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.94.1](https://github.com/kenstott/calcite/compare/engine-v0.94.0...engine-v0.94.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** scope CALL_LOG by last publish_report, not a time window ([b1e70cb](https://github.com/kenstott/calcite/commit/b1e70cb566a6b48f9a03b06c0aa4e79cc5379158))
+* **askamerica-engine:** stop report validation from citing another conversation's queries ([e023fa9](https://github.com/kenstott/calcite/commit/e023fa919e91d64d798f80a58dcd6da75fc58dd9))
+
 ## [0.94.0](https://github.com/kenstott/calcite/compare/engine-v0.93.0...engine-v0.94.0) (2026-09-18)
 
 
