@@ -332,21 +332,30 @@ public class InformationSchema extends AbstractSchema {
    */
   private class TablesTable extends AbstractTable implements ScannableTable, FilterableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-      return typeFactory.builder()
-          .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
-          .add("TABLE_SCHEMA", SqlTypeName.VARCHAR)
-          .add("TABLE_NAME", SqlTypeName.VARCHAR)
-          .add("TABLE_TYPE", SqlTypeName.VARCHAR)
-          .add("REMARKS", SqlTypeName.VARCHAR)  // Standard JDBC column for table comments
-          .add("SELF_REFERENCING_COLUMN_NAME", SqlTypeName.VARCHAR)
-          .add("REFERENCE_GENERATION", SqlTypeName.VARCHAR)
-          .add("USER_DEFINED_TYPE_CATALOG", SqlTypeName.VARCHAR)
-          .add("USER_DEFINED_TYPE_SCHEMA", SqlTypeName.VARCHAR)
-          .add("USER_DEFINED_TYPE_NAME", SqlTypeName.VARCHAR)
-          .add("IS_INSERTABLE_INTO", SqlTypeName.VARCHAR)
-          .add("IS_TYPED", SqlTypeName.VARCHAR)
-          .add("COMMIT_ACTION", SqlTypeName.VARCHAR)
-          .build();
+      // nullable(true) on every column that scan() can actually produce a null for (REMARKS --
+      // a table with no declared comment -- and every trailing advisory column, which scan()
+      // always sets to null): Calcite's builder defaults a bare .add(name, type) to NOT NULL,
+      // and Arrow's JDBC-to-vector serialization trusts that declared nullability rather than
+      // checking ResultSet.wasNull() itself. A real null reaching a NOT-NULL-declared VARCHAR
+      // column crashed with a raw NullPointerException in ArrowVectorIterator.next (confirmed
+      // live, 2026-09-18) rather than any error naming the actual cause -- latent since this
+      // code path was never reached by a real query before information_schema queries were
+      // routed here instead of a separate, now-removed Python-side interceptor.
+      RelDataTypeFactory.Builder builder = typeFactory.builder();
+      builder.add("TABLE_CATALOG", SqlTypeName.VARCHAR);
+      builder.add("TABLE_SCHEMA", SqlTypeName.VARCHAR);
+      builder.add("TABLE_NAME", SqlTypeName.VARCHAR);
+      builder.add("TABLE_TYPE", SqlTypeName.VARCHAR);
+      builder.add("REMARKS", SqlTypeName.VARCHAR).nullable(true);  // Standard JDBC column for table comments
+      builder.add("SELF_REFERENCING_COLUMN_NAME", SqlTypeName.VARCHAR).nullable(true);
+      builder.add("REFERENCE_GENERATION", SqlTypeName.VARCHAR).nullable(true);
+      builder.add("USER_DEFINED_TYPE_CATALOG", SqlTypeName.VARCHAR).nullable(true);
+      builder.add("USER_DEFINED_TYPE_SCHEMA", SqlTypeName.VARCHAR).nullable(true);
+      builder.add("USER_DEFINED_TYPE_NAME", SqlTypeName.VARCHAR).nullable(true);
+      builder.add("IS_INSERTABLE_INTO", SqlTypeName.VARCHAR);
+      builder.add("IS_TYPED", SqlTypeName.VARCHAR);
+      builder.add("COMMIT_ACTION", SqlTypeName.VARCHAR).nullable(true);
+      return builder.build();
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {

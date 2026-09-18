@@ -168,7 +168,18 @@ _SCALAR_FN_RE = re.compile(
     re.IGNORECASE,
 )
 
-_INTERCEPT_SCHEMAS = frozenset({"information_schema", "pg_catalog"})
+_INTERCEPT_SCHEMAS = frozenset({"pg_catalog"})
+# information_schema was intercepted here too until 2026-09-18: this module's own memoized
+# in-memory DuckDB catalog (_get_catalog_db/_build_catalog_db) answers it by eagerly computing
+# row counts for EVERY table via _fetch_row_counts, so even a single-table, WHERE-filtered
+# information_schema.tables lookup (e.g. describe_table) paid for a live Iceberg touch of the
+# entire catalog on first use -- confirmed live, minutes for a describe_table call that timed
+# out client-side twice. Unlike pg_catalog (Postgres-proprietary, not fully replicated by
+# Calcite's PostgresMetadataSchema, so still intercepted here), information_schema is standard
+# SQL that Calcite's own InformationSchema.java already answers directly -- correctly
+# filter-pushed-down, and now benefiting from that class's own row-count cache too -- so this
+# is architecturally the right connection for it: PASS_THROUGH lets it reach the real Calcite
+# connection instead of this parallel, eagerly-eager DuckDB reimplementation.
 
 _TABLE_MAP: dict[tuple[str, str], str] = {
     ("information_schema", "schemata"): "_is_schemata",
