@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.95.0](https://github.com/kenstott/calcite/compare/engine-v0.94.4...engine-v0.95.0) (2026-09-20)
+
+
+### Features
+
+* **askamerica-engine:** add score_claim tool for independent Jev-based claim verification ([f071a21](https://github.com/kenstott/calcite/commit/f071a212d49e78bde2b2e41970b81d894c30ff91))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** route claim-checking to search_catalog before web research ([bfbdf37](https://github.com/kenstott/calcite/commit/bfbdf37c15959a5c1bc9db31cc307fcbb9d92e0a))
+
 ## [0.94.4](https://github.com/kenstott/calcite/compare/engine-v0.94.3...engine-v0.94.4) (2026-09-18)
 
 
