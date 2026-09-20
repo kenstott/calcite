@@ -2300,7 +2300,8 @@ public class McpServer {
         pubProps.set("claims", prop("array",
             "For an article or claim validation: one object per assertion, as "
             + "[{assertion, verdict, article_value, warehouse_value, independent_value, "
-            + "sources, table, article_vintage, warehouse_vintage, reason, sql}]. `assertion` "
+            + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
+            + "score_claim_ref}]. `assertion` "
             + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
             + "say X' is graded on X). `verdict` is one of: true | mostly true | partially true "
             + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
@@ -2310,7 +2311,11 @@ public class McpServer {
             + "needs at least one. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
-            + "that is a freshness gap, not a falsehood. Renders as a tallied claim-by-claim "
+            + "that is a freshness gap, not a falsehood. If any claim was scored with the "
+            + "score_claim tool, it's cross-checked against Jev's independent verdict "
+            + "automatically -- no field needed. `score_claim_ref` is an optional override: set "
+            + "it to a specific score_claim call's returned id when the automatic ordering "
+            + "would pair the wrong claim with the wrong call. Renders as a tallied claim-by-claim "
             + "table directly under the summary. A publish whose claims rest on your own "
             + "warehouse analysis (any warehouse_value or sql) MUST also carry a `dashboard` or "
             + "follow a render_chart/compose_dashboard call; it is refused otherwise. Claims "
@@ -2379,6 +2384,46 @@ public class McpServer {
                 + "saved to that run's directory as report.html, since the "
                 + "http://127.0.0.1/... link above does not survive past this session."));
         }
+        if (JevClient.isConfigured()) {
+            ObjectNode scoreClaimProps = MAPPER.createObjectNode();
+            scoreClaimProps.set("assertion", prop("string",
+                "The claim under test, with any 'X said:' attribution lead stripped -- grade "
+                + "the quoted statement itself, not whether it was accurately attributed. One "
+                + "call per claim -- don't combine two assertions into one call."));
+            scoreClaimProps.set("evidence", prop("string",
+                "Plain-text summary of what was found: the article's figure, the "
+                + "warehouse_value or independent_value it's checked against, the sql or "
+                + "sources used. Everything the verdict should be based on -- Jev sees only "
+                + "what's in this field, nothing else from the session."));
+            ObjectNode candidateVerdictsProp = MAPPER.createObjectNode();
+            candidateVerdictsProp.put("type", "array");
+            candidateVerdictsProp.put("description",
+                "Allowed verdict values for this claim, e.g. [\"accurate\", \"misleading\", "
+                + "\"false\"]. Omit 'not checkable here' or 'stale vintage' here -- call this "
+                + "tool only once real evidence has been gathered; those two verdicts don't "
+                + "need independent scoring.");
+            scoreClaimProps.set("candidate_verdicts", candidateVerdictsProp);
+            tools.add(
+                tool("score_claim",
+                "Get an independent, calibrated second opinion on one already-evidenced claim "
+                + "before grading it in `publish_report`'s `claims` array. Sends the assertion "
+                + "and your gathered evidence to a separate scoring model (typesafe.ai's Jev) "
+                + "that returns a typed verdict and a 0-4 Pinocchios rating, each with its own "
+                + "confidence -- a real check against self-grading, not a restatement of your "
+                + "own reasoning. Requires warehouse or independent evidence already in hand; "
+                + "this scores a claim, it does not gather evidence for one. `publish_report` "
+                + "automatically cross-checks each graded claim (anything other than 'not "
+                + "checkable here'/'stale vintage') against your most recent score_claim calls "
+                + "for this session, in the order you called them and the order the claims are "
+                + "listed -- no extra field needed, just call this once per claim, in the same "
+                + "order you'll list them, right before publishing. Refuses on disagreement or "
+                + "low confidence. (An explicit `score_claim_ref` on a `claims[]` entry, copied "
+                + "from this call's result, overrides the automatic ordering if you want an "
+                + "unambiguous link instead.)",
+                schema(scoreClaimProps,
+                    new String[]{"assertion", "evidence", "candidate_verdicts"})));
+        }
+
         tools.add(
             tool("publish_report",
             "Build a complete answer — narrative, dashboard and citations — as one "
@@ -2940,6 +2985,33 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=search_catalog query=" + q);
                     text = searchCatalog(q, lim);
                     diagnostics = recipeReminderDiagnostics();
+                    break;
+                }
+                case "score_claim": {
+                    String assertion = args.path("assertion").asText();
+                    String evidence = args.path("evidence").asText();
+                    List<String> candidateVerdicts = textArray(args.path("candidate_verdicts"));
+                    if (candidateVerdicts.isEmpty()) {
+                        throw new IllegalArgumentException(
+                            "candidate_verdicts must list at least one allowed verdict.");
+                    }
+                    log.println("[askamerica-mcp] tool=score_claim assertion="
+                        + assertion.substring(0, Math.min(80, assertion.length())));
+                    JevClient.ScoreResult r = JevClient.scoreClaim(
+                        assertion, evidence, candidateVerdicts);
+                    String ref = "sc-" + SCORE_CLAIM_SEQ.incrementAndGet();
+                    SCORE_CLAIM_RESULTS.put(ref, r);
+                    SCORE_CLAIM_LOG.add(r);
+                    ObjectNode out = MAPPER.createObjectNode();
+                    out.put("score_claim_ref", ref);
+                    out.put("verdict", r.verdict);
+                    out.put("verdict_confidence", r.verdictConfidence);
+                    out.put("pinocchios_count", r.pinocchiosCount);
+                    out.put("pinocchios_confidence", r.pinocchiosConfidence);
+                    out.put("low_confidence",
+                        r.verdictConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD
+                        || r.pinocchiosConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD);
+                    text = out.toString();
                     break;
                 }
                 case "list_tables": {
@@ -3589,6 +3661,7 @@ public class McpServer {
                     JsonNode claims = args.path("claims");
                     if (claims.isArray() && claims.size() > 0) {
                         addIfPresent(gateProblems, enforceClaimShape(claims));
+                        addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
                         JsonNode pinocchios = args.path("pinocchios");
                         boolean isSplit = pinocchios.isObject()
@@ -5110,6 +5183,42 @@ public class McpServer {
     private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_CONSULTED =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    /** Below this confidence (on either the verdict or the Pinocchios score), a
+     *  {@code score_claim} result counts as unresolved rather than a real second opinion. */
+    private static final double SCORE_CLAIM_CONFIDENCE_THRESHOLD = 0.6;
+
+    /** Every {@code score_claim} result this session, keyed by the {@code ref} id returned
+     *  from that call. When a {@code claims[]} entry carries a {@code score_claim_ref}, this
+     *  is the authoritative lookup {@link #enforceScoreClaimAgreement} uses to cross-check it.
+     *  Measured live (q136, 2026-09-20, twice in a row): first an exact-assertion-text match
+     *  failed because the calling model reliably paraphrases the assertion between the
+     *  {@code score_claim} call and the {@code claims[]} entry it ends up publishing (dropped
+     *  quote marks, an inserted "as a group", a trimmed clause); switching to an id fixed the
+     *  matching itself, but a third run showed the model calls {@code score_claim} anyway and
+     *  then never copies the id into `claims[]` at all -- it treats the call as research, not
+     *  as a field to wire through. {@code score_claim_ref} stays available for a caller that
+     *  does supply it, but {@link #SCORE_CLAIM_LOG} below is what actually gets used in
+     *  practice. */
+    private static final java.util.Map<String, JevClient.ScoreResult> SCORE_CLAIM_RESULTS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Every {@code score_claim} result this session, in call order, for the recency-based
+     *  fallback match in {@link #enforceScoreClaimAgreement} when a claim carries no explicit
+     *  {@code score_claim_ref}: the last N calls (N = the number of still-unmatched graded
+     *  claims) are paired positionally, in order, with those claims as listed in {@code
+     *  claims[]}. Verified against the one real multi-claim run available (q136, 2026-09-20):
+     *  the model's most recent score_claim call for each claim landed in the same relative
+     *  order as the claims it went on to publish, even though earlier retry attempts had left
+     *  stale calls for the same claims earlier in this list -- taking the last N, not the
+     *  first N, is what makes that alignment work. A heuristic, not a guarantee; the refusal
+     *  message it produces says so, so a genuine mismatch can be explained away rather than
+     *  silently trusted. */
+    private static final java.util.List<JevClient.ScoreResult> SCORE_CLAIM_LOG =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    private static final java.util.concurrent.atomic.AtomicInteger SCORE_CLAIM_SEQ =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+
     /**
      * Eval-only delivery channel for a client with no filesystem of its own.
      *
@@ -5544,6 +5653,100 @@ public class McpServer {
 
     private static boolean nonBlank(JsonNode c, String key) {
         return c.hasNonNull(key) && !c.get(key).asText().trim().isEmpty();
+    }
+
+    /**
+     * Cross-checks each graded claim (excluding "not checkable here"/"stale vintage", which
+     * need no scoring) against a {@code score_claim} result this session. Two ways a claim gets
+     * matched to a result, tried in order:
+     * <ol>
+     *   <li>An explicit {@code score_claim_ref} on the claim, resolved against {@link
+     *   #SCORE_CLAIM_RESULTS} -- authoritative when present. A ref that doesn't resolve is a
+     *   copy error, refused rather than silently dropped.</li>
+     *   <li>Recency-positional fallback, from {@link #SCORE_CLAIM_LOG}: the claims left
+     *   unmatched by step 1, in {@code claims[]} order, are paired with the LAST that-many
+     *   entries of the session's score_claim call log, in call order. Exists because the
+     *   explicit-ref path measured live as unused in practice (q136, 2026-09-20) -- the model
+     *   calls score_claim but doesn't wire the id through -- while the positional pairing
+     *   still lines results up correctly, because a model scoring several claims in one pass
+     *   tends to call score_claim for each in roughly the order it lists them, and taking the
+     *   LAST N calls (not the first N) discards stale calls left over from an earlier,
+     *   since-revised publish_report attempt.</li>
+     * </ol>
+     * A heuristic match says so in its refusal message, so a genuine false pairing can be
+     * explained away in the claim's own text rather than silently trusted either way.
+     */
+    private static String enforceScoreClaimAgreement(JsonNode claims) {
+        if (SCORE_CLAIM_RESULTS.isEmpty()) {
+            return null;
+        }
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        java.util.List<JsonNode> unmatched = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(
+                java.util.Locale.ROOT);
+            if ("not checkable here".equals(verdict) || "stale vintage".equals(verdict)) {
+                continue;
+            }
+            String ref = c.path("score_claim_ref").asText("").trim();
+            if (ref.isEmpty()) {
+                unmatched.add(c);
+                continue;
+            }
+            JevClient.ScoreResult scored = SCORE_CLAIM_RESULTS.get(ref);
+            if (scored == null) {
+                problems.add("the assertion \"" + c.path("assertion").asText("").trim()
+                    + "\" carries score_claim_ref \"" + ref + "\", which does not match any "
+                    + "score_claim call made this session -- check for a typo, or drop the "
+                    + "field if this claim was never scored.");
+                continue;
+            }
+            checkScoreClaimAgreement(c, scored, false, problems);
+        }
+        int n = Math.min(unmatched.size(), SCORE_CLAIM_LOG.size());
+        if (n > 0) {
+            java.util.List<JevClient.ScoreResult> recent;
+            synchronized (SCORE_CLAIM_LOG) {
+                recent = new java.util.ArrayList<>(
+                    SCORE_CLAIM_LOG.subList(SCORE_CLAIM_LOG.size() - n, SCORE_CLAIM_LOG.size()));
+            }
+            for (int i = 0; i < n; i++) {
+                checkScoreClaimAgreement(unmatched.get(i), recent.get(i), true, problems);
+            }
+        }
+        if (problems.isEmpty()) {
+            return null;
+        }
+        return "validation refused: " + String.join(" ALSO: ", problems);
+    }
+
+    private static void checkScoreClaimAgreement(JsonNode c, JevClient.ScoreResult scored,
+        boolean positional, java.util.List<String> problems) {
+        String assertion = c.path("assertion").asText("").trim();
+        String submittedVerdict = c.path("verdict").asText("").trim().toLowerCase(
+            java.util.Locale.ROOT);
+        String basis = positional
+            ? "score_claim's independent check (matched by call order, not an explicit ref)"
+            : "score_claim's independent check";
+        boolean lowConfidence = scored.verdictConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD
+            || scored.pinocchiosConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD;
+        if (lowConfidence) {
+            problems.add(basis + " of \"" + assertion + "\" came back low-confidence (verdict "
+                + scored.verdictConfidence + ", pinocchios " + scored.pinocchiosConfidence
+                + ") -- gather more evidence before grading this claim, or grade it 'not "
+                + "checkable here' with a reason instead. If this pairing looks wrong (a "
+                + "positional match, not an explicit score_claim_ref), say so instead of "
+                + "gathering more evidence for the wrong claim.");
+            return;
+        }
+        if (!submittedVerdict.equals(scored.verdict.toLowerCase(java.util.Locale.ROOT))) {
+            problems.add("the assertion \"" + assertion + "\" is submitted as '"
+                + submittedVerdict + "' but " + basis + " returned '" + scored.verdict
+                + "' (confidence " + scored.verdictConfidence + "). Resolve the disagreement "
+                + "-- recheck the evidence, or explain in the claim's own text why the "
+                + "independent score is wrong -- before resubmitting. If this pairing looks "
+                + "wrong (a positional match, not an explicit score_claim_ref), say so instead.");
+        }
     }
 
     /** Appends {@code problem} to {@code problems} when non-null. Every {@code enforce*} gate
