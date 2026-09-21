@@ -5389,6 +5389,38 @@ public class McpServer {
             "column", "table", "year", "place_id", "county_fips", "state_fips", "series",
             "series_id", "field"));
 
+    /**
+     * The raw value plus, when it looks like a database identifier (contains an underscore --
+     * SQL column names in this corpus are SNAKE_CASE), a humanized alternate a model would
+     * plausibly write in prose instead of the literal name -- e.g. {@code REPORTER_CODE} ->
+     * {@code reporter}. {@link #enforceHighSeverityDisclosure} originally required the raw
+     * identifier verbatim, which measured live (2026-09-21, session dc65f4962d2e) rejected the
+     * same report 9 times in a row: no model naturally writes "PRODN_PRACTICE_DESC" in a
+     * caveat sentence, so the check was nearly unsatisfiable by construction rather than
+     * strict-but-fair. Returning multiple aliases lets the disclosure check accept whichever
+     * one the model actually used instead of demanding the exact SQL identifier.
+     */
+    private static java.util.List<String> identifyingAliases(String raw) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (raw == null || raw.isEmpty()) {
+            return out;
+        }
+        out.add(raw);
+        if (raw.indexOf('_') < 0) {
+            return out;
+        }
+        String humanized = raw.toLowerCase(java.util.Locale.ROOT).replace('_', ' ').trim();
+        for (String suffix : new String[]{" desc", " code", " cd", " id", " fips", " name"}) {
+            if (humanized.endsWith(suffix)) {
+                humanized = humanized.substring(0, humanized.length() - suffix.length()).trim();
+            }
+        }
+        if (!humanized.isEmpty() && !humanized.equalsIgnoreCase(raw) && !out.contains(humanized)) {
+            out.add(humanized);
+        }
+        return out;
+    }
+
     private static void recordCall(String tool, JsonNode args, long ms, int rows,
             ObjectNode diagnostics, String error) {
         if (CALL_LOG.size() >= CALL_LOG_MAX) {
@@ -5462,22 +5494,44 @@ public class McpServer {
                 // them here.
                 if ("high".equals(severity) && !"explicit_exclusion".equals(type)
                         && !"recipe_not_consulted".equals(type)) {
-                    java.util.List<String> keyTerms = new java.util.ArrayList<>();
+                    // Each identifying field becomes its own alias GROUP -- the disclosure gate
+                    // is satisfied for that field if the report mentions ANY alias in its group,
+                    // not all of them. "column"/"field" also pull in rollup_values (the actual
+                    // data labels involved, e.g. "ALL PRODUCTION PRACTICES") since those are far
+                    // more likely to show up in a model's prose than the raw SQL identifier.
+                    java.util.List<java.util.List<String>> termGroups = new java.util.ArrayList<>();
                     for (String field : HIGH_DIAGNOSTIC_IDENTIFYING_FIELDS) {
                         JsonNode v = w.get(field);
-                        if (v != null && v.isValueNode() && !v.isNull()) {
-                            keyTerms.add(v.asText());
+                        if (v == null || !v.isValueNode() || v.isNull()) {
+                            continue;
+                        }
+                        java.util.List<String> aliases = identifyingAliases(v.asText());
+                        if ("column".equals(field) || "field".equals(field)) {
+                            for (JsonNode rv : w.path("rollup_values")) {
+                                if (rv.isValueNode() && !rv.isNull()) {
+                                    String s = rv.asText();
+                                    if (!s.isEmpty() && !aliases.contains(s)) {
+                                        aliases.add(s);
+                                    }
+                                }
+                            }
+                        }
+                        if (!aliases.isEmpty()) {
+                            termGroups.add(aliases);
                         }
                     }
-                    if (!keyTerms.isEmpty()) {
+                    if (!termGroups.isEmpty()) {
                         if (highDiag == null) {
                             highDiag = e.putArray("high_diagnostics");
                         }
                         ObjectNode hd = highDiag.addObject();
                         hd.put("type", type);
-                        ArrayNode kt = hd.putArray("key_terms");
-                        for (String term : keyTerms) {
-                            kt.add(term);
+                        ArrayNode groupsArr = hd.putArray("key_term_groups");
+                        for (java.util.List<String> group : termGroups) {
+                            ArrayNode g = groupsArr.addArray();
+                            for (String term : group) {
+                                g.add(term);
+                            }
                         }
                     }
                 }
@@ -5958,16 +6012,25 @@ public class McpServer {
      */
     private static String enforceHighSeverityDisclosure(java.util.List<ReportPage.Section> secs) {
         java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
-        java.util.LinkedHashMap<String, java.util.List<String>> byType = new java.util.LinkedHashMap<>();
+        // Each entry in a type's list is one identifying field's alias GROUP -- satisfied if
+        // ANY alias in the group is disclosed, not all of them (see identifyingAliases).
+        java.util.LinkedHashMap<String, java.util.List<java.util.List<String>>> byType =
+            new java.util.LinkedHashMap<>();
         for (ObjectNode e : snapshot) {
             for (JsonNode hd : e.path("high_diagnostics")) {
                 String type = hd.path("type").asText("");
-                java.util.List<String> terms = byType.computeIfAbsent(type,
+                java.util.List<java.util.List<String>> groups = byType.computeIfAbsent(type,
                     k -> new java.util.ArrayList<>());
-                for (JsonNode kt : hd.path("key_terms")) {
-                    String t = kt.asText();
-                    if (t.length() >= 2 && !terms.contains(t)) {
-                        terms.add(t);
+                for (JsonNode g : hd.path("key_term_groups")) {
+                    java.util.List<String> terms = new java.util.ArrayList<>();
+                    for (JsonNode kt : g) {
+                        String t = kt.asText();
+                        if (t.length() >= 2) {
+                            terms.add(t);
+                        }
+                    }
+                    if (!terms.isEmpty()) {
+                        groups.add(terms);
                     }
                 }
             }
@@ -5983,25 +6046,30 @@ public class McpServer {
         String body = text.toString().replaceAll("<[^>]+>", " ");
         String lower = body.toLowerCase(java.util.Locale.ROOT);
         java.util.LinkedHashMap<String, java.util.List<String>> undisclosed = new java.util.LinkedHashMap<>();
-        for (java.util.Map.Entry<String, java.util.List<String>> ent : byType.entrySet()) {
-            for (String term : ent.getValue()) {
-                String termLower = term.toLowerCase(java.util.Locale.ROOT);
+        for (java.util.Map.Entry<String, java.util.List<java.util.List<String>>> ent : byType.entrySet()) {
+            for (java.util.List<String> group : ent.getValue()) {
                 boolean nearCaveat = false;
-                int from = 0;
-                int idx;
-                while ((idx = lower.indexOf(termLower, from)) >= 0) {
-                    int winStart = Math.max(0, idx - DISCLOSURE_PROXIMITY_CHARS);
-                    int winEnd = Math.min(body.length(), idx + termLower.length()
-                        + DISCLOSURE_PROXIMITY_CHARS);
-                    if (CAVEAT_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
-                        nearCaveat = true;
+                for (String term : group) {
+                    String termLower = term.toLowerCase(java.util.Locale.ROOT);
+                    int from = 0;
+                    int idx;
+                    while ((idx = lower.indexOf(termLower, from)) >= 0) {
+                        int winStart = Math.max(0, idx - DISCLOSURE_PROXIMITY_CHARS);
+                        int winEnd = Math.min(body.length(), idx + termLower.length()
+                            + DISCLOSURE_PROXIMITY_CHARS);
+                        if (CAVEAT_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                            nearCaveat = true;
+                            break;
+                        }
+                        from = idx + termLower.length();
+                    }
+                    if (nearCaveat) {
                         break;
                     }
-                    from = idx + termLower.length();
                 }
                 if (!nearCaveat) {
                     undisclosed.computeIfAbsent(ent.getKey(), k -> new java.util.ArrayList<>())
-                        .add(term);
+                        .add(group.get(0));
                 }
             }
         }
