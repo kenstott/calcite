@@ -575,6 +575,13 @@ allprojects {
                 useVersion("4.3.0")
                 because("GHSA-j288-q9x7-2f5v (transitively, by removing commons-lang entirely)")
             }
+            // Transitive-only (no direct declaration anywhere in this repo) in every trino-*
+            // module's shaded jar. Same-minor-line patch bump, verified live, 2026-09-21.
+            if (requested.group == "ch.qos.logback" && requested.name == "logback-core" &&
+                versionOlderThan(requested.version ?: "0", "1.5.34")) {
+                useVersion("1.5.34")
+                because("GHSA-jhq6-gfmj-v8fx / GHSA-p47f-322f-whfh")
+            }
         }
     }
 
