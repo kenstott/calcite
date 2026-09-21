@@ -3144,7 +3144,9 @@ partitionedTables:
       County-level establishment counts, employment levels, total annual wages, and average
       weekly wage from BLS QCEW (Quarterly Census of Employment and Wages), broken out by NAICS
       industry code and ownership type (private, federal, state, local government), for all
-      ~3,142 U.S. counties. Annual data released with ~1-year lag. See also county_wages, which
+      ~3,142 U.S. counties. Annual data released with ~1-year lag. No sales/receipts column —
+      for actual dollar sales by NAICS (including retail trade) at county grain, see
+      census.economic_census (quinquennial: 2017, 2022, 2027, ...). See also county_wages, which
       sources the same county-level QCEW feed.
     columns:
       - name: area_fips

@@ -3993,6 +3993,8 @@ partitionedTables:
     comment: >
       County Business Patterns provides annual data on business establishments,
       employment, and payroll by industry (NAICS) at state and county levels.
+      No sales/receipts column — for actual dollar sales by NAICS (including retail trade,
+      naics_code '44'/'45') at county grain, see economic_census (quinquennial, not annual).
 
     dimensions:
       type:
@@ -4291,12 +4293,20 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      Economic Census provides comprehensive business statistics including
-      establishments, employment, payroll, and sales by industry.
+      Establishment counts, employment, annual payroll, and total sales/receipts (RCPTOT, in
+      $1,000s) by NAICS industry, at state and county grain, quinquennial (2017, 2022, 2027, ...).
+      This is the only table in the corpus with actual dollar sales/receipts broken out by
+      industry at county level — including retail trade (naics_code '44' or '45', e.g. '44-45'
+      combined or finer subsectors like '445' grocery/'441' motor vehicle), down to the smallest
+      counties, so it answers "does this county's growth support retail demand" with real retail
+      sales dollars rather than population/income/employment proxies.
       Uses dimension resolver to handle NAICS version differences:
       - 2017: Uses NAICS2017 variable
       - 2022: Uses NAICS2022 variable
-      Partitioned by year only (not geography) to reduce file count.
+      Partitioned by year only (not geography) to reduce file count. For annual (non-quinquennial)
+      county-level establishment counts, employment, and payroll by NAICS — no sales — see
+      cbp_establishments. For annual county-level employment and wages by NAICS — no sales — see
+      econ.county_qcew.
 
     dimensions:
       type:
