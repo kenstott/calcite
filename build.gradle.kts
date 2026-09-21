@@ -365,6 +365,28 @@ sonarqube {
     }
 }
 
+// Numeric dot-version comparator for the CVE-override resolutionStrategy below (REQ-956): an
+// exact-version allow-list (`requested.version == "x.y.z"`) kept missing real findings whenever
+// a DIFFERENT module resolved a slightly different patch version of the same vulnerable package
+// (verified live, 2026-09-21: nimbus-jose-jwt landed on 9.37.3 in cloud-ops vs. 9.30.2/9.37.2
+// elsewhere; reactor-netty-http landed on 1.0.45 vs. 1.0.38/1.0.39) -- comparing "is this version
+// still below the fixed one" instead of listing every observed vulnerable version fixes the
+// whole class of miss, not just the one instance found. Scoped to plain numeric dot-versions
+// (no ".Final"/".v20250814"-style suffixes some artifacts here use, e.g. Netty/Jetty) --
+// non-numeric trailing segments compare as 0, which is safe as a floor but not a general
+// version-string parser.
+fun versionOlderThan(version: String, fixed: String): Boolean {
+    fun parts(v: String) = v.split(".").map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+    val a = parts(version)
+    val b = parts(fixed)
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val x = a.getOrElse(i) { 0 }
+        val y = b.getOrElse(i) { 0 }
+        if (x != y) return x < y
+    }
+    return false
+}
+
 allprojects {
     group = "org.apache.calcite"
     version = buildVersion
@@ -430,12 +452,14 @@ allprojects {
             // single useVersion() that would downgrade whichever branch is already ahead.
             if (requested.group == "com.fasterxml.jackson.core" &&
                 (requested.name == "jackson-core" || requested.name == "jackson-databind")) {
-                if (requested.version?.startsWith("2.21") == true) {
-                    useVersion("2.21.4")
-                } else {
-                    useVersion("2.18.8")
+                val fixed = if (requested.version?.startsWith("2.21") == true) "2.21.5" else "2.18.9"
+                if (versionOlderThan(requested.version ?: "0", fixed)) {
+                    useVersion(fixed)
+                    because(
+                        "GHSA-r7wm-3cxj-wff9 / GHSA-j3rv-43j4-c7qm / GHSA-rmj7-2vxq-3g9f / " +
+                        "GHSA-5gvw-p9qm-jgwh / GHSA-5jmj-h7xm-6q6v / GHSA-mhm7-754m-9p8w"
+                    )
                 }
-                because("GHSA-r7wm-3cxj-wff9 / GHSA-j3rv-43j4-c7qm / GHSA-rmj7-2vxq-3g9f")
             }
             if (requested.group == "org.apache.httpcomponents.core5" &&
                 (requested.name == "httpcore5" || requested.name == "httpcore5-h2")) {
@@ -461,17 +485,17 @@ allprojects {
                 because("latest available 9.4.x -- no true fix published on this EOL branch")
             }
             if (requested.group == "org.apache.zookeeper" && requested.name == "zookeeper" &&
-                requested.version == "3.8.4") {
+                versionOlderThan(requested.version ?: "0", "3.8.6")) {
                 useVersion("3.8.6")
                 because("GHSA-7xrh-hqfc-g7qr / GHSA-crhr-qqj8-rpxc")
             }
             if (requested.group == "com.nimbusds" && requested.name == "nimbus-jose-jwt" &&
-                requested.version == "9.30.2") {
-                useVersion("9.37.2")
-                because("GHSA-gvpg-vgmx-xg6w")
+                versionOlderThan(requested.version ?: "0", "9.37.4")) {
+                useVersion("9.37.4")
+                because("GHSA-gvpg-vgmx-xg6w / GHSA-xwmg-2g98-w7v9")
             }
             if (requested.group == "commons-beanutils" && requested.name == "commons-beanutils" &&
-                requested.version == "1.9.4") {
+                versionOlderThan(requested.version ?: "0", "1.11.0")) {
                 useVersion("1.11.0")
                 because("GHSA-wxr5-93ph-8wr9")
             }
@@ -486,26 +510,60 @@ allprojects {
                 because("GHSA-2r2c-cx56-8933 / GHSA-47qp-hqvx-6r3f")
             }
             if (requested.group == "org.jsoup" && requested.name == "jsoup" &&
-                requested.version == "1.11.3") {
-                useVersion("1.14.2")
-                because("GHSA-m72m-mhq2-9p6c")
+                versionOlderThan(requested.version ?: "0", "1.23.2")) {
+                useVersion("1.23.2")
+                because("GHSA-m72m-mhq2-9p6c / GHSA-gp7f-rwcx-9369 / GHSA-pmhh-3w7g-xqp8")
             }
             if (requested.group == "io.airlift" && requested.name == "aircompressor" &&
-                requested.version == "2.0.2") {
+                versionOlderThan(requested.version ?: "0", "2.0.3")) {
                 useVersion("2.0.3")
                 because("GHSA-vx9q-rhv9-3jvg")
             }
             if (requested.group == "org.postgresql" && requested.name == "postgresql" &&
-                requested.version == "42.7.4") {
+                versionOlderThan(requested.version ?: "0", "42.7.12")) {
                 useVersion("42.7.12")
                 because("GHSA-98qh-xjc8-98pq / GHSA-hq9p-pm7w-8p54 / GHSA-j92g-9f8w-j867")
             }
             if (requested.group == "io.projectreactor.netty" &&
                 (requested.name == "reactor-netty-core" || requested.name == "reactor-netty-http") &&
-                requested.version == "1.0.38") {
-                useVersion("1.0.39")
-                because("GHSA-q24v-hpg3-v3jp / GHSA-xjhv-p3fv-x24r")
+                versionOlderThan(requested.version ?: "0", "1.2.18")) {
+                useVersion("1.2.18")
+                because("GHSA-q24v-hpg3-v3jp / GHSA-xjhv-p3fv-x24r / GHSA-4q2v-9p7v-3v22")
             }
+            if (requested.group == "com.azure" && requested.name == "azure-identity" &&
+                versionOlderThan(requested.version ?: "0", "1.12.2")) {
+                useVersion("1.12.2")
+                because("GHSA-m5vv-6r4h-3vj9")
+            }
+            if (requested.group == "org.apache.commons" && requested.name == "commons-configuration2" &&
+                versionOlderThan(requested.version ?: "0", "2.15.0")) {
+                useVersion("2.15.0")
+                because("GHSA-337m-mw94-2v6g")
+            }
+            if (requested.group == "org.apache.httpcomponents.client5" && requested.name == "httpclient5" &&
+                versionOlderThan(requested.version ?: "0", "5.6.3")) {
+                useVersion("5.6.3")
+                because("GHSA-hjcp-jmpx-g3qm")
+            }
+            if (requested.group == "org.apache.logging.log4j" &&
+                (requested.name == "log4j-api" || requested.name == "log4j-core") &&
+                versionOlderThan(requested.version ?: "0", if (requested.name == "log4j-api") "2.25.5" else "2.25.4")) {
+                useVersion(if (requested.name == "log4j-api") "2.25.5" else "2.25.4")
+                because(
+                    "GHSA-qv9r-c865-cp47 / GHSA-3pxv-7cmr-fjr4 / GHSA-445c-vh5m-36rj / " +
+                    "GHSA-6hg6-v5c8-fphq / GHSA-vc5p-v9hr-52mj"
+                )
+            }
+            if (requested.group == "org.apache.poi" && requested.name == "poi-ooxml" &&
+                versionOlderThan(requested.version ?: "0", "5.4.0")) {
+                useVersion("5.4.0")
+                because("GHSA-gmg8-593g-7mv3")
+            }
+            // commons-lang:commons-lang (the legacy pre-commons-lang3 artifact) has no patched
+            // 2.x release at all -- GHSA-j288-q9x7-2f5v's own data lists "-> None" for this
+            // coordinate, only for its modern replacement commons-lang3. Left unforced (no
+            // useVersion callable) and documented in .grype.yaml instead, matching the jetty
+            // EOL-branch pattern.
         }
     }
 
