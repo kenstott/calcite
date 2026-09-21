@@ -22,9 +22,14 @@ on:
     types: [created]
 
 # The attach step updates the engine-v<version> release; on workflow_dispatch the default
-# GITHUB_TOKEN is read-only, so grant it explicitly.
+# GITHUB_TOKEN is read-only, so grant it explicitly. id-token/attestations: these tarballs are
+# fetched and RUN directly on end-user machines at runtime (provisa's runtime_deps/
+# pgwire_bundles.py), with previously nothing stronger than a SHA-256 checksum verifying them —
+# actions/attest-build-provenance needs both to mint a Sigstore attestation.
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   PY_VERSION: "3.12"
@@ -310,6 +315,7 @@ jobs:
           VER="${{ github.event.inputs.version || github.ref_name }}"
           VER="${VER#engine-v}"
           name="pgwire-${{ matrix.adapter.name }}-${VER}-${{ matrix.os.variant }}"
+          echo "BUNDLE_NAME=$name" >> "$GITHUB_ENV"
           mv bundle "$name"
           tar -czf "${name}.tar.gz" "$name"
           # `command -v sha256sum` is checked only for its exit status -- redirected to
@@ -325,12 +331,47 @@ jobs:
             | awk '{print $1}' > "${name}.tar.gz.sha256"
           echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
 
+      # This tarball is fetched and RUN directly on end-user machines at runtime (provisa's
+      # runtime_deps/pgwire_bundles.py), never installed via a package manager with its own
+      # integrity chain — until now the sha256 above was the only check, and it protects
+      # against corruption, not tampering (an attacker who can replace the release asset can
+      # just as easily replace its sha256 file alongside it). grype/syft scan the extracted
+      # bundle DIRECTORY (before the tar above), not the tarball, since neither tool unpacks
+      # arbitrary archive formats — they catalog jars found on a filesystem path.
+      - name: Install grype + syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM (CycloneDX)
+        run: syft "$BUNDLE_NAME" -o cyclonedx-json="${BUNDLE_NAME}.sbom.cdx.json"
+
+      # A direct grype scan of the directory, not grype's own `sbom:` source against the
+      # CycloneDX file just generated: grype's `sbom:` reader is documented against Syft's OWN
+      # JSON schema, not confirmed to also parse CycloneDX — scanning the directory natively
+      # avoids depending on an unverified format handoff between the two tools.
+      - name: CVE scan (gates the release — fails on any Critical finding)
+        # High/Medium/Low findings stay visible in the uploaded report but don't block: 201
+        # CVEs across pgwire-file's 266-jar runtime classpath were found live, 2026-09-21 —
+        # fixing the 6 Criticals (redisson, netty-handler, bcprov-jdk18on) is this pass's scope;
+        # the rest is its own separate remediation effort across this fork's dependency tree.
+        run: |
+          grype "dir:${BUNDLE_NAME}" \
+            -o json --file "${BUNDLE_NAME}.cve-report.json" --fail-on critical
+
+      - name: Sign tarball (Sigstore attestation)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "${{ env.BUNDLE_NAME }}.tar.gz"
+
       - uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ matrix.adapter.name }}-${{ matrix.os.variant }}
           path: |
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.sbom.cdx.json
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.cve-report.json
 
       - name: Attach to release
         # On a release event use its tag; on workflow_dispatch (used because a release created
@@ -344,7 +385,9 @@ jobs:
           TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
           gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz \
-            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256 \
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.sbom.cdx.json \
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.cve-report.json
 
   # Proves a just-built bundle actually runs on a clean machine: no repo checkout
   # venv, no setup-java/setup-uv, nothing but the tarball itself + a psql client.

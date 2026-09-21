@@ -69,6 +69,44 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Signing already exists below (GPG, Maven Central's actual requirement — unlike PyPI,
+      # Central never dropped GPG). SBOM + CVE gate the publish, same as this repo's
+      # pgwire-adapters-release.yml and provisa's own release pipeline: syft/grype scan the
+      # shaded jar's binary contents directly rather than needing a Gradle CycloneDX plugin
+      # wired into each module's build.gradle.kts.
+      - name: Locate shadow JAR
+        id: jar
+        run: |
+          JAR=$(find "${{ matrix.module }}/build/libs" -name "${{ matrix.artifact }}-*.jar" \
+            | grep -v sources | grep -v javadoc | head -1)
+          test -n "$JAR" || { echo "shadow jar not found for ${{ matrix.artifact }}"; exit 1; }
+          echo "path=$JAR" >> "$GITHUB_OUTPUT"
+
+      - name: Install grype + syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM (CycloneDX)
+        run: syft "${{ steps.jar.outputs.path }}" -o cyclonedx-json="${{ matrix.artifact }}-sbom.cdx.json"
+
+      - name: CVE scan (gates publish — fails on any Critical finding)
+        # High/Medium/Low findings stay visible in the uploaded report but don't block: a full
+        # sweep of this fork's transitive dependency tree (201 CVEs found live against the
+        # pgwire-file bundle, 2026-09-21 — see pgwire-adapters-release.yml's own CVE step) is
+        # its own separate remediation effort, out of scope for wiring up the gate itself.
+        run: |
+          grype "${{ steps.jar.outputs.path }}" \
+            -o json --file "${{ matrix.artifact }}-cve-report.json" --fail-on critical
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-sbom-and-scan
+          path: |
+            ${{ matrix.artifact }}-sbom.cdx.json
+            ${{ matrix.artifact }}-cve-report.json
+          retention-days: 90
+
       - name: Publish to GitHub Packages
         run: |
           OUTPUT=$(./gradlew :${{ matrix.module }}:publish${{ matrix.pub }}PublicationToGitHubPackagesRepository \

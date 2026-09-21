@@ -58,7 +58,11 @@ dependencies {
     api("org.slf4j:slf4j-api")
 
     implementation("com.github.ben-manes.caffeine:caffeine:2.9.1")
-    implementation("org.redisson:redisson:3.16.1")
+    // 3.16.1 had a Deserialization-of-Untrusted-Data critical (GHSA-4hvc-qwr2-f8rv, fixed
+    // 3.22.0) -- verified live via grype against the pgwire-file bundle's real classpath,
+    // 2026-09-21. Bumped to the latest 3.x (stays on the same major line the one consumer,
+    // core/src, already targets) rather than 4.x, which is a breaking API change.
+    implementation("org.redisson:redisson:3.52.0")
     implementation("com.google.guava:guava:30.1-jre")
     implementation("software.amazon.awssdk:s3:2.28.3")
     implementation("com.fasterxml.jackson.core:jackson-core:")

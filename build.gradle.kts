@@ -392,6 +392,26 @@ allprojects {
         }
     }
 
+    // CVE overrides, applied to every configuration on every module (REQ-956): a transitive
+    // dependency's OWN published module metadata `{strictly}`-locks netty-handler/bcprov-jdk18on
+    // to a vulnerable version, which a plain version bump on the direct dependency that pulls
+    // them in (org.redisson:redisson) does not override -- verified live via grype against the
+    // pgwire-file bundle's real runtime classpath, 2026-09-21: netty-handler 4.1.127.Final
+    // (GHSA-c4c3-7fpv-j4q5, fixed 4.1.137.Final) and bcprov-jdk18on 1.82 (GHSA-9pwp-9qqc-pr26,
+    // fixed 1.85), both Critical.
+    configurations.all {
+        resolutionStrategy.eachDependency {
+            if (requested.group == "io.netty" && requested.name == "netty-handler") {
+                useVersion("4.1.137.Final")
+                because("GHSA-c4c3-7fpv-j4q5 (Critical) -- fixed in 4.1.137.Final")
+            }
+            if (requested.group == "org.bouncycastle" && requested.name == "bcprov-jdk18on") {
+                useVersion("1.85")
+                because("GHSA-9pwp-9qqc-pr26 (Critical) -- fixed in 1.85")
+            }
+        }
+    }
+
     plugins.withId("java-library") {
         dependencies {
             "annotationProcessor"(platform(project(":bom")))
