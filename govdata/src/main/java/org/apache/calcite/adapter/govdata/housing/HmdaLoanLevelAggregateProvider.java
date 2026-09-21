@@ -159,7 +159,55 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     conn.setReadTimeout(600_000);
     conn.setInstanceFollowRedirects(true);
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
-    return conn.getInputStream();
+    InputStream base = conn.getInputStream();
+    return new TimeoutInputStream(base, 3_600_000, 600_000);
+  }
+
+  private static class TimeoutInputStream extends java.io.FilterInputStream {
+    private final long totalTimeoutMs;
+    private final long idleTimeoutMs;
+    private final long startTime;
+    private long lastReadTime;
+
+    TimeoutInputStream(InputStream in, long totalTimeoutMs, long idleTimeoutMs) {
+      super(in);
+      this.totalTimeoutMs = totalTimeoutMs;
+      this.idleTimeoutMs = idleTimeoutMs;
+      this.startTime = System.currentTimeMillis();
+      this.lastReadTime = startTime;
+    }
+
+    @Override
+    public int read() throws IOException {
+      checkTimeouts();
+      int result = in.read();
+      if (result != -1) {
+        lastReadTime = System.currentTimeMillis();
+      }
+      return result;
+    }
+
+    @Override
+    public int read(byte[] b, int off, int len) throws IOException {
+      checkTimeouts();
+      int result = in.read(b, off, len);
+      if (result > 0) {
+        lastReadTime = System.currentTimeMillis();
+      }
+      return result;
+    }
+
+    private void checkTimeouts() throws IOException {
+      long now = System.currentTimeMillis();
+      long totalElapsed = now - startTime;
+      long idleElapsed = now - lastReadTime;
+      if (totalElapsed > totalTimeoutMs) {
+        throw new IOException("HMDA download exceeded total timeout: " + totalElapsed + "ms > " + totalTimeoutMs + "ms");
+      }
+      if (idleElapsed > idleTimeoutMs) {
+        throw new IOException("HMDA download exceeded idle timeout: " + idleElapsed + "ms > " + idleTimeoutMs + "ms");
+      }
+    }
   }
 
   private List<Map<String, Object>> aggregate(File csvFile, String year) throws SQLException {
