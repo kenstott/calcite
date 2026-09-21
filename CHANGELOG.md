@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.95.2](https://github.com/kenstott/calcite/compare/engine-v0.95.1...engine-v0.95.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** a rejected publish_report attempt must not reset the provenance boundary ([e9f027b](https://github.com/kenstott/calcite/commit/e9f027b1b7d6cd8c12cf83a23922d07998a67b1b))
+
 ## [0.95.1](https://github.com/kenstott/calcite/compare/engine-v0.95.0...engine-v0.95.1) (2026-09-21)
 
 No askamerica-engine source changes. Re-tagged to repackage the browser extension
