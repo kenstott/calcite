@@ -5323,10 +5323,23 @@ public class McpServer {
      * {@link #CALL_LOG}, cut down to calls that plausibly belong to the report being validated
      * right now, not a stale earlier conversation sharing the same long-lived process (see
      * {@link #CALL_LOG}'s javadoc for why that happens). The boundary is the most recent PRIOR
-     * {@code publish_report} call, if any -- everything from just after it onward is kept, and
-     * everything at-or-before it is dropped as belonging to whatever report that call
-     * concluded (successfully or not; a rejected attempt still marks "the model believed it was
-     * done building a report here").
+     * SUCCESSFUL {@code publish_report} call, if any -- everything from just after it onward is
+     * kept, and everything at-or-before it is dropped as belonging to whatever report that call
+     * concluded.
+     *
+     * <p>A REJECTED {@code publish_report} attempt (one of the {@code enforce*} gates threw, so
+     * this same entry carries an {@code error} field) is deliberately NOT a boundary. Measured
+     * live (2026-09-21, an Al Jazeera tariff validation): a report needing several
+     * {@code publish_report} round trips to clear every gate -- an already-documented, common
+     * pattern (see {@link #addIfPresent}'s javadoc) -- had its own genuine, earlier
+     * {@code search_catalog}/{@code query} calls cut out by this boundary on the SECOND attempt,
+     * because the first, rejected attempt had already been logged as tool="publish_report" and
+     * counted as "a report concluded here." {@link #enforceTableProvenance} and
+     * {@link #enforceResearchDepthOnGap} then refused the second attempt for research the model
+     * had genuinely already done, quoting "no query call anywhere this session" for a query
+     * whose SQL was sitting right there in the claim being validated. A rejected attempt means
+     * the model is still working on the SAME report, not concluding it -- only a call that
+     * actually returned (no {@code error} field) marks the end of one.
      *
      * <p>Deliberately NOT {@code compose_dashboard}, even though it can also mark the end of a
      * prior, unrelated conversation: {@code compose_dashboard} is routinely called as an
@@ -5349,7 +5362,8 @@ public class McpServer {
         }
         int boundary = -1;
         for (int i = snapshot.size() - 1; i >= 0; i--) {
-            if ("publish_report".equals(snapshot.get(i).path("tool").asText(""))) {
+            ObjectNode entry = snapshot.get(i);
+            if ("publish_report".equals(entry.path("tool").asText("")) && !entry.has("error")) {
                 boundary = i;
                 break;
             }
