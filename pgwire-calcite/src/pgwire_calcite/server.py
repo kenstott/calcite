@@ -645,8 +645,23 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
     #: Set in handle_startup; read by finish(), which socketserver always runs.
     _ctx: BVContext | None = None
 
+    #: Bound on how long an accepted connection has to complete the startup
+    #: handshake (SSLRequest negotiation through authentication). Measured live
+    #: (2026-09-21): a long-lived pgwire-govdata process accumulated hundreds of
+    #: stuck handler threads over a few hours and stopped answering real queries.
+    #: Root cause: handle_startup's first read (self.r.read_uint32()) is a plain
+    #: blocking socket read with no timeout, so any connection that opens the TCP
+    #: socket but never sends a complete startup packet -- a bare liveness probe,
+    #: a client that connects then vanishes -- leaves that thread parked forever.
+    #: handle() never returns, finish() never runs, and the FD/thread is never
+    #: released. Cleared to blocking once the handshake actually completes
+    #: (see handle_startup's authenticated-return points) so a real, idle-but-
+    #: connected interactive session is never disconnected mid-use.
+    _STARTUP_TIMEOUT_SECONDS = 15.0
+
     def setup(self) -> None:
         super().setup()
+        self.request.settimeout(self._STARTUP_TIMEOUT_SECONDS)
         self.server.connection_opened()
 
     def finish(self) -> None:
@@ -817,6 +832,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 ctx.session.role_id = role  # type: ignore[attr-defined]
                 self.send_authentication_ok()
                 self.handle_post_auth(ctx)
+                # Handshake complete (ctx.authenticated is now True) -- clear the
+                # startup timeout so a real, idle-but-connected session is never cut
+                # off waiting on the client's next message. See _STARTUP_TIMEOUT_SECONDS.
+                self.request.settimeout(None)
                 return ctx
             # SASL SCRAM-SHA-256 wire exchange (PGW-043): no password on the wire.
             if _prov is not None and getattr(_prov, "wire_mechanism", None) == "SCRAM-SHA-256":
