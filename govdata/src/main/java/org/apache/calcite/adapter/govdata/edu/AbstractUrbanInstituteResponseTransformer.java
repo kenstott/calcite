@@ -90,7 +90,7 @@ abstract class AbstractUrbanInstituteResponseTransformer implements PerRecordRes
     ObjectNode node = MAPPER.valueToTree(row);
     augmentRecord(node, context);
     row.clear();
-    node.fields().forEachRemaining(e ->
+    node.properties().forEach(e ->
         row.put(e.getKey(), MAPPER.convertValue(e.getValue(), Object.class)));
   }
 

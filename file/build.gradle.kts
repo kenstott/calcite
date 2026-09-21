@@ -73,13 +73,18 @@ dependencies {
     // (govdata, then the engine jar, which then had to exclude them again). See
     // GandivaAvailability in the arrow module for how the accelerated path is opted into.
 
-    // Parquet dependencies for Parquet execution engine
-    implementation("org.apache.parquet:parquet-arrow:1.15.2")
-    implementation("org.apache.parquet:parquet-avro:1.15.2")
-    implementation("org.apache.parquet:parquet-column:1.15.2")
-    implementation("org.apache.parquet:parquet-common:1.15.2")
-    implementation("org.apache.parquet:parquet-encoding:1.15.2")
-    implementation("org.apache.parquet:parquet-hadoop:1.15.2")
+    // Parquet dependencies for Parquet execution engine. 1.15.2's parquet-jackson bundles its
+    // OWN relocated jackson-databind 2.18.1 (GHSA-rmj7-2vxq-3g9f/GHSA-j3rv-43j4-c7qm) and
+    // jackson-core 2.18.1 (GHSA-r7wm-3cxj-wff9), both High -- shaded INSIDE the jar, so
+    // Gradle's own dependency-resolution CVE overrides (see root build.gradle.kts) cannot reach
+    // it. 1.18.1 bundles a patched 2.22.2 (verified by downloading and inspecting its
+    // META-INF/maven pom.properties, 2026-09-21).
+    implementation("org.apache.parquet:parquet-arrow:1.18.1")
+    implementation("org.apache.parquet:parquet-avro:1.18.1")
+    implementation("org.apache.parquet:parquet-column:1.18.1")
+    implementation("org.apache.parquet:parquet-common:1.18.1")
+    implementation("org.apache.parquet:parquet-encoding:1.18.1")
+    implementation("org.apache.parquet:parquet-hadoop:1.18.1")
 
     // Hadoop dependencies for Parquet
     implementation("org.apache.hadoop:hadoop-common:3.4.3")

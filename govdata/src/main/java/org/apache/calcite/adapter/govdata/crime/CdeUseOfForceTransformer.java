@@ -68,7 +68,7 @@ public class CdeUseOfForceTransformer implements ResponseTransformer {
         return "[]";
       }
 
-      Iterator<Map.Entry<String, JsonNode>> sections = root.fields();
+      Iterator<Map.Entry<String, JsonNode>> sections = root.properties().iterator();
       while (sections.hasNext()) {
         Map.Entry<String, JsonNode> sectionEntry = sections.next();
         String section = sectionEntry.getKey();
@@ -80,7 +80,7 @@ public class CdeUseOfForceTransformer implements ResponseTransformer {
 
         // participation section: flat label → numeric value
         if ("participation".equals(section)) {
-          Iterator<Map.Entry<String, JsonNode>> labels = sectionData.fields();
+          Iterator<Map.Entry<String, JsonNode>> labels = sectionData.properties().iterator();
           while (labels.hasNext()) {
             Map.Entry<String, JsonNode> labelEntry = labels.next();
             String label = labelEntry.getKey();
@@ -94,14 +94,14 @@ public class CdeUseOfForceTransformer implements ResponseTransformer {
         }
 
         // reports_submission and similar: category → month → count
-        Iterator<Map.Entry<String, JsonNode>> categories = sectionData.fields();
+        Iterator<Map.Entry<String, JsonNode>> categories = sectionData.properties().iterator();
         while (categories.hasNext()) {
           Map.Entry<String, JsonNode> catEntry = categories.next();
           String category = catEntry.getKey();
           JsonNode catData = catEntry.getValue();
 
           if (catData.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> labels = catData.fields();
+            Iterator<Map.Entry<String, JsonNode>> labels = catData.properties().iterator();
             while (labels.hasNext()) {
               Map.Entry<String, JsonNode> labelEntry = labels.next();
               String label = labelEntry.getKey();

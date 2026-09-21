@@ -182,7 +182,7 @@ public class EtlRunConfig {
       Map<String, Object> operand = new HashMap<>();
       JsonNode operandNode = schemaNode.get("operand");
       if (operandNode != null && operandNode.isObject()) {
-        Iterator<Map.Entry<String, JsonNode>> fields = operandNode.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = operandNode.properties().iterator();
         while (fields.hasNext()) {
           Map.Entry<String, JsonNode> field = fields.next();
           operand.put(field.getKey(), jsonNodeToObject(field.getValue()));
@@ -214,7 +214,7 @@ public class EtlRunConfig {
       return list;
     } else if (node.isObject()) {
       Map<String, Object> map = new HashMap<>();
-      Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+      Iterator<Map.Entry<String, JsonNode>> fields = node.properties().iterator();
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> field = fields.next();
         map.put(field.getKey(), jsonNodeToObject(field.getValue()));

@@ -59,7 +59,7 @@ public abstract class AbstractCsvResponseTransformer implements PerRecordRespons
     ObjectNode mapped = MAPPER.createObjectNode();
     mapRow(headers, values, mapped);
     row.clear();
-    Iterator<Map.Entry<String, JsonNode>> fields = mapped.fields();
+    Iterator<Map.Entry<String, JsonNode>> fields = mapped.properties().iterator();
     while (fields.hasNext()) {
       Map.Entry<String, JsonNode> e = fields.next();
       JsonNode val = e.getValue();

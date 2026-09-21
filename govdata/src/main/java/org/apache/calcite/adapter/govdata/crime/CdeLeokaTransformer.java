@@ -68,14 +68,14 @@ public class CdeLeokaTransformer implements ResponseTransformer {
       }
 
       ArrayNode result = MAPPER.createArrayNode();
-      Iterator<Map.Entry<String, JsonNode>> categories = chartData.fields();
+      Iterator<Map.Entry<String, JsonNode>> categories = chartData.properties().iterator();
       while (categories.hasNext()) {
         Map.Entry<String, JsonNode> catEntry = categories.next();
         JsonNode categoryData = catEntry.getValue();
         if (!categoryData.isObject()) {
           continue;
         }
-        Iterator<Map.Entry<String, JsonNode>> labels = categoryData.fields();
+        Iterator<Map.Entry<String, JsonNode>> labels = categoryData.properties().iterator();
         while (labels.hasNext()) {
           Map.Entry<String, JsonNode> labelEntry = labels.next();
           JsonNode countNode = labelEntry.getValue();

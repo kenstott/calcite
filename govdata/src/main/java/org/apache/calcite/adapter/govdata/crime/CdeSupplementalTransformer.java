@@ -85,7 +85,7 @@ public class CdeSupplementalTransformer implements ResponseTransformer {
         JsonNode recoveredValues = stolenAndRecovered.path("recovered_value");
 
         if (stolenValues.isObject()) {
-          Iterator<Map.Entry<String, JsonNode>> fields = stolenValues.fields();
+          Iterator<Map.Entry<String, JsonNode>> fields = stolenValues.properties().iterator();
           while (fields.hasNext()) {
             Map.Entry<String, JsonNode> entry = fields.next();
             String propertyType = entry.getKey();

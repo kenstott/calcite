@@ -64,7 +64,7 @@ public class BtsPortTeuTransformer implements ResponseTransformer {
           continue;
         }
         String isoDate = LocalDate.parse(rawDate, SOURCE_FORMAT).toString();
-        Iterator<Map.Entry<String, JsonNode>> fields = record.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = record.properties().iterator();
         while (fields.hasNext()) {
           Map.Entry<String, JsonNode> field = fields.next();
           String portCode = field.getKey();

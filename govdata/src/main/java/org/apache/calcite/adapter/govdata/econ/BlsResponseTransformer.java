@@ -153,7 +153,7 @@ public class BlsResponseTransformer implements ResponseTransformer {
           record.put("series", seriesId);
 
           // Copy all fields from the data point
-          dataPoint.fields().forEachRemaining(field ->
+          dataPoint.properties().forEach(field ->
               record.set(field.getKey(), field.getValue()));
 
           flatData.add(record);

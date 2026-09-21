@@ -53,7 +53,7 @@ public class CdeAgencyTransformer implements ResponseTransformer {
       ArrayNode result = MAPPER.createArrayNode();
       String stateAbbr = context.getDimensionValues().get("state_abbr");
 
-      Iterator<Map.Entry<String, JsonNode>> counties = root.fields();
+      Iterator<Map.Entry<String, JsonNode>> counties = root.properties().iterator();
       while (counties.hasNext()) {
         Map.Entry<String, JsonNode> entry = counties.next();
         String countyName = toTitleCase(entry.getKey());

@@ -70,7 +70,7 @@ public class EtlRunManifest {
   private static ObjectMapper createMapper() {
     ObjectMapper mapper = new ObjectMapper();
     mapper.enable(SerializationFeature.INDENT_OUTPUT);
-    mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+    mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
     return mapper;
   }
 

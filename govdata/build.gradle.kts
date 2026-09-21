@@ -101,12 +101,12 @@ dependencies {
     implementation("javax.xml.bind:jaxb-api:2.3.1")
 
     // Parquet dependencies (inherited from file adapter)
-    implementation("org.apache.parquet:parquet-arrow:1.15.2")
-    implementation("org.apache.parquet:parquet-avro:1.15.2")
-    implementation("org.apache.parquet:parquet-column:1.15.2")
-    implementation("org.apache.parquet:parquet-common:1.15.2")
-    implementation("org.apache.parquet:parquet-encoding:1.15.2")
-    implementation("org.apache.parquet:parquet-hadoop:1.15.2")
+    implementation("org.apache.parquet:parquet-arrow:1.18.1")
+    implementation("org.apache.parquet:parquet-avro:1.18.1")
+    implementation("org.apache.parquet:parquet-column:1.18.1")
+    implementation("org.apache.parquet:parquet-common:1.18.1")
+    implementation("org.apache.parquet:parquet-encoding:1.18.1")
+    implementation("org.apache.parquet:parquet-hadoop:1.18.1")
 
     // Hadoop dependencies needed for Parquet
     implementation("org.apache.hadoop:hadoop-common:3.4.3")

@@ -401,9 +401,18 @@ allprojects {
     // fixed 1.85), both Critical.
     configurations.all {
         resolutionStrategy.eachDependency {
-            if (requested.group == "io.netty" && requested.name == "netty-handler") {
-                useVersion("4.1.137.Final")
-                because("GHSA-c4c3-7fpv-j4q5 (Critical) -- fixed in 4.1.137.Final")
+            // The whole io.netty family, forced as one group: netty components must stay in
+            // lockstep (mixing release trains risks ABI mismatches, per dedupe_jars.py's own
+            // comment on this exact class of bug) and grype found the WHOLE family behind, not
+            // just netty-handler -- netty-codec-dns/haproxy/http/http2/redis/smtp/stomp/xml,
+            // netty-handler-ssl-ocsp, netty-resolver-dns, netty-transport-sctp, at 4.1.100/
+            // 4.1.112/4.1.127.Final, all High, verified live 2026-09-21.
+            // netty-tcnative-* is a native OpenSSL binding with its OWN independent version
+            // scheme (2.0.x), not the 4.1.x core/codec/handler/resolver/transport train --
+            // forcing it to 4.1.138.Final (verified live) resolves to a nonexistent artifact.
+            if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
+                useVersion("4.1.138.Final")
+                because("whole netty family kept on one patched release train")
             }
             if (requested.group == "org.bouncycastle" && requested.name == "bcprov-jdk18on") {
                 useVersion("1.85")
@@ -415,6 +424,87 @@ allprojects {
             if (requested.group == "com.azure" && requested.name == "azure-security-keyvault-keys") {
                 useVersion("4.10.6")
                 because("GHSA-97jf-46m3-8953 (Critical) -- fixed in 4.10.6")
+            }
+            // jackson-core/-databind: two branches in play (2.18.x via core's redisson chain,
+            // 2.21.x via the trino-* modules) -- bump each within its own branch rather than a
+            // single useVersion() that would downgrade whichever branch is already ahead.
+            if (requested.group == "com.fasterxml.jackson.core" &&
+                (requested.name == "jackson-core" || requested.name == "jackson-databind")) {
+                if (requested.version?.startsWith("2.21") == true) {
+                    useVersion("2.21.4")
+                } else {
+                    useVersion("2.18.8")
+                }
+                because("GHSA-r7wm-3cxj-wff9 / GHSA-j3rv-43j4-c7qm / GHSA-rmj7-2vxq-3g9f")
+            }
+            if (requested.group == "org.apache.httpcomponents.core5" &&
+                (requested.name == "httpcore5" || requested.name == "httpcore5-h2")) {
+                useVersion("5.4.3")
+                because("GHSA-hf6x-8p5f-cgmf / GHSA-v3jc-474w-2wm6")
+            }
+            // The remainder come from org.apache.hadoop:hadoop-auth's own transitive footprint
+            // (file/govdata's Parquet/Iceberg/S3 support), not from core or any Calcite-proper
+            // dependency -- forced by EXACT vulnerable version, not by group/name alone, since
+            // hadoop-auth already requests a newer, already-patched nimbus-jose-jwt (10.4) on
+            // some paths; a blanket useVersion() here would downgrade that one back down.
+            // GHSA-355h-qmc2-wpwf/GHSA-2fvj-hgj9-j2gr claim fixes at 9.4.60/9.4.63 for the 9.4.x
+            // branch, but 9.4.58.v20250814 is the last 9.4.x version Eclipse Jetty ever
+            // published (verified against Maven Central metadata, 2026-09-21) -- the 9.4 line is
+            // EOL and no patched build exists there. Bumped to the latest available 9.4.x as a
+            // partial mitigation; a full fix needs a major-version jump (10.x/11.x/12.x) into
+            // hadoop-common's own jetty-server/jetty-servlet chain, a materially riskier change
+            // out of scope for this pass.
+            if (requested.group == "org.eclipse.jetty" &&
+                (requested.name == "jetty-http" || requested.name == "jetty-security") &&
+                requested.version == "9.4.57.v20241219") {
+                useVersion("9.4.58.v20250814")
+                because("latest available 9.4.x -- no true fix published on this EOL branch")
+            }
+            if (requested.group == "org.apache.zookeeper" && requested.name == "zookeeper" &&
+                requested.version == "3.8.4") {
+                useVersion("3.8.6")
+                because("GHSA-7xrh-hqfc-g7qr / GHSA-crhr-qqj8-rpxc")
+            }
+            if (requested.group == "com.nimbusds" && requested.name == "nimbus-jose-jwt" &&
+                requested.version == "9.30.2") {
+                useVersion("9.37.2")
+                because("GHSA-gvpg-vgmx-xg6w")
+            }
+            if (requested.group == "commons-beanutils" && requested.name == "commons-beanutils" &&
+                requested.version == "1.9.4") {
+                useVersion("1.11.0")
+                because("GHSA-wxr5-93ph-8wr9")
+            }
+            // The actual request is the old monolithic "jline" umbrella artifact (pre-split,
+            // bundles what's now the separate jline-remote-telnet module's classes internally)
+            // -- grype's package detection reports the split module name from the embedded
+            // class evidence, not the umbrella artifact grype actually found it in. Verified
+            // live via dependency:tree, 2026-09-21: org.jline:jline:3.9.0, not jline-remote-telnet.
+            if (requested.group == "org.jline" && requested.name == "jline" &&
+                requested.version == "3.9.0") {
+                useVersion("3.30.17")
+                because("GHSA-2r2c-cx56-8933 / GHSA-47qp-hqvx-6r3f")
+            }
+            if (requested.group == "org.jsoup" && requested.name == "jsoup" &&
+                requested.version == "1.11.3") {
+                useVersion("1.14.2")
+                because("GHSA-m72m-mhq2-9p6c")
+            }
+            if (requested.group == "io.airlift" && requested.name == "aircompressor" &&
+                requested.version == "2.0.2") {
+                useVersion("2.0.3")
+                because("GHSA-vx9q-rhv9-3jvg")
+            }
+            if (requested.group == "org.postgresql" && requested.name == "postgresql" &&
+                requested.version == "42.7.4") {
+                useVersion("42.7.12")
+                because("GHSA-98qh-xjc8-98pq / GHSA-hq9p-pm7w-8p54 / GHSA-j92g-9f8w-j867")
+            }
+            if (requested.group == "io.projectreactor.netty" &&
+                (requested.name == "reactor-netty-core" || requested.name == "reactor-netty-http") &&
+                requested.version == "1.0.38") {
+                useVersion("1.0.39")
+                because("GHSA-q24v-hpg3-v3jp / GHSA-xjhv-p3fv-x24r")
             }
         }
     }
