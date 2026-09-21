@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.95.1](https://github.com/kenstott/calcite/compare/engine-v0.95.0...engine-v0.95.1) (2026-09-21)
+
+No askamerica-engine source changes. Re-tagged to repackage the browser extension
+(kenstott/askamerica) with today's changes: a news-report validation button, and
+prompts on all three validate paths that explicitly mandate the AskAmerica
+connector rather than leaving it to chance.
+
 ## [0.95.0](https://github.com/kenstott/calcite/compare/engine-v0.94.4...engine-v0.95.0) (2026-09-20)
 
 
