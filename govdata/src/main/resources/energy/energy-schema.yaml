@@ -73,6 +73,12 @@ column_templates:
       - *partition_type
       - *partition_year
 
+  # Static reference tables (no year dimension) — one partition per `type` value.
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
   # Sub-annual tables (EIA monthly + weekly series) partition by year+month so each
   # per-month fetch lands its own partition. overwritePartitions:true then replaces a
   # single month rather than the whole year. The framework keys a per-month completion
@@ -1040,6 +1046,116 @@ partitionedTables:
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # GAS PIPELINES — EIA interstate/intrastate natural gas pipeline network (static reference)
+  # ---------------------------------------------------------------------------
+  - name: gas_pipelines
+    pattern: "type=gas_pipelines/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      U.S. natural gas transmission pipeline network — one row per pipeline segment
+      (~32,900 segments nationwide), sourced from EIA and mirrored as a public ArcGIS
+      FeatureServer under Esri's Federal_User_Community org (the layer's own listing:
+      "checked monthly for updates"; EIA's own Energy Atlas hosting for this layer is
+      not currently available — verified live, not the PA Department of Health's
+      Pennsylvania-only re-clip of the same underlying EIA data found during initial
+      research, which this table does NOT use). Confirmed nationwide via a spot-check
+      of returned segments across Illinois, Minnesota, Arizona, Utah, Nevada, and
+      Colorado — not just the Marcellus-region subset the PA mirror is limited to.
+      geometry_wkt carries each segment's own WGS84 line geometry (LINESTRING or, for
+      a small number of segments, MULTILINESTRING); length_m is EIA's own projected
+      segment length in meters, not a WGS84-degree approximation. No county field is
+      present at the source — join geometry_wkt against geo.counties (DuckDB
+      ST_Intersects) for county-grain rollups, following the same spatial-join pattern
+      as lands.county_federal_fee_land_share; see energy.county_gas_pipeline_presence
+      for a pre-built rollup. pipeline_type is Interstate or Intrastate (EIA/PHMSA
+      classification); status is "Operating" for every row in the live source despite
+      the field's stated Active/Inactive/Abandoned vocabulary — a real constant, not a
+      transform bug. A small fraction of segments (~0.2%, confirmed live) carry no
+      geometry at all; geometry_wkt is null for those rather than the row being
+      dropped, so segment_id stays a complete FID census.
+
+    dimensions:
+      type:
+        - gas_pipelines
+
+    columns:
+      - name: segment_id
+        type: integer
+        nullable: false
+        comment: EIA/Esri pipeline segment feature ID (FID)
+      - name: pipeline_type
+        type: string
+        nullable: true
+        comment: "Interstate or Intrastate (EIA/PHMSA classification)"
+      - name: operator
+        type: string
+        nullable: true
+        comment: Pipeline operating company
+      - name: status
+        type: string
+        nullable: true
+        comment: "Operational status — 'Operating' for every row in the live source"
+      - name: length_m
+        type: double
+        nullable: true
+        comment: Segment length in meters (EIA's own projected measurement, not WGS84-degree)
+      - name: geometry_wkt
+        type: string
+        nullable: true
+        comment: "Segment line geometry as WGS84 WKT (LINESTRING/MULTILINESTRING); null for the small fraction of source rows with no geometry"
+
+    # The service returns both an ETag and a Last-Modified header (confirmed live); ETag probed
+    # first per the project's own precedent (lands.national_forests). Content changes rarely
+    # (monthly-checked source, largely static network), so this table is a non-period reference
+    # table like national_forests/nps_units, re-fetched in full on each change rather than
+    # incrementally.
+    freshness:
+      type: etag
+    source:
+      type: http
+      url: "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/Natural_Gas_Interstate_and_Intrastate_Pipelines_1/FeatureServer/0/query?where=1%3D1&outFields=FID%2CTYPEPIPE%2COperator%2CStatus%2CShape__Length&returnGeometry=true&outSR=4326&orderByFields=FID&f=json"
+      method: GET
+      response:
+        format: json
+        # No countPath: the ArcGIS query response carries no total-count field. HttpSource
+        # falls back to partial-page detection (page size < pageSize ends pagination), which is
+        # exact here since the server never returns a short non-final page (maxRecordCount=2000,
+        # confirmed live at ~33k total rows / ~17 pages).
+        pagination:
+          type: OFFSET
+          pageSize: 2000
+          limitParam: "resultRecordCount"
+          offsetParam: "resultOffset"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.GasPipelineTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=gas_pipelines/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: gas_pipelines
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        # Must stay >= 2, matching lands.national_forests: a single-file static-reference
+        # partition satisfies compactionMinFiles: 1 on every run, rewriting under a fresh
+        # compacted_<uuid> name each pass — new snapshot, orphaned superseded file, and a
+        # filename that defeats the R2 sync's size+modtime skip so the same rows re-upload
+        # every time.
+        compactionMinFiles: 5
+        compactionTargetFileSizeBytes: 67108864
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # EIA CAPACITY CHANGES - EIA-860M Monthly Generator Capacity Changes
@@ -2746,6 +2862,9 @@ constraints:
         targetTable: eia_utility_annual
         targetColumns: [utility_id]
 
+  gas_pipelines:
+    primaryKey: [segment_id]
+
   eia_capacity_changes:
     primaryKey: [plant_id, generator_id, snapshot_year, snapshot_month, change_type]
     foreignKeys:
@@ -2829,6 +2948,92 @@ constraints:
 # ============================================================================
 
 views:
+
+  - name: county_gas_pipeline_presence
+    comment: >
+      Per-county natural gas pipeline presence, spatially joining gas_pipelines'
+      segment-level line geometry (geometry_wkt) against geo.counties' own boundary
+      geometry (its `geometry` column, latest TIGER vintage year) with DuckDB spatial
+      (`&&` bounding-box prefilter, then ST_Intersects/ST_Intersection/ST_Length over
+      WGS84 WKT — both sources use SRID 4326, no reprojection needed), following the
+      same pattern as lands.county_federal_fee_land_share. Unlike that view, no
+      per-row state filter is applied before the spatial predicate: gas_pipelines
+      carries no state column to prefilter on, and the `&&` bounding-box operator
+      (evaluated before the more expensive ST_Intersects) keeps the ~3,144 x ~32,900
+      cross product tractable without one. pipeline_length_miles is not a raw
+      degree-based length (DuckDB ST_Length has no CRS awareness, so a WGS84-degree
+      length is not a distance) — instead, for each intersecting segment, the fraction
+      of the segment's own line length that falls within the county
+      (ST_Length(ST_Intersection(...)) / ST_Length(full segment), both in the same
+      degree units, so the CRS-unaware-ness cancels out in the ratio) is applied to
+      that segment's real EIA-published length_m (meters, projected, not
+      degree-based) before converting to miles. A segment crossing multiple counties
+      is prorated across each and sums back to (approximately) its own total length
+      nationally, rather than counting its full length in every county it touches.
+      pipeline_segment_count / interstate_segment_count / intrastate_segment_count
+      count distinct segment_id (a segment that re-enters the same county's boundary
+      more than once, e.g. along a winding line, is still counted once). Both input
+      geometries are simplified/generalized (TIGER counties to their own Census
+      generalization; pipeline segments are EIA/Esri's own digitized routes, not
+      survey-grade), so treat pipeline_length_miles as a close estimate rather than a
+      pipeline-operator's as-built figure — consistent with
+      county_federal_fee_land_share's own accuracy caveat. LEFT JOIN so every county
+      appears, including a 0 count/length when no pipeline segment intersects it.
+    sql: >
+      WITH latest_counties AS (
+        SELECT
+          c.county_fips,
+          c.state_fips,
+          c.county_name,
+          ST_GeomFromText(c.geometry) AS geom
+        FROM "geo"."counties" c
+        WHERE c.year = (SELECT MAX(year) FROM "geo"."counties")
+          AND c.geometry IS NOT NULL
+      ),
+      pipeline_geom AS (
+        SELECT
+          segment_id,
+          pipeline_type,
+          length_m,
+          ST_GeomFromText(geometry_wkt) AS geom
+        FROM gas_pipelines
+        WHERE geometry_wkt IS NOT NULL
+      ),
+      matches AS (
+        SELECT
+          c.county_fips,
+          c.state_fips,
+          c.county_name,
+          p.segment_id,
+          p.pipeline_type,
+          p.length_m,
+          ST_Length(p.geom)                                  AS full_length_deg,
+          ST_Length(ST_Intersection(c.geom, p.geom))          AS overlap_length_deg
+        FROM latest_counties c
+        LEFT JOIN pipeline_geom p
+          ON c.geom && p.geom
+         AND ST_Intersects(c.geom, p.geom)
+      )
+      SELECT
+        county_fips,
+        state_fips,
+        county_name,
+        COUNT(DISTINCT segment_id)                            AS pipeline_segment_count,
+        COUNT(DISTINCT CASE WHEN pipeline_type = 'Interstate' THEN segment_id END)
+                                                                AS interstate_segment_count,
+        COUNT(DISTINCT CASE WHEN pipeline_type = 'Intrastate' THEN segment_id END)
+                                                                AS intrastate_segment_count,
+        ROUND(
+          COALESCE(SUM(
+            CASE WHEN full_length_deg > 0
+              THEN length_m * LEAST(overlap_length_deg / full_length_deg, 1.0)
+              ELSE 0
+            END
+          ), 0) / 1609.344,
+          2
+        )                                                      AS pipeline_length_miles
+      FROM matches
+      GROUP BY county_fips, state_fips, county_name
 
   - name: state_energy_mix
     comment: >

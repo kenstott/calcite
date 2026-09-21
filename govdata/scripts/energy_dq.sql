@@ -4,7 +4,7 @@
 -- Run: source .env.prod && envsubst < scripts/energy_dq.sql | duckdb
 --
 -- Tables: eia_electricity_generation, eia_electricity_prices,
---         eia_utility_annual, eia_service_territory, eia_power_plants,
+--         eia_utility_annual, eia_service_territory, eia_power_plants, gas_pipelines,
 --         eia_capacity_changes, eia_fossil_fuel_production,
 --         eia_state_energy_consumption, eia_natural_gas_storage,
 --         eia_petroleum_stocks, eia_crude_oil_imports, eia_refinery_operations,
@@ -418,6 +418,97 @@ FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_power_plants', allow_moved_paths := true)
   WHERE nameplate_capacity_mw IS NOT NULL AND nameplate_capacity_mw < 0
+) t;
+
+-- ============================================================
+-- gas_pipelines
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'gas_pipelines', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true);
+
+-- T2: row_count (~32,900 segments nationwide, confirmed live)
+INSERT INTO dq_results
+SELECT
+  'energy', 'gas_pipelines', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 25000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 25000, 'expected >= 25000 pipeline segments'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'gas_pipelines', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value — status is a real constant ('Operating' for every live row), excluded
+INSERT INTO dq_results
+SELECT
+  'energy', 'gas_pipelines', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'status')
+) t;
+
+-- T6: pk_nulls (segment_id NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'gas_pipelines', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'segment_id IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true)
+WHERE segment_id IS NULL;
+
+-- T7: segment_id uniqueness
+INSERT INTO dq_results
+SELECT
+  'energy', 'gas_pipelines', 'T7_segment_id_uniqueness',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Duplicate segment_id values'
+FROM (
+  SELECT COUNT(*) AS dups
+  FROM (
+    SELECT segment_id, COUNT(*) AS cnt
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true)
+    GROUP BY segment_id
+    HAVING COUNT(*) > 1
+  ) d
+) t;
+
+-- T7: length_m positive where not null; geometry_wkt null only for the known ~0.2% gap
+INSERT INTO dq_results
+SELECT
+  'energy', 'gas_pipelines', 'T7_length_and_geometry',
+  CASE WHEN bad_length = 0 AND missing_geom_pct <= 2.0 THEN 'pass' ELSE 'warn' END,
+  missing_geom_pct, 2.0,
+  printf('bad_length=%d rows, missing_geometry=%.2f%%', bad_length, missing_geom_pct)
+FROM (
+  SELECT
+    SUM(CASE WHEN length_m IS NOT NULL AND length_m <= 0 THEN 1 ELSE 0 END) AS bad_length,
+    100.0 * SUM(CASE WHEN geometry_wkt IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS missing_geom_pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true)
 ) t;
 
 -- ============================================================
