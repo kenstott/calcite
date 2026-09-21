@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.95.3](https://github.com/kenstott/calcite/compare/engine-v0.95.2...engine-v0.95.3) (2026-09-21)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** accept humanized aliases in the disclosure gate ([20d5a10](https://github.com/kenstott/calcite/commit/20d5a10f0056f5410dd82bbce786af1143f2d745))
+
 ## [0.95.2](https://github.com/kenstott/calcite/compare/engine-v0.95.1...engine-v0.95.2) (2026-09-21)
 
 
