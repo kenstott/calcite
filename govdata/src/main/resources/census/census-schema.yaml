@@ -4339,8 +4339,8 @@ partitionedTables:
       - name: naics_code
         type: string
         nullable: true
-        expression: 'COALESCE(src."NAICS2017", src."NAICS2022")'
-        comment: NAICS industry code (version depends on census year)
+        expression: 'src."NAICS"'
+        comment: NAICS industry code (canonical header; source variable is the vintage-specific NAICS20xx, normalized by CensusResponseTransformer)
       - name: establishments
         type: long
         nullable: true
