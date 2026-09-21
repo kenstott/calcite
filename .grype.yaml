@@ -1,0 +1,21 @@
+# Grype CVE-scan suppressions for the pgwire-*/trino-* release pipelines
+# (pgwire-adapters-release.yml, publish-trino.yml). Every entry here must be backed by verified
+# evidence that the finding does not apply, not just an inconvenient result -- see the reason on
+# each entry.
+
+ignore:
+  # jetty-security 9.4.x flagged against GHSA-2fvj-hgj9-j2gr (Eclipse Jetty Digest Authentication:
+  # ISO-8859-1 lossy encoding allows authentication bypass). Verified false positive, 2026-09-21:
+  # the advisory's own vulnerable code is org.eclipse.jetty.client.DigestAuthentication.apply()
+  # under jetty-core/jetty-client (Jetty 12's module architecture, which does not exist in 9.4.x's
+  # monolithic layout) -- decompiled jetty-security-9.4.58.v20250814.jar's actual
+  # org.eclipse.jetty.security.authentication.DigestAuthenticator (a different class entirely:
+  # server-side response validation, not client-side response generation) and confirmed it
+  # contains no ISO-8859-1 encoding call at all. The advisory's version range appears to span
+  # 9.4.x incorrectly.
+  - vulnerability: GHSA-2fvj-hgj9-j2gr
+    reason: >-
+      False positive: the vulnerable class (jetty-client's DigestAuthentication, Jetty 12's
+      module layout) does not exist in the 9.4.x jetty-security artifact; its actual
+      DigestAuthenticator class has no ISO-8859-1 encoding call. Verified by decompiling
+      jetty-security-9.4.58.v20250814.jar, 2026-09-21.

@@ -356,7 +356,7 @@ jobs:
         # fixing the 6 Criticals (redisson, netty-handler, bcprov-jdk18on) is this pass's scope;
         # the rest is its own separate remediation effort across this fork's dependency tree.
         run: |
-          grype "dir:${BUNDLE_NAME}" \
+          grype "dir:${BUNDLE_NAME}" -c .grype.yaml \
             -o json --file "${BUNDLE_NAME}.cve-report.json" --fail-on critical
 
       - name: Sign tarball (Sigstore attestation)

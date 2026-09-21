@@ -96,7 +96,7 @@ jobs:
         # pgwire-file bundle, 2026-09-21 — see pgwire-adapters-release.yml's own CVE step) is
         # its own separate remediation effort, out of scope for wiring up the gate itself.
         run: |
-          grype "${{ steps.jar.outputs.path }}" \
+          grype "${{ steps.jar.outputs.path }}" -c .grype.yaml \
             -o json --file "${{ matrix.artifact }}-cve-report.json" --fail-on critical
 
       - uses: actions/upload-artifact@v4
