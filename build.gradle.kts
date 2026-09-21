@@ -409,6 +409,13 @@ allprojects {
                 useVersion("1.85")
                 because("GHSA-9pwp-9qqc-pr26 (Critical) -- fixed in 1.85")
             }
+            // Transitive from com.azure.resourcemanager:azure-resourcemanager-keyvault:2.34.0
+            // (cloud-ops) -- verified live via grype against the pgwire-cloudops bundle,
+            // 2026-09-21.
+            if (requested.group == "com.azure" && requested.name == "azure-security-keyvault-keys") {
+                useVersion("4.10.6")
+                because("GHSA-97jf-46m3-8953 (Critical) -- fixed in 4.10.6")
+            }
         }
     }
 
