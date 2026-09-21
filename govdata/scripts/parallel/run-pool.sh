@@ -903,6 +903,18 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       exit_code=$(cat "$PID_DIR/${id}.exit" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
       [[ "$exit_code" =~ ^[0-9]+$ ]] || exit_code=1
 
+      # No .exit file means the session-leader wrapper itself died (e.g. OOM-killed) before it
+      # could write one — `kill -0 $pid` failing only proves the leader is gone, not that its
+      # session is empty. setsid's nohup-bash-worker.sh-EtlRunner chain reparents to init and
+      # keeps running, unsupervised and still holding its full memory footprint, while this loop
+      # already credits that footprint back via remove_active below. _kill_worker_session is a
+      # no-op (logs "no processes found") when the session really is empty, so this is safe to
+      # call unconditionally in this branch.
+      if [ ! -f "$PID_DIR/${id}.exit" ]; then
+        _cleanup_log "$id: wrapper $pid gone with no .exit file — reaping any orphaned session members"
+        _kill_worker_session "$pid"
+      fi
+
       if [ "$exit_code" -eq 0 ]; then
         ((done_count++)) || true
         log_info "$id finished OK (${mins}m)"
