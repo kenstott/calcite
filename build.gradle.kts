@@ -559,11 +559,22 @@ allprojects {
                 useVersion("5.4.0")
                 because("GHSA-gmg8-593g-7mv3")
             }
-            // commons-lang:commons-lang (the legacy pre-commons-lang3 artifact) has no patched
-            // 2.x release at all -- GHSA-j288-q9x7-2f5v's own data lists "-> None" for this
-            // coordinate, only for its modern replacement commons-lang3. Left unforced (no
-            // useVersion callable) and documented in .grype.yaml instead, matching the jetty
-            // EOL-branch pattern.
+            // commons-lang:commons-lang:2.6 (the legacy pre-commons-lang3 artifact, no patched
+            // 2.x release ever published -- GHSA-j288-q9x7-2f5v's own data says "-> None" for
+            // it) arrives via com.joestelmach:natty:0.13 (file's natural-language date parser,
+            // FileRowConverter.java) -> org.mnode.ical4j:ical4j:1.0.2. natty itself is
+            // abandoned upstream (0.13, 2017, is the last release ever published -- cannot be
+            // bumped), but ical4j is an independent transitive dep with real newer releases;
+            // forcing IT drops commons-lang entirely (4.3.0 has no commons-lang dependency at
+            // all). Verified live, 2026-09-21: file:compileJava succeeds unchanged, and a
+            // runtime smoke test (new Parser().parse("next friday at 3pm")) against the forced
+            // ical4j returns a correct parsed date -- natty's compiled bytecode does not break
+            // against ical4j's newer API for the code path this adapter actually exercises.
+            if (requested.group == "org.mnode.ical4j" && requested.name == "ical4j" &&
+                versionOlderThan(requested.version ?: "0", "4.3.0")) {
+                useVersion("4.3.0")
+                because("GHSA-j288-q9x7-2f5v (transitively, by removing commons-lang entirely)")
+            }
         }
     }
 
