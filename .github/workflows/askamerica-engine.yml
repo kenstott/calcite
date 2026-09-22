@@ -986,11 +986,25 @@ jobs:
           name: askamerica-extension
           path: release-assets/
 
+      # softprops/action-gh-release's own "fetch existing release by tag" API call fails here
+      # with "Resource not accessible by integration" even though the job's GITHUB_TOKEN
+      # Permissions log confirms contents:write is actually granted (verified live,
+      # 2026-09-21/22, three separate attempts including a full fresh workflow_dispatch) --
+      # the release already exists (release-please creates it atomically with the tag), so
+      # this only needs to set its title/notes and upload files, not create or "find" it.
+      # `gh release edit`/`gh release upload` do exactly that over the same GITHUB_TOKEN and
+      # are the proven-working path: the pgwire-adapters-release.yml and
+      # pgwire-calcite-release.yml jobs already attach dozens of assets to this same release
+      # via `gh release upload` without hitting this error.
       - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: AskAmerica Engine ${{ github.ref_name }}
-          body: |
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          # The heredoc body below is indented to match this script's own indentation (so it
+          # reads cleanly here); strip that literal 12-space prefix before it becomes release
+          # notes, or GitHub's markdown renderer treats every line as an indented code block.
+          cat <<'RELEASE_BODY' | sed 's/^            //' > /tmp/release-notes.md
             ## AskAmerica Query Engine
 
             Query all 15 US government datasets from Python, Node, Go, or any JDBC client.
@@ -1050,9 +1064,11 @@ jobs:
             ### Browser extension
 
             `askamerica-extension.zip` — unzip and load unpacked via `chrome://extensions` (Developer mode). Reads previously published AskAmerica validation claims for the page you're on and hands off "Validate with AskAmerica" to your own Claude Desktop/claude.ai session; makes no model API calls itself. Requires the AskAmerica MCP engine running locally to see live claims.
-          files: release-assets/**/*
-          draft: false
-          prerelease: false
+          RELEASE_BODY
+          gh release edit "$TAG" --repo "${{ github.repository }}" \
+            --title "AskAmerica Engine ${TAG}" --notes-file /tmp/release-notes.md
+          shopt -s globstar
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber release-assets/**/*
 
       # The pgwire-calcite installers attach on a release event, but a release created above by
       # GITHUB_TOKEN does not emit one. Dispatch that workflow explicitly now that the release
