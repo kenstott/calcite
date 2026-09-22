@@ -57,7 +57,10 @@ def generate() -> str:
                 f"| {short(r.get('description',''))} | {short(tests, 60)} |")
         out.append("")
     out.insert(4, f"**{total} requirements across {len(glob.glob(str(LEDGER_DIR / '*.yaml')))} adapters.**\n")
-    return "\n".join(out) + "\n"
+    # out's last element is already "" (the per-module trailing blank line), so joining
+    # already ends in exactly one newline -- appending another here doubled it into a
+    # blank final line, which autostyleMarkdownCheck rejects.
+    return "\n".join(out)
 
 
 def main() -> int:
