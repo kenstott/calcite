@@ -837,6 +837,74 @@
         "burn rate comparison"
       ],
       "body": "A national-level ratio between two groups (e.g. 'federal land burns 4x the rate of non-federal land') is easy to compute and easy to get wrong in a way that still produces a plausible-looking number: aggregating everything to one national total per group throws away the fact that federal land is disproportionately concentrated in the arid West, so a national federal-vs-nonfederal ratio partly just measures 'the West burns more,' not an ownership effect at all.\n\nMeasured live (q59, 2026-09-11): askamerica correctly joined a live ownership table, caught and disclosed a real defect in it (lands.padus_federal_fee_lands double-counts acreage from overlapping designation layers), and cross-validated its national ratio against a second independent dataset -- genuinely good work -- but never left the national/annual grain, and ran no significance or confound test. It lost to two other answers specifically on this: one ran a per-state Pearson correlation between %-federal and burn intensity; the other went further, computing a WITHIN-STATE paired ratio for all 50 states and running a Wilcoxon signed-rank test on those 50 paired values (p=0.0004) -- which cancels out each state's own climate baseline the way a national ratio cannot -- plus a precipitation regression (r=-0.64) that explicitly tested and partially ruled out aridity as the real driver.\n\nFIX: when a question compares two groups of places, don't stop at a national aggregate ratio even if it is well-sourced and cross-validated. Join at the finer grain the comparison actually happens at (state, or county if the data supports it), compute the ratio or difference WITHIN each unit, and run a paired test across units (Wilcoxon signed-rank for a ratio/difference that need not be normally distributed, or hypothesis_test/ols_regression for a continuous relationship) rather than reporting only the pooled national figure. If a plausible confound exists (here: aridity/region, which correlates with both federal-land-share and fire risk independently), test for it explicitly -- a correlation or regression against the confounding variable, stated plainly as a confound check, not folded silently into the main analysis."
+    },
+    {
+      "id": "surface-known-dissent-on-contested-claims",
+      "title": "A majority-literature synthesis on a contested empirical claim should name a known, specific dissenting critique, not just present the consensus view as unanimous",
+      "triggers": [
+        "contested claim",
+        "disputed statistic",
+        "conflicting research",
+        "conflicting studies",
+        "opposing research findings",
+        "methodology dispute",
+        "research controversy",
+        "two research groups disagree",
+        "fact-check contested claim",
+        "validate this article",
+        "is this true",
+        "immigrant crime",
+        "crime rate comparison"
+      ],
+      "body": "A question with a clear majority position in the published literature is easy to answer by synthesizing the supporting studies and stopping there, because they already agree with each other and read as settled. The plausible-but-wrong shortcut is treating majority agreement as unanimity -- many contested empirical topics also have a specific, named dissenting critique (a different research group disputing the data, the methodology, or the measurement), and a synthesis that never mentions it presents the topic as more settled than it actually is, even when the majority conclusion is correct.\n\nMeasured directly in this harness (q241, 2026-09-21): asked whether immigrants commit more or less crime than natives, an askamerica run correctly synthesized the majority literature (Texas DPS/Light-He-Robey PNAS 2020, Cato Institute incarceration data, Abramitzky et al.'s 150-year historical study) and additionally ran an original OLS regression against the warehouse confirming no state-level relationship between foreign-born share and crime rate -- genuinely strong work. But it never mentioned the Center for Immigration Studies' published critique disputing the Texas DPS data's undercount of illegal-immigrant offenders, even though it drew on the same Cato source material. Two independently-run unaided personas (no connector, web research only) both found and disclosed the CIS dispute on their own -- the strongest possible signal that this is a real, reachable gap, not a hypothetical one.\n\nFIX: when researching a contested empirical claim, run a second, explicit search pass for the dissenting side -- terms like \"[topic] critique\", \"[topic] disputes\", \"[topic] methodology controversy\", \"[claim] debunked\" alongside the supporting-evidence search -- rather than stopping once enough literature supports one conclusion. Name the dissenting group and the substance of its argument in the answer even when the majority conclusion still stands after weighing it; a reader should learn the topic has a real live dispute, not just its winning side."
+    },
+    {
+      "id": "reconcile-diverging-real-dollar-adjustments",
+      "title": "A self-computed real-dollar (inflation-adjusted) figure that disagrees with an independently-cited real series is not automatically the wrong one -- reconcile the two, don't silently pick one",
+      "triggers": [
+        "real income",
+        "inflation-adjusted income",
+        "real median household income",
+        "real wage growth",
+        "household income since",
+        "income doubled since",
+        "purchasing power over time",
+        "income growth since",
+        "real dollars comparison",
+        "adjust_inflation"
+      ],
+      "body": "adjust_inflation deflates a nominal dollar figure against one CPI series to a chosen base year. A well-known metric like real median household income also has independently published \"real\" series (Census's own historical table; FRED's MEHOINUSA672N), and it is tempting to treat a gap between your own adjust_inflation result and one of these published series as proof your own number is wrong. It usually is not -- multiple real-dollar series for the SAME nominal figures routinely diverge for two ordinary, legitimate reasons: (1) different price INDEX methodology (headline CPI-U vs. the chain-weighted C-CPI-U / R-CPI-U-RS blend FRED uses, which are built differently and produce different cumulative multi-decade inflation estimates), and (2) different BASE YEAR (FRED's series re-expresses its whole history in the CURRENT release year's dollars each update, e.g. \"2024 dollars\" for a 2023 data point, rather than the survey year's own dollars the way Census's own report states it -- so the same year's income can appear as two different-looking numbers depending on which convention was used).\n\nMeasured directly in this harness (q242, 2026-09-21): fact-checking a claim that household income \"more than doubled since 2000\", an askamerica run computed real growth as ~8.5% via adjust_inflation, while two unaided personas separately cited FRED's MEHOINUSA672N and reported ~15% and ~19%. On inspection, FRED's own 2000 value ($73,560, in FRED's 2024-dollar terms) is within 1% of askamerica's own computed 2000 figure ($74,300, in 2023-dollar terms) -- the two approaches actually agree closely on the STARTING point. The apparent gap traces almost entirely to the 2023 ENDPOINT: FRED's $84,730 is expressed in 2024 dollars (one more year of inflation baked in on both sides of FRED's own ratio), while Census's own P60-282 states the actual 2023 figure, in 2023 dollars, as $80,610. Neither figure is fabricated or simply wrong; they answer the question in two different, both-legitimate units. The lesson is not \"prefer the published series\" -- it is that nobody in that run noticed or explained the divergence.\n\nFIX: when a self-computed real-dollar figure and an independently-cited real series disagree by more than a rounding difference, do not silently report one and drop the other. Check whether they used the same base year and the same price index; if either differs, say so explicitly and either recompute both sides onto one common index/base year before comparing, or report the range across methodologies rather than a single point figure presented as settled. A reconciled range or a named methodology difference is more honest, and often more useful to the reader, than confidently picking whichever number came from the 'official-sounding' source."
+    },
+    {
+      "id": "find-the-primary-study-behind-a-compiled-aggregator",
+      "title": "When a topic's key figures come from a compiled secondary aggregator and the corpus has no purpose-built table for it, search separately for the major primary study the aggregator is built on",
+      "triggers": [
+        "deaths per",
+        "mortality rate comparison",
+        "which is more dangerous",
+        "health risk comparison",
+        "safest energy source",
+        "our world in data",
+        "compiled estimate",
+        "no purpose-built table",
+        "energy source comparison"
+      ],
+      "body": "A well-compiled secondary aggregator (Our World in Data, a think-tank fact sheet, a Wikipedia summary table) is an efficient way to get a topic's headline comparison figures in one place, and it is tempting to stop there once its numbers answer the question. The plausible-but-wrong shortcut is treating the aggregator as sufficient sourcing on its own -- a major, independently-run primary study often exists behind or alongside it, using an entirely different dataset and methodology, and citing it both strengthens the answer's evidentiary base and surfaces nuance (sample period, population covered, what exactly was measured) the aggregator's summary table flattens away.\n\nMeasured directly in this harness (q12, 2026-09-22): asked which power source is most dangerous per unit of electricity, an askamerica run correctly cited Our World in Data's compiled deaths-per-TWh figures (built on Markandya & Wilkinson 2007) and reached the right ranking (coal > gas > nuclear), but never searched for or found Henneman et al., *Science* (2023) -- a Medicare-linked mortality study covering 480 US coal plants, 1999-2020, attributing ~460,000 deaths to coal-plant PM2.5 from an entirely different dataset and methodology than the 2007 European baseline. Two independently-run unaided personas both found and cited this study on their own -- the strongest possible signal this is a real, reachable gap. The energy/health schemas in this corpus have no purpose-built energy-source mortality table at all, so this was never a case of missing a corpus query -- it was an external-literature search that stopped one source short.\n\nFIX: when the corpus has no table for a topic and the answer is built from a compiled secondary source, run a second, explicit search pass for the primary study/studies the compilation rests on or that independently corroborate the same figures from different data -- terms like \"[topic] study\", \"[topic] peer-reviewed\", \"[aggregator]'s own source for [figure]\" -- before finalizing the answer. A second independent primary source that agrees with the aggregator is stronger evidence than the aggregator alone, and if it disagrees, that disagreement is itself worth surfacing rather than missing entirely."
+    },
+    {
+      "id": "check-both-layers-of-a-two-sided-concentration-question",
+      "title": "\"How concentrated is X\" for a market with a distinct infrastructure/access structure is not answered by concentration at only one layer",
+      "triggers": [
+        "how concentrated is",
+        "down to a handful of firms",
+        "market concentration",
+        "clearing concentration",
+        "hhi",
+        "herfindahl",
+        "dominant firms in the market",
+        "few firms control"
+      ],
+      "body": "Many markets a caller asks to size the concentration of are not one flat market but two stacked layers: an infrastructure/utility layer (an exchange, a clearinghouse, a platform) and an access/intermediary layer (the brokers, banks, or sellers who actually reach end customers through it). It is tempting to treat the question as answered once the layer the corpus's own data can reach is fully worked out, especially when that layer turns out to be extremely concentrated on its own -- but a reader asking \"is this down to a handful of firms\" usually means the whole business, and the access layer is often AT LEAST as concentrated as the infrastructure layer, sometimes more.\n\nMeasured directly in this harness (q38, 2026-09-22): asked how concentrated interest-rate swap clearing is, an askamerica run correctly identified that its own CFTC swap-data tables cannot see the CCP (clearinghouse) side at all -- a real, permanent data-source limitation (Part 43 public dissemination excludes the CCP-facing novation leg by design) -- and built an excellent CCP-layer analysis from external sources instead (HHI=8,250, LCH SwapClear ~91% of global cleared notional). But it never addressed the SEPARATE dealer/clearing-member layer -- which banks control client access to that clearing -- even though nothing about the CFTC-table limitation blocks researching that layer. Two independently-run unaided personas both found and reported it on their own (OCC data: 4 US banks hold 87.1% of bank derivatives notional; a Federal Reserve Bank of Chicago study: 5 bank-affiliated clearing members hold over 80% of client margin for cleared IRS), which is at least as concentrated a picture as the CCP layer and materially changes what \"a handful of firms\" means for this market.\n\nFIX: before finalizing an answer to a market-concentration question, name the distinct layers the market actually has (infrastructure/utility vs. access/intermediary is the most common split, but a market can have others -- upstream supplier concentration vs. downstream retail concentration, for example) and check whether each one is addressed, not just the layer the corpus happens to have data for. A data limitation on ONE layer is never a reason the other layer went unresearched -- that second layer is usually reachable through ordinary external search even when the corpus has nothing on it."
     }
   ]
 }

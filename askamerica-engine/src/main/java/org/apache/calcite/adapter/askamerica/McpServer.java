@@ -5992,11 +5992,26 @@ public class McpServer {
     /** Broader than {@link #DISCLOSURE_WORDS} on purpose -- this gate polices "was this
      *  specific high-severity problem disclosed" for diagnostic types whose own wording talks
      *  about reliability/coverage, not necessarily exclusion, so "unreliable"/"caveat"/
-     *  "limitation"/coverage-gap language counts too. */
+     *  "limitation"/coverage-gap language counts too.
+     *
+     *  <p>Measured live (2026-09-22, q12): a {@code low_coverage} diagnostic on
+     *  {@code energy.eia_electricity_generation} rejected the same report 11 times in a row
+     *  despite a caveat paragraph naming the exact table, the exact year, and plainly
+     *  disclosing that the table "returned zero rows both times" and that "no figure in this
+     *  report is drawn from" it -- a caveat any human reader would recognize instantly, but
+     *  none of those phrases matched this pattern's original word list (which required
+     *  "excluded"/"unreliable"/"caveat"/"coverage gap" and similar, none of which the model's
+     *  own natural phrasing happened to use). Broadened below to cover the additional ordinary
+     *  ways a model discloses a broken/empty query result. */
     private static final java.util.regex.Pattern CAVEAT_WORDS = java.util.regex.Pattern
         .compile("(?i)exclud|omitt|dropped|left out|not included|removed from|without |"
             + "unreliable|caveat|limitation|caution|not reliable|coverage gap|not published|"
-            + "not (?:as )?trustworthy|treat.{0,20}as unreliable");
+            + "not (?:as )?trustworthy|treat.{0,20}as unreliable|"
+            + "zero rows|no rows|not drawn from|is not from|does not (?:come|draw) from|"
+            + "high-severity|data-quality (?:finding|issue|problem)|"
+            + "did not reconcile|does(?:n't| not) reconcile|"
+            + "no data|not loaded|not available|returned zero|empty result|"
+            + "flagged as (?:a |an )?(?:defect|issue|problem|gap)");
 
     /**
      * A high-severity diagnostic (broken_field, low_coverage, ...) that fired on a query whose

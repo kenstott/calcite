@@ -62,6 +62,29 @@ class HighSeverityDisclosureTest {
         m.invoke(null, "query", args, 1000L, 32, diagnostics, null);
     }
 
+    private static void recordLowCoverageQuery() throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("recordCall", String.class, JsonNode.class,
+            long.class, int.class, ObjectNode.class, String.class);
+        m.setAccessible(true);
+
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("sql", "SELECT * FROM energy.eia_electricity_generation "
+            + "WHERE generation_year = 2023");
+
+        ObjectNode warning = MAPPER.createObjectNode();
+        warning.put("type", "low_coverage");
+        warning.put("severity", "high");
+        warning.put("note", "energy.eia_electricity_generation returned no rows for 2023.");
+        warning.put("table", "energy.eia_electricity_generation");
+        warning.put("year", 2023);
+
+        ObjectNode diagnostics = MAPPER.createObjectNode();
+        ObjectNode inner = diagnostics.putObject("diagnostics");
+        inner.putArray("warnings").add(warning);
+
+        m.invoke(null, "query", args, 1000L, 0, diagnostics, null);
+    }
+
     private static Object section(String heading, String html) throws Exception {
         Class<?> secClass = Class.forName(
             "org.apache.calcite.adapter.askamerica.ReportPage$Section");
@@ -102,6 +125,26 @@ class HighSeverityDisclosureTest {
         recordRollupContaminationQuery();
         List<Object> secs = List.of(section("Wheat acreage",
             "Wheat acreage rose steadily from 2010 to 2020."));
+        assertNotNull(enforce(secs));
+    }
+
+    /** Regression for the CAVEAT_WORDS gap measured live 2026-09-22 (q12): a low_coverage
+     *  caveat phrased as "returned zero rows" / "no figure ... is drawn from" -- ordinary,
+     *  clear disclosure language that named none of the original word list's specific terms
+     *  ("excluded", "unreliable", "caveat", "coverage gap", etc.) -- rejected the same report
+     *  11 times in a row. */
+    @Test void plainDisclosureOfAnEmptyQueryResultSatisfies() throws Exception {
+        recordLowCoverageQuery();
+        List<Object> secs = List.of(section("Generation mix",
+            "energy.eia_electricity_generation was queried for 2023 and returned zero rows "
+            + "both times; no figure in this report is drawn from that table."));
+        assertNull(enforce(secs));
+    }
+
+    @Test void lowCoverageWithNoDisclosureStillRejected() throws Exception {
+        recordLowCoverageQuery();
+        List<Object> secs = List.of(section("Generation mix",
+            "Coal produced about 17% of US electricity in 2025."));
         assertNotNull(enforce(secs));
     }
 }
