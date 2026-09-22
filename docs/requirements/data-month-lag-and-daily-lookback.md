@@ -103,5 +103,3 @@ Both defects were confirmed by reading the code, not by reasoning about intent:
 | Cartesian `month` list axes exist and are uncapped | `eia_electricity_generation`, `eia_fossil_fuel_production`, `eia_refinery_operations` — `month: {type: list, values: [01..12]}` |
 | `lookbackPeriods` reopens only already-generated combos | `reopenTrailingWindowPeriods` iterates `combinations` by index |
 | Daily mode generates a single year | [common.sh:626,645](../../govdata/scripts/parallel/common.sh) |
-
-
