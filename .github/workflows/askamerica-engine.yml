@@ -696,6 +696,9 @@ jobs:
       - name: Import GPG key
         run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
 
+      - name: Install syft
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Determine version
         id: version
         run: |
@@ -742,12 +745,20 @@ jobs:
           jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" -C /tmp placeholder.txt
           jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" -C /tmp placeholder.txt
 
-          # GPG sign all four artifacts
+          # SBOM (CycloneDX), same tool/format as the pgwire-adapters release bundles
+          # (pgwire-adapters-release.yml) -- published as a classified artifact
+          # (<artifact>-<version>-cyclonedx.json) alongside the jar, checksummed and
+          # signed the same way, so the Maven Central coordinates carry an SBOM too.
+          syft "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
+            -o cyclonedx-json="${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-cyclonedx.json"
+
+          # GPG sign all five artifacts
           for f in \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom" \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" \
-            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-cyclonedx.json"
           do
             if [ -n "$GPG_PASSPHRASE" ]; then
               gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \

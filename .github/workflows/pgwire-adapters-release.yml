@@ -135,6 +135,12 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: astral-sh/setup-uv@v5
+      # Same GPG_PRIVATE_KEY/GPG_KEY_ID/GPG_PASSPHRASE secrets askamerica-engine.yml and
+      # publish-govdata.yml already use to sign the Maven Central bundle -- these tarballs get
+      # detached-signed the same way below, in addition to the existing sha256 (integrity, not
+      # authenticity) and Sigstore attestation (keyless, not this project's own key).
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
       - uses: actions/download-artifact@v4
         with:
           name: adapter-jars-${{ matrix.adapter.name }}
@@ -331,6 +337,18 @@ jobs:
             | awk '{print $1}' > "${name}.tar.gz.sha256"
           echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
 
+      - name: GPG-sign tarball
+        env:
+          GPG_KEY_ID:     ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -n "$GPG_PASSPHRASE" ]; then
+            gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+              --local-user "$GPG_KEY_ID" --armor --detach-sign "${BUNDLE_NAME}.tar.gz"
+          else
+            gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "${BUNDLE_NAME}.tar.gz"
+          fi
+
       # This tarball is fetched and RUN directly on end-user machines at runtime (provisa's
       # runtime_deps/pgwire_bundles.py), never installed via a package manager with its own
       # integrity chain — until now the sha256 above was the only check, and it protects
@@ -375,6 +393,7 @@ jobs:
           name: bundle-${{ matrix.adapter.name }}-${{ matrix.os.variant }}
           path: |
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.asc
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.sbom.cdx.json
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.cve-report.json
@@ -391,6 +410,7 @@ jobs:
           TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
           gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz \
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.asc \
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256 \
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.sbom.cdx.json \
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.cve-report.json
