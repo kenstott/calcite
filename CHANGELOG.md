@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.95.4](https://github.com/kenstott/calcite/compare/engine-v0.95.3...engine-v0.95.4) (2026-09-22)
+
+
+### Bug Fixes
+
+* bump azure-security-keyvault-keys off a Critical CVE (cloudops) ([2dcef72](https://github.com/kenstott/calcite/commit/2dcef7252c5fc8b6efd05e9960f76e345962570c))
+* eliminate the legacy commons-lang:commons-lang CVE (Low finding) ([7fa4d89](https://github.com/kenstott/calcite/commit/7fa4d89c58769f37d2243b98f043f4863a7bacc0))
+* **pgwire-calcite:** time out an incomplete startup handshake ([47a0ce9](https://github.com/kenstott/calcite/commit/47a0ce919e4ed6d21db8008514c642f9af1c6106))
+* resolve High-severity CVEs across pgwire/trino bundles ([14c60d5](https://github.com/kenstott/calcite/commit/14c60d5a740c38ac089825abba58c885d4766eab))
+* resolve Medium-severity CVEs across pgwire/trino bundles (pure version bumps) ([ccd696f](https://github.com/kenstott/calcite/commit/ccd696f627ac8e4c9ca1a45dcb9538a8996255ab))
+* resolve the trino-* modules' last Low findings (logback-core) ([c234349](https://github.com/kenstott/calcite/commit/c2343498b12a9117e30ca53d342e42b4eb9f9581))
+* sign + SBOM + CVE-gate pgwire/trino release artifacts ([1d4a00a](https://github.com/kenstott/calcite/commit/1d4a00aa46da6ac0955f4924d8dab9f370749d8e))
+* stop gen_requirements_md.py from doubling the trailing newline ([8d01086](https://github.com/kenstott/calcite/commit/8d0108697d6af52b6c2170ddfb156e327a302c74))
+* strip extra trailing blank line breaking autostyleMarkdownCheck ([df56de8](https://github.com/kenstott/calcite/commit/df56de82f3a8616ffe25efca64d1eb3da29063f3))
+* suppress a verified grype false positive (jetty-security digest CVE) ([97eff18](https://github.com/kenstott/calcite/commit/97eff18b9bff31805851b56eee4588c5c0fe3a6c))
+
 ## [0.95.3](https://github.com/kenstott/calcite/compare/engine-v0.95.2...engine-v0.95.3) (2026-09-21)
 
 
