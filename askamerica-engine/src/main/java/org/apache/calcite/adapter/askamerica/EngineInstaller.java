@@ -22,6 +22,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -116,8 +118,36 @@ final class EngineInstaller {
         }
         Files.createDirectories(dest.getParent());
         String url = System.getenv().getOrDefault("ASKAMERICA_ENGINE_URL", DEFAULT_URL);
-        download(url, dest, serverMode);
-        return dest;
+        return lockAndDownload(dest, url, serverMode);
+    }
+
+    /**
+     * Serializes the check-then-download across every process racing to fill the shared
+     * cache — Claude Desktop spawns one MCP server process per open conversation, so a
+     * new release landing while several conversations are open would otherwise start
+     * several full, independent downloads of the same jar at once (measured live
+     * 2026-09-22: multiple "Setting up AskAmerica engine" windows opening together).
+     *
+     * <p>A {@link FileLock} on a sibling {@code .lock} file is OS-level advisory locking
+     * that works across separate JVM processes, not just threads within one — exactly what's
+     * needed here, since each racing launcher is its own process. The lock is re-checked
+     * after acquisition: whichever process gets it first downloads and writes {@code dest};
+     * every other process, once unblocked, finds the jar already fresh and skips its own
+     * download instead of proceeding blindly.
+     */
+    private static Path lockAndDownload(Path dest, String url, boolean serverMode)
+        throws IOException, InterruptedException {
+        Path lockFile = dest.resolveSibling(dest.getFileName() + ".lock");
+        try (FileChannel channel = FileChannel.open(lockFile,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            try (FileLock lock = channel.lock()) {
+                if (Files.exists(dest) && !isStale(dest)) {
+                    return dest;
+                }
+                download(url, dest, serverMode);
+                return dest;
+            }
+        }
     }
 
     /**
