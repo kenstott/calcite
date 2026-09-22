@@ -342,6 +342,12 @@ jobs:
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          # /usr/local/bin is on PATH by default on Linux/macOS runners but NOT inherited by a
+          # later Git-Bash step on windows-latest, so `syft`/`grype` resolved fine here yet came
+          # back "command not found" in the very next step. Verified live (2026-09-21): every
+          # Windows bundle job (file, sharepoint-list, splunk, cloud-ops, govdata) failed at
+          # "Generate SBOM (CycloneDX)" with exit code 127 for exactly this reason.
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
 
       - name: Generate SBOM (CycloneDX)
         run: syft "$BUNDLE_NAME" -o cyclonedx-json="${BUNDLE_NAME}.sbom.cdx.json"
