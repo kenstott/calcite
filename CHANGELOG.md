@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.96.0](https://github.com/kenstott/calcite/compare/engine-v0.95.4...engine-v0.96.0) (2026-09-22)
+
+
+### Features
+
+* **ci:** GPG-sign pgwire release bundles, add SBOMs to Maven Central artifacts ([7f11d38](https://github.com/kenstott/calcite/commit/7f11d38c79e05a13588443e3dd29e3b360bca7d4))
+
+
+### Bug Fixes
+
+* **ci:** put /usr/local/bin on PATH after installing grype+syft on Windows ([93d7014](https://github.com/kenstott/calcite/commit/93d70147c3014e3d505450c45e2cf81268f8bf4e))
+* **ci:** stop using softprops/action-gh-release to attach the engine release ([b67e142](https://github.com/kenstott/calcite/commit/b67e14223a923e7819d17db4a222fdec9cc00fbf))
+
 ## [0.95.4](https://github.com/kenstott/calcite/compare/engine-v0.95.3...engine-v0.95.4) (2026-09-22)
 
 
