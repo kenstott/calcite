@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.96.1](https://github.com/kenstott/calcite/compare/engine-v0.96.0...engine-v0.96.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** broaden CAVEAT_WORDS, add 4 recipes from live eval ([3520b7b](https://github.com/kenstott/calcite/commit/3520b7b6680c05888e59ada99c402aa517de0973))
+
 ## [0.96.0](https://github.com/kenstott/calcite/compare/engine-v0.95.4...engine-v0.96.0) (2026-09-22)
 
 
