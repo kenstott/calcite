@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.96.2](https://github.com/kenstott/calcite/compare/engine-v0.96.1...engine-v0.96.2) (2026-09-22)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** serialize concurrent engine downloads across processes ([81f5f4d](https://github.com/kenstott/calcite/commit/81f5f4dc26540d337418b8fb6614b2ed4d0ee8fc))
+
 ## [0.96.1](https://github.com/kenstott/calcite/compare/engine-v0.96.0...engine-v0.96.1) (2026-09-22)
 
 
