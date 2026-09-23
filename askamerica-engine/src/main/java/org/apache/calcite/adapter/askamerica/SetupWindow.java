@@ -473,18 +473,51 @@ public class SetupWindow {
     }
 
     /**
-     * The version of the currently cached engine jar ({@link EngineInstaller#cacheJar()}),
-     * or null if nothing is cached yet. {@code SetupWindow} and {@link EngineInstaller} are
-     * both packaged into the fat engine jar and loaded by the same classloader at runtime
-     * (see {@code McpServerLauncher}), so this is a direct call, not reflection.
+     * The shared engine cache path — deliberately NOT {@link EngineInstaller#cacheJar()}.
+     *
+     * <p>Measured live 2026-09-23: {@code McpServerLauncher} calls {@code EngineInstaller
+     * .ensure()} directly, so {@code EngineInstaller} loads via the JVM's normal system
+     * classloader before {@code SetupWindow} is ever touched. {@code SetupWindow} itself is
+     * loaded afterward through a separate {@code URLClassLoader} pointed at the resolved fat
+     * jar (see {@code McpServerLauncher}'s reflective {@code Class.forName}). Those are two
+     * different classloaders, so — despite being "the same" class by name and package — a
+     * call from {@code SetupWindow} into {@code EngineInstaller}'s package-private statics
+     * throws {@code IllegalAccessError} across that boundary. It surfaces on the EDT, which
+     * kills {@code buildForm()} before any window is ever shown: the app appears in the Dock,
+     * shows nothing, and macOS eventually terminates the windowless, unresponsive process —
+     * exactly what "ran the pkg, no window, then it silently exits" was.
+     *
+     * <p>Fix: never reference {@code EngineInstaller} from this class. The two pieces of
+     * logic actually needed (the cache path, and reading a jar's stamped version) are small
+     * enough to duplicate locally rather than share across a classloader boundary that can't
+     * safely carry a direct call.
+     */
+    private static Path cachedEngineJar() {
+        return Paths.get(System.getProperty("user.home"), ".askamerica", "engine",
+            "askamerica-engine.jar");
+    }
+
+    /** See {@link #cachedEngineJar()} for why this doesn't call {@code EngineInstaller}. */
+    private static String jarVersion(Path jar) throws IOException {
+        try (java.util.jar.JarFile jf = new java.util.jar.JarFile(jar.toFile())) {
+            java.util.jar.Manifest mf = jf.getManifest();
+            if (mf == null) {
+                return null;
+            }
+            return mf.getMainAttributes().getValue("AskAmerica-Engine-Version");
+        }
+    }
+
+    /**
+     * The version of the currently cached engine jar, or null if nothing is cached yet.
      */
     private static String detectExistingJarVersion() {
         try {
-            Path cached = EngineInstaller.cacheJar();
+            Path cached = cachedEngineJar();
             if (!Files.exists(cached)) {
                 return null;
             }
-            String v = EngineInstaller.jarVersion(cached);
+            String v = jarVersion(cached);
             return v == null ? "unknown version" : "v" + v;
         } catch (Exception e) {
             return null;
@@ -493,15 +526,15 @@ public class SetupWindow {
 
     /**
      * Deletes the cached engine jar (and its cross-process lock file, if present) so the
-     * next launch's {@link EngineInstaller#ensure} downloads a fresh copy regardless of
-     * its own version-staleness check. This is the explicit "repair install" path — it
-     * must never run implicitly just because the wizard was opened again, or reinstalling
-     * would silently redownload the engine on every run.
+     * next launch's {@code EngineInstaller.ensure} downloads a fresh copy regardless of its
+     * own version-staleness check. This is the explicit "repair install" path — it must
+     * never run implicitly just because the wizard was opened again, or reinstalling would
+     * silently redownload the engine on every run.
      *
      * @return true if a cached jar was actually found and removed
      */
     private static boolean forceEngineRefresh() throws IOException {
-        Path cached = EngineInstaller.cacheJar();
+        Path cached = cachedEngineJar();
         boolean existed = Files.deleteIfExists(cached);
         Files.deleteIfExists(cached.resolveSibling(cached.getFileName() + ".lock"));
         return existed;
