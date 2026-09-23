@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.97.0](https://github.com/kenstott/calcite/compare/engine-v0.96.2...engine-v0.97.0) (2026-09-23)
+
+
+### Features
+
+* **askamerica-engine:** detect existing install in the setup wizard ([cf18c0e](https://github.com/kenstott/calcite/commit/cf18c0e5a53de06ca306d943b6c57f1efba487bc))
+
 ## [0.96.2](https://github.com/kenstott/calcite/compare/engine-v0.96.1...engine-v0.96.2) (2026-09-22)
 
 
