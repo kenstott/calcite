@@ -27,6 +27,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -43,9 +44,14 @@ import java.util.Map;
  *
  * <ul>
  *   <li>bound to <b>127.0.0.1</b> only;</li>
- *   <li><b>no enumeration</b>: there is no listing endpoint. A caller gets a validation back only
- *       by presenting the exact article URL it was published for, and {@code /status} reports a
- *       count, never the URLs;</li>
+ *   <li><b>no HTTP enumeration</b>: this loopback server itself has no listing endpoint. A
+ *       caller gets a validation back only by presenting the exact article URL it was published
+ *       for, and {@code /status} reports a count, never the URLs — because any webpage's own
+ *       JavaScript can reach a plain loopback HTTP server with a bare {@code fetch()}, so an
+ *       enumeration endpoint here would let any site read a user's whole validation history.
+ *       {@link #listAll()} is a different trust boundary: it backs the {@code list_reports} MCP
+ *       tool, reachable only through a real MCP client connection (Claude Desktop's connector),
+ *       never by arbitrary page JS — the privacy concern above does not apply to it;</li>
  *   <li><b>GET and HEAD only</b>, read-only, the newest {@value #CAPACITY} validations kept;</li>
  *   <li><b>in memory</b>, gone with the process, like the reports themselves.</li>
  * </ul>
@@ -71,6 +77,28 @@ final class ClaimsServer {
     private static HttpServer server;
     private static int port = -1;
 
+    /**
+     * A shared secret gating {@code /reports}, unlike {@code /claims} (single exact-URL
+     * lookup — an attacker page has to already know the URL to probe) and {@code /status} (just
+     * a count). {@code /reports} returns the full session validation history in one call, so it
+     * needs real protection, not just obscurity: {@code cors()}'s wildcard
+     * {@code Access-Control-Allow-Origin} exists for the extension's benefit but is readable by
+     * any webpage's own fetch too, and {@code host_permissions} already exempts the extension's
+     * background service worker from CORS regardless of what this server sends back — so CORS
+     * headers were never actually doing access control here, just enabling it for everyone.
+     *
+     * <p>Compiled into both this engine and the extension's {@code background.js} (kept in sync
+     * by hand — the two live in separate repos/release pipelines) rather than generated
+     * per-machine: no pairing step, no options-page UI, nothing for a user to copy. This is
+     * deliberately NOT a strong secret — anyone who downloads the public jar or unpacks the
+     * public extension source can read it out just as easily as this comment. It filters out
+     * opportunistic driveby scripts (a page probing common localhost ports for anything that
+     * answers), which is the actual threat this endpoint faces; it does nothing against a
+     * targeted attacker willing to go find this constant, and must never be treated as
+     * protecting anything more sensitive than the read-only validation history it gates here.
+     */
+    private static final String REPORTS_KEY = "aa-reports-9f3c1e7b2a48d0c6";
+
     /** Starts the listener once; silent no-op when the port is busy. */
     static synchronized void start(PrintStream log) {
         if (server != null) {
@@ -86,6 +114,7 @@ final class ClaimsServer {
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), p), 0);
             server.createContext("/claims", ClaimsServer::handleClaims);
             server.createContext("/status", ClaimsServer::handleStatus);
+            server.createContext("/reports", ClaimsServer::handleReports);
             server.setExecutor(null);
             server.start();
             port = p;
@@ -126,6 +155,29 @@ final class ClaimsServer {
     static synchronized ObjectNode lookup(String url) {
         String key = normalize(url);
         return key == null ? null : VALIDATIONS.get(key);
+    }
+
+    /**
+     * Every URL-based validation published this session (this process's lifetime — gone on
+     * exit, same as everything else in {@link #VALIDATIONS}), newest first. Backs the
+     * {@code list_reports} MCP tool; see the class javadoc for why this is safe to expose here
+     * but not as an HTTP endpoint. Each entry omits the full {@code claims} array (present in
+     * {@link #lookup}'s single-URL result) and keeps only the tally, since a list of many
+     * reports is for finding the right one, not re-reading every claim inline.
+     */
+    static synchronized List<ObjectNode> listAll() {
+        List<ObjectNode> out = new ArrayList<>(VALIDATIONS.size());
+        for (ObjectNode v : VALIDATIONS.values()) {
+            ObjectNode summary = MAPPER.createObjectNode();
+            summary.put("url", v.path("url").asText(""));
+            summary.put("title", v.path("title").asText(""));
+            summary.put("report_url", v.path("report_url").asText(""));
+            summary.put("published_at", v.path("published_at").asText(""));
+            summary.set("tally", v.path("tally").deepCopy());
+            out.add(summary);
+        }
+        Collections.reverse(out);
+        return out;
     }
 
     static synchronized int size() {
@@ -236,6 +288,45 @@ final class ClaimsServer {
             v.add(verdict);
         }
         send(ex, 200, s.toString(), "HEAD".equals(method));
+    }
+
+    /**
+     * The engine/extension handshake: a query-string key (not a header, so no CORS preflight
+     * complexity — the extension's own fetch is exempt from CORS via {@code host_permissions}
+     * anyway) checked against {@link #REPORTS_KEY} with a constant-time comparison. No
+     * {@code cors()} call here — see {@link #REPORTS_KEY}'s javadoc for why this endpoint
+     * deliberately doesn't advertise cross-origin readability the way {@code /claims} and
+     * {@code /status} do.
+     */
+    private static void handleReports(HttpExchange ex) throws IOException {
+        String method = ex.getRequestMethod();
+        if (!"GET".equals(method) && !"HEAD".equals(method)) {
+            ex.sendResponseHeaders(405, -1);
+            ex.close();
+            return;
+        }
+        String query = ex.getRequestURI().getRawQuery();
+        String key = null;
+        if (query != null) {
+            for (String kv : query.split("&")) {
+                if (kv.startsWith("key=")) {
+                    key = URLDecoder.decode(kv.substring(4), StandardCharsets.UTF_8.name());
+                }
+            }
+        }
+        if (key == null || !java.security.MessageDigest.isEqual(
+                key.getBytes(StandardCharsets.UTF_8), REPORTS_KEY.getBytes(StandardCharsets.UTF_8))) {
+            ex.sendResponseHeaders(403, -1);
+            ex.close();
+            return;
+        }
+        ArrayNode arr = MAPPER.createArrayNode();
+        for (ObjectNode r : listAll()) {
+            arr.add(r);
+        }
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("reports", arr);
+        send(ex, 200, body.toString(), "HEAD".equals(method));
     }
 
     private static void cors(HttpExchange ex) {

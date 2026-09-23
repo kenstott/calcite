@@ -480,7 +480,7 @@ public class McpServer {
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "web_fetch", "register", "upload_report", "mysite"));
+            "web_fetch", "register", "upload_report", "mysite", "list_reports"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -2321,9 +2321,11 @@ public class McpServer {
             + "follow a render_chart/compose_dashboard call; it is refused otherwise. Claims "
             + "graded purely from publications need no chart."));
         pubProps.set("source_url", prop("string",
-            "For a validation: the URL of the article or page the claims were extracted from. "
-            + "Lets the AskAmerica browser extension find this validation from that page. "
-            + "Defaults to the last web_fetch URL of the session when omitted."));
+            "REQUIRED for a validation (any publish whose claims array is non-empty): the "
+            + "exact URL of the article or page the claims were extracted from. The browser "
+            + "extension looks up a page's validation by this URL, so it must be the precise "
+            + "page under test, not a reference or fact-check source fetched along the way. "
+            + "The publish is refused if this is missing when claims are present."));
         pubProps.set("pinocchios", prop("object",
             "For a validation with two or more claims: a Pinocchio rating (Washington Post "
             + "Fact Checker style), count 0-4 with an explanation. The piece under test is not "
@@ -2483,6 +2485,17 @@ public class McpServer {
             tool("mysite",
             "Look up the caller's public Studies page link, e.g. after losing the one register "
             + "returned. Errors if register has not been called yet.",
+            schema(MAPPER.createObjectNode(), new String[]{})));
+
+        tools.add(
+            tool("list_reports",
+            "Every URL-based validation published this session (title, source URL, verdict "
+            + "tally, local report link), newest first — this process's lifetime only, gone on "
+            + "exit, same as publish_report's own local links. For durable, cross-session "
+            + "history use mysite's Studies page link instead. Lists only validations (a "
+            + "publish_report call with a claims array and a source_url) — a general research "
+            + "report with no claims, or a validation of pasted/static text with no source URL, "
+            + "was never keyed by URL and will not appear here.",
             schema(MAPPER.createObjectNode(), new String[]{})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
@@ -3105,8 +3118,7 @@ public class McpServer {
                     break;
                 }
                 case "web_fetch": {
-                    LAST_FETCH_URL = args.path("url").asText();
-                    log.println("[askamerica-mcp] tool=web_fetch url=" + LAST_FETCH_URL);
+                    log.println("[askamerica-mcp] tool=web_fetch url=" + args.path("url").asText());
                     text = webFetch(args);
                     break;
                 }
@@ -3660,6 +3672,7 @@ public class McpServer {
                     java.util.List<String> gateProblems = new java.util.ArrayList<>();
                     JsonNode claims = args.path("claims");
                     if (claims.isArray() && claims.size() > 0) {
+                        addIfPresent(gateProblems, enforceSourceUrlPresent(args));
                         addIfPresent(gateProblems, enforceClaimShape(claims));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
@@ -3755,10 +3768,9 @@ public class McpServer {
                         html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         "text/html; charset=utf-8", "html");
                     if (claims.isArray() && claims.size() > 0) {
+                        // Guaranteed non-blank here: enforceSourceUrlPresent already refused
+                        // the publish above if it were missing.
                         String srcUrl = args.path("source_url").asText(null);
-                        if (srcUrl == null || srcUrl.trim().isEmpty()) {
-                            srcUrl = LAST_FETCH_URL;
-                        }
                         ClaimsServer.record(srcUrl, args.path("title").asText(null), url, claims);
                     }
                     log.println("[askamerica-mcp] tool=publish_report sections=" + secs.size()
@@ -3825,6 +3837,12 @@ public class McpServer {
                     text = acct == null
                         ? "Not registered yet — call register first."
                         : "Studies page: " + acct.studiesUrl;
+                    break;
+                }
+                case "list_reports": {
+                    java.util.List<ObjectNode> reports = ClaimsServer.listAll();
+                    log.println("[askamerica-mcp] tool=list_reports count=" + reports.size());
+                    text = formatReportList(reports);
                     break;
                 }
                 case "compose_dashboard": {
@@ -5253,8 +5271,6 @@ public class McpServer {
     /** Whether any chart or dashboard has been rendered this session, in any mode; the
      *  validation chart gate reads this rather than the eval-only PNG holders. */
     private static volatile boolean CHART_RENDERED;
-    /** The URL most recently handed to web_fetch: the default source_url of a validation. */
-    private static volatile String LAST_FETCH_URL;
 
     /**
      * The most recent {@code compose_dashboard} render at 2x, kept separately from
@@ -5827,6 +5843,29 @@ public class McpServer {
         if (problem != null && !problem.isEmpty()) {
             problems.add(problem);
         }
+    }
+
+    /** A validation with no {@code source_url} publishes a report the browser extension can
+     *  never find from the page it was validating. This used to silently default to
+     *  {@code LAST_FETCH_URL} -- whatever page {@code web_fetch} last touched in the session,
+     *  which is very often NOT the article under test: any reference/fact-check fetch made
+     *  after the article (a common step in a real validation) silently overwrote it. Measured
+     *  live 2026-09-23 (amny.com validation): the report published successfully, but the
+     *  extension's popup on the article's own page reported "No validation published for this
+     *  page yet." because the stored key was some other URL entirely. Per this project's
+     *  no-silent-fallback rule, refuse instead of guessing -- the caller already has the exact
+     *  URL (the extension puts it in the prompt), so there is no good reason not to pass it. */
+    private static String enforceSourceUrlPresent(JsonNode args) {
+        String srcUrl = args.path("source_url").asText(null);
+        if (srcUrl != null && !srcUrl.trim().isEmpty()) {
+            return null;
+        }
+        return "validation refused: no `source_url` was given. Pass the exact URL of the "
+            + "article or page these claims were extracted from -- without it the browser "
+            + "extension has no way to find this validation from that page, and there is no "
+            + "reliable way to infer it (guessing from the last web_fetch call silently picked "
+            + "the wrong URL whenever a reference/fact-check fetch happened after the article "
+            + "itself, which produced a published report the extension could never find).";
     }
 
     /** A validation whose claims rest on the caller's own warehouse analysis must show it: refuse
@@ -11594,6 +11633,40 @@ public class McpServer {
         } catch (Exception e) {
             log.println("[askamerica-mcp] register persist failed: " + e.getMessage());
         }
+    }
+
+    /** Renders {@link ClaimsServer#listAll()}'s summaries as the {@code list_reports} tool's
+     *  text result — a scannable table, not raw JSON, matching every other tool's plain-text
+     *  output. */
+    private static String formatReportList(java.util.List<ObjectNode> reports) {
+        if (reports.isEmpty()) {
+            return "No URL-based validations published yet this session.";
+        }
+        StringBuilder sb = new StringBuilder(reports.size()
+            + " validation(s) published this session (newest first):\n\n");
+        for (ObjectNode r : reports) {
+            String title = r.path("title").asText("");
+            String url = r.path("url").asText("");
+            String reportUrl = r.path("report_url").asText("");
+            String publishedAt = r.path("published_at").asText("");
+            StringBuilder tallyStr = new StringBuilder();
+            JsonNode tally = r.path("tally");
+            java.util.Iterator<String> fields = tally.fieldNames();
+            while (fields.hasNext()) {
+                String f = fields.next();
+                if (tallyStr.length() > 0) {
+                    tallyStr.append(", ");
+                }
+                tallyStr.append(tally.get(f).asInt()).append(' ').append(f);
+            }
+            sb.append("- ").append(title.isEmpty() ? "(untitled)" : title).append('\n')
+                .append("  source: ").append(url).append('\n')
+                .append("  report: ").append(reportUrl).append('\n')
+                .append("  published: ").append(publishedAt).append('\n')
+                .append("  tally: ").append(tallyStr.length() == 0 ? "(none)" : tallyStr)
+                .append("\n\n");
+        }
+        return sb.toString().stripTrailing();
     }
 
     private static Account loadAccount() {
