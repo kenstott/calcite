@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.97.2](https://github.com/kenstott/calcite/compare/engine-v0.97.1...engine-v0.97.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** require source_url for validations, add list_reports ([f86d5ef](https://github.com/kenstott/calcite/commit/f86d5ef30e0c1706467b3ae379213881d394d685))
+
 ## [0.97.1](https://github.com/kenstott/calcite/compare/engine-v0.97.0...engine-v0.97.1) (2026-09-23)
 
 
