@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.97.1](https://github.com/kenstott/calcite/compare/engine-v0.97.0...engine-v0.97.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** fix IllegalAccessError crashing the setup wizard on launch ([bf55b14](https://github.com/kenstott/calcite/commit/bf55b1456cbc5888241d863a9359ecf37edfafa2))
+
 ## [0.97.0](https://github.com/kenstott/calcite/compare/engine-v0.96.2...engine-v0.97.0) (2026-09-23)
 
 
