@@ -122,7 +122,7 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
       root = MAPPER.readTree(in);
     }
     Map<String, AgencyInfo> out = new LinkedHashMap<String, AgencyInfo>();
-    Iterator<Map.Entry<String, JsonNode>> counties = root.fields();
+    Iterator<Map.Entry<String, JsonNode>> counties = root.properties().iterator();
     while (counties.hasNext()) {
       Map.Entry<String, JsonNode> countyEntry = counties.next();
       JsonNode list = countyEntry.getValue();
