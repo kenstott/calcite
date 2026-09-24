@@ -25,6 +25,11 @@
 #   ./rehydrate-minio-from-r2.sh --schemas sec           # one schema only (validate first)
 #   ./rehydrate-minio-from-r2.sh --schemas sec,census    # a few schemas
 #   ./rehydrate-minio-from-r2.sh --dry-run
+#   ./rehydrate-minio-from-r2.sh --size-only             # re-run to confirm/finish a copy: compares
+#                                                         # object size from the listing only, skipping
+#                                                         # the per-object HEAD for modtime. Much faster
+#                                                         # when nearly everything is already copied, but
+#                                                         # misses a same-size content change.
 #   nohup ./rehydrate-minio-from-r2.sh > ~/rehydrate-minio.log 2>&1 &
 #                                                         # full run in background — can
 #                                                         # take hours to days depending
@@ -54,12 +59,14 @@ log() { printf '[rehydrate-minio] %s\n' "$*"; }
 die() { printf '[rehydrate-minio] ERROR: %s\n' "$*" >&2; exit 1; }
 
 DRY_RUN=false
+SIZE_ONLY=false
 SCHEMAS_FILTER=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
+    --size-only) SIZE_ONLY=true; shift ;;
     --schemas) SCHEMAS_FILTER="$2"; shift 2 ;;
-    *) die "unknown argument: $1 (usage: $0 [--dry-run] [--schemas s1,s2])" ;;
+    *) die "unknown argument: $1 (usage: $0 [--dry-run] [--size-only] [--schemas s1,s2])" ;;
   esac
 done
 
@@ -78,6 +85,7 @@ RCLONE_FLAGS=(--transfers "$TRANSFERS" --checkers "$CHECKERS" --stats 30s --stat
   --s3-upload-cutoff "$MULTIPART_CUTOFF" --s3-chunk-size "$CHUNK_SIZE"
   --s3-upload-concurrency "$UPLOAD_CONCURRENCY")
 [ "$DRY_RUN" = true ] && RCLONE_FLAGS+=(--dry-run)
+[ "$SIZE_ONLY" = true ] && RCLONE_FLAGS+=(--size-only)
 
 if [ -n "$SCHEMAS_FILTER" ]; then
   IFS=',' read -ra SCHEMAS <<< "$(echo "$SCHEMAS_FILTER" | tr ' ' ',')"
