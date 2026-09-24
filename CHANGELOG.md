@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.97.3](https://github.com/kenstott/calcite/compare/engine-v0.97.2...engine-v0.97.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** store validations across conversations, fix stuck-query recovery ([642d909](https://github.com/kenstott/calcite/commit/642d9093df54ecfc8be9ced075a51737f1c485fe))
+
 ## [0.97.2](https://github.com/kenstott/calcite/compare/engine-v0.97.1...engine-v0.97.2) (2026-09-23)
 
 
