@@ -119,9 +119,13 @@ def serve(
     # from the Calcite child over the socket. StubBackend has neither -> skipped.
     conn = getattr(backend, "connection", None)
     if conn is not None:
-        from pgwire_calcite.catalog_populate import populate_state
+        from pgwire_calcite.catalog_populate import populate_state_cached
 
-        populate_state(conn, server_mod.state)
+        # Cached when a pre-built (or previously-generated) catalog cache sits next to
+        # the model file -- see catalog_populate.catalog_cache_path. A fresh launch with
+        # no cache falls back to the original live JDBC/Iceberg walk and writes one.
+        model_path = getattr(backend, "_model_path", None)
+        populate_state_cached(conn, server_mod.state, model_path)
     else:
         fetch_catalog = getattr(backend, "fetch_catalog", None)
         if fetch_catalog is not None:

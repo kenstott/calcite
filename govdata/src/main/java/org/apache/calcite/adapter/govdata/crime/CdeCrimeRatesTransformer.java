@@ -96,7 +96,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
     JsonNode usOffenseRates = null;
     JsonNode usClearanceRates = null;
 
-    Iterator<Map.Entry<String, JsonNode>> rateIt = rates.fields();
+    Iterator<Map.Entry<String, JsonNode>> rateIt = rates.properties().iterator();
     while (rateIt.hasNext()) {
       Map.Entry<String, JsonNode> e = rateIt.next();
       String key = e.getKey();
@@ -120,7 +120,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
     JsonNode coverageByMonth = findFirstNonUS(tooltipsSection, "Percent of Population Coverage");
     JsonNode popByMonth = findFirstNonUS(populationsSection, "population");
 
-    Iterator<Map.Entry<String, JsonNode>> monthIt = stateOffenseRates.fields();
+    Iterator<Map.Entry<String, JsonNode>> monthIt = stateOffenseRates.properties().iterator();
     while (monthIt.hasNext()) {
       Map.Entry<String, JsonNode> monthEntry = monthIt.next();
       String month = monthEntry.getKey();
@@ -152,7 +152,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
     if (section == null || !section.isObject()) {
       return null;
     }
-    Iterator<Map.Entry<String, JsonNode>> it = section.fields();
+    Iterator<Map.Entry<String, JsonNode>> it = section.properties().iterator();
     while (it.hasNext()) {
       Map.Entry<String, JsonNode> e = it.next();
       if (!"United States".equals(e.getKey()) && e.getValue().isObject()) {
@@ -194,7 +194,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
       ObjectNode row = MAPPER.createObjectNode();
       row.put("state_abbr", stateAbbr);
       row.put("offense_code", offenseCode != null ? offenseCode : "");
-      Iterator<Map.Entry<String, JsonNode>> fields = item.fields();
+      Iterator<Map.Entry<String, JsonNode>> fields = item.properties().iterator();
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> field = fields.next();
         row.set(field.getKey(), field.getValue());
@@ -217,7 +217,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
         result.add(buildRow(item, stateAbbr, offenseCode));
       }
     } else {
-      Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+      Iterator<Map.Entry<String, JsonNode>> fields = root.properties().iterator();
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> entry = fields.next();
         String key = entry.getKey();
@@ -260,7 +260,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
   }
 
   private static void copyNumericFields(ObjectNode row, JsonNode source) {
-    Iterator<Map.Entry<String, JsonNode>> fields = source.fields();
+    Iterator<Map.Entry<String, JsonNode>> fields = source.properties().iterator();
     while (fields.hasNext()) {
       Map.Entry<String, JsonNode> field = fields.next();
       JsonNode value = field.getValue();

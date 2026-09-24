@@ -11,6 +11,15 @@ on:
         required: true
         default: '0.1.0'
 
+# actions: write is needed by the installer job's "Ensure pgwire-govdata bundle" step,
+# which dispatches the separate "pgwire-adapters release" workflow (its `release: types:
+# [created]` trigger does not fire reliably — confirmed live, every prior run this
+# project has ever had was a manual workflow_dispatch) when this version's bundle isn't
+# already published.
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   # ── GovData ETL JAR (used by run-all-dq.sh on ingest servers) ────────────
   govdata-jar:
@@ -334,6 +343,124 @@ jobs:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
 
+      # Bundles pgwire-govdata (and, via it, the EMBED() model — see
+      # pgwire-adapters-release.yml) directly into the installer, so a fresh install never
+      # needs a first-run download at all. That separate release workflow's own `release:
+      # types: [created]` trigger does not fire reliably (confirmed live: every prior run
+      # this project has had was a manual workflow_dispatch) -- so this step is
+      # self-sufficient: it dispatches that workflow itself if this version's bundle isn't
+      # already published, then waits.
+      #
+      # NOT on macOS: the bundle's jars carry native libraries (duckdb_jdbc, tokenizers,
+      # netty, onnxruntime, zstd-jni, jna, snappy-java, and the shaded sih-aperio jar that
+      # re-bundles several of these) that are unsigned inside their jar entries. Apple's
+      # notary service scans recursively into every jar/zip in the app bundle -- codesign
+      # on the assembled .app never reaches those nested entries, since they are zip
+      # contents, not files on disk -- so embedding this bundle made every macOS
+      # notarization submission fail (confirmed live via `xcrun notarytool log`, 2026-09-18:
+      # ~40 "binary is not signed" / "no secure timestamp" errors, all under
+      # pgwire-govdata/jars/). `prepareJpackageInput` in build.gradle.kts already treats a
+      # missing staged dir as the local-dev fallback (no bundled pgwire-govdata, matching
+      # PgwireGovDataInstaller's lazy-download-on-first-use path) -- skipping this step for
+      # macOS reaches that same fallback deliberately, keeping the notarized .app thin
+      # instead of re-signing dozens of nested native libraries on every build.
+      - name: Ensure pgwire-govdata bundle for this version
+        if: matrix.os != 'macos-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          TAG="engine-v${VERSION}"
+          case "${{ matrix.os }}" in
+            windows-latest) VARIANT=windows-x86_64 ;;
+            macos-latest)   VARIANT=macos-arm64 ;;
+            ubuntu-latest)  VARIANT=linux-x86_64 ;;
+            *) echo "unknown matrix.os ${{ matrix.os }}"; exit 1 ;;
+          esac
+          ASSET="pgwire-govdata-${VERSION}-${VARIANT}.tar.gz"
+
+          have_asset() {
+            gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
+              --jq ".assets[].name" 2>/dev/null | grep -qx "$ASSET"
+          }
+
+          if ! have_asset; then
+            echo "No $ASSET on $TAG yet."
+            # Avoid dispatching 3x (once per OS in this matrix) if a run for THIS version is
+            # already in flight from another leg or a prior manual trigger -- filtered by
+            # displayTitle (see pgwire-adapters-release.yml's run-name), not just "any run",
+            # since an in-flight run left over from a DIFFERENT version satisfies neither this
+            # check nor the wait loop below it: the asset it produces is tagged for its own
+            # version, never for $TAG. Confirmed live (2026-09-18): three releases cut in quick
+            # succession each saw a stale older-version run in flight, skipped dispatching, and
+            # then hung the full 45-minute wait below for an asset nothing was ever building.
+            IN_FLIGHT=$(gh run list --repo "${{ github.repository }}" \
+              --workflow "pgwire-adapters release" \
+              --json status,displayTitle \
+              --jq "[.[] | select((.status==\"in_progress\" or .status==\"queued\") and (.displayTitle | contains(\"$VERSION\")))] | length")
+            if [ "${IN_FLIGHT:-0}" = "0" ]; then
+              echo "Dispatching pgwire-adapters release for $VERSION"
+              gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" \
+                -f version="$VERSION"
+            else
+              echo "A pgwire-adapters release run for $VERSION is already in flight -- waiting on it."
+            fi
+            echo "Waiting for $ASSET to appear on $TAG (up to 45 min)..."
+            found=0
+            for i in $(seq 1 90); do
+              sleep 30
+              if have_asset; then found=1; break; fi
+            done
+            if [ "$found" != "1" ]; then
+              echo "::error::$ASSET never appeared on $TAG after 45 minutes"
+              exit 1
+            fi
+          fi
+          echo "Found $ASSET"
+
+          # A dedicated mktemp -d, not /tmp directly, for the extraction destination --
+          # confirmed live this matters: macOS's /tmp is a symlink to /private/tmp, and
+          # `find /tmp -maxdepth 1 -type d -name "pgwire-govdata-*"` matched NOTHING through
+          # it (silently -- no error, just an empty result), which made $EXTRACTED empty and
+          # `cp -R "$EXTRACTED"/.` become `cp -R /.` -- copying the ENTIRE root filesystem
+          # into the staging dir until the runner's disk filled. A dedicated scratch dir
+          # side-steps the symlink question entirely, and the explicit empty-check below
+          # means a similar failure fails loudly instead of silently substituting "/".
+          WORKDIR=$(mktemp -d)
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ASSET}"
+          # --retry: confirmed live this matters -- curl exited 92 (CURLE_HTTP2_STREAM, a
+          # transient HTTP/2 framing error against GitHub's release CDN) on an otherwise-fine
+          # download, aborting the whole step under set -e with no output at all. The same
+          # class of transient infra flake as the services.gradle.org resets seen earlier
+          # today; retrying is the correct response, not treating it as a real failure.
+          curl -sL --retry 3 --retry-delay 2 -o "$WORKDIR/pgwire-govdata.tar.gz" "$URL"
+          curl -sL --retry 3 --retry-delay 2 -o "$WORKDIR/pgwire-govdata.tar.gz.sha256" "${URL}.sha256"
+          EXPECTED=$(tr -d '[:space:]' < "$WORKDIR/pgwire-govdata.tar.gz.sha256")
+          if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL=$(sha256sum "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
+          else
+            ACTUAL=$(shasum -a 256 "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
+          fi
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::pgwire-govdata sha256 mismatch: expected $EXPECTED got $ACTUAL"
+            exit 1
+          fi
+          mkdir "$WORKDIR/extracted"
+          tar -xzf "$WORKDIR/pgwire-govdata.tar.gz" -C "$WORKDIR/extracted"
+          EXTRACTED=$(find "$WORKDIR/extracted" -mindepth 1 -maxdepth 1 -type d | head -1)
+          if [ -z "$EXTRACTED" ] || [ ! -d "$EXTRACTED" ]; then
+            echo "::error::tar extraction produced no directory under $WORKDIR/extracted"
+            ls -la "$WORKDIR/extracted"
+            exit 1
+          fi
+          mkdir -p askamerica-engine/build/pgwire-govdata-staged
+          cp -R "$EXTRACTED"/. askamerica-engine/build/pgwire-govdata-staged/
+          rm -rf "$WORKDIR"
+          echo "Staged pgwire-govdata bundle: $(du -sh askamerica-engine/build/pgwire-govdata-staged | cut -f1)"
+
       - name: Import Apple signing certificate (macOS only)
         if: matrix.os == 'macos-latest'
         env:
@@ -513,11 +640,24 @@ jobs:
           fi
           PKG=$(find askamerica-engine/build/jpackage -name "*.pkg" | head -1)
           echo "Notarizing $PKG"
-          xcrun notarytool submit "$PKG" \
+          SUBMIT_JSON=$(xcrun notarytool submit "$PKG" \
             --apple-id "$APPLE_NOTARYTOOL_APPLE_ID" \
             --password "$APPLE_NOTARYTOOL_PASSWORD" \
             --team-id "$APPLE_NOTARYTOOL_TEAM_ID" \
-            --wait
+            --wait --output-format json)
+          echo "$SUBMIT_JSON"
+          SUBMIT_ID=$(echo "$SUBMIT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+          STATUS=$(echo "$SUBMIT_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])")
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization rejected (status: $STATUS) — fetching rejection log"
+            xcrun notarytool log "$SUBMIT_ID" \
+              --apple-id "$APPLE_NOTARYTOOL_APPLE_ID" \
+              --password "$APPLE_NOTARYTOOL_PASSWORD" \
+              --team-id "$APPLE_NOTARYTOOL_TEAM_ID"
+            # Non-fatal per the comment above, but the log printed here is what a
+            # "could not verify... free of malware" report on the shipped PKG needs.
+            exit 1
+          fi
           xcrun stapler staple "$PKG"
           echo "Notarization and stapling complete"
 
@@ -555,6 +695,9 @@ jobs:
 
       - name: Import GPG key
         run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+      - name: Install syft
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Determine version
         id: version
@@ -602,12 +745,20 @@ jobs:
           jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" -C /tmp placeholder.txt
           jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" -C /tmp placeholder.txt
 
-          # GPG sign all four artifacts
+          # SBOM (CycloneDX), same tool/format as the pgwire-adapters release bundles
+          # (pgwire-adapters-release.yml) -- published as a classified artifact
+          # (<artifact>-<version>-cyclonedx.json) alongside the jar, checksummed and
+          # signed the same way, so the Maven Central coordinates carry an SBOM too.
+          syft "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
+            -o cyclonedx-json="${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-cyclonedx.json"
+
+          # GPG sign all five artifacts
           for f in \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom" \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" \
-            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-cyclonedx.json"
           do
             if [ -n "$GPG_PASSPHRASE" ]; then
               gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
@@ -835,11 +986,25 @@ jobs:
           name: askamerica-extension
           path: release-assets/
 
+      # softprops/action-gh-release's own "fetch existing release by tag" API call fails here
+      # with "Resource not accessible by integration" even though the job's GITHUB_TOKEN
+      # Permissions log confirms contents:write is actually granted (verified live,
+      # 2026-09-21/22, three separate attempts including a full fresh workflow_dispatch) --
+      # the release already exists (release-please creates it atomically with the tag), so
+      # this only needs to set its title/notes and upload files, not create or "find" it.
+      # `gh release edit`/`gh release upload` do exactly that over the same GITHUB_TOKEN and
+      # are the proven-working path: the pgwire-adapters-release.yml and
+      # pgwire-calcite-release.yml jobs already attach dozens of assets to this same release
+      # via `gh release upload` without hitting this error.
       - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: AskAmerica Engine ${{ github.ref_name }}
-          body: |
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          # The heredoc body below is indented to match this script's own indentation (so it
+          # reads cleanly here); strip that literal 12-space prefix before it becomes release
+          # notes, or GitHub's markdown renderer treats every line as an indented code block.
+          cat <<'RELEASE_BODY' | sed 's/^            //' > /tmp/release-notes.md
             ## AskAmerica Query Engine
 
             Query all 15 US government datasets from Python, Node, Go, or any JDBC client.
@@ -899,9 +1064,11 @@ jobs:
             ### Browser extension
 
             `askamerica-extension.zip` — unzip and load unpacked via `chrome://extensions` (Developer mode). Reads previously published AskAmerica validation claims for the page you're on and hands off "Validate with AskAmerica" to your own Claude Desktop/claude.ai session; makes no model API calls itself. Requires the AskAmerica MCP engine running locally to see live claims.
-          files: release-assets/**/*
-          draft: false
-          prerelease: false
+          RELEASE_BODY
+          gh release edit "$TAG" --repo "${{ github.repository }}" \
+            --title "AskAmerica Engine ${TAG}" --notes-file /tmp/release-notes.md
+          shopt -s globstar
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber release-assets/**/*
 
       # The pgwire-calcite installers attach on a release event, but a release created above by
       # GITHUB_TOKEN does not emit one. Dispatch that workflow explicitly now that the release

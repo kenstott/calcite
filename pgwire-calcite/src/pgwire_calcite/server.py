@@ -38,6 +38,7 @@ import socketserver
 import ssl
 import struct
 import threading
+import time
 import weakref
 from typing import TYPE_CHECKING, Iterator, Optional, Tuple
 
@@ -51,6 +52,7 @@ from buenavista.postgres import (
 )
 
 from pgwire_calcite.auth import is_personal_access_token
+from pgwire_calcite import metering
 from pgwire_calcite.throttle import LockedOut, login_throttle, subject_key, throttled_auth
 from pgwire_calcite.types import QueryResult as TrinoResult
 
@@ -307,6 +309,12 @@ class CalciteQueryResult(BVQueryResult):
         )
         self._head: list | None = None
         self._closed = False
+        # Usage metering (kenstott/calcite#364): sampled as rows are actually
+        # streamed to the client, reported once on close(). See metering.py's
+        # module doc for why this lives here rather than on the Java side.
+        self._meter_sql = original_sql
+        self._meter_start = time.monotonic()
+        self._sampler = metering.EgressSampler(len(self._cols))
         ctypes = result.column_types
         if not ctypes or any(not t for t in ctypes):
             self._head = next(self._batch_iter, [])
@@ -344,6 +352,7 @@ class CalciteQueryResult(BVQueryResult):
             if self._pending_idx < len(self._pending):
                 row = self._pending[self._pending_idx]
                 self._pending_idx += 1
+                self._sampler.observe(row)
                 yield row
                 continue
             if self._closed:
@@ -359,6 +368,8 @@ class CalciteQueryResult(BVQueryResult):
         if self._closed:
             return
         self._closed = True
+        duration_ms = int((time.monotonic() - self._meter_start) * 1000)
+        self._sampler.finish(self._meter_sql, duration_ms)
         self._head = None
         self._pending, self._pending_idx = [], 0
         close = getattr(self._batch_iter, "close", None)
@@ -562,6 +573,14 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
 
             enforce_query(_grants, self.role_id or "", stripped)
 
+        # Usage quota (kenstott/calcite#364): a no-op when ASKAMERICA_API_KEY isn't
+        # set (local dev / self-hosted runs). Checked per query, same cadence as
+        # askamerica-engine's embedded-mode UsageMetering.StatementHandler; cheap
+        # thanks to metering.py's 60s cache. Raises PermissionError, already an
+        # established, handled error type on this exact call path (enforce_query
+        # above raises the same type for the same reason).
+        metering.enforce_quota()
+
         # Non-catalog execution seam: Phase 0 StubBackend -> Phase 1 CalciteBackend.
         # stream=True selects the Arrow batch-streaming path at the wire (Phase 3);
         # backends that don't stream ignore the flag and materialize.
@@ -626,6 +645,25 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
     #: Set in handle_startup; read by finish(), which socketserver always runs.
     _ctx: BVContext | None = None
 
+    #: Bound on how long an accepted connection has to complete the startup
+    #: handshake (SSLRequest negotiation through authentication). Measured live
+    #: (2026-09-21): a long-lived pgwire-govdata process accumulated hundreds of
+    #: stuck handler threads over a few hours and stopped answering real queries.
+    #: Root cause: handle_startup's first read (self.r.read_uint32()) is a plain
+    #: blocking socket read with no timeout, so any connection that opens the TCP
+    #: socket but never sends a complete startup packet -- a bare liveness probe,
+    #: a client that connects then vanishes -- leaves that thread parked forever.
+    #: handle() never returns, finish() never runs, and the FD/thread is never
+    #: released. Cleared to blocking once the handshake actually completes
+    #: (see handle_startup's authenticated-return points) so a real, idle-but-
+    #: connected interactive session is never disconnected mid-use.
+    _STARTUP_TIMEOUT_SECONDS = 15.0
+
+    def setup(self) -> None:
+        super().setup()
+        self.request.settimeout(self._STARTUP_TIMEOUT_SECONDS)
+        self.server.connection_opened()
+
     def finish(self) -> None:
         ctx = self._ctx
         self._ctx = None
@@ -633,7 +671,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             if ctx is not None:
                 ctx.session.close()
         finally:
-            super().finish()
+            try:
+                super().finish()
+            finally:
+                self.server.connection_closed()
 
     # Per-connection SASL SCRAM exchange state; None before the handshake starts and
     # between the SASLInitialResponse and SASLResponse messages is impossible (only ever
@@ -791,6 +832,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 ctx.session.role_id = role  # type: ignore[attr-defined]
                 self.send_authentication_ok()
                 self.handle_post_auth(ctx)
+                # Handshake complete (ctx.authenticated is now True) -- clear the
+                # startup timeout so a real, idle-but-connected session is never cut
+                # off waiting on the client's next message. See _STARTUP_TIMEOUT_SECONDS.
+                self.request.settimeout(None)
                 return ctx
             # SASL SCRAM-SHA-256 wire exchange (PGW-043): no password on the wire.
             if _prov is not None and getattr(_prov, "wire_mechanism", None) == "SCRAM-SHA-256":
@@ -1169,10 +1214,87 @@ class CalciteServer(BuenaVistaServer):  # PGW-001
         # Client-certificate policy (PGWIRE_CALCITE_CLIENT_CA, Phase 3 hardening); None means
         # mTLS is off. Read by CalciteHandler._assert_peer_binding.
         self.mtls_auth = mtls_auth
+        # Live connection count, for the opt-in idle-shutdown watcher (see
+        # maybe_start_idle_shutdown_watcher). Incremented in CalciteHandler.setup(),
+        # decremented in CalciteHandler.finish() — both run once per accepted
+        # connection, symmetric by construction (socketserver.BaseRequestHandler
+        # always calls finish() after setup(), even when handle() raises).
+        self._active_connections = 0
+        self._active_lock = threading.Lock()
+        # Wall-clock time.monotonic() the count first reached zero, or None while
+        # a connection is live. Read/written only under _active_lock.
+        self._idle_since: float | None = None
 
     def verify_request(self, request, client_address) -> bool:
         del request, client_address
         return True
+
+    def connection_opened(self) -> None:
+        with self._active_lock:
+            self._active_connections += 1
+            self._idle_since = None
+
+    def connection_closed(self) -> None:
+        with self._active_lock:
+            self._active_connections -= 1
+            if self._active_connections <= 0:
+                self._active_connections = 0
+                self._idle_since = time.monotonic()
+
+    def idle_seconds(self) -> float | None:
+        """Seconds since the connection count last reached zero, or None if not idle."""
+        with self._active_lock:
+            if self._idle_since is None:
+                return None
+            return time.monotonic() - self._idle_since
+
+
+def maybe_start_idle_shutdown_watcher(server: "CalciteServer") -> None:
+    """Opt-in: exit the process once the server has had zero live connections for a
+    configurable grace period.
+
+    Off by default — a standalone/manually-run pgwire-calcite deployment should keep
+    serving indefinitely, exactly like it does today. This exists for the
+    spawn-if-absent singleton pattern (askamerica-engine and any other thin client that
+    spawns pgwire-govdata on demand, per kenstott/calcite#364): with many short-lived
+    client processes connecting and disconnecting, the shared server needs to reap
+    itself rather than becoming a background process every user has to notice and
+    kill by hand. Enabled by setting PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS to a positive
+    number of seconds; unset or <= 0 leaves the server running forever, unchanged from
+    prior behavior.
+    """
+    raw = os.environ.get("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", "")
+    try:
+        grace = float(raw)
+    except ValueError:
+        grace = 0.0
+    if grace <= 0:
+        return
+
+    def _watch() -> None:
+        # A short poll interval keeps the actual shutdown delay close to `grace`
+        # without meaningfully increasing idle CPU use.
+        interval = min(5.0, grace / 4) or 1.0
+        while True:
+            time.sleep(interval)
+            idle = server.idle_seconds()
+            if idle is not None and idle >= grace:
+                log.info(
+                    "[PGWIRE] idle for %.0fs (limit %.0fs) with zero connections; exiting",
+                    idle, grace,
+                )
+                try:
+                    server.shutdown()
+                finally:
+                    # os._exit rather than sys.exit: this runs on a daemon thread, and
+                    # the embedded Calcite child / backend may hold non-daemon threads
+                    # or native resources that would otherwise keep the process alive
+                    # indefinitely after an idle server was meant to disappear.
+                    os._exit(0)
+
+    t = threading.Thread(target=_watch, name="pgwire-idle-shutdown", daemon=True)
+    t.start()
+    log.info("[PGWIRE] idle-shutdown watcher armed: %.0fs grace period", grace)
 
 
 def start_pgwire_server(
@@ -1203,4 +1325,5 @@ def start_pgwire_server(
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     log.info("[PGWIRE] listening on %s:%d (TLS=%s)", host, port, ssl_ctx is not None)
+    maybe_start_idle_shutdown_watcher(server)
     return server

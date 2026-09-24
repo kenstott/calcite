@@ -70,6 +70,10 @@ dependencies {
     // parser-factory connection property (see McpServer's connection setup), not a dialect
     // switch on GovDataDriver's own shared default, so only this engine's connections change.
     implementation(project(":babel"))
+    // PostgreSQL wire-protocol client, for the shared pgwire-govdata singleton connection
+    // (McpServer's PgwireGovDataConnector, kenstott/calcite#364) — an alternative to each
+    // McpServer process embedding its own DuckDB connection to the govdata catalog file.
+    implementation("org.postgresql:postgresql")
     implementation("com.formdev:flatlaf:3.3")
     implementation("org.knowm.xchart:xchart:4.0.4")
     // PDF-to-text for web_fetch (McpServer). Not previously a real dependency here —
@@ -447,6 +451,10 @@ val launcherJar by tasks.registering(Jar::class) {
         include("**/McpServerLauncher.class")
         include("**/EngineInstaller.class")
         include("**/EngineInstaller\$*.class")
+        // EngineInstaller.DialogProgress's window icon (loadAppIcons()) — this jar runs
+        // standalone before the fat engine jar is ever downloaded, so the icon resources
+        // have to live here too, not just in the main jar SetupWindow reads from.
+        include("icons/*.png")
     }
     manifest {
         attributes["Main-Class"] = "org.apache.calcite.adapter.askamerica.McpServerLauncher"
@@ -454,10 +462,21 @@ val launcherJar by tasks.registering(Jar::class) {
     dependsOn(tasks.compileJava)
 }
 
+// Staged by CI's "Ensure pgwire-govdata bundle for this version" step (askamerica-engine.yml)
+// before jpackage runs. Absent in a plain local `./gradlew jpackage` — the resulting local
+// installer just has no bundled pgwire-govdata, matching today's lazy-download behavior,
+// which is a fine local-dev fallback, not something to fail the build over.
+val pgwireGovdataStagedDir = File(projectDir, "build/pgwire-govdata-staged")
+
 tasks.register<Copy>("prepareJpackageInput") {
     dependsOn(launcherJar)
     from(launcherJar.get().archiveFile)
     into(jpackageInputDirFile)
+    if (pgwireGovdataStagedDir.isDirectory) {
+        from(pgwireGovdataStagedDir) {
+            into("pgwire-govdata")
+        }
+    }
 }
 
 tasks.register<Exec>("jlinkRuntime") {
@@ -537,6 +556,11 @@ tasks.register<Exec>("jpackage") {
     commandLine(
         jpackageTool,
         "--type", packageType,
+        // Without this, a WiX (candle.exe/light.exe) failure on Windows surfaces only a
+        // bare exit code with no error text at all -- confirmed live (exit code 5, zero
+        // diagnostic output) chasing a real WixVariable-related failure with no way to see
+        // what WiX actually objected to.
+        "--verbose",
         "--name", "AskAmerica MCP",
         "--app-version", version,
         "--vendor", "AskAmerica",
@@ -561,7 +585,22 @@ tasks.register<Exec>("jpackage") {
         *(if (os.contains("win"))
             arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut",
                     "--win-dir-chooser",
-                    "--resource-dir", winResourceDir)
+                    "--resource-dir", winResourceDir,
+                    // Explicit rather than relying on jpackage's implicit "<name>.ico in
+                    // --resource-dir" convention (which would need the file named exactly
+                    // "AskAmerica MCP.ico", space and all, to match --name below) — without
+                    // this the MSI, its Start-menu/desktop shortcuts, and the installed EXE
+                    // all fell back to jpackage's generic default icon.
+                    "--icon", "$winResourceDir/askamerica.ico",
+                    // FIXED, never-changing UUID -- must be identical across every future
+                    // release. Without --win-upgrade-uuid, jpackage mints a fresh random
+                    // UpgradeCode on every build, so main.wxs's <Upgrade Id="$(var.
+                    // JpProductUpgradeCode)"> can never match a previously installed
+                    // version's UpgradeCode: JP_UPGRADABLE_FOUND never fires, and Windows
+                    // Installer offers only Repair/Remove instead of installing the new
+                    // version. Confirmed live installing 0.91.4 over 0.91.3. Generated once
+                    // via `python3 -c "import uuid; print(uuid.uuid4())"` -- do not regenerate.
+                    "--win-upgrade-uuid", "E661CE71-AEB5-4FD3-B203-55E775A04C4C")
         else emptyArray()),
         // Linux: add an application-menu entry for the setup wizard.
         *(if (!isMac && !os.contains("win"))

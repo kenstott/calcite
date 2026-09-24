@@ -135,6 +135,15 @@ partitionedTables:
       and to sec.filing_metadata by state for risk-disclosure research. Refreshed
       daily (declarations issued continuously within 24h of signature).
       Source: fema.gov/api/open/v2/DisasterDeclarationsSummaries.
+      WARNING when using this table as a physical-hazard-exposure proxy:
+      incident_type = 'Biological' covers the COVID-19 major disaster
+      declarations of March-April 2020, issued once per state as a single
+      non-geographic nationwide event. Left in a per-county or per-state
+      declaration count, it registers as "a disaster" for nearly every county
+      in the country and erases the physical-hazard variation a query is
+      usually trying to measure. Filter incident_type != 'Biological' (or
+      inspect the distinct incident_type values directly) before using
+      declaration counts as a hazard-exposure or disaster-frequency metric.
 
     dimensions:
       type:
@@ -163,7 +172,12 @@ partitionedTables:
       - name: incident_type
         type: string
         nullable: true
-        comment: Hurricane / Flood / Tornado / Wildfire / Severe Storm / etc.
+        comment: >
+          Hurricane / Flood / Tornado / Wildfire / Severe Storm / etc. Also
+          includes 'Biological' (the COVID-19 declarations, issued once per
+          state as a single nationwide event in March-April 2020, not a
+          per-county physical hazard) -- exclude it before using this column
+          to count or filter disasters as a hazard-exposure proxy.
       - name: incident_begin_date
         type: date
         nullable: true

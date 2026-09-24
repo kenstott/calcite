@@ -72,7 +72,7 @@ public class SecCompanyTickersTransformer implements ResponseTransformer {
       }
 
       ArrayNode result = MAPPER.createArrayNode();
-      Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+      Iterator<Map.Entry<String, JsonNode>> fields = root.properties().iterator();
 
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> entry = fields.next();

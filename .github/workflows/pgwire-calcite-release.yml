@@ -159,7 +159,11 @@ jobs:
           name="pgwire-calcite-${VER}-${{ matrix.variant }}"
           mv bundle "$name"
           tar -czf "${name}.tar.gz" "$name"
-          (command -v sha256sum && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
+          # See pgwire-adapters-release.yml's identical line for why >/dev/null is required:
+          # without it, `command -v sha256sum`'s own stdout (the binary's path) leaks into
+          # the piped output ahead of the real hash line on any runner where sha256sum
+          # exists, producing a two-line .sha256 file whose first line is not a hash.
+          (command -v sha256sum >/dev/null 2>&1 && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
             | awk '{print $1}' > "${name}.tar.gz.sha256"
           echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
 

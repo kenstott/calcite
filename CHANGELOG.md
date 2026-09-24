@@ -1,5 +1,367 @@
 # Changelog
 
+## [0.97.4](https://github.com/kenstott/calcite/compare/engine-v0.97.3...engine-v0.97.4) (2026-09-24)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** store reports in a dedicated local file, not the read-only shared connection ([165d266](https://github.com/kenstott/calcite/commit/165d266ab1888662d7c2d4c7bc49a4a67c699cbd))
+
+## [0.97.3](https://github.com/kenstott/calcite/compare/engine-v0.97.2...engine-v0.97.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** store validations across conversations, fix stuck-query recovery ([642d909](https://github.com/kenstott/calcite/commit/642d9093df54ecfc8be9ced075a51737f1c485fe))
+
+## [0.97.2](https://github.com/kenstott/calcite/compare/engine-v0.97.1...engine-v0.97.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** require source_url for validations, add list_reports ([f86d5ef](https://github.com/kenstott/calcite/commit/f86d5ef30e0c1706467b3ae379213881d394d685))
+
+## [0.97.1](https://github.com/kenstott/calcite/compare/engine-v0.97.0...engine-v0.97.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** fix IllegalAccessError crashing the setup wizard on launch ([bf55b14](https://github.com/kenstott/calcite/commit/bf55b1456cbc5888241d863a9359ecf37edfafa2))
+
+## [0.97.0](https://github.com/kenstott/calcite/compare/engine-v0.96.2...engine-v0.97.0) (2026-09-23)
+
+
+### Features
+
+* **askamerica-engine:** detect existing install in the setup wizard ([cf18c0e](https://github.com/kenstott/calcite/commit/cf18c0e5a53de06ca306d943b6c57f1efba487bc))
+
+## [0.96.2](https://github.com/kenstott/calcite/compare/engine-v0.96.1...engine-v0.96.2) (2026-09-22)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** serialize concurrent engine downloads across processes ([81f5f4d](https://github.com/kenstott/calcite/commit/81f5f4dc26540d337418b8fb6614b2ed4d0ee8fc))
+
+## [0.96.1](https://github.com/kenstott/calcite/compare/engine-v0.96.0...engine-v0.96.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** broaden CAVEAT_WORDS, add 4 recipes from live eval ([3520b7b](https://github.com/kenstott/calcite/commit/3520b7b6680c05888e59ada99c402aa517de0973))
+
+## [0.96.0](https://github.com/kenstott/calcite/compare/engine-v0.95.4...engine-v0.96.0) (2026-09-22)
+
+
+### Features
+
+* **ci:** GPG-sign pgwire release bundles, add SBOMs to Maven Central artifacts ([7f11d38](https://github.com/kenstott/calcite/commit/7f11d38c79e05a13588443e3dd29e3b360bca7d4))
+
+
+### Bug Fixes
+
+* **ci:** put /usr/local/bin on PATH after installing grype+syft on Windows ([93d7014](https://github.com/kenstott/calcite/commit/93d70147c3014e3d505450c45e2cf81268f8bf4e))
+* **ci:** stop using softprops/action-gh-release to attach the engine release ([b67e142](https://github.com/kenstott/calcite/commit/b67e14223a923e7819d17db4a222fdec9cc00fbf))
+
+## [0.95.4](https://github.com/kenstott/calcite/compare/engine-v0.95.3...engine-v0.95.4) (2026-09-22)
+
+
+### Bug Fixes
+
+* bump azure-security-keyvault-keys off a Critical CVE (cloudops) ([2dcef72](https://github.com/kenstott/calcite/commit/2dcef7252c5fc8b6efd05e9960f76e345962570c))
+* eliminate the legacy commons-lang:commons-lang CVE (Low finding) ([7fa4d89](https://github.com/kenstott/calcite/commit/7fa4d89c58769f37d2243b98f043f4863a7bacc0))
+* **pgwire-calcite:** time out an incomplete startup handshake ([47a0ce9](https://github.com/kenstott/calcite/commit/47a0ce919e4ed6d21db8008514c642f9af1c6106))
+* resolve High-severity CVEs across pgwire/trino bundles ([14c60d5](https://github.com/kenstott/calcite/commit/14c60d5a740c38ac089825abba58c885d4766eab))
+* resolve Medium-severity CVEs across pgwire/trino bundles (pure version bumps) ([ccd696f](https://github.com/kenstott/calcite/commit/ccd696f627ac8e4c9ca1a45dcb9538a8996255ab))
+* resolve the trino-* modules' last Low findings (logback-core) ([c234349](https://github.com/kenstott/calcite/commit/c2343498b12a9117e30ca53d342e42b4eb9f9581))
+* sign + SBOM + CVE-gate pgwire/trino release artifacts ([1d4a00a](https://github.com/kenstott/calcite/commit/1d4a00aa46da6ac0955f4924d8dab9f370749d8e))
+* stop gen_requirements_md.py from doubling the trailing newline ([8d01086](https://github.com/kenstott/calcite/commit/8d0108697d6af52b6c2170ddfb156e327a302c74))
+* strip extra trailing blank line breaking autostyleMarkdownCheck ([df56de8](https://github.com/kenstott/calcite/commit/df56de82f3a8616ffe25efca64d1eb3da29063f3))
+* suppress a verified grype false positive (jetty-security digest CVE) ([97eff18](https://github.com/kenstott/calcite/commit/97eff18b9bff31805851b56eee4588c5c0fe3a6c))
+
+## [0.95.3](https://github.com/kenstott/calcite/compare/engine-v0.95.2...engine-v0.95.3) (2026-09-21)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** accept humanized aliases in the disclosure gate ([20d5a10](https://github.com/kenstott/calcite/commit/20d5a10f0056f5410dd82bbce786af1143f2d745))
+
+## [0.95.2](https://github.com/kenstott/calcite/compare/engine-v0.95.1...engine-v0.95.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** a rejected publish_report attempt must not reset the provenance boundary ([e9f027b](https://github.com/kenstott/calcite/commit/e9f027b1b7d6cd8c12cf83a23922d07998a67b1b))
+
+## [0.95.1](https://github.com/kenstott/calcite/compare/engine-v0.95.0...engine-v0.95.1) (2026-09-21)
+
+No askamerica-engine source changes. Re-tagged to repackage the browser extension
+(kenstott/askamerica) with today's changes: a news-report validation button, and
+prompts on all three validate paths that explicitly mandate the AskAmerica
+connector rather than leaving it to chance.
+
+## [0.95.0](https://github.com/kenstott/calcite/compare/engine-v0.94.4...engine-v0.95.0) (2026-09-20)
+
+
+### Features
+
+* **askamerica-engine:** add score_claim tool for independent Jev-based claim verification ([f071a21](https://github.com/kenstott/calcite/commit/f071a212d49e78bde2b2e41970b81d894c30ff91))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** route claim-checking to search_catalog before web research ([bfbdf37](https://github.com/kenstott/calcite/commit/bfbdf37c15959a5c1bc9db31cc307fcbb9d92e0a))
+
+## [0.94.4](https://github.com/kenstott/calcite/compare/engine-v0.94.3...engine-v0.94.4) (2026-09-18)
+
+
+### Bug Fixes
+
+* **ci:** scope pgwire-adapters-release in-flight check to the target version ([be58c19](https://github.com/kenstott/calcite/commit/be58c19fcee4651bff4f4653813fc175a390b8ab))
+
+## [0.94.3](https://github.com/kenstott/calcite/compare/engine-v0.94.2...engine-v0.94.3) (2026-09-18)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** stop flagging pct_chg columns as broken_field ([11e263a](https://github.com/kenstott/calcite/commit/11e263a24186f67985486570292d811be60a7f6c))
+
+## [0.94.2](https://github.com/kenstott/calcite/compare/engine-v0.94.1...engine-v0.94.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** suggest example questions, not a bare command phrase ([cce4d74](https://github.com/kenstott/calcite/commit/cce4d74c36d04ee05eb57896790ac6f21c2f42fb))
+
+## [0.94.1](https://github.com/kenstott/calcite/compare/engine-v0.94.0...engine-v0.94.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** scope CALL_LOG by last publish_report, not a time window ([b1e70cb](https://github.com/kenstott/calcite/commit/b1e70cb566a6b48f9a03b06c0aa4e79cc5379158))
+* **askamerica-engine:** stop report validation from citing another conversation's queries ([e023fa9](https://github.com/kenstott/calcite/commit/e023fa919e91d64d798f80a58dcd6da75fc58dd9))
+
+## [0.94.0](https://github.com/kenstott/calcite/compare/engine-v0.93.0...engine-v0.94.0) (2026-09-18)
+
+
+### Features
+
+* **file:** reuse per-table Iceberg row counts across a session's schema-tree rebuilds ([9057689](https://github.com/kenstott/calcite/commit/90576898c1703f0e51634fd559358d3ee6f9ba51))
+
+
+### Bug Fixes
+
+* **ci:** don't bundle pgwire-govdata into the macOS installer, notarization requires it thin ([dd4c66c](https://github.com/kenstott/calcite/commit/dd4c66c3b18a1e119d45adf90936b200650176d1))
+* **ci:** surface Apple notarytool rejection log instead of silently shipping unsigned PKG ([c3eff20](https://github.com/kenstott/calcite/commit/c3eff2053a81c4ce0024d41cb8ede5389c21decb))
+* **file:** cache per-column NDV (publishedNdv) the same way row counts are cached ([a124606](https://github.com/kenstott/calcite/commit/a124606264f9612edf54b7060fa0fe63ab5c48ca))
+* **file:** COUNT(*) falling back to a full scan on a null/wrong context classloader ([fbee122](https://github.com/kenstott/calcite/commit/fbee1223a5b6a7133fe3a4a2f8b308aebb0a9b4b))
+* **file:** mark every genuinely-nullable InformationSchema column as such ([b8d5b56](https://github.com/kenstott/calcite/commit/b8d5b56ad10f5ebceabe96efcdc0451bc0b042ed))
+* **pgwire-govdata:** missing env vars crashed every launch, cache the catalog walk ([4462863](https://github.com/kenstott/calcite/commit/446286301abc7cf404722bdb96c23b240ba90768))
+* route information_schema through Calcite instead of pgwire's own DuckDB reimplementation ([6ddd3e5](https://github.com/kenstott/calcite/commit/6ddd3e56fc3de337d2c1fdefd542eb9d888194b1))
+
+## [0.93.0](https://github.com/kenstott/calcite/compare/engine-v0.92.0...engine-v0.93.0) (2026-09-18)
+
+
+### Features
+
+* **trino-splunk:** expose a 'schema' catalog property ([4a042e8](https://github.com/kenstott/calcite/commit/4a042e8724fd1d846ba58e1c63e7f67b51986494))
+
+
+### Bug Fixes
+
+* **splunk:** register the Splunk schema under the configured name, not a hardcoded literal ([28db96c](https://github.com/kenstott/calcite/commit/28db96ca1a14040c8a2c8f74981af4d18042ef4c))
+
+## [0.92.0](https://github.com/kenstott/calcite/compare/engine-v0.91.5...engine-v0.92.0) (2026-09-17)
+
+
+### Features
+
+* **pgwire-calcite:** server-side usage metering + quota enforcement ([5cac251](https://github.com/kenstott/calcite/commit/5cac2519f3ce24bdf087e0063c53a526bf3cba58))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** revert WixUIBannerBmp/WixUIDialogBmp override, breaks Windows build ([b656ec2](https://github.com/kenstott/calcite/commit/b656ec2fc5467ab203da19deafb6aecd2f44b098))
+
+## [0.91.5](https://github.com/kenstott/calcite/compare/engine-v0.91.4...engine-v0.91.5) (2026-09-17)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** pin Windows MSI UpgradeCode, add branded installer graphics ([71c3b4a](https://github.com/kenstott/calcite/commit/71c3b4aef319222154ee39261abe3e6a9b253a45))
+* **file,govdata:** don't create per-schema operating dirs for read-only connections ([2bf33a7](https://github.com/kenstott/calcite/commit/2bf33a7508f8ac475d364a0efb7776b9292b75a8))
+* **govdata:** delete the temp model file right after connect, sweep old leftovers ([6788579](https://github.com/kenstott/calcite/commit/678857977008eb69b36c2a029a5da0c5cb7c87c1))
+
+## [0.91.4](https://github.com/kenstott/calcite/compare/engine-v0.91.3...engine-v0.91.4) (2026-09-17)
+
+
+### Bug Fixes
+
+* **ci:** rewrite the Windows venv's pyvenv.cfg home path at launch, not build time ([a144df8](https://github.com/kenstott/calcite/commit/a144df84b3fb75ebb8802d833c5071ccb7d866e7))
+
+## [0.91.3](https://github.com/kenstott/calcite/compare/engine-v0.91.2...engine-v0.91.3) (2026-09-17)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** mark reviewed fallback catches, fix telemetry fail-direction ([d1d36d3](https://github.com/kenstott/calcite/commit/d1d36d3a984a35cee43eb7638a2c7e57d246f534))
+
+## [0.91.2](https://github.com/kenstott/calcite/compare/engine-v0.91.1...engine-v0.91.2) (2026-09-17)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** remove the embedded-engine fallback, propagate real errors ([b1083ba](https://github.com/kenstott/calcite/commit/b1083ba61574d6b1bc9c8c722459558d77706c8d))
+* **ci:** retry the pgwire-govdata download on transient curl failures ([6e68684](https://github.com/kenstott/calcite/commit/6e6868474ec88b3040dbc707bc963690814ba027))
+
+## [0.91.1](https://github.com/kenstott/calcite/compare/engine-v0.91.0...engine-v0.91.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ci:** stop a symlink miss from turning into cp -R / on macOS ([a9783c2](https://github.com/kenstott/calcite/commit/a9783c2e784301db20a76633301f494191a49a1d))
+
+## [0.91.0](https://github.com/kenstott/calcite/compare/engine-v0.90.1...engine-v0.91.0) (2026-09-16)
+
+
+### Features
+
+* bundle pgwire-govdata + a shared EMBED() service into the MSI installer ([79c476a](https://github.com/kenstott/calcite/commit/79c476a0758e7a10b647460a5d33ae61e31b73d7))
+
+## [0.90.1](https://github.com/kenstott/calcite/compare/engine-v0.90.0...engine-v0.90.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** "askamerica help" now answers with the right content ([9e94dcc](https://github.com/kenstott/calcite/commit/9e94dcc61703ca4bd46ec54732490d3c895dfc8c))
+* **askamerica-engine:** use the AskAmerica brand icon for the Windows installer ([fdd9d27](https://github.com/kenstott/calcite/commit/fdd9d27fb09831baf1030eee4b75ada6030781f4))
+
+## [0.90.0](https://github.com/kenstott/calcite/compare/engine-v0.89.0...engine-v0.90.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** coach question-asking in the askamerica help response ([d4c7e23](https://github.com/kenstott/calcite/commit/d4c7e23fc15da297248bc4b409a16b08c7e482f4))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** wrap the setup wizard's status text instead of truncating ([e8d7f60](https://github.com/kenstott/calcite/commit/e8d7f6089dfb51e13c82e936e1660a6140d8243b))
+
+## [0.89.0](https://github.com/kenstott/calcite/compare/engine-v0.88.0...engine-v0.89.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** lazily download the pgwire-govdata bundle on first use ([b5846f6](https://github.com/kenstott/calcite/commit/b5846f677e59be2cf08ca736f17affecf1101a3c))
+* **askamerica-engine:** opt-in thin-client mode over shared pgwire-govdata ([a52704f](https://github.com/kenstott/calcite/commit/a52704ff6682c8f17747b14452ea26fd7b2088c5))
+* **pgwire-calcite:** opt-in idle-shutdown when connection count hits zero ([8c567e0](https://github.com/kenstott/calcite/commit/8c567e006e23fed68f57eddaeaae8d8639908468))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** fix real spawn/connect bugs found via live e2e test ([1c13ba1](https://github.com/kenstott/calcite/commit/1c13ba15917aeedadb39ca5964709a71cb7f9d8a))
+* **pgwire:** dedupe bundled jar versions; tolerate not-yet-ETL'd tables ([dfd2077](https://github.com/kenstott/calcite/commit/dfd2077624cbe992595bae3544d984d9a0588363))
+
+## [0.88.0](https://github.com/kenstott/calcite/compare/engine-v0.87.0...engine-v0.88.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** recognize "askamerica help" as an explicit orientation trigger ([d42f55e](https://github.com/kenstott/calcite/commit/d42f55e49536220e91d171e6dcfab98ff63e9735))
+
+## [0.87.0](https://github.com/kenstott/calcite/compare/engine-v0.86.3...engine-v0.87.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** reinforce the offer-a-report nudge in tool descriptions ([a8b89f3](https://github.com/kenstott/calcite/commit/a8b89f3092f4342e3da5bee40b88530f8ab8a3de))
+
+## [0.86.3](https://github.com/kenstott/calcite/compare/engine-v0.86.2...engine-v0.86.3) (2026-09-16)
+
+
+### Bug Fixes
+
+* **file:** seed numbered catalog copies from the bundled jar, not the live base file ([c576fab](https://github.com/kenstott/calcite/commit/c576faba6f11d3c80e6fe3f4abea53df18e9e31d))
+
+## [0.86.2](https://github.com/kenstott/calcite/compare/engine-v0.86.1...engine-v0.86.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* **file:** close TOCTOU race in stale-copy cleanup that could delete an in-use catalog ([a84db7e](https://github.com/kenstott/calcite/commit/a84db7ea6798cc9a3c91fbba2e8e4312998839ea))
+
+## [0.86.1](https://github.com/kenstott/calcite/compare/engine-v0.86.0...engine-v0.86.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **file:** reclaim unused DuckDB lock-conflict fallback catalog copies ([339da75](https://github.com/kenstott/calcite/commit/339da753d887a97475133276c4225aaedd13a9fa))
+
+## [0.86.0](https://github.com/kenstott/calcite/compare/engine-v0.85.0...engine-v0.86.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** require a defect/sourcing classification on report_issue ([2ec2bfd](https://github.com/kenstott/calcite/commit/2ec2bfd418b85f54a1753ecf0d1607ba1e4109f2))
+
+
+### Bug Fixes
+
+* **file:** recognize Windows' file-locking error text in the DuckDB catalog fallback ([58c0100](https://github.com/kenstott/calcite/commit/58c01009183f87024873cda68ed436668f9c1e63))
+
+## [0.85.0](https://github.com/kenstott/calcite/compare/engine-v0.84.0...engine-v0.85.0) (2026-09-16)
+
+
+### Features
+
+* **askamerica-engine:** auto-upload publish_report to Studies for registered accounts ([b26ca7c](https://github.com/kenstott/calcite/commit/b26ca7cab6482ff48f097f7bcb809714e8fb4c79))
+* **askamerica-engine:** offer a shareable report instead of mandating one silently ([1737a3c](https://github.com/kenstott/calcite/commit/1737a3ca8f41b40738be85b9b74b5dd6243d3fea))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** exempt external-source citations from statistical-provenance check ([31631ff](https://github.com/kenstott/calcite/commit/31631ffe6f873dfd84455dda17d5f62b4a10b97b))
+* **askamerica-engine:** warn real users that publish_report's link is ephemeral ([8ac2127](https://github.com/kenstott/calcite/commit/8ac2127ad59f08bd6253679aff8af951c3385b4e))
+
+## [0.84.0](https://github.com/kenstott/calcite/compare/engine-v0.83.0...engine-v0.84.0) (2026-09-15)
+
+
+### Features
+
+* **askamerica-engine:** add enforceResearchDepthOnGap publish_report gate ([09a0457](https://github.com/kenstott/calcite/commit/09a045759e8ed5693493d1e77d3cd110e4ae9f39))
+* **askamerica-engine:** add hhi_concentration tool and a once-per-session catalog-search note ([507352a](https://github.com/kenstott/calcite/commit/507352ad8f7f46700bc0c6d224d7dbc897e38ee3))
+* **askamerica-engine:** extend STANDING STATISTICAL PRACTICE to pure web-fallback data ([5abb925](https://github.com/kenstott/calcite/commit/5abb9253397231ac88625bcf389ef7e603a9990e))
+* **govdata/cyber_vuln:** add vulnerability_cpes junction table ([a137853](https://github.com/kenstott/calcite/commit/a1378536eef746c986e0209bb2d89987c2246021))
+* **govdata/econ:** add econ.mts_outlays_by_function (Treasury MTS current-year outlays) ([342cb5e](https://github.com/kenstott/calcite/commit/342cb5ec7bb5ee9241117162f1795303310ca783))
+* **govdata/econ:** add econ.national_wages (BLS QCEW national aggregate) ([ef3df04](https://github.com/kenstott/calcite/commit/ef3df04192b251fcfa521828fa271847c16d22c6))
+* **govdata/energy:** add fossil_fuel_production view unioning crude and gas ([7e40f72](https://github.com/kenstott/calcite/commit/7e40f720db180ac383d4614efb57e085d3e74154))
+* **govdata/energy:** add OEWS source-change detector for API backfill ([6faf5dc](https://github.com/kenstott/calcite/commit/6faf5dc4926dca0919a64c1983b4d22d9e69a240))
+* **govdata/energy:** separate crude oil and natural gas into distinct tables ([122d1af](https://github.com/kenstott/calcite/commit/122d1af4a6fc6d8ff91925ada986434a163a9d5a))
+* **govdata/health:** add health.va_medical_facilities (HIFLD VA facility roster) ([0e5f527](https://github.com/kenstott/calcite/commit/0e5f5271b64bc0a8dba68ac537f274a512af0ae4))
+* **govdata/research:** backfill nsf_rd_by_field FYs 1993-2014 from NCSES historical tables ([5aa671e](https://github.com/kenstott/calcite/commit/5aa671e0ba73e28e76dc6210eb512ba03c737a34))
+* **govdata:** add fiscal.irs_gross_collections_by_state_year (IRS SOI Table 1-5) ([433cf6d](https://github.com/kenstott/calcite/commit/433cf6d6a3d614d2bb86331588582293f657ddb2))
+* **govdata:** add health.medicare_geographic_variation (CMS Medicare FFS spending) ([b437a09](https://github.com/kenstott/calcite/commit/b437a09db138fb9913c0974d634e5b83f7e2da55))
+* **govdata:** add health.ssa_oasdi_county (SSA OASDI county beneficiary data) ([1ba1035](https://github.com/kenstott/calcite/commit/1ba1035906f0f5775c31b7823f8a6bb4edb1e27a))
+* **govdata:** add lands.blm_oil_gas_acreage (BLM leased/producing acreage by state/FY) ([f57b0ea](https://github.com/kenstott/calcite/commit/f57b0eac4b707f2b2764814633435eb62cc2a2d3))
+* **govdata:** add research.nih_publications (NIH award-to-publication links) ([a06c55f](https://github.com/kenstott/calcite/commit/a06c55f583110c3ccbe1eb2949be5ffe275f7bfc))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** name gini_coefficient/hhi_concentration in the external-data statistical-rigor instruction ([0077f88](https://github.com/kenstott/calcite/commit/0077f88120f6fc80393150c61a1ab352b28d26b7))
+* **askamerica-engine:** nudge search_catalog/suggest_external_sources toward complete research on a genuine gap ([935d3ea](https://github.com/kenstott/calcite/commit/935d3ea75543dae16ca9b186037cc64151876d21))
+* **askamerica-engine:** point external-data statistical rigor at query(), not Bash/python3 ([b4e7b11](https://github.com/kenstott/calcite/commit/b4e7b11616eaefa25144f03810e0e25d5b0f6923))
+* **askamerica-engine:** recognize describe_table as real table provenance ([2d13b78](https://github.com/kenstott/calcite/commit/2d13b7824c5867360fc0e4162ea0b2ea2f9abc97))
+* **askamerica-engine:** reframe research-depth guidance from a numeric target to a qualitative exhaustiveness standard ([10c935d](https://github.com/kenstott/calcite/commit/10c935d48c9ba795a81f73df8e9f17cbace3f62b))
+* **govdata/census:** update PEP dimension resolver to support Census Vintage 2024 ([#183](https://github.com/kenstott/calcite/issues/183)) ([e74d0b0](https://github.com/kenstott/calcite/commit/e74d0b0495bd4c07de1bb1bdf0ed0ae0873a4a9a))
+* **govdata/cyber:** add vulnerability_cpes to worker-cyber.sh historical mode ([4c1c7be](https://github.com/kenstott/calcite/commit/4c1c7be08e2d6b5f97fefdf32f1c275501ab59ea))
+* **govdata/cyber:** parse pub_month and quarter from CVE published in CWE transformer ([c48e1ff](https://github.com/kenstott/calcite/commit/c48e1ff9520139f22db6ccb619231eac0b5bcc64))
+* **govdata/cyber:** parse pub_month and quarter from CVE published timestamp ([58017fb](https://github.com/kenstott/calcite/commit/58017fbe7dc75c6950cd28fade366becc548736e))
+* **govdata/health:** assign va_medical_facilities to a worker-health.sh group ([dcd4688](https://github.com/kenstott/calcite/commit/dcd46887127ebbc7c69108b9d8440ba55ae78867))
+* **govdata/sec:** add socket timeouts to prevent indefinite hangs on dead connections ([#252](https://github.com/kenstott/calcite/issues/252)) ([a9a2b2a](https://github.com/kenstott/calcite/commit/a9a2b2ac3e4808c89ad67c38f46982601ac0fc2a))
+* **govdata/sec:** defer xbrl_relationships compaction to maintenance jobs ([aa05250](https://github.com/kenstott/calcite/commit/aa05250454438beb3e5ad6162f86364668825051))
+* **ref:** enrich gleif_cik lookup with name-matched SEC filing_metadata mappings ([6068dfe](https://github.com/kenstott/calcite/commit/6068dfe263217f109fa60f7821b5091646a31429))
+
 ## [0.83.0](https://github.com/kenstott/calcite/compare/engine-v0.82.1...engine-v0.83.0) (2026-09-13)
 
 

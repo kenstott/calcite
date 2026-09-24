@@ -361,12 +361,28 @@ public class IcebergTable extends AbstractTable
       return buildStatistic(cachedRowCount);
     }
 
+    // A fresh IcebergTable instance is built on every per-query schema-tree rebuild -- this
+    // instance's own cachedRowCount field above is therefore useless across queries; the cost of
+    // a full manifest walk was being paid again for every table Calcite's planner touched during
+    // preparation, on every single query, even for tables the query never referenced (confirmed
+    // live 2026-09-18, and confirmed specific to pgwire's single shared 26-schema/599-table
+    // connection: embedded mode's per-schema connections don't exhibit this, since Calcite's
+    // per-statement metadata touch stays scoped to one schema's handful of tables there instead
+    // of the whole catalog). IcebergSchemaCache.ENTRIES is a static, JVM-wide map that survives
+    // those rebuilds -- consult it here the same way table/column comments already do.
+    Double cached = IcebergSchemaCache.lookupRowCount(source.path());
+    if (cached != null) {
+      cachedRowCount = cached;
+      return buildStatistic(cachedRowCount);
+    }
+
     try {
       Snapshot snapshot = icebergTable().currentSnapshot();
       if (snapshot == null) {
         // Empty table - no snapshots yet
         LOGGER.debug("Iceberg table has no snapshot, returning 0 row count");
         cachedRowCount = 0.0;
+        IcebergSchemaCache.recordStatistics(source.path(), -1L, 0.0);
         return buildStatistic(0.0);
       }
 
@@ -380,6 +396,7 @@ public class IcebergTable extends AbstractTable
       }
 
       cachedRowCount = (double) totalRecords;
+      IcebergSchemaCache.recordStatistics(source.path(), snapshot.snapshotId(), cachedRowCount);
       LOGGER.debug("Iceberg table row count from metadata: {}", totalRecords);
       return buildStatistic(cachedRowCount);
 
@@ -438,6 +455,18 @@ public class IcebergTable extends AbstractTable
    */
   private synchronized Map<String, Long> publishedNdv() {
     if (publishedNdv == null) {
+      // Same per-query schema-tree-rebuild problem this class's row-count field had before
+      // IcebergSchemaCache.lookupRowCount/recordStatistics fixed it -- this instance field is
+      // discarded on every rebuild, so consult the same static, JVM-wide cache here too.
+      // Confirmed live (2026-09-18): a publish_report call timed out inside exactly this method,
+      // re-loading the table fresh (loadIcebergTable(), NOT the pinned icebergTable() handle --
+      // see this method's own doc for why) on every planner call that needed a cardinality
+      // estimate for a GROUP BY column.
+      Map<String, Long> cached = IcebergSchemaCache.lookupNdv(source.path());
+      if (cached != null) {
+        publishedNdv = cached;
+        return publishedNdv;
+      }
       try {
         publishedNdv =
             org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(
@@ -448,6 +477,7 @@ public class IcebergTable extends AbstractTable
         LOGGER.debug("Could not read published cardinality: {}", t.toString());
         publishedNdv = java.util.Collections.emptyMap();
       }
+      IcebergSchemaCache.recordNdv(source.path(), publishedNdv);
     }
     return publishedNdv;
   }

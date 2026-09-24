@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -25,16 +26,43 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
- * Serves the claim-by-claim verdicts of published validations over loopback, keyed by the
- * article URL, so a browser extension can overlay them on the page a reader is looking at.
+ * Serves the claim-by-claim verdicts of recently-published validations over loopback, keyed by
+ * the article URL, so a browser extension can overlay them on the page a reader is looking at.
+ *
+ * <p>Storage is a small table ({@code askamerica_reports}) in its own dedicated local DuckDB
+ * file ({@code ~/.askamerica/reports.duckdb}), not an in-memory map, and deliberately NOT the
+ * shared pgwire-govdata connection ({@link PgwireGovDataConnector}) despite that connection
+ * already being shared across every conversation on this machine — measured live 2026-09-23:
+ * pgwire-govdata serves a fixed, read-only Calcite model and rejects DDL outright ("CREATE TABLE
+ * is not supported: pgwire-calcite serves a read-only Calcite model"), so every write through it
+ * silently failed from the moment this class first tried to use it, caught by this class's own
+ * best-effort error handling and never surfaced to a caller. A short-lived, fresh JDBC connection
+ * straight to this dedicated file, opened and closed per call, sidesteps that entirely: DuckDB's
+ * own file locking is what actually serializes concurrent writers across processes here, not a
+ * JVM-level lock (there is no shared long-lived connection object for one to protect).
+ *
+ * <p>The earlier design (a per-process in-memory map) had the same cross-conversation-visibility
+ * problem this file-based one fixes: each Desktop conversation runs its own separate engine
+ * process, so a validation recorded only in that process's memory was invisible to every other
+ * conversation (and to the extension, unless that conversation's process happened to also be the
+ * one that won the loopback port below). A shared file on disk, not a shared in-process object,
+ * is what actually solves that.
+ *
+ * <p>"Recently" means the last {@value #WINDOW_HOURS} hours, not "this session" — there is no
+ * well-defined single session once storage is shared across every open conversation, so a rolling
+ * time window is the honest replacement: old enough to be irrelevant to what's likely still open
+ * in a browser tab, recent enough that re-validating a fast-moving story is expected.
  *
  * <p>Unlike {@link ArtifactServer} this listens on a <b>fixed</b> port (default
  * {@value #DEFAULT_PORT}, overridable with {@code -Daskamerica.claims.port}): a client that has
@@ -43,33 +71,53 @@ import java.util.Map;
  *
  * <ul>
  *   <li>bound to <b>127.0.0.1</b> only;</li>
- *   <li><b>no enumeration</b>: there is no listing endpoint. A caller gets a validation back only
- *       by presenting the exact article URL it was published for, and {@code /status} reports a
- *       count, never the URLs;</li>
- *   <li><b>GET and HEAD only</b>, read-only, the newest {@value #CAPACITY} validations kept;</li>
- *   <li><b>in memory</b>, gone with the process, like the reports themselves.</li>
+ *   <li><b>no HTTP enumeration</b>: this loopback server itself has no listing endpoint. A
+ *       caller gets a validation back only by presenting the exact article URL it was published
+ *       for, and {@code /status} reports a count, never the URLs — because any webpage's own
+ *       JavaScript can reach a plain loopback HTTP server with a bare {@code fetch()}, so an
+ *       enumeration endpoint here would let any site read a user's whole validation history.
+ *       {@link #listAll()} is a different trust boundary: it backs the {@code list_reports} MCP
+ *       tool, reachable only through a real MCP client connection (Claude Desktop's connector),
+ *       never by arbitrary page JS — the privacy concern above does not apply to it;</li>
+ *   <li><b>GET and HEAD only</b>, read-only.</li>
  * </ul>
  *
- * <p>If the port is already taken (a second engine on the same machine) this server simply does
- * not start; publishing still works and the extension talks to whichever instance got the port.
+ * <p>If the port is already taken (a second engine process on the same machine already bound it)
+ * this server simply does not start on THAT process — but publishing and reading both go through
+ * the shared table regardless, so this only affects which process's HTTP endpoint the extension
+ * happens to be pointed at, not whether a given conversation's data is visible anywhere.
  */
 final class ClaimsServer {
 
     private ClaimsServer() {}
 
     static final int DEFAULT_PORT = 45123;
-    private static final int CAPACITY = 64;
+    private static final int WINDOW_HOURS = 24;
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    private static final Map<String, ObjectNode> VALIDATIONS =
-        new LinkedHashMap<String, ObjectNode>(16, 0.75f, false) {
-            @Override protected boolean removeEldestEntry(Map.Entry<String, ObjectNode> e) {
-                return size() > CAPACITY;
-            }
-        };
-
     private static HttpServer server;
     private static int port = -1;
+
+    /**
+     * A shared secret gating {@code /reports}, unlike {@code /claims} (single exact-URL
+     * lookup — an attacker page has to already know the URL to probe) and {@code /status} (just
+     * a count). {@code /reports} returns the last {@value #WINDOW_HOURS} hours of validation
+     * history in one call, so it needs real protection, not just obscurity: {@code cors()}'s wildcard
+     * {@code Access-Control-Allow-Origin} exists for the extension's benefit but is readable by
+     * any webpage's own fetch too, and {@code host_permissions} already exempts the extension's
+     * background service worker from CORS regardless of what this server sends back — so CORS
+     * headers were never actually doing access control here, just enabling it for everyone.
+     *
+     * <p>Compiled into both this engine and the extension's {@code background.js} (kept in sync
+     * by hand — the two live in separate repos/release pipelines) rather than generated
+     * per-machine: no pairing step, no options-page UI, nothing for a user to copy. This is
+     * deliberately NOT a strong secret — anyone who downloads the public jar or unpacks the
+     * public extension source can read it out just as easily as this comment. It filters out
+     * opportunistic driveby scripts (a page probing common localhost ports for anything that
+     * answers), which is the actual threat this endpoint faces; it does nothing against a
+     * targeted attacker willing to go find this constant, and must never be treated as
+     * protecting anything more sensitive than the read-only validation history it gates here.
+     */
+    private static final String REPORTS_KEY = "aa-reports-9f3c1e7b2a48d0c6";
 
     /** Starts the listener once; silent no-op when the port is busy. */
     static synchronized void start(PrintStream log) {
@@ -86,6 +134,7 @@ final class ClaimsServer {
                 new InetSocketAddress(InetAddress.getLoopbackAddress(), p), 0);
             server.createContext("/claims", ClaimsServer::handleClaims);
             server.createContext("/status", ClaimsServer::handleStatus);
+            server.createContext("/reports", ClaimsServer::handleReports);
             server.setExecutor(null);
             server.start();
             port = p;
@@ -97,19 +146,62 @@ final class ClaimsServer {
         }
     }
 
-    /** Records a validation for the extension to find by article URL. */
-    static synchronized void record(String sourceUrl, String title, String reportUrl,
-        JsonNode claims) {
+    private static final String REPORTS_DB_FILENAME = "reports.duckdb";
+    private static final int OPEN_RETRY_ATTEMPTS = 5;
+    private static final long OPEN_RETRY_DELAY_MILLIS = 200;
+
+    private static File reportsDbFile() {
+        File dir = new File(System.getProperty("user.home", ""), ".askamerica");
+        dir.mkdirs();
+        return new File(dir, REPORTS_DB_FILENAME);
+    }
+
+    /**
+     * Opens a fresh, short-lived connection to the dedicated local reports file, retrying
+     * briefly on a lock conflict from another process's concurrent open. Not cached and not
+     * held open across calls: DuckDB's own file lock is what actually serializes concurrent
+     * writers across every conversation's process here, not a JVM-level lock guarding a shared
+     * connection object -- there is no such shared object in this design, deliberately (see the
+     * class javadoc for why the earlier design routing through pgwire-govdata never worked at
+     * all). Report publishing is infrequent enough that a real collision between two processes
+     * both opening this file in the same instant is rare; the retry loop is a cushion for that
+     * rare case, not the primary correctness mechanism.
+     */
+    private static Connection openReportsDb() throws Exception {
+        Class.forName("org.duckdb.DuckDBDriver");
+        String url = "jdbc:duckdb:" + reportsDbFile().getAbsolutePath();
+        Exception last = null;
+        for (int attempt = 1; attempt <= OPEN_RETRY_ATTEMPTS; attempt++) {
+            try {
+                return DriverManager.getConnection(url);
+            } catch (SQLException e) {
+                last = e;
+                Thread.sleep(OPEN_RETRY_DELAY_MILLIS);
+            }
+        }
+        throw last;
+    }
+
+    /** Idempotent; cheap to call every time ({@code CREATE TABLE IF NOT EXISTS}) rather than
+     *  tracked globally, since every call opens its own fresh connection anyway. */
+    private static void ensureTable(Connection c) throws Exception {
+        try (Statement st = c.createStatement()) {
+            st.execute("CREATE TABLE IF NOT EXISTS askamerica_reports ("
+                + "normalized_url VARCHAR PRIMARY KEY, url VARCHAR, title VARCHAR, "
+                + "report_url VARCHAR, published_at TIMESTAMP, tally_json VARCHAR, "
+                + "claims_json VARCHAR)");
+        }
+    }
+
+    /** Records a validation for the extension to find by article URL. Best-effort: a storage
+     *  failure is logged, not thrown -- publish_report's own success already happened, and a
+     *  reader losing the extension overlay is a lesser failure than the whole publish erroring
+     *  out over a problem in a side table. */
+    static void record(String sourceUrl, String title, String reportUrl, JsonNode claims) {
         String key = normalize(sourceUrl);
         if (key == null || claims == null || !claims.isArray() || claims.size() == 0) {
             return;
         }
-        ObjectNode v = MAPPER.createObjectNode();
-        v.put("url", sourceUrl);
-        v.put("normalized_url", key);
-        v.put("title", title == null ? "" : title);
-        v.put("report_url", reportUrl == null ? "" : reportUrl);
-        v.put("published_at", Instant.now().toString());
         ObjectNode tally = MAPPER.createObjectNode();
         for (JsonNode c : claims) {
             String verdict = c.path("verdict").asText("").trim().toLowerCase(Locale.ROOT);
@@ -117,19 +209,122 @@ final class ClaimsServer {
                 tally.put(verdict, tally.path(verdict).asInt(0) + 1);
             }
         }
-        v.set("tally", tally);
-        v.set("claims", claims.deepCopy());
-        VALIDATIONS.remove(key);
-        VALIDATIONS.put(key, v);
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            // Opportunistic cleanup on every write keeps the file small over time without
+            // needing a separate scheduled job -- report publishing is infrequent enough that
+            // piggybacking here costs nothing noticeable.
+            try (Statement st = c.createStatement()) {
+                st.execute("DELETE FROM askamerica_reports WHERE published_at <= "
+                    + "now() - INTERVAL '" + WINDOW_HOURS + " hours'");
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO askamerica_reports (normalized_url, url, title, "
+                    + "report_url, published_at, tally_json, claims_json) "
+                    + "VALUES (?, ?, ?, ?, now(), ?, ?) "
+                    + "ON CONFLICT (normalized_url) DO UPDATE SET url = excluded.url, "
+                    + "title = excluded.title, report_url = excluded.report_url, "
+                    + "published_at = excluded.published_at, "
+                    + "tally_json = excluded.tally_json, "
+                    + "claims_json = excluded.claims_json")) {
+                ps.setString(1, key);
+                ps.setString(2, sourceUrl);
+                ps.setString(3, title == null ? "" : title);
+                ps.setString(4, reportUrl == null ? "" : reportUrl);
+                ps.setString(5, tally.toString());
+                ps.setString(6, claims.toString());
+                ps.executeUpdate();
+            }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.record failed: "
+                + e.getMessage());
+        }
     }
 
-    static synchronized ObjectNode lookup(String url) {
+    static ObjectNode lookup(String url) {
         String key = normalize(url);
-        return key == null ? null : VALIDATIONS.get(key);
+        if (key == null) {
+            return null;
+        }
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT url, title, report_url, published_at, tally_json, claims_json "
+                    + "FROM askamerica_reports WHERE normalized_url = ? "
+                    + "AND published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours'")) {
+                ps.setString(1, key);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return null;
+                    }
+                    ObjectNode v = MAPPER.createObjectNode();
+                    v.put("url", rs.getString("url"));
+                    v.put("normalized_url", key);
+                    v.put("title", rs.getString("title"));
+                    v.put("report_url", rs.getString("report_url"));
+                    v.put("published_at", String.valueOf(rs.getTimestamp("published_at")));
+                    v.set("tally", MAPPER.readTree(rs.getString("tally_json")));
+                    v.set("claims", MAPPER.readTree(rs.getString("claims_json")));
+                    return v;
+                }
+            }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.lookup failed: "
+                + e.getMessage());
+            return null;
+        }
     }
 
-    static synchronized int size() {
-        return VALIDATIONS.size();
+    /**
+     * Every URL-based validation published in the last {@value #WINDOW_HOURS} hours, across
+     * every conversation on this machine, newest first. Backs the {@code list_reports} MCP
+     * tool; see the class javadoc for why this is safe to expose here but not as an HTTP
+     * endpoint without {@link #REPORTS_KEY}. Each entry omits the full {@code claims} array
+     * (present in {@link #lookup}'s single-URL result) and keeps only the tally, since a list
+     * of many reports is for finding the right one, not re-reading every claim inline.
+     */
+    static List<ObjectNode> listAll() {
+        List<ObjectNode> out = new ArrayList<>();
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT url, title, report_url, published_at, tally_json "
+                    + "FROM askamerica_reports "
+                    + "WHERE published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours' "
+                    + "ORDER BY published_at DESC")) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        ObjectNode summary = MAPPER.createObjectNode();
+                        summary.put("url", rs.getString("url"));
+                        summary.put("title", rs.getString("title"));
+                        summary.put("report_url", rs.getString("report_url"));
+                        summary.put("published_at",
+                            String.valueOf(rs.getTimestamp("published_at")));
+                        summary.set("tally", MAPPER.readTree(rs.getString("tally_json")));
+                        out.add(summary);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.listAll failed: "
+                + e.getMessage());
+        }
+        return out;
+    }
+
+    static int size() {
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM askamerica_reports "
+                     + "WHERE published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours'")) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.size failed: "
+                + e.getMessage());
+            return 0;
+        }
     }
 
     static int port() {
@@ -236,6 +431,45 @@ final class ClaimsServer {
             v.add(verdict);
         }
         send(ex, 200, s.toString(), "HEAD".equals(method));
+    }
+
+    /**
+     * The engine/extension handshake: a query-string key (not a header, so no CORS preflight
+     * complexity — the extension's own fetch is exempt from CORS via {@code host_permissions}
+     * anyway) checked against {@link #REPORTS_KEY} with a constant-time comparison. No
+     * {@code cors()} call here — see {@link #REPORTS_KEY}'s javadoc for why this endpoint
+     * deliberately doesn't advertise cross-origin readability the way {@code /claims} and
+     * {@code /status} do.
+     */
+    private static void handleReports(HttpExchange ex) throws IOException {
+        String method = ex.getRequestMethod();
+        if (!"GET".equals(method) && !"HEAD".equals(method)) {
+            ex.sendResponseHeaders(405, -1);
+            ex.close();
+            return;
+        }
+        String query = ex.getRequestURI().getRawQuery();
+        String key = null;
+        if (query != null) {
+            for (String kv : query.split("&")) {
+                if (kv.startsWith("key=")) {
+                    key = URLDecoder.decode(kv.substring(4), StandardCharsets.UTF_8.name());
+                }
+            }
+        }
+        if (key == null || !java.security.MessageDigest.isEqual(
+                key.getBytes(StandardCharsets.UTF_8), REPORTS_KEY.getBytes(StandardCharsets.UTF_8))) {
+            ex.sendResponseHeaders(403, -1);
+            ex.close();
+            return;
+        }
+        ArrayNode arr = MAPPER.createArrayNode();
+        for (ObjectNode r : listAll()) {
+            arr.add(r);
+        }
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("reports", arr);
+        send(ex, 200, body.toString(), "HEAD".equals(method));
     }
 
     private static void cors(HttpExchange ex) {

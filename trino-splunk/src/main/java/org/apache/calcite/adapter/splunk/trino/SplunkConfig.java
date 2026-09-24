@@ -36,6 +36,7 @@ public class SplunkConfig
     private String app;
     private String datamodelFilter;
     private boolean disableSslValidation;
+    private String schema;
 
     @NotNull
     public String getUrl()
@@ -128,6 +129,19 @@ public class SplunkConfig
     public SplunkConfig setDisableSslValidation(boolean disableSslValidation)
     {
         this.disableSslValidation = disableSslValidation;
+        return this;
+    }
+
+    public String getSchema()
+    {
+        return schema;
+    }
+
+    @Config("schema")
+    @ConfigDescription("The schema name to register Splunk's tables under (default: \"splunk\")")
+    public SplunkConfig setSchema(String schema)
+    {
+        this.schema = schema;
         return this;
     }
 }

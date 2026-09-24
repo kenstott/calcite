@@ -202,6 +202,13 @@ public class GovDataDriver extends Driver {
       // null when given "jdbc:calcite:". A separate instance has the correct prefix.
       String calciteUrl = "jdbc:calcite:";
       Connection calciteConn = new Driver().connect(calciteUrl, govDataInfo);
+      // Calcite parses the model file synchronously inside connect() above to build the
+      // schema and never touches it again afterward -- delete it now rather than leaving it
+      // to deleteOnExit(), which only fires on a graceful JVM shutdown and, for a long-lived
+      // shared server, doesn't run until the process's eventual exit no matter how many
+      // connections it opens in between. Confirmed live: a real operating dir accumulated 48
+      // of these (one per run that was never a clean shutdown), never cleaned up.
+      new File(modelPath).delete();
       // DuckDB engine ONLY (S3-backed data uses executionEngine=duckdb; other engines are
       // parquet/arrow/linq4j). Transparently rewrite the reserved-keyword statistical
       // aggregates (corr, regr_*) to their non-reserved aliases before Calcite parses, so
@@ -493,6 +500,9 @@ public class GovDataDriver extends Driver {
         modelDir = null;  // could not create the base dir; fall back to default temp location
       }
     }
+    if (modelDir != null) {
+      sweepStaleModelFilesOnce(modelDir);
+    }
     File tempFile = modelDir != null
         ? File.createTempFile(prefix, ".json", modelDir)
         : File.createTempFile(prefix, ".json");
@@ -503,5 +513,51 @@ public class GovDataDriver extends Driver {
     }
     LOGGER.debug("Created temporary model file: {}", tempFile.getAbsolutePath());
     return tempFile.getAbsolutePath();
+  }
+
+  private static volatile boolean staleModelSweepDone = false;
+
+  /**
+   * One-time, best-effort cleanup of {@code govdata-model*.json}/{@code
+   * govdata-multi-model*.json} files left over from a prior process that never reached the
+   * post-connect delete above (crashed, was killed, or predates this cleanup existing at all —
+   * confirmed live: 48 such files accumulated over seven weeks in one real operating dir).
+   * Safe to run at any process's startup: since the post-connect delete now removes each file
+   * within milliseconds of creation, anything still present when a NEW process starts is
+   * essentially guaranteed to be orphaned, not a file a concurrently running sibling process is
+   * mid-connect with. Runs once per JVM (connect() may be called many times).
+   */
+  private static void sweepStaleModelFilesOnce(File modelDir) {
+    if (staleModelSweepDone) {
+      return;
+    }
+    synchronized (GovDataDriver.class) {
+      if (staleModelSweepDone) {
+        return;
+      }
+      staleModelSweepDone = true;
+      // Only delete files at least a minute old -- a genuinely in-flight sibling process
+      // (this session's own double-launch spawn race, confirmed live elsewhere) still has a
+      // window between creating its file and connect() deleting it; age-gating leaves that
+      // window alone while still catching everything this sweep exists for, which is weeks
+      // old by construction.
+      long cutoff = System.currentTimeMillis() - 60_000L;
+      File[] stale = modelDir.listFiles((dir, name) ->
+          (name.startsWith("govdata-model") || name.startsWith("govdata-multi-model"))
+          && name.endsWith(".json"));
+      if (stale == null) {
+        return;
+      }
+      int deleted = 0;
+      for (File f : stale) {
+        if (f.lastModified() < cutoff && f.delete()) {
+          deleted++;
+        }
+      }
+      if (deleted > 0) {
+        LOGGER.info("Cleaned up {} stale model file(s) from a previous run in {}",
+            deleted, modelDir.getAbsolutePath());
+      }
+    }
   }
 }

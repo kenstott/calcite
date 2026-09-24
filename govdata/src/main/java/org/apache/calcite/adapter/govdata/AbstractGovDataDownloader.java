@@ -1017,7 +1017,7 @@ public abstract class AbstractGovDataDownloader {
       JsonNode bulkDownloadsNode = root.get("bulkDownloads");
       Map<String, BulkDownloadConfig> bulkDownloads = new HashMap<>();
 
-      bulkDownloadsNode.fields().forEachRemaining(entry -> {
+      bulkDownloadsNode.properties().forEach(entry -> {
         String name = entry.getKey();
         JsonNode config = entry.getValue();
 
@@ -1116,7 +1116,7 @@ public abstract class AbstractGovDataDownloader {
           JsonNode objectNode = download.get(objectKey);
           if (objectNode != null && objectNode.isObject()) {
             Map<String, Object> result = new LinkedHashMap<>();
-            objectNode.fields().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue()));
+            objectNode.properties().forEach(entry -> result.put(entry.getKey(), entry.getValue()));
             LOGGER.debug("Extracted {} entries from {} for table {}", result.size(), objectKey,
                 tableName);
             return result;
@@ -2121,7 +2121,7 @@ public abstract class AbstractGovDataDownloader {
     }
 
     // Existing type conversion for all fields
-    Iterator<Map.Entry<String, JsonNode>> fields = recordNode.fields();
+    Iterator<Map.Entry<String, JsonNode>> fields = recordNode.properties().iterator();
     while (fields.hasNext()) {
       Map.Entry<String, JsonNode> field = fields.next();
       String fieldName = field.getKey();

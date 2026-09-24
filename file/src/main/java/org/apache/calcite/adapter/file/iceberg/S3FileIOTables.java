@@ -54,24 +54,62 @@ public final class S3FileIOTables {
    * @return a read-only Iceberg {@link Table}
    */
   public static Table load(String tablePath, Map<String, String> s3aConfig) {
-    S3FileIO io = newIO(s3aConfig);
-    String root = stripTrailingSlash(tablePath);
-    // version-hint is MUTABLE — read it live, uncached, so snapshot selection is always current.
-    String version = readVersionHint(io, root);
-    String metadataLocation = root + "/metadata/v" + version + ".metadata.json";
-    // v{N}.metadata.json is fetched live, not cached on disk. The natural read of Iceberg is that
-    // this file is immutable — Iceberg's own writers append v{N+1} on every commit and never
-    // rewrite an existing v{N} — but a drop-and-recreate of a table in this codebase (see
-    // IcebergMaterializationWriter's schema-drift path) deletes every metadata.json and starts
-    // fresh at v0, reusing filenames with different content. That silently breaks any keyed-by-
-    // path disk cache, which is what a prior IcebergMetadataCache used to be: cached entries kept
-    // pointing at old snapshots whose manifest-list avro files were purged in the recreate, and
-    // the resulting HeadObject 404 blew up COUNT(*) planning through this rule on every table
-    // that had ever been recreated. StaticTableOperations reads v{N}.metadata.json exactly once
-    // per table lifetime (lazily on first schema()/snapshot() access) so the direct read is one
-    // small GET per table, and any warm-JVM reuse comes from Iceberg's own in-process memo.
-    StaticTableOperations ops = new StaticTableOperations(metadataLocation, io);
-    return new BaseTable(ops, tableName(root));
+    return withAppClassLoader(() -> {
+      S3FileIO io = newIO(s3aConfig);
+      String root = stripTrailingSlash(tablePath);
+      // version-hint is MUTABLE — read it live, uncached, so snapshot selection is always
+      // current.
+      String version = readVersionHint(io, root);
+      String metadataLocation = root + "/metadata/v" + version + ".metadata.json";
+      // v{N}.metadata.json is fetched live, not cached on disk. The natural read of Iceberg is
+      // that this file is immutable — Iceberg's own writers append v{N+1} on every commit and
+      // never rewrite an existing v{N} — but a drop-and-recreate of a table in this codebase
+      // (see IcebergMaterializationWriter's schema-drift path) deletes every metadata.json and
+      // starts fresh at v0, reusing filenames with different content. That silently breaks any
+      // keyed-by-path disk cache, which is what a prior IcebergMetadataCache used to be: cached
+      // entries kept pointing at old snapshots whose manifest-list avro files were purged in the
+      // recreate, and the resulting HeadObject 404 blew up COUNT(*) planning through this rule
+      // on every table that had ever been recreated. StaticTableOperations reads
+      // v{N}.metadata.json exactly once per table lifetime (lazily on first schema()/snapshot()
+      // access) so the direct read is one small GET per table, and any warm-JVM reuse comes from
+      // Iceberg's own in-process memo.
+      StaticTableOperations ops = new StaticTableOperations(metadataLocation, io);
+      return new BaseTable(ops, tableName(root));
+    });
+  }
+
+  /**
+   * Runs {@code action} with this class's own classloader as the calling thread's context
+   * classloader, restoring the prior one afterward.
+   *
+   * <p>Iceberg's DynMethods (used by {@code HttpClientProperties} to reflectively pick an HTTP
+   * client implementation — {@code ApacheHttpClientConfigurations}, {@code
+   * UrlConnectionHttpClientConfigurations}) resolves classes via {@code
+   * Thread.currentThread().getContextClassLoader()} — set in {@code DynMethods.Builder}'s own
+   * constructor, not passed in by the caller. That's fine on a normal JVM main thread, but
+   * confirmed live (2026-09-18) to be null/app-invisible on the worker threads a pgwire-govdata
+   * query actually runs planning on (Thread-3, Thread-7, ...), even though the exact same
+   * reflective lookup succeeds trivially on the main thread and in a standalone reflection test
+   * against the identical classpath. DynMethods collapses the resulting
+   * {@code ClassNotFoundException} into a generic {@code "NoSuchMethodException: Cannot find
+   * method: create"}, which reads like a missing dependency but isn't one — every class and
+   * method it's looking for is really there.
+   *
+   * <p>The failure can surface from {@code S3FileIO.client()}'s LAZY, first-use client
+   * construction — not only from {@code S3FileIO.initialize()} — so this has to wrap an entire
+   * public entry point (load/create/loadWritable), not just {@link #newIO}: a narrower wrap
+   * around only {@code initialize()} was tried and confirmed live to still fail, since
+   * {@code client()} runs later, inside {@link #readVersionHint}, after that narrower wrap had
+   * already restored the broken context classloader.
+   */
+  private static <T> T withAppClassLoader(java.util.function.Supplier<T> action) {
+    ClassLoader prior = Thread.currentThread().getContextClassLoader();
+    Thread.currentThread().setContextClassLoader(S3FileIOTables.class.getClassLoader());
+    try {
+      return action.get();
+    } finally {
+      Thread.currentThread().setContextClassLoader(prior);
+    }
   }
 
   /**
@@ -80,9 +118,11 @@ public final class S3FileIOTables {
    * keys). Shared by the read-only and writable table paths.
    */
   static S3FileIO newIO(Map<String, String> s3Config) {
-    S3FileIO io = new S3FileIO();
-    io.initialize(toS3Properties(s3Config));
-    return io;
+    return withAppClassLoader(() -> {
+      S3FileIO io = new S3FileIO();
+      io.initialize(toS3Properties(s3Config));
+      return io;
+    });
   }
 
   /**
@@ -98,16 +138,18 @@ public final class S3FileIOTables {
    */
   public static Table create(String tablePath, Map<String, String> s3Config, Schema schema,
       PartitionSpec spec, Map<String, String> properties) {
-    S3FileIO io = newIO(s3Config);
-    String root = stripTrailingSlash(tablePath);
-    S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
-    TableMetadata metadata =
-        TableMetadata.newTableMetadata(schema,
-            spec != null ? spec : PartitionSpec.unpartitioned(),
-            root,
-            properties != null ? properties : java.util.Collections.<String, String>emptyMap());
-    ops.commit(null, metadata);
-    return new BaseTable(ops, tableName(root));
+    return withAppClassLoader(() -> {
+      S3FileIO io = newIO(s3Config);
+      String root = stripTrailingSlash(tablePath);
+      S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
+      TableMetadata metadata =
+          TableMetadata.newTableMetadata(schema,
+              spec != null ? spec : PartitionSpec.unpartitioned(),
+              root,
+              properties != null ? properties : java.util.Collections.<String, String>emptyMap());
+      ops.commit(null, metadata);
+      return new BaseTable(ops, tableName(root));
+    });
   }
 
   /**
@@ -120,11 +162,13 @@ public final class S3FileIOTables {
    * @return an appendable Iceberg {@link Table}
    */
   public static Table loadWritable(String tablePath, Map<String, String> s3Config) {
-    S3FileIO io = newIO(s3Config);
-    String root = stripTrailingSlash(tablePath);
-    S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
-    ops.refresh();
-    return new BaseTable(ops, tableName(root));
+    return withAppClassLoader(() -> {
+      S3FileIO io = newIO(s3Config);
+      String root = stripTrailingSlash(tablePath);
+      S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
+      ops.refresh();
+      return new BaseTable(ops, tableName(root));
+    });
   }
 
   /**
@@ -136,45 +180,48 @@ public final class S3FileIOTables {
    * @return true if the version hint is present, false if it is absent
    */
   public static boolean exists(String tablePath, Map<String, String> s3Config) {
-    String root = stripTrailingSlash(tablePath);
-    String hintPath = root + "/metadata/version-hint.text";
-    // Unlike load/create/loadWritable, which hand their S3FileIO to a TableOperations that must
-    // outlive the call, this one uses it purely as a probe and discards it. Left unclosed it
-    // strands an S3 client and its connection pool until finalization — one per table per
-    // materialize pass, which a long backfill repeats thousands of times, and which surfaces as
-    // "Unclosed S3FileIO instance created by ..." from the Finalizer thread.
-    //
-    // io is declared first so it closes LAST, after the stream and reader that borrow from it.
-    try (S3FileIO io = newIO(s3Config);
-         InputStream is = io.newInputFile(hintPath).newStream();
-         BufferedReader reader =
-             new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-      String line = reader.readLine();
-      return line != null && !line.trim().isEmpty();
-    // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal (S3
-    // key not found) as "no table yet"; other failures are surfaced instead of being silently
-    // treated as absence, which would make createTable() (see IcebergCatalogManager) think it's
-    // creating a brand new table and overwrite an existing one's metadata history.
-    //
-    // Both exception types below are the SAME underlying "key not found" condition, just
-    // wrapped differently depending on call path: newInputFile(...).newStream() (used here)
-    // returns Iceberg's own S3InputStream, which catches the SDK's NoSuchKeyException
-    // internally and rethrows it as org.apache.iceberg.exceptions.NotFoundException BEFORE
-    // it ever reaches this method — so the raw SDK exception is never actually observable
-    // through this code path, only Iceberg's wrapped one. The direct SDK catch is kept for
-    // any caller reached via a different S3FileIO code path that skips that wrapping.
-    // Confirmed via a brand-new schema's first-ever ETL run (officials, 2026-08-02): every
-    // existing schema's table already existed from prior runs, so this "does the table exist
-    // yet" probe had not actually been exercised against a truly absent table in a long
-    // time — the bug was latent, not something a new schema's config could trigger differently.
-    } catch (NotFoundException notFound) {
-      return false;
-    } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
-      return false;
-    } catch (IOException e) {
-      throw new java.io.UncheckedIOException(
-          "Failed to check for Iceberg table existence at " + hintPath, e);
-    }
+    return withAppClassLoader(() -> {
+      String root = stripTrailingSlash(tablePath);
+      String hintPath = root + "/metadata/version-hint.text";
+      // Unlike load/create/loadWritable, which hand their S3FileIO to a TableOperations that
+      // must outlive the call, this one uses it purely as a probe and discards it. Left unclosed
+      // it strands an S3 client and its connection pool until finalization — one per table per
+      // materialize pass, which a long backfill repeats thousands of times, and which surfaces
+      // as "Unclosed S3FileIO instance created by ..." from the Finalizer thread.
+      //
+      // io is declared first so it closes LAST, after the stream and reader that borrow from it.
+      try (S3FileIO io = newIO(s3Config);
+           InputStream is = io.newInputFile(hintPath).newStream();
+           BufferedReader reader =
+               new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+        String line = reader.readLine();
+        return line != null && !line.trim().isEmpty();
+      // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal (S3
+      // key not found) as "no table yet"; other failures are surfaced instead of being silently
+      // treated as absence, which would make createTable() (see IcebergCatalogManager) think
+      // it's creating a brand new table and overwrite an existing one's metadata history.
+      //
+      // Both exception types below are the SAME underlying "key not found" condition, just
+      // wrapped differently depending on call path: newInputFile(...).newStream() (used here)
+      // returns Iceberg's own S3InputStream, which catches the SDK's NoSuchKeyException
+      // internally and rethrows it as org.apache.iceberg.exceptions.NotFoundException BEFORE
+      // it ever reaches this method — so the raw SDK exception is never actually observable
+      // through this code path, only Iceberg's wrapped one. The direct SDK catch is kept for
+      // any caller reached via a different S3FileIO code path that skips that wrapping.
+      // Confirmed via a brand-new schema's first-ever ETL run (officials, 2026-08-02): every
+      // existing schema's table already existed from prior runs, so this "does the table exist
+      // yet" probe had not actually been exercised against a truly absent table in a long
+      // time — the bug was latent, not something a new schema's config could trigger
+      // differently.
+      } catch (NotFoundException notFound) {
+        return false;
+      } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
+        return false;
+      } catch (IOException e) {
+        throw new java.io.UncheckedIOException(
+            "Failed to check for Iceberg table existence at " + hintPath, e);
+      }
+    });
   }
 
   /**

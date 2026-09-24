@@ -71,6 +71,22 @@ public class DuckDBJdbcSchemaFactory {
   private static final int MAX_CATALOG_LOCK_FALLBACKS = 16;
 
   /**
+   * One-time-per-JVM guard for {@link #cleanupStaleNumberedCopies(String)} — the scan itself is
+   * cheap (a handful of lock-check opens), but there is no reason to repeat it once per schema
+   * mounted in this process, only once per process lifetime.
+   */
+  private static final java.util.concurrent.atomic.AtomicBoolean STALE_COPY_CLEANUP_DONE =
+      new java.util.concurrent.atomic.AtomicBoolean(false);
+
+  /**
+   * Minimum time since last modification before {@link #cleanupStaleNumberedCopies(String)}
+   * will even consider a numbered copy -- see the safety-gate comment at its one call site.
+   * Ten minutes comfortably exceeds how long a seed-then-open sequence on one file could
+   * plausibly take, while still reclaiming genuinely abandoned copies promptly.
+   */
+  private static final long STALE_COPY_MIN_AGE_MILLIS = 10 * 60 * 1000L;
+
+  /**
    * Iceberg views satisfied by a catalog that already defined them — no object-store call.
    *
    * @see #icebergViewsReused()
@@ -421,6 +437,7 @@ public class DuckDBJdbcSchemaFactory {
       // collide, so they open directly.
       Connection setupConn = null;
       if (catalogPath != null) {
+        cleanupStaleNumberedCopies(baseCatalogPath);
         for (int lockAttempt = 0; ; lockAttempt++) {
           boolean seeded = false;
           if (lockAttempt > 0) {
@@ -1015,12 +1032,28 @@ public class DuckDBJdbcSchemaFactory {
    * True if the exception is DuckDB's single-process file-lock conflict on a database file
    * (another OS process already has the catalog open). Walks the cause chain.
    */
+  /**
+   * Recognizes DuckDB's single-writer-lock conflict across platforms. Unix/macOS DuckDB reports
+   * this as "Could not set lock on file ...: Conflicting lock is held ..."; Windows reports a
+   * completely different phrasing surfaced from the OS's own sharing-violation error instead —
+   * "IO Error: Cannot open file \"...\": The process cannot access the file because it is being
+   * used by another process. File is already open in &lt;exe&gt; (PID N)". Observed live
+   * (2026-09-15, real Windows install): a second concurrent process (a second open Claude
+   * Desktop thread spawning its own engine process against the same shared catalog) hit exactly
+   * this and got the raw IO error verbatim, because neither original substring matched it — the
+   * numbered-copy fallback below never engaged, silently, on every Windows install this could
+   * ever have affected. Matching only Unix wording was never validated against a real Windows
+   * error string; this file's own dev/test environment is macOS.
+   */
   private static boolean isCatalogLockConflict(SQLException e) {
     for (Throwable t = e; t != null; t = t.getCause()) {
       String msg = t.getMessage();
       if (msg != null) {
         String lower = msg.toLowerCase(java.util.Locale.ROOT);
-        if (lower.contains("could not set lock") || lower.contains("conflicting lock")) {
+        if (lower.contains("could not set lock") || lower.contains("conflicting lock")
+            || lower.contains("being used by another process")
+            || lower.contains("sharing violation")
+            || (lower.contains("cannot open file") && lower.contains("already open in"))) {
           return true;
         }
       }
@@ -1041,14 +1074,195 @@ public class DuckDBJdbcSchemaFactory {
   }
 
   /**
+   * Reclaims {@code {name}_N.duckdb} fallback copies left behind by a past concurrency spike.
+   * Nothing ever deleted these on its own: {@link #seedCatalogCopy} only ever creates them, and
+   * once a numbered copy exists it is reused indefinitely (self-healing its own views on each
+   * open, per {@code viewExists}/{@code recreatedIcebergTables} below), so a peak of N concurrent
+   * processes at any point in this catalog's history leaves N-1 multi-GB files sitting on disk
+   * forever even if concurrency never returns — unbounded, since nothing bounds it but {@link
+   * #MAX_CATALOG_LOCK_FALLBACKS}. Raised live, 2026-09-15, right after fixing the Windows
+   * lock-detection gap that makes this fallback actually engage on Windows.
+   *
+   * <p>Safe by construction: a numbered copy is only ever deleted after this method itself
+   * successfully opens it (proving no other process currently holds DuckDB's single-writer lock
+   * on it — the same lock check {@link #isCatalogLockConflict} already relies on elsewhere in
+   * this file), and closes that check connection again immediately before deleting. A copy an
+   * open error reports as locked is left alone untouched. Runs once per JVM ({@link
+   * #STALE_COPY_CLEANUP_DONE}), right before the lock-fallback loop below ever needs to decide
+   * whether to create a new numbered copy of its own.
+   */
+  private static void cleanupStaleNumberedCopies(String baseCatalogPath) {
+    if (!STALE_COPY_CLEANUP_DONE.compareAndSet(false, true)) {
+      return;
+    }
+    File base = new File(baseCatalogPath);
+    File dir = base.getParentFile();
+    if (dir == null || !dir.isDirectory()) {
+      return;
+    }
+    String suffix = ".duckdb";
+    String baseName = base.getName();
+    String stem = baseName.endsWith(suffix)
+        ? baseName.substring(0, baseName.length() - suffix.length()) : baseName;
+    // Matches "{stem}_{digits}.duckdb" exactly -- never the base file itself, never an unrelated
+    // file that merely starts with the same stem.
+    java.util.regex.Pattern numberedName =
+        java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(stem) + "_\\d+\\.duckdb");
+    File[] candidates = dir.listFiles((d, name) -> numberedName.matcher(name).matches());
+    if (candidates == null) {
+      return;
+    }
+    int reclaimed = 0;
+    long reclaimedBytes = 0;
+    for (File candidate : candidates) {
+      String candidatePath = candidate.getAbsolutePath();
+      long size = candidate.length();
+      // Safety gate against the exact race this check-then-delete pattern is otherwise
+      // vulnerable to: another process can be between finishing seedCatalogCopy (which
+      // writes/touches this file) and its own subsequent DriverManager.getConnection() on the
+      // same path -- a window in which the file briefly has no open handle at all, so the lock
+      // check below would see it as "free" even though it is about to be used. Observed live,
+      // 2026-09-15: a numbered copy vanished from under a process mid-seed, and that process's
+      // own connect() then silently created a fresh EMPTY file at the now-vacant path instead
+      // of erroring, triggering a many-minutes from-scratch view rebuild with no other symptom
+      // than a suspiciously small catalog and a slowly growing WAL. A copy modified in the
+      // last few minutes is left alone unconditionally, lock state notwithstanding -- cleanup
+      // only ever targets copies old enough that no live seed-then-open sequence could still be
+      // in flight on them.
+      if (System.currentTimeMillis() - candidate.lastModified() < STALE_COPY_MIN_AGE_MILLIS) {
+        continue;
+      }
+      Connection probe = null;
+      try {
+        probe = DriverManager.getConnection("jdbc:duckdb:" + candidatePath);
+      } catch (SQLException openErr) {
+        if (!isCatalogLockConflict(openErr)) {
+          LOGGER.debug("Leaving stale-copy candidate '{}' alone (non-lock open error): {}",
+              candidatePath, openErr.getMessage());
+        }
+        continue;
+      } finally {
+        if (probe != null) {
+          try {
+            probe.close();
+          } catch (SQLException ignored) {
+            // Best-effort: an unclosable check connection is not a reason to skip deleting the
+            // file underneath it -- the delete below either succeeds or the OS refuses it.
+          }
+        }
+      }
+      // No other process held the lock a moment ago -- delete the .duckdb and any .wal sibling
+      // (an unflushed WAL from whichever process last used this copy) to actually reclaim space.
+      if (candidate.delete()) {
+        reclaimed++;
+        reclaimedBytes += size;
+        new File(candidatePath + ".wal").delete();
+      } else {
+        LOGGER.debug("Could not delete unused stale catalog copy '{}'", candidatePath);
+      }
+    }
+    if (reclaimed > 0) {
+      LOGGER.info("Reclaimed {} unused fallback catalog copy(ies) ({} MB) for '{}'",
+          reclaimed, reclaimedBytes / (1024 * 1024), baseCatalogPath);
+    }
+  }
+
+  /** Resource path of the bundled seed zip inside this jar -- mirrors {@code
+   *  GovDataSeedInstaller.SEED_ZIP_RESOURCE} in the govdata module. Read by resource name, not
+   *  by a compile-time dependency: govdata depends on file, not the reverse, and a classloader
+   *  resource lookup needs no such dependency since both classes end up on the same shaded-jar
+   *  classpath at runtime regardless of the Gradle module graph. */
+  private static final String BUNDLED_SEED_ZIP_RESOURCE = "/duckdb/seed/govdata-seed.zip";
+
+  /** The one entry inside the seed zip this method cares about -- the catalog file itself. The
+   *  zip also carries per-schema {@code .aperio/<schema>/.conversions.json} trackers, but those
+   *  are shared at the operating-directory level by every catalog file under it (base and every
+   *  numbered copy alike) and were already extracted once when the base catalog was first
+   *  installed, so a numbered copy needs nothing from the zip beyond this one entry. */
+  private static final String BUNDLED_SEED_CATALOG_ENTRY = ".duckdb/govdata.duckdb";
+
+  /**
+   * Seeds a numbered fallback catalog directly from this jar's own bundled seed zip, entirely
+   * independent of the live base catalog file. Tried FIRST, ahead of {@link
+   * #seedCatalogCopyFromBaseFile} -- not merely as a faster alternative, but because copying the
+   * live base file is fundamentally unreliable on Windows: a second process cannot even {@code
+   * Files.copy} a file a first process holds open, not just fail to open it directly. Observed
+   * live, 2026-09-15/16: {@code seedCatalogCopyFromBaseFile}'s copy failed with "The process
+   * cannot access the file because it is being used by another process" -- the identical Windows
+   * sharing-violation text {@link #isCatalogLockConflict} already recognizes for a direct open --
+   * while the base catalog was simply being read by another live process, nothing more unusual
+   * than that. The bundled zip inside this .jar is a completely different, static file nothing
+   * else on the machine ever holds open, so extracting from it has no lock contention to race
+   * against in the first place, on any platform.
+   *
+   * @return true if the numbered file was populated from the bundled seed, false if this jar
+   *     was built with no bundled seed at all (a cold-start jar, not built via
+   *     {@code bundleGovdataSeed}) or the extraction failed for some other reason -- the caller
+   *     falls back to {@link #seedCatalogCopyFromBaseFile} in either case.
+   */
+  private static boolean seedCatalogCopyFromBundledJar(String numberedCatalogPath) {
+    File numbered = new File(numberedCatalogPath);
+    if (numbered.exists()) {
+      return false;
+    }
+    try (java.io.InputStream zipStream =
+             DuckDBJdbcSchemaFactory.class.getResourceAsStream(BUNDLED_SEED_ZIP_RESOURCE)) {
+      if (zipStream == null) {
+        LOGGER.debug("No bundled seed zip ({}) on this jar's classpath; falling back to "
+            + "copying the live base catalog", BUNDLED_SEED_ZIP_RESOURCE);
+        return false;
+      }
+      java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(zipStream);
+      java.util.zip.ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        if (!BUNDLED_SEED_CATALOG_ENTRY.equals(entry.getName())) {
+          continue;
+        }
+        File parent = numbered.getParentFile();
+        if (parent != null) {
+          java.nio.file.Files.createDirectories(parent.toPath());
+        }
+        java.nio.file.Files.copy(zis, numbered.toPath());
+        LOGGER.info("Seeded DuckDB catalog copy {} from this jar's bundled seed ({})",
+            numberedCatalogPath, BUNDLED_SEED_ZIP_RESOURCE);
+        return true;
+      }
+      LOGGER.debug("Bundled seed zip has no {} entry; falling back to copying the live base "
+          + "catalog", BUNDLED_SEED_CATALOG_ENTRY);
+      return false;
+    } catch (java.io.IOException e) {
+      LOGGER.warn("Could not seed catalog copy {} from this jar's bundled seed ({}); falling "
+          + "back to copying the live base catalog", numberedCatalogPath, e.getMessage());
+      new File(numberedCatalogPath).delete();
+      return false;
+    }
+  }
+
+  /**
+   * Seeds a numbered fallback catalog, trying the immutable jar-bundled seed first ({@link
+   * #seedCatalogCopyFromBundledJar}) since it has no lock contention with anything else on the
+   * machine, then falling back to copying the live base file ({@link
+   * #seedCatalogCopyFromBaseFile}) only if that's unavailable (a cold-start jar with no bundled
+   * seed) -- the base-file copy is kept as a fallback, not removed, since it is still strictly
+   * better than the last resort (an empty catalog rebuilt live) when it does work.
+   */
+  private static boolean seedCatalogCopy(String baseCatalogPath, String numberedCatalogPath) {
+    return seedCatalogCopyFromBundledJar(numberedCatalogPath)
+        || seedCatalogCopyFromBaseFile(baseCatalogPath, numberedCatalogPath);
+  }
+
+  /**
    * Seeds a numbered fallback catalog by copying the already-built base catalog file, so its views
    * satisfy {@code CREATE VIEW IF NOT EXISTS} and the fallback skips re-reading Iceberg metadata
    * for every view. Copies only the base {@code .duckdb} file (never the live {@code .wal}), so it
    * cannot capture a half-written WAL. Best-effort: returns false (caller opens an empty file and
    * rebuilds the views) when the numbered file already exists, the base is absent/empty, or the
-   * copy fails.
+   * copy fails -- including, on Windows, simply because another process currently has the base
+   * file open; see {@link #seedCatalogCopyFromBundledJar}, which is tried first and does not
+   * share this failure mode.
    */
-  private static boolean seedCatalogCopy(String baseCatalogPath, String numberedCatalogPath) {
+  private static boolean seedCatalogCopyFromBaseFile(String baseCatalogPath,
+      String numberedCatalogPath) {
     try {
       File base = new File(baseCatalogPath);
       File numbered = new File(numberedCatalogPath);

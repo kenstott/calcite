@@ -365,6 +365,28 @@ sonarqube {
     }
 }
 
+// Numeric dot-version comparator for the CVE-override resolutionStrategy below (REQ-956): an
+// exact-version allow-list (`requested.version == "x.y.z"`) kept missing real findings whenever
+// a DIFFERENT module resolved a slightly different patch version of the same vulnerable package
+// (verified live, 2026-09-21: nimbus-jose-jwt landed on 9.37.3 in cloud-ops vs. 9.30.2/9.37.2
+// elsewhere; reactor-netty-http landed on 1.0.45 vs. 1.0.38/1.0.39) -- comparing "is this version
+// still below the fixed one" instead of listing every observed vulnerable version fixes the
+// whole class of miss, not just the one instance found. Scoped to plain numeric dot-versions
+// (no ".Final"/".v20250814"-style suffixes some artifacts here use, e.g. Netty/Jetty) --
+// non-numeric trailing segments compare as 0, which is safe as a floor but not a general
+// version-string parser.
+fun versionOlderThan(version: String, fixed: String): Boolean {
+    fun parts(v: String) = v.split(".").map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+    val a = parts(version)
+    val b = parts(fixed)
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val x = a.getOrElse(i) { 0 }
+        val y = b.getOrElse(i) { 0 }
+        if (x != y) return x < y
+    }
+    return false
+}
+
 allprojects {
     group = "org.apache.calcite"
     version = buildVersion
@@ -388,6 +410,177 @@ allprojects {
             "implementation" {
                 exclude(group = "org.jetbrains", module = "annotations")
                 exclude(group = "org.bouncycastle", module = "bcprov-jdk15on")
+            }
+        }
+    }
+
+    // CVE overrides, applied to every configuration on every module (REQ-956): a transitive
+    // dependency's OWN published module metadata `{strictly}`-locks netty-handler/bcprov-jdk18on
+    // to a vulnerable version, which a plain version bump on the direct dependency that pulls
+    // them in (org.redisson:redisson) does not override -- verified live via grype against the
+    // pgwire-file bundle's real runtime classpath, 2026-09-21: netty-handler 4.1.127.Final
+    // (GHSA-c4c3-7fpv-j4q5, fixed 4.1.137.Final) and bcprov-jdk18on 1.82 (GHSA-9pwp-9qqc-pr26,
+    // fixed 1.85), both Critical.
+    configurations.all {
+        resolutionStrategy.eachDependency {
+            // The whole io.netty family, forced as one group: netty components must stay in
+            // lockstep (mixing release trains risks ABI mismatches, per dedupe_jars.py's own
+            // comment on this exact class of bug) and grype found the WHOLE family behind, not
+            // just netty-handler -- netty-codec-dns/haproxy/http/http2/redis/smtp/stomp/xml,
+            // netty-handler-ssl-ocsp, netty-resolver-dns, netty-transport-sctp, at 4.1.100/
+            // 4.1.112/4.1.127.Final, all High, verified live 2026-09-21.
+            // netty-tcnative-* is a native OpenSSL binding with its OWN independent version
+            // scheme (2.0.x), not the 4.1.x core/codec/handler/resolver/transport train --
+            // forcing it to 4.1.138.Final (verified live) resolves to a nonexistent artifact.
+            if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
+                useVersion("4.1.138.Final")
+                because("whole netty family kept on one patched release train")
+            }
+            if (requested.group == "org.bouncycastle" && requested.name == "bcprov-jdk18on") {
+                useVersion("1.85")
+                because("GHSA-9pwp-9qqc-pr26 (Critical) -- fixed in 1.85")
+            }
+            // Transitive from com.azure.resourcemanager:azure-resourcemanager-keyvault:2.34.0
+            // (cloud-ops) -- verified live via grype against the pgwire-cloudops bundle,
+            // 2026-09-21.
+            if (requested.group == "com.azure" && requested.name == "azure-security-keyvault-keys") {
+                useVersion("4.10.6")
+                because("GHSA-97jf-46m3-8953 (Critical) -- fixed in 4.10.6")
+            }
+            // jackson-core/-databind: two branches in play (2.18.x via core's redisson chain,
+            // 2.21.x via the trino-* modules) -- bump each within its own branch rather than a
+            // single useVersion() that would downgrade whichever branch is already ahead.
+            if (requested.group == "com.fasterxml.jackson.core" &&
+                (requested.name == "jackson-core" || requested.name == "jackson-databind")) {
+                val fixed = if (requested.version?.startsWith("2.21") == true) "2.21.5" else "2.18.9"
+                if (versionOlderThan(requested.version ?: "0", fixed)) {
+                    useVersion(fixed)
+                    because(
+                        "GHSA-r7wm-3cxj-wff9 / GHSA-j3rv-43j4-c7qm / GHSA-rmj7-2vxq-3g9f / " +
+                        "GHSA-5gvw-p9qm-jgwh / GHSA-5jmj-h7xm-6q6v / GHSA-mhm7-754m-9p8w"
+                    )
+                }
+            }
+            if (requested.group == "org.apache.httpcomponents.core5" &&
+                (requested.name == "httpcore5" || requested.name == "httpcore5-h2")) {
+                useVersion("5.4.3")
+                because("GHSA-hf6x-8p5f-cgmf / GHSA-v3jc-474w-2wm6")
+            }
+            // The remainder come from org.apache.hadoop:hadoop-auth's own transitive footprint
+            // (file/govdata's Parquet/Iceberg/S3 support), not from core or any Calcite-proper
+            // dependency -- forced by EXACT vulnerable version, not by group/name alone, since
+            // hadoop-auth already requests a newer, already-patched nimbus-jose-jwt (10.4) on
+            // some paths; a blanket useVersion() here would downgrade that one back down.
+            // GHSA-355h-qmc2-wpwf/GHSA-2fvj-hgj9-j2gr claim fixes at 9.4.60/9.4.63 for the 9.4.x
+            // branch, but 9.4.58.v20250814 is the last 9.4.x version Eclipse Jetty ever
+            // published (verified against Maven Central metadata, 2026-09-21) -- the 9.4 line is
+            // EOL and no patched build exists there. Bumped to the latest available 9.4.x as a
+            // partial mitigation; a full fix needs a major-version jump (10.x/11.x/12.x) into
+            // hadoop-common's own jetty-server/jetty-servlet chain, a materially riskier change
+            // out of scope for this pass.
+            if (requested.group == "org.eclipse.jetty" &&
+                (requested.name == "jetty-http" || requested.name == "jetty-security") &&
+                requested.version == "9.4.57.v20241219") {
+                useVersion("9.4.58.v20250814")
+                because("latest available 9.4.x -- no true fix published on this EOL branch")
+            }
+            if (requested.group == "org.apache.zookeeper" && requested.name == "zookeeper" &&
+                versionOlderThan(requested.version ?: "0", "3.8.6")) {
+                useVersion("3.8.6")
+                because("GHSA-7xrh-hqfc-g7qr / GHSA-crhr-qqj8-rpxc")
+            }
+            if (requested.group == "com.nimbusds" && requested.name == "nimbus-jose-jwt" &&
+                versionOlderThan(requested.version ?: "0", "9.37.4")) {
+                useVersion("9.37.4")
+                because("GHSA-gvpg-vgmx-xg6w / GHSA-xwmg-2g98-w7v9")
+            }
+            if (requested.group == "commons-beanutils" && requested.name == "commons-beanutils" &&
+                versionOlderThan(requested.version ?: "0", "1.11.0")) {
+                useVersion("1.11.0")
+                because("GHSA-wxr5-93ph-8wr9")
+            }
+            // The actual request is the old monolithic "jline" umbrella artifact (pre-split,
+            // bundles what's now the separate jline-remote-telnet module's classes internally)
+            // -- grype's package detection reports the split module name from the embedded
+            // class evidence, not the umbrella artifact grype actually found it in. Verified
+            // live via dependency:tree, 2026-09-21: org.jline:jline:3.9.0, not jline-remote-telnet.
+            if (requested.group == "org.jline" && requested.name == "jline" &&
+                requested.version == "3.9.0") {
+                useVersion("3.30.17")
+                because("GHSA-2r2c-cx56-8933 / GHSA-47qp-hqvx-6r3f")
+            }
+            if (requested.group == "org.jsoup" && requested.name == "jsoup" &&
+                versionOlderThan(requested.version ?: "0", "1.23.2")) {
+                useVersion("1.23.2")
+                because("GHSA-m72m-mhq2-9p6c / GHSA-gp7f-rwcx-9369 / GHSA-pmhh-3w7g-xqp8")
+            }
+            if (requested.group == "io.airlift" && requested.name == "aircompressor" &&
+                versionOlderThan(requested.version ?: "0", "2.0.3")) {
+                useVersion("2.0.3")
+                because("GHSA-vx9q-rhv9-3jvg")
+            }
+            if (requested.group == "org.postgresql" && requested.name == "postgresql" &&
+                versionOlderThan(requested.version ?: "0", "42.7.12")) {
+                useVersion("42.7.12")
+                because("GHSA-98qh-xjc8-98pq / GHSA-hq9p-pm7w-8p54 / GHSA-j92g-9f8w-j867")
+            }
+            if (requested.group == "io.projectreactor.netty" &&
+                (requested.name == "reactor-netty-core" || requested.name == "reactor-netty-http") &&
+                versionOlderThan(requested.version ?: "0", "1.2.18")) {
+                useVersion("1.2.18")
+                because("GHSA-q24v-hpg3-v3jp / GHSA-xjhv-p3fv-x24r / GHSA-4q2v-9p7v-3v22")
+            }
+            if (requested.group == "com.azure" && requested.name == "azure-identity" &&
+                versionOlderThan(requested.version ?: "0", "1.12.2")) {
+                useVersion("1.12.2")
+                because("GHSA-m5vv-6r4h-3vj9")
+            }
+            if (requested.group == "org.apache.commons" && requested.name == "commons-configuration2" &&
+                versionOlderThan(requested.version ?: "0", "2.15.0")) {
+                useVersion("2.15.0")
+                because("GHSA-337m-mw94-2v6g")
+            }
+            if (requested.group == "org.apache.httpcomponents.client5" && requested.name == "httpclient5" &&
+                versionOlderThan(requested.version ?: "0", "5.6.3")) {
+                useVersion("5.6.3")
+                because("GHSA-hjcp-jmpx-g3qm")
+            }
+            if (requested.group == "org.apache.logging.log4j" &&
+                (requested.name == "log4j-api" || requested.name == "log4j-core") &&
+                versionOlderThan(requested.version ?: "0", if (requested.name == "log4j-api") "2.25.5" else "2.25.4")) {
+                useVersion(if (requested.name == "log4j-api") "2.25.5" else "2.25.4")
+                because(
+                    "GHSA-qv9r-c865-cp47 / GHSA-3pxv-7cmr-fjr4 / GHSA-445c-vh5m-36rj / " +
+                    "GHSA-6hg6-v5c8-fphq / GHSA-vc5p-v9hr-52mj"
+                )
+            }
+            if (requested.group == "org.apache.poi" && requested.name == "poi-ooxml" &&
+                versionOlderThan(requested.version ?: "0", "5.4.0")) {
+                useVersion("5.4.0")
+                because("GHSA-gmg8-593g-7mv3")
+            }
+            // commons-lang:commons-lang:2.6 (the legacy pre-commons-lang3 artifact, no patched
+            // 2.x release ever published -- GHSA-j288-q9x7-2f5v's own data says "-> None" for
+            // it) arrives via com.joestelmach:natty:0.13 (file's natural-language date parser,
+            // FileRowConverter.java) -> org.mnode.ical4j:ical4j:1.0.2. natty itself is
+            // abandoned upstream (0.13, 2017, is the last release ever published -- cannot be
+            // bumped), but ical4j is an independent transitive dep with real newer releases;
+            // forcing IT drops commons-lang entirely (4.3.0 has no commons-lang dependency at
+            // all). Verified live, 2026-09-21: file:compileJava succeeds unchanged, and a
+            // runtime smoke test (new Parser().parse("next friday at 3pm")) against the forced
+            // ical4j returns a correct parsed date -- natty's compiled bytecode does not break
+            // against ical4j's newer API for the code path this adapter actually exercises.
+            if (requested.group == "org.mnode.ical4j" && requested.name == "ical4j" &&
+                versionOlderThan(requested.version ?: "0", "4.3.0")) {
+                useVersion("4.3.0")
+                because("GHSA-j288-q9x7-2f5v (transitively, by removing commons-lang entirely)")
+            }
+            // Transitive-only (no direct declaration anywhere in this repo) in every trino-*
+            // module's shaded jar. Same-minor-line patch bump, verified live, 2026-09-21.
+            if (requested.group == "ch.qos.logback" && requested.name == "logback-core" &&
+                versionOlderThan(requested.version ?: "0", "1.5.34")) {
+                useVersion("1.5.34")
+                because("GHSA-jhq6-gfmj-v8fx / GHSA-p47f-322f-whfh")
             }
         }
     }

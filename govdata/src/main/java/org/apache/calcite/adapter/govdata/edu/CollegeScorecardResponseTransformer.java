@@ -114,7 +114,7 @@ public class CollegeScorecardResponseTransformer implements ResponseTransformer 
         }
 
         // Map flat dot-notation keys to schema column names
-        Iterator<Map.Entry<String, JsonNode>> fields = record.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = record.properties().iterator();
         while (fields.hasNext()) {
           Map.Entry<String, JsonNode> entry = fields.next();
           String apiKey = entry.getKey();

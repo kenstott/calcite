@@ -151,7 +151,7 @@ public class CikRegistry {
     // Load tickers
     if (root.has("tickers")) {
       JsonNode tickers = root.get("tickers");
-      tickers.fields().forEachRemaining(entry -> {
+      tickers.properties().forEach(entry -> {
         TICKER_TO_CIK.put(entry.getKey().toUpperCase(), entry.getValue().asText());
       });
     }
@@ -161,7 +161,7 @@ public class CikRegistry {
       JsonNode groups = root.get("groups");
 
       // First pass: load aliases and raw CIK members
-      groups.fields().forEachRemaining(entry -> {
+      groups.properties().forEach(entry -> {
         String groupName = entry.getKey();
         JsonNode groupData = entry.getValue();
 
@@ -193,7 +193,7 @@ public class CikRegistry {
     // Load custom groups if present
     if (root.has("customGroups")) {
       JsonNode customGroups = root.get("customGroups");
-      customGroups.fields().forEachRemaining(entry -> {
+      customGroups.properties().forEach(entry -> {
         if (!entry.getKey().startsWith("_")) { // Skip comments
           JsonNode groupData = entry.getValue();
           if (groupData.has("members")) {
@@ -256,7 +256,7 @@ public class CikRegistry {
     // Load/override tickers
     if (root.has("tickers")) {
       JsonNode tickers = root.get("tickers");
-      tickers.fields().forEachRemaining(entry -> {
+      tickers.properties().forEach(entry -> {
         String ticker = entry.getKey().toUpperCase();
         String cik = entry.getValue().asText();
         TICKER_TO_CIK.put(ticker, cik);
@@ -267,7 +267,7 @@ public class CikRegistry {
     // Load/override groups
     if (root.has("groups")) {
       JsonNode groups = root.get("groups");
-      groups.fields().forEachRemaining(entry -> {
+      groups.properties().forEach(entry -> {
         String groupName = entry.getKey();
         JsonNode groupData = entry.getValue();
 
@@ -293,7 +293,7 @@ public class CikRegistry {
     // Load custom groups if present
     if (root.has("customGroups")) {
       JsonNode customGroups = root.get("customGroups");
-      customGroups.fields().forEachRemaining(entry -> {
+      customGroups.properties().forEach(entry -> {
         if (!entry.getKey().startsWith("_")) { // Skip comments
           JsonNode groupData = entry.getValue();
           if (groupData.has("members")) {

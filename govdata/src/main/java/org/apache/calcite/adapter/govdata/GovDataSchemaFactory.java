@@ -693,11 +693,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     String operatingDirectory = base + "/" + dataSource.toLowerCase();
-    File opDir = new File(operatingDirectory);
-    if (!opDir.exists()) {
-      opDir.mkdirs();
-    }
-
+    // NOT created here: ModelLifecycleProcessor.process() creates it, gated on the
+    // incremental tracker actually being writable. A plain query connection resolves to
+    // ReadOnlyPipelineTracker (no writable backend configured) and never touches this
+    // directory at all, so creating it eagerly here would just leave an empty, unused
+    // per-schema directory behind for every schema a read-only connection touches --
+    // confirmed live, accumulating one per schema on every run.
     LOGGER.debug("Operating directory: {}", operatingDirectory);
     return operatingDirectory;
   }

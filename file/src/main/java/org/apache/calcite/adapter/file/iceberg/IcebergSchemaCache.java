@@ -133,6 +133,18 @@ public final class IcebergSchemaCache {
     public String tableComment;
     /** Iceberg table property {@code column.comments} (a JSON map), or null. */
     public String columnCommentsJson;
+    /**
+     * Row count as of {@link #statsSnapshotId}, or null when never recorded. Trusted the same
+     * way {@link #schemaJson} already is (see {@link #lookup}) -- once loaded, used as-is, no
+     * live snapshot re-check per lookup; refreshed only via {@link #invalidate} or a reseed.
+     */
+    public Double rowCount;
+    /** The Iceberg snapshot ID {@link #rowCount} was computed from, or null. Diagnostic only --
+     * lookup() does not compare it against the table's current snapshot. */
+    public Long statsSnapshotId;
+    /** Per-column distinct-value count (lower-cased column name -> NDV), or null when never
+     * recorded. Same trust model as {@link #rowCount} -- see {@link #lookupNdv}. */
+    public Map<String, Long> ndv;
 
     public TableSchema() {
     }
@@ -287,6 +299,106 @@ public final class IcebergSchemaCache {
       entry.columnCommentsJson = properties.get("column.comments");
     }
     ENTRIES.put(tablePath, entry);
+  }
+
+  /**
+   * Row count previously recorded for this table via {@link #recordStatistics}, or null if
+   * none has been recorded yet.
+   *
+   * <p>Deliberately bypasses {@link #lookup}'s {@code trusted} gate (set only when a
+   * warehouse-published cache file has been downloaded and digest-verified against comments/
+   * schema, which serving a stale copy of could be actively misleading). A row count recorded
+   * this way was computed by this same JVM, this same session, from a live scan -- there is no
+   * "unverified published data" risk to gate against, only ordinary same-process reuse across
+   * the per-query schema-tree rebuilds that otherwise discard {@code IcebergTable}'s own
+   * instance-level {@code cachedRowCount} field every time.
+   *
+   * @param tablePath table root; returns null when null
+   */
+  public static Double lookupRowCount(String tablePath) {
+    if (!ENABLED || tablePath == null) {
+      return null;
+    }
+    ensureLoaded();
+    TableSchema entry = ENTRIES.get(tablePath);
+    return entry != null ? entry.rowCount : null;
+  }
+
+  /**
+   * Per-column NDV map previously recorded for this table via {@link #recordNdv}, or null if
+   * none has been recorded yet. Same bypass-of-{@code trusted} rationale as
+   * {@link #lookupRowCount}: a same-session, same-JVM live computation, not unverified
+   * published data.
+   *
+   * @param tablePath table root; returns null when null
+   */
+  public static Map<String, Long> lookupNdv(String tablePath) {
+    if (!ENABLED || tablePath == null) {
+      return null;
+    }
+    ensureLoaded();
+    TableSchema entry = ENTRIES.get(tablePath);
+    return entry != null ? entry.ndv : null;
+  }
+
+  /**
+   * Records a table's live-computed per-column NDV map in memory, merging into an existing
+   * entry when present. Mirrors {@link #recordStatistics}: added because
+   * {@code IcebergTable.publishedNdv()}'s own instance field is exactly as useless across the
+   * per-query schema-tree rebuilds as {@code cachedRowCount} was before that fix -- confirmed
+   * live (2026-09-18) via a publish_report call that timed out inside
+   * {@code IcebergTable.getDistinctRowCount()} -> {@code publishedNdv()} -> a fresh
+   * {@code loadIcebergTable()} on every rebuild, for the cost-based planner's per-GROUP-BY-column
+   * cardinality estimate.
+   *
+   * @param tablePath table root; ignored when null
+   * @param ndv the computed NDV map (lower-cased column name -> distinct count)
+   */
+  public static void recordNdv(String tablePath, Map<String, Long> ndv) {
+    if (!ENABLED || tablePath == null) {
+      return;
+    }
+    ensureLoaded();
+    TableSchema entry = ENTRIES.get(tablePath);
+    if (entry == null) {
+      entry = new TableSchema();
+      entry.path = tablePath;
+      ENTRIES.put(tablePath, entry);
+    }
+    entry.ndv = ndv;
+  }
+
+  /**
+   * Records a table's live-computed row count in memory, merging into an existing entry when
+   * present (creating a schema-less one otherwise, so recording order between this and
+   * {@link #record} never matters). Persisting is explicit -- see {@link #save} -- so an
+   * ordinary connection pays nothing beyond a map write, and only seed generation writes a file.
+   *
+   * <p>Added to close the one gap {@link #record} left: table/column comments and schema were
+   * already cached this way, but row count -- what {@code CountStarStatisticsRule} and
+   * {@code DuckDBIcebergCountStarRule} both need -- was not, so every fresh per-query schema-tree
+   * rebuild (a new {@code IcebergTable} instance, whose own {@code cachedRowCount} field is
+   * useless across rebuilds) re-ran a full Iceberg manifest walk for row count alone, even for
+   * tables never referenced by that query. Confirmed live (2026-09-18): a trivial single-table
+   * query touched hundreds of unrelated tables' row counts this way.
+   *
+   * @param tablePath table root; ignored when null
+   * @param snapshotId the Iceberg snapshot ID {@code rowCount} was computed from
+   * @param rowCount the computed row count
+   */
+  public static void recordStatistics(String tablePath, long snapshotId, double rowCount) {
+    if (!ENABLED || tablePath == null) {
+      return;
+    }
+    ensureLoaded();
+    TableSchema entry = ENTRIES.get(tablePath);
+    if (entry == null) {
+      entry = new TableSchema();
+      entry.path = tablePath;
+      ENTRIES.put(tablePath, entry);
+    }
+    entry.rowCount = rowCount;
+    entry.statsSnapshotId = snapshotId;
   }
 
   /**

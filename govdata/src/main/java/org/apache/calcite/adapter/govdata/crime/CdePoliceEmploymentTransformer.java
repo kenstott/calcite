@@ -77,7 +77,7 @@ public class CdePoliceEmploymentTransformer implements ResponseTransformer {
               result.add(buildRow(item, stateAbbr));
             }
           } else {
-            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+            Iterator<Map.Entry<String, JsonNode>> fields = root.properties().iterator();
             while (fields.hasNext()) {
               Map.Entry<String, JsonNode> entry = fields.next();
               String key = entry.getKey();

@@ -445,7 +445,7 @@ public class SecDataFetcher {
       JsonNode root = MAPPER.readTree(reader);
 
       // Extract CIKs from the response
-      root.fields().forEachRemaining(entry -> {
+      root.properties().forEach(entry -> {
         JsonNode item = entry.getValue();
         if (item.has("cik_str")) {
           String cik = String.format("%010d", item.get("cik_str").asLong());
@@ -745,7 +745,7 @@ public class SecDataFetcher {
         new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
 
       JsonNode root = MAPPER.readTree(reader);
-      root.fields().forEachRemaining(entry -> {
+      root.properties().forEach(entry -> {
         JsonNode item = entry.getValue();
         if (item.has("ticker") && item.has("cik_str")) {
           String ticker = item.get("ticker").asText().toUpperCase();

@@ -49,6 +49,15 @@ public class McpServerLauncher {
         ProcessHandle.current().info().command()
             .ifPresent(cmd -> System.setProperty("askamerica.launcher.command", cmd));
 
+        // jpackage's --input contents (this launcher jar's own directory) land at
+        // <installdir>/app/ — a "pgwire-govdata" subfolder there, if the CI build staged one
+        // (askamerica-engine.yml's "Ensure pgwire-govdata bundle" step; empty/absent for a
+        // plain local `./gradlew jpackage`), is the actual installed copy. Set unconditionally
+        // and cheaply here since PgwireGovDataConnector (running later, once the fat engine
+        // jar is loaded) is the one place that actually checks whether it exists.
+        System.setProperty("askamerica.bundled.pgwire.dir",
+            new File(launcherJar.getParentFile(), "pgwire-govdata").getAbsolutePath());
+
         // Resolve — downloading if necessary — the fat engine jar. In server mode
         // this is a headless (stderr) download; interactively it shows a progress
         // window. Normally the wizard has already cached it, so this is a no-op.

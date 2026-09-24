@@ -82,7 +82,7 @@ public class CdeHateCrimeTransformer implements ResponseTransformer {
           if (year > 0) {
             row.put("year", year);
           }
-          Iterator<Map.Entry<String, JsonNode>> fields = item.fields();
+          Iterator<Map.Entry<String, JsonNode>> fields = item.properties().iterator();
           while (fields.hasNext()) {
             Map.Entry<String, JsonNode> field = fields.next();
             row.set(field.getKey(), field.getValue());
@@ -106,7 +106,7 @@ public class CdeHateCrimeTransformer implements ResponseTransformer {
 
   private void flattenSections(JsonNode root, ArrayNode result,
       String stateAbbr, int year) {
-    Iterator<Map.Entry<String, JsonNode>> sections = root.fields();
+    Iterator<Map.Entry<String, JsonNode>> sections = root.properties().iterator();
     while (sections.hasNext()) {
       Map.Entry<String, JsonNode> sectionEntry = sections.next();
       String section = sectionEntry.getKey();
@@ -117,7 +117,7 @@ public class CdeHateCrimeTransformer implements ResponseTransformer {
         continue;
       }
 
-      Iterator<Map.Entry<String, JsonNode>> categories = sectionData.fields();
+      Iterator<Map.Entry<String, JsonNode>> categories = sectionData.properties().iterator();
       while (categories.hasNext()) {
         Map.Entry<String, JsonNode> catEntry = categories.next();
         String category = catEntry.getKey();
@@ -125,7 +125,7 @@ public class CdeHateCrimeTransformer implements ResponseTransformer {
 
         if (categoryData.isObject()) {
           // Category contains label -> count mappings
-          Iterator<Map.Entry<String, JsonNode>> labels = categoryData.fields();
+          Iterator<Map.Entry<String, JsonNode>> labels = categoryData.properties().iterator();
           while (labels.hasNext()) {
             Map.Entry<String, JsonNode> labelEntry = labels.next();
             String label = labelEntry.getKey();

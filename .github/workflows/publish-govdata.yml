@@ -64,6 +64,9 @@ jobs:
       - name: Import GPG key
         run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
 
+      - name: Install syft
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Generate POM
         run: |
           ./gradlew :govdata:generatePomFileForShadowPublication \
@@ -125,12 +128,18 @@ jobs:
           cp "$SOURCES" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar"
           cp "$JAVADOC" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
 
-          # GPG sign all four artifacts
+          # SBOM (CycloneDX), same as the pgwire-adapters release bundles and
+          # askamerica-engine's Maven Central publish.
+          syft "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
+            -o cyclonedx-json="${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-cyclonedx.json"
+
+          # GPG sign all five artifacts
           for f in \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom" \
             "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" \
-            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-cyclonedx.json"
           do
             if [ -n "$GPG_PASSPHRASE" ]; then
               gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \

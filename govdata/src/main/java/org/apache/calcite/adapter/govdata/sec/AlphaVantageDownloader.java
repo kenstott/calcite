@@ -307,7 +307,7 @@ public class AlphaVantageDownloader {
     }
 
     List<String[]> rows = new ArrayList<String[]>();
-    Iterator<Map.Entry<String, JsonNode>> iter = timeSeries.fields();
+    Iterator<Map.Entry<String, JsonNode>> iter = timeSeries.properties().iterator();
     while (iter.hasNext()) {
       Map.Entry<String, JsonNode> entry = iter.next();
       String dateStr = entry.getKey();

@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
+import org.apache.calcite.adapter.file.partition.ReadOnlyPipelineTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
@@ -123,8 +124,12 @@ public class ModelLifecycleProcessor {
     LOGGER.info("Starting model lifecycle processing with {} schemas", schemas.size());
     long startTime = System.currentTimeMillis();
 
-    // Ensure operating directory exists
-    if (operatingDirectory != null) {
+    // Ensure operating directory exists -- but not for a read-only tracker, which never
+    // writes anything there (every mutator throws by design) and has nothing to lock. A
+    // plain query connection (the common MCP/JDBC case, no writable tracker configured)
+    // would otherwise get an empty per-schema directory it never uses; confirmed live, one
+    // such directory accumulating per schema touched, purely as a byproduct of this call.
+    if (operatingDirectory != null && !(incrementalTracker instanceof ReadOnlyPipelineTracker)) {
       File opDir = new File(operatingDirectory);
       if (!opDir.exists()) {
         opDir.mkdirs();

@@ -69,6 +69,122 @@ public class McpServer {
 
     static final String BUILD_ID = "telemetry-v13";
 
+    /**
+     * MCP Apps (spec 2026-01-26) {@code ui://} resource URI for the chart/dashboard viewer
+     * widget. Any tool whose {@code _meta.ui.resourceUri} names this gets its result rendered
+     * by {@link #CHART_VIEWER_HTML} in a host-controlled sandboxed iframe, instead of (or
+     * alongside) the plain content blocks a non-MCP-Apps host reads. See
+     * {@link #toolWithChartViewer(String, String, ObjectNode)}.
+     */
+    static final String CHART_VIEWER_RESOURCE_URI = "ui://askamerica/chart-viewer.html";
+
+    /**
+     * The widget itself: a self-contained page with no external script/style/font references,
+     * so it satisfies the spec's restrictive default CSP ({@code script-src 'self'
+     * 'unsafe-inline'; img-src 'self' data:; connect-src 'none'}) without this server having to
+     * declare any {@code _meta.ui.csp} override on the resource below.
+     *
+     * <p>Hand-rolled against the wire protocol directly (JSON-RPC over {@code postMessage}) —
+     * no {@code @modelcontextprotocol/ext-apps} SDK exists for a Java server to reach for, and
+     * pulling in a JS build toolchain for one static page is not worth it. The three messages
+     * this needs are: send {@code ui/initialize} once on load, send
+     * {@code ui/notifications/initialized} once the host replies, then listen forever for
+     * {@code ui/notifications/tool-result} and render whatever content blocks arrive. Text
+     * blocks are filtered by the same {@code annotations.audience} tagging the plain
+     * tools/call path already sets (see the {@code content.add(...)} calls in
+     * {@code handleToolsCall}) — an assistant-only block (the raw SVG source, the diagnostics
+     * envelope) is exactly as inappropriate to show a human here as it is in a chat transcript.
+     */
+    static final String CHART_VIEWER_HTML = "<!doctype html>\n"
+        + "<html><head><meta charset=\"utf-8\">\n"
+        + "<style>\n"
+        + "  html,body{margin:0;padding:0;background:transparent;"
+        + "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}\n"
+        + "  #chart-img{max-width:100%;display:block;}\n"
+        + "  .chart-text{padding:8px 10px;color:#333;font-size:13px;line-height:1.4;"
+        + "white-space:pre-wrap;}\n"
+        + "</style></head>\n"
+        + "<body>\n"
+        + "<div id=\"root\"><div class=\"chart-text\">Loading chart…</div></div>\n"
+        + "<script>\n"
+        + "(function(){\n"
+        + "  var pending = {};\n"
+        + "  var nextId = 1;\n"
+        + "  function send(method, params, notify){\n"
+        + "    var msg = {jsonrpc:\"2.0\", method: method, params: params || {}};\n"
+        + "    if(!notify){ msg.id = nextId++; }\n"
+        + "    window.parent.postMessage(msg, \"*\");\n"
+        + "    return msg.id;\n"
+        + "  }\n"
+        + "  function request(method, params){\n"
+        + "    return new Promise(function(resolve, reject){\n"
+        + "      var id = send(method, params, false);\n"
+        + "      pending[id] = {resolve:resolve, reject:reject};\n"
+        + "    });\n"
+        + "  }\n"
+        + "  function audienceOk(block){\n"
+        + "    var a = block.annotations && block.annotations.audience;\n"
+        + "    return !a || a.indexOf(\"user\") !== -1;\n"
+        + "  }\n"
+        + "  function renderResult(params){\n"
+        + "    var content = (params && params.content) || [];\n"
+        + "    var root = document.getElementById(\"root\");\n"
+        + "    root.innerHTML = \"\";\n"
+        + "    var shown = false;\n"
+        + "    for(var i=0;i<content.length;i++){\n"
+        + "      var block = content[i];\n"
+        + "      if(!audienceOk(block)) continue;\n"
+        + "      if(block.type === \"image\" && block.data){\n"
+        + "        var img = document.createElement(\"img\");\n"
+        + "        img.id = \"chart-img\";\n"
+        + "        img.src = \"data:\" + (block.mimeType || \"image/png\") + \";base64,\" "
+        + "+ block.data;\n"
+        + "        root.appendChild(img);\n"
+        + "        shown = true;\n"
+        + "      } else if(block.type === \"text\" && block.text){\n"
+        + "        var p = document.createElement(\"div\");\n"
+        + "        p.className = \"chart-text\";\n"
+        + "        p.textContent = block.text;\n"
+        + "        root.appendChild(p);\n"
+        + "        shown = true;\n"
+        + "      }\n"
+        + "    }\n"
+        + "    if(!shown){\n"
+        + "      root.innerHTML = '<div class=\"chart-text\">No chart in this result.</div>';\n"
+        + "    }\n"
+        + "  }\n"
+        + "  window.addEventListener(\"message\", function(ev){\n"
+        + "    var msg = ev.data;\n"
+        + "    if(!msg || msg.jsonrpc !== \"2.0\") return;\n"
+        + "    if(msg.id !== undefined && (msg.result !== undefined "
+        + "|| msg.error !== undefined)){\n"
+        + "      var p = pending[msg.id];\n"
+        + "      if(p){\n"
+        + "        delete pending[msg.id];\n"
+        + "        if(msg.error){ p.reject(msg.error); } else { p.resolve(msg.result); }\n"
+        + "      }\n"
+        + "      return;\n"
+        + "    }\n"
+        + "    if(msg.method === \"ui/notifications/tool-result\"){\n"
+        + "      renderResult(msg.params);\n"
+        + "    } else if(msg.method === \"ui/notifications/tool-cancelled\"){\n"
+        + "      document.getElementById(\"root\").innerHTML = "
+        + "'<div class=\"chart-text\">Cancelled.</div>';\n"
+        + "    }\n"
+        + "  });\n"
+        + "  request(\"ui/initialize\", {\n"
+        + "    capabilities: {},\n"
+        + "    clientInfo: {name:\"AskAmerica Chart Viewer\", version:\"1.0.0\"},\n"
+        + "    protocolVersion: \"2026-01-26\",\n"
+        + "    appCapabilities: {tools:{listChanged:false}, "
+        + "availableDisplayModes:[\"inline\"]}\n"
+        + "  }).then(function(){\n"
+        + "    send(\"ui/notifications/initialized\", {}, true);\n"
+        + "  });\n"
+        + "})();\n"
+        + "</script>\n"
+        + "</body></html>\n";
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** Tool definitions, built on first use by {@link #toolDefs()}. */
@@ -154,7 +270,9 @@ public class McpServer {
         return (raw == null || raw.isEmpty()) ? 30L : Long.parseLong(raw);
     }
 
-    private static PrintStream log;
+    // Package-private (not private): PgwireGovDataConnector shares this same diagnostic
+    // stream so its spawn/connect logging interleaves with the rest of the engine's log.
+    static PrintStream log;
 
     public static void main(String[] args) throws Exception {
         boolean mcpMode = false;
@@ -238,18 +356,29 @@ public class McpServer {
             long t0 = System.currentTimeMillis();
             try {
                 getCatalogConnection();
-                // Loading the JAR-bundled seed catalog and rebuilding every view from Iceberg
-                // metadata end in the same mounted state, so without these counts a mount that
-                // spent minutes on object-store round trips is indistinguishable in the log from
-                // one that started instantly. Printed to this stream, not through SLF4J, because
-                // the shaded jar's logging binding drops adapter logs entirely.
-                log.println("[askamerica-mcp] All schemas mounted in "
-                    + (System.currentTimeMillis() - t0) + "ms"
-                    + " — catalog=" + new java.io.File(
-                        System.getProperty("govdata.operating.dir.base", "?"),
-                        ".duckdb/govdata.duckdb")
-                    + " icebergViewsReused=" + DuckDBJdbcSchemaFactory.icebergViewsReused()
-                    + " icebergViewsRebuilt=" + DuckDBJdbcSchemaFactory.icebergViewsCreated());
+                if (PgwireGovDataConnector.isEnabled()) {
+                    // The counters/catalog path below describe the embedded DuckDB engine,
+                    // which this mode never instantiates (getSchemaConnection's pgwire
+                    // short-circuit runs before GovDataDriver is ever constructed) — printing
+                    // them here would report misleading zeros for a mount that actually
+                    // succeeded through the shared pgwire-govdata server instead.
+                    log.println("[askamerica-mcp] All schemas mounted in "
+                        + (System.currentTimeMillis() - t0) + "ms via shared pgwire-govdata ("
+                        + PgwireGovDataConnector.describeTarget() + ")");
+                } else {
+                    // Loading the JAR-bundled seed catalog and rebuilding every view from Iceberg
+                    // metadata end in the same mounted state, so without these counts a mount that
+                    // spent minutes on object-store round trips is indistinguishable in the log from
+                    // one that started instantly. Printed to this stream, not through SLF4J, because
+                    // the shaded jar's logging binding drops adapter logs entirely.
+                    log.println("[askamerica-mcp] All schemas mounted in "
+                        + (System.currentTimeMillis() - t0) + "ms"
+                        + " — catalog=" + new java.io.File(
+                            System.getProperty("govdata.operating.dir.base", "?"),
+                            ".duckdb/govdata.duckdb")
+                        + " icebergViewsReused=" + DuckDBJdbcSchemaFactory.icebergViewsReused()
+                        + " icebergViewsRebuilt=" + DuckDBJdbcSchemaFactory.icebergViewsCreated());
+                }
             } catch (Throwable e) {
                 log.println("[askamerica-mcp] Schema warm-up failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -336,8 +465,13 @@ public class McpServer {
      * connection is not safe for concurrent use. Until each worker can hold its own
      * connection, this lock is what preserves the safety the serial loop used to provide
      * for free — it is not an optimisation choice.
+     *
+     * <p>Package-private (not private): {@link ClaimsServer} synchronizes on this same lock
+     * for its own SQL against the shared pgwire-govdata connection, since that connection is
+     * the identical one this lock already protects — a second, uncoordinated lock guarding
+     * the same non-thread-safe {@code Connection} would defeat the point of having one.
      */
-    private static final Object DB_LOCK = new Object();
+    static final Object DB_LOCK = new Object();
 
     /**
      * Tools that touch no database, so they need not wait behind a long query. This is the
@@ -346,7 +480,9 @@ public class McpServer {
      *
      * <p>Everything absent from this set is assumed to need the lock. list_schemas is
      * deliberately not here — it reads information_schema, which is a DB query despite
-     * sounding like a local lookup.
+     * sounding like a local lookup. list_reports is the same shape: it now queries
+     * ClaimsServer's DuckDB-backed report table over the shared pgwire-govdata connection,
+     * not an in-memory map, so it needs the lock too.
      */
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
@@ -388,13 +524,15 @@ public class McpServer {
      * How many multiples of a statement's own configured timeout the watchdog waits before
      * escalating. Stage 1 (this multiple) calls {@link Statement#cancel()} — the JDBC-standard,
      * cross-thread-safe way to ask a driver to abort in-flight work. Stage 2 (double this
-     * multiple) evicts and closes the shared connection outright if the statement is still
-     * registered, on the reasoning that {@code DB_LOCK} means nothing else can legitimately be
-     * using that connection at that moment — so a statement still active well past a cancel
-     * attempt is presumed wedged past the point cancellation can reach, and the only way left to
-     * restore the server's responsiveness to OTHER callers is to force the next caller onto a
-     * fresh connection rather than wait on this one forever. It does not reclaim whatever the
-     * stuck native call is still doing in the background — see the caveat in DEFECTS-OPEN.md #16.
+     * multiple) presumes the statement wedged past the point cancellation can reach and forces
+     * a fresh connection for future callers: in the default pgwire-enabled configuration this
+     * means killing the separate pgwire-govdata process outright ({@link
+     * PgwireGovDataConnector#killAndRespawn}), which also severs the socket the stuck thread is
+     * blocked reading from — unlike a same-process cancel, a killed socket connection is
+     * something Java's I/O layer reliably observes even when a cooperative interrupt flag isn't
+     * being checked. In embedded mode (the explicit opt-out), it evicts the cached embedded
+     * connection instead, same as before. Neither path reclaims whatever the stuck native call
+     * was doing before the kill/evict — see the caveat in DEFECTS-OPEN.md #16.
      */
     private static final int WATCHDOG_TIMEOUT_MULTIPLE = 2;
 
@@ -421,22 +559,42 @@ public class McpServer {
                     long cancelAtMillis = timeoutSeconds * 1000L * WATCHDOG_TIMEOUT_MULTIPLE;
                     long evictAtMillis = cancelAtMillis * 2;
                     if (ageMillis >= evictAtMillis) {
-                        log.println("[askamerica-mcp] WATCHDOG: statement still active "
-                            + (ageMillis / 1000) + "s after starting (timeout was "
-                            + timeoutSeconds + "s) — cancel() did not unstick it; evicting the "
-                            + "shared connection so future callers get a fresh one. This does "
-                            + "NOT reclaim whatever the stuck query is still doing.");
-                        String catalogKey = String.join(",", allowedSchemas());
-                        Connection stuck = schemaConns.remove(catalogKey);
-                        schemaConnOpenedAtMillis.remove(catalogKey);
+                        // Measured live 2026-09-23: in the default pgwire-enabled configuration,
+                        // the schemaConns eviction below is dead code — that map is only ever
+                        // populated by the EMBEDDED-mode branch of getSchemaConnection, which
+                        // pgwire mode bypasses entirely. So this branch used to do nothing at
+                        // all for the one configuration everyone actually runs, and the stuck
+                        // thread held DB_LOCK forever with no recovery. killAndRespawn kills the
+                        // separate pgwire-govdata OS process outright (see its own javadoc for
+                        // why that unsticks a blocked socket read where an in-process interrupt
+                        // flag might not) — this is the real fix for that path; schemaConns
+                        // eviction remains correct and unchanged for the embedded-mode opt-out.
+                        if (PgwireGovDataConnector.isEnabled()) {
+                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
+                                + (ageMillis / 1000) + "s after starting (timeout was "
+                                + timeoutSeconds + "s) — cancel() did not unstick it; killing "
+                                + "the shared pgwire-govdata process so it respawns fresh.");
+                            PgwireGovDataConnector.killAndRespawn(
+                                "statement active " + (ageMillis / 1000) + "s, cancel() failed");
+                        } else {
+                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
+                                + (ageMillis / 1000) + "s after starting (timeout was "
+                                + timeoutSeconds + "s) — cancel() did not unstick it; evicting "
+                                + "the embedded connection so future callers get a fresh one. "
+                                + "This does NOT reclaim whatever the stuck query is still "
+                                + "doing.");
+                            String catalogKey = String.join(",", allowedSchemas());
+                            Connection stuck = schemaConns.remove(catalogKey);
+                            schemaConnOpenedAtMillis.remove(catalogKey);
+                            if (stuck != null) {
+                                closeQuietly(stuck, catalogKey);
+                            }
+                        }
                         // Removing the entry (not the ACTIVE_STATEMENTS registration) is
                         // deliberate: leaving the registration in place stops this branch from
                         // re-firing every 15s for the same statement while it is still there,
                         // without pretending the underlying work actually stopped.
                         ACTIVE_STATEMENTS.put(stmt, new long[]{startedAt, -1});
-                        if (stuck != null) {
-                            closeQuietly(stuck, catalogKey);
-                        }
                     } else if (ageMillis >= cancelAtMillis) {
                         log.println("[askamerica-mcp] WATCHDOG: statement active " + (ageMillis
                             / 1000) + "s after starting (timeout was " + timeoutSeconds
@@ -476,6 +634,10 @@ public class McpServer {
                 // stay answerable while a query runs, like tools/list above.
                 case "prompts/list":     return result(id, QuestionGuidance.promptsList());
                 case "prompts/get":      return handlePromptsGet(id, params);
+                // MCP Apps resource fetch — see CHART_VIEWER_RESOURCE_URI. Touches no schema,
+                // same reasoning as the other pre-query-safe methods above.
+                case "resources/list":   return handleResourcesList(id);
+                case "resources/read":   return handleResourcesRead(id, params);
                 case "tools/call": {
                     String tool = params.path("name").asText("");
                     if (LOCK_FREE_TOOLS.contains(tool)) {
@@ -488,6 +650,7 @@ public class McpServer {
                 default:
                     return errorResponse(id, -32601, "Method not found: " + method);
             }
+        // fallback-guard: allow -- real JSON-RPC protocol error below, not a substituted value
         } catch (Throwable e) {
             // Deliberately Throwable, not Exception: a Calcite planner AssertionError (or any
             // other Error) previously slipped past this catch entirely. Because dispatch() runs
@@ -505,6 +668,8 @@ public class McpServer {
                 log.println("[askamerica-mcp]   caused by: " + cause.getMessage());
                 cause = cause.getCause();
             }
+            // fallback-guard: allow -- real JSON-RPC protocol error, not a substituted value;
+            // this is the last-resort translation of an uncaught Throwable into a response
             return errorResponse(id, -32603, compactErrorMessage(e));
         }
     }
@@ -537,6 +702,10 @@ public class McpServer {
         // them is uneven, which is why the same teaching also lives in the tool descriptions
         // — those every capable client reads. This is the bonus channel, not the primary one.
         capabilities.set("prompts", MAPPER.createObjectNode());
+        // Declared so a host can fetch CHART_VIEWER_RESOURCE_URI via resources/read — required
+        // for MCP Apps rendering, but otherwise inert: a host with no resources support simply
+        // never calls resources/read, same as it already ignores an unrecognized _meta field.
+        capabilities.set("resources", MAPPER.createObjectNode());
 
         ObjectNode body = MAPPER.createObjectNode();
         body.put("protocolVersion", "2024-11-05");
@@ -553,6 +722,11 @@ public class McpServer {
             + "WFIGS), housing (FHFA/Census permits/HUD), cftc (swaps/derivatives), ag (USDA "
             + "agriculture), transport (NHTSA/BTS/FAA/FTA/FHWA), environment (EPA/USGS), fiscal "
             + "(IRS SOI / USAspending / SBA / SSA).\n\n"
+
+            // The "askamerica help" orientation used to live here. Confirmed live it never
+            // reached the model — this whole banner has the same documented reachability
+            // problem QuestionGuidance.USAGE_GUIDE's class doc describes — so it moved to the
+            // get_help tool's description instead (see QuestionGuidance.HELP_TEXT).
 
             + "## VALIDATING AN ARTICLE OR A CLAIM\n\n"
             + "When the user hands you a URL, a pasted article, or a quoted passage and asks "
@@ -863,7 +1037,33 @@ public class McpServer {
             + "rates, multi-year trends, causal claims, a table's construction basis you have "
             + "not verified. Call it before deciding you're already certain of the method, not "
             + "only once you notice you're not. Empty result means uncovered, not 'plan is "
-            + "fine'.\n\n"
+            + "fine'.\n"
+            + "- **This standing practice is NOT limited to data already in the warehouse — it "
+            + "applies just as much to numeric series you fetched externally (a FRED CSV, a "
+            + "NAIC report's tables) when your own data had nothing to contribute.** These "
+            + "tools need query() results, not a warehouse table specifically: paste the "
+            + "fetched numbers into a query() call as an inline VALUES table (e.g. SELECT "
+            + "corr(x, y) FROM (VALUES (1.2,3.4), (5.6,7.8), ...) AS t(x, y)), then run corr(), "
+            + "regr_slope/regr_r2, ols_regression/correlation_matrix, or -- for a market/industry "
+            + "concentration question specifically ('how concentrated', 'top firms getting "
+            + "bigger') -- gini_coefficient/hhi_concentration, against it exactly as you would a "
+            + "real table. Measured live, 2026-09-14: a run computing 'has concentration risen' "
+            + "from externally-fetched top-N shares narrated the percentages by hand and never "
+            + "called hhi_concentration at all, where the unaided expert on the same question "
+            + "computed a real HHI. This keeps the computation auditable in "
+            + "calls.jsonl the same way every other statistical claim in this file is -- do not "
+            + "reach outside the MCP tools for this (an unaudited calculation elsewhere is not "
+            + "verifiable the way a query() call is). When a report compares or claims a "
+            + "relationship between two or more externally-fetched numeric series, actually "
+            + "compute it this way rather than eyeballing parallel percentages and narrating "
+            + "one as driving the other. Measured live, 2026-09-14: a run fetched a FRED CSV "
+            + "expressly for this purpose, alongside insurance-cost figures, and never computed "
+            + "anything from it — the report said one series was 'a substantial but partial "
+            + "driver' of the other with no number behind that claim, while the unaided "
+            + "personas on the identical question computed a real correlation coefficient (with "
+            + "a significance check) from the same public data. A relationship claim needs a "
+            + "number behind it exactly the same way a warehouse claim needs a query behind it "
+            + "— the source of the data doesn't change that.\n\n"
 
             + "## COVERAGE, VERSIONING, AND GAPS\n\n"
             + "- **This is a versioned snapshot, not a live feed.** describe_table reports a "
@@ -930,15 +1130,58 @@ public class McpServer {
             + "attributing each number to its own. If the answer reports that a ranking or "
             + "comparison holds, this check includes testing whether the GAP driving it — not "
             + "just each side's own point estimate — survives its own uncertainty.\n"
-            + "- **DELIVERY IS REQUIRED, NOT OPTIONAL.** Call publish_report before finishing "
-            + "any question worth more than a sentence — it is the deliverable, not a "
-            + "nice-to-have; a chart plus prose the reader has to reassemble is not an "
-            + "acceptable substitute. When the answer holds more than one figure worth "
-            + "showing, call compose_dashboard first and pass its panels through "
-            + "publish_report's dashboard argument so board and narrative compose in one page "
-            + "— this beats prose or a bare chart for multi-variate answers. A single figure "
-            + "with nothing to compare still needs publish_report for its narrative, sourcing "
-            + "and caveats.");
+            + "- **OFFER THE REPORT — DO NOT SILENTLY SKIP IT OR SILENTLY BUILD IT.** Measured "
+            + "live (2026-09-15, real Desktop sessions): two substantive analyses were "
+            + "delivered as chat prose alone, with publish_report never called and never "
+            + "mentioned — the reader had no way to know a formatted, shareable report was "
+            + "even possible until they thought to ask for one by name. An internal MUST that "
+            + "the model can silently fail to follow is not a real guarantee; a choice put to "
+            + "the reader in the answer itself is. So: for any question worth more than a "
+            + "sentence, END your chat answer by asking whether the reader wants it as a "
+            + "durable, shareable report — e.g. 'Want this as a formatted report with a "
+            + "permanent link you can revisit or send to someone?' — rather than building one "
+            + "unasked or leaving the offer unstated. Build it immediately without asking only "
+            + "when the question already asked for a report/document/dashboard by name, or when "
+            + "the answer holds more than one figure worth showing side by side (a multi-panel "
+            + "dashboard nobody can see inline in chat is not a deliverable left as an offer). "
+            + "In either case: call compose_dashboard first when there is more than one figure, "
+            + "pass its panels through publish_report's dashboard argument so board and "
+            + "narrative compose in one page, and once the reader says yes to the offer, treat "
+            + "publish_report the same way — it is the deliverable at that point, not a "
+            + "nice-to-have, and a chart plus prose the reader has to reassemble by hand is "
+            + "never an acceptable substitute for it.");
+        return result(id, body);
+    }
+
+    /** The one MCP Apps resource this server serves — see {@link #CHART_VIEWER_RESOURCE_URI}. */
+    private static ObjectNode handleResourcesList(JsonNode id) {
+        ObjectNode res = MAPPER.createObjectNode();
+        res.put("uri", CHART_VIEWER_RESOURCE_URI);
+        res.put("name", "Chart Viewer");
+        res.put("description",
+            "Renders the image and narrative text from render_chart/compose_dashboard "
+            + "results as an interactive MCP Apps widget.");
+        res.put("mimeType", "text/html;profile=mcp-app");
+        ArrayNode resources = MAPPER.createArrayNode();
+        resources.add(res);
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("resources", resources);
+        return result(id, body);
+    }
+
+    private static ObjectNode handleResourcesRead(JsonNode id, JsonNode params) {
+        String uri = params.path("uri").asText("");
+        if (!CHART_VIEWER_RESOURCE_URI.equals(uri)) {
+            return errorResponse(id, -32602, "Unknown resource: " + uri);
+        }
+        ObjectNode content = MAPPER.createObjectNode();
+        content.put("uri", CHART_VIEWER_RESOURCE_URI);
+        content.put("mimeType", "text/html;profile=mcp-app");
+        content.put("text", CHART_VIEWER_HTML);
+        ArrayNode contents = MAPPER.createArrayNode();
+        contents.add(content);
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("contents", contents);
         return result(id, body);
     }
 
@@ -994,6 +1237,19 @@ public class McpServer {
             + "compares across places, compares across years, averages or trends a rate, "
             + "computes a share/ratio/index, ranks anything, or attributes a trend to a "
             + "cause.** Call it before you decide you already know the method.\n\n"
+            + "**When the task is checking a claim — 'validate this', 'fact-check this', 'is "
+            + "this true', a pasted article, or any question that is really asking whether some "
+            + "assertion holds up — call this BEFORE web_search/web_fetch, not after.** External "
+            + "sources are comparison points once you have your own number, not a substitute for "
+            + "one: search for the measure the claim rests on here first, and if it's covered, "
+            + "compute your own independent figure (query it directly, or build the relationship "
+            + "with hypothesis_test/ols_regression/diff_in_diff if the claim is about a "
+            + "relationship rather than a single number) before reaching for outside sources at "
+            + "all. Only fall back to web research first when this search genuinely comes back "
+            + "empty for the measure in question. External evidence still matters just as much "
+            + "as this corpus's own — fetch the claim's cited sources afterward for comparison, "
+            + "and bring in any outside figures as data to test against your own, not prose to "
+            + "take on faith — the ordering is what changes, not which source counts.\n\n"
             + "Search the full data catalog by keyword to discover which schemas, tables, and "
             + "columns are relevant — each match includes its description. Call this FIRST when "
             + "you don't already know the exact table, then confirm with describe_table. "
@@ -1001,7 +1257,18 @@ public class McpServer {
             + "endpoint, external_sources: [...] and external_sources_caveat — the same "
             + "candidates suggest_external_sources would return for this query, surfaced here so "
             + "a coverage gap and a live alternative show up in one call instead of two. Read "
-            + "external_sources_caveat before using any of them: they are not askamerica data.",
+            + "external_sources_caveat before using any of them: they are not askamerica data. "
+            + "No matches, or matches that don't actually cover the question, is not the end of "
+            + "research — it means this corpus isn't where the answer lives, not that the "
+            + "question is unanswerable. Research it the rest of the way with web_search and "
+            + "web_fetch, and before publishing assess for yourself, independently, whether what "
+            + "you have constitutes an EXHAUSTIVE study for a question of this scope — not "
+            + "whether you did a passing amount. If the question implies a full universe (every "
+            + "state, every facility, every county), a handful of illustrative examples is not "
+            + "exhaustive, even where every other requirement is satisfied; a competent analyst "
+            + "with no connector at all would attempt to enumerate that universe, not sample it. "
+            + "A thin answer because your own tool came up empty is a worse outcome than not "
+            + "having the tool.",
             schema(searchProps, new String[]{"query"})));
 
         ObjectNode listTablesProps = MAPPER.createObjectNode();
@@ -1089,7 +1356,10 @@ public class McpServer {
             + "info/caution/high, the grain, the observation count, and the declared coverage "
             + "windows of the tables involved. Read it before answering: a 'high' warning "
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
-            + "health, only that no listed defect was detected."
+            + "health, only that no listed defect was detected. "
+            + "If this turns out to be your last query before writing the final answer: "
+            + "offer the reader a shareable report (see publish_report) rather than leaving "
+            + "the finding as chat text alone with no way to revisit or send it."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
@@ -1109,6 +1379,15 @@ public class McpServer {
             + "see; silence from it is not approval."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(critiqueProps, new String[]{"sql"})));
+
+        // Dedicated "askamerica help" tool, named unambiguously — see QuestionGuidance.
+        // HELP_TEXT's class doc: a real user typing "askamerica help" got
+        // get_usage_guide_section_1's RESEARCHER-facing methodology guide instead, because
+        // that tool's description was the closest name match available with nothing more
+        // specific to reach for. get_help is that more specific match.
+        tools.add(
+            tool("get_help", QuestionGuidance.HELP_TEXT,
+            schema(MAPPER.createObjectNode(), new String[]{})));
 
         // Eight small, self-contained tools rather than one large one or a return to the
         // (silently unreachable) initialize.instructions banner — see QuestionGuidance.
@@ -1210,6 +1489,15 @@ public class McpServer {
             "How many chunks to return. Default 10, capped at 50. Ask for more than you need: "
             + "the top hits are frequently boilerplate, so a short list can contain no real "
             + "match at all."));
+        // No auto-provisioning exists for the embedder (unlike the engine jar and
+        // pgwire-govdata, both of which self-install on first use) — only a manual operator
+        // script (govdata/scripts/vss-embed-setup.sh) that nobody runs on a real Claude
+        // Desktop install. Advertising this tool unconditionally means every real install
+        // gets offered a capability guaranteed to fail with "no embedder configured" the
+        // instant it's called. Gate registration on the same properties
+        // configureQueryEmbedder() (called at startup, before toolDefs() is ever built) uses
+        // to decide whether an embedder is actually reachable.
+        if (embedderConfigured()) {
         tools.add(
             tool("semantic_search",
             "Search the FILING TEXT by meaning rather than by keyword — MD&A, risk factors, "
@@ -1240,6 +1528,7 @@ public class McpServer {
             + "attack_techniques hits (methodology, not an event) from ioc_urls/actual indicator "
             + "hits. Do not expect the embedding score alone to make any of these distinctions.",
             schema(semProps, new String[]{"query"})));
+        }
 
         ObjectNode relProps = MAPPER.createObjectNode();
         relProps.set("lei", prop("string",
@@ -1769,6 +2058,27 @@ public class McpServer {
             + "across two periods or populations of different size.",
             schema(giniProps, new String[]{"sql", "value_col"})));
 
+        ObjectNode hhiProps = MAPPER.createObjectNode();
+        hhiProps.set("sql", prop("string",
+            "SQL SELECT returning one row per unit (firm, grantee, plant) with its nonnegative "
+            + "amount column."));
+        hhiProps.set("value_col", prop("string",
+            "Numeric, nonnegative column holding each unit's amount (market share basis, "
+            + "funding, output) to measure concentration over."));
+        tools.add(
+            tool("hhi_concentration",
+            "Herfindahl-Hirschman Index (0-10,000 scale; DOJ/FTC merger-guideline concentration "
+            + "measure) for a distribution of amounts across units — sum of each unit's "
+            + "percentage-point share squared, so it is driven by the LARGEST few units rather "
+            + "than the whole distribution's shape the way gini_coefficient is. Use this "
+            + "specifically when a question asks about market/industry concentration, a "
+            + "'top player getting bigger' dynamic, or cites a published HHI threshold; use "
+            + "gini_coefficient instead when the question is about even-ness across the WHOLE "
+            + "distribution rather than the leader's share. The two can diverge — a rising HHI "
+            + "with a flat Gini means the leader is pulling ahead while everyone else stays "
+            + "the same relative to each other.",
+            schema(hhiProps, new String[]{"sql", "value_col"})));
+
         ObjectNode partialCorrProps = MAPPER.createObjectNode();
         partialCorrProps.set("sql", prop("string",
             "SQL SELECT returning the x, y, and control columns, one row per observation."));
@@ -1869,7 +2179,7 @@ public class McpServer {
         chartProps.set(
             "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
         tools.add(
-            tool("render_chart",
+            toolWithChartViewer("render_chart",
             "Render ONE chart (line, bar, pie, scatter, or bubble). Returns TWO blocks: a PNG "
             + "for the reader, and the same chart as editable SVG for you. PREFER "
             + "compose_dashboard whenever the answer has more than one figure worth showing — "
@@ -1886,7 +2196,10 @@ public class McpServer {
             + "every mark has an id (mark-*, series-*, xtick-*) and every label a class, so "
             + "each of those is a targeted change. Re-render only when the data itself changes. "
             + "Do not move plotted geometry — the coordinates are derived from the values you "
-            + "passed, so shifting a mark makes the picture disagree with its own numbers.",
+            + "passed, so shifting a mark makes the picture disagree with its own numbers. "
+            + "Once this chart is genuinely the whole deliverable, offer the reader a "
+            + "permanent, shareable version of it via publish_report rather than leaving only "
+            + "an inline image that dies with this chat.",
             schema(chartProps, new String[]{})));
 
         ObjectNode dashProps = MAPPER.createObjectNode();
@@ -1928,7 +2241,7 @@ public class McpServer {
             + "panel looks wrong.");
         dashProps.set("panels", panelsProp);
         tools.add(
-            tool("compose_dashboard",
+            toolWithChartViewer("compose_dashboard",
             "THE DEFAULT WAY TO VISUALISE AN ANSWER. Composes charts and headline numbers into "
             + "ONE dashboard, returned as a PNG plus a single self-contained SVG you can "
             + "publish as an artifact or drop into an HTML page. Use this rather than several "
@@ -1940,10 +2253,11 @@ public class McpServer {
             + "that should be compared so they share one axis domain. "
             + "THIS CALL ALONE RETURNS ONLY THE BOARD — no narrative, sourcing or caveats travel "
             + "with it. That is enough for a chart embedded in an answer you are writing "
-            + "yourself, but for any question worth more than a sentence the deliverable is "
-            + "publish_report, not this call in isolation: pass these same panels via its "
-            + "dashboard argument and it composes the board and inlines it under your prose in "
-            + "one page.",
+            + "yourself, but you have just built the board for a question worth more than a "
+            + "sentence — this is exactly the moment to OFFER the reader a full report, not "
+            + "assume either way: pass these same panels via publish_report's dashboard "
+            + "argument only once they say yes, and it composes the board and inlines it under "
+            + "your prose in one page.",
             schema(dashProps, new String[]{"panels"})));
 
         ObjectNode pubProps = MAPPER.createObjectNode();
@@ -2015,7 +2329,8 @@ public class McpServer {
         pubProps.set("claims", prop("array",
             "For an article or claim validation: one object per assertion, as "
             + "[{assertion, verdict, article_value, warehouse_value, independent_value, "
-            + "sources, table, article_vintage, warehouse_vintage, reason, sql}]. `assertion` "
+            + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
+            + "score_claim_ref}]. `assertion` "
             + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
             + "say X' is graded on X). `verdict` is one of: true | mostly true | partially true "
             + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
@@ -2025,15 +2340,21 @@ public class McpServer {
             + "needs at least one. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
-            + "that is a freshness gap, not a falsehood. Renders as a tallied claim-by-claim "
+            + "that is a freshness gap, not a falsehood. If any claim was scored with the "
+            + "score_claim tool, it's cross-checked against Jev's independent verdict "
+            + "automatically -- no field needed. `score_claim_ref` is an optional override: set "
+            + "it to a specific score_claim call's returned id when the automatic ordering "
+            + "would pair the wrong claim with the wrong call. Renders as a tallied claim-by-claim "
             + "table directly under the summary. A publish whose claims rest on your own "
             + "warehouse analysis (any warehouse_value or sql) MUST also carry a `dashboard` or "
             + "follow a render_chart/compose_dashboard call; it is refused otherwise. Claims "
             + "graded purely from publications need no chart."));
         pubProps.set("source_url", prop("string",
-            "For a validation: the URL of the article or page the claims were extracted from. "
-            + "Lets the AskAmerica browser extension find this validation from that page. "
-            + "Defaults to the last web_fetch URL of the session when omitted."));
+            "REQUIRED for a validation (any publish whose claims array is non-empty): the "
+            + "exact URL of the article or page the claims were extracted from. The browser "
+            + "extension looks up a page's validation by this URL, so it must be the precise "
+            + "page under test, not a reference or fact-check source fetched along the way. "
+            + "The publish is refused if this is missing when claims are present."));
         pubProps.set("pinocchios", prop("object",
             "For a validation with two or more claims: a Pinocchio rating (Washington Post "
             + "Fact Checker style), count 0-4 with an explanation. The piece under test is not "
@@ -2094,13 +2415,61 @@ public class McpServer {
                 + "saved to that run's directory as report.html, since the "
                 + "http://127.0.0.1/... link above does not survive past this session."));
         }
+        if (JevClient.isConfigured()) {
+            ObjectNode scoreClaimProps = MAPPER.createObjectNode();
+            scoreClaimProps.set("assertion", prop("string",
+                "The claim under test, with any 'X said:' attribution lead stripped -- grade "
+                + "the quoted statement itself, not whether it was accurately attributed. One "
+                + "call per claim -- don't combine two assertions into one call."));
+            scoreClaimProps.set("evidence", prop("string",
+                "Plain-text summary of what was found: the article's figure, the "
+                + "warehouse_value or independent_value it's checked against, the sql or "
+                + "sources used. Everything the verdict should be based on -- Jev sees only "
+                + "what's in this field, nothing else from the session."));
+            ObjectNode candidateVerdictsProp = MAPPER.createObjectNode();
+            candidateVerdictsProp.put("type", "array");
+            candidateVerdictsProp.put("description",
+                "Allowed verdict values for this claim, e.g. [\"accurate\", \"misleading\", "
+                + "\"false\"]. Omit 'not checkable here' or 'stale vintage' here -- call this "
+                + "tool only once real evidence has been gathered; those two verdicts don't "
+                + "need independent scoring.");
+            scoreClaimProps.set("candidate_verdicts", candidateVerdictsProp);
+            tools.add(
+                tool("score_claim",
+                "Get an independent, calibrated second opinion on one already-evidenced claim "
+                + "before grading it in `publish_report`'s `claims` array. Sends the assertion "
+                + "and your gathered evidence to a separate scoring model (typesafe.ai's Jev) "
+                + "that returns a typed verdict and a 0-4 Pinocchios rating, each with its own "
+                + "confidence -- a real check against self-grading, not a restatement of your "
+                + "own reasoning. Requires warehouse or independent evidence already in hand; "
+                + "this scores a claim, it does not gather evidence for one. `publish_report` "
+                + "automatically cross-checks each graded claim (anything other than 'not "
+                + "checkable here'/'stale vintage') against your most recent score_claim calls "
+                + "for this session, in the order you called them and the order the claims are "
+                + "listed -- no extra field needed, just call this once per claim, in the same "
+                + "order you'll list them, right before publishing. Refuses on disagreement or "
+                + "low confidence. (An explicit `score_claim_ref` on a `claims[]` entry, copied "
+                + "from this call's result, overrides the automatic ordering if you want an "
+                + "unambiguous link instead.)",
+                schema(scoreClaimProps,
+                    new String[]{"assertion", "evidence", "candidate_verdicts"})));
+        }
+
         tools.add(
             tool("publish_report",
-            "Publish a complete answer — narrative, dashboard and citations — as one "
-            + "self-contained HTML page, and return its link. THIS IS THE DELIVERABLE for any "
-            + "question worth more than a sentence: the reader gets the finding, the figures, "
-            + "the caveats and the sourcing in one page they can open, save, print or send, "
-            + "instead of a chart plus prose they have to reassemble. Pass the dashboard "
+            "Build a complete answer — narrative, dashboard and citations — as one "
+            + "self-contained HTML page, and return a LOCAL, EPHEMERAL link to it (dies with "
+            + "this process — it does not survive past this session). Despite the tool name, "
+            + "this is the 'show me a report' / 'show report' action, not the 'publish' or "
+            + "'share' one: when the user says 'show report', call this alone. When the user "
+            + "says 'publish report' or 'share report', that means they want a DURABLE, "
+            + "shareable link instead — call this first (it also builds the page upload_report "
+            + "needs), then register (once per account) then upload_report, and return the "
+            + "durable link upload_report gives back, not this one. For a question worth more "
+            + "than a sentence, THIS IS WHAT TO OFFER THE READER (see the top-level instructions "
+            + "on when to offer vs. call this outright): the finding, the figures, the caveats "
+            + "and the sourcing in one page they can open, save, print or send, instead of a "
+            + "chart plus prose they have to reassemble. Pass the dashboard "
             + "argument to compose and inline the board in the same call. Costs about twenty "
             + "tokens to return, because what comes back is a link rather than the page. "
             + "REQUIRES question_coverage — see its own description; this is not optional "
@@ -2130,11 +2499,15 @@ public class McpServer {
             tool("upload_report",
             "Publish the report most recently built by publish_report to the caller's Studies "
             + "page — durably, under their registered name, unlike publish_report's local link "
-            + "which dies with this process. Takes no arguments: it always uploads whatever "
-            + "publish_report last built in this session. Requires register to have been called "
-            + "first (errors otherwise); also errors if publish_report has not been called yet "
-            + "this session. The uploaded report cannot be edited afterward — only deleted, from "
-            + "the account's own Studies page once logged in there.",
+            + "which dies with this process. This is the actual 'publish report' / 'share "
+            + "report' action: when the user asks to publish or share (as opposed to just "
+            + "'show') a report, this — preceded by publish_report to build the page, and by "
+            + "register once per account — is what to call, and its returned link is the one "
+            + "to hand back, not publish_report's local one. Takes no arguments: it always "
+            + "uploads whatever publish_report last built in this session. Requires register to "
+            + "have been called first (errors otherwise); also errors if publish_report has not "
+            + "been called yet this session. The uploaded report cannot be edited afterward — "
+            + "only deleted, from the account's own Studies page once logged in there.",
             schema(MAPPER.createObjectNode(), new String[]{})));
 
         tools.add(
@@ -2143,7 +2516,34 @@ public class McpServer {
             + "returned. Errors if register has not been called yet.",
             schema(MAPPER.createObjectNode(), new String[]{})));
 
+        tools.add(
+            tool("list_reports",
+            "Every URL-based validation published in the last 24 hours (title, source URL, "
+            + "verdict tally, local report link), newest first — shared across every "
+            + "conversation on this machine, not limited to this one. Local report links still "
+            + "die when the process that built them exits; the row itself and its tally survive "
+            + "that. For durable, permanent history use mysite's Studies page link instead. "
+            + "Lists only validations (a publish_report call with a claims array and a "
+            + "source_url) — a general research report with no claims, or a validation of "
+            + "pasted/static text with no source URL, was never keyed by URL and will not "
+            + "appear here.",
+            schema(MAPPER.createObjectNode(), new String[]{})));
+
         ObjectNode reportProps = MAPPER.createObjectNode();
+        ObjectNode reportTypeProp = prop(
+            "string",
+            "Which of the two kinds this is — always pick one, there is no third option: "
+                + "'defect' — a table or column EXISTS and returned a value, but the value is "
+                + "wrong, inconsistent, or internally contradictory (a query error after "
+                + "retrying, an implausible aggregate, two fields that should reconcile but "
+                + "don't). 'sourcing' — the data plain isn't here: search_catalog/describe_table "
+                + "confirm no table covers this measure, or a table's declared coverage window "
+                + "doesn't reach the period asked about. Downstream triage files these into "
+                + "different queues (a defect gets root-caused and fixed in place; a sourcing "
+                + "gap gets evaluated for a new ingest), so guessing wrong sends it to the wrong "
+                + "team, not just the wrong label.");
+        reportTypeProp.putArray("enum").add("defect").add("sourcing");
+        reportProps.set("type", reportTypeProp);
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
         reportProps.set(
             "body",
@@ -2155,8 +2555,11 @@ public class McpServer {
             tool("report_issue",
             "Record a data quality issue, query error, or missing data to a local issue log. "
             + "Use this when a query fails unexpectedly after retrying, data appears incorrect, "
-            + "or a schema/table is missing. Do not use for routine SQL errors the user can correct.",
-            schema(reportProps, new String[]{"subject", "body"})));
+            + "or a schema/table is missing. Do not use for routine SQL errors the user can "
+            + "correct. Every report MUST be classified via `type` (defect or sourcing) — an "
+            + "unclassified report cannot be routed and is effectively invisible to whichever "
+            + "team should act on it.",
+            schema(reportProps, new String[]{"type", "subject", "body"})));
 
         ObjectNode externalProps = MAPPER.createObjectNode();
         externalProps.set(
@@ -2172,7 +2575,26 @@ public class McpServer {
             + "cannot fill. Call this ONLY after search_catalog and describe_table show the "
             + "data is genuinely absent, or the question falls outside a table's declared "
             + "coverage window. Returns endpoint pointers and usage caveats — it does not "
-            + "fetch anything, and the results are not askamerica data.",
+            + "fetch anything, and the results are not askamerica data. A confirmed gap changes "
+            + "WHERE the answer comes from, not how hard to look for it: pursue these endpoints "
+            + "and ordinary web research (web_search, web_fetch) with the same thoroughness and "
+            + "cross-referencing an analyst with no connector at all would use for the same "
+            + "question, not a lighter pass because a specialized tool exists elsewhere in your "
+            + "toolset. Before publishing, assess independently whether your research "
+            + "constitutes an EXHAUSTIVE study for a question of this scope — actual documents "
+            + "read via web_fetch, not search-result snippets, and where the question implies a "
+            + "full universe (every state, every facility, every county), an attempt to "
+            + "enumerate that universe rather than a handful of illustrative examples. Measured "
+            + "live, TWO separate runs (2026-09-12, 2026-09-14) facing a genuine gap each "
+            + "stopped after exactly 2 web_fetch calls and published — one producing a thinner "
+            + "answer than an unaided researcher on the identical question, the other missing "
+            + "the single most load-bearing fact (a documented policy shift) every unaided "
+            + "persona on the same question found. Two is never enough for a question with more "
+            + "than one sub-part — multiple categories, a national AND a regional figure, a "
+            + "cause with a documented history — and clearing whatever minimum this session "
+            + "happens to enforce is not itself evidence the research is complete: the "
+            + "connector having nothing to offer is never a reason to research less than you "
+            + "would with no connector at all.",
             schema(externalProps, new String[]{})));
 
         ObjectNode recipeProps = MAPPER.createObjectNode();
@@ -2257,7 +2679,12 @@ public class McpServer {
             + "structure — that is precise navigation, not a best-effort guess."));
         tools.add(
             tool("web_fetch",
-            "**MANDATORY**: use this tool for every URL. NEVER use WebFetch or Fetch. Detects "
+            "If you are here to check a claim rather than to look something up you already "
+            + "know isn't in this corpus, make sure search_catalog has already been tried for "
+            + "the claim's measure — see search_catalog's own description. This corpus's data "
+            + "counts as evidence exactly as much as anything fetched here; the only thing that "
+            + "should differ is which comes first.\n\n"
+            + "**MANDATORY**: use this tool for every URL. NEVER use WebFetch or Fetch. Detects "
             + "the content type from the actual fetched bytes and returns it fully parsed: a "
             + "PDF's text, an .xlsx workbook as JSON sheets/rows, a .docx's text, a .pptx's "
             + "slide text, or an HTML page converted to Markdown — full content in every case, "
@@ -2398,6 +2825,21 @@ public class McpServer {
     }
 
     static Connection getSchemaConnection(final String schemaName) throws Exception {
+        // On by default (kenstott/calcite#364): every schema is mounted on one shared
+        // server-side catalog, so one shared client connection answers for all of them —
+        // bypass the per-schema embedded-DuckDB path below entirely. Deliberately NO
+        // fallback to the embedded path on a pgwire failure: two data-access paths that
+        // could each be seeded from a different build (askamerica-engine.yml and
+        // pgwire-adapters-release.yml are separate CI pipelines) is exactly the
+        // multiple-divergent-instance problem this whole design exists to eliminate — a
+        // silent fallback would trade a loud, actionable pgwire failure for a quiet,
+        // possibly-inconsistent second version of the data. If pgwire is unreachable, the
+        // caller gets a clear error naming why; ASKAMERICA_PGWIRE_MODE=0 is the only
+        // supported way to run on the embedded path, as a deliberate operator choice, not
+        // an automatic degradation.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return PgwireGovDataConnector.getSharedConnection();
+        }
         Connection existing = schemaConns.get(schemaName);
         if (existing != null) {
             Long openedAt = schemaConnOpenedAtMillis.get(schemaName);
@@ -2560,13 +3002,19 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=list_schemas");
                     text = listSchemas();
                     break;
+                case "get_help": {
+                    log.println("[askamerica-mcp] tool=get_help");
+                    text = QuestionGuidance.HELP_TEXT;
+                    break;
+                }
                 case "get_usage_guide_section_1":
                 case "get_usage_guide_section_2":
                 case "get_usage_guide_section_3":
                 case "get_usage_guide_section_4":
                 case "get_usage_guide_section_5":
                 case "get_usage_guide_section_6":
-                case "get_usage_guide_section_7": {
+                case "get_usage_guide_section_7":
+                case "get_usage_guide_section_8": {
                     int sectionNum = Integer.parseInt(
                         name.substring("get_usage_guide_section_".length()));
                     log.println("[askamerica-mcp] tool=" + name);
@@ -2581,6 +3029,33 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=search_catalog query=" + q);
                     text = searchCatalog(q, lim);
                     diagnostics = recipeReminderDiagnostics();
+                    break;
+                }
+                case "score_claim": {
+                    String assertion = args.path("assertion").asText();
+                    String evidence = args.path("evidence").asText();
+                    List<String> candidateVerdicts = textArray(args.path("candidate_verdicts"));
+                    if (candidateVerdicts.isEmpty()) {
+                        throw new IllegalArgumentException(
+                            "candidate_verdicts must list at least one allowed verdict.");
+                    }
+                    log.println("[askamerica-mcp] tool=score_claim assertion="
+                        + assertion.substring(0, Math.min(80, assertion.length())));
+                    JevClient.ScoreResult r = JevClient.scoreClaim(
+                        assertion, evidence, candidateVerdicts);
+                    String ref = "sc-" + SCORE_CLAIM_SEQ.incrementAndGet();
+                    SCORE_CLAIM_RESULTS.put(ref, r);
+                    SCORE_CLAIM_LOG.add(r);
+                    ObjectNode out = MAPPER.createObjectNode();
+                    out.put("score_claim_ref", ref);
+                    out.put("verdict", r.verdict);
+                    out.put("verdict_confidence", r.verdictConfidence);
+                    out.put("pinocchios_count", r.pinocchiosCount);
+                    out.put("pinocchios_confidence", r.pinocchiosConfidence);
+                    out.put("low_confidence",
+                        r.verdictConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD
+                        || r.pinocchiosConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD);
+                    text = out.toString();
                     break;
                 }
                 case "list_tables": {
@@ -2617,10 +3092,20 @@ public class McpServer {
                     break;
                 }
                 case "report_issue": {
+                    String issueType = args.path("type").asText("");
+                    if (!"defect".equals(issueType) && !"sourcing".equals(issueType)) {
+                        return errorResponse(id, -32602,
+                            "report_issue requires \"type\" to be exactly \"defect\" or "
+                                + "\"sourcing\", got " + jsonStr(issueType) + " — pick whichever "
+                                + "actually applies rather than omitting it or inventing a third "
+                                + "value; see the tool's own description for how to tell them "
+                                + "apart.");
+                    }
                     String subject = args.path("subject").asText();
                     String issueBody = args.path("body").asText();
-                    log.println("[askamerica-mcp] tool=report_issue subject=" + subject);
-                    text = reportIssue(subject, issueBody);
+                    log.println("[askamerica-mcp] tool=report_issue type=" + issueType
+                        + " subject=" + subject);
+                    text = reportIssue(issueType, subject, issueBody);
                     break;
                 }
                 case "deliver_report": {
@@ -2664,8 +3149,7 @@ public class McpServer {
                     break;
                 }
                 case "web_fetch": {
-                    LAST_FETCH_URL = args.path("url").asText();
-                    log.println("[askamerica-mcp] tool=web_fetch url=" + LAST_FETCH_URL);
+                    log.println("[askamerica-mcp] tool=web_fetch url=" + args.path("url").asText());
                     text = webFetch(args);
                     break;
                 }
@@ -3020,6 +3504,15 @@ public class McpServer {
                     diagnostics = r.diagnostics;
                     break;
                 }
+                case "hhi_concentration": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    log.println("[askamerica-mcp] tool=hhi_concentration value_col=" + valueCol);
+                    StatsOutput r = hhiConcentrationTool(sql, valueCol);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
                 case "partial_correlation": {
                     String sql = args.path("sql").asText();
                     String x = args.path("x").asText();
@@ -3210,7 +3703,9 @@ public class McpServer {
                     java.util.List<String> gateProblems = new java.util.ArrayList<>();
                     JsonNode claims = args.path("claims");
                     if (claims.isArray() && claims.size() > 0) {
+                        addIfPresent(gateProblems, enforceSourceUrlPresent(args));
                         addIfPresent(gateProblems, enforceClaimShape(claims));
+                        addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
                         JsonNode pinocchios = args.path("pinocchios");
                         boolean isSplit = pinocchios.isObject()
@@ -3259,6 +3754,7 @@ public class McpServer {
                     addIfPresent(gateProblems, enforceStatisticalProvenance(secs));
                     addIfPresent(gateProblems, enforceRecurringEventRecency(rTitle, rSub, secs));
                     addIfPresent(gateProblems, enforceRecipeConsulted());
+                    addIfPresent(gateProblems, enforceResearchDepthOnGap());
                     if (!gateProblems.isEmpty()) {
                         StringBuilder combined = new StringBuilder(
                             "This report cannot be published yet -- " + gateProblems.size()
@@ -3303,10 +3799,9 @@ public class McpServer {
                         html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         "text/html; charset=utf-8", "html");
                     if (claims.isArray() && claims.size() > 0) {
+                        // Guaranteed non-blank here: enforceSourceUrlPresent already refused
+                        // the publish above if it were missing.
                         String srcUrl = args.path("source_url").asText(null);
-                        if (srcUrl == null || srcUrl.trim().isEmpty()) {
-                            srcUrl = LAST_FETCH_URL;
-                        }
                         ClaimsServer.record(srcUrl, args.path("title").asText(null), url, claims);
                     }
                     log.println("[askamerica-mcp] tool=publish_report sections=" + secs.size()
@@ -3318,6 +3813,16 @@ public class McpServer {
                     // markdown-renders tool-result text, Claude included.
                     String linkLabel = (rTitle == null || rTitle.isEmpty())
                         ? "Open the report" : rTitle;
+                    // Deliberately NOT auto-uploaded durably here, even when an account is
+                    // already registered: "show report"/publish_report alone means the reader
+                    // gets the ephemeral local link only. A durable copy is a separate ask —
+                    // "publish report" or "share report" — which the calling model routes to
+                    // upload_report itself (see that tool's own description). Auto-uploading on
+                    // every publish_report call regardless of the user's own wording was tried
+                    // and reverted (2026-09-18): it silently answered "show" and "share" the
+                    // same way, which is exactly the distinction the caller asked for. Skipped
+                    // entirely in EVAL_MODE either way, so a comparative-eval run never posts
+                    // real content to a real Studies account.
                     String linkLine = url == null
                         ? "Report built (" + html.length() + " bytes) but no local server is "
                             + "available to serve it."
@@ -3326,7 +3831,13 @@ public class McpServer {
                         + "the whole answer in one page: " + secs.size() + " section(s), "
                         + srcs.size() + " citation(s)"
                         + (boardSvg == null ? "" : ", dashboard inlined")
-                        + ". It is self-contained and local to this machine."
+                        + ". This link is served locally by this engine process and stops "
+                        + "working the moment this process exits — it is NOT a durable URL, "
+                        + "regardless of how self-contained the page itself is."
+                        + (EVAL_MODE ? "" : " If the reader asked to publish or share this "
+                            + "(rather than just see it), call `register` once (if not already "
+                            + "done this session) and then `upload_report` right after this call "
+                            + "to get a permanent Studies-page link instead.")
                         + evalReportNote;
                     // Every report's first section is required to be the summary (see this
                     // tool's own "sections" schema). Order is: the dashboard image (already
@@ -3357,6 +3868,12 @@ public class McpServer {
                     text = acct == null
                         ? "Not registered yet — call register first."
                         : "Studies page: " + acct.studiesUrl;
+                    break;
+                }
+                case "list_reports": {
+                    java.util.List<ObjectNode> reports = ClaimsServer.listAll();
+                    log.println("[askamerica-mcp] tool=list_reports count=" + reports.size());
+                    text = formatReportList(reports);
                     break;
                 }
                 case "compose_dashboard": {
@@ -3401,14 +3918,18 @@ public class McpServer {
                         + (dTitle == null ? "" : " '" + dTitle + "'") + " — "
                         + (panels.size() - stats) + " chart panel(s), " + stats
                         + " stat tile(s).\n\n"
-                        + (dashUrl == null ? ""
-                            : "GIVE THE READER THIS LINK: " + dashUrl + "\n"
-                            + "It opens the dashboard full size in a browser, on this machine "
-                            + "only. Share the link — do NOT paste the SVG below into your "
-                            + "reply. The SVG is roughly 7,000 tokens; the link is twenty, and "
-                            + "it shows the same picture.\n\n")
+                        // Dropped the "GIVE THE READER THIS LINK" instruction here (2026-09-18):
+                        // confirmed live that the calling model does not reliably relay a raw
+                        // http://127.0.0.1 link into its own reply even when told to verbatim —
+                        // the PNG below is already the deliverable, and this link is ephemeral
+                        // (dies with the process) and machine-local-only regardless, so a link
+                        // that silently never reaches the reader added confusion without
+                        // reliable benefit. dashUrl itself is kept (not removed) since
+                        // oversizeSvgNotice below still needs it as the only fetch path for an
+                        // SVG too large to inline.
                         + "The image above is the same board as a PNG, already viewable "
-                        + "inline."
+                        + "inline. For a real, shareable link (not tied to this machine or "
+                        + "session), call register once and then upload_report."
                         + (wantSvg
                             ? (oversizeSvgNotice(chartSvg, dashUrl) == null
                                 ? " The block after this is the SVG source you asked for. Panel "
@@ -3523,6 +4044,9 @@ public class McpServer {
                 default:
                     return errorResponse(id, -32602, "Unknown tool: " + name);
             }
+        // isError=true result below marks this as a business-logic failure, distinguishable
+        // from a real result; not a silent substitution.
+        // fallback-guard: allow -- see comment above
         } catch (Exception e) {
             long ms = System.currentTimeMillis() - t0;
             String compact = compactErrorMessage(e);
@@ -3572,6 +4096,8 @@ public class McpServer {
             ObjectNode errBody = MAPPER.createObjectNode();
             errBody.set("content", errContent);
             errBody.put("isError", true);
+            // fallback-guard: allow -- isError=true marks this as a business-logic failure,
+            // distinguishable from a real result; not a silent substitution
             return result(id, errBody);
         }
 
@@ -3608,11 +4134,25 @@ public class McpServer {
             imageBlock.put("type", "image");
             imageBlock.put("data", java.util.Base64.getEncoder().encodeToString(chartPng));
             imageBlock.put("mimeType", "image/png");
+            // Without this, a client has no signal that the image is meant for the human to
+            // actually look at (vs. incidental data the model alone should read) and is free to
+            // bury it inside the raw tool-call detail — see the MCP spec's own image-content
+            // example, which tags exactly this case with audience:["user"].
+            ObjectNode imageAnnotations = MAPPER.createObjectNode();
+            imageAnnotations.putArray("audience").add("user");
+            imageAnnotations.put("priority", 0.9);
+            imageBlock.set("annotations", imageAnnotations);
             content.add(imageBlock);
         }
         ObjectNode textBlock = MAPPER.createObjectNode();
         textBlock.put("type", "text");
         textBlock.put("text", text);
+        // This is the narrative answer — the markdown a reader actually wants — not internal
+        // bookkeeping, so tag it for the user same as the image, not just the model.
+        ObjectNode textAnnotations = MAPPER.createObjectNode();
+        textAnnotations.putArray("audience").add("user").add("assistant");
+        textAnnotations.put("priority", 0.8);
+        textBlock.set("annotations", textAnnotations);
         content.add(textBlock);
 
         // The same scene as editable markup, alongside the picture. The PNG is what a host
@@ -3625,6 +4165,11 @@ public class McpServer {
             ObjectNode svgBlock = MAPPER.createObjectNode();
             svgBlock.put("type", "text");
             svgBlock.put("text", chartSvg);
+            // Raw markup, not prose — audience:assistant-only keeps a client from dumping
+            // ~7,000 tokens of SVG source into the visible chat the way it would a real answer.
+            ObjectNode svgAnnotations = MAPPER.createObjectNode();
+            svgAnnotations.putArray("audience").add("assistant");
+            svgBlock.set("annotations", svgAnnotations);
             content.add(svgBlock);
         }
 
@@ -3637,6 +4182,10 @@ public class McpServer {
             ObjectNode diagBlock = MAPPER.createObjectNode();
             diagBlock.put("type", "text");
             diagBlock.put("text", diagnostics.toString());
+            // Machinery for the model to act on, not something a reader should see verbatim.
+            ObjectNode diagAnnotations = MAPPER.createObjectNode();
+            diagAnnotations.putArray("audience").add("assistant");
+            diagBlock.set("annotations", diagAnnotations);
             content.add(diagBlock);
         }
         // A tool with no diagnostics envelope still owes the caller the rewrite it made.
@@ -3646,6 +4195,9 @@ public class McpServer {
             ObjectNode noticeBlock = MAPPER.createObjectNode();
             noticeBlock.put("type", "text");
             noticeBlock.put("text", "Note: " + standaloneRepair);
+            ObjectNode noticeAnnotations = MAPPER.createObjectNode();
+            noticeAnnotations.putArray("audience").add("user").add("assistant");
+            noticeBlock.set("annotations", noticeAnnotations);
             content.add(noticeBlock);
         }
 
@@ -3841,6 +4393,9 @@ public class McpServer {
     private static int countRows(String json) {
         try {
             return MAPPER.readTree(json).size();
+        // -1 is the established "unknown/inapplicable" sentinel used elsewhere in this file
+        // for a row count that could not be determined -- never confused with a real count.
+        // fallback-guard: allow -- documented sentinel, see comment above
         } catch (Exception e) {
             return -1;
         }
@@ -3872,6 +4427,27 @@ public class McpServer {
      * would be far worse than none, because query vectors from a different pipeline than the
      * corpus still return rows, just silently mis-ranked.
      */
+    /**
+     * Whether {@code configureQueryEmbedder()} (called once at startup, before toolDefs() is
+     * ever built) found or was given a usable embedder. Same three properties it resolves —
+     * checked here rather than cached separately so there is exactly one source of truth for
+     * "is an embedder actually reachable."
+     */
+    private static boolean embedderConfigured() {
+        // In pgwire mode, SEMANTIC_SEARCH/EMBED execute wherever Calcite actually runs — the
+        // shared pgwire-govdata server's own JVM (started via JPype from Python), not this
+        // client process — so this client's own local calcite.embed.* properties describe
+        // nothing relevant. The pgwire-govdata bundle always carries the embedder (see
+        // pgwire-adapters-release.yml's "Pre-download EMBED() model" step and
+        // pgwire_calcite/embedder.py), so pgwire mode alone is the correct signal here.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return true;
+        }
+        return !System.getProperty("calcite.embed.command", "").isEmpty()
+            || !System.getProperty("calcite.embed.home", "").isEmpty()
+            || !System.getProperty("calcite.embed.script", "").isEmpty();
+    }
+
     private static void configureQueryEmbedder() {
         if (!System.getProperty("calcite.embed.command", "").isEmpty()
             || !System.getProperty("calcite.embed.home", "").isEmpty()
@@ -4017,8 +4593,12 @@ public class McpServer {
         }
         ArrayNode hits = Catalog.search(query.trim(), limit);
         ArrayNode extSources = ExternalSources.matchesFor(query.trim(), 5);
+        String opener = searchCatalogSessionOpener();
         if (hits.size() == 0) {
             ObjectNode empty = MAPPER.createObjectNode();
+            if (opener != null) {
+                empty.put("before_you_start", opener);
+            }
             empty.put("matches", 0);
             empty.put("query", query.trim());
             empty.put("hint",
@@ -4033,6 +4613,9 @@ public class McpServer {
             return empty.toString();
         }
         ObjectNode out = MAPPER.createObjectNode();
+        if (opener != null) {
+            out.put("before_you_start", opener);
+        }
         out.set("matches", hits);
         addUnmatchedTerms(out, query.trim(), hits);
         if (extSources.size() > 0) {
@@ -4649,6 +5232,42 @@ public class McpServer {
     private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_CONSULTED =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    /** Below this confidence (on either the verdict or the Pinocchios score), a
+     *  {@code score_claim} result counts as unresolved rather than a real second opinion. */
+    private static final double SCORE_CLAIM_CONFIDENCE_THRESHOLD = 0.6;
+
+    /** Every {@code score_claim} result this session, keyed by the {@code ref} id returned
+     *  from that call. When a {@code claims[]} entry carries a {@code score_claim_ref}, this
+     *  is the authoritative lookup {@link #enforceScoreClaimAgreement} uses to cross-check it.
+     *  Measured live (q136, 2026-09-20, twice in a row): first an exact-assertion-text match
+     *  failed because the calling model reliably paraphrases the assertion between the
+     *  {@code score_claim} call and the {@code claims[]} entry it ends up publishing (dropped
+     *  quote marks, an inserted "as a group", a trimmed clause); switching to an id fixed the
+     *  matching itself, but a third run showed the model calls {@code score_claim} anyway and
+     *  then never copies the id into `claims[]` at all -- it treats the call as research, not
+     *  as a field to wire through. {@code score_claim_ref} stays available for a caller that
+     *  does supply it, but {@link #SCORE_CLAIM_LOG} below is what actually gets used in
+     *  practice. */
+    private static final java.util.Map<String, JevClient.ScoreResult> SCORE_CLAIM_RESULTS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Every {@code score_claim} result this session, in call order, for the recency-based
+     *  fallback match in {@link #enforceScoreClaimAgreement} when a claim carries no explicit
+     *  {@code score_claim_ref}: the last N calls (N = the number of still-unmatched graded
+     *  claims) are paired positionally, in order, with those claims as listed in {@code
+     *  claims[]}. Verified against the one real multi-claim run available (q136, 2026-09-20):
+     *  the model's most recent score_claim call for each claim landed in the same relative
+     *  order as the claims it went on to publish, even though earlier retry attempts had left
+     *  stale calls for the same claims earlier in this list -- taking the last N, not the
+     *  first N, is what makes that alignment work. A heuristic, not a guarantee; the refusal
+     *  message it produces says so, so a genuine mismatch can be explained away rather than
+     *  silently trusted. */
+    private static final java.util.List<JevClient.ScoreResult> SCORE_CLAIM_LOG =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    private static final java.util.concurrent.atomic.AtomicInteger SCORE_CLAIM_SEQ =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+
     /**
      * Eval-only delivery channel for a client with no filesystem of its own.
      *
@@ -4683,8 +5302,6 @@ public class McpServer {
     /** Whether any chart or dashboard has been rendered this session, in any mode; the
      *  validation chart gate reads this rather than the eval-only PNG holders. */
     private static volatile boolean CHART_RENDERED;
-    /** The URL most recently handed to web_fetch: the default source_url of a validation. */
-    private static volatile String LAST_FETCH_URL;
 
     /**
      * The most recent {@code compose_dashboard} render at 2x, kept separately from
@@ -4735,12 +5352,74 @@ public class McpServer {
     // ── Per-process tool-call log ─────────────────────────────────────────────
 
     /** Every tool call this process has served, oldest first, capped so a runaway session
-     *  cannot grow it without bound. One process serves one client session, so this is the
-     *  session's audit trail: what was asked of the warehouse, in what order, how long it
-     *  took, and what the server warned about. */
+     *  cannot grow it without bound. "One process serves one client session" does NOT hold in
+     *  practice -- Claude Desktop connects an MCP server once per app launch and reuses that
+     *  same process across every chat window opened afterward, with no protocol-level signal
+     *  marking where one conversation ends and the next begins. Confirmed live (2026-09-18): a
+     *  report-validation check cited a SQL exclusion predicate from a completely unrelated,
+     *  hours-earlier test conversation as if it belonged to the report just being published.
+     *  Read this directly only for a true whole-process dump (eval mode's writeCallLog, which
+     *  legitimately wants everything since each eval run gets its own fresh process); every
+     *  provenance/disclosure check that means "what did THIS conversation actually do" must go
+     *  through {@link #recentCallLogSnapshot()} instead. */
     private static final java.util.List<ObjectNode> CALL_LOG =
         java.util.Collections.synchronizedList(new java.util.ArrayList<ObjectNode>());
     private static final int CALL_LOG_MAX = 2000;
+
+    /**
+     * {@link #CALL_LOG}, cut down to calls that plausibly belong to the report being validated
+     * right now, not a stale earlier conversation sharing the same long-lived process (see
+     * {@link #CALL_LOG}'s javadoc for why that happens). The boundary is the most recent PRIOR
+     * SUCCESSFUL {@code publish_report} call, if any -- everything from just after it onward is
+     * kept, and everything at-or-before it is dropped as belonging to whatever report that call
+     * concluded.
+     *
+     * <p>A REJECTED {@code publish_report} attempt (one of the {@code enforce*} gates threw, so
+     * this same entry carries an {@code error} field) is deliberately NOT a boundary. Measured
+     * live (2026-09-21, an Al Jazeera tariff validation): a report needing several
+     * {@code publish_report} round trips to clear every gate -- an already-documented, common
+     * pattern (see {@link #addIfPresent}'s javadoc) -- had its own genuine, earlier
+     * {@code search_catalog}/{@code query} calls cut out by this boundary on the SECOND attempt,
+     * because the first, rejected attempt had already been logged as tool="publish_report" and
+     * counted as "a report concluded here." {@link #enforceTableProvenance} and
+     * {@link #enforceResearchDepthOnGap} then refused the second attempt for research the model
+     * had genuinely already done, quoting "no query call anywhere this session" for a query
+     * whose SQL was sitting right there in the claim being validated. A rejected attempt means
+     * the model is still working on the SAME report, not concluding it -- only a call that
+     * actually returned (no {@code error} field) marks the end of one.
+     *
+     * <p>Deliberately NOT {@code compose_dashboard}, even though it can also mark the end of a
+     * prior, unrelated conversation: {@code compose_dashboard} is routinely called as an
+     * intermediate step of the CURRENT report too (queries first produce the data, then
+     * compose_dashboard turns it into panels, then publish_report), so treating it as a cutoff
+     * would drop that same report's own supporting queries -- turning this into a false
+     * negative on exactly the disclosure check it's meant to protect.
+     *
+     * <p>This is a mitigation, not a complete fix: a conversation that calls compose_dashboard
+     * and stops (no publish_report) leaves no boundary behind it, so a LATER, unrelated
+     * publish_report elsewhere in the same process can still reach back past it. MCP over a
+     * shared stdio connection gives a server no protocol-level way to know a new conversation
+     * started at all; this uses the one real signal CALL_LOG actually contains for "a report
+     * concluded here" instead of guessing from a time window.
+     */
+    private static java.util.List<ObjectNode> recentCallLogSnapshot() {
+        java.util.List<ObjectNode> snapshot;
+        synchronized (CALL_LOG) {
+            snapshot = new java.util.ArrayList<>(CALL_LOG);
+        }
+        int boundary = -1;
+        for (int i = snapshot.size() - 1; i >= 0; i--) {
+            ObjectNode entry = snapshot.get(i);
+            if ("publish_report".equals(entry.path("tool").asText("")) && !entry.has("error")) {
+                boundary = i;
+                break;
+            }
+        }
+        return boundary < 0
+            ? snapshot
+            : new java.util.ArrayList<>(snapshot.subList(boundary + 1, snapshot.size()));
+    }
+
     private static final java.util.concurrent.atomic.AtomicInteger CALL_SEQ =
         new java.util.concurrent.atomic.AtomicInteger();
 
@@ -4756,6 +5435,38 @@ public class McpServer {
         new java.util.HashSet<>(java.util.Arrays.asList(
             "column", "table", "year", "place_id", "county_fips", "state_fips", "series",
             "series_id", "field"));
+
+    /**
+     * The raw value plus, when it looks like a database identifier (contains an underscore --
+     * SQL column names in this corpus are SNAKE_CASE), a humanized alternate a model would
+     * plausibly write in prose instead of the literal name -- e.g. {@code REPORTER_CODE} ->
+     * {@code reporter}. {@link #enforceHighSeverityDisclosure} originally required the raw
+     * identifier verbatim, which measured live (2026-09-21, session dc65f4962d2e) rejected the
+     * same report 9 times in a row: no model naturally writes "PRODN_PRACTICE_DESC" in a
+     * caveat sentence, so the check was nearly unsatisfiable by construction rather than
+     * strict-but-fair. Returning multiple aliases lets the disclosure check accept whichever
+     * one the model actually used instead of demanding the exact SQL identifier.
+     */
+    private static java.util.List<String> identifyingAliases(String raw) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (raw == null || raw.isEmpty()) {
+            return out;
+        }
+        out.add(raw);
+        if (raw.indexOf('_') < 0) {
+            return out;
+        }
+        String humanized = raw.toLowerCase(java.util.Locale.ROOT).replace('_', ' ').trim();
+        for (String suffix : new String[]{" desc", " code", " cd", " id", " fips", " name"}) {
+            if (humanized.endsWith(suffix)) {
+                humanized = humanized.substring(0, humanized.length() - suffix.length()).trim();
+            }
+        }
+        if (!humanized.isEmpty() && !humanized.equalsIgnoreCase(raw) && !out.contains(humanized)) {
+            out.add(humanized);
+        }
+        return out;
+    }
 
     private static void recordCall(String tool, JsonNode args, long ms, int rows,
             ObjectNode diagnostics, String error) {
@@ -4776,6 +5487,18 @@ public class McpServer {
                 for (String t : tables) {
                     tablesArr.add(t);
                 }
+            }
+        } else if (("describe_table".equals(tool) || "list_tables".equals(tool))
+                && args != null && args.hasNonNull("table") && args.hasNonNull("schema")) {
+            // describe_table/list_tables never carry a "sql" field, so without this branch a
+            // report correctly citing "confirmed via describe_table" for a table it genuinely
+            // inspected would be false-flagged by enforceTableProvenance below exactly as if it
+            // had never touched the table at all -- a describe_table call IS real provenance for
+            // a schema-shape claim ("this table lacks field X"), just not for a data-value claim.
+            String schema = args.get("schema").asText("").toLowerCase(java.util.Locale.ROOT);
+            String table = args.get("table").asText("").toLowerCase(java.util.Locale.ROOT);
+            if (!schema.isEmpty() && !table.isEmpty()) {
+                e.putArray("tables").add(schema + "." + table);
             }
         }
         if (args != null && args.isObject()) {
@@ -4818,22 +5541,44 @@ public class McpServer {
                 // them here.
                 if ("high".equals(severity) && !"explicit_exclusion".equals(type)
                         && !"recipe_not_consulted".equals(type)) {
-                    java.util.List<String> keyTerms = new java.util.ArrayList<>();
+                    // Each identifying field becomes its own alias GROUP -- the disclosure gate
+                    // is satisfied for that field if the report mentions ANY alias in its group,
+                    // not all of them. "column"/"field" also pull in rollup_values (the actual
+                    // data labels involved, e.g. "ALL PRODUCTION PRACTICES") since those are far
+                    // more likely to show up in a model's prose than the raw SQL identifier.
+                    java.util.List<java.util.List<String>> termGroups = new java.util.ArrayList<>();
                     for (String field : HIGH_DIAGNOSTIC_IDENTIFYING_FIELDS) {
                         JsonNode v = w.get(field);
-                        if (v != null && v.isValueNode() && !v.isNull()) {
-                            keyTerms.add(v.asText());
+                        if (v == null || !v.isValueNode() || v.isNull()) {
+                            continue;
+                        }
+                        java.util.List<String> aliases = identifyingAliases(v.asText());
+                        if ("column".equals(field) || "field".equals(field)) {
+                            for (JsonNode rv : w.path("rollup_values")) {
+                                if (rv.isValueNode() && !rv.isNull()) {
+                                    String s = rv.asText();
+                                    if (!s.isEmpty() && !aliases.contains(s)) {
+                                        aliases.add(s);
+                                    }
+                                }
+                            }
+                        }
+                        if (!aliases.isEmpty()) {
+                            termGroups.add(aliases);
                         }
                     }
-                    if (!keyTerms.isEmpty()) {
+                    if (!termGroups.isEmpty()) {
                         if (highDiag == null) {
                             highDiag = e.putArray("high_diagnostics");
                         }
                         ObjectNode hd = highDiag.addObject();
                         hd.put("type", type);
-                        ArrayNode kt = hd.putArray("key_terms");
-                        for (String term : keyTerms) {
-                            kt.add(term);
+                        ArrayNode groupsArr = hd.putArray("key_term_groups");
+                        for (java.util.List<String> group : termGroups) {
+                            ArrayNode g = groupsArr.addArray();
+                            for (String term : group) {
+                                g.add(term);
+                            }
                         }
                     }
                 }
@@ -5025,6 +5770,100 @@ public class McpServer {
         return c.hasNonNull(key) && !c.get(key).asText().trim().isEmpty();
     }
 
+    /**
+     * Cross-checks each graded claim (excluding "not checkable here"/"stale vintage", which
+     * need no scoring) against a {@code score_claim} result this session. Two ways a claim gets
+     * matched to a result, tried in order:
+     * <ol>
+     *   <li>An explicit {@code score_claim_ref} on the claim, resolved against {@link
+     *   #SCORE_CLAIM_RESULTS} -- authoritative when present. A ref that doesn't resolve is a
+     *   copy error, refused rather than silently dropped.</li>
+     *   <li>Recency-positional fallback, from {@link #SCORE_CLAIM_LOG}: the claims left
+     *   unmatched by step 1, in {@code claims[]} order, are paired with the LAST that-many
+     *   entries of the session's score_claim call log, in call order. Exists because the
+     *   explicit-ref path measured live as unused in practice (q136, 2026-09-20) -- the model
+     *   calls score_claim but doesn't wire the id through -- while the positional pairing
+     *   still lines results up correctly, because a model scoring several claims in one pass
+     *   tends to call score_claim for each in roughly the order it lists them, and taking the
+     *   LAST N calls (not the first N) discards stale calls left over from an earlier,
+     *   since-revised publish_report attempt.</li>
+     * </ol>
+     * A heuristic match says so in its refusal message, so a genuine false pairing can be
+     * explained away in the claim's own text rather than silently trusted either way.
+     */
+    private static String enforceScoreClaimAgreement(JsonNode claims) {
+        if (SCORE_CLAIM_RESULTS.isEmpty()) {
+            return null;
+        }
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        java.util.List<JsonNode> unmatched = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(
+                java.util.Locale.ROOT);
+            if ("not checkable here".equals(verdict) || "stale vintage".equals(verdict)) {
+                continue;
+            }
+            String ref = c.path("score_claim_ref").asText("").trim();
+            if (ref.isEmpty()) {
+                unmatched.add(c);
+                continue;
+            }
+            JevClient.ScoreResult scored = SCORE_CLAIM_RESULTS.get(ref);
+            if (scored == null) {
+                problems.add("the assertion \"" + c.path("assertion").asText("").trim()
+                    + "\" carries score_claim_ref \"" + ref + "\", which does not match any "
+                    + "score_claim call made this session -- check for a typo, or drop the "
+                    + "field if this claim was never scored.");
+                continue;
+            }
+            checkScoreClaimAgreement(c, scored, false, problems);
+        }
+        int n = Math.min(unmatched.size(), SCORE_CLAIM_LOG.size());
+        if (n > 0) {
+            java.util.List<JevClient.ScoreResult> recent;
+            synchronized (SCORE_CLAIM_LOG) {
+                recent = new java.util.ArrayList<>(
+                    SCORE_CLAIM_LOG.subList(SCORE_CLAIM_LOG.size() - n, SCORE_CLAIM_LOG.size()));
+            }
+            for (int i = 0; i < n; i++) {
+                checkScoreClaimAgreement(unmatched.get(i), recent.get(i), true, problems);
+            }
+        }
+        if (problems.isEmpty()) {
+            return null;
+        }
+        return "validation refused: " + String.join(" ALSO: ", problems);
+    }
+
+    private static void checkScoreClaimAgreement(JsonNode c, JevClient.ScoreResult scored,
+        boolean positional, java.util.List<String> problems) {
+        String assertion = c.path("assertion").asText("").trim();
+        String submittedVerdict = c.path("verdict").asText("").trim().toLowerCase(
+            java.util.Locale.ROOT);
+        String basis = positional
+            ? "score_claim's independent check (matched by call order, not an explicit ref)"
+            : "score_claim's independent check";
+        boolean lowConfidence = scored.verdictConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD
+            || scored.pinocchiosConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD;
+        if (lowConfidence) {
+            problems.add(basis + " of \"" + assertion + "\" came back low-confidence (verdict "
+                + scored.verdictConfidence + ", pinocchios " + scored.pinocchiosConfidence
+                + ") -- gather more evidence before grading this claim, or grade it 'not "
+                + "checkable here' with a reason instead. If this pairing looks wrong (a "
+                + "positional match, not an explicit score_claim_ref), say so instead of "
+                + "gathering more evidence for the wrong claim.");
+            return;
+        }
+        if (!submittedVerdict.equals(scored.verdict.toLowerCase(java.util.Locale.ROOT))) {
+            problems.add("the assertion \"" + assertion + "\" is submitted as '"
+                + submittedVerdict + "' but " + basis + " returned '" + scored.verdict
+                + "' (confidence " + scored.verdictConfidence + "). Resolve the disagreement "
+                + "-- recheck the evidence, or explain in the claim's own text why the "
+                + "independent score is wrong -- before resubmitting. If this pairing looks "
+                + "wrong (a positional match, not an explicit score_claim_ref), say so instead.");
+        }
+    }
+
     /** Appends {@code problem} to {@code problems} when non-null. Every {@code enforce*} gate
      *  in {@code publish_report}'s pipeline returns a violation message (or null when it
      *  passes) rather than throwing directly, so the handler can run every gate regardless of
@@ -5035,6 +5874,29 @@ public class McpServer {
         if (problem != null && !problem.isEmpty()) {
             problems.add(problem);
         }
+    }
+
+    /** A validation with no {@code source_url} publishes a report the browser extension can
+     *  never find from the page it was validating. This used to silently default to
+     *  {@code LAST_FETCH_URL} -- whatever page {@code web_fetch} last touched in the session,
+     *  which is very often NOT the article under test: any reference/fact-check fetch made
+     *  after the article (a common step in a real validation) silently overwrote it. Measured
+     *  live 2026-09-23 (amny.com validation): the report published successfully, but the
+     *  extension's popup on the article's own page reported "No validation published for this
+     *  page yet." because the stored key was some other URL entirely. Per this project's
+     *  no-silent-fallback rule, refuse instead of guessing -- the caller already has the exact
+     *  URL (the extension puts it in the prompt), so there is no good reason not to pass it. */
+    private static String enforceSourceUrlPresent(JsonNode args) {
+        String srcUrl = args.path("source_url").asText(null);
+        if (srcUrl != null && !srcUrl.trim().isEmpty()) {
+            return null;
+        }
+        return "validation refused: no `source_url` was given. Pass the exact URL of the "
+            + "article or page these claims were extracted from -- without it the browser "
+            + "extension has no way to find this validation from that page, and there is no "
+            + "reliable way to infer it (guessing from the last web_fetch call silently picked "
+            + "the wrong URL whenever a reference/fact-check fetch happened after the article "
+            + "itself, which produced a published report the extension could never find).";
     }
 
     /** A validation whose claims rest on the caller's own warehouse analysis must show it: refuse
@@ -5088,10 +5950,7 @@ public class McpServer {
         if (RECIPE_CONSULTED.get()) {
             return null;
         }
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         boolean fired = false;
         for (ObjectNode e : snapshot) {
             for (JsonNode t : e.path("diagnostic_types")) {
@@ -5116,14 +5975,113 @@ public class McpServer {
             + "calling it at all does.";
     }
 
+    /** Below this many distinct URLs fetched, a pure-web-fallback report is refused by {@link
+     *  #enforceResearchDepthOnGap()}. Chosen from two measured live failures at 1-2 fetches,
+     *  not a guess at what "enough" looks like in the abstract. */
+    private static final int MIN_FETCHES_ON_PURE_FALLBACK = 5;
+
+    /**
+     * A "pure web fallback" report -- no {@code query} call anywhere this session returned any
+     * rows, meaning askamerica's own data had nothing to contribute to this question -- gets
+     * held to two things an unaided web-only researcher couldn't skip either: actually
+     * checking whether the corpus covers this before assuming it doesn't, and then researching
+     * the open web as deeply as that researcher would need to. Measured live, THREE separate
+     * runs on the same question: 2026-09-12 and an early 2026-09-14 rerun each stopped after
+     * 1-2 {@code web_fetch} calls and published -- one producing a measurably thinner answer
+     * than an unaided persona on the identical question, the other missing the single most
+     * load-bearing fact (a documented policy shift) every unaided persona found. Advisory text
+     * on {@code suggest_external_sources} alone did not fix either -- neither run called that
+     * tool at all, so the guidance never entered its context. A hard fetch-count gate fixed
+     * the depth problem (a later 2026-09-14 rerun was refused at 2 fetches, retried at 5, and
+     * published a materially better answer) but exposed a second failure the fetch count alone
+     * didn't catch: that same corrected run skipped {@code search_catalog}/{@code list_tables}/
+     * {@code describe_table} entirely, going straight to the web without ever checking whether
+     * the corpus actually covered the question -- assuming absence instead of confirming it.
+     * Both checks are therefore gated here, not just the one that failed most recently.
+     *
+     * <p>Only engages when askamerica genuinely had nothing: any {@code query} call this
+     * session that returned at least one row means real warehouse data fed the report, and
+     * this gate does not apply, however many or few URLs were fetched or catalog calls made
+     * alongside it -- a hybrid report is not the failure mode this catches.
+     */
+    private static String enforceResearchDepthOnGap() {
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
+        boolean productiveQuery = false;
+        boolean catalogChecked = false;
+        java.util.Set<String> fetchedUrls = new java.util.HashSet<>();
+        for (ObjectNode e : snapshot) {
+            String tool = e.path("tool").asText("");
+            if ("query".equals(tool) && e.path("rows").asInt(0) > 0) {
+                productiveQuery = true;
+            }
+            if ("search_catalog".equals(tool) || "list_tables".equals(tool)
+                    || "describe_table".equals(tool)) {
+                catalogChecked = true;
+            }
+            if ("web_fetch".equals(tool)) {
+                String url = e.path("args").path("url").asText(null);
+                if (url != null && !url.isEmpty()) {
+                    fetchedUrls.add(url);
+                }
+            }
+        }
+        if (productiveQuery) {
+            return null;
+        }
+        boolean enoughFetches = fetchedUrls.size() >= MIN_FETCHES_ON_PURE_FALLBACK;
+        if (catalogChecked && enoughFetches) {
+            return null;
+        }
+        StringBuilder msg = new StringBuilder(
+            "no query call anywhere this session returned any rows -- askamerica's own data "
+            + "had nothing to contribute to this question. ");
+        if (!catalogChecked) {
+            msg.append("search_catalog, list_tables, and describe_table were NEVER called "
+                + "this session -- before falling back to the open web, actually check the "
+                + "catalog and confirm the gap is real, rather than assuming coverage is "
+                + "absent. ");
+        }
+        if (!enoughFetches) {
+            msg.append("Only ").append(fetchedUrls.size()).append(" distinct URL(s) were "
+                + "fetched via web_fetch -- below even the bare minimum sanity-check floor of ")
+                .append(MIN_FETCHES_ON_PURE_FALLBACK)
+                .append(" this session enforces. A confirmed gap changes WHERE the answer "
+                + "comes from, not how hard to look for it: fetch and read enough distinct, "
+                + "substantive sources (actual documents, not search-result snippets) to make "
+                + "this an EXHAUSTIVE study for a question of this scope, not a passing amount "
+                + "-- where the question implies a full universe (every state, every facility, "
+                + "every county), that means attempting to enumerate it, not sampling a few "
+                + "examples. Clearing this floor is not itself evidence the research is "
+                + "complete, only that it isn't the worst failure mode measured in production. "
+                + "The connector having nothing to offer is never a reason to research less "
+                + "than you would with no connector at all.");
+        }
+        return msg.toString();
+    }
+
     /** Broader than {@link #DISCLOSURE_WORDS} on purpose -- this gate polices "was this
      *  specific high-severity problem disclosed" for diagnostic types whose own wording talks
      *  about reliability/coverage, not necessarily exclusion, so "unreliable"/"caveat"/
-     *  "limitation"/coverage-gap language counts too. */
+     *  "limitation"/coverage-gap language counts too.
+     *
+     *  <p>Measured live (2026-09-22, q12): a {@code low_coverage} diagnostic on
+     *  {@code energy.eia_electricity_generation} rejected the same report 11 times in a row
+     *  despite a caveat paragraph naming the exact table, the exact year, and plainly
+     *  disclosing that the table "returned zero rows both times" and that "no figure in this
+     *  report is drawn from" it -- a caveat any human reader would recognize instantly, but
+     *  none of those phrases matched this pattern's original word list (which required
+     *  "excluded"/"unreliable"/"caveat"/"coverage gap" and similar, none of which the model's
+     *  own natural phrasing happened to use). Broadened below to cover the additional ordinary
+     *  ways a model discloses a broken/empty query result. */
     private static final java.util.regex.Pattern CAVEAT_WORDS = java.util.regex.Pattern
         .compile("(?i)exclud|omitt|dropped|left out|not included|removed from|without |"
             + "unreliable|caveat|limitation|caution|not reliable|coverage gap|not published|"
-            + "not (?:as )?trustworthy|treat.{0,20}as unreliable");
+            + "not (?:as )?trustworthy|treat.{0,20}as unreliable|"
+            + "zero rows|no rows|not drawn from|is not from|does not (?:come|draw) from|"
+            + "high-severity|data-quality (?:finding|issue|problem)|"
+            + "did not reconcile|does(?:n't| not) reconcile|"
+            + "no data|not loaded|not available|returned zero|empty result|"
+            + "flagged as (?:a |an )?(?:defect|issue|problem|gap)");
 
     /**
      * A high-severity diagnostic (broken_field, low_coverage, ...) that fired on a query whose
@@ -5138,20 +6096,26 @@ public class McpServer {
      * column/metro in the final report -- only a general, unrelated caveat existed elsewhere.
      */
     private static String enforceHighSeverityDisclosure(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
-        java.util.LinkedHashMap<String, java.util.List<String>> byType = new java.util.LinkedHashMap<>();
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
+        // Each entry in a type's list is one identifying field's alias GROUP -- satisfied if
+        // ANY alias in the group is disclosed, not all of them (see identifyingAliases).
+        java.util.LinkedHashMap<String, java.util.List<java.util.List<String>>> byType =
+            new java.util.LinkedHashMap<>();
         for (ObjectNode e : snapshot) {
             for (JsonNode hd : e.path("high_diagnostics")) {
                 String type = hd.path("type").asText("");
-                java.util.List<String> terms = byType.computeIfAbsent(type,
+                java.util.List<java.util.List<String>> groups = byType.computeIfAbsent(type,
                     k -> new java.util.ArrayList<>());
-                for (JsonNode kt : hd.path("key_terms")) {
-                    String t = kt.asText();
-                    if (t.length() >= 2 && !terms.contains(t)) {
-                        terms.add(t);
+                for (JsonNode g : hd.path("key_term_groups")) {
+                    java.util.List<String> terms = new java.util.ArrayList<>();
+                    for (JsonNode kt : g) {
+                        String t = kt.asText();
+                        if (t.length() >= 2) {
+                            terms.add(t);
+                        }
+                    }
+                    if (!terms.isEmpty()) {
+                        groups.add(terms);
                     }
                 }
             }
@@ -5167,25 +6131,30 @@ public class McpServer {
         String body = text.toString().replaceAll("<[^>]+>", " ");
         String lower = body.toLowerCase(java.util.Locale.ROOT);
         java.util.LinkedHashMap<String, java.util.List<String>> undisclosed = new java.util.LinkedHashMap<>();
-        for (java.util.Map.Entry<String, java.util.List<String>> ent : byType.entrySet()) {
-            for (String term : ent.getValue()) {
-                String termLower = term.toLowerCase(java.util.Locale.ROOT);
+        for (java.util.Map.Entry<String, java.util.List<java.util.List<String>>> ent : byType.entrySet()) {
+            for (java.util.List<String> group : ent.getValue()) {
                 boolean nearCaveat = false;
-                int from = 0;
-                int idx;
-                while ((idx = lower.indexOf(termLower, from)) >= 0) {
-                    int winStart = Math.max(0, idx - DISCLOSURE_PROXIMITY_CHARS);
-                    int winEnd = Math.min(body.length(), idx + termLower.length()
-                        + DISCLOSURE_PROXIMITY_CHARS);
-                    if (CAVEAT_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
-                        nearCaveat = true;
+                for (String term : group) {
+                    String termLower = term.toLowerCase(java.util.Locale.ROOT);
+                    int from = 0;
+                    int idx;
+                    while ((idx = lower.indexOf(termLower, from)) >= 0) {
+                        int winStart = Math.max(0, idx - DISCLOSURE_PROXIMITY_CHARS);
+                        int winEnd = Math.min(body.length(), idx + termLower.length()
+                            + DISCLOSURE_PROXIMITY_CHARS);
+                        if (CAVEAT_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                            nearCaveat = true;
+                            break;
+                        }
+                        from = idx + termLower.length();
+                    }
+                    if (nearCaveat) {
                         break;
                     }
-                    from = idx + termLower.length();
                 }
                 if (!nearCaveat) {
                     undisclosed.computeIfAbsent(ent.getKey(), k -> new java.util.ArrayList<>())
-                        .add(term);
+                        .add(group.get(0));
                 }
             }
         }
@@ -5207,10 +6176,7 @@ public class McpServer {
     }
 
     private static String enforceExclusionDisclosure(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         java.util.LinkedHashSet<String> predicates = new java.util.LinkedHashSet<>();
         // key term per predicate: the quoted literal if present, else the column/identifier the
         // predicate tests (e.g. "metro_nonmetro" out of "metro_nonmetro IS NOT NULL").
@@ -5304,7 +6270,10 @@ public class McpServer {
     private static final java.util.regex.Pattern PROVENANCE_CLAIM_WORDS = java.util.regex.Pattern
         .compile("(?i)computed from|queried (?:directly|live|from)|sourced directly|"
             + "live[- ]scann?(?:ed)?|fetched directly from|pulled directly from|"
-            + "directly (?:via|from) the warehouse|warehouse[- ]native|live[- ]quer(?:y|ied)");
+            + "directly (?:via|from) the warehouse|warehouse[- ]native|live[- ]quer(?:y|ied)|"
+            + "confirmed (?:via|by|through)|inspect(?:ed|ing)|checked (?:its|the|both|all)?"
+            + "\\s*(?:schema|column|field)|column list|full column|does not (?:carry|have)|"
+            + "lacks? (?:the|a|any)?\\s*field");
 
     /**
      * A report claiming it queried, computed from, or live-scanned a table it never actually
@@ -5324,10 +6293,7 @@ public class McpServer {
      * gate has any business policing.
      */
     private static String enforceTableProvenance(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         java.util.Set<String> queried = new java.util.HashSet<>();
         for (ObjectNode e : snapshot) {
             for (JsonNode t : e.path("tables")) {
@@ -5380,6 +6346,23 @@ public class McpServer {
             + "regression (?:of|predicting|shows|showed)|test(?:ed)? (?:for|whether)|"
             + "p\\s*[<=]\\s*0|p-value");
 
+    /** Marks a statistical-method mention as an EXTERNAL source's result, not a claim that
+     *  askamerica itself ran the method this session — a citation like "Weill (2023) finds a
+     *  diff-in-differences..." or "a Federal Reserve working paper's DiD result" reads as a
+     *  run-claim to {@link #STAT_CLAIM_WORDS} (it contains "finds"/"result") with no way to
+     *  tell it apart from "we computed this" by verb shape alone. Measured live (q173,
+     *  2026-09-15): a report correctly attributing a Fed working paper's own DiD finding was
+     *  rejected nine times in a row by {@link #enforceStatisticalProvenance} before the model
+     *  worked around it by rewording away from any verb this gate recognizes — the guard was
+     *  right that no {@code diff_in_diff} call backed the number, but wrong that this needed
+     *  policing at all, since the report never claimed askamerica ran it. A citation marker
+     *  anywhere in the same window defuses the check the way an in-session tool call would. */
+    private static final java.util.regex.Pattern EXTERNAL_SOURCE_ATTRIBUTION = java.util.regex.Pattern
+        .compile("(?i)\\((?:19|20)\\d{2}\\)|et al\\.?|\\bworking paper\\b|\\bpaper'?s\\b|"
+            + "\\bstudy'?s\\b|\\bstudies\\b|\\baccording to\\b|\\bpublished (?:in|by)\\b|"
+            + "\\bresearchers?\\b|\\bpress release\\b|\\bjournal\\b|\\banalysis by\\b|"
+            + "\\bfinding(?:s)? (?:from|by|in)\\b|\\breport (?:from|by)\\b|\\bcited\\b");
+
     /** Named statistical method -> the MCP tool(s) that actually perform it. A report claiming
      *  one of these ran needs a matching call somewhere in {@code calls.jsonl}; naming the
      *  method as a general concept with no run-claim verb nearby is not policed. */
@@ -5409,6 +6392,9 @@ public class McpServer {
             new String[]{"hypothesis_test"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)Gini coefficient"),
             new String[]{"gini_coefficient"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)\\bHHI\\b|Herfindahl[- ]Hirschman"),
+            new String[]{"hhi_concentration"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)quantile binning"),
             new String[]{"quantile_binning_test"});
     }
@@ -5425,10 +6411,7 @@ public class McpServer {
      * ("an OLS regression could test this") is not policed.
      */
     private static String enforceStatisticalProvenance(java.util.List<ReportPage.Section> secs) {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         java.util.Set<String> toolsCalled = new java.util.HashSet<>();
         for (ObjectNode e : snapshot) {
             toolsCalled.add(e.path("tool").asText(""));
@@ -5456,7 +6439,9 @@ public class McpServer {
                 }
                 int winStart = Math.max(0, mm.start() - DISCLOSURE_PROXIMITY_CHARS);
                 int winEnd = Math.min(body.length(), mm.end() + DISCLOSURE_PROXIMITY_CHARS);
-                if (STAT_CLAIM_WORDS.matcher(body.substring(winStart, winEnd)).find()) {
+                String window = body.substring(winStart, winEnd);
+                if (STAT_CLAIM_WORDS.matcher(window).find()
+                        && !EXTERNAL_SOURCE_ATTRIBUTION.matcher(window).find()) {
                     unsupported.add(mm.group().trim() + " (needs one of: "
                         + String.join(", ", ent.getValue()) + ")");
                 }
@@ -5743,10 +6728,7 @@ public class McpServer {
      *  behind every figure is on the page a reader is handed rather than only the calls the
      *  author chose to cite. Skipped when nothing ran. */
     private static ReportPage.Section queryAppendix() {
-        java.util.List<ObjectNode> snapshot;
-        synchronized (CALL_LOG) {
-            snapshot = new java.util.ArrayList<>(CALL_LOG);
-        }
+        java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
         StringBuilder sb = new StringBuilder();
         int n = 0;
         for (ObjectNode e : snapshot) {
@@ -5855,6 +6837,8 @@ public class McpServer {
         try {
             return SqlParser.create("VALUES 1").getMetadata()
                 .isReservedWord(token.toUpperCase(java.util.Locale.ROOT));
+        // false ("not reserved") fails toward no special handling, not a fake positive.
+        // fallback-guard: allow -- safe-direction sentinel, see comment above
         } catch (RuntimeException e) {
             return false;
         }
@@ -7453,6 +8437,9 @@ public class McpServer {
             ObjectNode out = MAPPER.createObjectNode();
             out.set("diagnostics", inner);
             return out;
+        // null already means "nothing to report" on this function's normal path too --
+        // not distinguishable from a failure, but not a substituted value either.
+        // fallback-guard: allow -- consistent with this function's normal null case
         } catch (Exception e) {
             return null;
         }
@@ -8316,6 +9303,8 @@ public class McpServer {
         try {
             int y = Integer.parseInt(raw.trim());
             return (y >= 1800 && y <= 2200) ? Integer.valueOf(y) : null;
+        // Null rather than a guess -- documented above: never deflated against an assumed year.
+        // fallback-guard: allow -- documented null-not-a-guess convention
         } catch (NumberFormatException e) {
             return null;
         }
@@ -8904,6 +9893,8 @@ public class McpServer {
         }
         try {
             return Integer.valueOf(raw.trim());
+        // Documented above: null when it holds neither -- not a substituted value.
+        // fallback-guard: allow -- documented null convention, see method doc
         } catch (NumberFormatException e) {
             return null;
         }
@@ -9003,6 +9994,15 @@ public class McpServer {
         StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, new String[]{valueCol});
         double[] value = ex.column(valueCol);
         StatsEngine.GiniResult result = StatsEngine.giniCoefficient(value);
+        ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, java.util.Collections.<String>emptyList(), ex);
+    }
+
+    private static StatsOutput hhiConcentrationTool(String sql, String valueCol) throws Exception {
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, new String[]{valueCol});
+        double[] value = ex.column(valueCol);
+        StatsEngine.HHIResult result = StatsEngine.hhiConcentration(value);
         ObjectNode out = result.toJson(MAPPER);
         return statsResult(out, sql, java.util.Collections.<String>emptyList(), ex);
     }
@@ -9160,6 +10160,9 @@ public class McpServer {
     private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit) {
         try {
             return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit);
+        // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
+        // with a successful diagnostics result.
+        // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
@@ -9287,6 +10290,47 @@ public class McpServer {
     private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_REMINDED =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    /** Fires the session-opening note at most once per session, on the first search_catalog --
+     *  same chokepoint {@link #RECIPE_REMINDED} already uses, and for the same reason: it is
+     *  where a run orients itself before choosing a method, not after. See {@link
+     *  #searchCatalogSessionOpener()}. */
+    private static final java.util.concurrent.atomic.AtomicBoolean SESSION_OPENING_SHOWN =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * A short note prepended ONCE, ahead of the matches themselves, the first time
+     * search_catalog is called this session -- content that reads as something that just
+     * happened in response to this call, not standing documentation competing with everything
+     * else in the instructions preamble or a tool description read at every tool-selection
+     * decision.
+     *
+     * <p>Two things measured live this session belong here specifically because neither has a
+     * mechanical backstop the way {@link #enforceResearchDepthOnGap} does: (1) a confirmed gap
+     * is not license to sample a few examples when the question implies a full universe --
+     * askamerica cleared every other requirement on one run while spot-checking 2 of ~164 VA
+     * facilities instead of attempting the systematic sweep an unaided persona ran against the
+     * same public API; (2) an empty or thin catalog match is not evidence the corpus lacks the
+     * answer until list_tables/describe_table confirm it.
+     *
+     * @return the note text, or null when already shown this session
+     */
+    private static String searchCatalogSessionOpener() {
+        if (!SESSION_OPENING_SHOWN.compareAndSet(false, true)) {
+            return null;
+        }
+        return "The catalog search results are below, but before you consider that a verdict on "
+            + "coverage: an empty or thin match here means keep checking (list_tables, "
+            + "describe_table) before concluding the corpus lacks the answer, not that it does. "
+            + "And whether this call finds the answer here or you end up researching the open "
+            + "web instead, hold yourself to the same standard either way -- assess "
+            + "independently, before you publish, whether what you have is an EXHAUSTIVE study "
+            + "for a question of this scope. Where the question implies a full universe (every "
+            + "state, every facility, every county), that means attempting to enumerate it, not "
+            + "sampling a few illustrative examples, regardless of which source -- this corpus "
+            + "or the web -- ends up answering it. This note appears once, at the start of this "
+            + "session.";
+    }
+
     /**
      * A standalone diagnostics envelope reminding the caller to consult the recipe catalog.
      *
@@ -9340,6 +10384,9 @@ public class McpServer {
         try {
             return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
                 totalRows, dropped, droppedLabels);
+        // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
+        // with a successful diagnostics result.
+        // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
@@ -9711,6 +10758,9 @@ public class McpServer {
                 }
                 return out.toString();
             }
+        // The error text itself is returned as the tool's answer -- distinguishable from a
+        // successful parse result, not a substituted value.
+        // fallback-guard: allow -- error text is the answer, see comment above
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch xlsx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as an .xlsx workbook: " + e.getMessage()
@@ -9776,6 +10826,7 @@ public class McpServer {
                 }
                 return out.toString();
             }
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch pdf parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .pdf file: " + e.getMessage();
@@ -9910,6 +10961,7 @@ public class McpServer {
                         + "relevant part.");
             }
             return out.toString();
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch docx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .docx file: " + e.getMessage()
@@ -10010,6 +11062,7 @@ public class McpServer {
                     + "are the relevant ones.");
             }
             return out.toString();
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch pptx parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as a .pptx file: " + e.getMessage()
@@ -10048,6 +11101,7 @@ public class McpServer {
             out.put("markdown", markdown);
             out.put("truncated", truncated);
             return out.toString();
+        // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch HTML parse error: " + e.getMessage());
             return "Could not parse " + urlStr + " as HTML: " + e.getMessage();
@@ -10121,6 +11175,9 @@ public class McpServer {
             FetchedContent fetched;
             try {
                 fetched = fetchUrlContent(urlStr, method, body, bodyContentType);
+            // fe.getMessage() below is the error text itself returned as the answer,
+            // distinguishable from a successful fetch.
+            // fallback-guard: allow -- see comment above
             } catch (FetchException fe) {
                 log.println("[askamerica-mcp] web_fetch fetch error: " + fe.getMessage());
                 return fe.getMessage();
@@ -10138,6 +11195,9 @@ public class McpServer {
                     log.println("[askamerica-mcp] web_fetch url=" + urlStr + " gunzipped "
                         + bytes.length + " -> " + decompressed.length + " bytes");
                     bytes = decompressed;
+                // out below carries an explicit "error" field, not the undecompressed bytes --
+                // distinguishable from a successful decompress.
+                // fallback-guard: allow -- explicit error field, see comment above
                 } catch (java.io.IOException ge) {
                     ObjectNode out = MAPPER.createObjectNode();
                     out.put("source_url", urlStr);
@@ -10251,6 +11311,9 @@ public class McpServer {
                 return "html";
             }
             return "text";
+        // "unknown" is a third, distinct outcome from this function's other two ("html"/"text")
+        // -- not confused with either.
+        // fallback-guard: allow -- distinct sentinel, see comment above
         } catch (java.nio.charset.CharacterCodingException notUtf8) {
             return "unknown";
         }
@@ -10379,7 +11442,7 @@ public class McpServer {
      * a report; telling them it was filed when it was not is worse than telling them to
      * retry.
      */
-    private static String reportIssue(String subject, String body) {
+    private static String reportIssue(String type, String subject, String body) {
         HttpURLConnection c = null;
         try {
             String payload = "{"
@@ -10387,6 +11450,7 @@ public class McpServer {
                 + "\"build\":" + jsonStr(BUILD_ID) + ","
                 + "\"session_id\":" + jsonStr(SESSION_ID) + ","
                 + "\"reported_at\":" + jsonStr(java.time.Instant.now().toString()) + ","
+                + "\"type\":" + jsonStr(type) + ","
                 + "\"subject\":" + jsonStr(subject) + ","
                 + "\"body\":" + jsonStr(body)
                 + "}";
@@ -10419,6 +11483,8 @@ public class McpServer {
             log.println("[askamerica-mcp] report_issue rejected: HTTP " + code);
             return "Could not record the issue (HTTP " + code
                 + "). Nothing was filed — please retry, or report it at askamerica.ai.";
+        // Explicit failure message returned as the answer -- distinguishable from success.
+        // fallback-guard: allow -- explicit failure message, see comment above
         } catch (Exception e) {
             log.println("[askamerica-mcp] report_issue error: " + e.getMessage());
             return "Could not record the issue: " + e.getMessage()
@@ -10470,6 +11536,7 @@ public class McpServer {
             }
             log.println("[askamerica-mcp] register rejected: HTTP " + code);
             return "Could not register (HTTP " + code + "). Nothing was saved — please retry.";
+        // fallback-guard: allow -- explicit failure message, same pattern as report_issue
         } catch (Exception e) {
             log.println("[askamerica-mcp] register error: " + e.getMessage());
             return "Could not register: " + e.getMessage() + ". Please retry.";
@@ -10485,20 +11552,39 @@ public class McpServer {
      * to the caller's Studies page via POST /v1/studies/reports. Takes no arguments of its
      * own — there is exactly one thing to upload, whatever publish_report last built.
      */
-    private static String uploadReport() {
-        Account acct = ACCOUNT;
-        if (acct == null) {
-            return "Not registered yet — call register first, then upload_report.";
+    /** Outcome of a durable-upload attempt, whether triggered explicitly by the {@code
+     *  upload_report} tool or automatically from {@code publish_report}. Exactly one of
+     *  {@code url} or {@code error} is set. */
+    private static final class UploadResult {
+        final String url;
+        final String error;
+
+        private UploadResult(String url, String error) {
+            this.url = url;
+            this.error = error;
         }
-        LastReport report = LAST_REPORT;
-        if (report == null) {
-            return "No report has been published yet this session — call publish_report first, "
-                + "then upload_report.";
+
+        static UploadResult ok(String url) {
+            return new UploadResult(url, null);
         }
+
+        static UploadResult failed(String error) {
+            return new UploadResult(null, error);
+        }
+    }
+
+    /**
+     * POSTs {@code report} to the account's Studies page. Pulled out of {@link #uploadReport()}
+     * so {@code publish_report} can call it automatically for an already-registered account
+     * (see the call site there) without duplicating the HTTP handling -- a caller who already
+     * registered once should never need to remember a second tool call just to keep a report
+     * from dying with this process.
+     */
+    private static UploadResult doUploadReport(Account acct, LastReport report) {
         String apiKey = UsageMetering.resolveApiKey(null);
         if (apiKey == null || apiKey.isEmpty()) {
-            return "No engine API key is configured — upload_report needs the same key used to "
-                + "connect to askamerica.";
+            return UploadResult.failed("No engine API key is configured — upload needs the same "
+                + "key used to connect to askamerica.");
         }
         HttpURLConnection c = null;
         try {
@@ -10524,23 +11610,42 @@ public class McpServer {
                 JsonNode resp = MAPPER.readTree(c.getInputStream());
                 String reportUrl = resp.path("url").asText(null);
                 log.println("[askamerica-mcp] upload_report succeeded (HTTP " + code + ")");
-                return "Uploaded: " + reportUrl;
+                return UploadResult.ok(reportUrl);
             }
             if (code == 401 || code == 403) {
                 log.println("[askamerica-mcp] upload_report rejected: HTTP " + code);
-                return "Upload rejected (HTTP " + code + ") — the API key is invalid or has "
-                    + "been revoked. Do not retry; the account holder needs a new key.";
+                return UploadResult.failed("Upload rejected (HTTP " + code + ") — the API key "
+                    + "is invalid or has been revoked. Do not retry; the account holder needs a "
+                    + "new key.");
             }
             log.println("[askamerica-mcp] upload_report failed: HTTP " + code);
-            return "Could not upload (HTTP " + code + "). Nothing was published — please retry.";
+            return UploadResult.failed("Could not upload (HTTP " + code + "). Nothing was "
+                + "published — please retry.");
+        // UploadResult.failed(...) is an explicit failure sentinel -- not confused with a
+        // successful UploadResult.ok(...).
+        // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
             log.println("[askamerica-mcp] upload_report error: " + e.getMessage());
-            return "Could not upload: " + e.getMessage() + ". Please retry.";
+            return UploadResult.failed("Could not upload: " + e.getMessage() + ". Please retry.");
         } finally {
             if (c != null) {
                 c.disconnect();
             }
         }
+    }
+
+    private static String uploadReport() {
+        Account acct = ACCOUNT;
+        if (acct == null) {
+            return "Not registered yet — call register first, then upload_report.";
+        }
+        LastReport report = LAST_REPORT;
+        if (report == null) {
+            return "No report has been published yet this session — call publish_report first, "
+                + "then upload_report.";
+        }
+        UploadResult result = doUploadReport(acct, report);
+        return result.url != null ? "Uploaded: " + result.url : result.error;
     }
 
     private static void persistAccount(Account acct) {
@@ -10561,6 +11666,41 @@ public class McpServer {
         }
     }
 
+    /** Renders {@link ClaimsServer#listAll()}'s summaries as the {@code list_reports} tool's
+     *  text result — a scannable table, not raw JSON, matching every other tool's plain-text
+     *  output. */
+    private static String formatReportList(java.util.List<ObjectNode> reports) {
+        if (reports.isEmpty()) {
+            return "No URL-based validations published in the last 24 hours.";
+        }
+        StringBuilder sb = new StringBuilder(reports.size()
+            + " validation(s) published in the last 24 hours, across every conversation on "
+            + "this machine (newest first):\n\n");
+        for (ObjectNode r : reports) {
+            String title = r.path("title").asText("");
+            String url = r.path("url").asText("");
+            String reportUrl = r.path("report_url").asText("");
+            String publishedAt = r.path("published_at").asText("");
+            StringBuilder tallyStr = new StringBuilder();
+            JsonNode tally = r.path("tally");
+            java.util.Iterator<String> fields = tally.fieldNames();
+            while (fields.hasNext()) {
+                String f = fields.next();
+                if (tallyStr.length() > 0) {
+                    tallyStr.append(", ");
+                }
+                tallyStr.append(tally.get(f).asInt()).append(' ').append(f);
+            }
+            sb.append("- ").append(title.isEmpty() ? "(untitled)" : title).append('\n')
+                .append("  source: ").append(url).append('\n')
+                .append("  report: ").append(reportUrl).append('\n')
+                .append("  published: ").append(publishedAt).append('\n')
+                .append("  tally: ").append(tallyStr.length() == 0 ? "(none)" : tallyStr)
+                .append("\n\n");
+        }
+        return sb.toString().stripTrailing();
+    }
+
     private static Account loadAccount() {
         try {
             java.io.File f = new java.io.File(
@@ -10575,6 +11715,9 @@ public class McpServer {
             }
             return new Account(node.path("name").asText(null), node.path("org").asText(null),
                 studiesUrl);
+        // Low severity: a corrupt account file just means re-registration is asked for --
+        // not a wrong-data risk, only a re-prompt.
+        // fallback-guard: allow -- low-severity, see comment above
         } catch (Exception e) {
             return null;
         }
@@ -10631,6 +11774,14 @@ public class McpServer {
      * before ever re-extracting, so a later process restart won't overwrite this rebuild.
      */
     private static String updateSchema() throws Exception {
+        // Not reachable over the shared pgwire connection (kenstott/calcite#364): it isn't a
+        // CalciteConnection to unwrap, and a schema rebuild there would affect every process
+        // sharing the server, not just this one. No side-channel admin path exists yet.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return "update_schema is not available while ASKAMERICA_PGWIRE_MODE is enabled "
+                + "(this engine is a thin client of a shared pgwire-govdata server; "
+                + "rebuild that server's catalog directly instead).";
+        }
         Connection conn = getCatalogConnection();
         org.apache.calcite.jdbc.CalciteConnection calciteConn =
             conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
@@ -10670,6 +11821,14 @@ public class McpServer {
         String normalized = limit.trim();
         System.setProperty("calcite.duckdb.memoryLimit", normalized);
 
+        // Same reason as update_schema: the shared pgwire connection isn't a CalciteConnection,
+        // and DuckDB's memory_limit there is server-wide, shared across every connected client.
+        if (PgwireGovDataConnector.isEnabled()) {
+            return "set_memory_limit is not available while ASKAMERICA_PGWIRE_MODE is enabled "
+                + "(this engine is a thin client of a shared pgwire-govdata server; "
+                + "set its memory limit directly instead).";
+        }
+
         Connection conn = getCatalogConnection();
         org.apache.calcite.jdbc.CalciteConnection calciteConn =
             conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
@@ -10682,16 +11841,23 @@ public class McpServer {
     }
 
     private static boolean loadTelemetryOptIn() {
+        java.io.File f =
+            new java.io.File(System.getProperty("user.home"), ".askamerica/telemetry.json");
+        if (!f.exists()) {
+            return true;
+        }
         try {
-            java.io.File f =
-                new java.io.File(System.getProperty("user.home"), ".askamerica/telemetry.json");
-            if (!f.exists()) {
-                return true;
-            }
             JsonNode node = MAPPER.readTree(f);
             return node.path("optIn").asBoolean(true);
+        // A corrupt/unreadable preference file must fail toward LESS sharing, not more --
+        // the opposite of the !f.exists() default above, which is the documented
+        // fresh-install case, not an error case.
+        // fallback-guard: allow -- privacy-safe direction on read failure, see comment above
         } catch (Exception e) {
-            return true;
+            log.println("[askamerica-mcp] Could not read telemetry preference from "
+                + f.getAbsolutePath() + " (" + e.getClass().getSimpleName() + ": "
+                + e.getMessage() + ") — defaulting to opted out until it can be read.");
+            return false;
         }
     }
 
@@ -10864,6 +12030,24 @@ public class McpServer {
         t.put("name", name);
         t.put("description", description);
         t.set("inputSchema", inputSchema);
+        return t;
+    }
+
+    /**
+     * Same as {@link #tool(String, String, ObjectNode)}, plus the MCP Apps
+     * {@code _meta.ui.resourceUri} pointer (spec 2026-01-26) that lets a host render this
+     * tool's result inside the {@link #CHART_VIEWER_RESOURCE_URI} widget instead of (or
+     * alongside) the plain content blocks. A host with no MCP Apps support simply ignores an
+     * unrecognized {@code _meta} field, so this is additive, never a behavior change for one.
+     */
+    private static ObjectNode toolWithChartViewer(String name, String description,
+        ObjectNode inputSchema) {
+        ObjectNode t = tool(name, description, inputSchema);
+        ObjectNode ui = MAPPER.createObjectNode();
+        ui.put("resourceUri", CHART_VIEWER_RESOURCE_URI);
+        ObjectNode meta = MAPPER.createObjectNode();
+        meta.set("ui", ui);
+        t.set("_meta", meta);
         return t;
     }
 

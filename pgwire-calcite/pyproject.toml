@@ -27,6 +27,12 @@ dev = [
 oidc = [
     "pyjwt[crypto]",
 ]
+# Query-time EMBED() support (embedder.py) — onnxruntime-backed, no torch. Optional
+# because only the govdata variant has any use for it; bundling it into
+# file/splunk/sharepoint/cloudops would carry onnxruntime for nothing.
+embed = [
+    "fastembed",
+]
 
 [project.scripts]
 pgwire-calcite = "pgwire_calcite.launcher:main"

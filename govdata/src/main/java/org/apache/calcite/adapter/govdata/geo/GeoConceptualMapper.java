@@ -204,7 +204,7 @@ public class GeoConceptualMapper extends AbstractConceptualMapper {
     }
 
     // Find the appropriate year range
-    Iterator<Map.Entry<String, JsonNode>> fields = tigerNode.fields();
+    Iterator<Map.Entry<String, JsonNode>> fields = tigerNode.properties().iterator();
     while (fields.hasNext()) {
       Map.Entry<String, JsonNode> entry = fields.next();
       String yearRange = entry.getKey();

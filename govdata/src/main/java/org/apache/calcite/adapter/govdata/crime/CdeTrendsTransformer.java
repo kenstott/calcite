@@ -74,7 +74,7 @@ public class CdeTrendsTransformer implements ResponseTransformer {
 
       JsonNode trends = crimeTrends.path("trends");
       if (trends.isObject()) {
-        Iterator<Map.Entry<String, JsonNode>> fields = trends.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = trends.properties().iterator();
         while (fields.hasNext()) {
           Map.Entry<String, JsonNode> entry = fields.next();
           ObjectNode row = MAPPER.createObjectNode();

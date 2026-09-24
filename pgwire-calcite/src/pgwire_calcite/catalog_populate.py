@@ -23,7 +23,10 @@ simply have no PK/FK entries; clients (DataGrip) add virtual FKs on their side.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
+import pickle
 from typing import Dict, List
 
 from pgwire_calcite import catalog, normalize
@@ -102,7 +105,26 @@ def build_context(conn) -> tuple:
 
     # Columns per table.
     for schema, name, tm in table_keys:
-        crs = md.getColumns(None, schema, name, "%")
+        try:
+            crs = md.getColumns(None, schema, name, "%")
+        except Exception as e:
+            # A table declared in the schema whose ETL hasn't (fully) materialized it yet
+            # must not abort catalog population for the whole server. Seen live: a table
+            # mid-ETL whose Iceberg directory exists but has no version-hint.text pointer
+            # yet — normal, expected transient state for a warehouse this large, not
+            # corruption. FileSchema's own per-table metadata recording already tolerates
+            # this gracefully for tables missing outright ("Run ETL to materialize..."),
+            # but this walks EVERY table's columns eagerly at startup (unlike the embedded
+            # engine's connections, which only ever touch a table a query actually names),
+            # so one still-materializing table anywhere in a 26-schema warehouse would
+            # otherwise take the whole shared server down before it can serve anyone else.
+            # Leave column_types[tm.table_id] at the empty list already set above — the
+            # table is still listed, just with no discoverable columns yet, consistent
+            # with this module's existing "well-formed empty" handling for adapters with
+            # no PK/FK metadata.
+            log.warning("getColumns failed for %s.%s (%s: %s) — leaving it column-less",
+                        schema, name, type(e).__name__, e)
+            continue
         cols: List[ColumnMeta] = []
         for r in _rows(crs):
             type_name = r.get("TYPE_NAME") or "VARCHAR"
@@ -372,3 +394,72 @@ def deserialize_catalog(d: dict):
         int(tid): [ColumnMeta(**c) for c in cols] for tid, cols in d["column_types"].items()
     }
     return ctx, column_types
+
+
+# --- Disk-backed catalog cache (a fresh server launch otherwise re-walks every -----
+# --- table's live Iceberg metadata via JDBC on every cold start) ------------------
+
+_CACHE_FORMAT_VERSION = 1
+
+
+def catalog_cache_path(model_path: str) -> str:
+    """Deterministic cache filename next to ``model_path``, keyed by its content hash.
+
+    A schema change (a table added/removed/edited in model.json) changes the hash and
+    therefore the filename, so a stale cache is simply never matched -- no separate
+    invalidation bookkeeping needed. Shipping a pre-built cache file is then just
+    shipping it alongside model.json in the same directory: the runtime path
+    computation independently lands on the identical name, so the bundled release
+    tarball needs no extra wiring at either build or install time.
+    """
+    with open(model_path, "rb") as f:
+        model_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+    return os.path.join(
+        os.path.dirname(os.path.abspath(model_path)),
+        f"catalog-cache-{model_hash}.pkl",
+    )
+
+
+def build_and_cache_context(conn, model_path: str):
+    """Run the live JDBC/Iceberg discovery once and write the result to
+    :func:`catalog_cache_path`'s file, unconditionally (used by the seed-generation
+    script -- always regenerate, never trust a stale file on disk)."""
+    ctx, column_types = build_context(conn)
+    cache_path = catalog_cache_path(model_path)
+    tmp_path = cache_path + ".tmp"
+    with open(tmp_path, "wb") as f:
+        pickle.dump((_CACHE_FORMAT_VERSION, ctx, column_types), f, protocol=pickle.HIGHEST_PROTOCOL)
+    os.replace(tmp_path, cache_path)
+    log.info("Wrote catalog cache to %s (%d tables)", cache_path, len(ctx.tables))
+    return ctx, column_types
+
+
+def populate_state_cached(conn, state, model_path: str | None, role_id: str = "") -> None:
+    """Like :func:`populate_state`, but tries :func:`catalog_cache_path`'s file first.
+
+    A cache hit skips the live JDBC/Iceberg walk entirely -- the difference between a
+    multi-minute cold start (hundreds of tables, each a live Iceberg snapshot scan) and
+    an install that answers its first query immediately. Falls back to a live build,
+    and writes the result back to the cache, on any miss or load failure -- a
+    genuinely fresh launch (no cache shipped, or a corrupt file) still works, just
+    without the speedup, exactly like before this existed.
+    """
+    if model_path is None:
+        populate_state(conn, state, role_id=role_id)
+        return
+    cache_path = catalog_cache_path(model_path)
+    if os.path.isfile(cache_path):
+        try:
+            with open(cache_path, "rb") as f:
+                loaded = pickle.load(f)
+            version, ctx, column_types = loaded
+            if version != _CACHE_FORMAT_VERSION:
+                raise ValueError(f"cache format version {version} != {_CACHE_FORMAT_VERSION}")
+            install_catalog(state, ctx, column_types)
+            log.info("Catalog loaded from cache: %s (%d tables)", cache_path, len(ctx.tables))
+            return
+        except Exception:
+            log.exception(
+                "Catalog cache at %s failed to load -- rebuilding live", cache_path)
+    ctx, column_types = build_and_cache_context(conn, model_path)
+    install_catalog(state, ctx, column_types)

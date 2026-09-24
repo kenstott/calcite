@@ -21,9 +21,11 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Toolkit;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -64,8 +66,11 @@ public class SetupWindow {
     private JFrame frame;
     private JPasswordField apiKeyField;
     private JCheckBox telemetryCheckbox;
+    private JCheckBox forceRefreshCheckbox;
     private JLabel statusLabel;
+    private JLabel existingInstallLabel;
     private JButton configureBtn;
+    private JButton relaunchBtn;
 
     @SuppressWarnings("EmptyCatch")
     public void show() {
@@ -82,6 +87,7 @@ public class SetupWindow {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
         frame.setBackground(BG);
+        frame.setIconImages(loadAppIcons());
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(BG);
@@ -138,6 +144,32 @@ public class SetupWindow {
         c.weightx = 1.0;
         c.gridx = 0;
         c.insets = new Insets(0, 0, 8, 0);
+        int row = 0;
+
+        // Existing-install banner — only shown when this run actually found something
+        // (a cached engine jar and/or a previously-written API key). A reinstall used to
+        // look identical to a first run: a blank key field and no acknowledgement that
+        // anything was already there, so it silently kept whatever was cached with no
+        // way to tell. Detected once, up front, and surfaced before either the key field
+        // or the repair checkbox below so both make sense in context.
+        String existingKey = detectExistingApiKey();
+        String existingJarVersion = detectExistingJarVersion();
+        if (existingKey != null || existingJarVersion != null) {
+            StringBuilder msg = new StringBuilder("Existing install found — ");
+            if (existingJarVersion != null) {
+                msg.append("engine ").append(existingJarVersion).append(existingKey != null ? ", " : "");
+            }
+            if (existingKey != null) {
+                msg.append("API key on file");
+            }
+            msg.append(". Edit below to replace, or click Configure to keep as-is.");
+            existingInstallLabel = new JLabel(
+                "<html><div style='width:400px;'>" + escapeHtml(msg.toString()) + "</div></html>");
+            existingInstallLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+            existingInstallLabel.setForeground(AMBER);
+            c.gridy = row++; c.insets = new Insets(0, 0, 12, 0);
+            p.add(existingInstallLabel, c);
+        }
 
         // API key label + link
         JPanel keyHeader = new JPanel(new BorderLayout());
@@ -147,11 +179,15 @@ public class SetupWindow {
         keyHeader.add(keyLabel, BorderLayout.WEST);
         keyHeader.add(getKey,   BorderLayout.EAST);
 
-        c.gridy = 0;
+        c.gridy = row++; c.insets = new Insets(0, 0, 8, 0);
         p.add(keyHeader, c);
 
-        // API key field
+        // API key field — prefilled with whatever is already configured, so a
+        // reinstall shows what's there instead of pretending nothing is.
         apiKeyField = new JPasswordField();
+        if (existingKey != null) {
+            apiKeyField.setText(existingKey);
+        }
         apiKeyField.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
         apiKeyField.setBackground(CARD);
         apiKeyField.setForeground(TEXT);
@@ -162,7 +198,7 @@ public class SetupWindow {
             BorderFactory.createEmptyBorder(8, 10, 8, 10)));
         apiKeyField.setEchoChar((char) 0); // show text
         apiKeyField.setPreferredSize(new Dimension(400, 36));
-        c.gridy = 1; c.insets = new Insets(0, 0, 16, 0);
+        c.gridy = row++; c.insets = new Insets(0, 0, 16, 0);
         p.add(apiKeyField, c);
 
         // Telemetry opt-in checkbox
@@ -173,8 +209,25 @@ public class SetupWindow {
         telemetryCheckbox.setForeground(DIM);
         telemetryCheckbox.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         telemetryCheckbox.setFocusPainted(false);
-        c.gridy = 2; c.insets = new Insets(0, 0, 16, 0);
+        c.gridy = row++; c.insets = new Insets(0, 0, existingJarVersion != null ? 4 : 16, 0);
         p.add(telemetryCheckbox, c);
+
+        // Repair checkbox — only offered when there is actually a cached jar to force-
+        // refresh. Unchecked by default: a plain reinstall should stay fast and not
+        // redownload ~450MB just because the wizard ran again, but a corrupted or
+        // suspect cache needs an explicit way to force a clean redownload rather than
+        // silently keeping whatever is there.
+        if (existingJarVersion != null) {
+            forceRefreshCheckbox =
+                new JCheckBox("Force a fresh engine download (repair install)");
+            forceRefreshCheckbox.setSelected(false);
+            forceRefreshCheckbox.setBackground(BG);
+            forceRefreshCheckbox.setForeground(DIM);
+            forceRefreshCheckbox.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+            forceRefreshCheckbox.setFocusPainted(false);
+            c.gridy = row++; c.insets = new Insets(0, 0, 16, 0);
+            p.add(forceRefreshCheckbox, c);
+        }
 
         // Configure button — use BasicButtonUI so setBackground(AMBER) is respected
         // on macOS Aqua L&F, which otherwise paints buttons natively and ignores fill.
@@ -189,18 +242,37 @@ public class SetupWindow {
         configureBtn.setPreferredSize(new Dimension(400, 40));
         configureBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         configureBtn.addActionListener(e -> onConfigure());
-        c.gridy = 3; c.insets = new Insets(0, 0, 12, 0);
+        c.gridy = row++; c.insets = new Insets(0, 0, 12, 0);
         p.add(configureBtn, c);
+
+        // Relaunch button — hidden until a successful Configure detects Claude Desktop
+        // is actually running (see onConfigure/maybeOfferRelaunch). Never fires on its
+        // own: quitting an app the user may have open mid-conversation is disruptive
+        // enough that it must always be an explicit, separate click, never a side
+        // effect of Configure itself.
+        relaunchBtn = new JButton("Quit & Relaunch Claude Desktop Now");
+        relaunchBtn.setUI(new javax.swing.plaf.basic.BasicButtonUI());
+        relaunchBtn.setBackground(CARD);
+        relaunchBtn.setForeground(TEXT);
+        relaunchBtn.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        relaunchBtn.setOpaque(true);
+        relaunchBtn.setFocusPainted(false);
+        relaunchBtn.setBorder(BorderFactory.createLineBorder(BORDER));
+        relaunchBtn.setPreferredSize(new Dimension(400, 32));
+        relaunchBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        relaunchBtn.addActionListener(e -> onRelaunch());
+        relaunchBtn.setVisible(false);
+        c.gridy = row++; c.insets = new Insets(0, 0, 12, 0);
+        p.add(relaunchBtn, c);
 
         // Status label
         statusLabel = new JLabel(" ");
         statusLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         statusLabel.setForeground(DIM);
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        c.gridy = 4; c.insets = new Insets(0, 0, 0, 0);
+        c.gridy = row++; c.insets = new Insets(0, 0, 0, 0);
         p.add(statusLabel, c);
 
-        // Config preview (collapsible — shown after success)
         return p;
     }
 
@@ -249,18 +321,69 @@ public class SetupWindow {
                 writeClaudeConfig(configPath, apiKey);
             }
             saveTelemetryOptIn(telemetryCheckbox.isSelected());
+
+            String repairNote = "";
+            if (forceRefreshCheckbox != null && forceRefreshCheckbox.isSelected()) {
+                repairNote = forceEngineRefresh()
+                    ? " Cached engine cleared — it will redownload on next launch."
+                    : " (No cached engine found to clear.)";
+            }
+
             // Name the count, and the paths on hover: a bare "Done!" was reported after
             // writing a config file Claude Desktop does not read, which is unfalsifiable
             // from the wizard and looks identical to success.
             setStatus("Done! Updated " + written.size()
                 + (written.size() == 1 ? " config file. " : " config files. ")
-                + "Restart Claude Desktop to activate.", true);
+                + "Restart Claude Desktop to activate." + repairNote + " Tip: try \"What "
+                + "can I do with AskAmerica?\", \"What questions can AskAmerica answer?\", "
+                + "or \"Pose a sample question to AskAmerica\" in a new chat any time to "
+                + "see what it can do.", true);
             statusLabel.setToolTipText(written.toString());
             configureBtn.setText("Configure again");
+            maybeOfferRelaunch();
         } catch (Exception ex) {
             setStatus("Error: " + ex.getMessage(), false);
         } finally {
             configureBtn.setEnabled(true);
+        }
+    }
+
+    /**
+     * Shows the relaunch button only when Claude Desktop is actually running right now —
+     * offering it unconditionally would be a dead click most of the time (Desktop isn't
+     * open, or this is a genuine first install with nothing to restart) and would imply
+     * an action is needed when it isn't.
+     */
+    private void maybeOfferRelaunch() {
+        if (isClaudeDesktopRunning()) {
+            relaunchBtn.setVisible(true);
+            frame.pack();
+        }
+    }
+
+    private void onRelaunch() {
+        relaunchBtn.setEnabled(false);
+        setStatus("Quitting Claude Desktop…", null);
+        try {
+            quitClaudeDesktop();
+            // Graceful quit is async — Desktop decides its own shutdown pace (it may have
+            // its own confirmation dialogs). Poll rather than assume a fixed delay, but
+            // don't wait forever: relaunching over a still-shutting-down instance is
+            // relatively harmless (the OS will just focus the existing window), so a
+            // capped wait is the right tradeoff over blocking the UI indefinitely.
+            long deadline = System.currentTimeMillis() + 8000;
+            while (isClaudeDesktopRunning() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(300);
+            }
+            setStatus("Relaunching Claude Desktop…", null);
+            relaunchClaudeDesktop();
+            setStatus("Done! Claude Desktop is restarting with the new configuration.", true);
+            relaunchBtn.setVisible(false);
+            frame.pack();
+        } catch (Exception ex) {
+            setStatus("Couldn't relaunch automatically (" + ex.getMessage()
+                + "). Please quit and reopen Claude Desktop yourself.", false);
+            relaunchBtn.setEnabled(true);
         }
     }
 
@@ -319,6 +442,174 @@ public class SetupWindow {
 
         Files.createDirectories(configPath.getParent());
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(configPath.toFile(), root);
+    }
+
+    // ── Existing-install detection ───────────────────────────────────────────
+
+    /**
+     * The API key already written into Claude Desktop's config, if any — read from the
+     * first config path where it's found. Best-effort: no config file, no
+     * {@code mcpServers.askamerica} entry, or a read error all mean "nothing found",
+     * which is exactly the right answer for a genuine first install, not an error to
+     * surface.
+     */
+    private static String detectExistingApiKey() {
+        try {
+            for (Path configPath : claudeConfigPaths()) {
+                if (!Files.exists(configPath)) {
+                    continue;
+                }
+                com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(configPath.toFile());
+                com.fasterxml.jackson.databind.JsonNode key = root
+                    .path("mcpServers").path("askamerica").path("env").path("ASKAMERICA_API_KEY");
+                if (key.isTextual() && !key.asText().isBlank()) {
+                    return key.asText();
+                }
+            }
+        } catch (Exception ignored) {
+            // Best-effort — see javadoc.
+        }
+        return null;
+    }
+
+    /**
+     * The shared engine cache path — deliberately NOT {@link EngineInstaller#cacheJar()}.
+     *
+     * <p>Measured live 2026-09-23: {@code McpServerLauncher} calls {@code EngineInstaller
+     * .ensure()} directly, so {@code EngineInstaller} loads via the JVM's normal system
+     * classloader before {@code SetupWindow} is ever touched. {@code SetupWindow} itself is
+     * loaded afterward through a separate {@code URLClassLoader} pointed at the resolved fat
+     * jar (see {@code McpServerLauncher}'s reflective {@code Class.forName}). Those are two
+     * different classloaders, so — despite being "the same" class by name and package — a
+     * call from {@code SetupWindow} into {@code EngineInstaller}'s package-private statics
+     * throws {@code IllegalAccessError} across that boundary. It surfaces on the EDT, which
+     * kills {@code buildForm()} before any window is ever shown: the app appears in the Dock,
+     * shows nothing, and macOS eventually terminates the windowless, unresponsive process —
+     * exactly what "ran the pkg, no window, then it silently exits" was.
+     *
+     * <p>Fix: never reference {@code EngineInstaller} from this class. The two pieces of
+     * logic actually needed (the cache path, and reading a jar's stamped version) are small
+     * enough to duplicate locally rather than share across a classloader boundary that can't
+     * safely carry a direct call.
+     */
+    private static Path cachedEngineJar() {
+        return Paths.get(System.getProperty("user.home"), ".askamerica", "engine",
+            "askamerica-engine.jar");
+    }
+
+    /** See {@link #cachedEngineJar()} for why this doesn't call {@code EngineInstaller}. */
+    private static String jarVersion(Path jar) throws IOException {
+        try (java.util.jar.JarFile jf = new java.util.jar.JarFile(jar.toFile())) {
+            java.util.jar.Manifest mf = jf.getManifest();
+            if (mf == null) {
+                return null;
+            }
+            return mf.getMainAttributes().getValue("AskAmerica-Engine-Version");
+        }
+    }
+
+    /**
+     * The version of the currently cached engine jar, or null if nothing is cached yet.
+     */
+    private static String detectExistingJarVersion() {
+        try {
+            Path cached = cachedEngineJar();
+            if (!Files.exists(cached)) {
+                return null;
+            }
+            String v = jarVersion(cached);
+            return v == null ? "unknown version" : "v" + v;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Deletes the cached engine jar (and its cross-process lock file, if present) so the
+     * next launch's {@code EngineInstaller.ensure} downloads a fresh copy regardless of its
+     * own version-staleness check. This is the explicit "repair install" path — it must
+     * never run implicitly just because the wizard was opened again, or reinstalling would
+     * silently redownload the engine on every run.
+     *
+     * @return true if a cached jar was actually found and removed
+     */
+    private static boolean forceEngineRefresh() throws IOException {
+        Path cached = cachedEngineJar();
+        boolean existed = Files.deleteIfExists(cached);
+        Files.deleteIfExists(cached.resolveSibling(cached.getFileName() + ".lock"));
+        return existed;
+    }
+
+    // ── Claude Desktop process management ────────────────────────────────────
+
+    /**
+     * Best-effort, platform-specific "is the app running" check. False on any failure —
+     * an unrecognized platform or a failed process probe should hide the relaunch button
+     * (nothing to offer), never crash the wizard over it.
+     */
+    private static boolean isClaudeDesktopRunning() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        try {
+            if (os.contains("win")) {
+                Process p = new ProcessBuilder(
+                    "tasklist", "/FI", "IMAGENAME eq Claude.exe").start();
+                String out = new String(p.getInputStream().readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+                p.waitFor();
+                return out.toLowerCase().contains("claude.exe");
+            }
+            // macOS and Linux Electron builds both register the process name "Claude".
+            Process p = new ProcessBuilder("pgrep", "-x", "Claude").start();
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Asks Claude Desktop to quit — a graceful, OS-level request the app can act on
+     * normally (save state, decline via a dialog), never a forced kill. A forced kill
+     * (SIGKILL / {@code taskkill /F}) risks losing session state for the sake of a config
+     * change that will apply just as well on the next ordinary restart.
+     */
+    private static void quitClaudeDesktop() throws IOException, InterruptedException {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (os.contains("mac")) {
+            new ProcessBuilder("osascript", "-e", "quit app \"Claude\"").start().waitFor();
+        } else if (os.contains("win")) {
+            // No /F: a plain taskkill sends WM_CLOSE, giving the app the same chance to
+            // shut down cleanly that closing its window would.
+            new ProcessBuilder("taskkill", "/IM", "Claude.exe").start().waitFor();
+        } else {
+            // Plain pkill sends SIGTERM, not SIGKILL — same "ask nicely" intent.
+            new ProcessBuilder("pkill", "-x", "Claude").start().waitFor();
+        }
+    }
+
+    /**
+     * Relaunches Claude Desktop after a quit. Best-effort per platform; a failure here is
+     * reported to the user as "please reopen it yourself" rather than treated as fatal —
+     * the config change itself already succeeded regardless of whether this step works.
+     */
+    private static void relaunchClaudeDesktop() throws IOException {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (os.contains("mac")) {
+            new ProcessBuilder("open", "-a", "Claude").start();
+        } else if (os.contains("win")) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            Path exe = localAppData == null ? null
+                : Paths.get(localAppData, "Programs", "Claude", "Claude.exe");
+            if (exe != null && Files.exists(exe)) {
+                new ProcessBuilder(exe.toString()).start();
+            } else {
+                // Falls through to whatever "Claude" resolves to on PATH/shell association;
+                // may not resolve on every install layout, which is why the caller reports
+                // failure back to the user rather than assuming success.
+                new ProcessBuilder("cmd", "/c", "start", "", "Claude").start();
+            }
+        } else {
+            new ProcessBuilder("claude-desktop").start();
+        }
     }
 
     /**
@@ -455,6 +746,30 @@ public class SetupWindow {
 
     // ── UI helpers ────────────────────────────────────────────────────────────
 
+    /**
+     * A plain {@code JFrame} shows Java's generic default icon (the coffee cup) in its title
+     * bar, taskbar entry, and Alt-Tab switcher unless {@code setIconImage(s)} is called
+     * explicitly — jpackage's {@code --icon} only covers the packaged EXE/shortcuts/Add-Remove-
+     * Programs entry, not a running Swing window's own icon. Multiple sizes (not just one) so
+     * Windows can pick the sharpest one for each context instead of scaling a single size up
+     * or down.
+     */
+    private static List<Image> loadAppIcons() {
+        List<Image> icons = new ArrayList<>();
+        for (int size : new int[]{16, 32, 48, 64, 128, 256}) {
+            try (InputStream in = SetupWindow.class.getResourceAsStream(
+                    "/icons/askamerica-" + size + ".png")) {
+                if (in != null) {
+                    icons.add(javax.imageio.ImageIO.read(in));
+                }
+            } catch (IOException ignored) {
+                // Missing/unreadable icon resource must never block the setup window itself
+                // from opening — worst case, this one size is absent from the list.
+            }
+        }
+        return icons;
+    }
+
     private static JLabel label(String text, boolean dim) {
         JLabel l = new JLabel(text);
         l.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
@@ -480,8 +795,20 @@ public class SetupWindow {
         return l;
     }
 
+    /**
+     * A plain JLabel never wraps — it truncates instead, which is how the completion message
+     * ("Done! ... Restart Claude Desktop to activate. Tip: ...") was reported clipped on
+     * Windows. HTML content in a JLabel DOES wrap, but only within an explicit pixel width —
+     * without one, Swing sizes the label to fit the text on a single line regardless, same as
+     * plain text. 400px matches the API key field / configure button width above.
+     */
+    private static String escapeHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     private void setStatus(String msg, Boolean success) {
-        statusLabel.setText(msg);
+        statusLabel.setText("<html><div style='width:400px;text-align:center;'>"
+            + escapeHtml(msg) + "</div></html>");
         if (Boolean.TRUE.equals(success)) {
             statusLabel.setForeground(new Color(0x28C840));
         } else if (Boolean.FALSE.equals(success)) {
@@ -489,5 +816,12 @@ public class SetupWindow {
         } else {
             statusLabel.setForeground(DIM);
         }
+        // The window is packed once at construction, sized for the initial single-line " "
+        // placeholder — a wrapped, multi-line status (the completion message routinely runs
+        // to 3 lines at the 400px wrap width above) would otherwise be clipped at the bottom
+        // of that fixed, non-resizable frame instead of growing to fit. setResizable(false)
+        // only blocks the user dragging a resize handle; it does not block a programmatic
+        // pack().
+        frame.pack();
     }
 }
