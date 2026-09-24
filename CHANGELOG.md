@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.97.4](https://github.com/kenstott/calcite/compare/engine-v0.97.3...engine-v0.97.4) (2026-09-24)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** store reports in a dedicated local file, not the read-only shared connection ([165d266](https://github.com/kenstott/calcite/commit/165d266ab1888662d7c2d4c7bc49a4a67c699cbd))
+
 ## [0.97.3](https://github.com/kenstott/calcite/compare/engine-v0.97.2...engine-v0.97.3) (2026-09-24)
 
 
