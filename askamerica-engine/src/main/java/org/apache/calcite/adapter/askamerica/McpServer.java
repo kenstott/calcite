@@ -465,8 +465,13 @@ public class McpServer {
      * connection is not safe for concurrent use. Until each worker can hold its own
      * connection, this lock is what preserves the safety the serial loop used to provide
      * for free — it is not an optimisation choice.
+     *
+     * <p>Package-private (not private): {@link ClaimsServer} synchronizes on this same lock
+     * for its own SQL against the shared pgwire-govdata connection, since that connection is
+     * the identical one this lock already protects — a second, uncoordinated lock guarding
+     * the same non-thread-safe {@code Connection} would defeat the point of having one.
      */
-    private static final Object DB_LOCK = new Object();
+    static final Object DB_LOCK = new Object();
 
     /**
      * Tools that touch no database, so they need not wait behind a long query. This is the
@@ -475,12 +480,14 @@ public class McpServer {
      *
      * <p>Everything absent from this set is assumed to need the lock. list_schemas is
      * deliberately not here — it reads information_schema, which is a DB query despite
-     * sounding like a local lookup.
+     * sounding like a local lookup. list_reports is the same shape: it now queries
+     * ClaimsServer's DuckDB-backed report table over the shared pgwire-govdata connection,
+     * not an in-memory map, so it needs the lock too.
      */
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "web_fetch", "register", "upload_report", "mysite", "list_reports"));
+            "web_fetch", "register", "upload_report", "mysite"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -517,13 +524,15 @@ public class McpServer {
      * How many multiples of a statement's own configured timeout the watchdog waits before
      * escalating. Stage 1 (this multiple) calls {@link Statement#cancel()} — the JDBC-standard,
      * cross-thread-safe way to ask a driver to abort in-flight work. Stage 2 (double this
-     * multiple) evicts and closes the shared connection outright if the statement is still
-     * registered, on the reasoning that {@code DB_LOCK} means nothing else can legitimately be
-     * using that connection at that moment — so a statement still active well past a cancel
-     * attempt is presumed wedged past the point cancellation can reach, and the only way left to
-     * restore the server's responsiveness to OTHER callers is to force the next caller onto a
-     * fresh connection rather than wait on this one forever. It does not reclaim whatever the
-     * stuck native call is still doing in the background — see the caveat in DEFECTS-OPEN.md #16.
+     * multiple) presumes the statement wedged past the point cancellation can reach and forces
+     * a fresh connection for future callers: in the default pgwire-enabled configuration this
+     * means killing the separate pgwire-govdata process outright ({@link
+     * PgwireGovDataConnector#killAndRespawn}), which also severs the socket the stuck thread is
+     * blocked reading from — unlike a same-process cancel, a killed socket connection is
+     * something Java's I/O layer reliably observes even when a cooperative interrupt flag isn't
+     * being checked. In embedded mode (the explicit opt-out), it evicts the cached embedded
+     * connection instead, same as before. Neither path reclaims whatever the stuck native call
+     * was doing before the kill/evict — see the caveat in DEFECTS-OPEN.md #16.
      */
     private static final int WATCHDOG_TIMEOUT_MULTIPLE = 2;
 
@@ -550,22 +559,42 @@ public class McpServer {
                     long cancelAtMillis = timeoutSeconds * 1000L * WATCHDOG_TIMEOUT_MULTIPLE;
                     long evictAtMillis = cancelAtMillis * 2;
                     if (ageMillis >= evictAtMillis) {
-                        log.println("[askamerica-mcp] WATCHDOG: statement still active "
-                            + (ageMillis / 1000) + "s after starting (timeout was "
-                            + timeoutSeconds + "s) — cancel() did not unstick it; evicting the "
-                            + "shared connection so future callers get a fresh one. This does "
-                            + "NOT reclaim whatever the stuck query is still doing.");
-                        String catalogKey = String.join(",", allowedSchemas());
-                        Connection stuck = schemaConns.remove(catalogKey);
-                        schemaConnOpenedAtMillis.remove(catalogKey);
+                        // Measured live 2026-09-23: in the default pgwire-enabled configuration,
+                        // the schemaConns eviction below is dead code — that map is only ever
+                        // populated by the EMBEDDED-mode branch of getSchemaConnection, which
+                        // pgwire mode bypasses entirely. So this branch used to do nothing at
+                        // all for the one configuration everyone actually runs, and the stuck
+                        // thread held DB_LOCK forever with no recovery. killAndRespawn kills the
+                        // separate pgwire-govdata OS process outright (see its own javadoc for
+                        // why that unsticks a blocked socket read where an in-process interrupt
+                        // flag might not) — this is the real fix for that path; schemaConns
+                        // eviction remains correct and unchanged for the embedded-mode opt-out.
+                        if (PgwireGovDataConnector.isEnabled()) {
+                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
+                                + (ageMillis / 1000) + "s after starting (timeout was "
+                                + timeoutSeconds + "s) — cancel() did not unstick it; killing "
+                                + "the shared pgwire-govdata process so it respawns fresh.");
+                            PgwireGovDataConnector.killAndRespawn(
+                                "statement active " + (ageMillis / 1000) + "s, cancel() failed");
+                        } else {
+                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
+                                + (ageMillis / 1000) + "s after starting (timeout was "
+                                + timeoutSeconds + "s) — cancel() did not unstick it; evicting "
+                                + "the embedded connection so future callers get a fresh one. "
+                                + "This does NOT reclaim whatever the stuck query is still "
+                                + "doing.");
+                            String catalogKey = String.join(",", allowedSchemas());
+                            Connection stuck = schemaConns.remove(catalogKey);
+                            schemaConnOpenedAtMillis.remove(catalogKey);
+                            if (stuck != null) {
+                                closeQuietly(stuck, catalogKey);
+                            }
+                        }
                         // Removing the entry (not the ACTIVE_STATEMENTS registration) is
                         // deliberate: leaving the registration in place stops this branch from
                         // re-firing every 15s for the same statement while it is still there,
                         // without pretending the underlying work actually stopped.
                         ACTIVE_STATEMENTS.put(stmt, new long[]{startedAt, -1});
-                        if (stuck != null) {
-                            closeQuietly(stuck, catalogKey);
-                        }
                     } else if (ageMillis >= cancelAtMillis) {
                         log.println("[askamerica-mcp] WATCHDOG: statement active " + (ageMillis
                             / 1000) + "s after starting (timeout was " + timeoutSeconds
@@ -2489,13 +2518,15 @@ public class McpServer {
 
         tools.add(
             tool("list_reports",
-            "Every URL-based validation published this session (title, source URL, verdict "
-            + "tally, local report link), newest first — this process's lifetime only, gone on "
-            + "exit, same as publish_report's own local links. For durable, cross-session "
-            + "history use mysite's Studies page link instead. Lists only validations (a "
-            + "publish_report call with a claims array and a source_url) — a general research "
-            + "report with no claims, or a validation of pasted/static text with no source URL, "
-            + "was never keyed by URL and will not appear here.",
+            "Every URL-based validation published in the last 24 hours (title, source URL, "
+            + "verdict tally, local report link), newest first — shared across every "
+            + "conversation on this machine, not limited to this one. Local report links still "
+            + "die when the process that built them exits; the row itself and its tally survive "
+            + "that. For durable, permanent history use mysite's Studies page link instead. "
+            + "Lists only validations (a publish_report call with a claims array and a "
+            + "source_url) — a general research report with no claims, or a validation of "
+            + "pasted/static text with no source URL, was never keyed by URL and will not "
+            + "appear here.",
             schema(MAPPER.createObjectNode(), new String[]{})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
@@ -11640,10 +11671,11 @@ public class McpServer {
      *  output. */
     private static String formatReportList(java.util.List<ObjectNode> reports) {
         if (reports.isEmpty()) {
-            return "No URL-based validations published yet this session.";
+            return "No URL-based validations published in the last 24 hours.";
         }
         StringBuilder sb = new StringBuilder(reports.size()
-            + " validation(s) published this session (newest first):\n\n");
+            + " validation(s) published in the last 24 hours, across every conversation on "
+            + "this machine (newest first):\n\n");
         for (ObjectNode r : reports) {
             String title = r.path("title").asText("");
             String url = r.path("url").asText("");

@@ -400,6 +400,7 @@ final class PgwireGovDataConnector {
       // attempt fail, confirmed live. The spawned server never reads stdin at all, so simply
       // not touching redirectInput (default PIPE, left unread and unwritten) is correct.
       Process p = pb.start();
+      writePidFile(p.pid());
       log().println("[askamerica-mcp] Spawned pgwire-govdata (pid " + p.pid() + "): "
           + launcher.getAbsolutePath() + " — log: " + logFile);
     } catch (Exception e) {
@@ -414,6 +415,94 @@ final class PgwireGovDataConnector {
   private static String cacheDirLogPath() {
     String home = System.getProperty("user.home", "");
     return new File(new File(home, ".askamerica"), "pgwire-govdata/spawn.log").getAbsolutePath();
+  }
+
+  /** Beside spawn.log — a well-known file, not a static field, because the process that spawned
+   *  pgwire-govdata is very often NOT the same process later trying to kill a wedged one: the
+   *  shared-server design (this class's own javadoc) means whichever conversation's engine
+   *  process happened to win the race spawns it once, and every other conversation's process —
+   *  including the one whose watchdog eventually detects the wedge — only ever calls
+   *  getSharedConnection() and has no in-memory {@code Process} handle of its own. */
+  private static File pidFile() {
+    String home = System.getProperty("user.home", "");
+    return new File(new File(home, ".askamerica"), "pgwire-govdata/pgwire.pid");
+  }
+
+  private static void writePidFile(long pid) {
+    try {
+      File f = pidFile();
+      f.getParentFile().mkdirs();
+      java.nio.file.Files.writeString(f.toPath(), String.valueOf(pid));
+    } catch (Exception e) {
+      // Best-effort: a missing PID file only means a future wedge can't be killed by PID
+      // (killAndRespawn logs that plainly and moves on) — it does not affect this spawn's
+      // own success, which is already logged separately above.
+      log().println("[askamerica-mcp] Could not record pgwire-govdata's pid: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Kills the shared pgwire-govdata process outright and discards this process's cached
+   * connection to it, so the next {@link #getSharedConnection()} call spawns a fresh server.
+   *
+   * <p>This exists because in-process cancellation ({@code Statement.cancel()} →
+   * {@code DuckDBConnection.interrupt()} — verified live 2026-09-23 to be a real call, not a
+   * stub) is cooperative: DuckDB's engine checks the interrupt flag between operators, so a
+   * query wedged deep inside one oversized native operation can outlast it. Since pgwire-govdata
+   * runs as a genuinely separate OS process reached over a TCP socket rather than in this
+   * engine's own JVM, killing that process forces a hard socket failure on whatever thread —
+   * in this process or any other conversation's — is blocked reading from it, which Java's I/O
+   * layer observes immediately as an IOException. That is a strictly more reliable unstick than
+   * hoping a cooperative interrupt flag gets checked in time, and it costs little: pgwire-govdata
+   * respawns against the same already-seeded catalog, not a cold mount.
+   *
+   * <p>Killing the whole process rather than pooling multiple connections is deliberate, not a
+   * shortcut: every query is already fully serialized behind one lock server-side (CalciteBackend
+   * holds a single execution lock — see pgwire-calcite's own spawn-flag comment), so a pool of
+   * connections to the SAME single-threaded backend would not add real concurrency, only
+   * complexity. One connection, killed and respawned on a genuine wedge, matches how the backend
+   * actually works.
+   */
+  static void killAndRespawn(String reason) {
+    // Deliberately never lets anything escape: this runs from inside McpServer's watchdog
+    // thread's per-entry loop, which has no enclosing try/catch of its own -- an uncaught
+    // exception here would kill the ENTIRE watchdog daemon thread for the rest of the
+    // process's life (disabling cancellation for every future query, not just this one),
+    // which is strictly worse than the wedge this method exists to recover from.
+    try {
+      synchronized (LOCK) {
+        Connection stale = sharedConnection;
+        sharedConnection = null;
+        if (stale != null) {
+          closeQuietly(stale);
+        }
+        File pf = pidFile();
+        long pid;
+        try {
+          pid = Long.parseLong(java.nio.file.Files.readString(pf.toPath()).trim());
+        } catch (Exception e) {
+          log().println("[askamerica-mcp] killAndRespawn(" + reason + "): no readable pid "
+              + "file at " + pf + " (" + e.getMessage() + ") — cannot kill the wedged process "
+              + "directly. The cached connection was discarded regardless; the next caller "
+              + "will attempt to reconnect, which will hang again if the old process is still "
+              + "holding the port.");
+          return;
+        }
+        java.util.Optional<ProcessHandle> ph = ProcessHandle.of(pid);
+        if (!ph.isPresent()) {
+          log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
+              + " from " + pf + " is no longer running — nothing to kill.");
+          return;
+        }
+        boolean destroyed = ph.get().destroyForcibly();
+        log().println("[askamerica-mcp] killAndRespawn(" + reason + "): sent a forced kill to "
+            + "pgwire-govdata pid " + pid + " (" + (destroyed ? "signal sent" : "failed to send")
+            + "). The next connection attempt will spawn a fresh server.");
+      }
+    } catch (Throwable t) {
+      log().println("[askamerica-mcp] killAndRespawn(" + reason + ") itself failed: "
+          + t.getClass().getName() + ": " + t.getMessage());
+    }
   }
 
   private static File resolveLauncher() {

@@ -250,7 +250,7 @@ public class SetupWindow {
         // own: quitting an app the user may have open mid-conversation is disruptive
         // enough that it must always be an explicit, separate click, never a side
         // effect of Configure itself.
-        relaunchBtn = new JButton("Quit && Relaunch Claude Desktop Now");
+        relaunchBtn = new JButton("Quit & Relaunch Claude Desktop Now");
         relaunchBtn.setUI(new javax.swing.plaf.basic.BasicButtonUI());
         relaunchBtn.setBackground(CARD);
         relaunchBtn.setForeground(TEXT);
