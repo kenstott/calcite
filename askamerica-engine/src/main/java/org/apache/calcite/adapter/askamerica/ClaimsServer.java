@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -26,8 +27,10 @@ import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,17 +40,24 @@ import java.util.Locale;
  * Serves the claim-by-claim verdicts of recently-published validations over loopback, keyed by
  * the article URL, so a browser extension can overlay them on the page a reader is looking at.
  *
- * <p>Storage is a small table ({@code askamerica_reports}) in the shared pgwire-govdata DuckDB
- * catalog (see {@link PgwireGovDataConnector}), not an in-memory map. Measured live 2026-09-23:
- * every Desktop conversation runs its own separate engine process, so a per-process in-memory
- * map meant a validation published in one conversation was invisible to every other conversation
- * (and to the extension, if that conversation's process wasn't the one that happened to win the
- * loopback port below) — a report could publish successfully and still never appear anywhere the
- * user could see it. Routing storage through the connection every conversation already shares
- * fixes that for free: whichever conversation writes a row, every conversation (and the
- * extension) reading through this same shared catalog sees it. All SQL here synchronizes on
- * {@link McpServer#DB_LOCK}, the same lock guarding every other use of that shared connection —
- * see that field's javadoc for why a second, uncoordinated lock would be unsafe.
+ * <p>Storage is a small table ({@code askamerica_reports}) in its own dedicated local DuckDB
+ * file ({@code ~/.askamerica/reports.duckdb}), not an in-memory map, and deliberately NOT the
+ * shared pgwire-govdata connection ({@link PgwireGovDataConnector}) despite that connection
+ * already being shared across every conversation on this machine — measured live 2026-09-23:
+ * pgwire-govdata serves a fixed, read-only Calcite model and rejects DDL outright ("CREATE TABLE
+ * is not supported: pgwire-calcite serves a read-only Calcite model"), so every write through it
+ * silently failed from the moment this class first tried to use it, caught by this class's own
+ * best-effort error handling and never surfaced to a caller. A short-lived, fresh JDBC connection
+ * straight to this dedicated file, opened and closed per call, sidesteps that entirely: DuckDB's
+ * own file locking is what actually serializes concurrent writers across processes here, not a
+ * JVM-level lock (there is no shared long-lived connection object for one to protect).
+ *
+ * <p>The earlier design (a per-process in-memory map) had the same cross-conversation-visibility
+ * problem this file-based one fixes: each Desktop conversation runs its own separate engine
+ * process, so a validation recorded only in that process's memory was invisible to every other
+ * conversation (and to the extension, unless that conversation's process happened to also be the
+ * one that won the loopback port below). A shared file on disk, not a shared in-process object,
+ * is what actually solves that.
  *
  * <p>"Recently" means the last {@value #WINDOW_HOURS} hours, not "this session" — there is no
  * well-defined single session once storage is shared across every open conversation, so a rolling
@@ -84,8 +94,6 @@ final class ClaimsServer {
     static final int DEFAULT_PORT = 45123;
     private static final int WINDOW_HOURS = 24;
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static volatile boolean tableEnsured;
-
     private static HttpServer server;
     private static int port = -1;
 
@@ -138,28 +146,51 @@ final class ClaimsServer {
         }
     }
 
-    private static Connection connection() throws Exception {
-        // "ref" is an arbitrary, always-mounted default schema name -- irrelevant when
-        // PgwireGovDataConnector is enabled (the default), since one shared connection answers
-        // for every schema; only used as a cache key on the rare embedded-mode opt-out path.
-        return McpServer.getSchemaConnection("ref");
+    private static final String REPORTS_DB_FILENAME = "reports.duckdb";
+    private static final int OPEN_RETRY_ATTEMPTS = 5;
+    private static final long OPEN_RETRY_DELAY_MILLIS = 200;
+
+    private static File reportsDbFile() {
+        File dir = new File(System.getProperty("user.home", ""), ".askamerica");
+        dir.mkdirs();
+        return new File(dir, REPORTS_DB_FILENAME);
+    }
+
+    /**
+     * Opens a fresh, short-lived connection to the dedicated local reports file, retrying
+     * briefly on a lock conflict from another process's concurrent open. Not cached and not
+     * held open across calls: DuckDB's own file lock is what actually serializes concurrent
+     * writers across every conversation's process here, not a JVM-level lock guarding a shared
+     * connection object -- there is no such shared object in this design, deliberately (see the
+     * class javadoc for why the earlier design routing through pgwire-govdata never worked at
+     * all). Report publishing is infrequent enough that a real collision between two processes
+     * both opening this file in the same instant is rare; the retry loop is a cushion for that
+     * rare case, not the primary correctness mechanism.
+     */
+    private static Connection openReportsDb() throws Exception {
+        Class.forName("org.duckdb.DuckDBDriver");
+        String url = "jdbc:duckdb:" + reportsDbFile().getAbsolutePath();
+        Exception last = null;
+        for (int attempt = 1; attempt <= OPEN_RETRY_ATTEMPTS; attempt++) {
+            try {
+                return DriverManager.getConnection(url);
+            } catch (SQLException e) {
+                last = e;
+                Thread.sleep(OPEN_RETRY_DELAY_MILLIS);
+            }
+        }
+        throw last;
     }
 
     /** Idempotent; cheap to call every time ({@code CREATE TABLE IF NOT EXISTS}) rather than
-     *  tracked per-connection, since the shared connection can be replaced underneath this
-     *  class (a schema-connection TTL refresh, or pgwire-govdata itself restarting) without
-     *  this class finding out. */
+     *  tracked globally, since every call opens its own fresh connection anyway. */
     private static void ensureTable(Connection c) throws Exception {
-        if (tableEnsured) {
-            return;
-        }
         try (Statement st = c.createStatement()) {
             st.execute("CREATE TABLE IF NOT EXISTS askamerica_reports ("
                 + "normalized_url VARCHAR PRIMARY KEY, url VARCHAR, title VARCHAR, "
                 + "report_url VARCHAR, published_at TIMESTAMP, tally_json VARCHAR, "
                 + "claims_json VARCHAR)");
         }
-        tableEnsured = true;
     }
 
     /** Records a validation for the extension to find by article URL. Best-effort: a storage
@@ -178,39 +209,35 @@ final class ClaimsServer {
                 tally.put(verdict, tally.path(verdict).asInt(0) + 1);
             }
         }
-        synchronized (McpServer.DB_LOCK) {
-            try {
-                Connection c = connection();
-                ensureTable(c);
-                // Opportunistic cleanup on every write keeps the table small over a
-                // long-lived shared pgwire-govdata process without needing a separate
-                // scheduled job -- report publishing is infrequent enough that piggybacking
-                // here costs nothing noticeable.
-                try (Statement st = c.createStatement()) {
-                    st.execute("DELETE FROM askamerica_reports WHERE published_at <= "
-                        + "now() - INTERVAL '" + WINDOW_HOURS + " hours'");
-                }
-                try (PreparedStatement ps = c.prepareStatement(
-                        "INSERT INTO askamerica_reports (normalized_url, url, title, "
-                        + "report_url, published_at, tally_json, claims_json) "
-                        + "VALUES (?, ?, ?, ?, now(), ?, ?) "
-                        + "ON CONFLICT (normalized_url) DO UPDATE SET url = excluded.url, "
-                        + "title = excluded.title, report_url = excluded.report_url, "
-                        + "published_at = excluded.published_at, "
-                        + "tally_json = excluded.tally_json, "
-                        + "claims_json = excluded.claims_json")) {
-                    ps.setString(1, key);
-                    ps.setString(2, sourceUrl);
-                    ps.setString(3, title == null ? "" : title);
-                    ps.setString(4, reportUrl == null ? "" : reportUrl);
-                    ps.setString(5, tally.toString());
-                    ps.setString(6, claims.toString());
-                    ps.executeUpdate();
-                }
-            } catch (Exception e) {
-                McpServer.logLine("[askamerica-mcp] ClaimsServer.record failed: "
-                    + e.getMessage());
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            // Opportunistic cleanup on every write keeps the file small over time without
+            // needing a separate scheduled job -- report publishing is infrequent enough that
+            // piggybacking here costs nothing noticeable.
+            try (Statement st = c.createStatement()) {
+                st.execute("DELETE FROM askamerica_reports WHERE published_at <= "
+                    + "now() - INTERVAL '" + WINDOW_HOURS + " hours'");
             }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO askamerica_reports (normalized_url, url, title, "
+                    + "report_url, published_at, tally_json, claims_json) "
+                    + "VALUES (?, ?, ?, ?, now(), ?, ?) "
+                    + "ON CONFLICT (normalized_url) DO UPDATE SET url = excluded.url, "
+                    + "title = excluded.title, report_url = excluded.report_url, "
+                    + "published_at = excluded.published_at, "
+                    + "tally_json = excluded.tally_json, "
+                    + "claims_json = excluded.claims_json")) {
+                ps.setString(1, key);
+                ps.setString(2, sourceUrl);
+                ps.setString(3, title == null ? "" : title);
+                ps.setString(4, reportUrl == null ? "" : reportUrl);
+                ps.setString(5, tally.toString());
+                ps.setString(6, claims.toString());
+                ps.executeUpdate();
+            }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.record failed: "
+                + e.getMessage());
         }
     }
 
@@ -219,94 +246,84 @@ final class ClaimsServer {
         if (key == null) {
             return null;
         }
-        synchronized (McpServer.DB_LOCK) {
-            try {
-                Connection c = connection();
-                ensureTable(c);
-                try (PreparedStatement ps = c.prepareStatement(
-                        "SELECT url, title, report_url, published_at, tally_json, claims_json "
-                        + "FROM askamerica_reports WHERE normalized_url = ? "
-                        + "AND published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours'")) {
-                    ps.setString(1, key);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next()) {
-                            return null;
-                        }
-                        ObjectNode v = MAPPER.createObjectNode();
-                        v.put("url", rs.getString("url"));
-                        v.put("normalized_url", key);
-                        v.put("title", rs.getString("title"));
-                        v.put("report_url", rs.getString("report_url"));
-                        v.put("published_at", String.valueOf(rs.getTimestamp("published_at")));
-                        v.set("tally", MAPPER.readTree(rs.getString("tally_json")));
-                        v.set("claims", MAPPER.readTree(rs.getString("claims_json")));
-                        return v;
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT url, title, report_url, published_at, tally_json, claims_json "
+                    + "FROM askamerica_reports WHERE normalized_url = ? "
+                    + "AND published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours'")) {
+                ps.setString(1, key);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return null;
                     }
+                    ObjectNode v = MAPPER.createObjectNode();
+                    v.put("url", rs.getString("url"));
+                    v.put("normalized_url", key);
+                    v.put("title", rs.getString("title"));
+                    v.put("report_url", rs.getString("report_url"));
+                    v.put("published_at", String.valueOf(rs.getTimestamp("published_at")));
+                    v.set("tally", MAPPER.readTree(rs.getString("tally_json")));
+                    v.set("claims", MAPPER.readTree(rs.getString("claims_json")));
+                    return v;
                 }
-            } catch (Exception e) {
-                McpServer.logLine("[askamerica-mcp] ClaimsServer.lookup failed: "
-                    + e.getMessage());
-                return null;
             }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.lookup failed: "
+                + e.getMessage());
+            return null;
         }
     }
 
     /**
      * Every URL-based validation published in the last {@value #WINDOW_HOURS} hours, across
-     * every conversation sharing this machine's pgwire-govdata connection, newest first. Backs
-     * the {@code list_reports} MCP tool; see the class javadoc for why this is safe to expose
-     * here but not as an HTTP endpoint without {@link #REPORTS_KEY}. Each entry omits the full
-     * {@code claims} array (present in {@link #lookup}'s single-URL result) and keeps only the
-     * tally, since a list of many reports is for finding the right one, not re-reading every
-     * claim inline.
+     * every conversation on this machine, newest first. Backs the {@code list_reports} MCP
+     * tool; see the class javadoc for why this is safe to expose here but not as an HTTP
+     * endpoint without {@link #REPORTS_KEY}. Each entry omits the full {@code claims} array
+     * (present in {@link #lookup}'s single-URL result) and keeps only the tally, since a list
+     * of many reports is for finding the right one, not re-reading every claim inline.
      */
     static List<ObjectNode> listAll() {
         List<ObjectNode> out = new ArrayList<>();
-        synchronized (McpServer.DB_LOCK) {
-            try {
-                Connection c = connection();
-                ensureTable(c);
-                try (PreparedStatement ps = c.prepareStatement(
-                        "SELECT url, title, report_url, published_at, tally_json "
-                        + "FROM askamerica_reports "
-                        + "WHERE published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours' "
-                        + "ORDER BY published_at DESC")) {
-                    try (ResultSet rs = ps.executeQuery()) {
-                        while (rs.next()) {
-                            ObjectNode summary = MAPPER.createObjectNode();
-                            summary.put("url", rs.getString("url"));
-                            summary.put("title", rs.getString("title"));
-                            summary.put("report_url", rs.getString("report_url"));
-                            summary.put("published_at",
-                                String.valueOf(rs.getTimestamp("published_at")));
-                            summary.set("tally", MAPPER.readTree(rs.getString("tally_json")));
-                            out.add(summary);
-                        }
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT url, title, report_url, published_at, tally_json "
+                    + "FROM askamerica_reports "
+                    + "WHERE published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours' "
+                    + "ORDER BY published_at DESC")) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        ObjectNode summary = MAPPER.createObjectNode();
+                        summary.put("url", rs.getString("url"));
+                        summary.put("title", rs.getString("title"));
+                        summary.put("report_url", rs.getString("report_url"));
+                        summary.put("published_at",
+                            String.valueOf(rs.getTimestamp("published_at")));
+                        summary.set("tally", MAPPER.readTree(rs.getString("tally_json")));
+                        out.add(summary);
                     }
                 }
-            } catch (Exception e) {
-                McpServer.logLine("[askamerica-mcp] ClaimsServer.listAll failed: "
-                    + e.getMessage());
             }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.listAll failed: "
+                + e.getMessage());
         }
         return out;
     }
 
     static int size() {
-        synchronized (McpServer.DB_LOCK) {
-            try {
-                Connection c = connection();
-                ensureTable(c);
-                try (Statement st = c.createStatement();
-                     ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM askamerica_reports "
-                         + "WHERE published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours'")) {
-                    return rs.next() ? rs.getInt(1) : 0;
-                }
-            } catch (Exception e) {
-                McpServer.logLine("[askamerica-mcp] ClaimsServer.size failed: "
-                    + e.getMessage());
-                return 0;
+        try (Connection c = openReportsDb()) {
+            ensureTable(c);
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM askamerica_reports "
+                     + "WHERE published_at > now() - INTERVAL '" + WINDOW_HOURS + " hours'")) {
+                return rs.next() ? rs.getInt(1) : 0;
             }
+        } catch (Exception e) {
+            McpServer.logLine("[askamerica-mcp] ClaimsServer.size failed: "
+                + e.getMessage());
+            return 0;
         }
     }
 
