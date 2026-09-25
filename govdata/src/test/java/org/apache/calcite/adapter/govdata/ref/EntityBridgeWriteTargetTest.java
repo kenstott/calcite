@@ -97,4 +97,9 @@ public class EntityBridgeWriteTargetTest {
     MaterializeConfig second = resolve("canonical_org_entity");
     assertEquals(first.getColumns().size(), second.getColumns().size());
   }
+
+  /** Every registry canonical column must be declared, or the writer drops it without an error. */
+  @Test void registryCanonicalColumnsAreDeclaredInTheSchemaYaml() throws Exception {
+    EntityBridgeListener.verifyCanonicalColumnsDeclared();
+  }
 }

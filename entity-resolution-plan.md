@@ -143,6 +143,36 @@ Not in scope: `fec.committee_summaries.connected_org_name` (a second, likely sam
 occurrence of the org-name field on a different table) — note if it ever disagrees with
 `committees.connected_org_name` for the same `committee_id`, don't chase it now.
 
+### Law-schema sources
+
+Added after the schema above shipped, in the same registry, matched by the same pipeline.
+The `law` schema's lobbying disclosures (LDA.gov) and Supreme Court opinions name entities that
+carry no canonical id, so they connect through the bridge instead of a foreign key. Lobbying
+names are almost all upper case, some registrant and client names carry "(DO NOT USE)" or "(FKA)"
+annotations, and honoree names carry titles ("Sen.", "The Honorable"); name normalization
+handles the case, and the honoree parser below strips titles, a "(R-AZ)" tag and a Jr./Sr. suffix.
+`lobbying_filings.registrant_name`/`client_name` and the copies in the contribution reports and
+activity tables repeat the two dimension tables' names and are deliberately not registered again.
+
+| schema.table.name_column | key_column | key type | track | notes |
+|---|---|---|---|---|
+| `law.lobbying_registrants.name` | `registrant_id` | structured | org | LDA's own id; may be an individual, which the org track's person-shape routing handles |
+| `law.lobbying_clients.name` | `client_id` | structured | org | LDA's own id; same |
+| `law.lobbying_foreign_entities.name` | *(name-only)* | **unstructured** | org | parenthetical annotations on some names |
+| `law.lobbying_affiliated_organizations.name` | *(name-only)* | **unstructured** | org | |
+| `law.lobbying_contribution_pacs.pac_name` | *(name-only)* | **unstructured** | org | political committees; the natural link is fec.committees |
+| `law.lobbying_contribution_items.contributor_name` | *(name-only)* | **unstructured** | org | firm PACs |
+| `law.lobbying_contribution_items.payee_name` | *(name-only)* | **unstructured** | org | mostly campaign committees |
+| `law.lobbying_contribution_items.honoree_name` (committee-shaped) | *(name-only)* | **unstructured** | org | mixed column, classified by name shape: `pac`, `committee`, `fund`, `for`, `victory`, `campaign`, ... |
+| `law.lobbyists` first/middle/last | `lobbyist_id` | structured | person | name already split |
+| `law.lobbying_contribution_items.honoree_name` (person-shaped) | *(name-only)* | **unstructured** | person | officials and candidates honored; "Last, First" and "First Last" both occur |
+| `law.scotus_reports_cases.opinion_writer` | *(name-only)* | **unstructured** | person | the justice who wrote the opinion (9 distinct in the DQ load); matched against `officials.federal_judges` |
+
+Not registered: `chief_justice` and `opinion_assigner` (the same justices), the "X v. Y" case
+names in `scotus_slip_opinions.case_name`, `scotus_dockets.title` and `scotus_reports_cases.case_title`
+(mixed parties that need petitioner/respondent parsing first), and `scotus_dockets.lower_court`
+(courts are not in GLEIF).
+
 ## Matching algorithm
 
 ### Org track

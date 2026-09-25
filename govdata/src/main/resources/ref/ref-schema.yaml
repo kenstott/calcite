@@ -2114,10 +2114,16 @@ partitionedTables:
       transport.faa_aircraft_registry (faa_registrant_name), fiscal.exempt_org_master
       (exempt_org_ein), fiscal.sba_loan_approvals (sba_borrower_name, sba_lender_name),
       research.nsf_herd_by_institution (nsf_herd_inst_id), edu.ipeds_institutions
-      (ipeds_unitid). Structured-key sources (a per-row id/CIK/EIN already on the source
+      (ipeds_unitid), law.lobbying_registrants (lobbying_registrant_id), law.lobbying_clients
+      (lobbying_client_id), law.lobbying_foreign_entities (lobbying_foreign_entity_name),
+      law.lobbying_affiliated_organizations (lobbying_affiliated_org_name),
+      law.lobbying_contribution_pacs (lobbying_pac_name), law.lobbying_contribution_items
+      (lobbying_contributor_name, lobbying_payee_name, lobbying_honoree_org_name).
+      Structured-key sources (a per-row id/CIK/EIN already on the source
       table — fec_committee_id, sec_reporting_person_cik, sec_manager_cik,
       patents_assignee_id, patents_trademark_owner_id, eia_utility_id, fmcsa_dot_number,
-      exempt_org_ein, clinical_trials_nct_id, ipeds_unitid) get an exact join here on that
+      exempt_org_ein, clinical_trials_nct_id, ipeds_unitid, lobbying_registrant_id,
+      lobbying_client_id) get an exact join here on that
       id; unstructured sources (name-only, no per-row id) get the fuzzy-resolved identity
       this table already carries, so a cross-schema link still avoids re-running the fuzzy
       match by hand.
@@ -2296,6 +2302,62 @@ partitionedTables:
       - name: fda_drug_recalling_firm_confidence
         type: string
         nullable: true
+      - name: lobbying_registrant_id
+        type: string
+        nullable: true
+        comment: "Lobbying-disclosure registrant (the firm that files), LDA.gov's own stable id"
+      - name: lobbying_registrant_id_confidence
+        type: string
+        nullable: true
+      - name: lobbying_client_id
+        type: string
+        nullable: true
+        comment: "Lobbying-disclosure client (who pays the registrant), LDA.gov's own stable id; a client can be an individual"
+      - name: lobbying_client_id_confidence
+        type: string
+        nullable: true
+      - name: lobbying_foreign_entity_name
+        type: string
+        nullable: true
+        comment: "Foreign entity named on a lobbying filing (LD-2); unstructured, no per-row id"
+      - name: lobbying_foreign_entity_name_confidence
+        type: string
+        nullable: true
+      - name: lobbying_affiliated_org_name
+        type: string
+        nullable: true
+        comment: "Organization affiliated with a lobbying client; unstructured, no per-row id"
+      - name: lobbying_affiliated_org_name_confidence
+        type: string
+        nullable: true
+      - name: lobbying_pac_name
+        type: string
+        nullable: true
+        comment: "PAC or committee named on a lobbyist contribution report (LD-203); unstructured"
+      - name: lobbying_pac_name_confidence
+        type: string
+        nullable: true
+      - name: lobbying_contributor_name
+        type: string
+        nullable: true
+        comment: "Organization or PAC that made a contribution on a lobbyist contribution report; unstructured"
+      - name: lobbying_contributor_name_confidence
+        type: string
+        nullable: true
+      - name: lobbying_payee_name
+        type: string
+        nullable: true
+        comment: "Committee or organization that received a contribution on a lobbyist contribution report; unstructured"
+      - name: lobbying_payee_name_confidence
+        type: string
+        nullable: true
+      - name: lobbying_honoree_org_name
+        type: string
+        nullable: true
+        comment: "Committee-shaped rows of lobbying_contribution_items.honoree_name (campaigns, PACs); the person-shaped rows are canonical_person_entity.lobbying_honoree_name"
+      - name: lobbying_honoree_org_name_confidence
+        type: string
+        nullable: true
 
     hooks:
       enabled: true
@@ -2406,6 +2468,38 @@ partitionedTables:
           type: VARCHAR
         - name: fda_drug_recalling_firm_confidence
           type: VARCHAR
+        - name: lobbying_registrant_id
+          type: VARCHAR
+        - name: lobbying_registrant_id_confidence
+          type: VARCHAR
+        - name: lobbying_client_id
+          type: VARCHAR
+        - name: lobbying_client_id_confidence
+          type: VARCHAR
+        - name: lobbying_foreign_entity_name
+          type: VARCHAR
+        - name: lobbying_foreign_entity_name_confidence
+          type: VARCHAR
+        - name: lobbying_affiliated_org_name
+          type: VARCHAR
+        - name: lobbying_affiliated_org_name_confidence
+          type: VARCHAR
+        - name: lobbying_pac_name
+          type: VARCHAR
+        - name: lobbying_pac_name_confidence
+          type: VARCHAR
+        - name: lobbying_contributor_name
+          type: VARCHAR
+        - name: lobbying_contributor_name_confidence
+          type: VARCHAR
+        - name: lobbying_payee_name
+          type: VARCHAR
+        - name: lobbying_payee_name_confidence
+          type: VARCHAR
+        - name: lobbying_honoree_org_name
+          type: VARCHAR
+        - name: lobbying_honoree_org_name_confidence
+          type: VARCHAR
       output:
         pattern: ""
       partition:
@@ -2444,7 +2538,10 @@ partitionedTables:
       a row with only one FK populated is simply "known to that one source, never
       cross-matched" — both are legitimate outcomes. No third-party canonical
       individual registry exists (unlike GLEIF for orgs), so these FKs are direct
-      pairwise links between source pools, not resolutions to an external hub.
+      pairwise links between source pools, not resolutions to an external hub. Law-schema
+      sources: law.lobbyists (lobbying_lobbyist_id), the person-shaped rows of
+      law.lobbying_contribution_items.honoree_name (lobbying_honoree_name) and
+      law.scotus_reports_cases.opinion_writer (scotus_opinion_writer_name).
 
     columns:
       - name: canonical_entity_id
@@ -2508,6 +2605,27 @@ partitionedTables:
       - name: officials_judge_jid_confidence
         type: string
         nullable: true
+      - name: lobbying_lobbyist_id
+        type: string
+        nullable: true
+        comment: "Registered lobbyist, LDA.gov's own stable per-lobbyist id"
+      - name: lobbying_lobbyist_id_confidence
+        type: string
+        nullable: true
+      - name: lobbying_honoree_name
+        type: string
+        nullable: true
+        comment: "Person-shaped rows of lobbying_contribution_items.honoree_name (officials and candidates honored); name-only, keyed by normalized last|first"
+      - name: lobbying_honoree_name_confidence
+        type: string
+        nullable: true
+      - name: scotus_opinion_writer_name
+        type: string
+        nullable: true
+        comment: "Justice who wrote a Supreme Court opinion (scotus_reports_cases.opinion_writer); name-only"
+      - name: scotus_opinion_writer_name_confidence
+        type: string
+        nullable: true
 
     hooks:
       enabled: true
@@ -2550,6 +2668,18 @@ partitionedTables:
         - name: officials_judge_jid
           type: VARCHAR
         - name: officials_judge_jid_confidence
+          type: VARCHAR
+        - name: lobbying_lobbyist_id
+          type: VARCHAR
+        - name: lobbying_lobbyist_id_confidence
+          type: VARCHAR
+        - name: lobbying_honoree_name
+          type: VARCHAR
+        - name: lobbying_honoree_name_confidence
+          type: VARCHAR
+        - name: scotus_opinion_writer_name
+          type: VARCHAR
+        - name: scotus_opinion_writer_name_confidence
           type: VARCHAR
       output:
         pattern: ""

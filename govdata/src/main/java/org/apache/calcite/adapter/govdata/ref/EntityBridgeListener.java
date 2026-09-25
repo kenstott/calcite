@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.ref;
 
+import org.apache.calcite.adapter.file.etl.ColumnConfig;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.EtlResult;
 import org.apache.calcite.adapter.file.etl.MaterializationWriter;
@@ -150,6 +151,68 @@ public class EntityBridgeListener implements TableLifecycleListener {
   private static final String FAA_PERSON_FILTER =
       "(" + FAA_REGISTRANT_TYPE_EXPR + ") = 'Individual'";
 
+  /** Honorific and rank words that lead a lobbying {@code honoree_name} ("Sen.", "Cong.", "The
+   *  Honorable", "U.S. Representative"); a leading run of them is stripped before parsing. */
+  static final String HONOREE_TITLES =
+      "(the|u\\.s\\.|honorable|hon\\.?|sen\\.?|senator|rep\\.?|representative|cong\\.?|congressman"
+      + "|congresswoman|del\\.?|delegate|gov\\.?|governor|speaker|mr\\.?|mrs\\.?|ms\\.?|dr\\.?)";
+
+  private static final String NAME_SUFFIX = "(jr\\.?|sr\\.?|ii|iii|iv)";
+
+  /**
+   * Words that mark a lobbying {@code honoree_name} as a committee or campaign ("Susan Collins PAC",
+   * "Blake Moore for Congress", "Hung Cao for Virginia", "BARRETT BRIGADE VICTORY FUND") instead of
+   * a person. {@code lobbying_contribution_items.honoree_name} has no type column, so, like
+   * sec.insider_transactions above, each row is classified by name shape: checked against the 3,443
+   * distinct honoree names in the DQ load (2,818 person-shaped, 498 committee-shaped, 127 single
+   * words that fit neither, none in both).
+   */
+  static final String HONOREE_ORG_MARKER =
+      "(\\b(committee|fund|for|victory|campaign|party|leadership|caucus|coalition|association"
+      + "|council|inc|llc|re[- ]?elect)\\b|pac\\b)";
+
+  static final String HONOREE_ORG_FILTER =
+      "regexp_matches(s.honoree_name, '(?i)" + HONOREE_ORG_MARKER + "')";
+
+  /** honoree_name with leading titles, a trailing "(R-AZ)" party tag and a Jr./Sr./II suffix removed. */
+  private static final String HONOREE_CLEAN =
+      "trim(regexp_replace(regexp_replace(regexp_replace(s.honoree_name, '(?i)^("
+      + HONOREE_TITLES + "\\s+)+', ''), '\\s*\\([^)]*\\)\\s*$', ''), '(?i),?\\s+"
+      + NAME_SUFFIX + "$', ''))";
+
+  /** The name is written "Last, First Middle" when it has a comma, else "First Middle Last". */
+  private static final String HONOREE_COMMA = HONOREE_CLEAN + " LIKE '%,%'";
+  private static final String HONOREE_AFTER_COMMA =
+      "string_split(trim(split_part(" + HONOREE_CLEAN + ", ',', 2)), ' ')";
+  private static final String HONOREE_TOKENS = "string_split(" + HONOREE_CLEAN + ", ' ')";
+
+  static final String HONOREE_LAST =
+      "CASE WHEN " + HONOREE_COMMA + " THEN trim(split_part(" + HONOREE_CLEAN + ", ',', 1)) "
+      + "ELSE list_element(" + HONOREE_TOKENS + ", -1) END";
+  static final String HONOREE_FIRST =
+      "CASE WHEN " + HONOREE_COMMA + " THEN list_element(" + HONOREE_AFTER_COMMA + ", 1) "
+      + "ELSE list_element(" + HONOREE_TOKENS + ", 1) END";
+  static final String HONOREE_MIDDLE =
+      "CASE WHEN " + HONOREE_COMMA + " THEN array_to_string(list_slice(" + HONOREE_AFTER_COMMA
+      + ", 2, len(" + HONOREE_AFTER_COMMA + ")), ' ') "
+      + "ELSE array_to_string(list_slice(" + HONOREE_TOKENS + ", 2, len(" + HONOREE_TOKENS
+      + ") - 1), ' ') END";
+
+  /** Person-shaped: not committee-shaped, and at least two name tokens once titles are stripped
+   *  (a bare surname such as "Sen. Boozman" cannot be matched on first and last name). */
+  static final String HONOREE_PERSON_FILTER =
+      "NOT " + HONOREE_ORG_FILTER + " AND (" + HONOREE_CLEAN + " LIKE '% %' OR " + HONOREE_COMMA + ")";
+
+  /** scotus_reports_cases.opinion_writer: "Elena Kagan", "John G. Roberts, Jr." -- the suffix goes. */
+  private static final String JUSTICE_CLEAN =
+      "trim(regexp_replace(s.opinion_writer, '(?i),?\\s+" + NAME_SUFFIX + "$', ''))";
+  private static final String JUSTICE_TOKENS = "string_split(" + JUSTICE_CLEAN + ", ' ')";
+  static final String JUSTICE_LAST = "list_element(" + JUSTICE_TOKENS + ", -1)";
+  static final String JUSTICE_FIRST = "list_element(" + JUSTICE_TOKENS + ", 1)";
+  static final String JUSTICE_MIDDLE =
+      "array_to_string(list_slice(" + JUSTICE_TOKENS + ", 2, len(" + JUSTICE_TOKENS + ") - 1), ' ')";
+  static final String JUSTICE_FILTER = JUSTICE_CLEAN + " LIKE '% %'";
+
   /** One row per org-type entry in entity-resolution-plan.md's "Org-type sources" table. */
   private static final List<OrgSource> ORG_SOURCES = Arrays.asList(
       new OrgSource(
@@ -264,7 +327,48 @@ public class EntityBridgeListener implements TableLifecycleListener {
       new OrgSource(
           "health", "fda_drug_recalls", null,
           "s.recalling_firm", "s.recall_number", null,
-          "recalling_firm", null, null, "fda_drug_recalling_firm"));
+          "recalling_firm", null, null, "fda_drug_recalling_firm"),
+      // law schema: lobbying disclosures (LDA.gov). registrant_id/client_id are LDA's own ids, so those
+      // two are keyed; the rest carry a name and nothing else. Registrants and clients include
+      // individuals, which the org track's person-shape routing already handles, so there is no
+      // filter. lobbying_filings' registrant_name/client_name (and the copies in the contribution
+      // reports) are denormalized copies of these two dimension tables and are not registered again.
+      new OrgSource(
+          "law", "lobbying_registrants", null,
+          "s.name", "CAST(s.registrant_id AS VARCHAR)", null,
+          "name", null, null, "lobbying_registrant_id"),
+      new OrgSource(
+          "law", "lobbying_clients", null,
+          "s.name", "CAST(s.client_id AS VARCHAR)", null,
+          "name", null, null, "lobbying_client_id"),
+      new OrgSource(
+          "law", "lobbying_foreign_entities", null,
+          "s.name", null, null,
+          "name", null, null, "lobbying_foreign_entity_name"),
+      new OrgSource(
+          "law", "lobbying_affiliated_organizations", null,
+          "s.name", null, null,
+          "name", null, null, "lobbying_affiliated_org_name"),
+      new OrgSource(
+          "law", "lobbying_contribution_pacs", null,
+          "s.pac_name", null, null,
+          "pac_name", null, null, "lobbying_pac_name"),
+      // Same table three times, one name column each (precedent: eia_coal_mines' controller and
+      // operator, sba_loan_approvals' borrower and lender).
+      new OrgSource(
+          "law", "lobbying_contribution_items", null,
+          "s.contributor_name", null, null,
+          "contributor_name", null, null, "lobbying_contributor_name"),
+      new OrgSource(
+          "law", "lobbying_contribution_items", null,
+          "s.payee_name", null, null,
+          "payee_name", null, null, "lobbying_payee_name"),
+      // honoree_name is mixed: people ("Sen. Martin Heinrich (D-NM)") and committees ("Susan Collins
+      // PAC"). This entry takes the committee-shaped rows; the person entry below takes the rest.
+      new OrgSource(
+          "law", "lobbying_contribution_items", null,
+          "s.honoree_name", null, null,
+          "honoree_name", HONOREE_ORG_FILTER, null, "lobbying_honoree_org_name"));
 
   /** One row per person-type entry in entity-resolution-plan.md's "Person-type sources" table. */
   private static final List<PersonSource> PERSON_SOURCES = Arrays.asList(
@@ -329,7 +433,30 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "officials", "federal_judges", null,
           "s.jid", "s.first_name || ' ' || s.last_name",
           "s.last_name", "s.first_name", "s.middle_name",
-          null, null, "officials_judge_jid"));
+          null, null, "officials_judge_jid"),
+      // law schema. lobbyists is the LDA lobbyist dimension (name already split; the copies of these
+      // names in lobbying_activity_lobbyists and the disclosure tables are not registered again).
+      new PersonSource(
+          "law", "lobbyists", null,
+          "CAST(s.lobbyist_id AS VARCHAR)", "s.first_name || ' ' || s.last_name",
+          "s.last_name", "s.first_name", "s.middle_name",
+          null, null, "lobbying_lobbyist_id"),
+      // Person-shaped rows of a mixed column (see HONOREE_ORG_MARKER); name-only, so the source key
+      // is the normalized last|first name. Officials and candidates are honored, which is what
+      // links this to officials_member_bioguide_id and fec_candidate_id.
+      new PersonSource(
+          "law", "lobbying_contribution_items", null,
+          null, "s.honoree_name",
+          HONOREE_LAST, HONOREE_FIRST, HONOREE_MIDDLE,
+          HONOREE_PERSON_FILTER, null, "lobbying_honoree_name"),
+      // The justice who wrote the opinion: 9 distinct names in the DQ load, matched against
+      // officials.federal_judges by the person track. chief_justice and opinion_assigner name
+      // the same justices, so they are not registered separately.
+      new PersonSource(
+          "law", "scotus_reports_cases", null,
+          null, "s.opinion_writer",
+          JUSTICE_LAST, JUSTICE_FIRST, JUSTICE_MIDDLE,
+          JUSTICE_FILTER, null, "scotus_opinion_writer_name"));
 
   /**
    * Builds entity bridges and canonical entities as a standalone job (not as a lifecycle hook).
@@ -372,6 +499,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
 
   private void buildBridgesInternal(Connection conn, String base, String writeBase, String runId)
       throws SQLException, IOException {
+    verifyCanonicalColumnsDeclared();
     createMacros(conn);
     stageGleif(conn, base);
     stageEinHub(conn, base);
@@ -1304,6 +1432,47 @@ public class EntityBridgeListener implements TableLifecycleListener {
           + " has no materialize block in ref-schema.yaml");
     }
     return mat;
+  }
+
+  /**
+   * Fails the sweep before any work if a registry source's canonical columns are not declared in
+   * the target table's {@code materialize.columns}. The writer builds each record from the Iceberg
+   * table's columns, so a registry column missing there is dropped from every row without an error
+   * and the sweep still reports success.
+   */
+  static void verifyCanonicalColumnsDeclared() throws IOException {
+    List<String> orgColumns = new ArrayList<String>();
+    for (OrgSource src : ORG_SOURCES) {
+      orgColumns.add(src.canonicalColumn);
+    }
+    List<String> personColumns = new ArrayList<String>();
+    for (PersonSource src : PERSON_SOURCES) {
+      personColumns.add(src.canonicalColumn);
+    }
+    List<String> problems = new ArrayList<String>();
+    collectUndeclaredColumns("canonical_org_entity", orgColumns, problems);
+    collectUndeclaredColumns("canonical_person_entity", personColumns, problems);
+    if (!problems.isEmpty()) {
+      throw new IllegalStateException("EntityBridgeListener: registry canonical columns missing "
+          + "from ref-schema.yaml materialize.columns (they would be silently dropped from the "
+          + "output): " + problems);
+    }
+  }
+
+  private static void collectUndeclaredColumns(String tableName, List<String> canonicalColumns,
+      List<String> problems) throws IOException {
+    java.util.Set<String> declared = new java.util.HashSet<String>();
+    for (ColumnConfig col : standaloneMaterializeConfig(tableName).getColumns()) {
+      declared.add(col.getName());
+    }
+    for (String column : canonicalColumns) {
+      if (!declared.contains(column)) {
+        problems.add(tableName + "." + column);
+      }
+      if (!declared.contains(column + "_confidence")) {
+        problems.add(tableName + "." + column + "_confidence");
+      }
+    }
   }
 
   /** Finds one table's raw definition in the bundled ref schema. */
