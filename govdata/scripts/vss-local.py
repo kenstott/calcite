@@ -176,7 +176,7 @@ def codes_dataset_for(source_schema):
 # a real embedding never gets picked up as "done" (its codes exist but this list can't see them),
 # which is the failure mode worth avoiding.
 CODES_SOURCE_SCHEMAS = ("sec", "ref", "fedregister", "cyber_threat", "transport", "patents",
-                         "disasters", "geo", "officials", "health")
+                         "disasters", "geo", "officials", "health", "law")
 
 
 # IVF centroids: the coarse quantizer search probes before it looks at any codes. Kept as ONE

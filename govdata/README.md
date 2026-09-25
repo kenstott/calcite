@@ -46,6 +46,7 @@ jdbc:govdata:source=fec,crime,weather
 | `weather` | NOAA GHCND daily observations (temperature, precipitation) |
 | `fec` | FEC campaign finance contributions and expenditures |
 | `fedregister` | Federal Register rules and notices |
+| `law` | U.S. Code (codified federal statutes), current release point |
 | `cyber_vuln` | NIST NVD CVE vulnerability database |
 | `cyber_threat` | CISA known exploited vulnerabilities |
 | `energy` | EIA energy production and consumption |

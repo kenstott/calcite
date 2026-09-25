@@ -89,7 +89,7 @@ CADENCE_DAYS = {
     # Weekly
     "cyber_threat": 14,
     # Monthly
-    "econ": 45, "energy": 45, "environment": 45, "health": 45, "housing": 45,
+    "econ": 45, "law": 45, "energy": 45, "environment": 45, "health": 45, "housing": 45,
     # Annual
     "census": 400, "geo": 400, "crime": 400, "lands": 400, "ag": 400,
     "edu": 400, "research": 400,

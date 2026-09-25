@@ -32,6 +32,7 @@
 #   fec           <historical|daily>
 #   fedregister   <historical|daily>
 #   econ_reference <daily>          — BLS area/industry codes (year-agnostic)
+#   law           <daily|historical|year|range> — legal corpus: U.S. Code (year-agnostic snapshot), congressional bills, Supreme Court opinions, lobbying disclosures (by Congress)
 #   officials     <historical|daily|year|range> — Congress.gov members/nominations, FJC judges
 #
 # Complex schemas (delegate to specialty worker scripts):
@@ -56,7 +57,7 @@ MODE="${2:-}"
 if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
   echo "Usage: $0 <schema> <mode>" >&2
   echo "  Schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
-  echo "           weather, ref, fec, fedregister, officials, econ_reference, research," >&2
+  echo "           weather, ref, fec, fedregister, law, officials, econ_reference, research," >&2
   echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
   echo "           housing, transport, environment, disasters, fiscal, banking" >&2
   exit 1
@@ -475,6 +476,65 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model econ_reference)" "$WORKER_ID"
     ;;
 
+  # ── Law — U.S. Code, congressional bills, Supreme Court opinions, lobbying ────────────────
+  # Some tables are year-agnostic snapshots (usc_sections; the lobbying registries and code
+  # lists, which refresh monthly); the rest are addressed by year or Congress (the bill tables,
+  # the Supreme Court tables, the lobbying filings and contribution reports). Like officials,
+  # this block just resolves MODE to a start/end year and exports them; each table reads them
+  # through its own dimension, and LawSchemaFactory.deriveEarlyProperties() (via CongressRange)
+  # turns them into the Congress range for the bill tables.
+  #   daily             every table, for the current year
+  #   historical|once   the year-addressed tables only, from GOVDATA_START_YEAR (each table's own
+  #                     default when unset) through last year
+  #   YYYY | YYYY-YYYY  the year-addressed tables only, for that year or range
+  # A backfill must not re-run the snapshots — usc_sections re-downloads the whole U.S. Code from
+  # the slow OLRC server — so every non-daily mode is scoped to the tables that have a year or
+  # congress dimension, read from the schema YAML so the list cannot drift, unless the caller
+  # already scoped the run with GOVDATA_TABLES.
+  law)
+    _law_year_addressed_only=true
+    _law_start_year=""
+    case "$MODE" in
+      daily)
+        _law_start_year="$INCREMENTAL_YEAR"
+        _law_end_year="$INCREMENTAL_YEAR"
+        _law_year_addressed_only=false
+        ;;
+      historical|once)
+        _law_end_year=$((INCREMENTAL_YEAR - 1))
+        ;;
+      [0-9][0-9][0-9][0-9])
+        _law_start_year="$MODE"
+        _law_end_year="$MODE"
+        ;;
+      [0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        _law_start_year="${MODE%-*}"
+        _law_end_year="${MODE#*-}"
+        ;;
+      *) echo "law: unknown mode '$MODE'. Valid modes: historical, once, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+    esac
+    if $_law_year_addressed_only && [ -z "${GOVDATA_TABLES:-}" ]; then
+      GOVDATA_TABLES="$(python3 - "$GOVDATA_ROOT/src/main/resources/law/law-schema.yaml" <<'PY'
+import sys
+import yaml
+schema = yaml.safe_load(open(sys.argv[1]))
+print(",".join(t["name"] for t in schema["partitionedTables"]
+               if {"year", "congress"} & set(t.get("dimensions") or {})))
+PY
+)"
+      if [ -z "$GOVDATA_TABLES" ]; then
+        echo "law: found no year-addressed tables in law-schema.yaml — cannot scope a $MODE run" >&2
+        exit 1
+      fi
+      export GOVDATA_TABLES
+    fi
+    if [ -n "$_law_start_year" ]; then
+      export GOVDATA_START_YEAR="$_law_start_year"
+    fi
+    export GOVDATA_END_YEAR="$_law_end_year"
+    run_etl_inline "$(build_inline_model law)" "$WORKER_ID"
+    ;;
+
   # ── Federal officials — universal historical|daily entry point ────────────
   # Congress.gov's endpoints are themselves Congress-scoped (a 2-year window per call), and the
   # presidential-election tables only have data every 4 years — but the only demarc set here is
@@ -610,7 +670,7 @@ case "$SCHEMA" in
   *)
     echo "Unknown schema: $SCHEMA" >&2
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
-    echo "               weather, ref, fec, fedregister, officials, econ_reference, research," >&2
+    echo "               weather, ref, fec, fedregister, law, officials, econ_reference, research," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
     echo "               housing, transport, environment, disasters, fiscal, banking" >&2
     exit 1

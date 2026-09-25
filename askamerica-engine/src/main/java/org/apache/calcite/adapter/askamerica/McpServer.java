@@ -237,7 +237,7 @@ public class McpServer {
 
     static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
-        + "fedregister,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
+        + "fedregister,law,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
         + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal,banking";
 
     // Connections keyed by comma-joined source set. The all-schemas set is warmed at
@@ -715,7 +715,7 @@ public class McpServer {
             "Query US government data using PostgreSQL-compatible SQL.\n\n"
             + "SCHEMAS: sec (SEC filings/XBRL), geo (TIGER/FIPS), econ (BLS/BEA), census (ACS), "
             + "crime (FBI UCR), weather (NOAA GHCND), fec (campaign finance), ref (THE JOIN "
-            + "LAYER — see below — plus NAICS/SIC/calendar lookups), fedregister, officials "
+            + "LAYER — see below — plus NAICS/SIC/calendar lookups), fedregister, law (U.S. Code), officials "
             + "(Congress.gov members/nominations, FJC judges), cyber_vuln (NVD CVEs), "
             + "cyber_threat (CISA KEV), energy (EIA), health (CDC/CMS), edu (NCES), "
             + "econ_reference, patents (USPTO), lands (federal lands), disasters (FEMA/NOAA/"
@@ -1500,9 +1500,14 @@ public class McpServer {
         if (embedderConfigured()) {
         tools.add(
             tool("semantic_search",
-            "Search the FILING TEXT by meaning rather than by keyword — MD&A, risk factors, "
-            + "footnotes and earnings-call passages across sec, ref, fedregister and "
-            + "cyber_threat. Use this instead of a LIKE over chunk_text: wording varies "
+            "Search TEXT by meaning rather than by keyword — SEC MD&A, risk factors and "
+            + "earnings-call passages (sec); statute sections of the U.S. Code (law); Federal "
+            + "Register rules and notices (fedregister); patent abstracts, claims and summaries "
+            + "(patents); clinical trial summaries (health); NTSB accident causes (transport); "
+            + "FEMA declarations (disasters); cyber standards and controls (cyber_threat); "
+            + "federal judge records (officials); and reference descriptions (ref, geo) — across "
+            + "sec, ref, fedregister, cyber_threat, transport, patents, disasters, geo, officials, "
+            + "health and law. Use this instead of a LIKE over chunk_text: wording varies "
             + "('unauthorized access', 'threat actor', 'security event' all describe one thing) "
             + "and a keyword misses every phrasing you did not think of. Returns chunk_id, a "
             + "cosine score, and the source coordinates each hit came from — source_schema, "
@@ -1523,7 +1528,10 @@ public class McpServer {
             + "'risk of', 'if we were to') separates actual occurrence from risk-factor "
             + "boilerplate; in fedregister, check rule_type and effective_date — a PRORULE or "
             + "NOTICE that merely discusses a topic scores the same as a RULE that actually "
-            + "regulates it; in cyber_threat, an ATT&CK technique's abstract description of a "
+            + "regulates it; in law, a section that merely mentions a topic in a definition or "
+            + "an exception scores the same as the section that actually governs it — read the "
+            + "section and its title and chapter (hierarchy) before citing it; in cyber_threat, "
+            + "an ATT&CK technique's abstract description of a "
             + "method scores the same as a real IOC/incident referencing it — distinguish "
             + "attack_techniques hits (methodology, not an event) from ioc_urls/actual indicator "
             + "hits. Do not expect the embedding score alone to make any of these distinctions.",

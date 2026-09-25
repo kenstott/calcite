@@ -16,7 +16,7 @@ module's runtime jars + this model).
 Each entry in [model.json](model.json) mounts one GovData source as a PostgreSQL schema. `sec` is the
 default schema. The bundled set:
 
-`sec`, `geo`, `econ`, `econ_reference`, `census`, `crime`, `weather`, `fec`, `fedregister`,
+`sec`, `geo`, `econ`, `econ_reference`, `census`, `crime`, `weather`, `fec`, `fedregister`, `law`,
 `officials`, `cyber_vuln`, `cyber_threat`, `energy`, `health`, `edu`, `lands`, `patents`, `disasters`,
 `housing`, `cftc`, `ag`, `ref`, `transport`, `environment`, `research`, `fiscal`, `banking`.
 

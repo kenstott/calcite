@@ -121,7 +121,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking"
+  echo "                 ref, fec, fedregister, law, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -195,7 +195,7 @@ for arg in "$@"; do
       queue+=(research:historical research:daily)
       queue+=(fiscal:historical fiscal:daily)
       queue+=(banking:historical banking:daily)
-      queue+=(econ_reference:daily)
+      queue+=(econ_reference:daily law:daily)
       # See the daily) alias below for why ref:daily is queued last here too.
       queue+=(ref:daily)
       ;;
@@ -220,6 +220,10 @@ for arg in "$@"; do
       # research above: total volume (members/nominations/judges) is small enough that per-year
       # slicing would just double-run each 2-year Congress term without a real parallelism payoff.
       hcy_enqueue officials once
+      # law: the U.S. Code is a daily-only snapshot, but the bill, lobbying and court tables need a
+      # historical backfill; worker.sh scopes a non-daily law run to the tables that declare a
+      # year or congress dimension.
+      hcy_enqueue law once
       # cyber_threat is NOT here — all its tables are current-snapshot/delta feeds with no year
       # axis (daily-only). cyber_vuln:historical backfills only its NVD publish-dated tables in a
       # single windowed pass (NVD resolver spans the full pub-year range), so it isn't sliced
@@ -338,6 +342,7 @@ for arg in "$@"; do
         fiscal:daily
         banking:daily
         econ_reference:daily
+        law:daily
         # ref:daily is queued last, not for a hard ordering guarantee (this pool has none —
         # admission is memory-budget-gated, not dependency-gated, so ref can still start
         # concurrently with a still-running earlier slot) but because queue position is a real,

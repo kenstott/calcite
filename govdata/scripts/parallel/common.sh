@@ -761,6 +761,12 @@ generate_single_schema_model() {
     econ_reference)
       operand_body="\"dataSource\": \"econ_reference\""
       ;;
+    law)
+      # No year fields in the operand: the year and Congress bounds come from GOVDATA_START_YEAR
+      # and GOVDATA_END_YEAR, which the schema YAML reads through ${...} (worker.sh law exports
+      # them for its own runs).
+      operand_body="\"dataSource\": \"law\""
+      ;;
     officials)
       # No year dimension (members/nominations fan out by `congress`, an env-knob
       # RANGE resolved from the schema YAML itself via ${GOVDATA_START_CONGRESS}/

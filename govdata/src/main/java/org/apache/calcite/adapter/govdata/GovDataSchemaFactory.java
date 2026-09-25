@@ -44,6 +44,7 @@ import org.apache.calcite.adapter.govdata.patents.PatentsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.research.ResearchSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
+import org.apache.calcite.adapter.govdata.law.LawSchemaFactory;
 import org.apache.calcite.adapter.govdata.weather.WeatherSchemaFactory;
 import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.schema.ConstraintCapableSchemaFactory;
@@ -88,6 +89,8 @@ import org.apache.calcite.adapter.file.etl.VariableResolver;
  *   <li>ref - Reference data (GLEIF entities, CIK mapping, OpenFIGI instruments)</li>
  *   <li>fec - Federal Election Commission campaign finance data</li>
  *   <li>fedregister - U.S. Federal Register (rules, proposed rules, notices, presidential docs)</li>
+ *   <li>law - The legal corpus; currently the U.S. Code (codified federal statutes) from OLRC
+ *       USLM XML release points</li>
  *   <li>officials - Federal elected/appointed officeholders (Congress.gov members and
  *       nominations, FJC federal judges)</li>
  *   <li>cyber_vuln - Cybersecurity vulnerability data (NVD CVEs, CISA KEV, OSV, GitHub SA)</li>
@@ -365,6 +368,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "fr":
         return new FedRegisterSchemaFactory();
 
+      case "law":
+        return new LawSchemaFactory();
+
       case "officials":
         return new OfficialsSchemaFactory();
 
@@ -449,7 +455,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, officials, cyber_vuln, cyber_threat, health, energy, edu, patents, lands,"
+            + " fedregister, law, officials, cyber_vuln, cyber_threat, health, energy, edu, patents, lands,"
             + " cftc, ag, housing, transport, environment, research, fiscal, banking");
     }
   }

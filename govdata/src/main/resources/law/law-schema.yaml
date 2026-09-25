@@ -1,0 +1,4715 @@
+# ============================================================================
+# Law Schema (LAW)
+# ============================================================================
+# Data Source:
+#   - Office of the Law Revision Counsel (OLRC), U.S. House of Representatives
+#     https://uscode.house.gov/download/download.shtml — USLM XML release points
+#   - One zip per title: xml_usc{title}@{congress}-{release}.zip, one XML file per zip.
+#     The current release point (e.g. 119-111 = current through Public Law 119-111) is
+#     read from the xml_uscAll link on the download page at run time.
+#   - Coverage: the current, in-force text of the Code — Titles 1-52 and 54 plus the
+#     appendices to Titles 5 and 18. A snapshot of the latest release point, not a
+#     history: prior release points (back to Public Law 113-21, 2013) are not ingested.
+#   - Not fetched, because they have no <section> elements to become rows: Title 53
+#     (reserved, the OLRC serves an empty redirect), Title 50 Appendix (a 1.6 KB stub),
+#     and the Title 11 and Title 28 Appendices (Federal Rules of Bankruptcy, Civil,
+#     Criminal and Appellate Procedure etc. — court rules, not statutory sections).
+#
+# Data Source (bills):
+#   - GovInfo Bill Status bulk data (govinfo.gov/bulkdata/BILLSTATUS) — GPO / Library of Congress
+#     * one zip per (Congress, bill type), one XML file per bill; the Congresses 108 onward are
+#       published. bills, bill_actions, bill_cosponsors, bill_committees,
+#       bill_committee_activities, bill_subjects, bill_text_versions, bill_related_bills,
+#       bill_amendments, bill_amendment_actions, bill_amendment_cosponsors,
+#       bill_action_committees, bill_recorded_votes, bill_titles, bill_summaries,
+#       bill_cbo_cost_estimates, bill_committee_reports, bill_notes. No API key needed.
+#
+# Data Source (lobbying):
+#   - LDA.gov REST API (lda.gov/api/v1) — U.S. Senate Office of Public Records. Registrations
+#     (LD-1), quarterly activity reports (LD-2) and political-contribution reports (LD-203),
+#     fetched a calendar quarter at a time by the date each was posted, plus the registrant,
+#     client and lobbyist registries and the small code lists. Needs a free API key in
+#     LDA_API_KEY: without it the API allows 15 requests a minute instead of 120, so the
+#     provider refuses to run rather than crawl anonymously. Tables: lobbying_filings,
+#     lobbying_activities, lobbying_activity_lobbyists, lobbying_activity_government_entities,
+#     lobbying_foreign_entities, lobbying_affiliated_organizations,
+#     lobbying_conviction_disclosures, lobbying_contribution_reports,
+#     lobbying_contribution_items, lobbying_contribution_pacs, lobbyists,
+#     lobbying_registrants, lobbying_clients, lobbying_issue_codes,
+#     lobbying_government_entity_codes, lobbying_filing_types, lobbying_contribution_item_types.
+#
+# Features:
+#   - The U.S. Code and bill tables need no API key or rate limiting (bulk download); the
+#     lobbying tables need LDA_API_KEY
+#   - usc_sections.section_text is a text blob: chunked into ref.vectorized_chunks by
+#     ChunkOrganizer (DocumentBlobSource) and embedded by the routine vss-local sweep
+#   - Regulations (CFR) are a separate source and are not in this schema
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:law}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  The legal corpus, one source per group of tables. It currently holds the United States Code
+  (codified general and permanent federal statutes) from the Office
+  of the Law Revision Counsel's USLM XML release points at uscode.house.gov, one row per
+  section (about 60,500 at release point 119-111), covering Titles 1-52 and 54 and the
+  appendices to Titles 5 and 18. This is
+  the current in-force text at the latest release point (release_point column, e.g.
+  119-111 = current through Public Law 119-111), replaced wholesale on each run — it is not
+  a history of prior versions. is_positive_law separates titles Congress has enacted as
+  law itself (e.g. Titles 5, 18, 28) from titles that are only prima facie evidence of the
+  law (e.g. Titles 26 and 42). Regulations (CFR) and private or temporary laws are not in this
+  schema; the Federal Register lives in the fedregister schema. Tables: usc_sections
+  (section_text holds the operative text and is the field embedded for semantic search;
+  source_credit holds the enactment history citing each Public Law and Statutes at Large
+  page); and `bills` with its child tables, covering every bill and resolution introduced in
+  Congress from the GovInfo Bill Status bulk data — status and sponsor in `bills`; action
+  history, cosponsors, committee referrals and their activity, subject terms, published text,
+  related bills, amendments and their actions and cosponsors, roll-call votes, titles, CRS
+  summaries, CBO estimates, committee reports and editorial notes in `bill_actions`,
+  `bill_cosponsors`, `bill_committees`, `bill_committee_activities`, `bill_subjects`,
+  `bill_text_versions`, `bill_related_bills`, `bill_amendments`, `bill_amendment_actions`,
+  `bill_amendment_cosponsors`, `bill_action_committees`, `bill_recorded_votes`, `bill_titles`,
+  `bill_summaries`, `bill_cbo_cost_estimates`, `bill_committee_reports` and `bill_notes`;
+  and federal lobbying disclosures from LDA.gov — `lobbying_filings` (LD-1 registrations and
+  LD-2 quarterly reports: who lobbied for whom and for how much) with `lobbying_activities`
+  (the issues, in free text that names bills), `lobbying_activity_lobbyists`,
+  `lobbying_activity_government_entities`, `lobbying_foreign_entities`,
+  `lobbying_affiliated_organizations` and `lobbying_conviction_disclosures`; LD-203
+  political-contribution reports in `lobbying_contribution_reports`,
+  `lobbying_contribution_items` and `lobbying_contribution_pacs`; the registries `lobbyists`,
+  `lobbying_registrants` and `lobbying_clients`; and the code lists `lobbying_issue_codes`,
+  `lobbying_government_entity_codes`, `lobbying_filing_types` and
+  `lobbying_contribution_item_types`. The Senate Office of Public Records cannot vouch for
+  the lobbying data or analyses derived from it after retrieval from LDA.gov.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_congress: &partition_congress
+    name: congress
+    type: INTEGER
+
+  partition_bill_type: &partition_bill_type
+    name: bill_type
+    type: VARCHAR
+
+  bill_partitions: &bill_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_congress
+      - *partition_bill_type
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  scotus_year_partitions: &scotus_year_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  partition_quarter: &partition_quarter
+    name: quarter
+    type: VARCHAR
+
+  lobbying_window_partitions: &lobbying_window_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_quarter
+
+  lobbying_type_partitions: &lobbying_type_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # The bill tables fan out by Congress. The only demarc a caller sets is
+  # GOVDATA_START_YEAR/GOVDATA_END_YEAR; LawSchemaFactory.deriveEarlyProperties (via
+  # CongressRange) turns that operand into GOVDATA_START_CONGRESS/GOVDATA_END_CONGRESS before this
+  # YAML is parsed. Each is set independently, so a run that gives only an end year still starts at
+  # the 111th Congress (2009-2010, the repo's 2010 floor); the 111-119 literals below are used
+  # only when no year reaches the schema at all (e.g. a read-only connection).
+  congress_range: &congress_range
+    type: range
+    start: "${GOVDATA_START_CONGRESS:111}"
+    end: "${GOVDATA_END_CONGRESS:119}"
+
+  # GovInfo publishes one BILLSTATUS zip per (Congress, bill type); these are the eight
+  # congress.gov bill types (verified live 2026-09-25: all eight zips exist for every Congress
+  # from the 108th to the 119th). A missing zip is a real error, not an empty batch.
+  bill_types: &bill_types
+    type: list
+    values: ["hr", "s", "hjres", "sjres", "hconres", "sconres", "hres", "sres"]
+
+  # Cache buster for the current Congress, whose bill files change daily at the source.
+  # GovDataSchemaFactory sets GOVDATA_CURRENT_MONTH from today's date on every run, so each
+  # calendar month is a new fetch unit and the raw zip is downloaded again once a month; reruns
+  # within a month reuse the cached zip. Deliberately a single value: a multi-value dimension
+  # with no partition column would multiply rows.
+  bill_refresh_month: &bill_refresh_month ["${GOVDATA_CURRENT_MONTH:12}"]
+
+  # The Court term (the year its October term began) of the bound volumes of the United States
+  # Reports on GovInfo: volume 2 (term 1781) through volume 583 (term 2017). GovInfo has no
+  # later bound volume; terms from 2018 come from the slip opinions on supremecourt.gov, so
+  # the default end is 2017 and a term with no volume yields no rows.
+  scotus_reports_term_range: &scotus_reports_term_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1781}"
+    end: "${GOVDATA_END_YEAR:2017}"
+    dataLag: 0
+
+  # The terms supremecourt.gov lists opinions for that the bound volumes on GovInfo do not
+  # carry: from term 2017 (whose opinions after March 20, 2018 are not in volume 583) to the
+  # current one. A term is included from October, when it begins.
+  scotus_slip_term_range: &scotus_slip_term_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2017}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+    releaseMonth: 10
+
+  # Lobbying filings are fetched one calendar quarter at a time by the date they were POSTED
+  # (backfill_period: quarterly supplies period_start/period_end to LdaApiProvider). Past quarters
+  # are immutable, so completion markers skip them; the current quarter is re-read each run.
+  # LDA.gov holds filings back to 1999; 2010 is this repo's default floor.
+  lobbying_year_range: &lobbying_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 0
+    descending: true
+
+  lobbying_quarter: &lobbying_quarter
+    type: quarter
+
+  # Cache buster for the registry snapshots (lobbyists, registrants, clients), which are read whole
+  # and take a while: a new month is a new fetch unit; runs within a month reuse the cached pages.
+  lobbying_refresh_month: &lobbying_refresh_month ["${GOVDATA_CURRENT_MONTH:12}"]
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+# Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`.
+compaction_defaults: &compaction_defaults
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # USC_SECTIONS — one row per section of the U.S. Code
+  # ---------------------------------------------------------------------------
+  # Partitioned by the OLRC file key (title=01..52, 54, 05a, 18a) so each title is
+  # fetched, streamed and replaced independently — the OLRC server is slow (about 100 KB/s
+  # observed on the all-titles zip), so one small zip per title keeps every fetch resumable.
+  # The primary key is (title_number, section_number, section_seq): the Code itself
+  # numbers a few sections twice within a title (e.g. 5 U.S.C. 3598, 5757), and the
+  # appendix files carry no USLM identifier attribute, so neither the identifier nor
+  # the section number alone is unique.
+  - name: usc_sections
+    pattern: "title=*/*.parquet"
+    dataset_type: snapshot
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: title
+          type: VARCHAR
+    comment: >
+      One row per section of the U.S. Code at the current OLRC release point. The operative
+      text of the section is in section_text (statutory notes, tables of contents and
+      editorial footnotes are excluded); the Public Law and Statutes at Large citations that
+      enacted and amended it are in source_credit. Sections that were repealed, omitted or
+      transferred keep their row (status says which) but have a null section_text because
+      no operative text remains. Filter on is_positive_law for titles enacted as law, and
+      on title_number/chapter_number for a subject area (e.g. title 26 = Internal Revenue
+      Code, 42 = Public Health and Welfare, 15 = Commerce and Trade).
+
+    dimensions:
+      title:
+        - "01"
+        - "02"
+        - "03"
+        - "04"
+        - "05"
+        - "05a"
+        - "06"
+        - "07"
+        - "08"
+        - "09"
+        - "10"
+        - "11"
+        - "12"
+        - "13"
+        - "14"
+        - "15"
+        - "16"
+        - "17"
+        - "18"
+        - "18a"
+        - "19"
+        - "20"
+        - "21"
+        - "22"
+        - "23"
+        - "24"
+        - "25"
+        - "26"
+        - "27"
+        - "28"
+        - "29"
+        - "30"
+        - "31"
+        - "32"
+        - "33"
+        - "34"
+        - "35"
+        - "36"
+        - "37"
+        - "38"
+        - "39"
+        - "40"
+        - "41"
+        - "42"
+        - "43"
+        - "44"
+        - "45"
+        - "46"
+        - "47"
+        - "48"
+        - "49"
+        - "50"
+        - "51"
+        - "52"
+        - "54"
+
+    columns:
+      - name: title_number
+        type: string
+        nullable: false
+        comment: U.S. Code title number as OLRC publishes it (e.g. 5, 26, 42; 5a for the Title 5 Appendix)
+      - name: title_name
+        type: string
+        nullable: false
+        comment: Title heading (e.g. GOVERNMENT ORGANIZATION AND EMPLOYEES)
+      - name: is_positive_law
+        type: boolean
+        nullable: false
+        comment: True when Congress has enacted the whole title into positive law (e.g. Titles 5, 18, 28); false when the title is only prima facie evidence of the law (e.g. Titles 26 and 42) and for every appendix
+      - name: release_point
+        type: string
+        nullable: false
+        comment: OLRC release point this row was read from, {congress}-{public law number} (e.g. 119-111 = current through Public Law 119-111)
+      - name: section_number
+        type: string
+        nullable: false
+        comment: Section number as printed, including letter suffixes and ranges for grouped repealed sections (e.g. 101, 1395w-4, 2 to 15)
+      - name: section_seq
+        type: integer
+        nullable: false
+        comment: 1 for the first occurrence of section_number within the title, 2 for a second section the Code numbers identically (e.g. the two 5 U.S.C. 3598 sections)
+      - name: usc_identifier
+        type: string
+        nullable: true
+        comment: USLM identifier (e.g. /us/usc/t5/s101); null for appendix titles, which carry none; a range of grouped repealed sections lists each identifier space-separated
+      - name: citation
+        type: string
+        nullable: false
+        comment: Standard citation, e.g. 5 U.S.C. § 101; appendix sections are cited 5A U.S.C. App. § 1
+      - name: heading
+        type: string
+        nullable: true
+        comment: Section heading (e.g. Executive departments); Repealed, Omitted or Transferred for sections in those states
+      - name: status
+        type: string
+        nullable: true
+        comment: "OLRC section status when the section carries no current operative text under its own number: repealed, omitted, transferred, renumbered, reserved, vacant or unknown; null for a current section"
+      - name: hierarchy
+        type: string
+        nullable: true
+        comment: Path of enclosing divisions below the title, outermost first (e.g. Subtitle II — Civil Service > Part III — Employees > Chapter 33 — Examination, Selection, and Placement)
+      - name: chapter_number
+        type: string
+        nullable: true
+        comment: Number of the enclosing chapter; null for sections that sit directly under the title or an appendix
+      - name: chapter_heading
+        type: string
+        nullable: true
+        comment: Heading of the enclosing chapter
+      - name: section_text
+        type: string
+        nullable: true
+        comment: "Operative text of the section — its citation and heading on the first line, then every subsection, paragraph and clause on its own line, excluding statutory notes; null when nothing operative remains (repealed, omitted or transferred sections, and the few whose only content is a pointer in a note: the Title 18 \"(Rule)\" entries that refer to the Federal Rules of Criminal Procedure, and 19 U.S.C. 1202). Text blob embedded into ref.vectorized_chunks as source_type usc_section"
+      - name: source_credit
+        type: string
+        nullable: true
+        comment: Enactment history in the Code's own words — each Public Law, date and Statutes at Large page that enacted or amended the section
+
+    # The provider (UsCodeXmlDataProvider) reads the current release point off this page, then
+    # downloads releasepoints/us/pl/{congress}/{release}/xml_usc{title}@{congress}-{release}.zip
+    # for the title dimension value and streams its XML; the url below is only the anchor page.
+    source:
+      type: http
+      url: "https://uscode.house.gov/download/download.shtml"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.UsCodeXmlDataProvider"
+
+    materialize:
+      format: iceberg
+      partition:
+        columns: [title]
+      output:
+        pattern: "title={title}/"
+      # Nested under materialize: MaterializeConfig.fromMap reads the iceberg sub-map off the
+      # materialize map only (see fr_documents in the fedregister schema).
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [title]
+        incrementalKeys: [title]
+        overwritePartitions: true   # snapshot: replace the title=<key> partition each run (idempotent)
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILLS — every bill and resolution introduced in Congress, one row per bill
+  # ---------------------------------------------------------------------------
+  # Source: GovInfo Bill Status bulk XML (Congress.gov / GPO / House Clerk / Senate Secretary,
+  # jointly published). One zip per (Congress, bill type), one XML file per bill. bills,
+  # bill_actions and bill_cosponsors all read the same cached zip through
+  # CongressBillStatusProvider, which streams it (StAX) and never holds more than one bill.
+  - name: bills
+    pattern: "type=bills/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Every bill and resolution introduced in the U.S. Congress, one row per bill, from the
+      GovInfo Bill Status bulk data (the same data the Congress.gov API serves). Partitioned
+      by `congress` (e.g. 119 = 2025-2026) and `bill_type`: hr (House bill), s (Senate bill),
+      hjres / sjres (joint resolutions), hconres / sconres (concurrent resolutions), hres /
+      sres (simple resolutions). `bill_number` is unique only within (congress, bill_type).
+      `latest_action_text` / `latest_action_date` are the best single status signal
+      (e.g. "Became Public Law No: 119-21.", "Referred to the House Committee on the
+      Judiciary."); `law_type` and `law_number` are populated only once a bill is enacted.
+      Sponsor columns carry the first listed sponsor. `action_count` and `cosponsor_count`
+      count the rows in bill_actions and bill_cosponsors for the same bill; committee
+      referrals, subjects, text, related bills, amendments, votes, titles, summaries, CBO
+      estimates, committee reports and notes are in the other bill_* tables (bill_committees,
+      bill_subjects, bill_text_versions, bill_related_bills, bill_amendments,
+      bill_recorded_votes, bill_titles, bill_summaries, bill_cbo_cost_estimates,
+      bill_committee_reports, bill_notes, ...). The current
+      Congress changes daily at the source and is re-pulled monthly; completed Congresses are
+      static. The source publishes the 108th Congress onward; the default GOVDATA_START_YEAR
+      (2010) starts at the 111th.
+
+    dimensions:
+      type:
+        - bills
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type (H.R. 1 -> 1)
+      - name: origin_chamber
+        type: string
+        nullable: true
+        comment: Chamber the bill was introduced in (House or Senate)
+      - name: introduced_date
+        type: string
+        nullable: true
+        comment: Date introduced (YYYY-MM-DD)
+      - name: title
+        type: string
+        nullable: true
+        comment: Official title as introduced (e.g. "An act to provide for reconciliation ...")
+      - name: policy_area
+        type: string
+        nullable: true
+        comment: >
+          Congressional Research Service policy area (e.g. "Economics and Public Finance");
+          one per bill, assigned some time after introduction so early rows can be NULL
+      - name: sponsor_bioguide_id
+        type: string
+        nullable: true
+        comment: Bioguide ID of the first listed sponsor; joins to officials.members
+      - name: sponsor_full_name
+        type: string
+        nullable: true
+        comment: Sponsor display name with party and state, e.g. "Rep. Arrington, Jodey C. [R-TX-19]"
+      - name: sponsor_party
+        type: string
+        nullable: true
+        comment: Sponsor party code (R, D, I)
+      - name: sponsor_state
+        type: string
+        nullable: true
+        comment: Sponsor two-letter state code
+      - name: sponsor_district
+        type: string
+        nullable: true
+        comment: Sponsor House district number; NULL for senators
+      - name: latest_action_date
+        type: string
+        nullable: true
+        comment: Date of the most recent action (YYYY-MM-DD)
+      - name: latest_action_text
+        type: string
+        nullable: true
+        comment: Text of the most recent action — the primary status signal
+      - name: law_type
+        type: string
+        nullable: true
+        comment: "Public Law or Private Law; NULL unless the bill was enacted"
+      - name: law_number
+        type: string
+        nullable: true
+        comment: Law number, e.g. 119-21; NULL unless the bill was enacted
+      - name: action_count
+        type: integer
+        nullable: false
+        comment: Number of actions recorded for the bill (rows in bill_actions)
+      - name: cosponsor_count
+        type: integer
+        nullable: false
+        comment: Number of cosponsors currently listed (rows in bill_cosponsors)
+      - name: update_date
+        type: string
+        nullable: true
+        comment: Last update timestamp on Congress.gov
+      - name: legislation_url
+        type: string
+        nullable: true
+        comment: Congress.gov page for the bill
+      - name: latest_action_time
+        type: string
+        nullable: true
+        comment: >
+          Time of the latest action when recorded (HH:MM:SS); usually NULL
+      - name: update_date_including_text
+        type: string
+        nullable: true
+        comment: Last update including text changes (UTC timestamp); NULL in a few older files
+      - name: constitutional_authority_statement
+        type: string
+        nullable: true
+        comment: >
+          Constitutional authority statement as printed in the Congressional Record
+          (text with markup); present for most recent bills
+      - name: sponsor_is_by_request
+        type: boolean
+        nullable: true
+        comment: True when the sponsor introduced the bill by request
+      - name: on_behalf_of_bioguide_id
+        type: string
+        nullable: true
+        comment: Bioguide ID of the member the bill was introduced on behalf of; rare, mostly older files
+      - name: on_behalf_of_full_name
+        type: string
+        nullable: true
+        comment: Name of the member the bill was introduced on behalf of
+      - name: on_behalf_of_type
+        type: string
+        nullable: true
+        comment: Relationship, e.g. "Introduced on behalf of"
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bills/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bills
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_ACTIONS — full action history per bill
+  # ---------------------------------------------------------------------------
+  - name: bill_actions
+    pattern: "type=bill_actions/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Every recorded action on every bill in `bills`, one row per action, from the same
+      GovInfo Bill Status XML — introduction, committee referral, markup, floor votes,
+      passage, presentment, signing. Join to `bills` on (congress, bill_type, bill_number).
+      `action_seq` numbers actions oldest-first starting at 1, so it stays fixed when later
+      actions are added. `action_type` is the source's coarse category (observed in the 119th: IntroReferral,
+      Committee, Floor, Calendars, Discharge, ResolvingDifferences, President, Veto, BecameLaw,
+      NotUsed) and `action_code` its code (e.g. E40000). Only about a fifth of actions carry an
+      `action_time`.
+
+    dimensions:
+      type:
+        - bill_actions
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: action_seq
+        type: integer
+        nullable: false
+        comment: Position of the action, 1 = oldest
+      - name: action_date
+        type: string
+        nullable: true
+        comment: Date of the action (YYYY-MM-DD)
+      - name: action_time
+        type: string
+        nullable: true
+        comment: Time of day when the source records one (HH:MM:SS), otherwise NULL
+      - name: text
+        type: string
+        nullable: true
+        comment: Action text as recorded, e.g. "Referred to the House Committee on the Judiciary."
+      - name: action_type
+        type: string
+        nullable: true
+        comment: Source's coarse action category
+      - name: action_code
+        type: string
+        nullable: true
+        comment: Source action code
+      - name: source_system
+        type: string
+        nullable: true
+        comment: Where the action was recorded — House floor actions, House committee actions, Senate, or Library of Congress
+      - name: calendar_number
+        type: string
+        nullable: true
+        comment: Calendar code when the action placed the bill on a calendar (e.g. H00243); NULL otherwise
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_actions/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_actions
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_COSPONSORS — cosponsors per bill
+  # ---------------------------------------------------------------------------
+  - name: bill_cosponsors
+    pattern: "type=bill_cosponsors/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Cosponsors of every bill in `bills`, one row per (bill, cosponsor), from the same
+      GovInfo Bill Status XML. Join to `bills` on (congress, bill_type, bill_number) and to
+      officials.members on `bioguide_id`. `is_original_cosponsor` is true for members who
+      signed on at introduction; `withdrawn_date` is set when a cosponsor later withdrew.
+      Bills with no cosponsors have no rows here.
+      A member who withdrew and later re-signed appears twice, with different
+      `sponsorship_date`; a few identical repeats also exist upstream (2 in the 108th-119th).
+
+    dimensions:
+      type:
+        - bill_cosponsors
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: bioguide_id
+        type: string
+        nullable: false
+        comment: Bioguide ID of the cosponsor; joins to officials.members
+      - name: full_name
+        type: string
+        nullable: true
+        comment: Cosponsor display name with party and state
+      - name: party
+        type: string
+        nullable: true
+        comment: Party code (R, D, I)
+      - name: state
+        type: string
+        nullable: true
+        comment: Two-letter state code
+      - name: district
+        type: string
+        nullable: true
+        comment: House district number; NULL for senators
+      - name: sponsorship_date
+        type: string
+        nullable: true
+        comment: Date the member became a cosponsor (YYYY-MM-DD)
+      - name: is_original_cosponsor
+        type: boolean
+        nullable: true
+        comment: True if the member cosponsored at introduction
+      - name: withdrawn_date
+        type: string
+        nullable: true
+        comment: Date the member withdrew as cosponsor; NULL if still a cosponsor
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_cosponsors/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_cosponsors
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_COMMITTEES — committees and subcommittees a bill was referred to
+  # ---------------------------------------------------------------------------
+  - name: bill_committees
+    pattern: "type=bill_committees/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Committees and subcommittees a bill was referred to, one row per committee or
+      subcommittee, from the same GovInfo Bill Status XML. Join to `bills` on (congress,
+      bill_type, bill_number). `committee_system_code` is the Congress.gov committee code
+      (e.g. hsju00 = House Judiciary). A subcommittee row (e.g. hsvr10) has
+      `parent_committee_system_code` set to its full committee's code and NULL `chamber` and
+      `committee_type`, which the source records only on the full committee. `committee_type`
+      is Standing, Select, Special or Other. What each committee did with the bill (referred, markup,
+      reported, hearings) is in bill_committee_activities.
+
+    dimensions:
+      type:
+        - bill_committees
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: committee_system_code
+        type: string
+        nullable: false
+        comment: Congress.gov committee code, e.g. hsju00 (House Judiciary)
+      - name: committee_name
+        type: string
+        nullable: true
+        comment: Committee or subcommittee name, e.g. "Judiciary Committee"
+      - name: chamber
+        type: string
+        nullable: true
+        comment: House, Senate or Joint; NULL on subcommittee rows
+      - name: committee_type
+        type: string
+        nullable: true
+        comment: Standing, Select, Special or Other; NULL on subcommittee rows
+      - name: parent_committee_system_code
+        type: string
+        nullable: true
+        comment: Full committee code when this row is a subcommittee; NULL on full-committee rows
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_committees/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_committees
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_COMMITTEE_ACTIVITIES — what each committee did with a bill
+  # ---------------------------------------------------------------------------
+  - name: bill_committee_activities
+    pattern: "type=bill_committee_activities/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Every recorded committee activity on a bill, one row per (committee or subcommittee,
+      activity), from the same GovInfo Bill Status XML. Join to bill_committees on
+      (congress, bill_type, bill_number, committee_system_code). `activity_name` values
+      include Referred To, Markup By, Reported By, Hearings By (full committee), Discharged
+      From, Reported Original Measure and Bills of Interest - Exchange of Letters, spelled as
+      the source publishes them — capitalization is not consistent (Referred To / Referred to).
+      `activity_date` is a UTC timestamp. The source occasionally repeats an identical
+      activity, so the rows have no unique key.
+
+    dimensions:
+      type:
+        - bill_committee_activities
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: committee_system_code
+        type: string
+        nullable: false
+        comment: Committee or subcommittee code; joins to bill_committees
+      - name: activity_name
+        type: string
+        nullable: true
+        comment: Activity as published, e.g. "Referred To", "Markup By", "Reported By"
+      - name: activity_date
+        type: string
+        nullable: true
+        comment: >
+          UTC timestamp of the activity (YYYY-MM-DDTHH:MM:SSZ); NULL for a few
+          activities
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_committee_activities/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_committee_activities
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_SUBJECTS — CRS legislative subject terms
+  # ---------------------------------------------------------------------------
+  - name: bill_subjects
+    pattern: "type=bill_subjects/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Congressional Research Service legislative subject terms assigned to a bill, one row
+      per (bill, subject), from the same GovInfo Bill Status XML — e.g. "Abortion",
+      "Accounting and auditing". A bill can carry hundreds (H.R. 1 in the 119th has 239). The
+      single broader policy area is `bills.policy_area`, not repeated here. Subjects are
+      assigned some time after introduction, so a new bill may have none yet.
+
+    dimensions:
+      type:
+        - bill_subjects
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: subject_name
+        type: string
+        nullable: false
+        comment: CRS legislative subject term
+      - name: update_date
+        type: string
+        nullable: true
+        comment: When the term was last updated on Congress.gov (UTC timestamp)
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_subjects/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_subjects
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_TEXT_VERSIONS — published text of a bill, by version and format
+  # ---------------------------------------------------------------------------
+  - name: bill_text_versions
+    pattern: "type=bill_text_versions/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Every published text version of a bill, one row per (version, format), from the same
+      GovInfo Bill Status XML; the `url` points at the text on govinfo.gov. `version_type`
+      follows the bill through Congress using GPO's stage names — Introduced in House/Senate,
+      Referred in Senate, Reported in House, Reported to Senate, Placed on Calendar Senate,
+      Engrossed in House/Senate, Engrossed Amendment House/Senate, Considered and Passed
+      House/Senate, Agreed to House/Senate, Enrolled Bill, Public Law, and older stage names
+      such as Additional Sponsors House and Committee Discharged Senate. `format_type` is set only for the "United States Legislative Markup" (USLM)
+      file; the plain XML row has NULL `format_type`. A version whose text is not yet
+      published has one row with NULL `url`, and some versions (e.g. Enrolled Bill) have NULL
+      `version_date`.
+      The source occasionally lists an identical version twice.
+
+    dimensions:
+      type:
+        - bill_text_versions
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: version_type
+        type: string
+        nullable: true
+        comment: Stage of the bill this text belongs to, e.g. "Introduced in House"
+      - name: version_date
+        type: string
+        nullable: true
+        comment: UTC timestamp of the version; NULL when the source gives none
+      - name: format_type
+        type: string
+        nullable: true
+        comment: >
+          "United States Legislative Markup" for the USLM file; NULL for the plain XML
+      - name: url
+        type: string
+        nullable: true
+        comment: govinfo.gov URL of the text; NULL when no format is published yet
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_text_versions/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_text_versions
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_RELATED_BILLS — bills linked to this bill
+  # ---------------------------------------------------------------------------
+  - name: bill_related_bills
+    pattern: "type=bill_related_bills/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Bills the Congressional Research Service, the House or GPO link to a bill, one row per
+      (bill, related bill, relationship), from the same GovInfo Bill Status XML.
+      `relationship_type` is one of Related bill, Identical bill, Companion bill, Cross-Congress
+      related bill, Contained in public law, Public law contains the text, Procedurally related
+      (also spelled Procedurally-related in older files), Related document, Text similarities,
+      PrimaryCompanionBillBecameLaw, SecondaryCompanionBillBecameLaw; `identified_by` says who
+      made the link (CRS, House, Senate, U.S. Government Publishing Office). `related_bill_type` uses
+      the same lowercase slugs as `bill_type` (hr, s, hres, ...), so (related_congress,
+      related_bill_type, related_bill_number) joins straight back to `bills`. The
+      `related_latest_action_*` columns are the related bill's latest action as of this
+      bill's last update and can lag `bills` for that bill.
+      The source occasionally repeats an identical relationship, so the rows have no unique
+      key.
+
+    dimensions:
+      type:
+        - bill_related_bills
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: related_congress
+        type: integer
+        nullable: true
+        comment: Congress of the related bill (differs for a Cross-Congress relationship)
+      - name: related_bill_type
+        type: string
+        nullable: true
+        comment: Bill type slug of the related bill (hr, s, hres, ...); joins to bills.bill_type
+      - name: related_bill_number
+        type: integer
+        nullable: true
+        comment: Bill number of the related bill
+      - name: related_title
+        type: string
+        nullable: true
+        comment: Title of the related bill
+      - name: related_latest_action_date
+        type: string
+        nullable: true
+        comment: Related bill latest action date (YYYY-MM-DD)
+      - name: related_latest_action_time
+        type: string
+        nullable: true
+        comment: Related bill latest action time when recorded; usually NULL
+      - name: related_latest_action_text
+        type: string
+        nullable: true
+        comment: Related bill latest action text
+      - name: relationship_type
+        type: string
+        nullable: true
+        comment: How the bills are related, e.g. "Identical bill", "Related bill"
+      - name: identified_by
+        type: string
+        nullable: true
+        comment: >
+          Who identified the relationship: CRS, House, Senate, or U.S. Government
+          Publishing Office
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_related_bills/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_related_bills
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_AMENDMENTS — amendments offered to a bill
+  # ---------------------------------------------------------------------------
+  - name: bill_amendments
+    pattern: "type=bill_amendments/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Amendments offered to a bill, one row per amendment, from the same GovInfo Bill Status
+      XML. `amendment_type` is SAMDT (Senate) or HAMDT (House); `amendment_number` is unique
+      within (congress, amendment_type). Sponsor columns hold a member's bioguide ID and name;
+      when a committee sponsored the amendment (e.g. the Rules Committee) only `sponsor_name`
+      is set. `amended_amendment_*` is set when the amendment amends another amendment.
+      `purpose` and `description` are usually NULL. `action_count` and `cosponsor_count` count
+      the amendment's own actions and cosponsors, which are the rows of
+      bill_amendment_actions and bill_amendment_cosponsors; roll-call votes on amendment
+      actions are in bill_recorded_votes.
+
+    dimensions:
+      type:
+        - bill_amendments
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: amendment_type
+        type: string
+        nullable: false
+        comment: SAMDT (Senate amendment) or HAMDT (House amendment)
+      - name: amendment_number
+        type: integer
+        nullable: false
+        comment: Amendment number within the Congress and amendment type
+      - name: chamber
+        type: string
+        nullable: true
+        comment: Senate or House of Representatives
+      - name: sponsor_bioguide_id
+        type: string
+        nullable: true
+        comment: Bioguide ID of the first listed sponsor; NULL for a committee sponsor
+      - name: sponsor_full_name
+        type: string
+        nullable: true
+        comment: Sponsor display name with party and state
+      - name: sponsor_name
+        type: string
+        nullable: true
+        comment: Sponsor name when a committee sponsored (e.g. "Rules Committee"); NULL for members
+      - name: sponsor_party
+        type: string
+        nullable: true
+        comment: Sponsor party code
+      - name: sponsor_state
+        type: string
+        nullable: true
+        comment: Sponsor two-letter state code
+      - name: sponsor_district
+        type: string
+        nullable: true
+        comment: Sponsor House district; NULL for senators and committees
+      - name: description
+        type: string
+        nullable: true
+        comment: Amendment description text; usually NULL
+      - name: purpose
+        type: string
+        nullable: true
+        comment: Statement of purpose, e.g. "To apply the prohibition ..."; usually NULL
+      - name: submitted_date
+        type: string
+        nullable: true
+        comment: UTC timestamp the amendment was submitted
+      - name: proposed_date
+        type: string
+        nullable: true
+        comment: UTC timestamp the amendment was proposed; usually NULL
+      - name: latest_action_date
+        type: string
+        nullable: true
+        comment: Date of the amendment's latest action; NULL when none recorded
+      - name: latest_action_text
+        type: string
+        nullable: true
+        comment: Text of the amendment's latest action; NULL when none recorded
+      - name: update_date
+        type: string
+        nullable: true
+        comment: Last update timestamp on Congress.gov
+      - name: amended_amendment_type
+        type: string
+        nullable: true
+        comment: Type of the amendment this one amends; NULL unless it amends an amendment
+      - name: amended_amendment_number
+        type: integer
+        nullable: true
+        comment: Number of the amendment this one amends; NULL unless it amends an amendment
+      - name: action_count
+        type: integer
+        nullable: false
+        comment: Number of actions recorded on this amendment
+      - name: cosponsor_count
+        type: integer
+        nullable: false
+        comment: Number of cosponsors listed on this amendment
+      - name: on_behalf_of_bioguide_id
+        type: string
+        nullable: true
+        comment: >
+          Bioguide ID of the member the amendment was offered on behalf of; NULL if not
+          on behalf of anyone
+      - name: on_behalf_of_full_name
+        type: string
+        nullable: true
+        comment: Name of the member the amendment was offered on behalf of
+      - name: on_behalf_of_type
+        type: string
+        nullable: true
+        comment: >
+          Relationship: "Submitted on behalf of" or "Proposed on behalf of"
+      - name: latest_action_time
+        type: string
+        nullable: true
+        comment: Time of the latest action when recorded; usually NULL
+      - name: amendments_to_amendment_count
+        type: integer
+        nullable: true
+        comment: Number of amendments offered to this amendment; NULL when none are listed
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_amendments/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_amendments
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_AMENDMENT_ACTIONS — action history of each amendment
+  # ---------------------------------------------------------------------------
+  - name: bill_amendment_actions
+    pattern: "type=bill_amendment_actions/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Every recorded action on every amendment in `bill_amendments`, one row per action, from
+      the same GovInfo Bill Status XML (introduction, submission, agreed to, not agreed to,
+      withdrawn, ...). Join to `bill_amendments` on (congress, bill_type, bill_number,
+      amendment_type, amendment_number). There is no sequence number: the source does not list
+      amendment actions in date order. Roll-call votes on amendment actions are in
+      bill_recorded_votes. `action_type` values seen: Floor, Committee, IntroReferral,
+      ResolvingDifferences, NotUsed.
+
+    dimensions:
+      type:
+        - bill_amendment_actions
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: amendment_type
+        type: string
+        nullable: false
+        comment: SAMDT or HAMDT; with amendment_number identifies the amendment
+      - name: amendment_number
+        type: integer
+        nullable: false
+        comment: Amendment number within the Congress and amendment type
+      - name: action_date
+        type: string
+        nullable: true
+        comment: Date of the action (YYYY-MM-DD)
+      - name: action_time
+        type: string
+        nullable: true
+        comment: >
+          Time of day when the source records one (HH:MM:SS), otherwise NULL
+      - name: text
+        type: string
+        nullable: true
+        comment: Action text as recorded; NULL for some actions
+      - name: action_type
+        type: string
+        nullable: true
+        comment: Source coarse action category (Floor, Committee, IntroReferral, ...)
+      - name: action_code
+        type: string
+        nullable: true
+        comment: Source action code
+      - name: source_system
+        type: string
+        nullable: true
+        comment: Where the action was recorded — House floor actions, Senate, or Library of Congress
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_amendment_actions/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_amendment_actions
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_AMENDMENT_COSPONSORS — cosponsors of each amendment
+  # ---------------------------------------------------------------------------
+  - name: bill_amendment_cosponsors
+    pattern: "type=bill_amendment_cosponsors/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Cosponsors of the amendments in `bill_amendments`, one row per (amendment, cosponsor),
+      from the same GovInfo Bill Status XML. Only Senate amendments (SAMDT) carry cosponsors
+      in the source; House amendments (HAMDT) have none. Join to `bill_amendments` on
+      (congress, bill_type, bill_number, amendment_type, amendment_number) and to
+      officials.members on `bioguide_id`. `withdrawn_date` is set when a cosponsor later
+      withdrew.
+
+    dimensions:
+      type:
+        - bill_amendment_cosponsors
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: amendment_type
+        type: string
+        nullable: false
+        comment: SAMDT (only Senate amendments have cosponsors)
+      - name: amendment_number
+        type: integer
+        nullable: false
+        comment: Amendment number within the Congress and amendment type
+      - name: bioguide_id
+        type: string
+        nullable: false
+        comment: Bioguide ID of the cosponsor; joins to officials.members
+      - name: full_name
+        type: string
+        nullable: true
+        comment: Cosponsor display name with party and state
+      - name: party
+        type: string
+        nullable: true
+        comment: Party code
+      - name: state
+        type: string
+        nullable: true
+        comment: Two-letter state code
+      - name: sponsorship_date
+        type: string
+        nullable: true
+        comment: Date the member became a cosponsor (YYYY-MM-DD)
+      - name: is_original_cosponsor
+        type: boolean
+        nullable: true
+        comment: True if the member cosponsored when the amendment was offered
+      - name: withdrawn_date
+        type: string
+        nullable: true
+        comment: Date the member withdrew as cosponsor; NULL if still a cosponsor
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_amendment_cosponsors/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_amendment_cosponsors
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_ACTION_COMMITTEES — the committee each bill action concerns
+  # ---------------------------------------------------------------------------
+  - name: bill_action_committees
+    pattern: "type=bill_action_committees/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      The committee named on a bill action, one row per (action, committee), from the same
+      GovInfo Bill Status XML — e.g. the action "Read twice and referred to the Committee on
+      Finance." names ssfi00. Join to `bill_actions` on (congress, bill_type, bill_number,
+      action_seq) and to `bill_committees` on committee_system_code. Only actions that
+      involve a committee have a row here.
+
+    dimensions:
+      type:
+        - bill_action_committees
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: action_seq
+        type: integer
+        nullable: false
+        comment: Position of the action in bill_actions, 1 = oldest
+      - name: committee_system_code
+        type: string
+        nullable: false
+        comment: Congress.gov committee code, e.g. ssfi00
+      - name: committee_name
+        type: string
+        nullable: true
+        comment: Committee name, e.g. "Finance Committee"
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_action_committees/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_action_committees
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_RECORDED_VOTES — roll-call votes on bills and amendments
+  # ---------------------------------------------------------------------------
+  - name: bill_recorded_votes
+    pattern: "type=bill_recorded_votes/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Roll-call votes recorded against a bill or one of its amendments, one row per vote, from
+      the same GovInfo Bill Status XML. `url` is the House Clerk or Senate roll-call XML that
+      holds the member-by-member result. A vote on an amendment has `amendment_type` and
+      `amendment_number` set; a vote on the bill itself has them NULL. `action_date` and
+      `action_text` are those of the bill or amendment action that recorded the vote (for
+      example "Passed/agreed to in House: On passage Passed by the Yeas and Nays: 220 - 213").
+      `full_action_name` (e.g. "Passage of a Measure") appears only on votes listed directly
+      on the bill in a few older files, which then have NULL action fields.
+      One roll call can be cited by several actions on the same bill, so there is one row
+      per citation and no unique key.
+
+    dimensions:
+      type:
+        - bill_recorded_votes
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: amendment_type
+        type: string
+        nullable: true
+        comment: SAMDT or HAMDT when the vote was on an amendment; NULL for a vote on the bill
+      - name: amendment_number
+        type: integer
+        nullable: true
+        comment: Amendment number when the vote was on an amendment; NULL otherwise
+      - name: action_date
+        type: string
+        nullable: true
+        comment: Date of the action that recorded the vote (YYYY-MM-DD); NULL for legacy bill-level votes
+      - name: action_text
+        type: string
+        nullable: true
+        comment: Text of the action that recorded the vote; NULL for legacy bill-level votes
+      - name: vote_chamber
+        type: string
+        nullable: true
+        comment: House or Senate
+      - name: vote_congress
+        type: integer
+        nullable: true
+        comment: Congress the vote was taken in
+      - name: session_number
+        type: integer
+        nullable: true
+        comment: Session of that Congress (1 or 2)
+      - name: roll_number
+        type: integer
+        nullable: true
+        comment: Roll-call number within the chamber and session
+      - name: vote_date
+        type: string
+        nullable: true
+        comment: UTC timestamp of the vote
+      - name: url
+        type: string
+        nullable: true
+        comment: House Clerk or Senate roll-call XML with the individual votes
+      - name: full_action_name
+        type: string
+        nullable: true
+        comment: Name of the vote (e.g. "Passage of a Measure"); only on legacy bill-level votes
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_recorded_votes/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_recorded_votes
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_TITLES — every title a bill has carried
+  # ---------------------------------------------------------------------------
+  - name: bill_titles
+    pattern: "type=bill_titles/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Every title recorded for a bill, one row per title, from the same GovInfo Bill Status
+      XML — the Display Title, the Official Title as Introduced, short titles as introduced,
+      reported or passed, and the official title as amended or enacted. A bill typically has
+      about three. `title_type` is the source category and `title_type_code` its numeric code.
+      `bill_text_version_code` / `bill_text_version_name` say which text version the title
+      belongs to, and `chamber_code` / `chamber_name` (H, S, J) which chamber it applies to;
+      both are NULL on most rows. `bills.title` is the current official title.
+
+    dimensions:
+      type:
+        - bill_titles
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: title_type
+        type: string
+        nullable: true
+        comment: Title category, e.g. "Display Title", "Official Title as Introduced"
+      - name: title_type_code
+        type: string
+        nullable: true
+        comment: Numeric code of the title category; NULL in older files
+      - name: title
+        type: string
+        nullable: true
+        comment: The title text
+      - name: bill_text_version_code
+        type: string
+        nullable: true
+        comment: Code of the text version the title belongs to; usually NULL
+      - name: bill_text_version_name
+        type: string
+        nullable: true
+        comment: Name of the text version the title belongs to; usually NULL
+      - name: chamber_code
+        type: string
+        nullable: true
+        comment: H, S or J when the title applies to one chamber; usually NULL
+      - name: chamber_name
+        type: string
+        nullable: true
+        comment: House, Senate or Joint when the title applies to one chamber; usually NULL
+      - name: parent_title_type
+        type: string
+        nullable: true
+        comment: >
+          Parent category for a nested short title (e.g. "Short Titles House of
+          Representatives"); rare
+      - name: source_system
+        type: string
+        nullable: true
+        comment: Recording system when given (Library of Congress); usually NULL
+      - name: update_date
+        type: string
+        nullable: true
+        comment: When the title was last updated (UTC timestamp); NULL in older files
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_titles/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_titles
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_SUMMARIES — Congressional Research Service bill summaries
+  # ---------------------------------------------------------------------------
+  - name: bill_summaries
+    pattern: "type=bill_summaries/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      CRS summaries of a bill, one row per summary version, from the same GovInfo Bill Status
+      XML. `summary_text` is CRS-written HTML. `version_code` numbers the stage the summary
+      covers (00 = as introduced; later codes mark later stages such as passed one chamber
+      or enacted) and `action_description` names it (e.g. "Introduced in Senate", "Passed
+      House without amendment"). CRS writes summaries after introduction and not for every
+      bill, so many bills have none. `summary_name` and `last_summary_update_date` exist only
+      in a few older files.
+
+    dimensions:
+      type:
+        - bill_summaries
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: version_code
+        type: string
+        nullable: true
+        comment: Stage code of the summary; 00 = as introduced
+      - name: action_date
+        type: string
+        nullable: true
+        comment: Date of the action the summary covers (YYYY-MM-DD)
+      - name: action_description
+        type: string
+        nullable: true
+        comment: Stage the summary covers, e.g. "Introduced in Senate"
+      - name: summary_name
+        type: string
+        nullable: true
+        comment: Summary name; only in a few older files
+      - name: update_date
+        type: string
+        nullable: true
+        comment: When the summary was last updated (UTC timestamp)
+      - name: last_summary_update_date
+        type: string
+        nullable: true
+        comment: Last summary update; only in a few older files
+      - name: summary_text
+        type: string
+        nullable: true
+        comment: CRS summary text, as HTML
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_summaries/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_summaries
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_CBO_COST_ESTIMATES — Congressional Budget Office estimates
+  # ---------------------------------------------------------------------------
+  - name: bill_cbo_cost_estimates
+    pattern: "type=bill_cbo_cost_estimates/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Congressional Budget Office cost estimates linked to a bill, one row per estimate, from
+      the same GovInfo Bill Status XML. `title` names the estimate and the stage it covers
+      (e.g. "H.R. 3111, Faster FOIA Act of 2010"), `url` is the CBO publication page, and
+      `description` says what version of the bill it covers ("Cost estimate for the bill as
+      reported by ..."); older rows can hold HTML markup there.
+      The same estimate can appear twice, once with mis-encoded characters in the title,
+      exactly as published.
+
+    dimensions:
+      type:
+        - bill_cbo_cost_estimates
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: pub_date
+        type: string
+        nullable: true
+        comment: When CBO published the estimate (UTC timestamp)
+      - name: title
+        type: string
+        nullable: true
+        comment: Estimate title
+      - name: url
+        type: string
+        nullable: true
+        comment: CBO publication page
+      - name: description
+        type: string
+        nullable: true
+        comment: What version of the bill the estimate covers; can contain HTML in older rows
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_cbo_cost_estimates/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_cbo_cost_estimates
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_COMMITTEE_REPORTS — committee reports on a bill
+  # ---------------------------------------------------------------------------
+  - name: bill_committee_reports
+    pattern: "type=bill_committee_reports/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      House and Senate committee reports filed on a bill, one row per report, from the same
+      GovInfo Bill Status XML. `citation` is exactly as published (e.g. "H. Rept. 108-753",
+      sometimes with a book suffix such as "H. Rept. 119-106,Book 1").
+      A report is occasionally cited twice on the same bill, as published.
+
+    dimensions:
+      type:
+        - bill_committee_reports
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: citation
+        type: string
+        nullable: false
+        comment: Report citation as published, e.g. "H. Rept. 108-753"
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_committee_reports/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_committee_reports
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_NOTES — Congress.gov editorial notes on a bill
+  # ---------------------------------------------------------------------------
+  - name: bill_notes
+    pattern: "type=bill_notes/congress=*/bill_type=*/*.parquet"
+    partitions: *bill_partitions
+    comment: >
+      Congress.gov editorial notes attached to a bill, from the same GovInfo Bill Status XML —
+      for example "For further action, see H.R.366, which became Public Law 112-1". One row
+      per (note, link); a note with no links has one row with NULL `link_name` and `link_url`.
+      `note_text` can contain HTML anchors.
+
+    dimensions:
+      type:
+        - bill_notes
+      congress: *congress_range
+      bill_type: *bill_types
+      refresh_month: *bill_refresh_month
+
+    columns:
+      - <<: *partition_congress
+      - <<: *partition_bill_type
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: Bill number within its Congress and bill type
+      - name: note_text
+        type: string
+        nullable: true
+        comment: Note text; can contain HTML
+      - name: link_name
+        type: string
+        nullable: true
+        comment: Link label, e.g. "H.R.366"; NULL when the note has no link
+      - name: link_url
+        type: string
+        nullable: true
+        comment: Link target; NULL when the note has no link
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{bill_type}/BILLSTATUS-{congress}-{bill_type}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressBillStatusProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_notes/congress=*/bill_type=*/"
+      partition:
+        columns: [type, congress, bill_type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_notes
+        batchPartitionColumns: [congress, bill_type]
+        incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # SCOTUS_REPORTS_CASES — every case in the bound United States Reports, one row per case
+  # ---------------------------------------------------------------------------
+  # Source: GovInfo United States Reports collection (GPO), volumes 2-583 (terms 1781-2017).
+  # One row per case granule: its MODS record for the citation and the Supreme Court Database's
+  # curated outcome fields, and its PDF for the docket numbers and the opinion text.
+  # ScotusReportsProvider fetches a term at a time (the year dimension is the term) and
+  # streams cases one by one.
+  - name: scotus_reports_cases
+    pattern: "type=scotus_reports_cases/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Every case decided by the U.S. Supreme Court and printed in the bound United States
+      Reports on GovInfo: volumes 2 through 583, Court terms 1781 through 2017, about 30,800
+      cases. One row per case, partitioned by `year`, the term in which the volume's
+      cases were decided (the first year of GovInfo's courtTerm; the earliest reporters span
+      several years and count under their first). Terms from 2018 are in scotus_slip_opinions;
+      scotus_cases combines the two. Outcome columns (`disposition`, `party_winning`, `votes_majority`,
+      `votes_minority`, `chief_justice`, `opinion_writer`, `case_origin`, `cert_reason`,
+      `scdb_issue_areas` and the rest of GovInfo's curated fields) come from GovInfo's MODS
+      record, which takes them from the Supreme Court Database, and are present for volumes
+      through 582 only; volume 583 (term 2017) has none, so `disposition` is derived from the
+      opinion text and `disposition_source` says which. `disposition` uses one vocabulary
+      either way: Affirmed (includes modified), Reversed, Reversed and remanded, Vacated and
+      remanded, Affirmed and reversed (or vacated) in part [and remanded], Dismissed as
+      improvidently granted. Text-derived values agree with the curated ones for about 96%
+      of cases; the exceptions are how a remand is coded. `docket_numbers` are the Court's
+      docket numbers read from the opinion (a consolidated case lists every docket whose
+      number the text gives), not the SCDB-format `govinfo_docket_id`. `opinion_text` is the
+      full text of the opinion PDF as extracted, in which the "fi" ligature loses its "i"
+      (e.g. "affrmed", "fnal"). Original-jurisdiction cases have no disposition.
+
+    dimensions:
+      type:
+        - scotus_reports_cases
+      year: *scotus_reports_term_range
+
+    columns:
+      - name: volume
+        type: integer
+        nullable: false
+        comment: United States Reports volume number (e.g. 583 in 583 U.S. 17)
+      - name: granule_id
+        type: string
+        nullable: false
+        comment: GovInfo granule ID of the case, e.g. USREPORTS-583-17; joins to the case's govinfo.gov page and API records
+      - name: case_title
+        type: string
+        nullable: false
+        comment: Case name with citation and year as GovInfo prints it, e.g. Hamer v. Neighborhood Housing Services of Chicago, 583 U.S. 17 (2017)
+      - name: us_citation
+        type: string
+        nullable: false
+        comment: Official citation, e.g. 583 U.S. 17
+      - name: full_citation
+        type: string
+        nullable: true
+        comment: Citation with the decision year, e.g. 583 U.S. 17 (2017)
+      - name: first_page
+        type: integer
+        nullable: false
+        comment: Page of the volume on which the case begins
+      - name: sequence_number
+        type: integer
+        nullable: true
+        comment: GovInfo's order of the case within the volume
+      - name: court_term
+        type: string
+        nullable: true
+        comment: GovInfo's courtTerm for the case as MODS gives it (the year the term began); null where the MODS record carries none, which is volume 583
+      - name: decision_year
+        type: integer
+        nullable: false
+        comment: Year of decision as GovInfo dates it; for volume 583 this is the year only, since GovInfo gives no day or month there
+      - name: decision_date
+        type: string
+        nullable: true
+        comment: Date of decision (YYYY-MM-DD); null when GovInfo gives only the year
+      - name: argument_date
+        type: string
+        nullable: true
+        comment: Date the case was argued (YYYY-MM-DD); null for cases decided without argument and where the MODS record carries none
+      - name: docket_numbers
+        type: array<string>
+        nullable: true
+        comment: The Court's docket numbers, lead docket first, normalised with a hyphen (23-583; 24A910 for an application; 137-Orig for an original case). A consolidated case lists every docket the opinion's footnote numbers; empty where the opinion text carries none
+      - name: govinfo_docket_id
+        type: string
+        nullable: true
+        comment: Supreme Court Database docket ID as GovInfo carries it (e.g. 2000-031-01); an SCDB identifier, not the Court's docket number, and absent for volume 583
+      - name: disposition
+        type: string
+        nullable: true
+        comment: What the Court did with the judgment below, in one vocabulary — Affirmed (includes modified), Reversed, Reversed and remanded, Vacated, Vacated and remanded, Affirmed and reversed (or vacated) in part [and remanded], Petition denied or appeal dismissed, Dismissed as improvidently granted; null when none was recorded or derivable, as for original-jurisdiction cases
+      - name: disposition_source
+        type: string
+        nullable: true
+        comment: govinfo_mods when disposition is GovInfo's curated Supreme Court Database value; opinion_text when it was derived from the opinion. Null when disposition is null
+      - name: party_winning
+        type: string
+        nullable: true
+        comment: Whether the petitioning party received a favorable disposition (Petitioning party received a favorable disposition, or No favorable disposition for petitioning party apparent); curated, so null for volume 583 and any case without an outcome
+      - name: decision_type
+        type: string
+        nullable: true
+        comment: Kind of decision, e.g. Opinion of the court (orally argued), Per curiam (no oral argument), Equally divided vote
+      - name: jurisdiction
+        type: string
+        nullable: true
+        comment: How the case reached the Court, e.g. Cert, Appeal, Original
+      - name: case_origin
+        type: string
+        nullable: true
+        comment: Court in which the case originated, e.g. Michigan Eastern U.S. District Court
+      - name: case_source
+        type: string
+        nullable: true
+        comment: Court whose decision was reviewed, e.g. U.S. Court of Appeals, Sixth Circuit
+      - name: cert_reason
+        type: string
+        nullable: true
+        comment: Reason the Court took the case, e.g. Federal court conflict
+      - name: chief_justice
+        type: string
+        nullable: true
+        comment: Chief Justice at the time, as a full name (e.g. William H. Rehnquist)
+      - name: opinion_writer
+        type: string
+        nullable: true
+        comment: Justice who wrote the majority opinion, as a full name; null for some per curiam and unsigned decisions
+      - name: opinion_assigner
+        type: string
+        nullable: true
+        comment: Justice who assigned the majority opinion
+      - name: votes_majority
+        type: integer
+        nullable: true
+        comment: Number of justices in the majority
+      - name: votes_minority
+        type: integer
+        nullable: true
+        comment: Number of justices in the minority
+      - name: authority_decision
+        type: string
+        nullable: true
+        comment: Basis of the decision, e.g. Statutory construction, Constitutional interpretation
+      - name: unconstitutionality
+        type: string
+        nullable: true
+        comment: Whether the Court declared a law unconstitutional, e.g. No declaration of unconstitutionality
+      - name: petitioner_type
+        type: string
+        nullable: true
+        comment: Category of the petitioner, e.g. Manufacturer, State, Federal government
+      - name: respondent_type
+        type: string
+        nullable: true
+        comment: Category of the respondent
+      - name: lc_topics
+        type: array<string>
+        nullable: true
+        comment: Subject topics assigned by the Library of Congress Law Library; present on fewer than half of cases
+      - name: scdb_issue_areas
+        type: array<string>
+        nullable: true
+        comment: "Issue areas from the Supreme Court Database (e.g. Patents and Copyrights: Copyright)"
+      - name: law_types
+        type: array<string>
+        nullable: true
+        comment: Type of law at issue, from the Supreme Court Database
+      - name: legal_provisions
+        type: array<string>
+        nullable: true
+        comment: Legal provisions at issue, from the Supreme Court Database
+      - name: page_count
+        type: integer
+        nullable: false
+        comment: Pages in the case's PDF
+      - name: pdf_url
+        type: string
+        nullable: false
+        comment: GovInfo URL of the case PDF the opinion text was read from
+      - name: opinion_text
+        type: string
+        nullable: true
+        comment: "Full text of the case as extracted from the PDF — syllabus, opinion of the Court, concurrences and dissents. The \"fi\" ligature loses its \"i\" in the source encoding (\"affrmed\", \"fnal\"). Text blob"
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://api.govinfo.gov/collections/USREPORTS"
+      method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.ScotusReportsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=scotus_reports_cases/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: scotus_reports_cases
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_FILINGS — LD-1 registrations and LD-2 quarterly reports
+  # ---------------------------------------------------------------------------
+  - name: lobbying_filings
+    pattern: "type=lobbying_filings/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      Every lobbying filing made under the Lobbying Disclosure Act, one row per filing: LD-1
+      registrations (a lobbyist or firm registering to lobby for a client) and LD-2
+      quarterly activity reports, with their amendments and terminations. `filing_type` says
+      which (decoded in lobbying_filing_types: RR = Registration, Q1 = 1st Quarter Report,
+      and so on). The registrant is the lobbying firm or organization; the client is who it
+      lobbies for (often the same when an organization lobbies for itself). `income` is what
+      a lobbying firm reports receiving from the client and `expenses` is what an
+      organization reports spending on in-house lobbying; each is set on only some filings,
+      as reported (rounded by the filer). `filing_year`/`filing_period` is the reporting
+      period the filing covers. What was lobbied on is in lobbying_activities and the people
+      involved in lobbying_activity_lobbyists. Registrant contact names and telephone
+      numbers and the name of whoever posted a filing are deliberately not carried.
+      Partitioned by `year` and `quarter`: the calendar quarter in which the filing was
+      POSTED (Eastern time), not the period it reports on. A filing keeps its posting date,
+      so a past partition never changes, and an amendment is a new filing in a later
+      partition. The current quarter is re-read on each daily run. Source: LDA.gov (Senate
+      Office of Public Records). The Senate Office of Public Records cannot vouch for the
+      data or analyses derived from these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_filings
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: filing_type
+        type: string
+        nullable: true
+        comment: >
+          Filing type code, e.g. RR (registration), Q1-Q4 (quarterly reports), and
+          amendment/termination variants; decoded in lobbying_filing_types
+      - name: filing_type_name
+        type: string
+        nullable: true
+        comment: >
+          Filing type in words, e.g. Registration, 1st Quarter Report
+      - name: filing_year
+        type: integer
+        nullable: true
+        comment: >
+          Calendar year of the period the filing covers
+      - name: filing_period
+        type: string
+        nullable: true
+        comment: >
+          Period the filing covers: first_quarter, second_quarter, third_quarter or
+          fourth_quarter (mid_year and year_end appear on contribution reports only)
+      - name: filing_document_url
+        type: string
+        nullable: true
+        comment: >
+          LDA.gov page of the filing itself
+      - name: income
+        type: double
+        nullable: true
+        comment: >
+          Income the registrant reports from the client for the period; set on some LD-2
+          filings
+      - name: expenses
+        type: double
+        nullable: true
+        comment: >
+          Expenses an organization reports for its own in-house lobbying; set on some LD-2
+          filings
+      - name: expenses_method
+        type: string
+        nullable: true
+        comment: >
+          Expense-reporting method code: a, b or c
+      - name: expenses_method_name
+        type: string
+        nullable: true
+        comment: >
+          Expense-reporting method in words, e.g. Method A - Reporting amounts using LDA
+          definitions only
+      - name: dt_posted
+        type: string
+        nullable: true
+        comment: >
+          When the filing was posted (ISO-8601 with Eastern-time offset); decides the
+          year/quarter partition
+      - name: termination_date
+        type: string
+        nullable: true
+        comment: >
+          Date the registration terminated (YYYY-MM-DD); set on termination filings
+      - name: registrant_id
+        type: long
+        nullable: true
+        comment: >
+          Registrant ID; joins to lobbying_registrants
+      - name: registrant_name
+        type: string
+        nullable: true
+        comment: >
+          Registrant (lobbying firm or self-filing organization) name
+      - name: registrant_house_id
+        type: integer
+        nullable: true
+        comment: >
+          The registrant's ID in the House Lobbying Disclosure system, when it has one
+      - name: registrant_description
+        type: string
+        nullable: true
+        comment: >
+          Registrant's own description of its business
+      - name: registrant_address_1
+        type: string
+        nullable: true
+        comment: >
+          Registrant street address on this filing (a business address)
+      - name: registrant_address_2
+        type: string
+        nullable: true
+        comment: >
+          Registrant address line 2
+      - name: registrant_city
+        type: string
+        nullable: true
+        comment: >
+          Registrant city on this filing
+      - name: registrant_state
+        type: string
+        nullable: true
+        comment: >
+          Registrant state on this filing
+      - name: registrant_zip
+        type: string
+        nullable: true
+        comment: >
+          Registrant ZIP on this filing
+      - name: registrant_country
+        type: string
+        nullable: true
+        comment: >
+          Registrant country on this filing, as published
+      - name: registrant_ppb_country
+        type: string
+        nullable: true
+        comment: >
+          Registrant principal-place-of-business country when it differs from the address
+      - name: registrant_different_address
+        type: boolean
+        nullable: true
+        comment: >
+          True when the registrant's principal place of business differs from its address
+      - name: client_id
+        type: long
+        nullable: true
+        comment: >
+          Client ID; joins to lobbying_clients
+      - name: client_name
+        type: string
+        nullable: true
+        comment: >
+          Client name
+      - name: client_general_description
+        type: string
+        nullable: true
+        comment: >
+          Client's line of business, e.g. Health benefit plan company
+      - name: client_state
+        type: string
+        nullable: true
+        comment: >
+          Client state code
+      - name: client_country
+        type: string
+        nullable: true
+        comment: >
+          Client country code
+      - name: client_ppb_state
+        type: string
+        nullable: true
+        comment: >
+          Client principal-place-of-business state code
+      - name: client_ppb_country
+        type: string
+        nullable: true
+        comment: >
+          Client principal-place-of-business country code
+      - name: client_government_entity
+        type: boolean
+        nullable: true
+        comment: >
+          True when the client is itself a government entity
+      - name: client_self_select
+        type: boolean
+        nullable: true
+        comment: >
+          True when the client is the registrant (an organization lobbying for itself)
+      - name: client_effective_date
+        type: string
+        nullable: true
+        comment: >
+          Date the client relationship took effect (YYYY-MM-DD)
+      - name: activity_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of lobbying activities on the filing (rows in lobbying_activities)
+      - name: foreign_entity_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of foreign entities disclosed (rows in lobbying_foreign_entities)
+      - name: affiliated_organization_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of affiliated organizations disclosed (rows in
+          lobbying_affiliated_organizations)
+      - name: conviction_disclosure_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of lobbyist convictions disclosed (rows in lobbying_conviction_disclosures)
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_filings/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_ACTIVITIES — issues lobbied on
+  # ---------------------------------------------------------------------------
+  - name: lobbying_activities
+    pattern: "type=lobbying_activities/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      What each filing says was lobbied on, one row per lobbying activity within a filing
+      (usually one to a handful, one per general issue area). `general_issue_code` is one of
+      the 79 issue areas in lobbying_issue_codes (e.g. DEF = Defense, HCR = Health Issues).
+      `description` is the filer's free-text statement of the specific issues, and is where
+      particular bills, regulations and programs are named (for example "H.R. 1" or "FY26
+      defense appropriations") — there is no structured bill identifier, so matching to the
+      bill_* tables means reading that text. `activity_seq` numbers the activities within
+      the filing from 1 in the order the API lists them. Join to lobbying_filings on
+      filing_uuid. Partitioned by `year` and `quarter`: the calendar quarter in which the
+      filing was POSTED (Eastern time), not the period it reports on. A filing keeps its
+      posting date, so a past partition never changes, and an amendment is a new filing in a
+      later partition. The current quarter is re-read on each daily run. Source: LDA.gov
+      (Senate Office of Public Records). The Senate Office of Public Records cannot vouch
+      for the data or analyses derived from these data after they have been retrieved from
+      LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_activities
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: activity_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the activity within its filing, from 1
+      - name: general_issue_code
+        type: string
+        nullable: true
+        comment: >
+          General issue area code; decoded in lobbying_issue_codes
+      - name: general_issue_name
+        type: string
+        nullable: true
+        comment: >
+          General issue area in words, e.g. Defense, Budget/Appropriations
+      - name: description
+        type: string
+        nullable: true
+        comment: >
+          Filer's free-text statement of the specific lobbying issues; names bills and
+          programs
+      - name: foreign_entity_issues
+        type: string
+        nullable: true
+        comment: >
+          Issues lobbied on that concern a foreign entity, when stated
+      - name: lobbyist_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of lobbyists listed on the activity
+      - name: government_entity_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of government entities contacted on the activity
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_activities/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_ACTIVITY_LOBBYISTS — who lobbied on each activity
+  # ---------------------------------------------------------------------------
+  - name: lobbying_activity_lobbyists
+    pattern: "type=lobbying_activity_lobbyists/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      The individual lobbyists named on each lobbying activity, one row per (activity,
+      lobbyist). `covered_position` is any covered executive or legislative branch position
+      the lobbyist held in the previous 20 years, as the filer wrote it (e.g. "Principal",
+      "National President"); `is_new` is true when the lobbyist was added on this filing.
+      `lobbyist_id` joins to the lobbyists registry. Join to lobbying_activities on
+      (filing_uuid, activity_seq). Partitioned by `year` and `quarter`: the calendar quarter
+      in which the filing was POSTED (Eastern time), not the period it reports on. A filing
+      keeps its posting date, so a past partition never changes, and an amendment is a new
+      filing in a later partition. The current quarter is re-read on each daily run. Source:
+      LDA.gov (Senate Office of Public Records). The Senate Office of Public Records cannot
+      vouch for the data or analyses derived from these data after they have been retrieved
+      from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_activity_lobbyists
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: activity_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the activity within its filing, from 1
+      - name: lobbyist_id
+        type: long
+        nullable: true
+        comment: >
+          Lobbyist ID; the same person keeps one ID across filings
+      - name: lobbyist_prefix
+        type: string
+        nullable: true
+        comment: >
+          Name prefix as published, e.g. MR., MS., HON.
+      - name: lobbyist_first_name
+        type: string
+        nullable: true
+        comment: >
+          First name
+      - name: lobbyist_nickname
+        type: string
+        nullable: true
+        comment: >
+          Nickname when given
+      - name: lobbyist_middle_name
+        type: string
+        nullable: true
+        comment: >
+          Middle name or initial
+      - name: lobbyist_last_name
+        type: string
+        nullable: true
+        comment: >
+          Last name
+      - name: lobbyist_suffix
+        type: string
+        nullable: true
+        comment: >
+          Name suffix as published, e.g. JR., III
+      - name: covered_position
+        type: string
+        nullable: true
+        comment: >
+          Covered government position held in the past, as the filer wrote it; NULL when
+          none
+      - name: is_new
+        type: boolean
+        nullable: true
+        comment: >
+          True when the lobbyist is new to this filing
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_activity_lobbyists/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_ACTIVITY_GOVERNMENT_ENTITIES — who was lobbied
+  # ---------------------------------------------------------------------------
+  - name: lobbying_activity_government_entities
+    pattern: "type=lobbying_activity_government_entities/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      The federal bodies each lobbying activity contacted, one row per (activity, government
+      entity): House of Representatives, Senate, and executive agencies such as "Army, Dept
+      of (Other)". `government_entity_id` decodes in lobbying_government_entity_codes. Join
+      to lobbying_activities on (filing_uuid, activity_seq). Partitioned by `year` and
+      `quarter`: the calendar quarter in which the filing was POSTED (Eastern time), not the
+      period it reports on. A filing keeps its posting date, so a past partition never
+      changes, and an amendment is a new filing in a later partition. The current quarter is
+      re-read on each daily run. Source: LDA.gov (Senate Office of Public Records). The
+      Senate Office of Public Records cannot vouch for the data or analyses derived from
+      these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_activity_government_entities
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: activity_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the activity within its filing, from 1
+      - name: government_entity_id
+        type: integer
+        nullable: true
+        comment: >
+          Government entity ID; decoded in lobbying_government_entity_codes
+      - name: government_entity_name
+        type: string
+        nullable: true
+        comment: >
+          Government entity name, e.g. HOUSE OF REPRESENTATIVES
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_activity_government_entities/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_FOREIGN_ENTITIES — foreign ownership disclosed on a filing
+  # ---------------------------------------------------------------------------
+  - name: lobbying_foreign_entities
+    pattern: "type=lobbying_foreign_entities/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      Foreign entities disclosed on a filing because they own or control the client or
+      contribute to the lobbying, one row per (filing, entity). `ownership_percentage` is
+      the share the entity holds in the client and `contribution` the amount it contributed
+      toward the lobbying. Join to lobbying_filings on filing_uuid. Partitioned by `year`
+      and `quarter`: the calendar quarter in which the filing was POSTED (Eastern time), not
+      the period it reports on. A filing keeps its posting date, so a past partition never
+      changes, and an amendment is a new filing in a later partition. The current quarter is
+      re-read on each daily run. Source: LDA.gov (Senate Office of Public Records). The
+      Senate Office of Public Records cannot vouch for the data or analyses derived from
+      these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_foreign_entities
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: entity_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the entity within its filing, from 1
+      - name: name
+        type: string
+        nullable: true
+        comment: >
+          Foreign entity name, e.g. AIRBUS SE
+      - name: contribution
+        type: double
+        nullable: true
+        comment: >
+          Amount the entity contributed to the lobbying
+      - name: ownership_percentage
+        type: double
+        nullable: true
+        comment: >
+          Percent of the client the entity owns
+      - name: address
+        type: string
+        nullable: true
+        comment: >
+          Entity address as one line
+      - name: city
+        type: string
+        nullable: true
+        comment: >
+          Entity city
+      - name: state
+        type: string
+        nullable: true
+        comment: >
+          Entity state or province
+      - name: country
+        type: string
+        nullable: true
+        comment: >
+          Entity country code, e.g. NL
+      - name: country_name
+        type: string
+        nullable: true
+        comment: >
+          Entity country name, e.g. Netherlands
+      - name: ppb_city
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business city
+      - name: ppb_state
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business state or province
+      - name: ppb_country
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business country code
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_foreign_entities/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_AFFILIATED_ORGANIZATIONS — affiliates disclosed on a filing
+  # ---------------------------------------------------------------------------
+  - name: lobbying_affiliated_organizations
+    pattern: "type=lobbying_affiliated_organizations/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      Organizations affiliated with the client that take part in planning, supervising or
+      controlling its lobbying, one row per (filing, organization). Join to lobbying_filings
+      on filing_uuid. Partitioned by `year` and `quarter`: the calendar quarter in which the
+      filing was POSTED (Eastern time), not the period it reports on. A filing keeps its
+      posting date, so a past partition never changes, and an amendment is a new filing in a
+      later partition. The current quarter is re-read on each daily run. Source: LDA.gov
+      (Senate Office of Public Records). The Senate Office of Public Records cannot vouch
+      for the data or analyses derived from these data after they have been retrieved from
+      LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_affiliated_organizations
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: organization_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the organization within its filing, from 1
+      - name: name
+        type: string
+        nullable: true
+        comment: >
+          Affiliated organization name
+      - name: url
+        type: string
+        nullable: true
+        comment: >
+          Organization web address when given
+      - name: address_1
+        type: string
+        nullable: true
+        comment: >
+          Organization street address
+      - name: address_2
+        type: string
+        nullable: true
+        comment: >
+          Organization address line 2
+      - name: city
+        type: string
+        nullable: true
+        comment: >
+          Organization city
+      - name: state
+        type: string
+        nullable: true
+        comment: >
+          Organization state
+      - name: zip
+        type: string
+        nullable: true
+        comment: >
+          Organization ZIP
+      - name: country
+        type: string
+        nullable: true
+        comment: >
+          Organization country code
+      - name: ppb_city
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business city
+      - name: ppb_state
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business state
+      - name: ppb_country
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business country code
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_affiliated_organizations/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_CONVICTION_DISCLOSURES — lobbyist convictions disclosed
+  # ---------------------------------------------------------------------------
+  - name: lobbying_conviction_disclosures
+    pattern: "type=lobbying_conviction_disclosures/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      Convictions of lobbyists disclosed on a filing, one row per (filing, disclosure): the
+      lobbyist, the date and a free-text description. Rare (roughly one filing in a
+      thousand). Join to lobbying_filings on filing_uuid. Partitioned by `year` and
+      `quarter`: the calendar quarter in which the filing was POSTED (Eastern time), not the
+      period it reports on. A filing keeps its posting date, so a past partition never
+      changes, and an amendment is a new filing in a later partition. The current quarter is
+      re-read on each daily run. Source: LDA.gov (Senate Office of Public Records). The
+      Senate Office of Public Records cannot vouch for the data or analyses derived from
+      these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_conviction_disclosures
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: disclosure_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the disclosure within its filing, from 1
+      - name: lobbyist_id
+        type: long
+        nullable: true
+        comment: >
+          Lobbyist ID; the same person keeps one ID across filings
+      - name: lobbyist_prefix
+        type: string
+        nullable: true
+        comment: >
+          Name prefix as published, e.g. MR., MS., HON.
+      - name: lobbyist_first_name
+        type: string
+        nullable: true
+        comment: >
+          First name
+      - name: lobbyist_nickname
+        type: string
+        nullable: true
+        comment: >
+          Nickname when given
+      - name: lobbyist_middle_name
+        type: string
+        nullable: true
+        comment: >
+          Middle name or initial
+      - name: lobbyist_last_name
+        type: string
+        nullable: true
+        comment: >
+          Last name
+      - name: lobbyist_suffix
+        type: string
+        nullable: true
+        comment: >
+          Name suffix as published, e.g. JR., III
+      - name: conviction_date
+        type: string
+        nullable: true
+        comment: >
+          Date of the conviction (YYYY-MM-DD)
+      - name: description
+        type: string
+        nullable: true
+        comment: >
+          Free-text description of the conviction as disclosed
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_conviction_disclosures/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_CONTRIBUTION_REPORTS — LD-203 contribution reports
+  # ---------------------------------------------------------------------------
+  - name: lobbying_contribution_reports
+    pattern: "type=lobbying_contribution_reports/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      Semiannual reports of political contributions filed by registrants and by individual
+      lobbyists (form LD-203), one row per report: the Mid-Year Report (period Jan 1 - Jun
+      30, `filing_period` mid_year) and the Year-End Report (Jul 1 - Dec 31, year_end).
+      `filer_type` is `lobbyist` when an individual files (the lobbyist_* columns are then
+      set) or `organization` when a registrant files (they are NULL). `no_contributions` is
+      true when the filer certifies it made none. The individual contributions are in
+      lobbying_contribution_items and any PACs the filer controls in
+      lobbying_contribution_pacs. The report's own address is not carried — for an
+      individual it is a home address — only the filer's state and country. Partitioned by
+      `year` and `quarter`: the calendar quarter in which the filing was POSTED (Eastern
+      time), not the period it reports on. A filing keeps its posting date, so a past
+      partition never changes, and an amendment is a new filing in a later partition. The
+      current quarter is re-read on each daily run. Source: LDA.gov (Senate Office of Public
+      Records). The Senate Office of Public Records cannot vouch for the data or analyses
+      derived from these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_contribution_reports
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: filing_type
+        type: string
+        nullable: true
+        comment: >
+          Report type code, e.g. MM (mid-year), YY (year-end), and amendment variants;
+          decoded in lobbying_filing_types
+      - name: filing_type_name
+        type: string
+        nullable: true
+        comment: >
+          Report type in words, e.g. Mid-Year Report
+      - name: filing_year
+        type: integer
+        nullable: true
+        comment: >
+          Calendar year of the period the report covers
+      - name: filing_period
+        type: string
+        nullable: true
+        comment: >
+          mid_year or year_end
+      - name: filing_document_url
+        type: string
+        nullable: true
+        comment: >
+          LDA.gov page of the report itself
+      - name: filer_type
+        type: string
+        nullable: true
+        comment: >
+          lobbyist (an individual) or organization (a registrant)
+      - name: dt_posted
+        type: string
+        nullable: true
+        comment: >
+          When the report was posted (ISO-8601 with Eastern-time offset); decides the
+          year/quarter partition
+      - name: comments
+        type: string
+        nullable: true
+        comment: >
+          Filer's free-text comments on the report
+      - name: filer_state
+        type: string
+        nullable: true
+        comment: >
+          State of the filer's address
+      - name: filer_country
+        type: string
+        nullable: true
+        comment: >
+          Country of the filer's address
+      - name: registrant_id
+        type: long
+        nullable: true
+        comment: >
+          Registrant ID; joins to lobbying_registrants
+      - name: registrant_name
+        type: string
+        nullable: true
+        comment: >
+          Registrant name
+      - name: registrant_house_id
+        type: integer
+        nullable: true
+        comment: >
+          The registrant's ID in the House Lobbying Disclosure system, when it has one
+      - name: registrant_description
+        type: string
+        nullable: true
+        comment: >
+          Registrant's own description of its business
+      - name: lobbyist_id
+        type: long
+        nullable: true
+        comment: >
+          Filing lobbyist (NULL for an organization filer) ID; the same person keeps one ID
+          across filings
+      - name: lobbyist_prefix
+        type: string
+        nullable: true
+        comment: >
+          Name prefix as published, e.g. MR., MS., HON.
+      - name: lobbyist_first_name
+        type: string
+        nullable: true
+        comment: >
+          First name
+      - name: lobbyist_nickname
+        type: string
+        nullable: true
+        comment: >
+          Nickname when given
+      - name: lobbyist_middle_name
+        type: string
+        nullable: true
+        comment: >
+          Middle name or initial
+      - name: lobbyist_last_name
+        type: string
+        nullable: true
+        comment: >
+          Last name
+      - name: lobbyist_suffix
+        type: string
+        nullable: true
+        comment: >
+          Name suffix as published, e.g. JR., III
+      - name: no_contributions
+        type: boolean
+        nullable: true
+        comment: >
+          True when the filer reports no contributions
+      - name: item_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of contribution items (rows in lobbying_contribution_items)
+      - name: pac_count
+        type: integer
+        nullable: true
+        comment: >
+          Number of PACs listed (rows in lobbying_contribution_pacs)
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/contributions/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_contribution_reports/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_CONTRIBUTION_ITEMS — individual political contributions
+  # ---------------------------------------------------------------------------
+  - name: lobbying_contribution_items
+    pattern: "type=lobbying_contribution_items/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      The individual contributions listed on LD-203 reports, one row per item: who gave
+      (`contributor_name`, often SELF for an individual lobbyist), who received it
+      (`payee_name`, typically a campaign committee or PAC) and in whose honor
+      (`honoree_name`). `contribution_type` is feca (contribution to a federal candidate,
+      committee or party), he (honorary expenses) and so on, decoded in
+      lobbying_contribution_item_types. Join to lobbying_contribution_reports on
+      filing_uuid. Partitioned by `year` and `quarter`: the calendar quarter in which the
+      filing was POSTED (Eastern time), not the period it reports on. A filing keeps its
+      posting date, so a past partition never changes, and an amendment is a new filing in a
+      later partition. The current quarter is re-read on each daily run. Source: LDA.gov
+      (Senate Office of Public Records). The Senate Office of Public Records cannot vouch
+      for the data or analyses derived from these data after they have been retrieved from
+      LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_contribution_items
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: item_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the item within its report, from 1
+      - name: contribution_type
+        type: string
+        nullable: true
+        comment: >
+          Contribution type code, e.g. feca; decoded in lobbying_contribution_item_types
+      - name: contribution_type_name
+        type: string
+        nullable: true
+        comment: >
+          Contribution type in words, e.g. FECA
+      - name: contributor_name
+        type: string
+        nullable: true
+        comment: >
+          Who made the contribution; SELF when the filing lobbyist did
+      - name: payee_name
+        type: string
+        nullable: true
+        comment: >
+          Who received it, e.g. FRENCH HILL FOR ARKANSAS
+      - name: honoree_name
+        type: string
+        nullable: true
+        comment: >
+          Person honored, e.g. The Honorable French Hill
+      - name: amount
+        type: double
+        nullable: true
+        comment: >
+          Amount in dollars
+      - name: contribution_date
+        type: string
+        nullable: true
+        comment: >
+          Date of the contribution (YYYY-MM-DD)
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/contributions/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_contribution_items/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_CONTRIBUTION_PACS — PACs a filer controls
+  # ---------------------------------------------------------------------------
+  - name: lobbying_contribution_pacs
+    pattern: "type=lobbying_contribution_pacs/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      Political action committees that a registrant or lobbyist reports controlling, one row
+      per (report, PAC) — the API gives only the PAC's name. Join to
+      lobbying_contribution_reports on filing_uuid. Partitioned by `year` and `quarter`: the
+      calendar quarter in which the filing was POSTED (Eastern time), not the period it
+      reports on. A filing keeps its posting date, so a past partition never changes, and an
+      amendment is a new filing in a later partition. The current quarter is re-read on each
+      daily run. Source: LDA.gov (Senate Office of Public Records). The Senate Office of
+      Public Records cannot vouch for the data or analyses derived from these data after
+      they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_contribution_pacs
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: pac_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the PAC within its report, from 1
+      - name: pac_name
+        type: string
+        nullable: true
+        comment: >
+          PAC name, e.g. Kidney Care Council PAC
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/contributions/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_contribution_pacs/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYISTS — the registry of lobbyists
+  # ---------------------------------------------------------------------------
+  - name: lobbyists
+    pattern: "type=lobbyists/*.parquet"
+    dataset_type: snapshot
+    partitions: *lobbying_type_partitions
+    comment: >
+      The registry of lobbyists on LDA.gov: every individual who has been listed as a
+      lobbyist on a registration or report (about 88,800 records), one row per lobbyist
+      record with the registrant (lobbying firm or organization) it is filed under.
+      `lobbyist_id` is the same ID used in lobbying_activity_lobbyists and
+      lobbying_conviction_disclosures. This is the full list as of the last monthly refresh,
+      replaced wholesale each month, not a history. Registrant contact names and telephone
+      numbers are deliberately not carried. Source: LDA.gov (Senate Office of Public
+      Records). The Senate Office of Public Records cannot vouch for the data or analyses
+      derived from these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbyists
+      refresh_month: *lobbying_refresh_month
+
+    columns:
+      - name: lobbyist_id
+        type: long
+        nullable: false
+        comment: >
+          Lobbyist ID
+      - name: prefix
+        type: string
+        nullable: true
+        comment: >
+          Name prefix as published
+      - name: first_name
+        type: string
+        nullable: true
+        comment: >
+          First name
+      - name: nickname
+        type: string
+        nullable: true
+        comment: >
+          Nickname when given
+      - name: middle_name
+        type: string
+        nullable: true
+        comment: >
+          Middle name or initial
+      - name: last_name
+        type: string
+        nullable: true
+        comment: >
+          Last name
+      - name: suffix
+        type: string
+        nullable: true
+        comment: >
+          Name suffix as published
+      - name: registrant_id
+        type: long
+        nullable: true
+        comment: >
+          ID of the registrant the lobbyist is filed under; joins to lobbying_registrants
+      - name: registrant_name
+        type: string
+        nullable: true
+        comment: >
+          Registrant name
+      - name: registrant_house_id
+        type: integer
+        nullable: true
+        comment: >
+          The registrant's ID in the House Lobbying Disclosure system, when it has one
+      - name: registrant_city
+        type: string
+        nullable: true
+        comment: >
+          Registrant city
+      - name: registrant_state
+        type: string
+        nullable: true
+        comment: >
+          Registrant state
+      - name: registrant_country
+        type: string
+        nullable: true
+        comment: >
+          Registrant country code
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/lobbyists/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "id"
+        dq_record_limit: "250"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbyists/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_REGISTRANTS — lobbying firms and self-filing organizations
+  # ---------------------------------------------------------------------------
+  - name: lobbying_registrants
+    pattern: "type=lobbying_registrants/*.parquet"
+    dataset_type: snapshot
+    partitions: *lobbying_type_partitions
+    comment: >
+      Every registrant on LDA.gov (about 17,500): the lobbying firms and the organizations
+      that lobby for themselves, one row per registrant, replaced wholesale each month.
+      `registrant_id` is the ID used across every lobbying_* table. Contact names and
+      telephone numbers are deliberately not carried. Source: LDA.gov (Senate Office of
+      Public Records). The Senate Office of Public Records cannot vouch for the data or
+      analyses derived from these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_registrants
+      refresh_month: *lobbying_refresh_month
+
+    columns:
+      - name: registrant_id
+        type: long
+        nullable: false
+        comment: >
+          Registrant ID
+      - name: house_registrant_id
+        type: integer
+        nullable: true
+        comment: >
+          The registrant's ID in the House Lobbying Disclosure system, when it has one
+      - name: name
+        type: string
+        nullable: true
+        comment: >
+          Registrant name
+      - name: description
+        type: string
+        nullable: true
+        comment: >
+          Registrant's description of its business (older records sometimes hold a date or
+          note)
+      - name: address_1
+        type: string
+        nullable: true
+        comment: >
+          Street address (a business address)
+      - name: address_2
+        type: string
+        nullable: true
+        comment: >
+          Address line 2
+      - name: address_3
+        type: string
+        nullable: true
+        comment: >
+          Address line 3
+      - name: address_4
+        type: string
+        nullable: true
+        comment: >
+          Address line 4
+      - name: city
+        type: string
+        nullable: true
+        comment: >
+          City
+      - name: state
+        type: string
+        nullable: true
+        comment: >
+          State code
+      - name: zip
+        type: string
+        nullable: true
+        comment: >
+          ZIP
+      - name: country
+        type: string
+        nullable: true
+        comment: >
+          Country code
+      - name: ppb_country
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business country code
+      - name: dt_updated
+        type: string
+        nullable: true
+        comment: >
+          When LDA.gov last updated the record (ISO-8601)
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/registrants/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "id"
+        dq_record_limit: "250"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_registrants/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_CLIENTS — who lobbyists work for
+  # ---------------------------------------------------------------------------
+  - name: lobbying_clients
+    pattern: "type=lobbying_clients/*.parquet"
+    dataset_type: snapshot
+    partitions: *lobbying_type_partitions
+    comment: >
+      Every client on LDA.gov (about 136,700 records), one row per client record with the
+      registrant that represents it, replaced wholesale each month. `client_id` is the ID
+      used in lobbying_filings. `self_select` is true when the client is the registrant
+      itself, and `government_entity` when the client is a government body. Source: LDA.gov
+      (Senate Office of Public Records). The Senate Office of Public Records cannot vouch
+      for the data or analyses derived from these data after they have been retrieved from
+      LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_clients
+      refresh_month: *lobbying_refresh_month
+
+    columns:
+      - name: client_id
+        type: long
+        nullable: false
+        comment: >
+          Client ID
+      - name: name
+        type: string
+        nullable: true
+        comment: >
+          Client name
+      - name: general_description
+        type: string
+        nullable: true
+        comment: >
+          Client's line of business
+      - name: government_entity
+        type: boolean
+        nullable: true
+        comment: >
+          True when the client is a government entity
+      - name: self_select
+        type: boolean
+        nullable: true
+        comment: >
+          True when the client is the registrant itself
+      - name: state
+        type: string
+        nullable: true
+        comment: >
+          Client state code
+      - name: country
+        type: string
+        nullable: true
+        comment: >
+          Client country code
+      - name: ppb_state
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business state code
+      - name: ppb_country
+        type: string
+        nullable: true
+        comment: >
+          Principal-place-of-business country code
+      - name: effective_date
+        type: string
+        nullable: true
+        comment: >
+          Date the client relationship took effect (YYYY-MM-DD)
+      - name: registrant_id
+        type: long
+        nullable: true
+        comment: >
+          ID of the representing registrant; joins to lobbying_registrants
+      - name: registrant_name
+        type: string
+        nullable: true
+        comment: >
+          Representing registrant's name
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/clients/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "id"
+        dq_record_limit: "250"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_clients/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_ISSUE_CODES — general issue area codes
+  # ---------------------------------------------------------------------------
+  - name: lobbying_issue_codes
+    pattern: "type=lobbying_issue_codes/*.parquet"
+    dataset_type: snapshot
+    partitions: *lobbying_type_partitions
+    comment: >
+      The 79 general issue area codes a lobbying activity is filed under (ACC = Accounting,
+      DEF = Defense, HCR = Health Issues, ...). Decodes
+      lobbying_activities.general_issue_code. Source: LDA.gov (Senate Office of Public
+      Records). The Senate Office of Public Records cannot vouch for the data or analyses
+      derived from these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_issue_codes
+
+    columns:
+      - name: issue_code
+        type: string
+        nullable: false
+        comment: >
+          Three-letter issue area code
+      - name: issue_name
+        type: string
+        nullable: true
+        comment: >
+          Issue area name
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/constants/filing/lobbyingactivityissues/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_issue_codes/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_GOVERNMENT_ENTITY_CODES — bodies that can be lobbied
+  # ---------------------------------------------------------------------------
+  - name: lobbying_government_entity_codes
+    pattern: "type=lobbying_government_entity_codes/*.parquet"
+    dataset_type: snapshot
+    partitions: *lobbying_type_partitions
+    comment: >
+      The 257 federal bodies a lobbying activity can report contacting: the House, the
+      Senate and executive agencies. Decodes
+      lobbying_activity_government_entities.government_entity_id. Source: LDA.gov (Senate
+      Office of Public Records). The Senate Office of Public Records cannot vouch for the
+      data or analyses derived from these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_government_entity_codes
+
+    columns:
+      - name: government_entity_id
+        type: integer
+        nullable: false
+        comment: >
+          Government entity ID
+      - name: government_entity_name
+        type: string
+        nullable: true
+        comment: >
+          Government entity name
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/constants/filing/governmententities/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_government_entity_codes/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_FILING_TYPES — filing type codes
+  # ---------------------------------------------------------------------------
+  - name: lobbying_filing_types
+    pattern: "type=lobbying_filing_types/*.parquet"
+    dataset_type: snapshot
+    partitions: *lobbying_type_partitions
+    comment: >
+      The 50 filing type codes (RR = Registration, RA = Registration - Amendment, Q1 = 1st
+      Quarter Report, MM = Mid-Year Report, ...) with their variants for amendments and
+      terminations. Decodes filing_type on lobbying_filings and
+      lobbying_contribution_reports. Source: LDA.gov (Senate Office of Public Records). The
+      Senate Office of Public Records cannot vouch for the data or analyses derived from
+      these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_filing_types
+
+    columns:
+      - name: filing_type
+        type: string
+        nullable: false
+        comment: >
+          Filing type code
+      - name: filing_type_name
+        type: string
+        nullable: true
+        comment: >
+          Filing type name
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/constants/filing/filingtypes/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_filing_types/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_CONTRIBUTION_ITEM_TYPES — contribution type codes
+  # ---------------------------------------------------------------------------
+  - name: lobbying_contribution_item_types
+    pattern: "type=lobbying_contribution_item_types/*.parquet"
+    dataset_type: snapshot
+    partitions: *lobbying_type_partitions
+    comment: >
+      The five contribution type codes on an LD-203 item (feca = FECA, he = Honorary
+      Expenses, ...). Decodes lobbying_contribution_items.contribution_type. Source: LDA.gov
+      (Senate Office of Public Records). The Senate Office of Public Records cannot vouch
+      for the data or analyses derived from these data after they have been retrieved from
+      LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_contribution_item_types
+
+    columns:
+      - name: contribution_type
+        type: string
+        nullable: false
+        comment: >
+          Contribution type code
+      - name: contribution_type_name
+        type: string
+        nullable: true
+        comment: >
+          Contribution type name
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/constants/contribution/itemtypes/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_contribution_item_types/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # SCOTUS_SLIP_OPINIONS — opinions of the Court from supremecourt.gov, terms 2017 onward
+  # ---------------------------------------------------------------------------
+  # Source: supremecourt.gov "Opinions of the Court" listing per term, and the PDFs it links.
+  # ScotusSlipOpinionsProvider reads a term at a time. Recent terms link one PDF per opinion;
+  # terms 2017-2019 link into a preliminary-print or bound-volume PDF at a page, which is
+  # downloaded once and cut into cases.
+  - name: scotus_slip_opinions
+    pattern: "type=scotus_slip_opinions/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Every opinion of the U.S. Supreme Court in the "Opinions of the Court" listing on
+      supremecourt.gov, Court terms 2017 to the current term: the cases the bound volumes in
+      scotus_reports_cases do not cover (term 2017's opinions before March 21, 2018 are in
+      volume 583 there). One row per case, partitioned by `year`, the term (October of `year`
+      to the following summer). `holding_summary` is the Court's own one-line statement of the
+      holding from the listing. `docket_numbers` are read from the opinion (a consolidated
+      case lists every docket its footnote numbers; `listing_docket` is the one the listing
+      gives). `disposition` is derived from the opinion's syllabus, so `disposition_source` is
+      always opinion_text; it uses the vocabulary of scotus_reports_cases (Affirmed (includes
+      modified), Reversed, Reversed and remanded, Vacated and remanded, Affirmed and reversed
+      (or vacated) in part [and remanded], Dismissed as improvidently granted) and can also be
+      Reversed in part and remanded or Reversed in part, vacated in part, and remanded where the
+      Court affirmed no part, or Application granted / Application denied for an order on an
+      emergency application (a docket such as 24A884). It is null for an original-jurisdiction
+      decree. `us_citation` is null while the listing shows only a volume and print part
+      (609/2) and has no page yet. `opinion_text` is the full text as extracted from the PDF,
+      in which the "fi" ligature loses its "i" (e.g. "affrmed", "fnal"). `author_initials` is
+      PC for a per curiam and otherwise the justice's initials as the listing prints them.
+
+    dimensions:
+      type:
+        - scotus_slip_opinions
+      year: *scotus_slip_term_range
+
+    columns:
+      - name: release
+        type: string
+        nullable: false
+        comment: The opinion's release number within the term (e.g. 67), or a label such as D1 for a decree in an original-jurisdiction case
+      - name: decision_date
+        type: string
+        nullable: false
+        comment: Date of decision (YYYY-MM-DD)
+      - name: listing_docket
+        type: string
+        nullable: false
+        comment: Docket number as the listing prints it (23-583; 24A884 for an application; 141, Orig. for an original case)
+      - name: docket_numbers
+        type: array<string>
+        nullable: true
+        comment: The Court's docket numbers read from the opinion, lead docket first, normalised with a hyphen (23-583; 24A910; 137-Orig). A consolidated case lists every docket the opinion's footnote numbers; empty where the text carries none
+      - name: case_name
+        type: string
+        nullable: false
+        comment: Case name as the listing prints it, e.g. Goldey v. Fields
+      - name: holding_summary
+        type: string
+        nullable: true
+        comment: The Court's own one-line statement of the holding, from the listing; null where the listing gives none
+      - name: author_initials
+        type: string
+        nullable: false
+        comment: PC for a per curiam, otherwise the initials of the justice who wrote the opinion (e.g. NG, KJ, B) as the listing prints them; D for a decree
+      - name: volume
+        type: integer
+        nullable: true
+        comment: United States Reports volume, from the listing's citation; null when the listing gives none
+      - name: first_page
+        type: integer
+        nullable: true
+        comment: Page on which the case begins in the United States Reports; null until the page is assigned (the listing then shows only volume and print part, e.g. 609/2)
+      - name: us_citation
+        type: string
+        nullable: true
+        comment: Official citation, e.g. 606 U.S. 942; null while no page is assigned
+      - name: disposition
+        type: string
+        nullable: true
+        comment: What the Court did with the judgment below, derived from the opinion's syllabus, in the vocabulary of scotus_reports_cases plus Reversed in part and remanded, Reversed in part vacated in part and remanded, Application granted and Application denied; null for an original-jurisdiction decree and where no syllabus disposition line is found
+      - name: disposition_source
+        type: string
+        nullable: true
+        comment: opinion_text whenever disposition is set (there is no curated outcome for these terms); null when disposition is null
+      - name: decision_type
+        type: string
+        nullable: true
+        comment: Equally divided vote when the Court affirmed by an equally divided vote; null otherwise
+      - name: pdf_url
+        type: string
+        nullable: false
+        comment: supremecourt.gov URL of the PDF the opinion text was read from; for terms whose opinions share a volume PDF it is the volume's file and pdf_page locates the case
+      - name: pdf_page
+        type: integer
+        nullable: true
+        comment: Page of pdf_url on which the case begins when the PDF is a volume holding many cases; null for a per-opinion PDF
+      - name: page_count
+        type: integer
+        nullable: false
+        comment: Pages of the case in the PDF
+      - name: opinion_text
+        type: string
+        nullable: true
+        comment: "Full text of the case as extracted from the PDF — syllabus, opinion of the Court, concurrences and dissents. The \"fi\" ligature loses its \"i\" in the source encoding (\"affrmed\", \"fnal\"). Text blob"
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://www.supremecourt.gov/opinions/slipopinion/{year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.ScotusSlipOpinionsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=scotus_slip_opinions/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: scotus_slip_opinions
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # SCOTUS_DOCKETS — one row per docket of a decided case, from supremecourt.gov
+  # ---------------------------------------------------------------------------
+  # Source: the Court's docket pages (search.aspx?filename=/docket/docketfiles/html/public/...),
+  # for the docket numbers in each term's "Opinions of the Court" listing. Decided cases only:
+  # petitions the Court did not take are not fetched. ScotusDocketsProvider and
+  # ScotusDocketEntriesProvider read the same pages through ScotusDocketFetcher.
+  - name: scotus_dockets
+    pattern: "type=scotus_dockets/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      The Supreme Court docket of each case it decided in Court terms 2017 to the current term
+      (the same cases as scotus_slip_opinions): one row per docket, partitioned by `year`, the
+      term the case was decided in. Header fields are the docket's own — title, when it was
+      docketed, the court below and its case numbers and decision date, any application it is
+      linked with, and the Questions Presented. `granted_date`, `argued_date` and
+      `judgment_issued_date` are the dates of the docket entries "Petition GRANTED", "Argued." and
+      "Judgment Issued." and are null where the docket has none (a summary reversal is not argued;
+      a docket in which the Court's own entry is misspelt has no judgment date). `entry_count` and
+      `document_count` count the docket's entries and the filings linked from them; the entries
+      are in scotus_docket_entries. Join to scotus_slip_opinions on `docket_number` =
+      `listing_docket`. Not included: dockets of cases decided before term 2017 (the docket
+      pages before 2016 use an older layout that is not read), original-jurisdiction cases (their
+      page address cannot be derived from the listing), and, for a consolidated case, the
+      companion dockets — only the lead docket the listing names is fetched. No petitions the
+      Court declined to hear are here.
+
+    dimensions:
+      type:
+        - scotus_dockets
+      year: *scotus_slip_term_range
+
+    columns:
+      - name: docket_number
+        type: string
+        nullable: false
+        comment: The Court's docket number (23-583; an application is 24A910)
+      - name: title
+        type: string
+        nullable: false
+        comment: Caption as the docket prints it, e.g. Amina Bouarfa, Petitioner v. Alejandro Mayorkas, Secretary of Homeland Security, et al.
+      - name: docketed
+        type: string
+        nullable: false
+        comment: Date the case was docketed (YYYY-MM-DD)
+      - name: linked_with
+        type: string
+        nullable: true
+        comment: Application docket number or numbers linked to this case (e.g. an extension of time, 23A348), comma-separated; null when none
+      - name: lower_court
+        type: string
+        nullable: true
+        comment: Court whose decision was reviewed, e.g. United States Court of Appeals for the Eleventh Circuit; null for a case with no court below
+      - name: lower_court_case_numbers
+        type: string
+        nullable: true
+        comment: The lower court's case number or numbers as the docket prints them, without the parentheses (22-12429)
+      - name: lower_court_decision_date
+        type: string
+        nullable: true
+        comment: Date the lower court decided (YYYY-MM-DD)
+      - name: lower_court_decision_note
+        type: string
+        nullable: true
+        comment: Annotation the docket prints after the lower-court decision date, e.g. Rule 12.4 (the petition was filed under Supreme Court Rule 12.4); null when there is none
+      - name: discretionary_court_decision_date
+        type: string
+        nullable: true
+        comment: Date a state court of discretionary review decided (YYYY-MM-DD), for a case that came from a state court that could decline review; lower_court_decision_date is the earlier decision below it
+      - name: rehearing_denied
+        type: string
+        nullable: true
+        comment: Date rehearing was denied (YYYY-MM-DD), when the docket records one
+      - name: questions_presented_url
+        type: string
+        nullable: true
+        comment: URL of the Questions Presented PDF; null when the Court did not take the case up for full review
+      - name: granted_date
+        type: string
+        nullable: true
+        comment: Date of the docket entry "Petition GRANTED" (YYYY-MM-DD); null when there is none
+      - name: argued_date
+        type: string
+        nullable: true
+        comment: Date of the docket entry "Argued." (YYYY-MM-DD); null for a case decided without argument
+      - name: judgment_issued_date
+        type: string
+        nullable: true
+        comment: Date of the docket entry "Judgment Issued." (YYYY-MM-DD); null when none has issued
+      - name: entry_count
+        type: integer
+        nullable: false
+        comment: Number of entries in the docket's proceedings and orders (rows in scotus_docket_entries)
+      - name: document_count
+        type: integer
+        nullable: false
+        comment: Number of filings linked from the docket's entries
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://www.supremecourt.gov/opinions/slipopinion/{year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.ScotusDocketsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=scotus_dockets/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: scotus_dockets
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # SCOTUS_DOCKET_ENTRIES — one row per entry in each docket's proceedings and orders
+  # ---------------------------------------------------------------------------
+  - name: scotus_docket_entries
+    pattern: "type=scotus_docket_entries/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Every entry in the "Proceedings and Orders" of the dockets in scotus_dockets, one row per
+      entry in the order the docket lists them (`sequence` from 1), partitioned by `year`, the term
+      the case was decided in. Extensions of time, briefs including those of amici, the
+      distribution of the petition for conference, the grant, the argument and the judgment all
+      appear here as the Court's own text in `entry_text`, with the filings linked from the entry
+      in `document_labels` and `document_urls` (parallel lists). Join to scotus_dockets on
+      `docket_number`. Same coverage as scotus_dockets: decided cases from term 2017, lead docket of
+      a consolidated case, no original-jurisdiction cases.
+
+    dimensions:
+      type:
+        - scotus_docket_entries
+      year: *scotus_slip_term_range
+
+    columns:
+      - name: docket_number
+        type: string
+        nullable: false
+        comment: The Court's docket number the entry belongs to; joins to scotus_dockets
+      - name: sequence
+        type: integer
+        nullable: false
+        comment: Position of the entry in the docket, from 1, in the order the docket lists them
+      - name: entry_date
+        type: string
+        nullable: false
+        comment: Date of the entry (YYYY-MM-DD)
+      - name: entry_text
+        type: string
+        nullable: false
+        comment: The entry's text as the Court prints it, e.g. Petition GRANTED. or Brief of respondent ... in opposition filed.
+      - name: document_labels
+        type: array<string>
+        nullable: true
+        comment: Labels of the filings linked from the entry (Petition, Main Document, Appendix); parallel to document_urls; null when the entry links none
+      - name: document_urls
+        type: array<string>
+        nullable: true
+        comment: URLs of the filings linked from the entry; parallel to document_labels; null when the entry links none
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://www.supremecourt.gov/opinions/slipopinion/{year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.ScotusDocketEntriesProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=scotus_docket_entries/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: scotus_docket_entries
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: scotus_cases
+    comment: >
+      Every decided U.S. Supreme Court case from the bound United States Reports and from
+      supremecourt.gov, in one table with one row per case: the rows of scotus_reports_cases
+      (Court terms 1781 through 2017, volumes 2-583) and of scotus_slip_opinions (terms 2017
+      onward). The two sources do not overlap — the term 2017 opinions before March 21, 2018 are
+      in volume 583 and the rest are slip opinions. `source` says which table a row is from
+      (govinfo_reports or supremecourt_slip) and so which columns are populated: the curated
+      outcome columns (`party_winning`, `chief_justice`, `opinion_writer`, votes, `case_origin`,
+      `case_source`, `cert_reason`, `jurisdiction`) are present for govinfo_reports rows through
+      volume 582 only, and `holding_summary` and `author_initials` only for supremecourt_slip
+      rows. `term` is the Court term (the year its October term began). `case_name` is the name
+      without its citation. `disposition` uses one vocabulary in both sources, and
+      `disposition_source` says whether it is GovInfo's curated value or was derived from the
+      opinion text. `docket_numbers` are the Court's docket numbers read from the opinion.
+      `decision_date` is null for a volume 583 case, where GovInfo dates only the year;
+      `decision_year` is always present.
+    sql: >
+      SELECT 'govinfo_reports' AS source, r.year AS term, r.us_citation, r.volume, r.first_page,
+        CASE WHEN r.full_citation IS NOT NULL AND r.case_title LIKE '%, ' || r.full_citation
+             THEN SUBSTRING(r.case_title FROM 1
+                            FOR CHAR_LENGTH(r.case_title) - CHAR_LENGTH(r.full_citation) - 2)
+             ELSE r.case_title END AS case_name,
+        r.decision_date, r.decision_year, r.docket_numbers, r.disposition,
+        r.disposition_source, r.decision_type, r.party_winning, r.chief_justice,
+        r.opinion_writer, r.votes_majority, r.votes_minority, r.jurisdiction, r.case_origin,
+        r.case_source, r.cert_reason, CAST(NULL AS VARCHAR) AS holding_summary,
+        CAST(NULL AS VARCHAR) AS author_initials, r.pdf_url, r.opinion_text
+      FROM scotus_reports_cases r
+      UNION ALL
+      SELECT 'supremecourt_slip' AS source, s.year AS term, s.us_citation, s.volume, s.first_page,
+        s.case_name, s.decision_date, CAST(SUBSTRING(s.decision_date FROM 1 FOR 4) AS INTEGER),
+        s.docket_numbers, s.disposition, s.disposition_source, s.decision_type,
+        CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
+        CAST(NULL AS INTEGER), CAST(NULL AS INTEGER), CAST(NULL AS VARCHAR),
+        CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
+        s.holding_summary, s.author_initials, s.pdf_url, s.opinion_text
+      FROM scotus_slip_opinions s
