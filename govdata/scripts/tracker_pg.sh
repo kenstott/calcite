@@ -106,6 +106,37 @@ pg_tracker_purge_table() {
   echo "        Deleted ${markers} marker row(s) and ${completions} completion row(s) from ${ns}"
 }
 
+# Deletes every tracker row for each table of a schema — the tracker half of tearing a schema's
+# data down completely. Each table gets the same per-table delete data_purge.sh performs, and the
+# document schemas (sec / sec_secondary) also lose their per-accession completions, since
+# SecFilingCache skips any accession still marked complete no matter what the Iceberg tables hold.
+#
+# @param tables_csv comma-separated table names, e.g. from schema_tables
+pg_tracker_purge_schema() {
+  local ns="$1" schema="$2" tables_csv="$3" dry_run="$4" table
+  local -a tables=()
+  IFS=',' read -ra tables <<< "$tables_csv"
+  for table in "${tables[@]}"; do
+    table="$(echo -n "$table" | xargs)"
+    [[ -z "$table" ]] && continue
+    echo "  ${schema}/${table}"
+    pg_tracker_purge_table "$ns" "$table" "$dry_run" || return 1
+  done
+  case "$schema" in
+    sec|sec_secondary)
+      local -a suffixes=()
+      local suffix in_list=""
+      while IFS= read -r suffix; do
+        [[ -n "$suffix" ]] && suffixes+=("$suffix")
+      done < <(sec_accession_suffixes_for_tables "${tables[@]}")
+      if [[ ${#suffixes[@]} -gt 0 ]]; then
+        for suffix in "${suffixes[@]}"; do in_list="${in_list:+$in_list,}'$suffix'"; done
+        pg_tracker_purge_accessions "$ns" "$in_list" "$dry_run" || return 1
+      fi
+      ;;
+  esac
+}
+
 # Deletes the per-accession document completions for a document schema. The S3 path rewrites the
 # marker parquet to exclude these table_names; here they are rows.
 #

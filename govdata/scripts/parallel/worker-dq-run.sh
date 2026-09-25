@@ -19,6 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
+source "$SCRIPT_DIR/../tracker_pg.sh"
 load_env
 _env_dq="$SCRIPT_DIR/../../.env.dq"
 if [ -f "$_env_dq" ]; then set -a; source "$_env_dq"; set +a; fi
@@ -52,7 +53,7 @@ while [[ $# -gt 0 ]]; do
     --etl-resume)
       # Resume ETL without teardown: respects tracker, completes unfinished
       # partitions (historical + daily), then runs DQ. No purge of Iceberg
-      # metadata, MinIO data, dq-results, or etl-tracker.
+      # metadata, MinIO data, dq-results, or Postgres tracker rows.
       ETL_RESUME=true
       INCLUDE_DAILY=true
       ;;
@@ -453,9 +454,13 @@ fi  # end iceberg/data teardown (only when --rebuild)
   # On a full rebuild, clear DQ results + the ETL tracker so the standard workers re-ingest
   # the (already torn-down) data fresh.
   if $REBUILD; then
-    log_info "$WORKER_ID: --rebuild: purging dq-results + etl-tracker for schema=$SCHEMA"
+    log_info "$WORKER_ID: --rebuild: purging dq-results + Postgres tracker rows for schema=$SCHEMA"
     rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
-    rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/etl-tracker/schema=$SCHEMA" 2>/dev/null || true
+    # The standard workers resume from the Postgres tracker (namespace derived from the DQ
+    # bucket), so every table of the schema must lose its rows or the rebuild skips marked units.
+    _pg_ns="$(pg_ns_for_schema "s3://${GOVDATA_DQ_BUCKET}" "$SCHEMA")"
+    _pg_tables="$(schema_tables "$SCHEMA" all)"
+    pg_tracker_purge_schema "$_pg_ns" "$SCHEMA" "$_pg_tables" false
   fi
 
   # ── pre-ETL tracker compaction ──────────────────────────────────────────────
