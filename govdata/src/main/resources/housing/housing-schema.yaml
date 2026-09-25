@@ -130,11 +130,14 @@ dimension_values:
   # CFPB HMDA Data Browser aggregations exist from data year 2018 (the post-2018
   # HMDA-reform schema) through the prior year; the current year's file is not
   # published until ~June following, so dataLag 1 targets the newest complete
-  # year and never 404-poisons.
+  # year and never 404-poisons. The iterated `year` is the publish year and
+  # effective_year (publish year - 1) is the HMDA data year: URLs and providers
+  # must request {effective_year}, and minYear is the first publish year whose
+  # data year (2018) is in the post-reform format.
   hmda_year_range: &hmda_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
-    minYear: 2018
+    start: "${GOVDATA_START_YEAR:2019}"
+    minYear: 2019
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
@@ -1041,7 +1044,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/aggregations?years={year}&states={state}&actions_taken=1,2,3,4,5,6,7,8&loan_purposes=1,2,31,32,4,5"
+      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/aggregations?years={effective_year}&states={state}&actions_taken=1,2,3,4,5,6,7,8&loan_purposes=1,2,31,32,4,5"
       method: GET
       response:
         format: json
@@ -1287,7 +1290,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/aggregations?years={year}&states={state}&actions_taken=1,2,3,4,5,6,7,8"
+      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/aggregations?years={effective_year}&states={state}&actions_taken=1,2,3,4,5,6,7,8"
       method: GET
       response:
         format: json
@@ -1489,7 +1492,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/csv?states={state}&years={year}"
+      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/csv?states={state}&years={effective_year}"
       method: GET
       response:
         format: csv

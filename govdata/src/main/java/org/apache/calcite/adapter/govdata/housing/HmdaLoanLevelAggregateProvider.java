@@ -30,7 +30,6 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -100,10 +99,12 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
-    String year = variables.get("year");
+    // effective_year is the HMDA data year (publish year - dataLag); the pipeline's own
+    // `year` is the publish year and is not a year FFIEC has a file for until mid-following-year.
+    String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
-      LOGGER.warn("HMDA loan-level aggregate: no year in dimension variables {}", variables);
-      return Collections.emptyIterator();
+      throw new IOException("HMDA loan-level aggregate: no effective_year in dimension variables "
+          + variables);
     }
     String url = "https://ffiec.cfpb.gov/v2/data-browser-api/view/nationwide/csv?years=" + year
         + "&actions_taken=1,2,3,4,5,6,7,8";
