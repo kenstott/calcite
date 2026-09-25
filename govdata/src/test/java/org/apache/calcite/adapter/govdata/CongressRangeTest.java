@@ -50,10 +50,23 @@ class CongressRangeTest {
     assertEquals("119", System.getProperty("GOVDATA_END_CONGRESS"));
   }
 
-  @Test void nothingIsSetWithoutBothYears() {
-    Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("startYear", 2010);
-    CongressRange.deriveEarlyProperties(operand);
+  @Test void eachYearSetsOnlyItsOwnCongress() {
+    Map<String, Object> startOnly = new HashMap<String, Object>();
+    startOnly.put("startYear", 2010);
+    CongressRange.deriveEarlyProperties(startOnly);
+    assertEquals("111", System.getProperty("GOVDATA_START_CONGRESS"));
+    assertNull(System.getProperty("GOVDATA_END_CONGRESS"));
+
+    System.clearProperty("GOVDATA_START_CONGRESS");
+    Map<String, Object> endOnly = new HashMap<String, Object>();
+    endOnly.put("endYear", 2025);
+    CongressRange.deriveEarlyProperties(endOnly);
+    assertNull(System.getProperty("GOVDATA_START_CONGRESS"));
+    assertEquals("119", System.getProperty("GOVDATA_END_CONGRESS"));
+  }
+
+  @Test void nothingIsSetWithoutEitherYear() {
+    CongressRange.deriveEarlyProperties(new HashMap<String, Object>());
     assertNull(System.getProperty("GOVDATA_START_CONGRESS"));
     assertNull(System.getProperty("GOVDATA_END_CONGRESS"));
   }

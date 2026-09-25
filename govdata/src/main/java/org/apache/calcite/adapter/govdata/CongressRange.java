@@ -30,17 +30,21 @@ public final class CongressRange {
   private CongressRange() {
   }
 
-  /** Sets the Congress range properties from the operand's startYear/endYear, when both exist. */
+  /**
+   * Sets each Congress property from the operand's matching year, independently: a run that
+   * supplies only an end year still gets the schema's own default start.
+   */
   public static void deriveEarlyProperties(Map<String, Object> operand) {
     Object startYearObj = operand.get("startYear");
     Object endYearObj = operand.get("endYear");
-    if (startYearObj == null || endYearObj == null) {
-      return;
+    if (startYearObj != null) {
+      int startYear = Integer.parseInt(String.valueOf(startYearObj));
+      System.setProperty("GOVDATA_START_CONGRESS", String.valueOf(congressOf(startYear)));
     }
-    int startYear = Integer.parseInt(String.valueOf(startYearObj));
-    int endYear = Integer.parseInt(String.valueOf(endYearObj));
-    System.setProperty("GOVDATA_START_CONGRESS", String.valueOf(congressOf(startYear)));
-    System.setProperty("GOVDATA_END_CONGRESS", String.valueOf(congressOf(endYear)));
+    if (endYearObj != null) {
+      int endYear = Integer.parseInt(String.valueOf(endYearObj));
+      System.setProperty("GOVDATA_END_CONGRESS", String.valueOf(congressOf(endYear)));
+    }
   }
 
   /** The Congress covering calendar year {@code year}. */
