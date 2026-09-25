@@ -90,6 +90,26 @@ class ScotusDocketNumbersTest {
             + "*Justice Gorsuch took no part in the decision. Congress created Medicaid"));
   }
 
+  @Test void anOpinionAsFirstReleasedHasNoDatesAfterTheNumber() {
+    assertEquals(Collections.singletonList("26A308"),
+        parse("_________________ 1 Cite as: 609 U. S. ____ (2026) Per Curiam SUPREME COURT OF "
+            + "THE UNITED STATES No. 26A308 DEPARTMENT OF HOMELAND SECURITY, ET AL. v. LEAGUE OF "
+            + "WOMEN VOTERS, ET AL. ON APPLICATION FOR STAY [September 25, 2026] PER CURIAM."));
+  }
+
+  @Test void aReleasedOpinionOfAConsolidatedCaseListsEveryNumber() {
+    assertEquals(Arrays.asList("24-656", "24-657"),
+        parse("SUPREME COURT OF THE UNITED STATES Nos. 24\u2013656 and 24\u2013657 A v. B ON "
+            + "WRITS OF CERTIORARI [January 17, 2025]"));
+  }
+
+  @Test void aFinalDecreeInAnOriginalCase() {
+    assertEquals(Collections.singletonList("141-Orig"),
+        parse("346 OCTOBER TERM, 2025 Decree TEXAS v. NEW MEXICO, et al. on receipt of the fourth "
+            + "interim report of the special master No. 141, Orig. Final Decree Entered May 26, "
+            + "2026 Opinions reported: 583 U. S. 407"));
+  }
+
   @Test void noHeaderMeansNoNumbersNotAGuess() {
     assertTrue(parse("cover", "Errata: p. 12, line 3: \"No. 5\" is changed to \"No. 6\"").isEmpty());
   }

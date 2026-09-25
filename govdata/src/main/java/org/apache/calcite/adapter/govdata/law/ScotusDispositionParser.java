@@ -99,8 +99,20 @@ public final class ScotusDispositionParser {
 
   /** A disposition phrase that follows a reporter citation, a page range, or a semicolon. */
   private static final Pattern DISPOSITION =
-      Pattern.compile("(?:(?<=[\\d)])\\s*,\\s*|(?<=\\d\\.)\\s+|(?<=;)\\s*(?:judgment\\s+)?)"
+      Pattern.compile("(?:(?<=[\\d)])\\s*,\\s*|(?<=\\d\\.)\\s+|(?<=;)\\s*(?:judgment\\s+)?"
+          + "|(?<=,)\\s*judgment\\s+|(?<=Syllabus)\\s+)"
           + "(" + PHRASE + ")[.;]", Pattern.CASE_INSENSITIVE);
+
+  /**
+   * A syllabus that states the outcome in prose instead of a disposition line, as a summary
+   * reversal does: "the Court grants the State's petition for a writ of certiorari, reverses the
+   * judgment of the Second Circuit, and remands the case".
+   */
+  private static final Pattern PROSE_DISPOSITION =
+      Pattern.compile("the Court (?:grants[^.]{0,160}?,\\s*)?(reverses|vacates|affirms)\\b[^.]*\\.",
+          Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern REMANDS = Pattern.compile("\\bremands\\b", Pattern.CASE_INSENSITIVE);
 
   private static final Pattern PAGE_RANGE = Pattern.compile("Pp?\\. [\\d–\\-, ]+\\.");
 
@@ -162,6 +174,10 @@ public final class ScotusDispositionParser {
     if (line != null) {
       return line;
     }
+    Result prose = proseDisposition(syllabus);
+    if (prose != null) {
+      return prose;
+    }
 
     // An application that also granted certiorari and vacated the judgment has a syllabus
     // line and is handled above; a plain grant or denial has none.
@@ -209,6 +225,23 @@ public final class ScotusDispositionParser {
     boolean dividedVote = chosen.toLowerCase(Locale.ROOT).contains("equally divided");
     return new Result(Kind.SYLLABUS_LINE, normalise(chosen),
         dividedVote ? EQUALLY_DIVIDED_VOTE : null);
+  }
+
+  /** The outcome as stated in the syllabus's own closing sentence, when there is no line. */
+  private static Result proseDisposition(String syllabus) {
+    Matcher m = PROSE_DISPOSITION.matcher(syllabus);
+    String verb = null;
+    boolean remands = false;
+    while (m.find()) {
+      verb = m.group(1);
+      remands = REMANDS.matcher(m.group()).find();
+    }
+    if (verb == null) {
+      return null;
+    }
+    String phrase = verb.toLowerCase(Locale.ROOT).replaceFirst("es$", "ed")
+        .replaceFirst("s$", "ed");
+    return new Result(Kind.SYLLABUS_LINE, normalise(remands ? phrase + " and remanded" : phrase));
   }
 
   /** The last grant or denial before the order's closing "It is so ordered". */

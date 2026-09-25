@@ -41,12 +41,25 @@ public final class ScotusDocketNumbers {
 
   private static final String NUMBER = "\\d{1,3}\\s*[–—\\-]\\s*\\d+|\\d{1,3}[AO]\\d+|\\d{1,4}";
 
-  private static final String DATES = "(?:Argued|Decided|Submitted|Reargued)";
+  private static final String DATES =
+      "(?:Argued|Decided|Submitted|Reargued|Final Decree|Decree)";
 
   /** The header's docket number, identified by the argument or decision date that follows it. */
   private static final Pattern LEAD =
       Pattern.compile("\\bNo\\.\\s*(" + NUMBER + ")(?:\\s*,\\s*(Orig)\\.)?"
           + "(?:\\s*\\(\\s*(" + NUMBER + ")\\s*\\))?\\s*\\.?\\s+" + DATES);
+
+  /**
+   * The header of an opinion as first released, before it is reprinted in a preliminary print:
+   * {@code SUPREME COURT OF THE UNITED STATES No. 26A308 ... ON APPLICATION FOR STAY [September
+   * 25, 2026]}, with no argument or decision date after the number. A consolidated case lists
+   * its numbers there ({@code Nos. 24-656 and 24-657}).
+   */
+  private static final Pattern RELEASED_HEADER =
+      Pattern.compile("SUPREME COURT OF THE UNITED STATES\\s+Nos?\\.\\s*((?:" + NUMBER + ")"
+          + "(?:\\s*(?:,\\s*and\\s+|,\\s*|\\s+and\\s+|\\s*&\\s*)(?:" + NUMBER + "))*)");
+
+  private static final Pattern EACH_NUMBER = Pattern.compile(NUMBER);
 
   private static final Pattern TOGETHER =
       Pattern.compile("\\*\\s*Together with(.{0,600}?)(?:also on|Page Proof|Cite as|Syllabus|$)");
@@ -74,8 +87,15 @@ public final class ScotusDocketNumbers {
     String text = WS.matcher(sb).replaceAll(" ");
 
     List<String> numbers = new ArrayList<String>();
+    Matcher released = RELEASED_HEADER.matcher(text);
     Matcher lead = LEAD.matcher(text);
     if (!lead.find()) {
+      if (released.find()) {
+        Matcher each = EACH_NUMBER.matcher(released.group(1));
+        while (each.find()) {
+          add(numbers, each.group(), false);
+        }
+      }
       return numbers;
     }
     add(numbers, lead.group(1), lead.group(2) != null);

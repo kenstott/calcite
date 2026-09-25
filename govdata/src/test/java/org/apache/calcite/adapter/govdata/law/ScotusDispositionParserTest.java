@@ -115,6 +115,31 @@ class ScotusDispositionParserTest {
     assertEquals("Affirmed (includes modified)", r.disposition);
   }
 
+  @Test void certiorariGrantedCommaJudgmentReversed() {
+    Result r = parse("cover",
+        "Accordingly, Zorn was entitled to qualifed immunity. 135 F. 4th 19, certiorari granted, "
+            + "judgment reversed.\nPER CURIAM. The petition is granted.");
+    assertEquals("Reversed", r.disposition);
+  }
+
+  @Test void aRunningPageHeadBetweenThePageRangeAndTheDisposition() {
+    Result r = parse("cover",
+        "accountable to the President, and the President to the people. Pp. 456\u2013464. 428 "
+            + "TRUMP v. SLAUGHTER Syllabus Reversed and remanded.\nRoberts, C. J., delivered the "
+            + "opinion of the Court.");
+    assertEquals(Kind.SYLLABUS_LINE, r.kind);
+    assertEquals("Reversed and remanded", r.disposition);
+  }
+
+  @Test void aSummaryReversalStatedInProse() {
+    Result r = parse("cover",
+        "federal habeas court to disturb a state-court conviction. Because the panel erred in "
+            + "holding otherwise, the Court grants the State's petition for a writ of "
+            + "certiorari, reverses the judgment of the Second Circuit, and remands the case "
+            + "for further proceedings consistent with this opinion.\nPER CURIAM. The petition");
+    assertEquals("Reversed and remanded", r.disposition);
+  }
+
   @Test void equallyDividedCourt() {
     Result r = parse(
         "No. 13–1496. Argued December 7, 2015—Decided June 23, 2016 746 F. 3d 167, "
