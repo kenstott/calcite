@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.officials;
 
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
+import org.apache.calcite.adapter.govdata.CongressRange;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 
 import org.slf4j.Logger;
@@ -104,18 +105,6 @@ public class OfficialsSchemaFactory implements GovDataSubSchemaFactory {
    * no matching link) — no dimension-level derivation needed.
    */
   @Override public void deriveEarlyProperties(Map<String, Object> operand) {
-    Object startYearObj = operand.get("startYear");
-    Object endYearObj = operand.get("endYear");
-    if (startYearObj == null || endYearObj == null) {
-      return;
-    }
-    int startYear = Integer.parseInt(String.valueOf(startYearObj));
-    int endYear = Integer.parseInt(String.valueOf(endYearObj));
-
-    // Congress N spans [1789+2(N-1), 1791+2(N-1)); year Y -> N = (Y-1789)/2 + 1.
-    int startCongress = (startYear - 1789) / 2 + 1;
-    int endCongress = (endYear - 1789) / 2 + 1;
-    System.setProperty("GOVDATA_START_CONGRESS", String.valueOf(startCongress));
-    System.setProperty("GOVDATA_END_CONGRESS", String.valueOf(endCongress));
+    CongressRange.deriveEarlyProperties(operand);
   }
 }
