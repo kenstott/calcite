@@ -45,6 +45,11 @@
 #   lands   <historical|daily>
 #   cftc    <historical|daily>
 #   ag      <historical|daily>   — USDA NASS/ERS/RMA/FSA
+# The whole script is one brace group followed by an exit on the same line, so bash parses
+# the entire file before running any of it. Without this, a worker that is mid-run when this
+# file is edited in place resumes reading at its old byte offset in the new text and runs a
+# fragment as a command (exit 127) after its ETL has already finished.
+{
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -684,3 +689,4 @@ PY
 esac
 
 log_info "$WORKER_ID complete"
+}; exit $?
