@@ -2238,6 +2238,13 @@ public class EtlPipeline {
       if (dataWriter != null) {
         synchronized (writeLock) {
           long batchRows = dataWriter.write(config, null, variables);
+          // A negative return is the "use default MaterializationWriter" sentinel. A document
+          // source hands the writer no row iterator (data is null), so the default writer has
+          // nothing to write: this pass wrote zero rows. Summing the raw sentinel would turn a
+          // no-op pass into a negative EtlResult row count.
+          if (batchRows < 0) {
+            batchRows = 0;
+          }
           markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
           return batchRows;
         }

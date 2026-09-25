@@ -52,7 +52,8 @@ public class ShippedSchemaCoverageTest {
 
   /** Tables converted from a year-granular lag to a month-granular one. */
   private static final List<String> MONTH_LAG_TABLES = Arrays.asList(
-      "eia_electricity_generation", "eia_electricity_prices", "eia_fossil_fuel_production",
+      "eia_electricity_generation", "eia_electricity_prices", "eia_crude_oil_production",
+      "eia_natural_gas_production",
       "eia_refinery_operations", "eia_crude_oil_imports");
 
   @AfterEach void unpin() {
