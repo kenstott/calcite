@@ -840,8 +840,10 @@ partitionedTables:
       type: http
       url: "https://osv-vulnerabilities.storage.googleapis.com"
       method: GET
+      # The bucket listing this URL returns is XML and is not read; the transformer
+      # downloads each ecosystem's all.zip itself, so the body must not be parsed as JSON.
       response:
-        format: json
+        format: text
       rateLimit:
         requestsPerSecond: 2.0
         maxRetries: 3
