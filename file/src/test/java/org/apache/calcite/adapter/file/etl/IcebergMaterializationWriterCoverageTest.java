@@ -203,12 +203,9 @@ public class IcebergMaterializationWriterCoverageTest {
         .output(MaterializeOutputConfig.builder().build())
         .build();
 
-    // This will fail to connect to REST catalog - but we're testing the config building
-    try {
-      writer.initialize(config);
-    } catch (Exception e) {
-      // Expected - REST catalog not available in tests
-    }
+    UnsupportedOperationException e =
+        assertThrows(UnsupportedOperationException.class, () -> writer.initialize(config));
+    assertTrue(e.getMessage().contains("REST catalog is not supported"));
   }
 
   @Test void testInitializeWithHiveCatalogType() throws Exception {

@@ -178,61 +178,14 @@ public class IcebergCatalogManagerTest {
     assertNotNull(catalog1Again, "Cached or recreated catalog should be non-null");
   }
 
-  @Test public void testRestCatalogCreation() {
+  @Test public void testRestCatalogRejectedAsUnsupported() {
     Map<String, Object> config = new HashMap<>();
     config.put("catalogType", "rest");
     config.put("uri", "http://localhost:8181");
 
-    // Just test that we can create the catalog object without connecting
-    try {
-      Catalog catalog = IcebergCatalogManager.getCatalogForProvider("rest", config);
-      assertNotNull(catalog);
-      // Don't test actual connectivity since there's no real REST server
-    } catch (Exception e) {
-      // Expected - REST catalog creation may fail without a real server. How that failure
-      // presents depends on the host: a closed port normally answers with an immediate RST
-      // ("Connection refused"), but where the SYN is dropped instead it surfaces as a connect
-      // timeout. Iceberg also nests the real cause more than one level down
-      // (RESTException -> ConnectTimeoutException -> ConnectException), so accept any
-      // connection-establishment failure anywhere in the chain rather than pinning to one
-      // message on the immediate cause.
-      assertTrue(isConnectionFailure(e), "unexpected failure: " + describeChain(e));
-    }
-  }
-
-  /** Whether any link in a throwable's cause chain reports a failure to connect. */
-  private static boolean isConnectionFailure(Throwable t) {
-    for (Throwable x = t; x != null; x = x.getCause()) {
-      if (x instanceof java.net.ConnectException
-          || x instanceof java.net.SocketTimeoutException
-          || x instanceof java.net.UnknownHostException) {
-        return true;
-      }
-      String message = x.getMessage();
-      if (message != null
-          && (message.contains("refused") || message.contains("timed out"))) {
-        return true;
-      }
-      if (x.getCause() == x) {
-        break;
-      }
-    }
-    return false;
-  }
-
-  /** Renders a throwable's cause chain so an unexpected failure is diagnosable. */
-  private static String describeChain(Throwable t) {
-    StringBuilder sb = new StringBuilder();
-    for (Throwable x = t; x != null; x = x.getCause()) {
-      if (sb.length() > 0) {
-        sb.append(" <- ");
-      }
-      sb.append(x.getClass().getName()).append(": ").append(x.getMessage());
-      if (x.getCause() == x) {
-        break;
-      }
-    }
-    return sb.toString();
+    UnsupportedOperationException e = assertThrows(UnsupportedOperationException.class,
+        () -> IcebergCatalogManager.getCatalogForProvider("rest", config));
+    assertTrue(e.getMessage().contains("REST catalog is not supported"));
   }
 
   @Test public void testInvalidCatalogType() {

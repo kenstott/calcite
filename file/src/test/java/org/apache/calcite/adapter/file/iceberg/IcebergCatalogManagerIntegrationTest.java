@@ -437,12 +437,11 @@ public class IcebergCatalogManagerIntegrationTest {
     assertNotNull(table);
   }
 
-  @Test public void testRestCatalogRequiresUri() {
+  @Test public void testRestCatalogRejectedAsUnsupported() {
     Map<String, Object> config = new HashMap<>();
     config.put("catalog", "rest");
-    // No URI
 
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(UnsupportedOperationException.class,
         () -> IcebergCatalogManager.getCatalogForProvider("rest", config));
   }
 }

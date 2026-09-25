@@ -78,7 +78,7 @@ jdbc:aperio:model=/path/to/model.json
 | Parameter | Description | Env variable |
 |-----------|-------------|-------------|
 | `icebergEnabled` | Enable Iceberg catalog | `APERIO_ICEBERG_ENABLED` |
-| `icebergCatalogType` | Catalog type (e.g. `rest`, `hive`) | `ICEBERG_CATALOG_TYPE` |
+| `icebergCatalogType` | Catalog type (only `hadoop` is supported) | `ICEBERG_CATALOG_TYPE` |
 | `icebergWarehouse` | Warehouse path or URI | `ICEBERG_WAREHOUSE` |
 
 ## DBeaver setup

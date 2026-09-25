@@ -528,10 +528,9 @@ public class MaterializeConfig {
    * materialize:
    *   format: iceberg
    *   iceberg:
-   *     catalogType: hadoop        # hadoop, rest, or hive
+   *     catalogType: hadoop        # only hadoop is supported
    *     warehousePath: "/data/warehouse"
    *     namespace: "default"
-   *     restUri: "http://localhost:8181"  # for REST catalog
    *     batchPartitionColumns: [year]     # columns for OOM prevention batching
    *     incrementalKeys: [year]           # columns for incremental processing
    *     maxRetries: 3
@@ -546,9 +545,9 @@ public class MaterializeConfig {
     public enum CatalogType {
       /** Hadoop filesystem-based catalog. */
       HADOOP,
-      /** REST catalog (e.g., Nessie, Tabular). */
+      /** REST catalog (e.g., Nessie, Tabular); rejected at catalog creation as unsupported. */
       REST,
-      /** Hive metastore catalog. */
+      /** Hive metastore catalog; rejected at catalog creation as unsupported. */
       HIVE
     }
 

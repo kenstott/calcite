@@ -20,7 +20,6 @@ import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.hadoop.HadoopCatalog;
 import org.apache.iceberg.hadoop.HadoopTables;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
 
 import org.slf4j.Logger;
@@ -91,7 +90,7 @@ public class IcebergCatalogManager {
   /**
    * Gets or creates a catalog instance for use by storage provider.
    *
-   * @param catalogType The type of catalog (hadoop, hive, rest)
+   * @param catalogType The type of catalog (hadoop; hive and rest are rejected as unsupported)
    * @param config The configuration
    * @return The catalog instance
    */
@@ -102,7 +101,7 @@ public class IcebergCatalogManager {
   /**
    * Gets or creates a catalog instance.
    *
-   * @param catalogType The type of catalog (hadoop, hive, rest)
+   * @param catalogType The type of catalog (hadoop; hive and rest are rejected as unsupported)
    * @param config The configuration
    * @return The catalog instance
    */
@@ -123,8 +122,12 @@ public class IcebergCatalogManager {
         // catalog = createHiveCatalog(config);
         // break;
       case "rest":
-        catalog = createRestCatalog(config);
-        break;
+        // iceberg-core 1.4.0's REST client references the legacy
+        // PropertyNamingStrategy$KebabCaseStrategy, which the pinned jackson-databind
+        // no longer ships.
+        throw new UnsupportedOperationException(
+            "REST catalog is not supported: iceberg-core 1.4.0 is incompatible with "
+                + "the pinned jackson-databind");
       default:
         throw new IllegalArgumentException("Unknown catalog type: " + catalogType);
     }
@@ -207,63 +210,6 @@ public class IcebergCatalogManager {
 
     catalog.setConf(hadoopConf);
     catalog.initialize(catalogName, properties);
-
-    return catalog;
-  }
-
-  /**
-   * Creates a REST catalog.
-   *
-   * @param config The configuration
-   * @return The REST catalog
-   */
-  private static RESTCatalog createRestCatalog(Map<String, Object> config) {
-    RESTCatalog catalog = new RESTCatalog();
-
-    Map<String, String> properties = new HashMap<>();
-
-    // Set URI (required)
-    String uri = (String) config.get("uri");
-    if (uri == null) {
-      throw new IllegalArgumentException("REST catalog requires 'uri' configuration");
-    }
-    properties.put("uri", uri);
-
-    // Set warehouse if provided
-    String warehouse = (String) config.get("warehouse");
-    if (warehouse != null) {
-      properties.put("warehouse", warehouse);
-    }
-
-    // Set authentication if provided
-    String token = (String) config.get("token");
-    if (token != null) {
-      properties.put("token", token);
-    }
-
-    String credential = (String) config.get("credential");
-    if (credential != null) {
-      properties.put("credential", credential);
-    }
-
-    // Apply additional REST configuration
-    @SuppressWarnings("unchecked")
-    Map<String, String> restConfig = (Map<String, String>) config.get("restConfig");
-    if (restConfig != null) {
-      properties.putAll(restConfig);
-    }
-
-    Configuration hadoopConf = new Configuration();
-    @SuppressWarnings("unchecked")
-    Map<String, String> hadoopConfig = (Map<String, String>) config.get("hadoopConfig");
-    if (hadoopConfig != null) {
-      for (Map.Entry<String, String> entry : hadoopConfig.entrySet()) {
-        hadoopConf.set(entry.getKey(), entry.getValue());
-      }
-    }
-
-    catalog.setConf(hadoopConf);
-    catalog.initialize("rest", properties);
 
     return catalog;
   }
