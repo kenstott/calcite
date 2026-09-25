@@ -1501,7 +1501,9 @@ public class McpServer {
         tools.add(
             tool("semantic_search",
             "Search TEXT by meaning rather than by keyword — SEC MD&A, risk factors and "
-            + "earnings-call passages (sec); statute sections of the U.S. Code (law); Federal "
+            + "earnings-call passages (sec); in law, U.S. Code sections, Supreme Court opinions, "
+            + "bill titles, summaries and constitutional-authority statements, amendment purposes and "
+            + "lobbying activity descriptions; Federal "
             + "Register rules and notices (fedregister); patent abstracts, claims and summaries "
             + "(patents); clinical trial summaries (health); NTSB accident causes (transport); "
             + "FEMA declarations (disasters); cyber standards and controls (cyber_threat); "
@@ -1530,7 +1532,9 @@ public class McpServer {
             + "NOTICE that merely discusses a topic scores the same as a RULE that actually "
             + "regulates it; in law, a section that merely mentions a topic in a definition or "
             + "an exception scores the same as the section that actually governs it — read the "
-            + "section and its title and chapter (hierarchy) before citing it; in cyber_threat, "
+            + "section and its title and chapter (hierarchy) before citing it, and a Supreme Court "
+            + "opinion passage may come from a concurrence or dissent, not the Court's holding; "
+            + "in cyber_threat, "
             + "an ATT&CK technique's abstract description of a "
             + "method scores the same as a real IOC/incident referencing it — distinguish "
             + "attack_techniques hits (methodology, not an event) from ioc_urls/actual indicator "

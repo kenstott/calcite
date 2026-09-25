@@ -48,6 +48,32 @@ load_env
 # shared jar a pool may be running from.
 JAR=$(resolve_classpath) || exit 1
 
+# Claim exclusive access to the box for this sweep. EntityBridgeOrganizer/ChunkOrganizer need
+# real memory, and the vss-local.sh step that follows this one saturates every CPU core (torch
+# pinned to os.cpu_count() — see vss-local.py). run-pool.sh's own $RUN_EMBEDDINGS block already
+# sets MAX_WORKERS=0 before calling this script when invoked through the normal scheduled path —
+# but that protection lived entirely in the CALLER, not here, so a direct invocation got none of
+# it. Confirmed live 2026-09-15: a remediation agent launched this script directly (ops#302,
+# entity-bridge re-run) and it ran concurrently with 6 other pool-runner processes, exactly the
+# resource contention this reservation exists to prevent. Claiming it here instead makes
+# exclusivity a property of this script regardless of how it's invoked — a nested invocation
+# (already MAX_WORKERS=0 from the caller) just restores back to that same 0, harmless; the
+# caller's own restore-to-prior-value after this script returns still has the final word.
+POOL_BUDGET_FILE="$GOVDATA_ROOT/scripts/parallel/runs/pool-budget.conf"
+_xschema_prior_budget=""
+[ -f "$POOL_BUDGET_FILE" ] && _xschema_prior_budget=$(cat "$POOL_BUDGET_FILE")
+_xschema_restore_budget() {
+  if [ -n "$_xschema_prior_budget" ]; then
+    echo "$_xschema_prior_budget" > "$POOL_BUDGET_FILE"
+  else
+    rm -f "$POOL_BUDGET_FILE"
+  fi
+}
+trap _xschema_restore_budget EXIT
+_xschema_total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
+{ echo "RESERVE_MB=$((_xschema_total_mem_mb - 2000))"; echo "MAX_WORKERS=0"; } > "$POOL_BUDGET_FILE"
+echo "[x-schema] claimed exclusive pool budget (MAX_WORKERS=0) — restored on exit"
+
 : "${CALCITE_TRACKER_PG_URL:?CALCITE_TRACKER_PG_URL not set -- required to reach vc_staging}"
 
 # Optional per-step time box. Unset (the default) means no limit, i.e. unchanged behaviour; set

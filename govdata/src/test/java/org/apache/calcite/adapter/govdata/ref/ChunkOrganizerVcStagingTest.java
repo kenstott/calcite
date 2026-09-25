@@ -387,4 +387,46 @@ class ChunkOrganizerVcStagingTest {
     }
     return c;
   }
+
+  /** Rows staged before FK columns were written are filled from stringified_fk, not re-scanned. */
+  @Test void backfillFillsForeignKeyColumnsFromTheStringifiedKey() throws Exception {
+    String table = "mda_sections";
+    Map<String, Object> plain = row("sec", table, "0000123:0001-23-000001:Item 7:4", 0, "h", "t");
+    Map<String, Object> nullPart = row("sec", table, "0000123:0001-23-000002:null:5", 0, "h", "t");
+    Map<String, Object> colonInValue = row("sec", table, "0000123:a:b:c:d", 0, "h", "t");
+    ChunkOrganizer.insertParentRows(conn, java.util.Arrays.asList(plain, nullPart, colonInValue));
+    conn.commit();
+
+    assertEquals(2, ChunkOrganizer.backfillForeignKeys(conn, table, false, 10));
+    assertNull(fkValue(table, "0000123:0001-23-000001:Item 7:4", "sec_mda_sections_cik"),
+        "a dry run must not write");
+
+    assertEquals(2, ChunkOrganizer.backfillForeignKeys(conn, table, true, 1));
+    conn.commit();
+    String key = "0000123:0001-23-000001:Item 7:4";
+    assertEquals("0000123", fkValue(table, key, "sec_mda_sections_cik"));
+    assertEquals("0001-23-000001", fkValue(table, key, "sec_mda_sections_accession_number"));
+    assertEquals("Item 7", fkValue(table, key, "sec_mda_sections_section"));
+    assertEquals("4", fkValue(table, key, "sec_mda_sections_paragraph_number"));
+    assertNull(fkValue(table, "0000123:0001-23-000002:null:5", "sec_mda_sections_section"),
+        "a null key part must become SQL NULL");
+    assertEquals("5", fkValue(table, "0000123:0001-23-000002:null:5",
+        "sec_mda_sections_paragraph_number"));
+    assertNull(fkValue(table, "0000123:a:b:c:d", "sec_mda_sections_cik"),
+        "a key that does not split into one part per PK column is left for the sweep");
+    assertEquals(0, ChunkOrganizer.backfillForeignKeys(conn, table, true, 10),
+        "a second run has nothing left to fill");
+  }
+
+  private static String fkValue(String table, String fk, String column) throws Exception {
+    try (PreparedStatement ps = conn.prepareStatement("SELECT " + column
+        + " FROM vc_staging WHERE source_schema='sec' AND source_table=? AND stringified_fk=?")) {
+      ps.setString(1, table);
+      ps.setString(2, fk);
+      try (ResultSet rs = ps.executeQuery()) {
+        rs.next();
+        return rs.getString(1);
+      }
+    }
+  }
 }

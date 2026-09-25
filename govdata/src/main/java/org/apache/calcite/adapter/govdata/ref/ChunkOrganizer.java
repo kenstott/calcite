@@ -35,6 +35,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.function.Consumer;
 
 /**
@@ -99,8 +101,10 @@ public class ChunkOrganizer {
   // Bump after any change to the chunking logic itself (CHUNK_SIZE/CHUNK_OVERLAP, chunkFixed,
   // SemanticTextChunker's settings, the row-concat text-building rules) so every existing
   // parent_hash is invalidated and the next sweep reprocesses every parent with no separate
-  // removal step -- see the class javadoc's change-tracking paragraph.
-  private static final int CHUNKER_VERSION = 1;
+  // removal step -- see the class javadoc's change-tracking paragraph. Also bump when the set of
+  // columns written to vc_staging widens (e.g. FK columns), since parent_hash covers only the text
+  // and an unchanged parent is otherwise never rewritten with the new columns.
+  private static final int CHUNKER_VERSION = 2;
 
   // Naive fixed-window chunk size / overlap over the delimited column concatenation (row-concat
   // mode only -- document-blob mode uses SemanticTextChunker's own target/min/max sizing).
@@ -110,8 +114,9 @@ public class ChunkOrganizer {
   private static final int CHUNK_OVERLAP = 200;
 
   /** One row-concat source: an included entity-grain dimension table, per the v1 registry
-   *  in semantic-search-plan.md's "Table curation". Add an entry here (and the matching
-   *  wide FK column in ref-schema.yaml) to onboard a new source -- no other code change. */
+   *  in semantic-search-plan.md's "Table curation". Add an entry here to onboard a new source --
+   *  its FK columns on vc_staging are created by {@link #ensureVcSchema} and written by {@link
+   *  #insertParentRows} from the registry, so no other code or schema change is needed. */
   private static final List<RowConcatSource> ROW_CONCAT_SOURCES = Arrays.asList(
       new RowConcatSource("ref", "naics", Arrays.asList("naics_code"),
           Arrays.asList("naics_code", "naics_title"), "ref_naics_code"),
@@ -181,6 +186,27 @@ public class ChunkOrganizer {
       // pipeline's cross-schema separation-of-concerns design exists to avoid). No special
       // multi-table grouped chunker needed: these are ordinary per-row text columns, same shape
       // as every other row-concat source.
+      // Supreme Court slip opinions. A source table gets one registration, so the case name and the
+      // Court's own one-line holding go in the same row-concat as the opinion text (syllabus,
+      // opinion of the Court, concurrences, dissents): the first chunk carries name and holding.
+      // Fixed 1,000-char windows instead of the semantic chunker -- accepted for that gain.
+      // Composite PK (decision_date, listing_docket): us_citation is null for 11 of 584 DQ rows
+      // and shared by consolidated cases, so it is not a key.
+      new RowConcatSource("law", "scotus_slip_opinions",
+          Arrays.asList("decision_date", "listing_docket"),
+          Arrays.asList("case_name", "holding_summary", "opinion_text"), null),
+      // Bill title plus the Congressional Record's constitutional-authority statement, which is
+      // stored as <pre>/<a> markup after a Congressional Record header line. A bill with no
+      // statement (45% of the DQ sample) still gets its title embedded.
+      new RowConcatSource("law", "bills",
+          Arrays.asList("congress", "bill_type", "bill_number"),
+          Arrays.asList("title", "constitutional_authority_statement"), null,
+          Collections.singleton("constitutional_authority_statement")),
+      // Amendment purpose/description: short, and filled for only ~10% of amendments, so a
+      // row with both null builds an empty text and produces no chunk.
+      new RowConcatSource("law", "bill_amendments",
+          Arrays.asList("congress", "amendment_type", "amendment_number"),
+          Arrays.asList("purpose", "description"), null),
       new RowConcatSource("sec", "mda_sections",
           Arrays.asList("cik", "accession_number", "section", "paragraph_number"),
           Arrays.asList("section", "subsection", "paragraph_text"), null),
@@ -259,6 +285,50 @@ public class ChunkOrganizer {
     return result;
   };
 
+  private static final Pattern HTML_BLOCK_TAG =
+      Pattern.compile("(?i)</?(?:p|div|li|ul|ol|pre|br|tr|h[1-6])\\b[^>]*>");
+  private static final Pattern HTML_TAG = Pattern.compile("<[^>]+>");
+  private static final Pattern HTML_NUMERIC_ENTITY = Pattern.compile("&#(\\d{1,5});");
+  private static final Pattern BLANK_RUN = Pattern.compile("[\\s\\u00a0]+");
+
+  /** Turns an HTML fragment into plain text: block-level tags become line breaks, every other
+   *  tag is dropped, and the character entities the source actually uses ({@code &nbsp; &amp;
+   *  &lt; &gt; &quot; &apos;} and numeric {@code &#NNN;}) are decoded. An entity outside that
+   *  set is left in the text as written rather than guessed at. {@code &amp;} is decoded last so
+   *  an escaped entity ({@code &amp;lt;}) is not decoded twice. */
+  static String stripHtml(String html) {
+    String s = HTML_BLOCK_TAG.matcher(html).replaceAll("\n");
+    s = HTML_TAG.matcher(s).replaceAll("");
+    s = s.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">")
+        .replace("&quot;", "\"").replace("&apos;", "'");
+    Matcher numeric = HTML_NUMERIC_ENTITY.matcher(s);
+    StringBuffer decoded = new StringBuffer();
+    while (numeric.find()) {
+      numeric.appendReplacement(decoded,
+          Matcher.quoteReplacement(String.valueOf((char) Integer.parseInt(numeric.group(1)))));
+    }
+    numeric.appendTail(decoded);
+    s = decoded.toString().replace("&amp;", "&");
+    StringBuilder out = new StringBuilder(s.length());
+    for (String line : s.split("\n", -1)) {
+      String collapsed = BLANK_RUN.matcher(line).replaceAll(" ").trim();
+      if (collapsed.isEmpty()) {
+        continue;
+      }
+      if (out.length() > 0) {
+        out.append('\n');
+      }
+      out.append(collapsed);
+    }
+    return out.toString();
+  }
+
+  /** For sources whose blob column holds HTML markup (CRS bill summaries, the Congressional
+   *  Record's constitutional-authority statements): strips the markup, then chunks the text like
+   *  every other document blob. Markup is not text and would otherwise be embedded as tokens. */
+  private static final ChunkFunction HTML_STRIPPING_CHUNKER =
+      text -> SEMANTIC_TEXT_CHUNKER.chunk(stripHtml(text));
+
   /** Document-blob sources per semantic-search-plan.md's "Document-blob sources" table.
    *  Each gets its own source_type value; all three use {@link #SEMANTIC_TEXT_CHUNKER} today,
    *  but the chunker is a per-source field precisely so a future source needing a different one
@@ -298,7 +368,30 @@ public class ChunkOrganizer {
       // aircraft. probable_cause is truncated to 4000 chars at the source/ETL level.
       new DocumentBlobSource("transport", "ntsb_aviation_accidents",
           Arrays.asList("event_id", "aircraft_key"),
-          "probable_cause", "ntsb_probable_cause", null, SEMANTIC_TEXT_CHUNKER));
+          "probable_cause", "ntsb_probable_cause", null, SEMANTIC_TEXT_CHUNKER),
+      // The U.S. Code, embedded at subsection grain: usc_subsections is each section cut at its
+      // own structural boundaries into units of at most 2,000 characters, which is under the
+      // semantic chunker's 2,200-character maximum, so each unit becomes exactly one chunk and no
+      // paragraph is cut. usc_sections (the whole section, for reading) is deliberately not
+      // registered: that would embed every statute twice. Composite PK (title_number,
+      // section_number, section_seq, unit_seq) -- the Code numbers a few sections twice within a
+      // title, so section_number alone is not unique.
+      new DocumentBlobSource("law", "usc_subsections",
+          Arrays.asList("title_number", "section_number", "section_seq", "unit_seq"),
+          "unit_text", "usc_subsection", null, SEMANTIC_TEXT_CHUNKER),
+      // Composite PK (volume, first_page): unique across the DQ sample (90 of 90).
+      new DocumentBlobSource("law", "scotus_reports_cases",
+          Arrays.asList("volume", "first_page"),
+          "opinion_text", "scotus_reports_opinion", null, SEMANTIC_TEXT_CHUNKER),
+      // CRS summary, stored as HTML (p/strong/em/ol/ul/li/a and &nbsp;/&amp; entities).
+      new DocumentBlobSource("law", "bill_summaries",
+          Arrays.asList("congress", "bill_type", "bill_number", "version_code"),
+          "summary_text", "bill_summary", null, HTML_STRIPPING_CHUNKER),
+      // Composite PK (filing_uuid, activity_seq): the filer's free-text statement of the specific
+      // issues lobbied, which names bills and programs.
+      new DocumentBlobSource("law", "lobbying_activities",
+          Arrays.asList("filing_uuid", "activity_seq"),
+          "description", "lobbying_activity_description", null, SEMANTIC_TEXT_CHUNKER));
 
   // ========================================================================
   // Standalone sweep entry point -- invoked by x-schema.sh, not by any schema's own ETL
@@ -329,7 +422,19 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
-      chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource);
+      // Narrow the rescan to just the years that actually changed, when the source's own ETL
+      // pipeline tracks completion per year -- see selectChangedYears' javadoc. null means no
+      // per-year data exists for this source (most reference tables), so chunkRowConcatSource
+      // falls back to its original unfiltered full scan, unchanged from before this.
+      Long lastSwept = selectLastSweptCompletedAt(pg, src.sourceTable);
+      Set<Integer> changedYears = selectChangedYears(pg, src.sourceTable,
+          lastSwept != null ? lastSwept : 0L);
+      if (changedYears != null) {
+        LOGGER.info("ChunkOrganizer: {}.{} has per-year tracking -- scoping rescan to {} "
+            + "changed year(s): {}", src.sourceSchema, src.sourceTable, changedYears.size(),
+            changedYears);
+      }
+      chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource, changedYears);
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
     }
@@ -338,7 +443,15 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
-      chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource);
+      Long lastSweptBlob = selectLastSweptCompletedAt(pg, src.sourceTable);
+      Set<Integer> changedYearsBlob = selectChangedYears(pg, src.sourceTable,
+          lastSweptBlob != null ? lastSweptBlob : 0L);
+      if (changedYearsBlob != null) {
+        LOGGER.info("ChunkOrganizer: {}.{} has per-year tracking -- scoping rescan to {} "
+            + "changed year(s): {}", src.sourceSchema, src.sourceTable, changedYearsBlob.size(),
+            changedYearsBlob);
+      }
+      chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource, changedYearsBlob);
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
     }
@@ -399,6 +512,55 @@ public class ChunkOrganizer {
       ps.executeUpdate();
     }
     pg.commit();
+  }
+
+  /** Narrows a full-table rescan (triggered by {@link #sourceNeedsSweep}'s coarse, whole-table
+   *  watermark) down to just the years that actually changed, when the ETL pipeline that writes
+   *  {@code sourceTable} tracks completion per year -- the same {@code table_completion} table
+   *  already carries per-year rows for those pipelines, named {@code
+   *  <sourceTable>#iceberg-accession-sync#year=<year>}, alongside the bare whole-table row {@link
+   *  #sourceNeedsSweep} reads. No new tracker needed; this data already exists, just wasn't being
+   *  read this way. Returns {@code null} (meaning "no per-year data -- caller must full-scan
+   *  unfiltered") for sources whose pipeline never writes per-year completion rows (most
+   *  reference/dimension tables); otherwise returns exactly the years whose own {@code
+   *  completed_at} has advanced past {@code lastSweptWatermark}, which may be empty if the coarse
+   *  check's own watermark read raced a commit between the two queries -- correct to fall through
+   *  to a full unfiltered scan in that case too, never to silently skip everything.
+   *
+   *  Confirmed live 2026-09-16: sec.risk_factor_sections' coarse watermark correctly flagged the
+   *  whole table as changed (today's targeted #29/#240 backfill touched a few years), but without
+   *  this the fix would have re-hashed all 8.7M rows across all 18 years to confirm 13 of them
+   *  never changed -- observed as 4h39m of continuous "0 replaced" batches before this existed. */
+  static Set<Integer> selectChangedYears(Connection pg, String sourceTable, long lastSweptWatermark)
+      throws SQLException {
+    String prefix = sourceTable + "#iceberg-accession-sync#year=";
+    Set<Integer> changedYears = new HashSet<Integer>();
+    boolean anyYearRows = false;
+    try (PreparedStatement ps = pg.prepareStatement(
+        "SELECT pipeline_name, completed_at FROM table_completion WHERE pipeline_name LIKE ?")) {
+      ps.setString(1, prefix + "%");
+      try (ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) {
+          anyYearRows = true;
+          String pipelineName = rs.getString(1);
+          long completedAt = rs.getLong(2);
+          String yearSuffix = pipelineName.substring(prefix.length());
+          try {
+            int year = Integer.parseInt(yearSuffix);
+            if (completedAt > lastSweptWatermark) {
+              changedYears.add(year);
+            }
+          } catch (NumberFormatException e) {
+            // Matched the prefix but the suffix isn't a bare year -- not this naming
+            // convention (a different sync mechanism reusing a similar prefix); ignore it
+            // rather than let a parse failure abort the whole sweep.
+            LOGGER.debug("ChunkOrganizer: ignoring non-year table_completion entry '{}' for {}",
+                pipelineName, sourceTable);
+          }
+        }
+      }
+    }
+    return anyYearRows ? changedYears : null;
   }
 
   private static String ensureSocketTimeout(String jdbcUrl) {
@@ -524,6 +686,19 @@ public class ChunkOrganizer {
    *  so peak memory stays O(batch size) regardless of table size. */
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src, int maxRowsPerSource) throws SQLException {
+    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, null);
+  }
+
+  /** As above, but when {@code changedYears} is non-null, scopes the scan to just those years'
+   *  rows (a {@code year IN (...)} filter added to the underlying query) instead of the whole
+   *  table -- see {@link #selectChangedYears}. {@code null} means no per-year data exists for
+   *  this source (most reference tables) or the caller didn't compute it; behavior is then
+   *  identical to before this parameter existed: an unfiltered full-table scan. An empty
+   *  (non-null) set means per-year data exists but nothing changed since the last sweep for any
+   *  tracked year -- also scans nothing, correct given the coarse watermark that triggered this
+   *  call in the first place could itself be stale by the time this runs. */
+  private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
+      RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
     // is the PK and also carries real text), so query each column once, not once per role.
@@ -544,7 +719,7 @@ public class ChunkOrganizer {
     // pair across page boundaries.
     Set<String> seenPk = new HashSet<String>();
     queryRowsBatched(conn, loc, selectCols, src.pkColumns, ROW_CONCAT_BATCH_SIZE, maxRowsPerSource,
-        batch -> {
+        changedYears, batch -> {
       List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
       for (Map<String, Object> row : batch) {
         String pkValue = stringifyPk(row, src.pkColumns);
@@ -554,7 +729,7 @@ public class ChunkOrganizer {
               pkValue);
           continue;
         }
-        String text = buildRowConcatText(row, src.stringColumns);
+        String text = buildRowConcatText(row, src.stringColumns, src.htmlColumns);
         String parentHash = sha256Hex(CHUNKER_VERSION + ":" + text);
         List<String> chunks = chunkFixed(text);
         for (int seq = 0; seq < chunks.size(); seq++) {
@@ -570,12 +745,7 @@ public class ChunkOrganizer {
           chunkRow.put("chunk_text", chunks.get(seq));
           chunkRow.put("enriched_text", chunks.get(seq));
           // Write FK columns for each PK component to enable direct SQL joins back to source rows
-          if (!src.fkColumns.isEmpty()) {
-            String[] pkValueParts = pkValue.split(":", -1);
-            for (int i = 0; i < Math.min(src.fkColumns.size(), pkValueParts.length); i++) {
-              chunkRow.put(src.fkColumns.get(i), pkValueParts[i]);
-            }
-          }
+          putFkColumns(chunkRow, src.fkColumns, src.pkColumns, row);
           chunkRows.add(chunkRow);
         }
       }
@@ -603,21 +773,48 @@ public class ChunkOrganizer {
     return sb.toString();
   }
 
+  /** Writes each PK component's value into its FK column, read from the source row itself. The
+   *  values are not split back out of the ':'-joined stringified key: a key component that
+   *  contains ':' would shift every later component into the wrong column. A null component stays
+   *  SQL NULL rather than the text "null", which would never join back to the source. */
+  static void putFkColumns(Map<String, Object> chunkRow, List<String> fkColumns,
+      List<String> pkColumns, Map<String, Object> sourceRow) {
+    for (int i = 0; i < Math.min(fkColumns.size(), pkColumns.size()); i++) {
+      Object value = sourceRow.get(pkColumns.get(i));
+      chunkRow.put(fkColumns.get(i), value == null ? null : value.toString());
+    }
+  }
+
   /** Builds 'col: value | col: value | ...' from a row's non-null values, in the given
    *  (source-declared) column order. No per-column inclusion/exclusion -- every listed
    *  column goes in if non-null, per semantic-search-plan.md's "no column-level filtering"
    *  rule. */
   static String buildRowConcatText(Map<String, Object> row, List<String> columns) {
+    return buildRowConcatText(row, columns, Collections.<String>emptySet());
+  }
+
+  /** As above, but a column named in {@code htmlColumns} has its markup stripped first and is
+   *  left out entirely if nothing but markup remains. */
+  static String buildRowConcatText(Map<String, Object> row, List<String> columns,
+      Set<String> htmlColumns) {
     StringBuilder sb = new StringBuilder();
     for (String col : columns) {
       Object val = row.get(col);
       if (val == null) {
         continue;
       }
+      Object text = val;
+      if (htmlColumns.contains(col)) {
+        String stripped = stripHtml(val.toString());
+        if (stripped.isEmpty()) {
+          continue;
+        }
+        text = stripped;
+      }
       if (sb.length() > 0) {
         sb.append(" | ");
       }
-      sb.append(col).append(": ").append(val);
+      sb.append(col).append(": ").append(text);
     }
     return sb.toString();
   }
@@ -654,6 +851,16 @@ public class ChunkOrganizer {
    *  future custom {@link ChunkFunction}) does real per-row work, not just a string split. */
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
       DocumentBlobSource src, int maxRowsPerSource) throws SQLException {
+    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, null);
+  }
+
+  /** As above, but scoped to {@code changedYears} when non-null -- see {@link
+   *  #chunkRowConcatSource}'s matching overload and {@link #selectChangedYears}; identical
+   *  contract, just for the document-blob path (patents/health/cyber_threat/transport document
+   *  text) rather than row-concat. */
+  private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
+      DocumentBlobSource src, int maxRowsPerSource, Set<Integer> changedYears)
+      throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     List<String> selectCols = new ArrayList<String>(src.pkColumns);
     if (!selectCols.contains(src.blobColumn)) {
@@ -664,7 +871,7 @@ public class ChunkOrganizer {
     // declared primary key is not a guarantee its data is actually unique.
     Set<String> seenPk = new HashSet<String>();
     queryRowsBatched(conn, loc, selectCols, src.pkColumns, DOCUMENT_BLOB_BATCH_SIZE,
-        maxRowsPerSource, batch -> {
+        maxRowsPerSource, changedYears, batch -> {
       List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
       for (Map<String, Object> row : batch) {
         Object blobValue = row.get(src.blobColumn);
@@ -696,12 +903,7 @@ public class ChunkOrganizer {
           chunkRow.put("enriched_text", chunk.text);
           chunkRow.put("paragraph_continuation", chunk.paragraphContinuation);
           // Write FK columns for each PK component to enable direct SQL joins back to source rows
-          if (!src.fkColumns.isEmpty()) {
-            String[] pkValueParts = pkValue.split(":", -1);
-            for (int i = 0; i < Math.min(src.fkColumns.size(), pkValueParts.length); i++) {
-              chunkRow.put(src.fkColumns.get(i), pkValueParts[i]);
-            }
-          }
+          putFkColumns(chunkRow, src.fkColumns, src.pkColumns, row);
           chunkRows.add(chunkRow);
         }
       }
@@ -843,22 +1045,146 @@ public class ChunkOrganizer {
       "financial_concepts", "exhibit_number", "speaker_name", "speaker_role", "paragraph_number",
       "ref_naics_code", "fedregister_document_number");
 
+  /** Postgres truncates identifiers past this length, which would merge or misname FK columns. */
+  private static final int PG_MAX_IDENTIFIER_LENGTH = 63;
+
+  /** The fixed columns plus every registered source's FK columns -- the columns ensureVcSchema
+   *  guarantees exist, and the ones chunkRowConcatSource/chunkDocumentBlobSource populate. */
+  private static final List<String> VC_STAGING_INSERT_COLUMNS = vcStagingInsertColumns();
+
+  private static List<String> vcStagingInsertColumns() {
+    java.util.Set<String> cols = new java.util.LinkedHashSet<String>(VC_STAGING_COLUMNS);
+    for (RowConcatSource src : ROW_CONCAT_SOURCES) {
+      cols.addAll(src.fkColumns);
+    }
+    for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
+      cols.addAll(src.fkColumns);
+    }
+    for (String col : cols) {
+      if (col.length() > PG_MAX_IDENTIFIER_LENGTH) {
+        throw new IllegalStateException("ChunkOrganizer: vc_staging FK column '" + col + "' is "
+            + col.length() + " characters; Postgres truncates identifiers past "
+            + PG_MAX_IDENTIFIER_LENGTH + ", so it cannot be created or written under that name");
+      }
+    }
+    return new ArrayList<String>(cols);
+  }
+
   static void insertParentRows(Connection conn, List<Map<String, Object>> rows)
       throws SQLException {
-    String sql = "INSERT INTO vc_staging (" + String.join(", ", VC_STAGING_COLUMNS)
+    String sql = "INSERT INTO vc_staging (" + String.join(", ", VC_STAGING_INSERT_COLUMNS)
         + ", updated_at) VALUES (" + String.join(", ",
-            java.util.Collections.nCopies(VC_STAGING_COLUMNS.size() + 1, "?")) + ")";
+            java.util.Collections.nCopies(VC_STAGING_INSERT_COLUMNS.size() + 1, "?")) + ")";
     try (PreparedStatement ps = conn.prepareStatement(sql)) {
       long now = System.currentTimeMillis();
       for (Map<String, Object> row : rows) {
         int i = 1;
-        for (String col : VC_STAGING_COLUMNS) {
+        for (String col : VC_STAGING_INSERT_COLUMNS) {
           ps.setObject(i++, row.get(col));
         }
         ps.setLong(i, now);
         ps.addBatch();
       }
       ps.executeBatch();
+    }
+  }
+
+  /**
+   * Fills the FK columns of already-staged rows from their {@code stringified_fk}, for rows staged
+   * before {@link #insertParentRows} wrote them. Rows are touched only when every FK column of
+   * their source is NULL and {@code stringified_fk} splits on ':' into exactly one part per PK
+   * column; anything else (a key value containing ':', or an all-null key) is left for the normal
+   * sweep, which derives the values from the source row. A part spelled {@code null} is written as
+   * SQL NULL, matching how {@link #stringifyPk} rendered a null component. {@code updated_at} is
+   * not touched, so the embedding backlog does not re-fetch these rows.
+   *
+   * @param onlySourceTable restrict to one source table, or null for every registered source
+   * @param apply false only counts what would change
+   * @param batchSize rows per UPDATE/commit
+   * @return rows updated (or, when not applying, rows that would be updated)
+   */
+  static long backfillForeignKeys(Connection pg, String onlySourceTable, boolean apply,
+      int batchSize) throws SQLException {
+    long total = 0;
+    boolean matched = false;
+    for (RowConcatSource src : ROW_CONCAT_SOURCES) {
+      if (onlySourceTable == null || onlySourceTable.equals(src.sourceTable)) {
+        matched = true;
+        total += backfillSourceForeignKeys(pg, src.sourceSchema, src.sourceTable, src.pkColumns,
+            src.fkColumns, apply, batchSize);
+      }
+    }
+    for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
+      if (onlySourceTable == null || onlySourceTable.equals(src.sourceTable)) {
+        matched = true;
+        total += backfillSourceForeignKeys(pg, src.sourceSchema, src.sourceTable, src.pkColumns,
+            src.fkColumns, apply, batchSize);
+      }
+    }
+    if (!matched) {
+      throw new IllegalArgumentException("ChunkOrganizer: no registered source has table '"
+          + onlySourceTable + "'");
+    }
+    return total;
+  }
+
+  private static long backfillSourceForeignKeys(Connection pg, String sourceSchema,
+      String sourceTable, List<String> pkColumns, List<String> fkColumns, boolean apply,
+      int batchSize) throws SQLException {
+    int parts = Math.min(fkColumns.size(), pkColumns.size());
+    StringBuilder allNull = new StringBuilder();
+    StringBuilder assignments = new StringBuilder();
+    for (int i = 0; i < parts; i++) {
+      allNull.append(" AND ").append(fkColumns.get(i)).append(" IS NULL");
+      assignments.append(i > 0 ? ", " : "").append(fkColumns.get(i))
+          .append(" = NULLIF(split_part(stringified_fk, ':', ").append(i + 1).append("), 'null')");
+    }
+    String unpopulated = "source_schema = ? AND source_table = ?" + allNull;
+    // An all-'null' key would stay NULL after the update and be selected again forever.
+    String fixable = unpopulated
+        + " AND cardinality(string_to_array(stringified_fk, ':')) = " + parts
+        + " AND stringified_fk !~ '^null(:null)*$'";
+
+    long fixableCount = countRows(pg, fixable, sourceSchema, sourceTable);
+    long unpopulatedCount = countRows(pg, unpopulated, sourceSchema, sourceTable);
+    LOGGER.info("ChunkOrganizer FK backfill {}.{}: {} row(s) fillable from stringified_fk, {} "
+        + "unpopulated row(s) left for the sweep", sourceSchema, sourceTable, fixableCount,
+        unpopulatedCount - fixableCount);
+    if (!apply) {
+      return fixableCount;
+    }
+    String update = "UPDATE vc_staging SET " + assignments + " WHERE ctid IN (SELECT ctid FROM "
+        + "vc_staging WHERE " + fixable + " LIMIT ?)";
+    long updatedTotal = 0;
+    while (updatedTotal < fixableCount) {
+      int updated;
+      try (PreparedStatement ps = pg.prepareStatement(update)) {
+        ps.setString(1, sourceSchema);
+        ps.setString(2, sourceTable);
+        ps.setInt(3, batchSize);
+        updated = ps.executeUpdate();
+      }
+      pg.commit();
+      if (updated == 0) {
+        break;
+      }
+      updatedTotal += updated;
+      LOGGER.info("ChunkOrganizer FK backfill {}.{}: {} / {}", sourceSchema, sourceTable,
+          updatedTotal, fixableCount);
+    }
+    return updatedTotal;
+  }
+
+  private static long countRows(Connection pg, String where, String sourceSchema,
+      String sourceTable) throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "SELECT count(*) FROM vc_staging WHERE " + where)) {
+      ps.setString(1, sourceSchema);
+      ps.setString(2, sourceTable);
+      try (ResultSet rs = ps.executeQuery()) {
+        rs.next();
+        return rs.getLong(1);
+      }
     }
   }
 
@@ -929,9 +1255,9 @@ public class ChunkOrganizer {
       stmt.execute("ALTER TABLE vc_tombstones DROP COLUMN IF EXISTS applied_at");
       stmt.execute("ALTER TABLE vc_sync_state DROP COLUMN IF EXISTS last_synced_at");
 
-      // Add FK columns for all 23 contributors to support star-schema joins. Each column is named
-      // {sourceSchema}_{sourceTable}_{pkColumn}, one per PK component. This allows direct SQL joins
-      // from vc_staging back to source rows without stringified_fk string parsing.
+      // Add FK columns for every registered source to support star-schema joins. Each column is
+      // named {sourceSchema}_{sourceTable}_{pkColumn}, one per PK component. This allows direct
+      // SQL joins from vc_staging back to source rows without stringified_fk string parsing.
       for (RowConcatSource src : ROW_CONCAT_SOURCES) {
         for (String fkCol : src.fkColumns) {
           stmt.execute("ALTER TABLE vc_staging ADD COLUMN IF NOT EXISTS "
@@ -1009,7 +1335,7 @@ public class ChunkOrganizer {
    *  into a Java List, which OOM'd in practice the moment such a table was added, 2026-08-30. */
   private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
       List<String> pkColumns, int batchSize, BatchConsumer batchConsumer) throws SQLException {
-    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, 0, batchConsumer);
+    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, 0, null, batchConsumer);
   }
 
   /** As above, but stops once {@code maxTotalRows} rows have been fetched across all pages
@@ -1019,6 +1345,35 @@ public class ChunkOrganizer {
   private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
       List<String> pkColumns, int batchSize, int maxTotalRows, BatchConsumer batchConsumer)
       throws SQLException {
+    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, maxTotalRows, null,
+        batchConsumer);
+  }
+
+  /** As above, but when {@code yearFilter} is non-null, scopes every page to {@code year IN
+   *  (...)} instead of the whole table -- see {@link #selectChangedYears}. {@code null} means no
+   *  filter (identical to the pre-existing behavior); a non-null but empty set means nothing
+   *  changed for any tracked year, so this returns immediately without issuing any query at all
+   *  (an empty SQL IN-list is invalid and there is nothing to scan regardless). */
+  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
+      List<String> pkColumns, int batchSize, int maxTotalRows, Set<Integer> yearFilter,
+      BatchConsumer batchConsumer) throws SQLException {
+    if (yearFilter != null && yearFilter.isEmpty()) {
+      return;
+    }
+    String yearClause = null;
+    if (yearFilter != null) {
+      StringBuilder yc = new StringBuilder("year IN (");
+      boolean first = true;
+      for (Integer year : yearFilter) {
+        if (!first) {
+          yc.append(", ");
+        }
+        yc.append(year.intValue());
+        first = false;
+      }
+      yc.append(')');
+      yearClause = yc.toString();
+    }
     String orderBy = String.join(", ", pkColumns);
     List<Object> cursor = null;
     long fetched = 0;
@@ -1032,15 +1387,23 @@ public class ChunkOrganizer {
       }
       StringBuilder sql = new StringBuilder("SELECT ").append(String.join(", ", selectCols))
           .append(" FROM iceberg_scan('").append(loc).append("', allow_moved_paths=true)");
+      List<String> whereClauses = new ArrayList<String>(2);
+      if (yearClause != null) {
+        whereClauses.add(yearClause);
+      }
       if (cursor != null) {
-        sql.append(" WHERE (").append(orderBy).append(") > (");
+        StringBuilder cursorClause = new StringBuilder("(").append(orderBy).append(") > (");
         for (int i = 0; i < cursor.size(); i++) {
           if (i > 0) {
-            sql.append(", ");
+            cursorClause.append(", ");
           }
-          sql.append(sqlLiteral(cursor.get(i)));
+          cursorClause.append(sqlLiteral(cursor.get(i)));
         }
-        sql.append(')');
+        cursorClause.append(')');
+        whereClauses.add(cursorClause.toString());
+      }
+      if (!whereClauses.isEmpty()) {
+        sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
       }
       sql.append(" ORDER BY ").append(orderBy).append(" LIMIT ").append(limit);
       List<Map<String, Object>> batch = queryRows(conn, sql.toString());
@@ -1078,6 +1441,9 @@ public class ChunkOrganizer {
      *  their ':'-joined values, uniform for single-column and composite PKs alike. */
     final List<String> pkColumns;
     final List<String> stringColumns;
+    /** Members of {@link #stringColumns} whose values are HTML: {@link #stripHtml} runs on them
+     *  before they are joined, so markup is not embedded as text. Empty for almost every source. */
+    final Set<String> htmlColumns;
     /** Wide FK columns, one per PK component, named as {sourceSchema}_{sourceTable}_{pkColumn}.
      *  Allows direct SQL joins back to source rows without string parsing. Automatically
      *  generated if wideFkColumn is null; list is non-empty to ensure every source supports joins. */
@@ -1085,10 +1451,17 @@ public class ChunkOrganizer {
 
     RowConcatSource(String sourceSchema, String sourceTable, List<String> pkColumns,
         List<String> stringColumns, String legacyWideFkColumn) {
+      this(sourceSchema, sourceTable, pkColumns, stringColumns, legacyWideFkColumn,
+          Collections.<String>emptySet());
+    }
+
+    RowConcatSource(String sourceSchema, String sourceTable, List<String> pkColumns,
+        List<String> stringColumns, String legacyWideFkColumn, Set<String> htmlColumns) {
       this.sourceSchema = sourceSchema;
       this.sourceTable = sourceTable;
       this.pkColumns = pkColumns;
       this.stringColumns = stringColumns;
+      this.htmlColumns = htmlColumns;
       // All sources generate FK columns: legacy callers pass a single wideFkColumn (used as-is),
       // but most pass null and we auto-generate from PK columns. Either way, fkColumns is
       // non-empty to support star-schema joins from vc_staging back to every source row.
