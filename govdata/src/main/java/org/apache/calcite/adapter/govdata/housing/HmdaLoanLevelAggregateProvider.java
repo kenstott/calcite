@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.sql.Connection;
@@ -155,87 +156,146 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
   }
 
   private static InputStream openConnectionStream(String url) throws IOException {
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setConnectTimeout(60_000);
-    conn.setReadTimeout(600_000);
-    conn.setInstanceFollowRedirects(true);
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
-    InputStream base = conn.getInputStream();
-    long expectedBytes = conn.getContentLengthLong();
-    if (expectedBytes < 0) {
-      base.close();
-      throw new IOException("HMDA download from " + url + " returned no Content-Length; "
-          + "cannot verify the file arrived whole");
-    }
-    return new TimeoutInputStream(base, 3_600_000, 600_000, expectedBytes);
+    return ResumableHttpStream.open(url);
   }
 
   /**
-   * Enforces idle and total timeouts, and fails at end-of-stream unless exactly {@code
-   * expectedBytes} arrived. On JDK 21 {@code HttpURLConnection} reports a connection dropped
-   * mid-body as an ordinary end-of-stream, so without the count check a partial file is handed on
-   * as if whole — and {@code RawCache} commits whatever a stream delivers before it ends cleanly.
+   * Streams a file of known length over HTTP and, when the connection drops or stalls part-way,
+   * reopens it with a {@code Range} request from the byte where it stopped rather than restarting.
+   * On JDK 21 {@code HttpURLConnection} reports a connection dropped mid-body as an ordinary
+   * end-of-stream, so the byte count against {@code Content-Length} is what tells a whole file
+   * from a partial one — and {@code RawCache} commits whatever a stream delivers before it ends
+   * cleanly. The stream only ends once exactly {@code Content-Length} bytes have been delivered;
+   * a server that will not honour {@code Range}, or that keeps failing without progress, raises
+   * an {@link IOException} instead.
    */
-  private static class TimeoutInputStream extends java.io.FilterInputStream {
-    private final long totalTimeoutMs;
-    private final long idleTimeoutMs;
+  static final class ResumableHttpStream extends InputStream {
+    private static final int MAX_STALLED_RESUMES = 5;
+    private static final int CONNECT_TIMEOUT_MS = 60_000;
+    private static final int IDLE_TIMEOUT_MS = 600_000;
+    private static final long RESUME_BACKOFF_MS = 5_000L;
+
+    private final String url;
     private final long expectedBytes;
-    private final long startTime;
-    private long bytesRead;
-    private long lastReadTime;
+    private final long backoffMs;
+    private InputStream current;
+    private long position;
+    private int stalledResumes;
 
-    TimeoutInputStream(InputStream in, long totalTimeoutMs, long idleTimeoutMs,
-        long expectedBytes) {
-      super(in);
-      this.totalTimeoutMs = totalTimeoutMs;
-      this.idleTimeoutMs = idleTimeoutMs;
+    private ResumableHttpStream(String url, long expectedBytes, InputStream current,
+        long backoffMs) {
+      this.url = url;
       this.expectedBytes = expectedBytes;
-      this.startTime = System.currentTimeMillis();
-      this.lastReadTime = startTime;
+      this.current = current;
+      this.backoffMs = backoffMs;
     }
 
-    @Override
-    public int read() throws IOException {
-      checkTimeouts();
-      int result = in.read();
-      if (result != -1) {
-        bytesRead++;
-        lastReadTime = System.currentTimeMillis();
-      } else {
-        checkComplete();
-      }
-      return result;
+    static ResumableHttpStream open(String url) throws IOException {
+      return open(url, RESUME_BACKOFF_MS);
     }
 
-    @Override
-    public int read(byte[] b, int off, int len) throws IOException {
-      checkTimeouts();
-      int result = in.read(b, off, len);
-      if (result > 0) {
-        bytesRead += result;
-        lastReadTime = System.currentTimeMillis();
-      } else if (result == -1) {
-        checkComplete();
+    static ResumableHttpStream open(String url, long backoffMs) throws IOException {
+      HttpURLConnection conn = connect(url, 0);
+      long expected = conn.getContentLengthLong();
+      if (expected < 0) {
+        conn.disconnect();
+        throw new IOException("HMDA download from " + url + " returned no Content-Length; "
+            + "cannot verify the file arrived whole");
       }
-      return result;
+      return new ResumableHttpStream(url, expected, conn.getInputStream(), backoffMs);
     }
 
-    private void checkComplete() throws IOException {
-      if (bytesRead != expectedBytes) {
-        throw new IOException("HMDA download ended after " + bytesRead + " of " + expectedBytes
-            + " bytes");
+    private static HttpURLConnection connect(String url, long from) throws IOException {
+      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+      conn.setReadTimeout(IDLE_TIMEOUT_MS);
+      conn.setInstanceFollowRedirects(true);
+      conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+      if (from > 0) {
+        conn.setRequestProperty("Range", "bytes=" + from + "-");
+      }
+      return conn;
+    }
+
+    @Override public int read() throws IOException {
+      byte[] one = new byte[1];
+      int n = read(one, 0, 1);
+      return n == -1 ? -1 : one[0] & 0xff;
+    }
+
+    @Override public int read(byte[] b, int off, int len) throws IOException {
+      if (len == 0) {
+        return 0;
+      }
+      while (position < expectedBytes) {
+        int want = (int) Math.min(len, expectedBytes - position);
+        int n;
+        try {
+          n = current.read(b, off, want);
+        } catch (IOException e) {
+          resume(e);
+          continue;
+        }
+        if (n < 0) {
+          resume(new IOException("HMDA download ended after " + position + " of " + expectedBytes
+              + " bytes"));
+          continue;
+        }
+        position += n;
+        stalledResumes = 0;
+        return n;
+      }
+      return -1;
+    }
+
+    private void resume(IOException cause) throws IOException {
+      closeQuietly();
+      while (true) {
+        if (++stalledResumes > MAX_STALLED_RESUMES) {
+          throw new IOException("HMDA download stalled at " + position + " of " + expectedBytes
+              + " bytes after " + MAX_STALLED_RESUMES + " resume attempts", cause);
+        }
+        LOGGER.warn("HMDA download interrupted at {} of {} bytes ({}); resuming (attempt {}/{})",
+            position, expectedBytes, cause.getMessage(), stalledResumes, MAX_STALLED_RESUMES);
+        try {
+          Thread.sleep(backoffMs * stalledResumes);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new InterruptedIOException("HMDA download interrupted while resuming");
+        }
+        try {
+          current = openFrom(position);
+          return;
+        } catch (IOException e) {
+          cause = e;
+        }
       }
     }
 
-    private void checkTimeouts() throws IOException {
-      long now = System.currentTimeMillis();
-      long totalElapsed = now - startTime;
-      long idleElapsed = now - lastReadTime;
-      if (totalElapsed > totalTimeoutMs) {
-        throw new IOException("HMDA download exceeded total timeout: " + totalElapsed + "ms > " + totalTimeoutMs + "ms");
+    private InputStream openFrom(long from) throws IOException {
+      HttpURLConnection conn = connect(url, from);
+      int code = conn.getResponseCode();
+      String range = conn.getHeaderField("Content-Range");
+      String expectedRange = "bytes " + from + "-" + (expectedBytes - 1) + "/" + expectedBytes;
+      if (code != HttpURLConnection.HTTP_PARTIAL || !expectedRange.equals(range)) {
+        conn.disconnect();
+        throw new IOException("HMDA resume from byte " + from + " rejected: HTTP " + code
+            + ", Content-Range " + range + " (wanted " + expectedRange + ")");
       }
-      if (idleElapsed > idleTimeoutMs) {
-        throw new IOException("HMDA download exceeded idle timeout: " + idleElapsed + "ms > " + idleTimeoutMs + "ms");
+      return conn.getInputStream();
+    }
+
+    @Override public void close() throws IOException {
+      if (current != null) {
+        current.close();
+      }
+    }
+
+    private void closeQuietly() {
+      try {
+        current.close();
+      } catch (IOException e) {
+        LOGGER.debug("HMDA download: error closing interrupted connection: {}", e.getMessage());
       }
     }
   }
