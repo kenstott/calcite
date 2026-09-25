@@ -5,7 +5,7 @@
 --
 -- Tables: eia_electricity_generation, eia_electricity_prices,
 --         eia_utility_annual, eia_service_territory, eia_power_plants, gas_pipelines,
---         eia_capacity_changes, eia_fossil_fuel_production,
+--         interconnection_queue, eia_capacity_changes, eia_fossil_fuel_production,
 --         eia_state_energy_consumption, eia_natural_gas_storage,
 --         eia_petroleum_stocks, eia_crude_oil_imports, eia_refinery_operations,
 --         eia_coal_mines, ev_charging_stations, eia_drilling_activity,
@@ -509,6 +509,118 @@ FROM (
     SUM(CASE WHEN length_m IS NOT NULL AND length_m <= 0 THEN 1 ELSE 0 END) AS bad_length,
     100.0 * SUM(CASE WHEN geometry_wkt IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS missing_geom_pct
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/gas_pipelines', allow_moved_paths := true)
+) t;
+
+-- ============================================================
+-- interconnection_queue (LBNL Queued Up, static snapshot; ~38,200 rows)
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true);
+
+-- T2: row_count (38,201 in the 2026 edition; the file is never sampled)
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 35000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 35000, 'expected >= 35000 interconnection requests'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value — as_of_year is a real constant (one edition per load), excluded
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'as_of_year')
+) t;
+
+-- T6: pk_nulls (source_row, as_of_year NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'source_row IS NULL OR as_of_year IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true)
+WHERE source_row IS NULL OR as_of_year IS NULL;
+
+-- T7: source_row uniqueness (q_id is not unique in the source, so source_row is the identifier)
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T7_source_row_uniqueness',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Duplicate source_row values'
+FROM (
+  SELECT COUNT(*) AS dups
+  FROM (
+    SELECT source_row, COUNT(*) AS cnt
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true)
+    GROUP BY source_row
+    HAVING COUNT(*) > 1
+  ) d
+) t;
+
+-- T7: expected values — status vocabulary, FIPS shape, US county coverage. The source workbook
+-- itself carries 16 negative mw_1 values (verified row-for-row against the xlsx), so negative MW
+-- is bounded (<= 50) rather than required to be zero.
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T7_expected_values',
+  CASE WHEN bad_status = 0 AND bad_fips = 0 AND neg_mw <= 50 AND fips_pct >= 90.0
+    THEN 'pass' ELSE 'fail' END,
+  bad_status + bad_fips, 0,
+  printf('bad_status=%d bad_fips=%d negative_mw=%d (source has 16; <=50 tolerated) fips_present=%.1f%% (>=90 expected)',
+    bad_status, bad_fips, neg_mw, fips_pct)
+FROM (
+  SELECT
+    SUM(CASE WHEN q_status IS NULL OR q_status NOT IN ('active','operational','withdrawn','suspended','unknown') THEN 1 ELSE 0 END) AS bad_status,
+    SUM(CASE WHEN county_fips IS NOT NULL AND length(county_fips) <> 5 THEN 1 ELSE 0 END) AS bad_fips,
+    SUM(CASE WHEN COALESCE(mw_1, 0) < 0 OR COALESCE(mw_2, 0) < 0 OR COALESCE(mw_3, 0) < 0 THEN 1 ELSE 0 END) AS neg_mw,
+    100.0 * SUM(CASE WHEN county_fips IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*) AS fips_pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true)
+) t;
+
+-- T7: status mix — LBNL's 2026 report lists 4,789 operational / 668 suspended / 24,221 withdrawn
+INSERT INTO dq_results
+SELECT
+  'energy', 'interconnection_queue', 'T7_status_counts',
+  CASE WHEN active >= 7000 AND operational >= 4000 AND withdrawn >= 20000 THEN 'pass' ELSE 'fail' END,
+  active, 7000,
+  printf('active=%d operational=%d withdrawn=%d', active, operational, withdrawn)
+FROM (
+  SELECT
+    SUM(CASE WHEN q_status = 'active' THEN 1 ELSE 0 END) AS active,
+    SUM(CASE WHEN q_status = 'operational' THEN 1 ELSE 0 END) AS operational,
+    SUM(CASE WHEN q_status = 'withdrawn' THEN 1 ELSE 0 END) AS withdrawn
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/interconnection_queue', allow_moved_paths := true)
 ) t;
 
 -- ============================================================

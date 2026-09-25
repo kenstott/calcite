@@ -1158,6 +1158,217 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # INTERCONNECTION_QUEUE - LBNL "Queued Up" project-level interconnection requests
+  # ---------------------------------------------------------------------------
+  - name: interconnection_queue
+    pattern: "type=interconnection_queue/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Grid interconnection queue: one row per generation or storage project that has
+      requested connection to the U.S. transmission grid, from Lawrence Berkeley National
+      Laboratory's "Queued Up" dataset (Rand et al., 2026 edition, requests from 2000
+      through the end of 2025, CC BY 4.0), which LBNL compiles from the queue files of 7
+      ISO/RTOs and 50 non-ISO balancing areas (~98% of installed U.S. generating capacity;
+      Alaska and Hawaii not covered; transmission-connected generation and storage only, no
+      load interconnection or distribution-connected projects). ~38,200 rows: ~8,500 active,
+      ~4,800 operational, ~24,200 withdrawn, ~670 suspended (q_status). Answers "how much new
+      generation or storage is waiting to connect in this county, and of what type" — the
+      forward-looking supply-side half of siting questions; county_interconnection_queue is
+      the per-county rollup. county_fips is the project's FIRST listed county only (the
+      source states multi-county requests keep just the first); the ~1,770 rows
+      (~5%) whose source FIPS is blank have a null county_fips, and 22 rows sit outside the
+      U.S. (state MX/ON/MB). mw_1/mw_2/mw_3 are
+      the rated MW of resource type_1/type_2/type_3; a hybrid such as Solar+Battery has both
+      mw_1 and mw_2, so total project MW is their sum, and LBNL's own published totals
+      additionally include imputed storage MW that this file omits (active requests sum to
+      ~1,865 GW here against ~2,061 GW in the report; the 8,513 active rows here are ~3% more
+      than the report's 8,244, whose basis the file does not identify). 16 rows carry a
+      negative mw_1 (-4 to -75 MW) in LBNL's own workbook and are kept as published, so
+      SUM(mw) over a set that includes them is very slightly understated. q_id is unique only
+      together with entity, and not even then for 135 pairs, so source_row (the row's
+      position in the source sheet) is the only row identifier; a few q_id values were
+      converted to dates or numbers by Excel in the source. Dates: q_date request entered
+      queue, prop_date proposed online, on_date became operational, wd_date withdrawn,
+      ia_date interconnection agreement signed. as_of_year is the edition's cut-off year.
+      county holds the name as the queue wrote it and occasionally a town rather than the
+      county (40 of 2,634 FIPS have more than one spelling); county_fips is authoritative.
+      Snapshot table: the source is replaced wholesale each edition, not appended.
+      SOURCE DURABILITY: emp.lbl.gov and eta.lbl.gov sit behind a Cloudflare managed
+      challenge that no non-browser client passes (verified 2026-09-25: HTTP 403,
+      cf-mitigated: challenge), so the workbook is read from the copy redistributed under
+      CC BY 4.0 in the Zenodo deposit 10.5281/zenodo.22287832 (files are immutable per
+      record). That deposit is a third party's replication package, pinned to the 2026
+      edition; a new Queued Up edition needs source.url pointed at a newer deposit.
+      Joins to geo.counties via county_fips and to geo.states via state (= state_abbr).
+
+    dimensions:
+      type:
+        - interconnection_queue
+
+    columns:
+      - name: source_row
+        type: integer
+        nullable: false
+        comment: Row number of the project in the source workbook's queue sheet (row identifier; q_id is not unique)
+      - name: q_id
+        type: string
+        nullable: true
+        comment: Queue position/ID assigned by the transmission provider; unique only with entity, and 'not assigned' on some rows
+      - name: entity
+        type: string
+        nullable: true
+        comment: Transmission provider that runs the queue (an ISO/RTO or a utility)
+      - name: q_status
+        type: string
+        nullable: true
+        comment: "Queue status: active, operational, withdrawn, suspended (or unknown)"
+      - name: q_date
+        type: date
+        nullable: true
+        comment: Date the request entered the queue
+      - name: prop_date
+        type: date
+        nullable: true
+        comment: Proposed online date from the application (revised during the process)
+      - name: on_date
+        type: date
+        nullable: true
+        comment: Date the project became operational, where it did
+      - name: wd_date
+        type: date
+        nullable: true
+        comment: Date the request was withdrawn from the queue, where it was
+      - name: ia_date
+        type: date
+        nullable: true
+        comment: Date the interconnection agreement was signed, where one was
+      - name: ia_phase_raw
+        type: string
+        nullable: true
+        comment: Study phase exactly as the transmission provider reports it (not standardized)
+      - name: ia_phase_clean
+        type: string
+        nullable: true
+        comment: "Standardized study phase (IA Executed, System Impact Study, Feasibility Study, Facility Study, Cluster Study, IA Pending, Construction, Not Started, Suspended, Withdrawn, In Progress); 'IA Executed' is imputed for operational projects"
+      - name: county
+        type: string
+        nullable: true
+        comment: County name of the project's first listed county
+      - name: state
+        type: string
+        nullable: true
+        comment: 2-letter state abbreviation (FK to geo.states.state_abbr); a few rows are MX/ON/MB, outside the U.S.
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS of the first listed county (FK to geo.counties.county_fips); null where the queue lists no county or the project is outside the U.S.
+      - name: poi_name
+        type: string
+        nullable: true
+        comment: Point of interconnection name — a substation or transmission-line tap
+      - name: region
+        type: string
+        nullable: true
+        comment: "Standardized region: CAISO, ERCOT, ISO-NE, MISO, NYISO, PJM, SPP, or West / Southeast (non-ISO)"
+      - name: project_name
+        type: string
+        nullable: true
+        comment: Project name (absent for most requests)
+      - name: utility
+        type: string
+        nullable: true
+        comment: Utility name (same as entity in non-ISO/RTO balancing areas)
+      - name: developer
+        type: string
+        nullable: true
+        comment: Project developer, not standardized (absent for most requests)
+      - name: cluster
+        type: string
+        nullable: true
+        comment: Queue cluster the request belongs to, where the queue uses clusters
+      - name: service
+        type: string
+        nullable: true
+        comment: "Interconnection service type: NRIS, ERIS, NRIS/ERIS, or Other"
+      - name: project_type
+        type: string
+        nullable: true
+        comment: "Request type: Generation, Surplus, Upgrade, or Replacement"
+      - name: type_1
+        type: string
+        nullable: true
+        comment: "Primary resource type (Solar, Wind, Battery, Gas, Hydro, Coal, Offshore Wind, Nuclear, Geothermal, Diesel, Oil, Hydrogen, Other Storage, Other)"
+      - name: type_2
+        type: string
+        nullable: true
+        comment: Second resource type; populated only for hybrid/co-located projects
+      - name: type_3
+        type: string
+        nullable: true
+        comment: Third resource type; populated only for hybrid/co-located projects
+      - name: type_clean
+        type: string
+        nullable: true
+        comment: Standardized combined resource type, e.g. Solar, Battery, Solar+Battery
+      - name: mw_1
+        type: double
+        nullable: true
+        comment: Rated capacity in MW of type_1
+      - name: mw_2
+        type: double
+        nullable: true
+        comment: Rated capacity in MW of type_2 (hybrid projects only; LBNL's imputed storage MW omitted)
+      - name: mw_3
+        type: double
+        nullable: true
+        comment: Rated capacity in MW of type_3 (hybrid projects only)
+      - name: q_year
+        type: integer
+        nullable: true
+        comment: Year the request entered the queue (derived from q_date; null where q_date is missing)
+      - name: prop_year
+        type: integer
+        nullable: true
+        comment: Proposed online year (derived from prop_date)
+      - name: as_of_year
+        type: integer
+        nullable: false
+        comment: Cut-off year of the Queued Up edition the row came from
+
+    # Zenodo serves Last-Modified for the deposit zip (verified live); the pinned record is
+    # immutable, so this only re-fetches when source.url is repointed at a newer deposit.
+    freshness:
+      type: last_modified
+    source:
+      type: http
+      url: "https://zenodo.org/api/records/22287832/files/Art37_Zenodo_v1_deposit.zip/content"
+      method: GET
+      response:
+        format: json  # ignored: LbnlInterconnectionQueueProvider reads the zip itself
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.energy.LbnlInterconnectionQueueProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=interconnection_queue/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: interconnection_queue
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        # Single-file static partition: keep >= 2 so the compaction pass does not rewrite it
+        # under a fresh name every run (see gas_pipelines).
+        compactionMinFiles: 5
+        compactionTargetFileSizeBytes: 67108864
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # EIA CAPACITY CHANGES - EIA-860M Monthly Generator Capacity Changes
   # ---------------------------------------------------------------------------
   - name: eia_capacity_changes
@@ -3034,6 +3245,50 @@ views:
         )                                                      AS pipeline_length_miles
       FROM matches
       GROUP BY county_fips, state_fips, county_name
+
+  - name: county_interconnection_queue
+    comment: >
+      Per-county rollup of interconnection_queue: how many generation/storage projects, and how
+      many MW, are waiting to connect (active), have connected (operational), or dropped out
+      (withdrawn) in each county, with the active MW split by resource family. Counties with
+      no queue project do not appear (an absent county means no request in the LBNL sample,
+      not a measured zero). Capacity is mw_1 + mw_2 + mw_3 per project, so a hybrid's storage
+      component is counted once under its own resource type; upgrade/replacement/surplus
+      requests are included as the source lists them (project_type is not filtered). Counts
+      each project under its FIRST listed county only, matching interconnection_queue, and
+      omits rows with no county_fips. county_name is the most frequent county name among a
+      FIPS's rows (the source's name field occasionally holds a town instead — 40 of 2,634
+      counties have more than one spelling; county_fips is authoritative, join geo.counties
+      for canonical names). Active capacity omits LBNL's imputed storage MW (see
+      interconnection_queue). as_of_year is the Queued Up edition's cut-off year.
+    sql: >
+      SELECT
+        county_fips,
+        MAX(state)                                                            AS state,
+        MODE(county)                                                          AS county_name,
+        MAX(as_of_year)                                                       AS as_of_year,
+        COUNT(CASE WHEN q_status = 'active' THEN 1 END)                       AS active_projects,
+        ROUND(SUM(CASE WHEN q_status = 'active'
+          THEN COALESCE(mw_1, 0) + COALESCE(mw_2, 0) + COALESCE(mw_3, 0) END), 1)
+                                                                              AS active_mw,
+        ROUND(SUM(CASE WHEN q_status = 'active' AND type_1 = 'Solar'
+          THEN mw_1 END), 1)                                                  AS active_solar_mw,
+        ROUND(SUM(CASE WHEN q_status = 'active' AND type_1 IN ('Wind', 'Offshore Wind')
+          THEN mw_1 END), 1)                                                  AS active_wind_mw,
+        ROUND(SUM(CASE WHEN q_status = 'active' AND type_1 = 'Gas'
+          THEN mw_1 END), 1)                                                  AS active_gas_mw,
+        ROUND(SUM(CASE WHEN q_status = 'active' AND type_1 IN ('Battery', 'Other Storage')
+          THEN mw_1 END)
+          + SUM(CASE WHEN q_status = 'active' AND type_2 IN ('Battery', 'Other Storage')
+          THEN mw_2 END), 1)                                                  AS active_storage_mw,
+        COUNT(CASE WHEN q_status = 'operational' THEN 1 END)                  AS operational_projects,
+        ROUND(SUM(CASE WHEN q_status = 'operational'
+          THEN COALESCE(mw_1, 0) + COALESCE(mw_2, 0) + COALESCE(mw_3, 0) END), 1)
+                                                                              AS operational_mw,
+        COUNT(CASE WHEN q_status = 'withdrawn' THEN 1 END)                    AS withdrawn_projects
+      FROM interconnection_queue
+      WHERE county_fips IS NOT NULL
+      GROUP BY county_fips
 
   - name: state_energy_mix
     comment: >
