@@ -160,19 +160,35 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     conn.setInstanceFollowRedirects(true);
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
     InputStream base = conn.getInputStream();
-    return new TimeoutInputStream(base, 3_600_000, 600_000);
+    long expectedBytes = conn.getContentLengthLong();
+    if (expectedBytes < 0) {
+      base.close();
+      throw new IOException("HMDA download from " + url + " returned no Content-Length; "
+          + "cannot verify the file arrived whole");
+    }
+    return new TimeoutInputStream(base, 3_600_000, 600_000, expectedBytes);
   }
 
+  /**
+   * Enforces idle and total timeouts, and fails at end-of-stream unless exactly {@code
+   * expectedBytes} arrived. On JDK 21 {@code HttpURLConnection} reports a connection dropped
+   * mid-body as an ordinary end-of-stream, so without the count check a partial file is handed on
+   * as if whole — and {@code RawCache} commits whatever a stream delivers before it ends cleanly.
+   */
   private static class TimeoutInputStream extends java.io.FilterInputStream {
     private final long totalTimeoutMs;
     private final long idleTimeoutMs;
+    private final long expectedBytes;
     private final long startTime;
+    private long bytesRead;
     private long lastReadTime;
 
-    TimeoutInputStream(InputStream in, long totalTimeoutMs, long idleTimeoutMs) {
+    TimeoutInputStream(InputStream in, long totalTimeoutMs, long idleTimeoutMs,
+        long expectedBytes) {
       super(in);
       this.totalTimeoutMs = totalTimeoutMs;
       this.idleTimeoutMs = idleTimeoutMs;
+      this.expectedBytes = expectedBytes;
       this.startTime = System.currentTimeMillis();
       this.lastReadTime = startTime;
     }
@@ -182,7 +198,10 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
       checkTimeouts();
       int result = in.read();
       if (result != -1) {
+        bytesRead++;
         lastReadTime = System.currentTimeMillis();
+      } else {
+        checkComplete();
       }
       return result;
     }
@@ -192,9 +211,19 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
       checkTimeouts();
       int result = in.read(b, off, len);
       if (result > 0) {
+        bytesRead += result;
         lastReadTime = System.currentTimeMillis();
+      } else if (result == -1) {
+        checkComplete();
       }
       return result;
+    }
+
+    private void checkComplete() throws IOException {
+      if (bytesRead != expectedBytes) {
+        throw new IOException("HMDA download ended after " + bytesRead + " of " + expectedBytes
+            + " bytes");
+      }
     }
 
     private void checkTimeouts() throws IOException {
