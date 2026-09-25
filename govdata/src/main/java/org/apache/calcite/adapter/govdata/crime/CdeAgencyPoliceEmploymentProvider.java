@@ -122,7 +122,7 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
       root = MAPPER.readTree(in);
     }
     Map<String, AgencyInfo> out = new LinkedHashMap<String, AgencyInfo>();
-    Iterator<Map.Entry<String, JsonNode>> counties = root.fields();
+    Iterator<Map.Entry<String, JsonNode>> counties = root.properties().iterator();
     while (counties.hasNext()) {
       Map.Entry<String, JsonNode> countyEntry = counties.next();
       JsonNode list = countyEntry.getValue();
@@ -190,17 +190,62 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
     return row;
   }
 
+  /**
+   * Single-shot GET with in-provider retry on the transient CDE gateway statuses. The
+   * schema YAML's retryOn/maxRetries governs HttpSource-fed tables only — it never reaches
+   * this provider's raw HTTP, which is why kenstott/govdata-ops#268 still dropped whole
+   * (state, year) batches on single 403/503 responses after that fix landed. Retry here:
+   * the api.usa.gov Envoy gateway returns 403/503 under rate pressure and a short backoff
+   * nearly always lands the next attempt.
+   */
   private InputStream rawGet(String url) throws IOException {
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", "GovData/1.0");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(60000);
-    int status = conn.getResponseCode();
-    if (status < 200 || status >= 300) {
-      throw new IOException("CDE HTTP " + status + " from " + url);
+    int[] retryable = {403, 429, 503};
+    int maxAttempts = 4;             // 1 initial + 3 retries, matching schema maxRetries: 3
+    long backoffMs = 1000;
+    IOException lastError = null;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setRequestMethod("GET");
+      conn.setRequestProperty("User-Agent", "GovData/1.0");
+      conn.setConnectTimeout(30000);
+      conn.setReadTimeout(60000);
+      int status;
+      try {
+        status = conn.getResponseCode();
+      } catch (IOException e) {
+        lastError = e;       // connection-level failure (reset/timeout) — retryable
+        status = -1;
+      }
+      if (status >= 200 && status < 300) {
+        return conn.getInputStream();
+      }
+      boolean retryableStatus = status == -1;
+      for (int code : retryable) {
+        if (status == code) {
+          retryableStatus = true;
+          break;
+        }
+      }
+      if (!retryableStatus) {
+        throw new IOException("CDE HTTP " + status + " from " + url);
+      }
+      if (status != -1) {
+        lastError = new IOException("CDE HTTP " + status + " from " + url);
+      }
+      if (attempt < maxAttempts) {
+        LOGGER.info("Request failed, retrying in {}ms (attempt {}/{}): CDE HTTP {}: {}",
+            backoffMs, attempt + 1, maxAttempts, status, url);
+        try {
+          Thread.sleep(backoffMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted during retry wait for " + url, lastError);
+        }
+        backoffMs *= 2;
+      }
     }
-    return conn.getInputStream();
+    throw lastError != null ? lastError
+        : new IOException("CDE fetch failed after " + maxAttempts + " attempts: " + url);
   }
 
   private static Long getYearLong(JsonNode measureNode, String year) {

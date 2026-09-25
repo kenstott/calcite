@@ -315,6 +315,41 @@ SELECT 'environment', 'streamflow', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/streamflow', allow_moved_paths := true) WHERE site_no IS NULL);
 
 -- ------------------------------------------------------------
+-- TABLE: water_withdrawals (partition cols: type, year)
+-- Quinquennial census (2000, 2005, 2010, 2015); ~3200 counties x 7 sectors per covered year.
+-- A DQ window scoped to a single year yields ~22,500 rows, not a defect.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000, 'Expected >=10000 rows (single covered year: ~3200 counties x 7 sectors)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips/sector rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true) WHERE county_fips IS NULL OR sector IS NULL);
+
+-- ------------------------------------------------------------
 -- TABLE: drinking_water (partition cols: type, state)
 -- ------------------------------------------------------------
 INSERT INTO dq_results

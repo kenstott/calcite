@@ -279,6 +279,20 @@ run_window() {
       else
         echo "[$(ts)] $current pool ended on window timeout (exit $EXIT_CODE)" >> "$window_log"
       fi
+      # run-pool.sh only triggers x-schema/vss via its own tail-end `if $RUN_EMBEDDINGS`
+      # block, reached solely on NATURAL completion — a daily run cut short by the window
+      # timeout never gets there, so entity-bridge/chunk-parsing silently goes without a
+      # fresh pass for however long daily keeps missing its window. Confirmed live
+      # 2026-09-15: daily hit exit 124 with 8 schemas still queued, and the natural
+      # x-schema cadence had gone 5+ days without firing as a direct result (last real run
+      # 2026-09-10). Run it explicitly here instead, once, when daily specifically (not a
+      # fill-mode historical run) is the one that got cut short — daily is the phase
+      # x-schema is meant to follow, needing every source already materialized.
+      if [ "$current" = "daily" ]; then
+        echo "[$(ts)] daily cut short by window timeout — running x-schema.sh explicitly (its own natural-completion trigger never got the chance)" | tee -a "$window_log"
+        bash "$SCRIPT_DIR/../x-schema.sh" >> "$window_log" 2>&1 \
+          || log_error "WARNING: explicit x-schema.sh run (after daily timeout) failed — see $window_log"
+      fi
       break
     else
       # Genuine crash — run-pool died mid-queue (OOM/137, set -e abort, etc). The

@@ -126,6 +126,31 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Sets the table's default name mapping so readers resolve the columns of externally-written
+   * parquet (which carries no Iceberg field IDs) by name. Skips the commit when the recorded
+   * mapping already matches the schema, so repeated materialization passes don't each add a
+   * metadata version.
+   *
+   * <p>Committed under the same lock as every other table-mutating method here: a properties
+   * commit moves the non-atomic version-hint pointer, and left unlocked it interleaves with a
+   * concurrent writer's commit to the same table.
+   */
+  public void recordDefaultNameMapping() {
+    String mappingJson = org.apache.iceberg.mapping.NameMappingParser.toJson(
+        org.apache.iceberg.mapping.MappingUtil.create(table.schema()));
+    underCommitLock(() -> {
+      table.refresh();
+      if (mappingJson.equals(
+          table.properties().get(org.apache.iceberg.TableProperties.DEFAULT_NAME_MAPPING))) {
+        return;
+      }
+      table.updateProperties()
+          .set(org.apache.iceberg.TableProperties.DEFAULT_NAME_MAPPING, mappingJson)
+          .commit();
+    });
+  }
+
+  /**
    * Creates a writer for the specified Iceberg table. Every column behaves as
    * {@code onCoercionFailure: WARN} (log and write NULL on an unparseable value) — the
    * historical default, unchanged for callers that don't have per-column policy config

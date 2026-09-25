@@ -1104,11 +1104,7 @@ public class IcebergMaterializer {
     // The staged parquet (DuckDB-written) has no Iceberg field IDs, so set a default name mapping
     // — readers (DuckDB iceberg_scan) then resolve columns by name.
     try {
-      String mappingJson = org.apache.iceberg.mapping.NameMappingParser.toJson(
-          org.apache.iceberg.mapping.MappingUtil.create(table.schema()));
-      table.updateProperties()
-          .set(org.apache.iceberg.TableProperties.DEFAULT_NAME_MAPPING, mappingJson)
-          .commit();
+      writer.recordDefaultNameMapping();
     } catch (Exception e) {
       LOGGER.warn("Could not set name mapping for '{}': {}", config.getTargetTableId(), e.getMessage());
     }

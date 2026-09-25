@@ -795,14 +795,22 @@ fill_pool() {
       break
     fi
 
-    # Check 2: actual available memory (belt + suspenders, skip when no workers active)
-    if [ "${#active_pids[@]}" -gt 0 ]; then
-      local avail_mb
-      avail_mb=$(get_available_mb)
-      if [ "$avail_mb" -lt "$((next_foot_mb + OS_RESERVE_MB / 2))" ]; then
-        log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_foot_mb}MB — holding"
-        break
-      fi
+    # Check 2: actual available memory (belt + suspenders) — the ONLY check that sees true
+    # cross-instance state, since Check 1's committed_mb/budget_mb are this instance's own local
+    # view (budget_mb derives from TOTAL system memory, blind to what sibling run-pool.sh
+    # instances have already committed). Previously skipped when this instance had zero active
+    # workers of its own ("skip when no workers active") — but that's exactly the moment a
+    # freshly-started instance makes its first admission decision, and multiple instances
+    # starting around the same time (e.g. several remediation jobs launching concurrently) each
+    # had their first worker slip through with no cross-instance visibility at all. Confirmed
+    # live 2026-09-15: this let 3 independently-started instances each admit one worker despite
+    # combined real memory pressure. Now unconditional — every admission, first worker included,
+    # checks real MemAvailable.
+    local avail_mb
+    avail_mb=$(get_available_mb)
+    if [ "$avail_mb" -lt "$((next_foot_mb + OS_RESERVE_MB / 2))" ]; then
+      log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_foot_mb}MB — holding"
+      break
     fi
 
     queue_idx=$scan_idx
@@ -1090,6 +1098,20 @@ fi
 # per-schema ETL hook).
 if $RUN_EMBEDDINGS; then
   VSS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+  # x-schema (ChunkOrganizer/EntityBridgeOrganizer JVM sweep) and vss-local.sh (embeddings)
+  # have real memory needs but never participated in the BUDGET_FILE protocol other
+  # consumers (concurrent run-pool.sh instances, the govdata-runner opencode daemon) already
+  # honor. Reserve nearly the whole box here so those consumers hold off admitting new work
+  # while this runs, then restore whatever was on disk before — matching the same
+  # borrow/restore pattern remediation-ledger-runner already uses for a production job.
+  _prior_reserve=$OS_RESERVE_MB
+  _prior_workers=$MAX_WORKERS
+  OS_RESERVE_MB=$((total_mem_mb - 2000))   # leave ~2GB for x-schema/vss + OS
+  MAX_WORKERS=0
+  write_budget_file
+  log_info "x-schema/vss: reserving ${OS_RESERVE_MB}MB (MAX_WORKERS=0) — other consumers should yield"
+
   log_info "x-schema: sweeping every registered source (SEC included) into vc_staging"
   if [ -f "$VSS_DIR/x-schema.sh" ]; then
     bash "$VSS_DIR/x-schema.sh" || log_info "WARNING: x-schema sweep failed (non-fatal)"
@@ -1106,7 +1128,11 @@ if $RUN_EMBEDDINGS; then
   else
     log_info "WARNING: vss-local.sh not found — embeddings skipped"
   fi
-  log_info "x-schema + Embeddings: complete"
+
+  OS_RESERVE_MB=$_prior_reserve
+  MAX_WORKERS=$_prior_workers
+  write_budget_file
+  log_info "x-schema + Embeddings: complete, budget restored (RESERVE_MB=${OS_RESERVE_MB}MB, MAX_WORKERS=${MAX_WORKERS})"
 fi
 
 exit 0

@@ -18,6 +18,7 @@
 ._*
 **/.DS_Store
 **/__MACOSX
+.tmp-sourcing-*/
 .gradle
 /target
 /*/target

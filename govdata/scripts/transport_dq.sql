@@ -1082,6 +1082,118 @@ SELECT 'transport', 'rail_service_performance', 'T8_expected_values',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true)
   WHERE railroad_mark NOT IN ('BNSF', 'CN', 'CP', 'CPKC', 'CSXT', 'KCS', 'NS', 'UP'));
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: class1_rail_county_adjacency (BTS NTAD ArcGIS; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'class1_rail_county_adjacency', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'class1_rail_county_adjacency', 'T2_row_count',
+  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END, n, 2000, 'Expected >=2000 county x Class I railroad rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'class1_rail_county_adjacency', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'class1_rail_county_adjacency', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'class1_rail_county_adjacency', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips/railroad_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true)
+  WHERE county_fips IS NULL OR railroad_code IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'class1_rail_county_adjacency', 'T7_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (county_fips, railroad_code) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, railroad_code, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true)
+  GROUP BY county_fips, railroad_code HAVING COUNT(*) > 1));
+
+-- T8: server-side WHERE already restricts RROWNER1 to the current 6-carrier AAR Class I
+-- roster; this re-checks the filter round-tripped correctly into the materialized table.
+INSERT INTO dq_results
+SELECT 'transport', 'class1_rail_county_adjacency', 'T8_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'railroad_code values outside {BNSF, CN, CPKC, CSXT, NS, UP}'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true)
+  WHERE railroad_code NOT IN ('BNSF', 'CN', 'CPKC', 'CSXT', 'NS', 'UP'));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nhs_highway_county_access (BTS NTAD ArcGIS; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'nhs_highway_county_access', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'nhs_highway_county_access', 'T2_row_count',
+  CASE WHEN n >= 2900 THEN 'pass' ELSE 'fail' END, n, 2900, 'Expected ~3009 counties with NHS mileage'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'nhs_highway_county_access', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'nhs_highway_county_access', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'nhs_highway_county_access', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true)
+  WHERE county_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'nhs_highway_county_access', 'T7_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true)
+  GROUP BY county_fips HAVING COUNT(*) > 1));
+
+-- T8: the WHERE clause already excludes CTFIPS=0 placeholder segments; this re-checks
+-- no zero-mileage/placeholder county rows round-tripped into the materialized table.
+INSERT INTO dq_results
+SELECT 'transport', 'nhs_highway_county_access', 'T8_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with non-positive total_miles or segment_count'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/nhs_highway_county_access', allow_moved_paths := true)
+  WHERE total_miles <= 0 OR segment_count <= 0);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
