@@ -26,20 +26,54 @@
 
 param(
   [string]$Distro     = "Ubuntu",
-  [string]$DiskMatch  = "ST16000NM001G*"
+  [string]$DiskMatch  = "*MG08ACA16TE*"
 )
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
 
-$disk = Get-Disk | Where-Object { $_.FriendlyName -like $DiskMatch } | Select-Object -First 1
-if (-not $disk) {
-    Write-Host "start-minio-with-disk: no disk matching '$DiskMatch' found - skipping wsl --mount."
-    Write-Host "start-minio-with-disk: MinIO's own mountpoint guard should refuse to start rather than serve a stale local dir."
-} else {
+# Transcript so an unattended run leaves evidence of what it did and why it failed.
+$logPath = Join-Path $env:LOCALAPPDATA "start-minio-with-disk.log"
+Start-Transcript -Path $logPath -Append | Out-Null
+
+try {
+    $disk = Get-Disk | Where-Object { $_.FriendlyName -like $DiskMatch } | Select-Object -First 1
+    if (-not $disk) {
+        throw "no disk matching '$DiskMatch' found"
+    }
+
+    # `wsl --mount` needs Windows to have released the disk, so an Online disk must be
+    # taken offline first.
+    if (-not $disk.IsOffline) {
+        Write-Host "start-minio-with-disk: disk $($disk.Number) is Online in Windows - setting it offline."
+        Set-Disk -Number $disk.Number -IsOffline $true
+    }
+
     $target = "\\.\PHYSICALDRIVE$($disk.Number)"
     Write-Host "start-minio-with-disk: attaching $target (disk $($disk.Number), '$($disk.FriendlyName)') to WSL..."
-    wsl --mount $target --bare | Out-Null
-}
+    # wsl.exe writes its diagnostics to stderr; under "Stop" Windows PowerShell 5.1 would turn
+    # that into a terminating error before the exit code could be read. An already-attached
+    # disk is reported this way, and is handled by the mount step below.
+    $ErrorActionPreference = "Continue"
+    $mountOutput = wsl --mount $target --bare 2>&1 | Out-String
+    $mountExit = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    Write-Host "start-minio-with-disk: wsl --mount exit=$mountExit output=$mountOutput"
 
-Write-Host "start-minio-with-disk: mounting /mnt/minio and /mnt/wsltmp (if needed) and starting minio.service in $Distro..."
-wsl -d $Distro -u root -- bash -lc "mountpoint -q /mnt/minio || mount /mnt/minio; mountpoint -q /mnt/wsltmp || mount /mnt/wsltmp; mountpoint -q /var/tmp || mount /var/tmp; systemctl start minio"
+    # Mount through systemd's fstab-generated units, not a bare `mount`: a mount made from the
+    # wsl.exe session is not visible to systemd, so minio.service's ExecStartPre mountpoint
+    # check would still fail.
+    Write-Host "start-minio-with-disk: mounting /mnt/minio, /mnt/wsltmp and /var/tmp via systemd in $Distro..."
+    wsl -d $Distro -u root -- systemctl start mnt-minio.mount mnt-wsltmp.mount var-tmp.mount
+    if ($LASTEXITCODE -ne 0) {
+        throw "systemd could not mount the MinIO disk units in $Distro (wsl --mount exit=$mountExit): $mountOutput"
+    }
+
+    Write-Host "start-minio-with-disk: starting minio.service in $Distro..."
+    wsl -d $Distro -u root -- systemctl start minio
+    if ($LASTEXITCODE -ne 0) {
+        throw "minio.service failed to start in $Distro - see: journalctl -u minio.service"
+    }
+    Write-Host "start-minio-with-disk: /mnt/minio mounted and minio.service started."
+} finally {
+    Stop-Transcript | Out-Null
+}
