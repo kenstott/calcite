@@ -98,36 +98,44 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 read -r _self_start_year _self_end_year <<< "$(_year_range_from_mode "$MODE")"
-# Only self-register if nothing already holds a live, valid registration for this exact
-# worker identity. When launched through run-pool.sh's own detached-launcher wrapper, that
-# registration already exists (the wrapper writes it before invoking this script) and must
-# be left alone, not clobbered with a different PID here.
-_existing_worker_pid=""
-[ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_worker_pid=$(head -1 "$PID_DIR/${WORKER_ID}.pid" 2>/dev/null | tr -d '[:space:]')
-_is_pool_launched=false
-if [ -n "$_existing_worker_pid" ] && kill -0 "$_existing_worker_pid" 2>/dev/null; then
-  _is_pool_launched=true
-fi
-# Skip conflict check if this is a pool-launched worker (pool already checked at admission time)
-if [ "$_is_pool_launched" = false ]; then
-  if ! check_schema_year_conflict "$PID_DIR" "$SCHEMA" "$_self_start_year" "$_self_end_year"; then
-    exit 1
+# An isolated DQ bucket shares no Iceberg tables with a production writer, so neither the
+# conflict check nor the pid registration applies: worker-dq-run.sh exempts such runs for the
+# same reason, and registering here would make a production launch of the same schema+year
+# refuse against a DQ worker that cannot collide with it.
+if [ "${GOVDATA_DQ:-}" = "true" ] && [[ "${GOVDATA_PARQUET_DIR:-}" == s3://*-dq ]]; then
+  :
+else
+  # Only self-register if nothing already holds a live, valid registration for this exact
+  # worker identity. When launched through run-pool.sh's own detached-launcher wrapper, that
+  # registration already exists (the wrapper writes it before invoking this script) and must
+  # be left alone, not clobbered with a different PID here.
+  _existing_worker_pid=""
+  [ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_worker_pid=$(head -1 "$PID_DIR/${WORKER_ID}.pid" 2>/dev/null | tr -d '[:space:]')
+  _is_pool_launched=false
+  if [ -n "$_existing_worker_pid" ] && kill -0 "$_existing_worker_pid" 2>/dev/null; then
+    _is_pool_launched=true
   fi
-fi
-if [ -z "$_existing_worker_pid" ] || ! kill -0 "$_existing_worker_pid" 2>/dev/null; then
-  echo $$ > "$PID_DIR/${WORKER_ID}.pid"
-  # .foreground: explicit opt-in telling check_schema_year_conflict() to trust this pid
-  # file via kill -0 alone -- this process's own /proc/self/cmdline never contains the
-  # pid-file's path the way the wrapper's does, since it wasn't passed one (see that
-  # function's identity-check comment in common.sh; worker-dq-run.sh uses the same marker
-  # for the same reason).
-  touch "$PID_DIR/${WORKER_ID}.foreground"
-  rm -f "$PID_DIR/${WORKER_ID}.exit"
-  _worker_cleanup_self_registration() {
-    echo $? > "$PID_DIR/${WORKER_ID}.exit" 2>/dev/null
-    rm -f "$PID_DIR/${WORKER_ID}.foreground" 2>/dev/null
-  }
-  trap _worker_cleanup_self_registration EXIT
+  # Skip conflict check if this is a pool-launched worker (pool already checked at admission time)
+  if [ "$_is_pool_launched" = false ]; then
+    if ! check_schema_year_conflict "$PID_DIR" "$SCHEMA" "$_self_start_year" "$_self_end_year"; then
+      exit 1
+    fi
+  fi
+  if [ -z "$_existing_worker_pid" ] || ! kill -0 "$_existing_worker_pid" 2>/dev/null; then
+    echo $$ > "$PID_DIR/${WORKER_ID}.pid"
+    # .foreground: explicit opt-in telling check_schema_year_conflict() to trust this pid
+    # file via kill -0 alone -- this process's own /proc/self/cmdline never contains the
+    # pid-file's path the way the wrapper's does, since it wasn't passed one (see that
+    # function's identity-check comment in common.sh; worker-dq-run.sh uses the same marker
+    # for the same reason).
+    touch "$PID_DIR/${WORKER_ID}.foreground"
+    rm -f "$PID_DIR/${WORKER_ID}.exit"
+    _worker_cleanup_self_registration() {
+      echo $? > "$PID_DIR/${WORKER_ID}.exit" 2>/dev/null
+      rm -f "$PID_DIR/${WORKER_ID}.foreground" 2>/dev/null
+    }
+    trap _worker_cleanup_self_registration EXIT
+  fi
 fi
 
 # ── Split-schema table sets ────────────────────────────────────────────────────
