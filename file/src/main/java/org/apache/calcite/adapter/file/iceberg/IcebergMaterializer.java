@@ -2969,7 +2969,7 @@ public class IcebergMaterializer {
         continue; // missing entirely — the count-based check's concern, not this method's
       }
       Type expectedType = IcebergCatalogManager.mapToIcebergType(col.getType());
-      if (!expectedType.equals(existingField.type())) {
+      if (!IcebergCatalogManager.typesMatch(expectedType, existingField.type())) {
         throw new IllegalStateException("Iceberg table '" + targetTableId
             + "' has column type mismatch — declared config expects '" + col.getName()
             + "' as " + expectedType + ", existing table has '" + col.getName()
@@ -3006,7 +3006,7 @@ public class IcebergMaterializer {
         return null;
       }
       Type expectedType = IcebergCatalogManager.mapToIcebergType(expected.getType());
-      if (!expectedType.equals(existingField.type())) {
+      if (!IcebergCatalogManager.typesMatch(expectedType, existingField.type())) {
         return null;
       }
     }

@@ -405,6 +405,25 @@ public class IcebergCatalogManager {
   }
 
   /**
+   * True when an expected column type (from {@link #mapToIcebergType(String)}) is the same shape
+   * as an existing table column's type, ignoring the field IDs nested inside a list.
+   * {@link Types.ListType#equals} compares the element's ID, but an expected type is built
+   * standalone with a throwaway element ID while the existing table's element ID was assigned
+   * when the table was created, so two identical {@code list<string>} types never compare
+   * equal. A list matches when its element type and required-ness do.
+   */
+  public static boolean typesMatch(org.apache.iceberg.types.Type expected,
+      org.apache.iceberg.types.Type existing) {
+    if (expected.isListType() && existing.isListType()) {
+      Types.ListType e = expected.asListType();
+      Types.ListType a = existing.asListType();
+      return e.isElementRequired() == a.isElementRequired()
+          && typesMatch(e.elementType(), a.elementType());
+    }
+    return expected.equals(existing);
+  }
+
+  /**
    * Maps a string type name to an Iceberg Type, for standalone Type resolution (e.g. comparing
    * an expected vs. actual column type) where the result is never embedded in a {@link Schema}.
    * A list type's element ID is a throwaway value from a private counter — fine here since

@@ -492,7 +492,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         continue; // missing entirely — schemaDriftReason's concern, not this method's
       }
       org.apache.iceberg.types.Type expectedType = IcebergCatalogManager.mapToIcebergType(col.getType());
-      if (!expectedType.equals(existingField.type())) {
+      if (!IcebergCatalogManager.typesMatch(expectedType, existingField.type())) {
         throw new IllegalStateException("Iceberg table '" + targetTableId
             + "' has column type mismatch — declared config expects '" + col.getName()
             + "' as " + expectedType + ", existing table has '" + col.getName()

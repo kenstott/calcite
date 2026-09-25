@@ -432,7 +432,11 @@ allprojects {
             // netty-tcnative-* is a native OpenSSL binding with its OWN independent version
             // scheme (2.0.x), not the 4.1.x core/codec/handler/resolver/transport train --
             // forcing it to 4.1.138.Final (verified live) resolves to a nonexistent artifact.
-            if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
+            // The legacy Netty 3.x monolith (io.netty:netty, pulled in by hive-service) is a
+            // separate, older product with no 4.1.x release; forcing it fails resolution of
+            // :file's test runtime classpath.
+            if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")
+                && requested.name != "netty") {
                 useVersion("4.1.138.Final")
                 because("whole netty family kept on one patched release train")
             }

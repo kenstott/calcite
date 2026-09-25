@@ -142,6 +142,23 @@ class IcebergSchemaEvolutionTest {
 
   // ===== ensureTableExists, against a real Hadoop catalog =====
 
+  // A table holding an array column must still be evolved in place when a column is added: the
+  // array's element ID differs between the existing schema and a standalone expected type.
+  @Test void testPureAdditionIsRecognizedWhenATableHasAnArrayColumn() throws Exception {
+    IcebergMaterializer materializer = newMaterializer();
+    String tableId = "evo_array_add_" + UUID.randomUUID().toString().substring(0, 8);
+
+    materializer.ensureTableExists(configWith(tableId,
+        Arrays.asList(col("id", "VARCHAR"), col("docket_numbers", "array<string>"))));
+    IcebergMaterializer.TableSetupResult evolved = materializer.ensureTableExists(
+        configWith(tableId, Arrays.asList(col("id", "VARCHAR"),
+            col("docket_numbers", "array<string>"), col("extra", "VARCHAR"))));
+
+    assertFalse(evolved.wasRecreated,
+        "adding a column next to an array column must not drop and recreate the table");
+    assertEquals(3, evolved.table.schema().columns().size());
+  }
+
   @Test void testAddingAColumnPreservesExistingRows() throws Exception {
     IcebergMaterializer materializer = newMaterializer();
     String tableId = "evo_add_" + UUID.randomUUID().toString().substring(0, 8);
@@ -235,6 +252,37 @@ class IcebergSchemaEvolutionTest {
     assertFalse(reopened.wasRecreated, "identical column names and types must load cleanly");
     assertEquals(1, countRows(reopened.table),
         "the row from before must survive a same-schema reopen");
+  }
+
+  // A list column's element ID is assigned when the table is created, but the expected type is
+  // built standalone with a throwaway ID; the two must still compare equal.
+  @Test void testArrayColumnReopensCleanlyWithIdenticalDeclaration() throws Exception {
+    IcebergMaterializer materializer = newMaterializer();
+    String tableId = "evo_array_" + UUID.randomUUID().toString().substring(0, 8);
+    List<IcebergCatalogManager.ColumnDef> columns = Arrays.asList(
+        col("id", "VARCHAR"), col("docket_numbers", "array<string>"), col("year", "INTEGER"));
+
+    materializer.ensureTableExists(configWith(tableId, columns));
+    IcebergMaterializer.TableSetupResult reopened =
+        materializer.ensureTableExists(configWith(tableId, columns));
+
+    assertFalse(reopened.wasRecreated, "an unchanged array column must load cleanly");
+  }
+
+  @Test void testArrayElementTypeChangeStillThrows() throws Exception {
+    IcebergMaterializer materializer = newMaterializer();
+    String tableId = "evo_array_retype_" + UUID.randomUUID().toString().substring(0, 8);
+
+    materializer.ensureTableExists(configWith(tableId,
+        Arrays.asList(col("id", "VARCHAR"), col("values", "array<string>"))));
+
+    IllegalStateException thrown = org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> materializer.ensureTableExists(
+            configWith(tableId,
+                Arrays.asList(col("id", "VARCHAR"), col("values", "array<double>")))));
+
+    assertTrue(thrown.getMessage().contains("values"),
+        "exception message must name the mismatched column: " + thrown.getMessage());
   }
 
   /** Appends one row through a real Parquet DataWriter, matching how production data lands. */
