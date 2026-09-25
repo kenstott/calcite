@@ -30,12 +30,14 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -55,8 +57,12 @@ import javax.xml.stream.XMLStreamReader;
  * <p>One fetch is one title: it downloads {@code xml_usc{title}@{congress}-{release}.zip} for
  * the {@code title} dimension value (e.g. {@code 05}, or {@code 05a} for Title 5 Appendix) and
  * streams the single XML file inside it with StAX. Rows are produced lazily, one top-level
- * {@code <section>} per {@link Iterator#next()}; neither the XML nor the rows are ever held
- * whole in memory.
+ * {@code <section>} at a time; neither the XML nor the rows are ever held whole in memory.
+ *
+ * <p>This class produces {@code usc_sections} rows, one per section. {@link
+ * UsCodeSubsectionsDataProvider} reads the same stream and produces {@code usc_subsections}
+ * rows: each section split at its own structural boundaries (subsection, paragraph,
+ * subparagraph, clause...) into units small enough to embed as one chunk, so no paragraph is cut.
  *
  * <p>The current release point ({@code congress}-{@code release}, e.g. {@code 119-111}) is
  * scraped once per provider instance from the {@code xml_uscAll} link on the OLRC download
@@ -82,6 +88,11 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
 
   private static final String USLM_NS = "http://xml.house.gov/schemas/uslm/1.0";
 
+  /** Largest unit, in characters, that {@code usc_subsections} emits when the structure allows.
+   *  Kept under SemanticTextChunker's default maximum (2,200) so a unit is embedded as exactly
+   *  one chunk. */
+  static final int UNIT_MAX_CHARS = 2000;
+
   /** Elements whose whole subtree is excluded from section text. */
   private static final Set<String> SKIP_ELEMENTS =
       new HashSet<String>(Arrays.asList("notes", "note", "toc"));
@@ -92,6 +103,12 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
       new HashSet<String>(
           Arrays.asList("title", "appendix", "subtitle", "part", "subpart", "chapter",
               "subchapter"));
+
+  /** The divisions inside a section. Each one becomes a {@link Node} in the section's tree. */
+  private static final Set<String> STRUCT_ELEMENTS =
+      new HashSet<String>(
+          Arrays.asList("subsection", "paragraph", "subparagraph", "clause", "subclause",
+              "item", "subitem"));
 
   /** Elements that start a new line in section text. */
   private static final Set<String> BLOCK_ELEMENTS =
@@ -124,11 +141,21 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     return storageProvider;
   }
 
+  /** The table this provider feeds; used only in log and error messages. */
+  String tableName() {
+    return "usc_sections";
+  }
+
+  /** Turns the stream of parsed sections into this provider's rows. */
+  Iterator<Map<String, Object>> rows(Iterator<SectionData> sections) {
+    return new SectionRows(sections);
+  }
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
     String title = variables.get("title");
     if (title == null || title.isEmpty()) {
-      throw new IOException("usc_sections: the 'title' dimension is required");
+      throw new IOException(tableName() + ": the 'title' dimension is required");
     }
     resolveReleasePoint();
 
@@ -143,19 +170,27 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     File[] xmlFiles = tempDir.listFiles((d, n) -> n.toLowerCase(Locale.US).endsWith(".xml"));
     if (xmlFiles == null || xmlFiles.length != 1) {
       ZipDownloadUtils.deleteDirectory(tempDir);
-      throw new IOException("usc_sections: expected exactly one XML file in " + url + " but found "
-          + (xmlFiles == null ? 0 : xmlFiles.length));
+      throw new IOException(tableName() + ": expected exactly one XML file in " + url
+          + " but found " + (xmlFiles == null ? 0 : xmlFiles.length));
     }
 
-    LOGGER.info("usc_sections: streaming title {} from release point {}", title, releasePoint);
-    return streamSections(xmlFiles[0], tempDir, releasePoint);
+    LOGGER.info("{}: streaming title {} from release point {}", tableName(), title,
+        releasePoint);
+    return rows(new SectionStream(xmlFiles[0], tempDir, releasePoint));
   }
 
-  /** Streams the sections of one title's USLM XML file; deletes {@code tempDir} once the
-   *  stream is exhausted or fails. Package-private so tests can drive the parser directly. */
+  /** Streams the sections of one title's USLM XML file as {@code usc_sections} rows; deletes
+   *  {@code tempDir} once the stream is exhausted or fails. Package-private so tests can drive
+   *  the parser directly. */
   static Iterator<Map<String, Object>> streamSections(File xmlFile, File tempDir,
       String releasePoint) throws IOException {
-    return new SectionIterator(xmlFile, tempDir, releasePoint);
+    return new SectionRows(new SectionStream(xmlFile, tempDir, releasePoint));
+  }
+
+  /** As {@link #streamSections}, but yields {@code usc_subsections} rows. */
+  static Iterator<Map<String, Object>> streamUnits(File xmlFile, File tempDir,
+      String releasePoint) throws IOException {
+    return new UnitRows(new SectionStream(xmlFile, tempDir, releasePoint));
   }
 
   /** Reads the OLRC download page line by line straight off the HTTP response and pins the
@@ -173,7 +208,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     try {
       int status = conn.getResponseCode();
       if (status != HttpURLConnection.HTTP_OK) {
-        throw new IOException("usc_sections: HTTP " + status + " from " + RELEASE_PAGE_URL);
+        throw new IOException(tableName() + ": HTTP " + status + " from " + RELEASE_PAGE_URL);
       }
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
@@ -183,7 +218,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
           if (m.find()) {
             congress = m.group(1);
             release = m.group(2);
-            LOGGER.info("usc_sections: current release point is {}-{}", congress, release);
+            LOGGER.info("{}: current release point is {}-{}", tableName(), congress, release);
             return;
           }
         }
@@ -191,7 +226,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     } finally {
       conn.disconnect();
     }
-    throw new IOException("usc_sections: no xml_uscAll release point link found on "
+    throw new IOException(tableName() + ": no xml_uscAll release point link found on "
         + RELEASE_PAGE_URL);
   }
 
@@ -223,17 +258,263 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
   }
 
   /**
-   * Lazily walks one title's XML and emits one row per top-level section. Closes the parser,
-   * the file stream and deletes the extracted temp directory as soon as the stream is
-   * exhausted or fails.
+   * One division of a section (the section itself, or a subsection, paragraph, subparagraph,
+   * clause...) as a tree. {@code parts} interleaves the division's own text runs with its child
+   * divisions in document order, so rendering the tree reproduces the section text exactly and
+   * any division can be rendered on its own.
    */
-  private static final class SectionIterator implements Iterator<Map<String, Object>> {
+  private static final class Node {
+    final int depth;
+    final Node parent;
+    final StringBuilder label = new StringBuilder();
+    final List<Object> parts = new ArrayList<Object>();
+    StringBuilder run = new StringBuilder();
+
+    Node(int depth, Node parent) {
+      this.depth = depth;
+      this.parent = parent;
+    }
+
+    void flushRun() {
+      if (run.length() > 0) {
+        parts.add(run.toString());
+        run = new StringBuilder();
+      }
+    }
+
+    void addChild(Node child) {
+      flushRun();
+      parts.add(child);
+    }
+
+    boolean hasChildren() {
+      for (Object part : parts) {
+        if (part instanceof Node) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /** The labels from the section down to this division, e.g. {@code (a)(1)(A)}; empty for the
+     *  section itself. */
+    String path() {
+      return parent == null ? "" : parent.path() + collapse(label);
+    }
+
+    void render(StringBuilder out) {
+      for (Object part : parts) {
+        if (part instanceof Node) {
+          ((Node) part).render(out);
+        } else {
+          out.append((String) part);
+        }
+      }
+    }
+  }
+
+  /** One parsed section: its metadata and its division tree. */
+  static final class SectionData {
+    String titleNumber;
+    String titleName;
+    Boolean positiveLaw;
+    String releasePoint;
+    String sectionNumber;
+    int seq;
+    String identifier;
+    String status;
+    String heading;
+    String hierarchy;
+    String chapterNumber;
+    String chapterHeading;
+    String sourceCredit;
+    private Node root;
+
+    String citation() {
+      boolean appendix = Character.isLetter(titleNumber.charAt(titleNumber.length() - 1));
+      return titleNumber.toUpperCase(Locale.US) + " U.S.C. " + (appendix ? "App. " : "")
+          + "§ " + sectionNumber;
+    }
+
+    /** The section's operative text, one division per line; empty when nothing operative
+     *  remains (repealed, omitted, transferred, or a pointer-only section). */
+    String body() {
+      StringBuilder sb = new StringBuilder();
+      root.render(sb);
+      return normalizeBody(sb);
+    }
+  }
+
+  /** One {@code usc_subsections} unit: a run of adjacent divisions of a section. */
+  static final class Unit {
+    final String startPath;
+    final String endPath;
+    final String text;
+
+    Unit(String startPath, String endPath, String text) {
+      this.startPath = startPath;
+      this.endPath = endPath;
+      this.text = text;
+    }
+  }
+
+  /**
+   * Splits a section into units of at most {@link #UNIT_MAX_CHARS} characters, cutting only at
+   * structural boundaries. A division that fits is one unit; one that does not is split into its
+   * own text and its child divisions, recursively. Adjacent units are then packed together while
+   * they still fit, so tiny definitions do not become tiny rows. A single indivisible run longer
+   * than the limit (a long table, or one unbroken paragraph) stays one unit. Joining the units
+   * with newlines reproduces {@link SectionData#body()} exactly.
+   */
+  static List<Unit> units(SectionData section) {
+    List<Unit> pieces = new ArrayList<Unit>();
+    flatten(section.root, pieces);
+    List<Unit> packed = new ArrayList<Unit>();
+    Unit current = null;
+    for (Unit piece : pieces) {
+      if (current != null
+          && current.text.length() + 1 + piece.text.length() <= UNIT_MAX_CHARS) {
+        current = new Unit(current.startPath, piece.endPath, current.text + "\n" + piece.text);
+      } else {
+        if (current != null) {
+          packed.add(current);
+        }
+        current = piece;
+      }
+    }
+    if (current != null) {
+      packed.add(current);
+    }
+    return packed;
+  }
+
+  private static void flatten(Node node, List<Unit> out) {
+    StringBuilder sb = new StringBuilder();
+    node.render(sb);
+    String whole = normalizeBody(sb);
+    if (whole.isEmpty()) {
+      return;
+    }
+    String path = node.path();
+    if (whole.length() <= UNIT_MAX_CHARS || !node.hasChildren()) {
+      out.add(new Unit(path, path, whole));
+      return;
+    }
+    for (Object part : node.parts) {
+      if (part instanceof Node) {
+        flatten((Node) part, out);
+      } else {
+        String text = normalizeBody(new StringBuilder((String) part));
+        if (!text.isEmpty()) {
+          out.add(new Unit(path, path, text));
+        }
+      }
+    }
+  }
+
+  /** Streams {@code usc_sections} rows. */
+  private static final class SectionRows implements Iterator<Map<String, Object>> {
+    private final Iterator<SectionData> sections;
+
+    SectionRows(Iterator<SectionData> sections) {
+      this.sections = sections;
+    }
+
+    @Override public boolean hasNext() {
+      return sections.hasNext();
+    }
+
+    @Override public Map<String, Object> next() {
+      SectionData s = sections.next();
+      String heading = s.heading;
+      String body = s.body();
+      String headerLine = heading == null ? s.citation() : s.citation() + " — " + heading;
+
+      Map<String, Object> row = new LinkedHashMap<String, Object>();
+      row.put("title_number", s.titleNumber);
+      row.put("title_name", s.titleName);
+      row.put("is_positive_law", s.positiveLaw);
+      row.put("release_point", s.releasePoint);
+      row.put("section_number", s.sectionNumber);
+      row.put("section_seq", s.seq);
+      row.put("usc_identifier", s.identifier);
+      row.put("citation", s.citation());
+      row.put("heading", heading);
+      row.put("status", s.status);
+      row.put("hierarchy", s.hierarchy);
+      row.put("chapter_number", s.chapterNumber);
+      row.put("chapter_heading", s.chapterHeading);
+      // A section with no operative text (repealed/omitted/transferred) carries only its
+      // header line; leave the blob null so it is not chunked and embedded as a stub.
+      row.put("section_text", body.isEmpty() ? null : headerLine + "\n" + body);
+      row.put("source_credit", s.sourceCredit);
+      return row;
+    }
+  }
+
+  /** Streams {@code usc_subsections} rows: each section's units, lazily, one section at a time. */
+  static final class UnitRows implements Iterator<Map<String, Object>> {
+    private final Iterator<SectionData> sections;
+    private Iterator<Map<String, Object>> pending = new ArrayList<Map<String, Object>>().iterator();
+
+    UnitRows(Iterator<SectionData> sections) {
+      this.sections = sections;
+    }
+
+    @Override public boolean hasNext() {
+      while (!pending.hasNext() && sections.hasNext()) {
+        pending = unitRows(sections.next()).iterator();
+      }
+      return pending.hasNext();
+    }
+
+    @Override public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      return pending.next();
+    }
+
+    private static List<Map<String, Object>> unitRows(SectionData s) {
+      List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+      int unitSeq = 0;
+      for (Unit u : units(s)) {
+        unitSeq++;
+        boolean sameStartEnd = u.startPath.equals(u.endPath);
+        String unitPath;
+        String citation = s.citation() + u.startPath;
+        if (sameStartEnd) {
+          unitPath = u.startPath.isEmpty() ? null : u.startPath;
+        } else {
+          unitPath = (u.startPath.isEmpty() ? "lead-in" : u.startPath) + " to " + u.endPath;
+          citation = citation + " to " + u.endPath;
+        }
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        row.put("title_number", s.titleNumber);
+        row.put("section_number", s.sectionNumber);
+        row.put("section_seq", s.seq);
+        row.put("unit_seq", unitSeq);
+        row.put("unit_path", unitPath);
+        row.put("citation", citation);
+        row.put("unit_text", u.text);
+        rows.add(row);
+      }
+      return rows;
+    }
+  }
+
+  /**
+   * Lazily walks one title's XML and emits one {@link SectionData} per top-level section. Closes
+   * the parser and the file stream and deletes the extracted temp directory as soon as the
+   * stream is exhausted or fails.
+   */
+  private static final class SectionStream implements Iterator<SectionData> {
     private final File tempDir;
     private final String releasePoint;
     private final InputStream in;
     private final XMLStreamReader reader;
 
-    private Map<String, Object> pending;
+    private SectionData pending;
     private boolean done;
 
     private int depth;
@@ -258,14 +539,19 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     private String sectionNumber;
     private final StringBuilder sectionNumText = new StringBuilder();
     private final StringBuilder sectionHeading = new StringBuilder();
-    private final StringBuilder sectionBody = new StringBuilder();
     private final StringBuilder sourceCredit = new StringBuilder();
+
+    /** The section's own division, and the innermost open division while inside it. */
+    private Node root;
+    private Node cur;
+    /** Depth of the {@code <num>} element currently being read as a division's label, else -1. */
+    private int labelDepth = -1;
 
     /** Occurrences seen per section number within this title -- disambiguates the handful of
      *  sections the Code itself numbers twice (e.g. 5 U.S.C. 3598). */
     private final Map<String, Integer> sectionSeq = new HashMap<String, Integer>();
 
-    SectionIterator(File xmlFile, File tempDir, String releasePoint) throws IOException {
+    SectionStream(File xmlFile, File tempDir, String releasePoint) throws IOException {
       this.tempDir = tempDir;
       this.releasePoint = releasePoint;
       try {
@@ -277,7 +563,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
         this.reader = factory.createXMLStreamReader(in, "UTF-8");
       } catch (XMLStreamException e) {
         ZipDownloadUtils.deleteDirectory(tempDir);
-        throw new IOException("usc_sections: cannot open XML stream for " + xmlFile, e);
+        throw new IOException("us_code: cannot open XML stream for " + xmlFile, e);
       }
     }
 
@@ -287,7 +573,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
           pending = advance();
         } catch (XMLStreamException e) {
           close();
-          throw new UncheckedIOException(new IOException("usc_sections: XML parse failure", e));
+          throw new UncheckedIOException(new IOException("us_code: XML parse failure", e));
         } catch (IOException e) {
           close();
           throw new UncheckedIOException(e);
@@ -299,13 +585,13 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
       return pending != null;
     }
 
-    @Override public Map<String, Object> next() {
+    @Override public SectionData next() {
       if (!hasNext()) {
         throw new NoSuchElementException();
       }
-      Map<String, Object> row = pending;
+      SectionData section = pending;
       pending = null;
-      return row;
+      return section;
     }
 
     private void close() {
@@ -313,18 +599,18 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
       try {
         reader.close();
       } catch (XMLStreamException e) {
-        LOGGER.warn("usc_sections: error closing XML reader: {}", e.getMessage());
+        LOGGER.warn("us_code: error closing XML reader: {}", e.getMessage());
       }
       try {
         in.close();
       } catch (IOException e) {
-        LOGGER.warn("usc_sections: error closing XML stream: {}", e.getMessage());
+        LOGGER.warn("us_code: error closing XML stream: {}", e.getMessage());
       }
       ZipDownloadUtils.deleteDirectory(tempDir);
     }
 
     /** Parses forward to the end of the next top-level section; null when the stream ends. */
-    private Map<String, Object> advance() throws XMLStreamException, IOException {
+    private SectionData advance() throws XMLStreamException, IOException {
       while (reader.hasNext()) {
         int event = reader.next();
         if (event == XMLStreamConstants.START_ELEMENT) {
@@ -332,13 +618,18 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
         } else if (event == XMLStreamConstants.CHARACTERS) {
           onText(reader.getText());
         } else if (event == XMLStreamConstants.END_ELEMENT) {
-          Map<String, Object> row = onEnd();
-          if (row != null) {
-            return row;
+          SectionData section = onEnd();
+          if (section != null) {
+            return section;
           }
         }
       }
       return null;
+    }
+
+    /** Appends section text to the innermost open division. */
+    private void emit(String text) {
+      cur.run.append(text);
     }
 
     private void onStart() {
@@ -384,8 +675,10 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
           sectionNumber = null;
           sectionNumText.setLength(0);
           sectionHeading.setLength(0);
-          sectionBody.setLength(0);
           sourceCredit.setLength(0);
+          root = new Node(depth, null);
+          cur = root;
+          labelDepth = -1;
         }
         return;
       }
@@ -407,7 +700,14 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
         }
       }
       if (capture == Capture.NONE && BLOCK_ELEMENTS.contains(name)) {
-        sectionBody.append('\n');
+        emit("\n");
+      }
+      if (capture == Capture.NONE && uslm && STRUCT_ELEMENTS.contains(name)) {
+        Node child = new Node(depth, cur);
+        cur.addChild(child);
+        cur = child;
+      } else if (uslm && "num".equals(name) && cur != root && depth == cur.depth + 1) {
+        labelDepth = depth;
       }
     }
 
@@ -445,12 +745,15 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
         return;
       default:
         if (inSection) {
-          sectionBody.append(text);
+          emit(text);
+          if (labelDepth >= 0) {
+            cur.label.append(text);
+          }
         }
       }
     }
 
-    private Map<String, Object> onEnd() throws IOException {
+    private SectionData onEnd() throws IOException {
       try {
         if (skipUntilDepth != 0) {
           if (depth == skipUntilDepth) {
@@ -468,10 +771,16 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
         if (inSection) {
           if (depth == sectionDepth) {
             inSection = false;
-            return buildRow();
+            return buildSection();
           }
-          if (INLINE_LABEL_ELEMENTS.contains(name)) {
-            sectionBody.append(' ');
+          if (depth == labelDepth) {
+            labelDepth = -1;
+          }
+          if (cur != root && cur.depth == depth) {
+            cur.flushRun();
+            cur = cur.parent;
+          } else if (INLINE_LABEL_ELEMENTS.contains(name)) {
+            emit(" ");
           }
           return null;
         }
@@ -499,34 +808,26 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
         } else if ("no".equals(value)) {
           positiveLaw = Boolean.FALSE;
         } else {
-          throw new IOException("usc_sections: unexpected is-positive-law value '" + value + "'");
+          throw new IOException("us_code: unexpected is-positive-law value '" + value + "'");
         }
       }
       capture = Capture.NONE;
       captureFrame = null;
     }
 
-    private Map<String, Object> buildRow() throws IOException {
+    private SectionData buildSection() throws IOException {
       if (titleNumber == null || positiveLaw == null || titleName() == null) {
-        throw new IOException("usc_sections: section reached before title metadata "
+        throw new IOException("us_code: section reached before title metadata "
             + "(docNumber/is-positive-law/title heading) was read");
       }
       if (sectionNumber == null || sectionNumber.isEmpty()) {
-        throw new IOException("usc_sections: section without a num value in title " + titleNumber
+        throw new IOException("us_code: section without a num value in title " + titleNumber
             + " (identifier=" + sectionIdentifier + ")");
       }
 
       Integer seen = sectionSeq.get(sectionNumber);
       int seq = seen == null ? 1 : seen + 1;
       sectionSeq.put(sectionNumber, seq);
-
-      String heading = collapse(sectionHeading);
-      boolean appendix = Character.isLetter(titleNumber.charAt(titleNumber.length() - 1));
-      String citation = titleNumber.toUpperCase(Locale.US) + " U.S.C. "
-          + (appendix ? "App. " : "") + "§ " + sectionNumber;
-      String body = normalizeBody(sectionBody);
-
-      String headerLine = heading.isEmpty() ? citation : citation + " — " + heading;
 
       Frame chapter = null;
       StringBuilder hierarchy = new StringBuilder();
@@ -550,25 +851,23 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
         }
       }
 
-      Map<String, Object> row = new LinkedHashMap<String, Object>();
-      row.put("title_number", titleNumber);
-      row.put("title_name", titleName());
-      row.put("is_positive_law", positiveLaw);
-      row.put("release_point", releasePoint);
-      row.put("section_number", sectionNumber);
-      row.put("section_seq", seq);
-      row.put("usc_identifier", sectionIdentifier);
-      row.put("citation", citation);
-      row.put("heading", heading.isEmpty() ? null : heading);
-      row.put("status", sectionStatus);
-      row.put("hierarchy", hierarchy.length() == 0 ? null : hierarchy.toString());
-      row.put("chapter_number", chapter == null ? null : chapter.label());
-      row.put("chapter_heading", chapter == null ? null : emptyToNull(collapse(chapter.heading)));
-      // A section with no operative text (repealed/omitted/transferred) carries only its
-      // header line; leave the blob null so it is not chunked and embedded as a stub.
-      row.put("section_text", body.isEmpty() ? null : headerLine + "\n" + body);
-      row.put("source_credit", emptyToNull(collapse(sourceCredit)));
-      return row;
+      root.flushRun();
+      SectionData s = new SectionData();
+      s.titleNumber = titleNumber;
+      s.titleName = titleName();
+      s.positiveLaw = positiveLaw;
+      s.releasePoint = releasePoint;
+      s.sectionNumber = sectionNumber;
+      s.seq = seq;
+      s.identifier = sectionIdentifier;
+      s.status = sectionStatus;
+      s.heading = emptyToNull(collapse(sectionHeading));
+      s.hierarchy = hierarchy.length() == 0 ? null : hierarchy.toString();
+      s.chapterNumber = chapter == null ? null : chapter.label();
+      s.chapterHeading = chapter == null ? null : emptyToNull(collapse(chapter.heading));
+      s.sourceCredit = emptyToNull(collapse(sourceCredit));
+      s.root = root;
+      return s;
     }
 
     private String titleName() {

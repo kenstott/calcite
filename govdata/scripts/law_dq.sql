@@ -3795,6 +3795,103 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/scot
          OR len(document_labels) <> len(document_urls));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: usc_subsections
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true));
+
+-- T2: at least one unit per section that has text (a section that fits in 2,000 characters is one unit)
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T2_row_count',
+  CASE WHEN n >= sec THEN 'pass' ELSE 'fail' END,
+  n, sec, 'Units vs sections with section_text (units must be >= sections with text)'
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true)) AS n,
+             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_sections', allow_moved_paths := true) WHERE section_text IS NOT NULL) AS sec);
+
+-- T4: all_null_cols (unit_path is legitimately null for a section that is one unit)
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('title')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL title_number, section_number, section_seq, unit_seq, citation or unit_text rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true)
+      WHERE title_number IS NULL OR section_number IS NULL OR section_seq IS NULL
+         OR unit_seq IS NULL OR citation IS NULL OR unit_text IS NULL);
+
+-- T6: primary key uniqueness (title_number, section_number, section_seq, unit_seq)
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (title_number, section_number, section_seq, unit_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT title_number, section_number, section_seq, unit_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true)
+        GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1));
+
+-- T7: every unit belongs to a usc_sections row
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T7_parent_section_exists',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Units whose (title_number, section_number, section_seq) has no usc_sections row'
+FROM (SELECT COUNT(*) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true) u
+      LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_sections', allow_moved_paths := true) s
+        ON s.title_number = u.title_number AND s.section_number = u.section_number
+       AND s.section_seq = u.section_seq
+      WHERE s.title_number IS NULL);
+
+-- T7: lossless split. A section's units, joined with newlines, are its section_text minus the
+-- citation-and-heading first line. Checked as total characters (units plus one newline between
+-- consecutive units) so it is a cheap aggregate rather than a string comparison of 60,000 sections.
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T7_units_add_up_to_section_text',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Sections whose units do not add up to the length of section_text after its first line'
+FROM (
+  SELECT COUNT(*) AS bad FROM (
+    SELECT s.section_text, u.chars, u.n
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_sections', allow_moved_paths := true) s
+    JOIN (SELECT title_number, section_number, section_seq,
+                 SUM(LENGTH(unit_text)) AS chars, COUNT(*) AS n
+          FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true)
+          GROUP BY 1, 2, 3) u
+      ON s.title_number = u.title_number AND s.section_number = u.section_number
+     AND s.section_seq = u.section_seq
+    WHERE LENGTH(s.section_text) - LENGTH(SPLIT_PART(s.section_text, chr(10), 1)) - 1
+          <> u.chars + (u.n - 1)
+  )
+);
+
+-- T7: units stay within the 2,000-character limit except an unbroken run (one long paragraph or
+-- a table). Warn, not fail: that is the documented exception. Expect a few percent at most.
+INSERT INTO dq_results
+SELECT 'law', 'usc_subsections', 'T7_oversized_units',
+  CASE WHEN pct <= 5.0 THEN 'pass' ELSE 'warn' END,
+  pct, 5.0, 'Percent of units over 2000 characters (unbroken paragraphs and tables)'
+FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE LENGTH(unit_text) > 2000) / COUNT(*) AS pct
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

@@ -41,8 +41,9 @@
 # Features:
 #   - The U.S. Code and bill tables need no API key or rate limiting (bulk download); the
 #     lobbying tables need LDA_API_KEY
-#   - usc_sections.section_text is a text blob: chunked into ref.vectorized_chunks by
-#     ChunkOrganizer (DocumentBlobSource) and embedded by the routine vss-local sweep
+#   - usc_subsections.unit_text is a text blob: each section split at its own structural
+#     boundaries into units of at most 2,000 characters, chunked into ref.vectorized_chunks
+#     by ChunkOrganizer (DocumentBlobSource) and embedded by the routine vss-local sweep
 #   - Regulations (CFR) are a separate source and are not in this schema
 # ============================================================================
 
@@ -62,9 +63,10 @@ comment: >
   law itself (e.g. Titles 5, 18, 28) from titles that are only prima facie evidence of the
   law (e.g. Titles 26 and 42). Regulations (CFR) and private or temporary laws are not in this
   schema; the Federal Register lives in the fedregister schema. Tables: usc_sections
-  (section_text holds the operative text and is the field embedded for semantic search;
-  source_credit holds the enactment history citing each Public Law and Statutes at Large
-  page); and `bills` with its child tables, covering every bill and resolution introduced in
+  (section_text holds the operative text of each whole section for reading; source_credit holds
+  the enactment history citing each Public Law and Statutes at Large page); usc_subsections
+  (the same text cut at subsection, paragraph and clause boundaries into units of at most 2,000
+  characters, the field embedded for semantic search); and `bills` with its child tables, covering every bill and resolution introduced in
   Congress from the GovInfo Bill Status bulk data — status and sponsor in `bills`; action
   history, cosponsors, committee referrals and their activity, subject terms, published text,
   related bills, amendments and their actions and cosponsors, roll-call votes, titles, CRS
@@ -246,7 +248,7 @@ partitionedTables:
       Code, 42 = Public Health and Welfare, 15 = Commerce and Trade).
 
     dimensions:
-      title:
+      title: &usc_titles
         - "01"
         - "02"
         - "03"
@@ -359,7 +361,7 @@ partitionedTables:
       - name: section_text
         type: string
         nullable: true
-        comment: "Operative text of the section — its citation and heading on the first line, then every subsection, paragraph and clause on its own line, excluding statutory notes; null when nothing operative remains (repealed, omitted or transferred sections, and the few whose only content is a pointer in a note: the Title 18 \"(Rule)\" entries that refer to the Federal Rules of Criminal Procedure, and 19 U.S.C. 1202). Text blob embedded into ref.vectorized_chunks as source_type usc_section"
+        comment: "Operative text of the section — its citation and heading on the first line, then every subsection, paragraph and clause on its own line, excluding statutory notes; null when nothing operative remains (repealed, omitted or transferred sections, and the few whose only content is a pointer in a note: the Title 18 \"(Rule)\" entries that refer to the Federal Rules of Criminal Procedure, and 19 U.S.C. 1202). Kept whole for reading; the copy embedded for semantic search is usc_subsections.unit_text"
       - name: source_credit
         type: string
         nullable: true
@@ -386,6 +388,98 @@ partitionedTables:
         pattern: "title={title}/"
       # Nested under materialize: MaterializeConfig.fromMap reads the iceberg sub-map off the
       # materialize map only (see fr_documents in the fedregister schema).
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [title]
+        incrementalKeys: [title]
+        overwritePartitions: true   # snapshot: replace the title=<key> partition each run (idempotent)
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # USC_SUBSECTIONS — each section cut at its own structural boundaries
+  # ---------------------------------------------------------------------------
+  # The same OLRC XML as usc_sections, read a second time by UsCodeSubsectionsDataProvider (the
+  # per-title zip is cached, so it is not downloaded twice). A section that fits in 2,000
+  # characters is one row. A longer one is cut only at subsection, paragraph, subparagraph and
+  # clause boundaries, descending a level only where a piece is still too big, and adjacent
+  # small pieces are packed together up to the same limit so tiny definitions do not become
+  # tiny rows. 2,000 is under the semantic chunker's 2,200-character maximum, so every row is
+  # embedded as exactly one chunk and no paragraph or clause is ever cut in half. A single
+  # unbroken run longer than the limit (one long paragraph, or a table) stays one row and is
+  # split by the chunker as before. This is the table registered for embedding; usc_sections
+  # keeps the whole section for reading. Joining a section's units with newlines reproduces its
+  # section_text exactly, minus the citation-and-heading first line.
+  - name: usc_subsections
+    pattern: "title=*/*.parquet"
+    dataset_type: snapshot
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: title
+          type: VARCHAR
+    comment: >
+      One row per unit of a U.S. Code section: the section's operative text cut at its own
+      subsection, paragraph and clause boundaries into pieces of at most 2,000 characters, in
+      document order. Join to usc_sections on (title_number, section_number, section_seq) for
+      the section's heading, hierarchy, status and enactment history. Sections with no operative
+      text (repealed, omitted, transferred, or pointer-only) have no rows here. unit_path says
+      which divisions a row covers, so a hit can be cited to the subsection, for example
+      5 U.S.C. 552(a)(1) to (a)(2).
+
+    dimensions:
+      title: *usc_titles
+
+    columns:
+      - name: title_number
+        type: string
+        nullable: false
+        comment: "U.S. Code title number as OLRC publishes it (for example 5, 26, 42; 5a for the Title 5 Appendix); with section_number and section_seq it identifies the parent usc_sections row"
+      - name: section_number
+        type: string
+        nullable: false
+        comment: "Section number as printed, including letter suffixes (for example 101, 1395w-4)"
+      - name: section_seq
+        type: integer
+        nullable: false
+        comment: "1 for the first occurrence of section_number within the title, 2 for a second section the Code numbers identically"
+      - name: unit_seq
+        type: integer
+        nullable: false
+        comment: "1-based order of this unit within its section; with the three columns above it is the primary key"
+      - name: unit_path
+        type: string
+        nullable: true
+        comment: "The divisions this unit covers, from the section down: (a)(1) for one division, (a) to (a)(2) for a run of adjacent ones, lead-in to (a) when the run starts with the section's own opening text; null when the whole section is one unit"
+      - name: citation
+        type: string
+        nullable: false
+        comment: "Citation of the unit, for example 5 U.S.C. § 552(a)(1) or 5 U.S.C. § 552(a) to (b); appendix sections are cited 5A U.S.C. App. § 1"
+      - name: unit_text
+        type: string
+        nullable: false
+        comment: "The unit's text, one division per line, excluding statutory notes; at most 2,000 characters unless a single unbroken run (one long paragraph, or a table) is longer. Text blob embedded into ref.vectorized_chunks as source_type usc_subsection"
+
+    # Same anchor page as usc_sections; UsCodeSubsectionsDataProvider reads the current release point
+    # off it and streams the same per-title XML.
+    source:
+      type: http
+      url: "https://uscode.house.gov/download/download.shtml"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.UsCodeSubsectionsDataProvider"
+
+    materialize:
+      format: iceberg
+      partition:
+        columns: [title]
+      output:
+        pattern: "title={title}/"
       iceberg:
         <<: *compaction_defaults
         catalogType: hadoop
@@ -782,6 +876,11 @@ partitionedTables:
         type: string
         nullable: false
         comment: Congress.gov committee code, e.g. hsju00 (House Judiciary)
+      - name: committee_id
+        type: string
+        nullable: false
+        expression: "upper(CASE WHEN substr(src.\"committee_system_code\", 5, 2) = '00' THEN substr(src.\"committee_system_code\", 1, 4) ELSE src.\"committee_system_code\" END)"
+        comment: "committee_system_code in the form officials.committees uses: upper case, with the 00 that marks a full committee removed (hsju00 becomes HSJU, hsif14 becomes HSIF14). Joins to officials.committees.committee_id"
       - name: committee_name
         type: string
         nullable: true
@@ -798,6 +897,11 @@ partitionedTables:
         type: string
         nullable: true
         comment: Full committee code when this row is a subcommittee; NULL on full-committee rows
+      - name: parent_committee_id
+        type: string
+        nullable: true
+        expression: "upper(CASE WHEN substr(src.\"parent_committee_system_code\", 5, 2) = '00' THEN substr(src.\"parent_committee_system_code\", 1, 4) ELSE src.\"parent_committee_system_code\" END)"
+        comment: "parent_committee_system_code in the form officials.committees uses: upper case, with the 00 that marks a full committee removed (hsju00 becomes HSJU, hsif14 becomes HSIF14). Joins to officials.committees.committee_id; NULL on full-committee rows"
 
     source:
       type: http
@@ -860,6 +964,11 @@ partitionedTables:
         type: string
         nullable: false
         comment: Committee or subcommittee code; joins to bill_committees
+      - name: committee_id
+        type: string
+        nullable: false
+        expression: "upper(CASE WHEN substr(src.\"committee_system_code\", 5, 2) = '00' THEN substr(src.\"committee_system_code\", 1, 4) ELSE src.\"committee_system_code\" END)"
+        comment: "committee_system_code in the form officials.committees uses: upper case, with the 00 that marks a full committee removed (hsju00 becomes HSJU, hsif14 becomes HSIF14). Joins to officials.committees.committee_id"
       - name: activity_name
         type: string
         nullable: true
@@ -1519,6 +1628,11 @@ partitionedTables:
         type: string
         nullable: false
         comment: Congress.gov committee code, e.g. ssfi00
+      - name: committee_id
+        type: string
+        nullable: false
+        expression: "upper(CASE WHEN substr(src.\"committee_system_code\", 5, 2) = '00' THEN substr(src.\"committee_system_code\", 1, 4) ELSE src.\"committee_system_code\" END)"
+        comment: "committee_system_code in the form officials.committees uses: upper case, with the 00 that marks a full committee removed (hsju00 becomes HSJU, hsif14 becomes HSIF14). Joins to officials.committees.committee_id"
       - name: committee_name
         type: string
         nullable: true
@@ -4714,3 +4828,466 @@ views:
         CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR),
         s.holding_summary, s.author_initials, s.pdf_url, s.opinion_text
       FROM scotus_slip_opinions s
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# Primary keys are declared only where the key was verified unique (and non-null) on the DQ load;
+# a table with no primaryKey has no natural key that held up. Foreign keys were checked for orphans
+# against the DQ load (and against the production officials and geo tables for cross-schema targets).
+# Cross-schema targets use the ${..._SCHEMA_NAME:default} form so a renamed schema still resolves.
+
+constraints:
+
+  usc_sections:
+    primaryKey: [title_number, section_number, section_seq]
+
+  usc_subsections:
+    primaryKey: [title_number, section_number, section_seq, unit_seq]
+    foreignKeys:
+      - columns: [title_number, section_number, section_seq]
+        targetTable: usc_sections
+        targetColumns: [title_number, section_number, section_seq]
+        comment: "Every unit belongs to exactly one section"
+
+  bills:
+    primaryKey: [congress, bill_type, bill_number]
+    foreignKeys:
+      - columns: [sponsor_bioguide_id, congress]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: members
+        targetColumns: [bioguide_id, congress]
+        comment: "Non-enforcing: a member of that Congress. Delegates and resident commissioners are members too."
+      - columns: [on_behalf_of_bioguide_id, congress]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: members
+        targetColumns: [bioguide_id, congress]
+        comment: "Non-enforcing: a member of that Congress. Delegates and resident commissioners are members too."
+      - columns: [sponsor_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+
+  bill_actions:
+    primaryKey: [congress, bill_type, bill_number, action_seq]
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_cosponsors:
+    # No primaryKey declared: 2 rows in the DQ sample repeat (congress, bill_type, bill_number,
+    # bioguide_id).
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+      - columns: [bioguide_id, congress]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: members
+        targetColumns: [bioguide_id, congress]
+        comment: "Non-enforcing: a member of that Congress. Delegates and resident commissioners are members too."
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+
+  bill_committees:
+    primaryKey: [congress, bill_type, bill_number, committee_system_code]
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+      - columns: [committee_id]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: committees
+        targetColumns: [committee_id]
+        comment: "Committee or subcommittee, via the normalized committee_id"
+      - columns: [parent_committee_id]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: committees
+        targetColumns: [committee_id]
+        comment: "Committee or subcommittee, via the normalized committee_id"
+
+  bill_committee_activities:
+    # No primaryKey declared: (bill, committee, activity_name, activity_date) repeats and
+    # activity_date is sometimes null.
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number, committee_system_code]
+        targetTable: bill_committees
+        targetColumns: [congress, bill_type, bill_number, committee_system_code]
+      - columns: [committee_id]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: committees
+        targetColumns: [committee_id]
+        comment: "Committee or subcommittee, via the normalized committee_id"
+
+  bill_subjects:
+    primaryKey: [congress, bill_type, bill_number, subject_name]
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_text_versions:
+    # No primaryKey declared: version_type and format_type are usually null, so no natural key exists.
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_related_bills:
+    # No primaryKey declared: 98 rows in the DQ sample repeat the (bill, related bill,
+    # relationship_type) key.
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+      - columns: [related_congress, related_bill_type, related_bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+        comment: "Non-enforcing: a related bill can belong to a Congress outside the loaded range (2.7% of the DQ sample)."
+
+  bill_amendments:
+    primaryKey: [congress, amendment_type, amendment_number]
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+      - columns: [sponsor_bioguide_id, congress]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: members
+        targetColumns: [bioguide_id, congress]
+        comment: "Non-enforcing: a member of that Congress. Delegates and resident commissioners are members too."
+      - columns: [sponsor_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+
+  bill_amendment_actions:
+    # No primaryKey declared: an amendment action has no sequence number.
+    foreignKeys:
+      - columns: [congress, amendment_type, amendment_number]
+        targetTable: bill_amendments
+        targetColumns: [congress, amendment_type, amendment_number]
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_amendment_cosponsors:
+    primaryKey: [congress, amendment_type, amendment_number, bioguide_id]
+    foreignKeys:
+      - columns: [congress, amendment_type, amendment_number]
+        targetTable: bill_amendments
+        targetColumns: [congress, amendment_type, amendment_number]
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+      - columns: [bioguide_id, congress]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: members
+        targetColumns: [bioguide_id, congress]
+        comment: "Non-enforcing: a member of that Congress. Delegates and resident commissioners are members too."
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+
+  bill_action_committees:
+    primaryKey: [congress, bill_type, bill_number, action_seq, committee_system_code]
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number, action_seq]
+        targetTable: bill_actions
+        targetColumns: [congress, bill_type, bill_number, action_seq]
+        comment: "Implies the bill itself: its key starts with the bill key"
+      - columns: [committee_id]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: committees
+        targetColumns: [committee_id]
+        comment: "Committee or subcommittee, via the normalized committee_id"
+
+  bill_recorded_votes:
+    # No primaryKey declared: 1,752 rows in the DQ sample repeat the roll-call key (one roll call can
+    # record several actions).
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+      - columns: [congress, amendment_type, amendment_number]
+        targetTable: bill_amendments
+        targetColumns: [congress, amendment_type, amendment_number]
+        comment: "Set only on votes taken on an amendment; NULL on votes on the bill itself"
+
+  bill_titles:
+    # No primaryKey declared: the natural key includes nullable columns and still repeats.
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_summaries:
+    primaryKey: [congress, bill_type, bill_number, version_code]
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_cbo_cost_estimates:
+    # No primaryKey declared: (bill, pub_date) repeats and a title-bearing key would put free text in
+    # the key.
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_committee_reports:
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  bill_notes:
+    foreignKeys:
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+
+  lobbying_filings:
+    # registrant_country and registrant_ppb_country hold country NAMES ("United States of America"),
+    # while client_country holds ISO alpha-2 codes, so they cannot be declared as foreign keys to
+    # ref.countries. client_state is left out too: clients can be foreign, so it carries Canadian
+    # province codes (ON, BC) that state_ref does not hold.
+    primaryKey: [filing_uuid]
+    foreignKeys:
+      - columns: [filing_type]
+        targetTable: lobbying_filing_types
+        targetColumns: [filing_type]
+      - columns: [registrant_id]
+        targetTable: lobbying_registrants
+        targetColumns: [registrant_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+      - columns: [client_id]
+        targetTable: lobbying_clients
+        targetColumns: [client_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+      - columns: [registrant_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+      - columns: [client_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+      - columns: [client_ppb_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+
+  lobbying_activities:
+    primaryKey: [filing_uuid, activity_seq]
+    foreignKeys:
+      - columns: [filing_uuid]
+        targetTable: lobbying_filings
+        targetColumns: [filing_uuid]
+      - columns: [general_issue_code]
+        targetTable: lobbying_issue_codes
+        targetColumns: [issue_code]
+
+  lobbying_activity_lobbyists:
+    primaryKey: [filing_uuid, activity_seq, lobbyist_id]
+    foreignKeys:
+      - columns: [filing_uuid, activity_seq]
+        targetTable: lobbying_activities
+        targetColumns: [filing_uuid, activity_seq]
+      - columns: [lobbyist_id]
+        targetTable: lobbyists
+        targetColumns: [lobbyist_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+
+  lobbying_activity_government_entities:
+    primaryKey: [filing_uuid, activity_seq, government_entity_id]
+    foreignKeys:
+      - columns: [filing_uuid, activity_seq]
+        targetTable: lobbying_activities
+        targetColumns: [filing_uuid, activity_seq]
+      - columns: [government_entity_id]
+        targetTable: lobbying_government_entity_codes
+        targetColumns: [government_entity_id]
+
+  lobbying_foreign_entities:
+    primaryKey: [filing_uuid, entity_seq]
+    foreignKeys:
+      - columns: [filing_uuid]
+        targetTable: lobbying_filings
+        targetColumns: [filing_uuid]
+      - columns: [country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "Non-enforcing: ISO 3166-1 alpha-2. ref.countries has no row for Jersey (JE), so a few rows do not resolve."
+      - columns: [ppb_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "Non-enforcing: ISO 3166-1 alpha-2. ref.countries has no row for Jersey (JE), so a few rows do not resolve."
+
+  lobbying_affiliated_organizations:
+    primaryKey: [filing_uuid, organization_seq]
+    foreignKeys:
+      - columns: [filing_uuid]
+        targetTable: lobbying_filings
+        targetColumns: [filing_uuid]
+      - columns: [country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+      - columns: [ppb_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+
+  lobbying_conviction_disclosures:
+    primaryKey: [filing_uuid, disclosure_seq]
+    foreignKeys:
+      - columns: [filing_uuid]
+        targetTable: lobbying_filings
+        targetColumns: [filing_uuid]
+      - columns: [lobbyist_id]
+        targetTable: lobbyists
+        targetColumns: [lobbyist_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+
+  lobbying_contribution_reports:
+    # A contribution report (LD-203) has its own filing_uuid; it is not a row of lobbying_filings, so
+    # there is no foreign key to it. filer_state is left out: filers can be foreign (Canadian province
+    # codes).
+    primaryKey: [filing_uuid]
+    foreignKeys:
+      - columns: [registrant_id]
+        targetTable: lobbying_registrants
+        targetColumns: [registrant_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+      - columns: [lobbyist_id]
+        targetTable: lobbyists
+        targetColumns: [lobbyist_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+      - columns: [filer_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "Non-enforcing: ISO 3166-1 alpha-2. ref.countries has no row for Jersey (JE), so a few rows do not resolve."
+
+  lobbying_contribution_items:
+    primaryKey: [filing_uuid, item_seq]
+    foreignKeys:
+      - columns: [filing_uuid]
+        targetTable: lobbying_contribution_reports
+        targetColumns: [filing_uuid]
+      - columns: [contribution_type]
+        targetTable: lobbying_contribution_item_types
+        targetColumns: [contribution_type]
+
+  lobbying_contribution_pacs:
+    primaryKey: [filing_uuid, pac_seq]
+    foreignKeys:
+      - columns: [filing_uuid]
+        targetTable: lobbying_contribution_reports
+        targetColumns: [filing_uuid]
+
+  lobbyists:
+    primaryKey: [lobbyist_id]
+    foreignKeys:
+      - columns: [registrant_id]
+        targetTable: lobbying_registrants
+        targetColumns: [registrant_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+      - columns: [registrant_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+      - columns: [registrant_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+
+  lobbying_registrants:
+    primaryKey: [registrant_id]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+      - columns: [country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+      - columns: [ppb_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+
+  lobbying_clients:
+    # state and ppb_state are left out: clients can be foreign, so they carry Canadian province codes
+    # (ON, BC) that state_ref does not hold.
+    primaryKey: [client_id]
+    foreignKeys:
+      - columns: [registrant_id]
+        targetTable: lobbying_registrants
+        targetColumns: [registrant_id]
+        comment: "Non-enforcing: LDA id. The DQ reference snapshot holds only 250 rows, so this could not be verified against a full load."
+      - columns: [country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+      - columns: [ppb_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: "ISO 3166-1 alpha-2"
+
+  lobbying_issue_codes:
+    primaryKey: [issue_code]
+
+  lobbying_government_entity_codes:
+    primaryKey: [government_entity_id]
+
+  lobbying_filing_types:
+    primaryKey: [filing_type]
+
+  lobbying_contribution_item_types:
+    primaryKey: [contribution_type]
+
+  scotus_dockets:
+    primaryKey: [docket_number]
+
+  scotus_docket_entries:
+    primaryKey: [docket_number, sequence]
+    foreignKeys:
+      - columns: [docket_number]
+        targetTable: scotus_dockets
+        targetColumns: [docket_number]
+
+  scotus_slip_opinions:
+    # No foreign key to scotus_dockets: listing_docket is a display string ("141, Orig.", "21-588
+    # (21A85)"), and the docket numbers an opinion decides are in the docket_numbers array (one
+    # opinion can decide several consolidated dockets), so the link is many-to-many, not a foreign
+    # key.
+    primaryKey: [decision_date, listing_docket]
+
+  scotus_reports_cases:
+    primaryKey: [volume, first_page]
