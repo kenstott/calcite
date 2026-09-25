@@ -24,6 +24,8 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLConnection;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The {@link RawCache} a pipeline hands to a {@link DataProvider}, backed by the same storage and
@@ -42,6 +44,14 @@ final class StorageRawCache implements RawCache {
   private final StorageProvider storageProvider;
   private final String cacheDir;
   private final boolean enabled;
+
+  /**
+   * Entries a bypassing handle downloaded and committed in this JVM. A bypassing run must not
+   * replay an entry left by an earlier run, but an entry it wrote moments ago is exactly what a
+   * provider's second read within the same batch relies on being free (hash freshness reads a
+   * source twice, each time through a new handle).
+   */
+  private static final Set<String> WRITTEN_THIS_RUN = ConcurrentHashMap.newKeySet();
 
   /**
    * @param storageProvider storage holding the raw cache, or null when unavailable
@@ -140,7 +150,7 @@ final class StorageRawCache implements RawCache {
       return onMiss.open();
     }
     String entry = entryFor(key);
-    if (enabled && exists(entry)) {
+    if ((enabled || WRITTEN_THIS_RUN.contains(entry)) && exists(entry)) {
       LOGGER.debug("Provider raw cache hit: {}", entry);
       return storageProvider.openInputStream(entry);
     }
@@ -160,6 +170,9 @@ final class StorageRawCache implements RawCache {
       storageProvider.createDirectories(cacheDir);
       try (InputStream in = new FileInputStream(temp)) {
         storageProvider.writeFile(entry, in);
+      }
+      if (!enabled) {
+        WRITTEN_THIS_RUN.add(entry);
       }
       LOGGER.info("Provider cached response to raw: {} ({} bytes)", entry, temp.length());
       return storageProvider.openInputStream(entry);

@@ -165,6 +165,30 @@ public class StorageRawCacheTest {
         "a bypassing run must see the current bytes, not the cached ones");
   }
 
+  /**
+   * A bypassing run re-downloads once, but a provider that reads the same source twice in one
+   * batch through separate handles must find its own fresh entry on the second read rather than
+   * downloading (and overwriting the entry with) a second copy.
+   */
+  @Test void bypassServesItsOwnFreshEntryOnASecondRead(@TempDir Path tmp) throws Exception {
+    File origin = tmp.resolve("origin.zip").toFile();
+    Files.write(origin.toPath(), "stale".getBytes(StandardCharsets.UTF_8));
+    StorageProvider sp = new LocalFileStorageProvider();
+    String base = tmp.resolve("raw").toString() + "/shapes";
+    String url = origin.toURI().toString();
+
+    drain(StorageRawCache.forBatch(config(true), batch("2031"), sp, base, false).openStream(url));
+    Files.write(origin.toPath(), "current".getBytes(StandardCharsets.UTF_8));
+
+    drain(StorageRawCache.forBatch(config(true), batch("2031"), sp, base, true).openStream(url));
+    assertTrue(origin.delete(), "origin removed so a second download cannot succeed");
+
+    byte[] second = drain(
+        StorageRawCache.forBatch(config(true), batch("2031"), sp, base, true).openStream(url));
+    assertEquals("current", new String(second, StandardCharsets.UTF_8),
+        "the second bypassing read must be served from the entry the first one just wrote");
+  }
+
   /** rawCache.enabled: false must not start caching just because a provider asked for a handle. */
   @Test void aTableWithCachingOffDoesNotSuddenlyCache(@TempDir Path tmp) throws Exception {
     File origin = tmp.resolve("origin.zip").toFile();
