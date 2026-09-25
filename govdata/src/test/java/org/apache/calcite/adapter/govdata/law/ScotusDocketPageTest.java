@@ -177,6 +177,16 @@ class ScotusDocketPageTest {
         {"Motion of petitioners to expedite consideration of the petition for a writ of "
             + "certiorari before judgment DENIED.", null},
         {"Reply in support of motion to dismiss the writ as improvidently granted filed.", null},
+        {"Motion to proceed in forma pauperis GRANTED. Petition for a writ of certiorari GRANTED "
+            + "limited to Question 1 presented by the petition.", "2024-05-01"},
+        {"Motion to proceed in forma pauperis granted. The petition for a writ of certiorari is "
+            + "GRANTED limited to Question 1 presented by the petition.", "2024-05-01"},
+        {"Motion to proceed in forma pauperis GRANTED, and petition for a writ of certiorari "
+            + "GRANTED limited to the following question: Whether", "2024-05-01"},
+        {"Motion to expedite consideration of the petition for a writ of certiorari before "
+            + "judgment GRANTED.", null},
+        {"Consideration of the application for stay presented to Justice Sotomayor is deferred.",
+            null},
     };
     for (String[] c : cases) {
       Docket d = ScotusDocketPage.parse(page(FULL_HEADER, entry("May 01 2024", c[0], "")), BASE);

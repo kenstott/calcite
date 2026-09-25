@@ -4352,7 +4352,8 @@ partitionedTables:
       always opinion_text; it uses the vocabulary of scotus_reports_cases (Affirmed (includes
       modified), Reversed, Reversed and remanded, Vacated and remanded, Affirmed and reversed
       (or vacated) in part [and remanded], Dismissed as improvidently granted) and can also be
-      Reversed in part and remanded or Reversed in part, vacated in part, and remanded where the
+      Reversed in part and remanded, Reversed in part, vacated in part, and remanded, Vacated in part
+      and remanded or Reversed in part and remanded in part where the
       Court affirmed no part, or Application granted / Application denied for an order on an
       emergency application (a docket such as 24A884). It is null for an original-jurisdiction
       decree. `us_citation` is null while the listing shows only a volume and print part
@@ -4409,7 +4410,7 @@ partitionedTables:
       - name: disposition
         type: string
         nullable: true
-        comment: What the Court did with the judgment below, derived from the opinion's syllabus, in the vocabulary of scotus_reports_cases plus Reversed in part and remanded, Reversed in part vacated in part and remanded, Application granted and Application denied; null for an original-jurisdiction decree and where no syllabus disposition line is found
+        comment: What the Court did with the judgment below, derived from the opinion's syllabus, in the vocabulary of scotus_reports_cases plus Reversed in part and remanded, Reversed in part vacated in part and remanded, Vacated in part and remanded, Reversed in part and remanded in part, Application granted and Application denied; null for an original-jurisdiction decree and where no syllabus disposition line is found
       - name: disposition_source
         type: string
         nullable: true

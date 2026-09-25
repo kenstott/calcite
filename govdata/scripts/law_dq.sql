@@ -2159,6 +2159,7 @@ FROM (
             'Vacated', 'Vacated and remanded', 'Affirmed and reversed (or vacated) in part',
             'Affirmed and reversed (or vacated) in part and remanded',
             'Reversed in part and remanded', 'Reversed in part, vacated in part, and remanded',
+            'Vacated in part and remanded', 'Reversed in part and remanded in part',
             'Dismissed as improvidently granted', 'Application granted', 'Application denied',
             'Application granted in part', 'Application denied in part')
   )
@@ -3703,13 +3704,14 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/scot
          OR (judgment_issued_date IS NOT NULL AND argued_date IS NOT NULL
              AND judgment_issued_date < argued_date));
 
--- T7: an argued case was first granted
+-- T7: an argued case was first granted. An application (24A910) argued directly has no petition
+-- to grant, and a few stays are treated as petitions without a "Petition GRANTED" entry.
 INSERT INTO dq_results
 SELECT 'law', 'scotus_dockets', 'T7_argued_implies_granted',
   CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
-  'Dockets with an argued_date but no granted_date'
+  'Argued petition dockets (not applications) with an argued_date but no granted_date'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/scotus_dockets', allow_moved_paths := true)
-      WHERE argued_date IS NOT NULL AND granted_date IS NULL);
+      WHERE argued_date IS NOT NULL AND granted_date IS NULL AND docket_number NOT LIKE '%A%');
 
 -- T7: every docket is a decided case in scotus_slip_opinions (listing_docket)
 INSERT INTO dq_results

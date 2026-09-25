@@ -54,14 +54,17 @@ final class ScotusDocketPage {
   private static final Pattern CASE_NUMBERS_PARENS = Pattern.compile("^\\((.*)\\)$");
 
   /**
-   * The order granting the petition: "Petition GRANTED.", "Petition for a writ of certiorari
-   * before judgment GRANTED." or, for an indigent petitioner, "Motion to proceed in forma
-   * pauperis and petition for a writ of certiorari GRANTED." A motion that is merely granted
-   * (an extension, divided argument) is not it.
+   * The order granting the petition, as a sentence or clause that begins with the petition:
+   * "Petition GRANTED.", "Petition for a writ of certiorari before judgment GRANTED.", "Motion
+   * to proceed in forma pauperis GRANTED. Petition for a writ of certiorari GRANTED limited to
+   * Question 1.", "Motion to proceed in forma pauperis and petition for a writ of certiorari GRANTED." or "The petition for a writ of certiorari is GRANTED ...". A motion that is
+   * merely granted (an extension, divided argument, "Motion to expedite consideration of the
+   * petition ... GRANTED") is not it, because there the petition is not the subject of the
+   * clause.
    */
   private static final Pattern PETITION_GRANTED = Pattern.compile(
-      "^(?:Motion (?:for leave )?to proceed in forma pauperis and )?[Pp]etition"
-          + "(?: for (?:a )?writ of certiorari(?: before judgment)?)? GRANTED\\b.*");
+      "(?:^|\\.\\s+|,\\s+(?:and\\s+)?|in forma pauperis and\\s+)(?:[Tt]he )?[Pp]etition"
+          + "(?: for (?:a )?writ of certiorari(?: before judgment)?)?(?: is)? GRANTED\\b.*");
 
   private static final Pattern ARGUED = Pattern.compile("^Argued\\..*");
 
@@ -149,7 +152,7 @@ final class ScotusDocketPage {
 
     private String firstDate(Pattern text) {
       for (Entry e : entries) {
-        if (text.matcher(e.text).matches()) {
+        if (text.matcher(e.text).find()) {
           return e.date;
         }
       }
