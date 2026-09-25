@@ -229,7 +229,7 @@ partitionedTables:
       distinctYears: 28
       contiguous: true
       rowCount: 241232
-      checkedAt: "2026-09-16T22:03:41Z"
+      checkedAt: "2026-09-25T02:01:39Z"
     partitions: *standard_partitions
     comment: >
       USDA Forest Service timber harvest activities from FACTS EDW. One row per
@@ -1600,7 +1600,7 @@ partitionedTables:
       distinctYears: 27
       contiguous: true
       rowCount: 119443
-      checkedAt: "2026-09-16T22:03:43Z"
+      checkedAt: "2026-09-25T02:01:39Z"
     partitions: *standard_partitions
     comment: >
       National Park Service monthly visitation statistics from the IRMA Statistics
@@ -1994,7 +1994,7 @@ partitionedTables:
       distinctYears: 28
       contiguous: true
       rowCount: 63217
-      checkedAt: "2026-09-16T22:03:43Z"
+      checkedAt: "2026-09-25T02:01:40Z"
     partitions: *state_partitions
     comment: >
       DOI Payments in Lieu of Taxes (PILT) — federal payments to local governments for
