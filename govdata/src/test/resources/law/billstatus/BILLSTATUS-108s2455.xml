@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>2455</number>
+    <updateDate>2023-01-15T04:49:06Z</updateDate>
+    <updateDateIncludingText>2023-01-15T04:49:06Z</updateDateIncludingText>
+    <originChamber>Senate</originChamber>
+    <originChamberCode>S</originChamberCode>
+    <type>S</type>
+    <introducedDate>2004-05-20</introducedDate>
+    <congress>108</congress>
+    <committees>
+      <item>
+        <systemCode>ssfi00</systemCode>
+        <name>Finance Committee</name>
+        <chamber>Senate</chamber>
+        <type>Standing</type>
+        <activities>
+          <item>
+            <name>Referred to</name>
+            <date>2004-05-20T18:48:43Z</date>
+          </item>
+        </activities>
+      </item>
+    </committees>
+    <relatedBills>
+      <item>
+        <title>Public Servant Retirement Protection Act</title>
+        <congress>108</congress>
+        <number>4391</number>
+        <type>HR</type>
+        <latestAction>
+          <actionDate>2004-07-20</actionDate>
+          <text>Subcommittee Hearings Held.</text>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Identical bill</type>
+            <identifiedBy>CRS</identifiedBy>
+          </item>
+          <item>
+            <type>Companion bill</type>
+            <identifiedBy>Senate</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+    </relatedBills>
+    <actions>
+      <item>
+        <actionDate>2004-05-20</actionDate>
+        <committees>
+          <item>
+            <systemCode>ssfi00</systemCode>
+            <name>Finance Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Read twice and referred to the Committee on Finance. (text of measure as introduced: CR S5954-5955)</text>
+        <type>IntroReferral</type>
+      </item>
+      <item>
+        <actionDate>2004-05-20</actionDate>
+        <text>Introduced in Senate</text>
+        <type>IntroReferral</type>
+        <actionCode>10000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>H001016</bioguideId>
+        <fullName>Sen. Hutchison, Kay Bailey [R-TX]</fullName>
+        <firstName>KAY</firstName>
+        <lastName>HUTCHISON</lastName>
+        <party>R</party>
+        <state>TX</state>
+        <middleName>BAILEY</middleName>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <policyArea>
+      <name>Social Welfare</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects>
+        <item>
+          <name>Civil service retirement</name>
+        </item>
+        <item>
+          <name>Government Operations and Politics</name>
+        </item>
+        <item>
+          <name>Labor and Employment</name>
+        </item>
+        <item>
+          <name>Old age, survivors and disability insurance</name>
+        </item>
+      </legislativeSubjects>
+      <policyArea>
+        <name>Social Welfare</name>
+      </policyArea>
+    </subjects>
+    <summaries>
+      <summary>
+        <versionCode>00</versionCode>
+        <actionDate>2004-05-20</actionDate>
+        <actionDesc>Introduced in Senate</actionDesc>
+        <updateDate>2004-07-09T15:48:20Z</updateDate>
+        <text><![CDATA[ <p>Public Servant Retirement Protection Act - Amends title II (Old Age, Survivors and Disability Insurance) of the Social Security Act (SSA) to repeal the current windfall elimination provisions (which reduce Social Security benefits of retirees who paid into the Social Security system for part of their careers and who also receive a government pension from work in the public sector not covered by Social Security) and to replace them with a formula that treats non-Social Security earnings as if they were Social Security earnings for the purpose of calculating lifetime earnings for certain individuals.</p>]]></text>
+      </summary>
+    </summaries>
+    <title>Public Servant Retirement Protection Act</title>
+    <titles>
+      <item>
+        <titleType>Display Title</titleType>
+        <title>Public Servant Retirement Protection Act</title>
+      </item>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <title>A bill to amend title II of the Social Security Act to repeal the windfall elimination provision and protect the retirement of public servants.</title>
+        <billTextVersionName>Introduced in Senate</billTextVersionName>
+        <billTextVersionCode>IS</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Short Titles as Introduced</titleType>
+        <title>Public Servant Retirement Protection Act</title>
+      </item>
+    </titles>
+    <textVersions>
+      <item>
+        <type>Introduced in Senate</type>
+        <date>2004-05-20T04:00:00Z</date>
+        <formats/>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2004-05-20</actionDate>
+      <text>Read twice and referred to the Committee on Finance. (text of measure as introduced: CR S5954-5955)</text>
+    </latestAction>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>

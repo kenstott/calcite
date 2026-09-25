@@ -1,0 +1,648 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>1199</number>
+    <updateDate>2026-09-19T23:30:58Z</updateDate>
+    <updateDateIncludingText>2026-09-19T23:30:58Z</updateDateIncludingText>
+    <originChamber>Senate</originChamber>
+    <originChamberCode>S</originChamberCode>
+    <type>S</type>
+    <introducedDate>2025-03-27</introducedDate>
+    <congress>119</congress>
+    <legislationUrl>https://www.congress.gov/bill/119th-congress/senate-bill/1199</legislationUrl>
+    <committees>
+      <item>
+        <systemCode>sssb00</systemCode>
+        <name>Small Business and Entrepreneurship Committee</name>
+        <chamber>Senate</chamber>
+        <type>Standing</type>
+        <activities>
+          <item>
+            <name>Hearings By (full committee)</name>
+            <date>2026-03-18T18:30:04Z</date>
+          </item>
+          <item>
+            <name>Hearings By (full committee)</name>
+            <date>2026-02-25T19:30:00Z</date>
+          </item>
+          <item>
+            <name>Hearings By (full committee)</name>
+            <date>2025-12-10T19:30:00Z</date>
+          </item>
+          <item>
+            <name>Reported By</name>
+            <date>2025-07-30T15:48:05Z</date>
+          </item>
+          <item>
+            <name>Markup By</name>
+            <date>2025-07-16T18:40:52Z</date>
+          </item>
+          <item>
+            <name>Referred To</name>
+            <date>2025-03-27T20:06:56Z</date>
+          </item>
+        </activities>
+      </item>
+    </committees>
+    <relatedBills>
+      <item>
+        <title>SBA Fraud Enforcement Extension Act</title>
+        <congress>119</congress>
+        <number>4495</number>
+        <type>HR</type>
+        <latestAction>
+          <actionDate>2025-12-02</actionDate>
+          <text>Received in the Senate. Read twice. Placed on Senate Legislative Calendar under General Orders. Calendar No. 281.</text>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Related bill</type>
+            <identifiedBy>CRS</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+    </relatedBills>
+    <actions>
+      <item>
+        <actionDate>2026-05-04</actionDate>
+        <actionTime>10:33:00</actionTime>
+        <text>Held at the desk.</text>
+        <type>Floor</type>
+        <actionCode>H15000</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2026-05-04</actionDate>
+        <actionTime>10:32:41</actionTime>
+        <text>Received in the House.</text>
+        <type>Floor</type>
+        <actionCode>H14000</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2026-05-01</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Message on Senate action sent to the House.</text>
+        <type>Floor</type>
+      </item>
+      <item>
+        <actionDate>2026-04-29</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Passed Senate with an amendment by Unanimous Consent. (text of amendment in the nature of a substitute: CR S2108)</text>
+        <type>Floor</type>
+      </item>
+      <item>
+        <actionDate>2026-04-29</actionDate>
+        <text>Passed/agreed to in Senate: Passed Senate with an amendment by Unanimous Consent.</text>
+        <type>Floor</type>
+        <actionCode>17000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2026-04-29</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>The committee substitute withdrawn by Unanimous Consent.</text>
+        <type>Floor</type>
+      </item>
+      <item>
+        <actionDate>2026-04-29</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Measure laid before Senate by unanimous consent. (consideration: CR S2107-2108)</text>
+        <type>Floor</type>
+      </item>
+      <item>
+        <actionDate>2026-03-18</actionDate>
+        <committees>
+          <item>
+            <systemCode>sssb00</systemCode>
+            <name>Small Business and Entrepreneurship Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Committee on Small Business and Entrepreneurship. Hearings held.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2026-02-25</actionDate>
+        <committees>
+          <item>
+            <systemCode>sssb00</systemCode>
+            <name>Small Business and Entrepreneurship Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Committee on Small Business and Entrepreneurship. Hearings held.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2025-12-10</actionDate>
+        <committees>
+          <item>
+            <systemCode>sssb00</systemCode>
+            <name>Small Business and Entrepreneurship Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Committee on Small Business and Entrepreneurship. Hearings held.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2025-07-30</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Placed on Senate Legislative Calendar under General Orders. Calendar No. 134.</text>
+        <type>Calendars</type>
+      </item>
+      <item>
+        <actionDate>2025-07-30</actionDate>
+        <committees>
+          <item>
+            <systemCode>sssb00</systemCode>
+            <name>Small Business and Entrepreneurship Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Committee on Small Business and Entrepreneurship. Reported by Senator Ernst with an amendment in the nature of a substitute. Without written report.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2025-07-30</actionDate>
+        <text>Committee on Small Business and Entrepreneurship. Reported by Senator Ernst with an amendment in the nature of a substitute. Without written report.</text>
+        <type>Committee</type>
+        <actionCode>14000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>sssb00</systemCode>
+            <name>Small Business and Entrepreneurship Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2025-07-16</actionDate>
+        <committees>
+          <item>
+            <systemCode>sssb00</systemCode>
+            <name>Small Business and Entrepreneurship Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Committee on Small Business and Entrepreneurship. Ordered to be reported with an amendment in the nature of a substitute favorably.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2025-03-27</actionDate>
+        <committees>
+          <item>
+            <systemCode>sssb00</systemCode>
+            <name>Small Business and Entrepreneurship Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Read twice and referred to the Committee on Small Business and Entrepreneurship.</text>
+        <type>IntroReferral</type>
+      </item>
+      <item>
+        <actionDate>2025-03-27</actionDate>
+        <text>Introduced in Senate</text>
+        <type>IntroReferral</type>
+        <actionCode>10000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>E000295</bioguideId>
+        <fullName>Sen. Ernst, Joni [R-IA]</fullName>
+        <firstName>Joni</firstName>
+        <lastName>Ernst</lastName>
+        <party>R</party>
+        <state>IA</state>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <cosponsors>
+      <item>
+        <bioguideId>M001243</bioguideId>
+        <fullName>Sen. McCormick, David [R-PA]</fullName>
+        <firstName>David</firstName>
+        <lastName>McCormick</lastName>
+        <party>R</party>
+        <state>PA</state>
+        <middleName>H.</middleName>
+        <sponsorshipDate>2026-08-04</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+      </item>
+    </cosponsors>
+    <cboCostEstimates>
+      <item>
+        <pubDate>2026-07-22T20:14:00Z</pubDate>
+        <title>S. 1199, SBA Fraud Enforcement Extension Act</title>
+        <url>https://www.cbo.gov/publication/62595</url>
+        <description>As passed by the Senate on April 29, 2026</description>
+      </item>
+    </cboCostEstimates>
+    <policyArea>
+      <name>Commerce</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects>
+        <item>
+          <name>Administrative law and regulatory procedures</name>
+          <updateDate>2025-08-29T13:42:30Z</updateDate>
+        </item>
+        <item>
+          <name>Criminal investigation, prosecution, interrogation</name>
+          <updateDate>2025-08-29T13:42:30Z</updateDate>
+        </item>
+        <item>
+          <name>Fraud offenses and financial crimes</name>
+          <updateDate>2025-08-29T13:42:30Z</updateDate>
+        </item>
+        <item>
+          <name>Small Business Administration</name>
+          <updateDate>2025-08-29T13:42:30Z</updateDate>
+        </item>
+      </legislativeSubjects>
+      <policyArea>
+        <name>Commerce</name>
+        <updateDate>2026-05-01T16:29:14Z</updateDate>
+      </policyArea>
+    </subjects>
+    <title>SBA Fraud Enforcement Extension Act</title>
+    <titles>
+      <item>
+        <titleType>Display Title</titleType>
+        <titleTypeCode>45</titleTypeCode>
+        <title>SBA Fraud Enforcement Extension Act</title>
+        <updateDate>2026-09-19T23:30:58Z</updateDate>
+      </item>
+      <item>
+        <titleType>Short Title(s) as Passed Senate</titleType>
+        <titleTypeCode>105</titleTypeCode>
+        <title>SBA Fraud Enforcement Extension Act</title>
+        <updateDate>2026-04-30T04:38:29Z</updateDate>
+        <chamberCode>S</chamberCode>
+        <chamberName>Senate</chamberName>
+        <billTextVersionName>Engrossed in Senate</billTextVersionName>
+        <billTextVersionCode>ES</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Short Title(s) as Reported to Senate</titleType>
+        <titleTypeCode>103</titleTypeCode>
+        <title>SBA Fraud Enforcement Extension Act</title>
+        <updateDate>2025-08-01T03:53:17Z</updateDate>
+        <chamberCode>S</chamberCode>
+        <chamberName>Senate</chamberName>
+        <billTextVersionName>Reported to Senate</billTextVersionName>
+        <billTextVersionCode>RS</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Short Title(s) as Introduced</titleType>
+        <titleTypeCode>101</titleTypeCode>
+        <title>SBA Fraud Enforcement Extension Act</title>
+        <updateDate>2025-04-01T13:23:18Z</updateDate>
+        <billTextVersionName>Introduced in Senate</billTextVersionName>
+        <billTextVersionCode>IS</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <titleTypeCode>6</titleTypeCode>
+        <title>A bill to extend the statute of limitations for fraud under certain pandemic programs, and for other purposes.</title>
+        <updateDate>2025-04-01T13:18:28Z</updateDate>
+        <billTextVersionName>Introduced in Senate</billTextVersionName>
+        <billTextVersionCode>IS</billTextVersionCode>
+      </item>
+    </titles>
+    <amendments>
+      <amendment>
+        <number>5441</number>
+        <congress>119</congress>
+        <type>SAMDT</type>
+        <purpose>To require a report on Department of Justice activity relating to certain programs.</purpose>
+        <updateDate>2026-05-01T11:08:32Z</updateDate>
+        <latestAction>
+          <actionDate>2026-04-29</actionDate>
+          <text>Amendment SA 5441 agreed to in Senate by Unanimous Consent.</text>
+          <links>
+            <link>
+              <name>SA 5441</name>
+              <url>https://www.congress.gov/amendment/119th-congress/senate-amendment/5441</url>
+            </link>
+          </links>
+        </latestAction>
+        <sponsors>
+          <item>
+            <bioguideId>M000133</bioguideId>
+            <fullName>Sen. Markey, Edward J. [D-MA]</fullName>
+            <firstName>Edward</firstName>
+            <lastName>Markey</lastName>
+            <party>D</party>
+            <state>MA</state>
+            <middleName>J.</middleName>
+          </item>
+        </sponsors>
+        <onBehalfOfSponsor>
+          <item>
+            <bioguideId>E000295</bioguideId>
+            <fullName>Sen. Ernst, Joni [R-IA]</fullName>
+            <firstName>Joni</firstName>
+            <lastName>Ernst</lastName>
+            <party>R</party>
+            <state>IA</state>
+            <type>Submitted on behalf of</type>
+          </item>
+          <item>
+            <bioguideId>E000295</bioguideId>
+            <fullName>Sen. Ernst, Joni [R-IA]</fullName>
+            <firstName>Joni</firstName>
+            <lastName>Ernst</lastName>
+            <party>R</party>
+            <state>IA</state>
+            <type>Proposed on behalf of</type>
+          </item>
+        </onBehalfOfSponsor>
+        <proposedDate>2026-04-29T22:38:01Z</proposedDate>
+        <submittedDate>2026-04-29T04:00:00Z</submittedDate>
+        <chamber>Senate</chamber>
+        <amendedBill>
+          <congress>119</congress>
+          <type>S</type>
+          <originChamber>Senate</originChamber>
+          <originChamberCode>S</originChamberCode>
+          <number>1199</number>
+          <title>SBA Fraud Enforcement Extension Act</title>
+          <updateDateIncludingText>2026-09-19</updateDateIncludingText>
+        </amendedBill>
+        <amendedAmendment>
+          <number>5440</number>
+          <congress>119</congress>
+          <type>SAMDT</type>
+          <purpose>In the nature of a substitute.</purpose>
+          <updateDate>2026-04-30T11:08:23Z</updateDate>
+        </amendedAmendment>
+        <actions>
+          <count>6</count>
+          <actions>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Amendment SA 5441 agreed to in Senate by Unanimous Consent.</text>
+              <type>Floor</type>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Amendment SA 5441 proposed by Senator Ernst for Senator Markey to Amendment SA 5440. (consideration: CR S2107-2108)</text>
+              <type>Floor</type>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <type>IntroReferral</type>
+              <actionCode>Intro-S</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <text>Senate amendment proposed (on the floor): Amendment SA 5441 proposed by Senator Ernst for Senator Markey to Amendment SA 5440.</text>
+              <type>Floor</type>
+              <actionCode>93000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <text>Senate amendment submitted</text>
+              <type>Floor</type>
+              <actionCode>91000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <text>Senate amendment agreed to: Amendment SA 5441 agreed to in Senate by Unanimous Consent.</text>
+              <type>Floor</type>
+              <actionCode>94000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+          </actions>
+        </actions>
+        <textVersions>
+          <count>1</count>
+        </textVersions>
+      </amendment>
+      <amendment>
+        <number>5440</number>
+        <congress>119</congress>
+        <type>SAMDT</type>
+        <purpose>In the nature of a substitute.</purpose>
+        <updateDate>2026-05-01T11:08:32Z</updateDate>
+        <latestAction>
+          <actionDate>2026-04-29</actionDate>
+          <text>Amendment SA 5440 agreed to in Senate by Unanimous Consent.</text>
+          <links>
+            <link>
+              <name>SA 5440</name>
+              <url>https://www.congress.gov/amendment/119th-congress/senate-amendment/5440</url>
+            </link>
+          </links>
+        </latestAction>
+        <sponsors>
+          <item>
+            <bioguideId>E000295</bioguideId>
+            <fullName>Sen. Ernst, Joni [R-IA]</fullName>
+            <firstName>Joni</firstName>
+            <lastName>Ernst</lastName>
+            <party>R</party>
+            <state>IA</state>
+          </item>
+        </sponsors>
+        <onBehalfOfSponsor>
+          <item>
+            <bioguideId>E000295</bioguideId>
+            <fullName>Sen. Ernst, Joni [R-IA]</fullName>
+            <firstName>Joni</firstName>
+            <lastName>Ernst</lastName>
+            <party>R</party>
+            <state>IA</state>
+            <type>Proposed on behalf of</type>
+          </item>
+        </onBehalfOfSponsor>
+        <proposedDate>2026-04-29T04:00:00Z</proposedDate>
+        <submittedDate>2026-04-29T04:00:00Z</submittedDate>
+        <chamber>Senate</chamber>
+        <amendedBill>
+          <congress>119</congress>
+          <type>S</type>
+          <originChamber>Senate</originChamber>
+          <originChamberCode>S</originChamberCode>
+          <number>1199</number>
+          <title>SBA Fraud Enforcement Extension Act</title>
+          <updateDateIncludingText>2026-09-19</updateDateIncludingText>
+        </amendedBill>
+        <amendmentsToAmendment>
+          <count>1</count>
+        </amendmentsToAmendment>
+        <actions>
+          <count>6</count>
+          <actions>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Amendment SA 5440 agreed to in Senate by Unanimous Consent.</text>
+              <type>Floor</type>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Amendment SA 5440 proposed by Senator Ernst. (consideration: CR S2107-2108)</text>
+              <type>Floor</type>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <type>IntroReferral</type>
+              <actionCode>Intro-S</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <text>Senate amendment proposed (on the floor): Amendment SA 5440 proposed by Senator Ernst.</text>
+              <type>Floor</type>
+              <actionCode>93000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <text>Senate amendment submitted</text>
+              <type>Floor</type>
+              <actionCode>91000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2026-04-29</actionDate>
+              <text>Senate amendment agreed to: Amendment SA 5440 agreed to in Senate by Unanimous Consent.</text>
+              <type>Floor</type>
+              <actionCode>94000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+          </actions>
+        </actions>
+        <textVersions>
+          <count>1</count>
+        </textVersions>
+      </amendment>
+    </amendments>
+    <textVersions>
+      <item>
+        <type>Engrossed in Senate</type>
+        <date>2026-04-29T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119s1199es/xml/BILLS-119s1199es.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Reported to Senate</type>
+        <date>2025-07-30T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119s1199rs/xml/BILLS-119s1199rs.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Introduced in Senate</type>
+        <date>2025-03-27T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119s1199is/xml/BILLS-119s1199is.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2026-05-04</actionDate>
+      <text>Held at the desk.</text>
+      <actionTime>10:33:00</actionTime>
+    </latestAction>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>

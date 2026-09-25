@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>3052</number>
+    <updateDate>2026-08-08T15:26:12Z</updateDate>
+    <updateDateIncludingText>2026-08-08T15:26:12Z</updateDateIncludingText>
+    <originChamber>Senate</originChamber>
+    <originChamberCode>S</originChamberCode>
+    <type>S</type>
+    <introducedDate>2025-10-23</introducedDate>
+    <congress>119</congress>
+    <legislationUrl>https://www.congress.gov/bill/119th-congress/senate-bill/3052</legislationUrl>
+    <committees>
+      <item>
+        <systemCode>ssas00</systemCode>
+        <name>Armed Services Committee</name>
+        <chamber>Senate</chamber>
+        <type>Standing</type>
+        <activities>
+          <item>
+            <name>Referred To</name>
+            <date>2025-10-23T19:51:26Z</date>
+          </item>
+          <item>
+            <name>Referred To</name>
+            <date>2025-10-23T19:51:26Z</date>
+          </item>
+        </activities>
+      </item>
+    </committees>
+    <relatedBills>
+      <item>
+        <title>National Defense Authorization Act for Fiscal Year 2026</title>
+        <congress>119</congress>
+        <number>2296</number>
+        <type>S</type>
+        <latestAction>
+          <actionDate>2025-11-12</actionDate>
+          <text>Held at the desk.</text>
+          <actionTime>12:10:52</actionTime>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Related bill</type>
+            <identifiedBy>CRS</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+    </relatedBills>
+    <actions>
+      <item>
+        <actionDate>2025-10-23</actionDate>
+        <committees>
+          <item>
+            <systemCode>ssas00</systemCode>
+            <name>Armed Services Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Read twice and referred to the Committee on Armed Services.</text>
+        <type>IntroReferral</type>
+      </item>
+      <item>
+        <actionDate>2025-10-23</actionDate>
+        <text>Introduced in Senate</text>
+        <type>IntroReferral</type>
+        <actionCode>10000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>C001056</bioguideId>
+        <fullName>Sen. Cornyn, John [R-TX]</fullName>
+        <firstName>John</firstName>
+        <lastName>Cornyn</lastName>
+        <party>R</party>
+        <state>TX</state>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <cosponsors>
+      <item>
+        <bioguideId>K000377</bioguideId>
+        <fullName>Sen. Kelly, Mark [D-AZ]</fullName>
+        <firstName>Mark</firstName>
+        <lastName>Kelly</lastName>
+        <party>D</party>
+        <state>AZ</state>
+        <sponsorshipDate>2025-10-23</sponsorshipDate>
+        <isOriginalCosponsor>True</isOriginalCosponsor>
+      </item>
+      <item>
+        <bioguideId>M001243</bioguideId>
+        <fullName>Sen. McCormick, David [R-PA]</fullName>
+        <firstName>David</firstName>
+        <lastName>McCormick</lastName>
+        <party>R</party>
+        <state>PA</state>
+        <middleName>H.</middleName>
+        <sponsorshipDate>2026-08-06</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+      </item>
+    </cosponsors>
+    <policyArea>
+      <name>Armed Forces and National Security</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects/>
+      <policyArea>
+        <name>Armed Forces and National Security</name>
+        <updateDate>2025-12-02T18:24:17Z</updateDate>
+      </policyArea>
+    </subjects>
+    <title>A bill to promote recruiter access to secondary schools.</title>
+    <titles>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <titleTypeCode>6</titleTypeCode>
+        <title>A bill to promote recruiter access to secondary schools.</title>
+        <updateDate>2025-10-29T06:03:19Z</updateDate>
+        <billTextVersionName>Introduced in Senate</billTextVersionName>
+        <billTextVersionCode>IS</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Display Title</titleType>
+        <titleTypeCode>45</titleTypeCode>
+        <title>A bill to promote recruiter access to secondary schools.</title>
+        <updateDate>2025-10-24T10:56:15Z</updateDate>
+      </item>
+    </titles>
+    <amendments>
+      <amendment>
+        <number>3989</number>
+        <congress>119</congress>
+        <type>SAMDT</type>
+        <updateDate>2025-12-15T23:48:26Z</updateDate>
+        <latestAction>
+          <actionDate>2025-12-15</actionDate>
+          <text>Referred to the Committee on Armed Services.</text>
+        </latestAction>
+        <sponsors>
+          <item>
+            <bioguideId>C001056</bioguideId>
+            <fullName>Sen. Cornyn, John [R-TX]</fullName>
+            <firstName>John</firstName>
+            <lastName>Cornyn</lastName>
+            <party>R</party>
+            <state>TX</state>
+          </item>
+        </sponsors>
+        <cosponsors>
+          <countIncludingWithdrawnCosponsors>1</countIncludingWithdrawnCosponsors>
+          <count>1</count>
+          <item>
+            <bioguideId>K000377</bioguideId>
+            <fullName>Sen. Kelly, Mark [D-AZ]</fullName>
+            <firstName>Mark</firstName>
+            <lastName>Kelly</lastName>
+            <party>D</party>
+            <state>AZ</state>
+            <sponsorshipDate>2025-12-15</sponsorshipDate>
+            <isOriginalCosponsor>True</isOriginalCosponsor>
+          </item>
+        </cosponsors>
+        <submittedDate>2025-12-15T05:00:00Z</submittedDate>
+        <chamber>Senate</chamber>
+        <amendedBill>
+          <congress>119</congress>
+          <type>S</type>
+          <originChamber>Senate</originChamber>
+          <originChamberCode>S</originChamberCode>
+          <number>3052</number>
+          <title>A bill to promote recruiter access to secondary schools.</title>
+          <updateDateIncludingText>2026-08-08</updateDateIncludingText>
+        </amendedBill>
+        <actions>
+          <count>3</count>
+          <actions>
+            <item>
+              <actionDate>2025-12-15</actionDate>
+              <committees>
+                <item>
+                  <systemCode>ssas00</systemCode>
+                  <name>Armed Services Committee</name>
+                </item>
+              </committees>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Referred to the Committee on Armed Services.</text>
+              <type>IntroReferral</type>
+            </item>
+            <item>
+              <actionDate>2025-12-15</actionDate>
+              <type>IntroReferral</type>
+              <actionCode>Intro-S</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2025-12-15</actionDate>
+              <text>Senate amendment submitted</text>
+              <type>Floor</type>
+              <actionCode>91000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+          </actions>
+        </actions>
+        <textVersions>
+          <count>1</count>
+        </textVersions>
+      </amendment>
+    </amendments>
+    <textVersions>
+      <item>
+        <type>Introduced in Senate</type>
+        <date>2025-10-23T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119s3052is/xml/BILLS-119s3052is.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2025-10-23</actionDate>
+      <text>Read twice and referred to the Committee on Armed Services.</text>
+    </latestAction>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>

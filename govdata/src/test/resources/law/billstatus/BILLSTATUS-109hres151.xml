@@ -1,0 +1,422 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>151</number>
+    <updateDate>2022-02-03T05:35:38Z</updateDate>
+    <updateDateIncludingText>2022-02-03T05:35:38Z</updateDateIncludingText>
+    <originChamber>House</originChamber>
+    <originChamberCode>H</originChamberCode>
+    <type>HRES</type>
+    <introducedDate>2005-03-14</introducedDate>
+    <congress>109</congress>
+    <committees>
+      <item>
+        <systemCode>hsru00</systemCode>
+        <name>Rules Committee</name>
+        <chamber>House</chamber>
+        <type>Standing</type>
+        <activities>
+          <item>
+            <name>Reported original measure</name>
+            <date>2005-03-15T01:20:15Z</date>
+          </item>
+        </activities>
+      </item>
+    </committees>
+    <committeeReports>
+      <committeeReport>
+        <citation>H. Rept. 109-18</citation>
+      </committeeReport>
+    </committeeReports>
+    <relatedBills>
+      <item>
+        <title>REAL ID Act of 2005</title>
+        <congress>109</congress>
+        <number>418</number>
+        <type>HR</type>
+        <latestAction>
+          <actionDate>2005-02-17</actionDate>
+          <text>Read twice and referred to the Committee on the Judiciary.</text>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Related bill</type>
+            <identifiedBy>House</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+      <item>
+        <title>Emergency Supplemental Appropriations Act for Defense, the Global War on Terror, and Tsunami Relief, 2005</title>
+        <congress>109</congress>
+        <number>1268</number>
+        <type>HR</type>
+        <latestAction>
+          <actionDate>2005-05-11</actionDate>
+          <text>Became Public Law No: 109-13.</text>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Procedurally-related</type>
+            <identifiedBy>House</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+    </relatedBills>
+    <actions>
+      <item>
+        <actionDate>2005-03-15</actionDate>
+        <actionTime>11:41:49</actionTime>
+        <text>Motion to reconsider laid on the table Agreed to without objection.</text>
+        <type>Floor</type>
+        <actionCode>H38310</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2005-03-15</actionDate>
+        <actionTime>11:41:43</actionTime>
+        <text>On agreeing to the resolution Agreed to by voice vote.</text>
+        <type>Floor</type>
+        <actionCode>H37100</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2005-03-15</actionDate>
+        <actionTime>11:41:43</actionTime>
+        <text>Passed/agreed to in House: On agreeing to the resolution Agreed to by voice vote.</text>
+        <type>Floor</type>
+        <actionCode>8000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2005-03-15</actionDate>
+        <actionTime>10:24:41</actionTime>
+        <text>DEBATE - The House proceeded with one hour of debate on H. Res. 151.</text>
+        <type>Floor</type>
+        <actionCode>H8D000</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2005-03-15</actionDate>
+        <actionTime>10:22:18</actionTime>
+        <text>Considered as privileged matter. (consideration: CR H1427-1435)</text>
+        <type>Floor</type>
+        <actionCode>H30000</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2005-03-14</actionDate>
+        <text>Placed on the House Calendar, Calendar No. 11.</text>
+        <type>Calendars</type>
+        <actionCode>H12420</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <calendarNumber>
+          <calendar>H00011</calendar>
+        </calendarNumber>
+      </item>
+      <item>
+        <actionDate>2005-03-14</actionDate>
+        <actionTime>20:20:16</actionTime>
+        <text>Rule provides for consideration of H.R. 1268 with 1 hour of general debate. Previous question shall be considered as ordered without intervening motions except motion to recommit with or without instructions. Bill is open to amendments.</text>
+        <type>Floor</type>
+        <actionCode>H12700</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2005-03-14</actionDate>
+        <text>The House Committee on Rules reported an original measure, H. Rept. 109-18, by Mr. Cole (OK).</text>
+        <type>Committee</type>
+        <actionCode>H12100</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsru00</systemCode>
+            <name>Rules Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2005-03-14</actionDate>
+        <text>The House Committee on Rules reported an original measure, H. Rept. 109-18, by Mr. Cole (OK).</text>
+        <type>Committee</type>
+        <actionCode>5000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsru00</systemCode>
+            <name>Rules Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2005-03-14</actionDate>
+        <text>Introduced in House</text>
+        <type>IntroReferral</type>
+        <actionCode>1000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>C001053</bioguideId>
+        <fullName>Rep. Cole, Tom [R-OK-4]</fullName>
+        <firstName>Tom</firstName>
+        <lastName>Cole</lastName>
+        <party>R</party>
+        <state>OK</state>
+        <district>4</district>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <policyArea>
+      <name>Congress</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects>
+        <item>
+          <name>Economics and Public Finance</name>
+        </item>
+        <item>
+          <name>House rules and procedure</name>
+        </item>
+      </legislativeSubjects>
+      <policyArea>
+        <name>Congress</name>
+      </policyArea>
+    </subjects>
+    <summaries>
+      <summary>
+        <versionCode>00</versionCode>
+        <actionDate>2005-03-14</actionDate>
+        <actionDesc>Introduced in House</actionDesc>
+        <updateDate>2005-03-15T08:02:37Z</updateDate>
+        <text><![CDATA[Sets forth the rule for consideration of the bill (H.R. 1268) making emergency supplemental appropriations for the fiscal year ending September 30, 2005.]]></text>
+      </summary>
+      <summary>
+        <versionCode>36</versionCode>
+        <actionDate>2005-03-15</actionDate>
+        <actionDesc>Passed House amended</actionDesc>
+        <updateDate>2005-03-21T20:56:35Z</updateDate>
+        <text><![CDATA[ <p>Sets forth the rule for consideration of the bill (H.R. 1268) making emergency supplemental appropriations for the fiscal year ending September 30, 2005. </p>]]></text>
+      </summary>
+    </summaries>
+    <title>Providing for consideration of the bill (H.R. 1268) making emergency supplemental appropriations for the fiscal year ending September 30, 2005, and for other purposes.</title>
+    <titles>
+      <item>
+        <titleType>Display Title</titleType>
+        <title>Providing for consideration of the bill (H.R. 1268) making emergency supplemental appropriations for the fiscal year ending September 30, 2005, and for other purposes.</title>
+      </item>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <title>Providing for consideration of the bill (H.R. 1268) making emergency supplemental appropriations for the fiscal year ending September 30, 2005, and for other purposes.</title>
+      </item>
+    </titles>
+    <amendments>
+      <amendment>
+        <number>43</number>
+        <congress>109</congress>
+        <type>HAMDT</type>
+        <description>Amendment protects sections 1113 and 1114 in the bill from points of order.</description>
+        <purpose>An amendment to protect sections 1113 and 1114 from possible points of order.</purpose>
+        <updateDate>2022-02-03T05:35:38Z</updateDate>
+        <latestAction>
+          <actionDate>2005-03-15</actionDate>
+          <text>On agreeing to the Cole (OK) amendment (A001) Agreed to by voice vote.</text>
+          <actionTime>11:41:22</actionTime>
+        </latestAction>
+        <sponsors>
+          <item>
+            <bioguideId>C001053</bioguideId>
+            <fullName>Rep. Cole, Tom [R-OK-4]</fullName>
+            <firstName>Tom</firstName>
+            <lastName>Cole</lastName>
+            <party>R</party>
+            <state>OK</state>
+            <district>4</district>
+          </item>
+        </sponsors>
+        <submittedDate>2005-03-15T05:00:00Z</submittedDate>
+        <chamber>House of Representatives</chamber>
+        <amendedBill>
+          <congress>109</congress>
+          <type>HRES</type>
+          <originChamber>House</originChamber>
+          <originChamberCode>H</originChamberCode>
+          <number>151</number>
+          <title>Providing for consideration of the bill (H.R. 1268) making emergency supplemental appropriations for the fiscal year ending September 30, 2005, and for other purposes.</title>
+          <updateDateIncludingText>2022-02-03T05:35:38Z</updateDateIncludingText>
+        </amendedBill>
+        <actions>
+          <count>9</count>
+          <actions>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <actionTime>11:41:22</actionTime>
+              <text>On agreeing to the Cole (OK) amendment (A001) Agreed to by voice vote.</text>
+              <type>Floor</type>
+              <actionCode>H34111</actionCode>
+              <sourceSystem>
+                <code>2</code>
+                <name>House floor actions</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <actionTime>11:41:21</actionTime>
+              <text>On ordering the previous question on the amendment (A001) and on the resolution Agreed to by the Yeas and Nays: 220 - 195 (Roll no. 69).</text>
+              <type>Floor</type>
+              <actionCode>H34180</actionCode>
+              <sourceSystem>
+                <code>2</code>
+                <name>House floor actions</name>
+              </sourceSystem>
+              <recordedVotes>
+                <recordedVote>
+                  <rollNumber>69</rollNumber>
+                  <chamber>House</chamber>
+                  <congress>109</congress>
+                  <date>2005-03-15T16:41:21Z</date>
+                  <sessionNumber>1</sessionNumber>
+                  <url>https://clerk.house.gov/evs/2005/roll069.xml</url>
+                </recordedVote>
+              </recordedVotes>
+            </item>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <actionTime>11:16:40</actionTime>
+              <text>Amendment (A001) offered by Mr. Cole (OK). (consideration: CR H1433-1435; text: CR H1433-1434)</text>
+              <type>Floor</type>
+              <actionCode>H3A100</actionCode>
+              <sourceSystem>
+                <code>2</code>
+                <name>House floor actions</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <actionTime>11:16:40</actionTime>
+              <text>House amendment offered/reported by : Amendment (A001) offered by Mr. Cole (OK).(consideration: CR H1433-1435; text: CR H1433-1434)</text>
+              <type>NotUsed</type>
+              <actionCode>71500</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <actionTime>11:41:21</actionTime>
+              <text>Roll call votes on amendments in House</text>
+              <type>Floor</type>
+              <actionCode>75000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+              <recordedVotes>
+                <recordedVote>
+                  <rollNumber>69</rollNumber>
+                  <chamber>House</chamber>
+                  <congress>109</congress>
+                  <date>2005-03-15T16:41:21Z</date>
+                  <sessionNumber>1</sessionNumber>
+                  <url>https://clerk.house.gov/evs/2005/roll069.xml</url>
+                </recordedVote>
+              </recordedVotes>
+            </item>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <actionTime>11:41:22</actionTime>
+              <text>Amendment agreed to by House: On agreeing to the Cole (OK) amendment (A001) Agreed to by voice vote.</text>
+              <type>NotUsed</type>
+              <actionCode>79000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <actionTime>11:41:22</actionTime>
+              <text>House amendment agreed to: On agreeing to the Cole (OK) amendment (A001) Agreed to by voice vote.</text>
+              <type>Floor</type>
+              <actionCode>72000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2005-03-15</actionDate>
+              <text>House amendment offered</text>
+              <type>Floor</type>
+              <actionCode>71000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+          </actions>
+        </actions>
+      </amendment>
+    </amendments>
+    <textVersions>
+      <item>
+        <type>Engrossed in House</type>
+        <date>2005-03-15T05:00:00Z</date>
+        <formats/>
+      </item>
+      <item>
+        <type>Reported in House</type>
+        <date>2005-03-14T05:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-109hres151rh/xml/BILLS-109hres151rh.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2005-03-15</actionDate>
+      <text>Motion to reconsider laid on the table Agreed to without objection.</text>
+      <actionTime>11:41:49</actionTime>
+    </latestAction>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>

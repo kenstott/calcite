@@ -1,0 +1,694 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <bill>
+    <billNumber>4200</billNumber>
+    <createDate>2019-02-17T13:24:02Z</createDate>
+    <updateDate>2022-11-04T18:44:12Z</updateDate>
+    <originChamber>House</originChamber>
+    <billType>HR</billType>
+    <introducedDate>2014-03-11</introducedDate>
+    <congress>113</congress>
+    <constitutionalAuthorityStatementText>
+      <![CDATA[<pre>From the Congressional Record Online through the Government Publishing Office [<a href='http://www.gpo.gov'>www.gpo.gov</a>]By Mr. LUETKEMEYER:H.R. 4200.Congress has the power to enact this legislation pursuantto the following:The constitutional authority on which this bill rests isthe explicit power of Congress to regulate commerce in andamong the states, as enumerate in Article 1, Section 8,Clause 3, the Commerce Clause, of the United StatesConstitution.Additionally, Article 1, Section 7, Clause 2 of theConstitution allows for every bill passed by the House ofRepresentatives and the Senate and signed by the President tobe codified into law; and therefore implicitly allowsCongress to amend any bill that has been passed by bothchambers and signed into law by the President.[Page H2302]</pre>]]>
+    </constitutionalAuthorityStatementText>
+    <recordedVotes/>
+    <committees>
+      <billCommittees>
+        <item>
+          <systemCode>ssbk00</systemCode>
+          <name>Banking, Housing, and Urban Affairs Committee</name>
+          <chamber>Senate</chamber>
+          <type>Standing</type>
+          <subcommittees/>
+          <activities>
+            <item>
+              <name>Referred to</name>
+              <date>2014-12-03T20:14:39Z</date>
+            </item>
+          </activities>
+        </item>
+        <item>
+          <systemCode>hsba00</systemCode>
+          <name>Financial Services Committee</name>
+          <chamber>House</chamber>
+          <type>Standing</type>
+          <subcommittees>
+            <item>
+              <systemCode>hsba16</systemCode>
+              <name>Investor Protection, Entrepreneurship, and Capital Markets Subcommittee</name>
+              <activities>
+                <item>
+                  <name>Hearings by</name>
+                  <date>2014-04-09T20:50:27Z</date>
+                </item>
+              </activities>
+            </item>
+          </subcommittees>
+          <activities>
+            <item>
+              <name>Reported by</name>
+              <date>2014-12-02T16:47:28Z</date>
+            </item>
+            <item>
+              <name>Markup by</name>
+              <date>2014-05-22T15:47:50Z</date>
+            </item>
+            <item>
+              <name>Referred to</name>
+              <date>2014-03-11T16:03:10Z</date>
+            </item>
+          </activities>
+        </item>
+      </billCommittees>
+    </committees>
+    <committeeReports>
+      <committeeReport>
+        <citation>H. Rept. 113-641</citation>
+      </committeeReport>
+    </committeeReports>
+    <relatedBills>
+      <item>
+        <latestTitle>Promoting Job Creation and Reducing Small Business Burdens Act</latestTitle>
+        <congress>113</congress>
+        <number>5405</number>
+        <type>HR</type>
+        <latestAction>
+          <actionDate>2014-09-17</actionDate>
+          <text>Received in the Senate and Read twice and referred to the Committee on Banking, Housing, and Urban Affairs.</text>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Related bill</type>
+            <identifiedBy>CRS</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+      <item>
+        <latestTitle>SBIC Advisers Relief Act of 2014</latestTitle>
+        <congress>113</congress>
+        <number>2765</number>
+        <type>S</type>
+        <latestAction>
+          <actionDate>2014-07-31</actionDate>
+          <text>Read twice and referred to the Committee on Banking, Housing, and Urban Affairs.</text>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Identical bill</type>
+            <identifiedBy>CRS</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+    </relatedBills>
+    <actions>
+      <item>
+        <actionDate>2014-12-03</actionDate>
+        <committees>
+          <item>
+            <systemCode>ssbk00</systemCode>
+            <name>Banking, Housing, and Urban Affairs Committee</name>
+          </item>
+        </committees>
+        <links/>
+        <sourceSystem>
+          <code>0</code>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Received in the Senate and Read twice and referred to the Committee on Banking, Housing, and Urban Affairs.</text>
+        <type>IntroReferral</type>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <actionTime>13:49:27</actionTime>
+        <links/>
+        <text>Motion to reconsider laid on the table Agreed to without objection.</text>
+        <type>Floor</type>
+        <actionCode>H38310</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <actionTime>13:49:26</actionTime>
+        <links/>
+        <text>On motion to suspend the rules and pass the bill Agreed to by voice vote. (text: CR H8239-8240)</text>
+        <type>Floor</type>
+        <actionCode>H37300</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <actionTime>13:49:26</actionTime>
+        <links/>
+        <text>Passed/agreed to in House: On motion to suspend the rules and pass the bill Agreed to by voice vote.(text: CR H8239-8240)</text>
+        <type>Floor</type>
+        <actionCode>8000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <actionTime>13:44:56</actionTime>
+        <links/>
+        <text>DEBATE - The House proceeded with forty minutes of debate on H.R. 4200.</text>
+        <type>Floor</type>
+        <actionCode>H8D000</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <actionTime>13:44:54</actionTime>
+        <links/>
+        <text>Considered under suspension of the rules. (consideration: CR H8239-8240)</text>
+        <type>Floor</type>
+        <actionCode>H30000</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <actionTime>13:44:45</actionTime>
+        <links/>
+        <text>Mr. Luetkemeyer moved to suspend the rules and pass the bill.</text>
+        <type>Floor</type>
+        <actionCode>H30300</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <links/>
+        <text>Placed on the Union Calendar, Calendar No. 481.</text>
+        <type>Calendars</type>
+        <actionCode>H12410</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <links/>
+        <text>Reported by the Committee on Financial Services. H. Rept. 113-641.</text>
+        <type>Committee</type>
+        <actionCode>H12200</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsba00</systemCode>
+            <name>Financial Services Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2014-12-02</actionDate>
+        <links/>
+        <text>Reported by the Committee on Financial Services. H. Rept. 113-641.</text>
+        <type>Committee</type>
+        <actionCode>5000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsba00</systemCode>
+            <name>Financial Services Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2014-05-22</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsba00</systemCode>
+            <name>Financial Services Committee</name>
+          </item>
+        </committees>
+        <links/>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Ordered to be Reported by the Yeas and Nays: 56 - 0.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2014-05-22</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsba00</systemCode>
+            <name>Financial Services Committee</name>
+          </item>
+        </committees>
+        <links/>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Committee Consideration and Mark-up Session Held.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2014-04-09</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsba16</systemCode>
+            <name>Investor Protection, Entrepreneurship, and Capital Markets Subcommittee</name>
+          </item>
+        </committees>
+        <links/>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Hearings Held by the Subcommittee on Capital Markets and Government Sponsored Enterprises Prior to Referral.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2014-03-11</actionDate>
+        <links/>
+        <text>Referred to the House Committee on Financial Services.</text>
+        <type>IntroReferral</type>
+        <actionCode>H11100</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsba00</systemCode>
+            <name>Financial Services Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2014-03-11</actionDate>
+        <links/>
+        <text>Introduced in House</text>
+        <type>IntroReferral</type>
+        <actionCode>Intro-H</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <item>
+        <actionDate>2014-03-11</actionDate>
+        <links/>
+        <text>Introduced in House</text>
+        <type>IntroReferral</type>
+        <actionCode>1000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees/>
+      </item>
+      <actionTypeCounts>
+        <referredToCommittee>1</referredToCommittee>
+        <motionToReconsiderResults>1</motionToReconsiderResults>
+        <finalPassageUnderSuspensionOfTheRulesResults>1</finalPassageUnderSuspensionOfTheRulesResults>
+        <passedAgreedToInHouse>1</passedAgreedToInHouse>
+        <generalDebate>1</generalDebate>
+        <considerationByHouse>1</considerationByHouse>
+        <motionMadeToSuspendTheRules>1</motionMadeToSuspendTheRules>
+        <unionCalendarAssignment>1</unionCalendarAssignment>
+        <committeeReportOfABill>1</committeeReportOfABill>
+        <reportedToHouse>1</reportedToHouse>
+        <orderedToBeReported>1</orderedToBeReported>
+        <committeeConsiderationMarkUp>1</committeeConsiderationMarkUp>
+        <placeholderTextForH>1</placeholderTextForH>
+        <billReferrals>1</billReferrals>
+        <introducedInTheHouse>1</introducedInTheHouse>
+        <introducedInHouse>1</introducedInHouse>
+      </actionTypeCounts>
+      <actionByCounts>
+        <senate>1</senate>
+        <houseOfRepresentatives>15</houseOfRepresentatives>
+      </actionByCounts>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>L000569</bioguideId>
+        <fullName>Rep. Luetkemeyer, Blaine [R-MO-3]</fullName>
+        <firstName>Blaine</firstName>
+        <middleName/>
+        <lastName>Luetkemeyer</lastName>
+        <party>R</party>
+        <state>MO</state>
+        <identifiers>
+          <lisID>1931</lisID>
+          <bioguideId>L000569</bioguideId>
+          <gpoId>8017</gpoId>
+        </identifiers>
+        <district>3</district>
+        <byRequestType/>
+      </item>
+    </sponsors>
+    <cosponsors>
+      <item>
+        <bioguideId>P000594</bioguideId>
+        <fullName>Rep. Paulsen, Erik [R-MN-3]</fullName>
+        <firstName>Erik</firstName>
+        <middleName/>
+        <lastName>Paulsen</lastName>
+        <party>R</party>
+        <state>MN</state>
+        <identifiers>
+          <lisID>1930</lisID>
+          <bioguideId>P000594</bioguideId>
+          <gpoId>8003</gpoId>
+        </identifiers>
+        <district>3</district>
+        <sponsorshipDate>2014-03-27</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>M000087</bioguideId>
+        <fullName>Rep. Maloney, Carolyn B. [D-NY-12]</fullName>
+        <firstName>CAROLYN</firstName>
+        <middleName>B.</middleName>
+        <lastName>MALONEY</lastName>
+        <party>D</party>
+        <state>NY</state>
+        <identifiers>
+          <lisID>729</lisID>
+          <bioguideId>M000087</bioguideId>
+          <gpoId>8075</gpoId>
+        </identifiers>
+        <district>12</district>
+        <sponsorshipDate>2014-03-28</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>M001156</bioguideId>
+        <fullName>Rep. McHenry, Patrick T. [R-NC-10]</fullName>
+        <firstName>Patrick</firstName>
+        <middleName/>
+        <lastName>McHenry</lastName>
+        <party>R</party>
+        <state>NC</state>
+        <identifiers>
+          <lisID>1792</lisID>
+          <bioguideId>M001156</bioguideId>
+          <gpoId>8033</gpoId>
+        </identifiers>
+        <district>10</district>
+        <sponsorshipDate>2014-04-04</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>H001047</bioguideId>
+        <fullName>Rep. Himes, James A. [D-CT-4]</fullName>
+        <firstName>James</firstName>
+        <middleName>A.</middleName>
+        <lastName>Himes</lastName>
+        <party>D</party>
+        <state>CT</state>
+        <identifiers>
+          <lisID>1913</lisID>
+          <bioguideId>H001047</bioguideId>
+          <gpoId>7869</gpoId>
+        </identifiers>
+        <district>4</district>
+        <sponsorshipDate>2014-05-06</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>M001160</bioguideId>
+        <fullName>Rep. Moore, Gwen [D-WI-4]</fullName>
+        <firstName>Gwen</firstName>
+        <middleName/>
+        <lastName>Moore</lastName>
+        <party>D</party>
+        <state>WI</state>
+        <identifiers>
+          <lisID>1811</lisID>
+          <bioguideId>M001160</bioguideId>
+          <gpoId>8217</gpoId>
+        </identifiers>
+        <district>4</district>
+        <sponsorshipDate>2014-05-06</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>M001191</bioguideId>
+        <fullName>Rep. Murphy, Patrick [D-FL-18]</fullName>
+        <firstName>Patrick</firstName>
+        <middleName/>
+        <lastName>Murphy</lastName>
+        <party>D</party>
+        <state>FL</state>
+        <identifiers>
+          <lisID>2117</lisID>
+          <bioguideId>M001191</bioguideId>
+          <gpoId/>
+        </identifiers>
+        <district>18</district>
+        <sponsorshipDate>2014-05-07</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>R000598</bioguideId>
+        <fullName>Rep. Rothfus, Keith J. [R-PA-12]</fullName>
+        <firstName>Keith</firstName>
+        <middleName>J.</middleName>
+        <lastName>Rothfus</lastName>
+        <party>R</party>
+        <state>PA</state>
+        <identifiers>
+          <lisID>2158</lisID>
+          <bioguideId>R000598</bioguideId>
+          <gpoId/>
+        </identifiers>
+        <district>12</district>
+        <sponsorshipDate>2014-05-15</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>F000454</bioguideId>
+        <fullName>Rep. Foster, Bill [D-IL-11]</fullName>
+        <firstName>Bill</firstName>
+        <middleName/>
+        <lastName>Foster</lastName>
+        <party>D</party>
+        <state>IL</state>
+        <identifiers>
+          <lisID>1888</lisID>
+          <bioguideId>F000454</bioguideId>
+          <gpoId>7355</gpoId>
+        </identifiers>
+        <district>11</district>
+        <sponsorshipDate>2014-05-15</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+      <item>
+        <bioguideId>S001190</bioguideId>
+        <fullName>Rep. Schneider, Bradley Scott [D-IL-10]</fullName>
+        <firstName>Bradley</firstName>
+        <middleName>Scott</middleName>
+        <lastName>Schneider</lastName>
+        <party>D</party>
+        <state>IL</state>
+        <identifiers>
+          <lisID>2124</lisID>
+          <bioguideId>S001190</bioguideId>
+          <gpoId/>
+        </identifiers>
+        <district>10</district>
+        <sponsorshipDate>2014-05-21</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+        <sponsorshipWithdrawnDate/>
+      </item>
+    </cosponsors>
+    <cboCostEstimates/>
+    <laws/>
+    <notes/>
+    <policyArea>
+      <name>Finance and Financial Sector</name>
+    </policyArea>
+    <subjects>
+      <billSubjects>
+        <legislativeSubjects>
+          <item>
+            <name>Banking and financial institutions regulation</name>
+          </item>
+          <item>
+            <name>Business investment and capital</name>
+          </item>
+          <item>
+            <name>Financial services and investments</name>
+          </item>
+          <item>
+            <name>Licensing and registrations</name>
+          </item>
+          <item>
+            <name>Small business</name>
+          </item>
+          <item>
+            <name>State and local government operations</name>
+          </item>
+        </legislativeSubjects>
+        <policyArea>
+          <name>Finance and Financial Sector</name>
+        </policyArea>
+      </billSubjects>
+    </subjects>
+    <summaries>
+      <billSummaries>
+        <item>
+          <versionCode>00</versionCode>
+          <actionDate>2014-03-11</actionDate>
+          <actionDesc>Introduced in House</actionDesc>
+          <lastSummaryUpdateDate>2014-09-08T21:32:48Z</lastSummaryUpdateDate>
+          <text>
+            <![CDATA[ <p>SBIC Advisers Relief Act of 2014 - Amends the Investment Advisers Act of 1940 to exempt specified advisers of small business investment companies (SBICs) from certain: (1) Securities and Exchange Commission (SEC) registration requirements with respect to the provision of investment advice relating to venture capital funds, and (2) SEC registration and reporting requirements with respect to assets under management of private funds.</p> <p>Provides the same exemption with respect to any state or local law requiring the registration, licensing, or qualifications of investment advisers.</p>]]>
+          </text>
+          <updateDate>2014-03-11T04:00:00Z</updateDate>
+          <name>Introduced in House</name>
+        </item>
+        <item>
+          <versionCode>81</versionCode>
+          <actionDate>2014-12-02</actionDate>
+          <actionDesc>Passed House without amendment</actionDesc>
+          <lastSummaryUpdateDate>2014-12-03T19:28:27Z</lastSummaryUpdateDate>
+          <text>
+            <![CDATA[ <p><b>(This measure has not been amended since it was introduced. The summary of that version is repeated here.)</b></p> <p>SBIC Advisers Relief Act of 2014 - Amends the Investment Advisers Act of 1940 to exempt specified advisers of small business investment companies (SBICs) from certain: (1) Securities and Exchange Commission (SEC) registration requirements with respect to the provision of investment advice relating to venture capital funds, and (2) SEC registration and reporting requirements with respect to assets under management of private funds.</p> <p>Provides the same exemption with respect to any state or local law requiring the registration, licensing, or qualifications of investment advisers.</p>]]>
+          </text>
+          <updateDate>2014-12-02T11:35:43Z</updateDate>
+          <name>Passed House without amendment</name>
+        </item>
+      </billSummaries>
+    </summaries>
+    <title>SBIC Advisers Relief Act of 2014</title>
+    <titles>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <parentTitleType/>
+        <title>To amend the Investment Advisers Act of 1940 to prevent duplicative regulation of advisers of small business investment companies.</title>
+        <chamberCode/>
+        <chamberName/>
+      </item>
+      <item>
+        <titleType>Display Title</titleType>
+        <parentTitleType/>
+        <title>SBIC Advisers Relief Act of 2014</title>
+        <chamberCode/>
+        <chamberName/>
+      </item>
+      <item>
+        <titleType>Short Titles as Introduced</titleType>
+        <parentTitleType/>
+        <title>SBIC Advisers Relief Act of 2014</title>
+        <chamberCode/>
+        <chamberName/>
+      </item>
+      <item>
+        <titleType>Short Titles as Reported to House</titleType>
+        <parentTitleType>Short Titles House of Representatives</parentTitleType>
+        <title>SBIC Advisers Relief Act of 2014</title>
+        <chamberCode>H</chamberCode>
+        <chamberName>House</chamberName>
+      </item>
+      <item>
+        <titleType>Short Titles as Passed House</titleType>
+        <parentTitleType>Short Titles House of Representatives</parentTitleType>
+        <title>SBIC Advisers Relief Act of 2014</title>
+        <chamberCode>H</chamberCode>
+        <chamberName>House</chamberName>
+      </item>
+    </titles>
+    <amendments/>
+    <textVersions>
+      <item>
+        <type>Referred in Senate</type>
+        <date>2014-12-03T05:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-113hr4200rfs/xml/BILLS-113hr4200rfs.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Engrossed in House</type>
+        <date>2014-12-02T05:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-113hr4200eh/xml/BILLS-113hr4200eh.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Reported in House</type>
+        <date>2014-12-02T05:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-113hr4200rh/xml/BILLS-113hr4200rh.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Introduced in House</type>
+        <date>2014-03-11T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-113hr4200ih/xml/BILLS-113hr4200ih.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2014-12-03</actionDate>
+      <text>Received in the Senate and Read twice and referred to the Committee on Banking, Housing, and Urban Affairs.</text>
+      <links/>
+    </latestAction>
+    <calendarNumbers>
+      <item>
+        <calendar>U00481</calendar>
+        <number/>
+      </item>
+    </calendarNumbers>
+    <version>1.0.0</version>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>

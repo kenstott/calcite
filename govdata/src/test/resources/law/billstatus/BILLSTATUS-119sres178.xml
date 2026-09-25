@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>178</number>
+    <updateDate>2026-06-16T15:17:58Z</updateDate>
+    <updateDateIncludingText>2026-06-16T15:17:58Z</updateDateIncludingText>
+    <originChamber>Senate</originChamber>
+    <originChamberCode>S</originChamberCode>
+    <type>SRES</type>
+    <introducedDate>2025-04-10</introducedDate>
+    <congress>119</congress>
+    <legislationUrl>https://www.congress.gov/bill/119th-congress/senate-resolution/178</legislationUrl>
+    <actions>
+      <item>
+        <actionDate>2025-05-14</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>The preamble was amended after adoption by Unanimous Consent.</text>
+        <type>Floor</type>
+      </item>
+      <item>
+        <actionDate>2025-04-10</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Submitted in the Senate, considered, and agreed to without amendment and with a preamble by Unanimous Consent. (consideration: CR S2577; text: CR S2574)</text>
+        <type>Floor</type>
+      </item>
+      <item>
+        <actionDate>2025-04-10</actionDate>
+        <text>Passed/agreed to in Senate: Submitted in the Senate, considered, and agreed to without amendment and with a preamble by Unanimous Consent.</text>
+        <type>Floor</type>
+        <actionCode>17000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2025-04-10</actionDate>
+        <text>Introduced in Senate</text>
+        <type>IntroReferral</type>
+        <actionCode>10000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>C001056</bioguideId>
+        <fullName>Sen. Cornyn, John [R-TX]</fullName>
+        <firstName>John</firstName>
+        <lastName>Cornyn</lastName>
+        <party>R</party>
+        <state>TX</state>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <cosponsors>
+      <item>
+        <bioguideId>C001098</bioguideId>
+        <fullName>Sen. Cruz, Ted [R-TX]</fullName>
+        <firstName>Ted</firstName>
+        <lastName>Cruz</lastName>
+        <party>R</party>
+        <state>TX</state>
+        <sponsorshipDate>2025-04-10</sponsorshipDate>
+        <isOriginalCosponsor>True</isOriginalCosponsor>
+      </item>
+    </cosponsors>
+    <policyArea>
+      <name>Sports and Recreation</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects>
+        <item>
+          <name>Athletes</name>
+          <updateDate>2025-06-02T15:39:33Z</updateDate>
+        </item>
+        <item>
+          <name>Congressional tributes</name>
+          <updateDate>2025-06-02T15:39:29Z</updateDate>
+        </item>
+        <item>
+          <name>Professional sports</name>
+          <updateDate>2025-06-02T15:39:38Z</updateDate>
+        </item>
+        <item>
+          <name>Texas</name>
+          <updateDate>2025-06-02T15:39:42Z</updateDate>
+        </item>
+      </legislativeSubjects>
+      <policyArea>
+        <name>Sports and Recreation</name>
+        <updateDate>2025-05-28T13:53:20Z</updateDate>
+      </policyArea>
+    </subjects>
+    <title>A resolution honoring the life and legacy of the late George Foreman.</title>
+    <titles>
+      <item>
+        <titleType>Display Title</titleType>
+        <titleTypeCode>45</titleTypeCode>
+        <title>A resolution honoring the life and legacy of the late George Foreman.</title>
+        <updateDate>2025-04-11T10:56:18Z</updateDate>
+      </item>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <titleTypeCode>6</titleTypeCode>
+        <title>A resolution honoring the life and legacy of the late George Foreman.</title>
+        <updateDate>2025-04-11T10:56:18Z</updateDate>
+      </item>
+    </titles>
+    <amendments>
+      <amendment>
+        <number>2227</number>
+        <congress>119</congress>
+        <type>SAMDT</type>
+        <purpose>To amend the preamble.</purpose>
+        <updateDate>2026-03-12T15:05:55Z</updateDate>
+        <latestAction>
+          <actionDate>2025-05-14</actionDate>
+          <text>Amendment SA 2227 agreed to in Senate by Unanimous Consent.</text>
+          <links>
+            <link>
+              <name>SA 2227</name>
+              <url>https://www.congress.gov/amendment/119th-congress/senate-amendment/2227</url>
+            </link>
+          </links>
+        </latestAction>
+        <sponsors>
+          <item>
+            <bioguideId>C001056</bioguideId>
+            <fullName>Sen. Cornyn, John [R-TX]</fullName>
+            <firstName>John</firstName>
+            <lastName>Cornyn</lastName>
+            <party>R</party>
+            <state>TX</state>
+          </item>
+        </sponsors>
+        <onBehalfOfSponsor>
+          <item>
+            <bioguideId>T000250</bioguideId>
+            <fullName>Sen. Thune, John [R-SD]</fullName>
+            <firstName>John</firstName>
+            <lastName>Thune</lastName>
+            <party>R</party>
+            <state>SD</state>
+            <type>Submitted on behalf of</type>
+          </item>
+          <item>
+            <bioguideId>T000250</bioguideId>
+            <fullName>Sen. Thune, John [R-SD]</fullName>
+            <firstName>John</firstName>
+            <lastName>Thune</lastName>
+            <party>R</party>
+            <state>SD</state>
+            <type>Proposed on behalf of</type>
+          </item>
+        </onBehalfOfSponsor>
+        <proposedDate>2025-05-14T04:00:00Z</proposedDate>
+        <submittedDate>2025-05-14T04:00:00Z</submittedDate>
+        <chamber>Senate</chamber>
+        <amendedBill>
+          <congress>119</congress>
+          <type>SRES</type>
+          <originChamber>Senate</originChamber>
+          <originChamberCode>S</originChamberCode>
+          <number>178</number>
+          <title>A resolution honoring the life and legacy of the late George Foreman.</title>
+          <updateDateIncludingText>2026-06-16</updateDateIncludingText>
+        </amendedBill>
+        <actions>
+          <count>6</count>
+          <actions>
+            <item>
+              <actionDate>2025-05-14</actionDate>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Amendment SA 2227 agreed to in Senate by Unanimous Consent.</text>
+              <type>Floor</type>
+            </item>
+            <item>
+              <actionDate>2025-05-14</actionDate>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Amendment SA 2227 proposed by Senator Thune for Senator Cornyn. (consideration: CR S2932) To amend the preamble.</text>
+              <type>Floor</type>
+            </item>
+            <item>
+              <actionDate>2025-05-14</actionDate>
+              <type>IntroReferral</type>
+              <actionCode>Intro-S</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2025-05-14</actionDate>
+              <text>Senate amendment proposed (on the floor): Amendment SA 2227 proposed by Senator Thune for Senator Cornyn.</text>
+              <type>Floor</type>
+              <actionCode>93000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2025-05-14</actionDate>
+              <text>Senate amendment submitted</text>
+              <type>Floor</type>
+              <actionCode>91000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2025-05-14</actionDate>
+              <text>Senate amendment agreed to: Amendment SA 2227 agreed to in Senate by Unanimous Consent.</text>
+              <type>Floor</type>
+              <actionCode>94000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+          </actions>
+        </actions>
+        <textVersions>
+          <count>1</count>
+        </textVersions>
+      </amendment>
+    </amendments>
+    <textVersions>
+      <item>
+        <type>Amendment Ordered to be Printed (Senate)</type>
+        <date>2025-05-14T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119sres178as/xml/BILLS-119sres178as.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Agreed to Senate</type>
+        <date>2025-04-10T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119sres178ats/xml/BILLS-119sres178ats.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2025-05-14</actionDate>
+      <text>The preamble was amended after adoption by Unanimous Consent.</text>
+    </latestAction>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>

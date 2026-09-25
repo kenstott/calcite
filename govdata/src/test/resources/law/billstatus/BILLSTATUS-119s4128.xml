@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>4128</number>
+    <updateDate>2026-09-25T11:08:31Z</updateDate>
+    <updateDateIncludingText>2026-09-25T11:08:31Z</updateDateIncludingText>
+    <originChamber>Senate</originChamber>
+    <originChamberCode>S</originChamberCode>
+    <type>S</type>
+    <introducedDate>2026-03-18</introducedDate>
+    <congress>119</congress>
+    <legislationUrl>https://www.congress.gov/bill/119th-congress/senate-bill/4128</legislationUrl>
+    <committees>
+      <item>
+        <systemCode>ssga00</systemCode>
+        <name>Homeland Security and Governmental Affairs Committee</name>
+        <chamber>Senate</chamber>
+        <type>Standing</type>
+        <activities>
+          <item>
+            <name>Referred To</name>
+            <date>2026-03-18T17:01:37Z</date>
+          </item>
+        </activities>
+      </item>
+    </committees>
+    <actions>
+      <item>
+        <actionDate>2026-03-18</actionDate>
+        <committees>
+          <item>
+            <systemCode>ssga00</systemCode>
+            <name>Homeland Security and Governmental Affairs Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Read twice and referred to the Committee on Homeland Security and Governmental Affairs.</text>
+        <type>IntroReferral</type>
+      </item>
+      <item>
+        <actionDate>2026-03-18</actionDate>
+        <text>Introduced in Senate</text>
+        <type>IntroReferral</type>
+        <actionCode>10000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>R000608</bioguideId>
+        <fullName>Sen. Rosen, Jacky [D-NV]</fullName>
+        <firstName>Jacky</firstName>
+        <lastName>Rosen</lastName>
+        <party>D</party>
+        <state>NV</state>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <policyArea>
+      <name>Government Operations and Politics</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects/>
+      <policyArea>
+        <name>Government Operations and Politics</name>
+        <updateDate>2026-03-30T23:07:52Z</updateDate>
+      </policyArea>
+    </subjects>
+    <title>No Self-Promotion with Public Dollars Act</title>
+    <titles>
+      <item>
+        <titleType>Display Title</titleType>
+        <titleTypeCode>45</titleTypeCode>
+        <title>No Self-Promotion with Public Dollars Act</title>
+        <updateDate>2026-03-25T04:23:27Z</updateDate>
+      </item>
+      <item>
+        <titleType>Short Title(s) as Introduced</titleType>
+        <titleTypeCode>101</titleTypeCode>
+        <title>No Self-Promotion with Public Dollars Act</title>
+        <updateDate>2026-03-25T04:23:25Z</updateDate>
+        <billTextVersionName>Introduced in Senate</billTextVersionName>
+        <billTextVersionCode>IS</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <titleTypeCode>6</titleTypeCode>
+        <title>A bill to prohibit Cabinet Members and senior executive political appointees from using taxpayer funds to hire political consulting, advertising, and marketing firms, from expediting competitive open bidding processes to contract for official advertisements, and from using official advertisements for self-promotion.</title>
+        <updateDate>2026-03-25T04:18:38Z</updateDate>
+        <billTextVersionName>Introduced in Senate</billTextVersionName>
+        <billTextVersionCode>IS</billTextVersionCode>
+      </item>
+    </titles>
+    <amendments>
+      <amendment>
+        <number>6832</number>
+        <congress>119</congress>
+        <type>SAMDT</type>
+        <purpose>To apply the prohibition relating to self-promotion through official advertisements to the President and the Vice President.</purpose>
+        <updateDate>2026-09-25T11:08:31Z</updateDate>
+        <latestAction>
+          <actionDate>2026-09-24</actionDate>
+          <text>Referred to the Committee on Homeland Security and Governmental Affairs.</text>
+        </latestAction>
+        <sponsors>
+          <item>
+            <bioguideId>R000608</bioguideId>
+            <fullName>Sen. Rosen, Jacky [D-NV]</fullName>
+            <firstName>Jacky</firstName>
+            <lastName>Rosen</lastName>
+            <party>D</party>
+            <state>NV</state>
+          </item>
+        </sponsors>
+        <submittedDate>2026-09-24T04:00:00Z</submittedDate>
+        <chamber>Senate</chamber>
+        <amendedBill>
+          <congress>119</congress>
+          <type>S</type>
+          <originChamber>Senate</originChamber>
+          <originChamberCode>S</originChamberCode>
+          <number>4128</number>
+          <title>No Self-Promotion with Public Dollars Act</title>
+          <updateDateIncludingText>2026-09-25</updateDateIncludingText>
+        </amendedBill>
+        <actions>
+          <count>3</count>
+          <actions>
+            <item>
+              <actionDate>2026-09-24</actionDate>
+              <committees>
+                <item>
+                  <systemCode>ssga00</systemCode>
+                  <name>Homeland Security and Governmental Affairs Committee</name>
+                </item>
+              </committees>
+              <sourceSystem>
+                <code>0</code>
+                <name>Senate</name>
+              </sourceSystem>
+              <text>Referred to the Committee on Homeland Security and Governmental Affairs.</text>
+              <type>IntroReferral</type>
+            </item>
+            <item>
+              <actionDate>2026-09-24</actionDate>
+              <type>IntroReferral</type>
+              <actionCode>Intro-S</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+            <item>
+              <actionDate>2026-09-24</actionDate>
+              <text>Senate amendment submitted</text>
+              <type>Floor</type>
+              <actionCode>91000</actionCode>
+              <sourceSystem>
+                <code>9</code>
+                <name>Library of Congress</name>
+              </sourceSystem>
+            </item>
+          </actions>
+        </actions>
+      </amendment>
+    </amendments>
+    <textVersions>
+      <item>
+        <type>Introduced in Senate</type>
+        <date>2026-03-18T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119s4128is/xml/BILLS-119s4128is.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2026-03-18</actionDate>
+      <text>Read twice and referred to the Committee on Homeland Security and Governmental Affairs.</text>
+    </latestAction>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>
