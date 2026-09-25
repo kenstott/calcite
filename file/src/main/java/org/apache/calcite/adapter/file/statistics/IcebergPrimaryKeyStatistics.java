@@ -111,13 +111,16 @@ public final class IcebergPrimaryKeyStatistics {
       throw new IllegalStateException(
           "Cannot record primary-key statistics for a table with no current snapshot");
     }
-    table.updateProperties()
+    final org.apache.iceberg.UpdateProperties update = table.updateProperties()
         .set(SNAPSHOT_PROPERTY, Long.toString(table.currentSnapshot().snapshotId()))
         .set(COLUMNS_PROPERTY, String.join(",", stats.getKeyColumns()))
         .set(KEYED_ROWS_PROPERTY, Long.toString(stats.getKeyedRowCount()))
         .set(DISTINCT_KEYS_PROPERTY, Long.toString(stats.getDistinctKeyEstimate()))
-        .set(EXACT_PROPERTY, Boolean.toString(stats.isExact()))
-        .commit();
+        .set(EXACT_PROPERTY, Boolean.toString(stats.isExact()));
+    // A property commit moves the version-hint pointer like any other metadata commit, so it
+    // takes the same per-table lock the ETL writers hold.
+    org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock.runExclusive(
+        table.location(), update::commit);
     LOGGER.debug("Recorded primary-key statistics for {}: {}", table, stats);
   }
 }

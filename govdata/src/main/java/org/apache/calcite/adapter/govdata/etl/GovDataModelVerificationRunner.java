@@ -781,43 +781,43 @@ public final class GovDataModelVerificationRunner {
       if (warehouse == null || warehouse.isEmpty()) {
         return null;
       }
-      org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
+      if (!warehouse.startsWith("s3://") && !warehouse.startsWith("s3a://")) {
+        return new org.apache.iceberg.hadoop.HadoopTables(
+            new org.apache.hadoop.conf.Configuration()).load(warehouse + "/" + schema + "/" + table);
+      }
       String endpoint =
           org.apache.calcite.adapter.file.etl.ModelOperand.getString(schema + ".s3Config.endpoint");
-      if (endpoint != null && !endpoint.isEmpty()) {
-        conf.set("fs.s3a.endpoint", endpoint);
-        conf.set("fs.s3a.path.style.access", "true");
-        // Same three settings IcebergDirectLoader applies, and for the same reason: R2
-        // rejects AWS region names outright ("Must be one of: wnam, enam, ... auto") while
-        // the S3A/SDK client still requires a value, so an unset region makes every HEAD
-        // fail with 400 Bad Request. Without these, loading the table against the R2 mirror
-        // 400s on version-hint.text and the duplicate-PK check is silently skipped with
-        // "Could not load Iceberg table" — the check reports nothing rather than failing.
-        conf.set("fs.s3a.endpoint.region", "auto");
-        conf.set("fs.s3a.change.detection.mode", "none");
-        conf.set("fs.s3a.change.detection.version.required", "false");
-      }
       String keyId = org.apache.calcite.adapter.file.etl.ModelOperand
           .getString(schema + ".s3Config.accessKeyId");
       String secret = org.apache.calcite.adapter.file.etl.ModelOperand
           .getString(schema + ".s3Config.secretAccessKey");
-      if (keyId != null && secret != null) {
-        conf.set("fs.s3a.access.key", keyId);
-        conf.set("fs.s3a.secret.key", secret);
-      }
       // R2 credentials are temporary and arrive with a session token. Static access/secret
       // keys alone authenticate against MinIO but are rejected by R2, so without this the
       // statistic can be neither read nor recorded on exactly the remote store it exists for.
       String sessionToken = org.apache.calcite.adapter.file.etl.ModelOperand
           .getString(schema + ".s3Config.sessionToken");
-      if (sessionToken != null && !sessionToken.isEmpty()) {
-        conf.set("fs.s3a.session.token", sessionToken);
-        conf.set("fs.s3a.aws.credentials.provider",
-            "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider");
+      // The table is opened through S3FileIOTables, which reads version-hint.text and fails when
+      // it cannot. HadoopTables answers an unreadable hint by loading the highest vN.metadata.json
+      // in the directory instead, and this load is committed to (recordDupStats), so a directory
+      // holding an older lineage's higher versions would take the commit and the hint with it.
+      java.util.Map<String, String> s3 = new java.util.HashMap<String, String>();
+      if (endpoint != null && !endpoint.isEmpty()) {
+        s3.put("fs.s3a.endpoint", endpoint);
+        s3.put("fs.s3a.path.style.access", "true");
+        // R2 rejects AWS region names outright ("Must be one of: wnam, enam, ... auto") while
+        // the SDK client still requires a value, so an unset region makes every HEAD fail with
+        // 400 Bad Request. MinIO ignores it.
+        s3.put("fs.s3a.endpoint.region", "auto");
       }
-      String location = warehouse.replaceFirst("^s3://", "s3a://")
-          + "/" + schema + "/" + table;
-      return new org.apache.iceberg.hadoop.HadoopTables(conf).load(location);
+      if (keyId != null && secret != null) {
+        s3.put("fs.s3a.access.key", keyId);
+        s3.put("fs.s3a.secret.key", secret);
+      }
+      if (sessionToken != null && !sessionToken.isEmpty()) {
+        s3.put("fs.s3a.session.token", sessionToken);
+      }
+      return org.apache.calcite.adapter.file.iceberg.S3FileIOTables.loadWritable(
+          warehouse.replaceFirst("^s3a://", "s3://") + "/" + schema + "/" + table, s3);
     // Throwable, not Exception: an incompatible dependency raises an Error. Rethrown rather
     // than nulled so the caller can say why the statistic was unreachable — a silent null
     // here reads as "no statistic yet" and makes every future run scan with no explanation.
