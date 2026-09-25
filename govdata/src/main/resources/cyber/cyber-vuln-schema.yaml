@@ -141,8 +141,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 28
       contiguous: true
-      rowCount: 358571
-      checkedAt: "2026-09-16T21:59:29Z"
+      rowCount: 393307
+      checkedAt: "2026-09-25T01:56:15Z"
     # Windowing is driven by NvdPublishedWindowDimensionResolver (pubStartDate/pubEndDate
     # dims): quarterly history + daily tip, GOVDATA_START_YEAR-bounded. Rows route to the
     # correct [type,year,quarter] partition via the pub_year/pub_month computed columns.
@@ -311,8 +311,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 28
       contiguous: true
-      rowCount: 242219
-      checkedAt: "2026-09-16T21:59:30Z"
+      rowCount: 389244
+      checkedAt: "2026-09-25T01:56:18Z"
     # Same NvdPublishedWindowDimensionResolver windowing as vulnerabilities; rows route to
     # [type,year,quarter] via pub_year/pub_month (CWE rows lack published → year from cve_id).
     # DQ sample cap (GOVDATA_DQ mode): same rationale as vulnerabilities — sample, don't full-crawl.
@@ -428,8 +428,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 28
       contiguous: true
-      rowCount: 2690302
-      checkedAt: "2026-09-16T21:59:32Z"
+      rowCount: 2691149
+      checkedAt: "2026-09-25T01:56:22Z"
     dqRowLimit: 5000
     partitions:
       style: hive
@@ -1011,7 +1011,7 @@ partitionedTables:
       distinctYears: 3
       contiguous: true
       rowCount: 41
-      checkedAt: "2026-09-16T21:59:33Z"
+      checkedAt: "2026-09-25T01:56:22Z"
     dataset_type: delta
     partitions:
       style: hive
