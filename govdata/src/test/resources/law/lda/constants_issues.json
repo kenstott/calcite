@@ -1,0 +1,26 @@
+[
+ {
+  "value": "ACC",
+  "name": "Accounting"
+ },
+ {
+  "value": "ADV",
+  "name": "Advertising"
+ },
+ {
+  "value": "AER",
+  "name": "Aerospace"
+ },
+ {
+  "value": "AGR",
+  "name": "Agriculture"
+ },
+ {
+  "value": "ALC",
+  "name": "Alcohol and Drug Abuse"
+ },
+ {
+  "value": "ANI",
+  "name": "Animals"
+ }
+]

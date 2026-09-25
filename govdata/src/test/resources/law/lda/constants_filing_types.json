@@ -1,0 +1,26 @@
+[
+ {
+  "value": "RR",
+  "name": "Registration"
+ },
+ {
+  "value": "RA",
+  "name": "Registration - Amendment"
+ },
+ {
+  "value": "Q1",
+  "name": "1st Quarter - Report"
+ },
+ {
+  "value": "Q1Y",
+  "name": "1st Quarter - Report (No Activity)"
+ },
+ {
+  "value": "1T",
+  "name": "1st Quarter - Termination"
+ },
+ {
+  "value": "1TY",
+  "name": "1st Quarter - Termination (No Activity)"
+ }
+]

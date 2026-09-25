@@ -1,0 +1,521 @@
+{
+ "count": 4,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "url": "https://lda.gov/api/v1/filings/8149a0b7-637b-4080-ae40-9fb7dceddc4f/",
+   "filing_uuid": "8149a0b7-637b-4080-ae40-9fb7dceddc4f",
+   "filing_type": "Q2",
+   "filing_type_display": "2nd Quarter - Report",
+   "filing_year": 2025,
+   "filing_period": "second_quarter",
+   "filing_period_display": "2nd Quarter (Apr 1 - June 30)",
+   "filing_document_url": "https://lda.gov/filings/public/filing/8149a0b7-637b-4080-ae40-9fb7dceddc4f/print/",
+   "filing_document_content_type": "text/html",
+   "income": "5500.00",
+   "expenses": null,
+   "expenses_method": null,
+   "expenses_method_display": null,
+   "posted_by_name": null,
+   "dt_posted": "2025-06-03T11:04:32-04:00",
+   "termination_date": null,
+   "registrant_country": "United States of America",
+   "registrant_ppb_country": null,
+   "registrant_address_1": "8052 Sky Blue Dr Alexandria VA 22315",
+   "registrant_address_2": null,
+   "registrant_different_address": false,
+   "registrant_city": "Alexandria",
+   "registrant_state": "VA",
+   "registrant_zip": "22315",
+   "registrant": {
+    "id": 401108124,
+    "url": "https://lda.gov/api/v1/registrants/401108124/",
+    "house_registrant_id": 66907,
+    "name": "HOLLINGER GROUP CONSULTING",
+    "description": null,
+    "address_1": "7100 point replete circle",
+    "address_2": null,
+    "address_3": null,
+    "address_4": null,
+    "city": "fort belvoir",
+    "state": "VA",
+    "state_display": "Virginia",
+    "zip": "22060",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "contact_name": null,
+    "contact_telephone": null,
+    "dt_updated": "2026-05-08T14:26:19.594238-04:00"
+   },
+   "client": {
+    "id": 64967,
+    "url": "https://lda.gov/api/v1/clients/64967/",
+    "client_id": 64967,
+    "name": "MYHY",
+    "general_description": "Defense Sport Nutrition",
+    "client_government_entity": null,
+    "client_self_select": false,
+    "state": "LA",
+    "state_display": "Louisiana",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_state": "VA",
+    "ppb_state_display": "Virginia",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "effective_date": "2025-02-06"
+   },
+   "lobbying_activities": [
+    {
+     "general_issue_code": "DEF",
+     "general_issue_code_display": "Defense",
+     "description": "hydration supplements for servicemembers",
+     "foreign_entity_issues": "",
+     "lobbyists": [
+      {
+       "lobbyist": {
+        "id": 149015,
+        "prefix": null,
+        "prefix_display": null,
+        "first_name": "KEVIN",
+        "nickname": null,
+        "middle_name": null,
+        "last_name": "HOLLINGER",
+        "suffix": null,
+        "suffix_display": null
+       },
+       "covered_position": "Principal",
+       "new": false
+      }
+     ],
+     "government_entities": [
+      {
+       "id": 30,
+       "name": "Army, Dept of (Other)"
+      },
+      {
+       "id": 2,
+       "name": "HOUSE OF REPRESENTATIVES"
+      },
+      {
+       "id": 242,
+       "name": "Natl Guard"
+      },
+      {
+       "id": 1,
+       "name": "SENATE"
+      }
+     ]
+    }
+   ],
+   "conviction_disclosures": [],
+   "foreign_entities": [],
+   "affiliated_organizations": []
+  },
+  {
+   "url": "https://lda.gov/api/v1/filings/9f2d5a7c-c8d9-4a15-9d35-6e74daba1233/",
+   "filing_uuid": "9f2d5a7c-c8d9-4a15-9d35-6e74daba1233",
+   "filing_type": "RR",
+   "filing_type_display": "Registration",
+   "filing_year": 2025,
+   "filing_period": "first_quarter",
+   "filing_period_display": "1st Quarter (Jan 1 - Mar 31)",
+   "filing_document_url": "https://lda.gov/filings/public/filing/9f2d5a7c-c8d9-4a15-9d35-6e74daba1233/print/",
+   "filing_document_content_type": "text/html",
+   "income": null,
+   "expenses": null,
+   "expenses_method": null,
+   "expenses_method_display": null,
+   "posted_by_name": null,
+   "dt_posted": "2025-01-01T12:25:49-05:00",
+   "termination_date": null,
+   "registrant_country": "United States of America",
+   "registrant_ppb_country": null,
+   "registrant_address_1": "38 S Blue Angel Pkwy",
+   "registrant_address_2": "#214",
+   "registrant_different_address": null,
+   "registrant_city": "Pensacola",
+   "registrant_state": "FL",
+   "registrant_zip": "32506",
+   "registrant": {
+    "id": 401109030,
+    "url": "https://lda.gov/api/v1/registrants/401109030/",
+    "house_registrant_id": 56732,
+    "name": "COVENANT GOVERNMENT AFFAIRS, LLC",
+    "description": null,
+    "address_1": "38 S Blue Angel Pkwy",
+    "address_2": "#214",
+    "address_3": null,
+    "address_4": null,
+    "city": "Pensacola",
+    "state": "FL",
+    "state_display": "Florida",
+    "zip": "32506",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "contact_name": null,
+    "contact_telephone": null,
+    "dt_updated": "2026-07-30T14:02:38.754936-04:00"
+   },
+   "client": {
+    "id": 63335,
+    "url": "https://lda.gov/api/v1/clients/63335/",
+    "client_id": 63335,
+    "name": "MBDA INCORPORATED",
+    "general_description": "Manufacturing",
+    "client_government_entity": null,
+    "client_self_select": false,
+    "state": "VA",
+    "state_display": "Virginia",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_state": "VA",
+    "ppb_state_display": "Virginia",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "effective_date": "2025-01-01"
+   },
+   "lobbying_activities": [
+    {
+     "general_issue_code": "DEF",
+     "general_issue_code_display": "Defense",
+     "description": "FY26 legislative cycle initiatives associated with Air-to Ground, Air-to Air, Ground/Sea to Air and Range Expansive weapon systems",
+     "foreign_entity_issues": null,
+     "lobbyists": [
+      {
+       "lobbyist": {
+        "id": 148053,
+        "prefix": null,
+        "prefix_display": null,
+        "first_name": "JOHN",
+        "nickname": null,
+        "middle_name": null,
+        "last_name": "ROBERTI",
+        "suffix": null,
+        "suffix_display": null
+       },
+       "covered_position": null,
+       "new": true
+      }
+     ],
+     "government_entities": []
+    }
+   ],
+   "conviction_disclosures": [],
+   "foreign_entities": [
+    {
+     "name": "AIRBUS SE",
+     "contribution": "0.00",
+     "ownership_percentage": "37.50",
+     "address": "Bredeweg 28b, 2752AA",
+     "city": "Moerkapelle",
+     "state": null,
+     "state_display": null,
+     "country": "NL",
+     "country_display": "Netherlands",
+     "ppb_city": "Moerkapelle",
+     "ppb_state": null,
+     "ppb_state_display": null,
+     "ppb_country": "NL",
+     "ppb_country_display": "Netherlands"
+    },
+    {
+     "name": "BAE SYSTEMS PLC",
+     "contribution": "0.00",
+     "ownership_percentage": "37.50",
+     "address": "Stirling Square 6 Carlton Gardens",
+     "city": "London",
+     "state": null,
+     "state_display": null,
+     "country": "GB",
+     "country_display": "United Kingdom",
+     "ppb_city": "London",
+     "ppb_state": null,
+     "ppb_state_display": null,
+     "ppb_country": "GB",
+     "ppb_country_display": "United Kingdom"
+    }
+   ],
+   "affiliated_organizations": []
+  },
+  {
+   "url": "https://lda.gov/api/v1/filings/ffb87b82-de68-4805-a6f4-23c8990386e6/",
+   "filing_uuid": "ffb87b82-de68-4805-a6f4-23c8990386e6",
+   "filing_type": "RR",
+   "filing_type_display": "Registration",
+   "filing_year": 2025,
+   "filing_period": "first_quarter",
+   "filing_period_display": "1st Quarter (Jan 1 - Mar 31)",
+   "filing_document_url": "https://lda.gov/filings/public/filing/ffb87b82-de68-4805-a6f4-23c8990386e6/print/",
+   "filing_document_content_type": "text/html",
+   "income": null,
+   "expenses": null,
+   "expenses_method": null,
+   "expenses_method_display": null,
+   "posted_by_name": null,
+   "dt_posted": "2025-01-13T13:22:45-05:00",
+   "termination_date": null,
+   "registrant_country": "Canada",
+   "registrant_ppb_country": "United States of America",
+   "registrant_address_1": "23 E Main St",
+   "registrant_address_2": null,
+   "registrant_different_address": null,
+   "registrant_city": "Lyn",
+   "registrant_state": "ON",
+   "registrant_zip": null,
+   "registrant": {
+    "id": 401109100,
+    "url": "https://lda.gov/api/v1/registrants/401109100/",
+    "house_registrant_id": 56770,
+    "name": "MCLEOD STRATEGIES",
+    "description": null,
+    "address_1": "23 E Main St",
+    "address_2": null,
+    "address_3": "K0E 1M0",
+    "address_4": null,
+    "city": "Lyn",
+    "state": "ON",
+    "state_display": "ON",
+    "zip": "K0E1M",
+    "country": "CA",
+    "country_display": "Canada",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "contact_name": null,
+    "contact_telephone": null,
+    "dt_updated": "2026-07-30T15:16:39.244349-04:00"
+   },
+   "client": {
+    "id": 63524,
+    "url": "https://lda.gov/api/v1/clients/63524/",
+    "client_id": 63524,
+    "name": "ASSOCIATION OF CLINICAL RESEARCH ORGANIZATIONS",
+    "general_description": "trade association",
+    "client_government_entity": null,
+    "client_self_select": false,
+    "state": "DC",
+    "state_display": "District of Columbia",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_state": "DC",
+    "ppb_state_display": "District of Columbia",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "effective_date": "2025-01-01"
+   },
+   "lobbying_activities": [
+    {
+     "general_issue_code": "HCR",
+     "general_issue_code_display": "Health Issues",
+     "description": "clinical research, data privacy, artificial intelligence",
+     "foreign_entity_issues": null,
+     "lobbyists": [
+      {
+       "lobbyist": {
+        "id": 148208,
+        "prefix": null,
+        "prefix_display": null,
+        "first_name": "SOPHIA",
+        "nickname": null,
+        "middle_name": null,
+        "last_name": "MCLEOD",
+        "suffix": null,
+        "suffix_display": null
+       },
+       "covered_position": null,
+       "new": true
+      }
+     ],
+     "government_entities": []
+    },
+    {
+     "general_issue_code": "MED",
+     "general_issue_code_display": "Medical/Disease Research/Clinical Labs",
+     "description": "clinical research, data privacy, artificial intelligence",
+     "foreign_entity_issues": null,
+     "lobbyists": [
+      {
+       "lobbyist": {
+        "id": 148208,
+        "prefix": null,
+        "prefix_display": null,
+        "first_name": "SOPHIA",
+        "nickname": null,
+        "middle_name": null,
+        "last_name": "MCLEOD",
+        "suffix": null,
+        "suffix_display": null
+       },
+       "covered_position": null,
+       "new": true
+      }
+     ],
+     "government_entities": []
+    },
+    {
+     "general_issue_code": "SCI",
+     "general_issue_code_display": "Science/Technology",
+     "description": "clinical research, data privacy, artificial intelligence",
+     "foreign_entity_issues": null,
+     "lobbyists": [
+      {
+       "lobbyist": {
+        "id": 148208,
+        "prefix": null,
+        "prefix_display": null,
+        "first_name": "SOPHIA",
+        "nickname": null,
+        "middle_name": null,
+        "last_name": "MCLEOD",
+        "suffix": null,
+        "suffix_display": null
+       },
+       "covered_position": null,
+       "new": true
+      }
+     ],
+     "government_entities": []
+    }
+   ],
+   "conviction_disclosures": [],
+   "foreign_entities": [],
+   "affiliated_organizations": [
+    {
+     "name": "WASHINGTON HEALTH STRATEGIES GROUP",
+     "url": null,
+     "address_1": "601 New Jersey Ave NW, Ste. 350",
+     "address_2": null,
+     "address_3": null,
+     "address_4": null,
+     "city": "Washington",
+     "state": "DC",
+     "state_display": "District of Columbia",
+     "zip": "20001",
+     "country": "US",
+     "country_display": "United States of America",
+     "ppb_city": null,
+     "ppb_state": "DC",
+     "ppb_state_display": "District of Columbia",
+     "ppb_country": "US",
+     "ppb_country_display": "United States of America"
+    }
+   ]
+  },
+  {
+   "url": "https://lda.gov/api/v1/filings/3ff95a34-6907-456a-ad53-ec0286d5a45d/",
+   "filing_uuid": "3ff95a34-6907-456a-ad53-ec0286d5a45d",
+   "filing_type": "RR",
+   "filing_type_display": "Registration",
+   "filing_year": 2025,
+   "filing_period": "first_quarter",
+   "filing_period_display": "1st Quarter (Jan 1 - Mar 31)",
+   "filing_document_url": "https://lda.gov/filings/public/filing/3ff95a34-6907-456a-ad53-ec0286d5a45d/print/",
+   "filing_document_content_type": "text/html",
+   "income": null,
+   "expenses": null,
+   "expenses_method": null,
+   "expenses_method_display": null,
+   "posted_by_name": null,
+   "dt_posted": "2025-02-11T14:22:24-05:00",
+   "termination_date": null,
+   "registrant_country": "United States of America",
+   "registrant_ppb_country": null,
+   "registrant_address_1": "1599 North Colonial Terrace",
+   "registrant_address_2": null,
+   "registrant_different_address": null,
+   "registrant_city": "ARLINGTON",
+   "registrant_state": "VA",
+   "registrant_zip": "22209",
+   "registrant": {
+    "id": 75570,
+    "url": "https://lda.gov/api/v1/registrants/75570/",
+    "house_registrant_id": 36049,
+    "name": "J M BURKMAN & ASSOCIATES",
+    "description": "Lobbying",
+    "address_1": "1599 North Colonial Terrace",
+    "address_2": null,
+    "address_3": null,
+    "address_4": null,
+    "city": "ARLINGTON",
+    "state": "VA",
+    "state_display": "Virginia",
+    "zip": "22209",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "contact_name": null,
+    "contact_telephone": null,
+    "dt_updated": "2026-07-17T17:28:23.932968-04:00"
+   },
+   "client": {
+    "id": 64150,
+    "url": "https://lda.gov/api/v1/clients/64150/",
+    "client_id": 64150,
+    "name": "ERIKA MAGARIAN",
+    "general_description": "A private individual.",
+    "client_government_entity": null,
+    "client_self_select": false,
+    "state": "FL",
+    "state_display": "Florida",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_state": "FL",
+    "ppb_state_display": "Florida",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "effective_date": "2025-02-04"
+   },
+   "lobbying_activities": [
+    {
+     "general_issue_code": "GOV",
+     "general_issue_code_display": "Government Issues",
+     "description": "Florida Congressional Delegation Issues.",
+     "foreign_entity_issues": null,
+     "lobbyists": [
+      {
+       "lobbyist": {
+        "id": 46860,
+        "prefix": "mr",
+        "prefix_display": "MR.",
+        "first_name": "JACK",
+        "nickname": null,
+        "middle_name": "MACAULEY",
+        "last_name": "BURKMAN",
+        "suffix": null,
+        "suffix_display": null
+       },
+       "covered_position": null,
+       "new": true
+      }
+     ],
+     "government_entities": []
+    }
+   ],
+   "conviction_disclosures": [
+    {
+     "lobbyist": {
+      "id": 46860,
+      "prefix": "mr",
+      "prefix_display": "MR.",
+      "first_name": "JACK",
+      "nickname": null,
+      "middle_name": "MACAULEY",
+      "last_name": "BURKMAN",
+      "suffix": null,
+      "suffix_display": null
+     },
+     "date": "2022-11-30",
+     "description": "Illegal campaign robo calls, telecommunications fraud. Cuyahoga County, Ohio. Offense took place in September 2020. Section 2913.05 Ohio code"
+    }
+   ],
+   "foreign_entities": [],
+   "affiliated_organizations": []
+  }
+ ]
+}
