@@ -344,27 +344,9 @@ public class SchemaLifecycleProcessor {
     if (resolvedDimensions != null && !resolvedDimensions.isEmpty()) {
       LOGGER.debug("Using {} resolved dimensions for table '{}'",
           resolvedDimensions.size(), tableConfig.getName());
-      // Faithful copy with only dimensions overridden — must carry EVERY field, or
-      // resolved-dimension tables silently lose config. Dropping freshness/datasetType/
-      // backfillPeriod here is why the freshness gate never fired and snapshot/delta
-      // semantics were lost for any table whose dimensions get resolved by a listener.
-      effectiveConfig = EtlPipelineConfig.builder()
-          .name(tableConfig.getName())
-          .enabled(tableConfig.isEnabled())
-          .sourceType(tableConfig.getSourceType())
-          .source(tableConfig.getSource())
-          .rawSourceConfig(tableConfig.getRawSourceConfig())
-          .dimensions(resolvedDimensions)
-          .columns(tableConfig.getColumns())
-          .materialize(tableConfig.getMaterialize())
-          .errorHandling(tableConfig.getErrorHandling())
-          .hooks(tableConfig.getHooks())
-          .freshness(tableConfig.getFreshness())
-          .releaseWindow(tableConfig.getReleaseWindow())
-          .datasetType(tableConfig.getDatasetType())
-          .backfillPeriod(tableConfig.getBackfillPeriod())
-          .dqRowLimit(tableConfig.getDqRowLimit())
-          .build();
+      // withDimensions carries every other field, so resolved-dimension tables keep their
+      // freshness, datasetType, backfillPeriod and lookbackPeriods.
+      effectiveConfig = tableConfig.withDimensions(resolvedDimensions);
     }
 
     // Create DataProvider: check for explicit class first, then use listener's fetchData hook

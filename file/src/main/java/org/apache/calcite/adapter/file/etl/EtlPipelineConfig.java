@@ -269,6 +269,38 @@ public class EtlPipelineConfig {
   }
 
   /**
+   * Returns a copy of this config with only the dimensions replaced.
+   *
+   * <p>Every other field is carried over. This lives on the class that owns the fields so a
+   * caller resolving dimensions at run time cannot drop configuration the way a hand-written
+   * field-by-field copy can; {@code EtlPipelineConfigCopyTest} fails if a field is added here
+   * without being carried.
+   *
+   * @param resolvedDimensions the dimensions the copy uses
+   * @return a config identical to this one except for its dimensions
+   */
+  public EtlPipelineConfig withDimensions(Map<String, DimensionConfig> resolvedDimensions) {
+    return builder()
+        .name(name)
+        .enabled(enabled)
+        .sourceType(sourceType)
+        .source(source)
+        .rawSourceConfig(rawSourceConfig)
+        .dimensions(resolvedDimensions)
+        .columns(columns)
+        .materialize(materialize)
+        .errorHandling(errorHandling)
+        .hooks(hooks)
+        .freshness(freshness)
+        .releaseWindow(releaseWindow)
+        .datasetType(datasetType)
+        .backfillPeriod(backfillPeriod)
+        .dqRowLimit(dqRowLimit)
+        .lookbackPeriods(lookbackPeriods)
+        .build();
+  }
+
+  /**
    * Creates an EtlPipelineConfig from a YAML/JSON map.
    *
    * <p>Handles both Map and JsonNode values in the metadata. This allows schema
