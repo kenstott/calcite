@@ -4536,7 +4536,10 @@ partitionedTables:
       # resultRecordCount are injected by the OFFSET paginator — do NOT hardcode them
       # here. ArcGIS caps a page at maxRecordCount=2000; pageSize 2000 makes full pages
       # exactly 2000 rows so termination fires on the short final page (no count in body).
-      url: "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Rail_Network_Lines_Class_I_Railroads/FeatureServer/0/query?where=RROWNER1%20IN%20%28%27UP%27%2C%27BNSF%27%2C%27CSXT%27%2C%27NS%27%2C%27CN%27%2C%27CPKC%27%29&outStatistics=%5B%7B%22statisticType%22%3A%22sum%22%2C%22onStatisticField%22%3A%22MILES%22%2C%22outStatisticFieldName%22%3A%22TOTAL_MILES%22%7D%2C%7B%22statisticType%22%3A%22count%22%2C%22onStatisticField%22%3A%22OBJECTID%22%2C%22outStatisticFieldName%22%3A%22SEGMENT_COUNT%22%7D%5D&groupByFieldsForStatistics=STCNTYFIPS%2CRROWNER1&orderByFields=STCNTYFIPS%2CRROWNER1&f=json"
+      # STCNTYFIPS IS NOT NULL is in the where clause (not the transformer) so a page is
+      # never shortened after fetch: the paginator ends on any page under pageSize, and the
+      # Canadian mileage rows (null county FIPS) would otherwise cut page 1 short.
+      url: "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Rail_Network_Lines_Class_I_Railroads/FeatureServer/0/query?where=RROWNER1%20IN%20%28%27UP%27%2C%27BNSF%27%2C%27CSXT%27%2C%27NS%27%2C%27CN%27%2C%27CPKC%27%29%20AND%20STCNTYFIPS%20IS%20NOT%20NULL&outStatistics=%5B%7B%22statisticType%22%3A%22sum%22%2C%22onStatisticField%22%3A%22MILES%22%2C%22outStatisticFieldName%22%3A%22TOTAL_MILES%22%7D%2C%7B%22statisticType%22%3A%22count%22%2C%22onStatisticField%22%3A%22OBJECTID%22%2C%22outStatisticFieldName%22%3A%22SEGMENT_COUNT%22%7D%5D&groupByFieldsForStatistics=STCNTYFIPS%2CRROWNER1&orderByFields=STCNTYFIPS%2CRROWNER1&f=json"
       method: GET
       response:
         format: json

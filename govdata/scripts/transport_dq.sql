@@ -1092,7 +1092,7 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
 
 INSERT INTO dq_results
 SELECT 'transport', 'class1_rail_county_adjacency', 'T2_row_count',
-  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END, n, 2000, 'Expected >=2000 county x Class I railroad rows'
+  CASE WHEN n >= 2800 THEN 'pass' ELSE 'fail' END, n, 2800, 'Expected >=2800 county x Class I railroad rows (2,885 confirmed live 25 Sep 2026)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true));
 
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/class1_rail_county_adjacency', allow_moved_paths := true) LIMIT 3;

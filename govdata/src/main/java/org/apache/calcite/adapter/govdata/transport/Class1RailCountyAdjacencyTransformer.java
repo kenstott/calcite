@@ -36,8 +36,9 @@ import java.util.Map;
  * {@code CNTYFIPS} fields carry inconsistent formatting on a handful of segments — postal
  * abbreviations instead of numeric FIPS in {@code STFIPS}, unpadded digits in {@code CNTYFIPS} —
  * so grouping or deriving from those directly produces spurious duplicate county rows; the
- * 5-digit {@code STCNTYFIPS} does not have this problem and is authoritative). Rows with a null
- * {@code STCNTYFIPS} are the network's Canadian mileage (no U.S. county FIPS) and are skipped.
+ * 5-digit {@code STCNTYFIPS} does not have this problem and is authoritative). The source query's
+ * WHERE clause excludes the network's Canadian mileage (null {@code STCNTYFIPS}); it must not be
+ * dropped here, because the paginator ends on any page shorter than {@code pageSize}.
  *
  * <p>Unlike {@link FaaAirportsTransformer} the WHERE clause already restricts the source view to
  * the current AAR Class I roster ({@code RROWNER1 IN ('UP','BNSF','CSXT','NS','CN','CPKC')}) —
@@ -85,8 +86,8 @@ public class Class1RailCountyAdjacencyTransformer implements ResponseTransformer
         }
         String countyFips = text(a, "STCNTYFIPS");
         if (countyFips == null || countyFips.length() != 5) {
-          // Canadian mileage carries no U.S. county FIPS; not in scope for this table.
-          continue;
+          throw new RuntimeException("class1_rail_county_adjacency: STCNTYFIPS is not a "
+              + "5-digit FIPS: " + countyFips);
         }
         String railroadCode = text(a, "RROWNER1");
         ObjectNode row = MAPPER.createObjectNode();
