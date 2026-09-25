@@ -484,8 +484,8 @@ case "$SCHEMA" in
   # through its own dimension, and LawSchemaFactory.deriveEarlyProperties() (via CongressRange)
   # turns them into the Congress range for the bill tables.
   #   daily             every table, for the current year
-  #   historical|once   the year-addressed tables only, from GOVDATA_START_YEAR (each table's own
-  #                     default when unset) through last year
+  #   historical|once   the year-addressed tables only, from GOVDATA_START_YEAR (2010 when unset,
+  #                     like every other schema) through last year
   #   YYYY | YYYY-YYYY  the year-addressed tables only, for that year or range
   # A backfill must not re-run the snapshots — usc_sections re-downloads the whole U.S. Code from
   # the slow OLRC server — so every non-daily mode is scoped to the tables that have a year or
@@ -493,7 +493,6 @@ case "$SCHEMA" in
   # already scoped the run with GOVDATA_TABLES.
   law)
     _law_year_addressed_only=true
-    _law_start_year=""
     case "$MODE" in
       daily)
         _law_start_year="$INCREMENTAL_YEAR"
@@ -501,6 +500,7 @@ case "$SCHEMA" in
         _law_year_addressed_only=false
         ;;
       historical|once)
+        _law_start_year="${GOVDATA_START_YEAR:-2010}"
         _law_end_year=$((INCREMENTAL_YEAR - 1))
         ;;
       [0-9][0-9][0-9][0-9])
@@ -528,9 +528,7 @@ PY
       fi
       export GOVDATA_TABLES
     fi
-    if [ -n "$_law_start_year" ]; then
-      export GOVDATA_START_YEAR="$_law_start_year"
-    fi
+    export GOVDATA_START_YEAR="$_law_start_year"
     export GOVDATA_END_YEAR="$_law_end_year"
     run_etl_inline "$(build_inline_model law)" "$WORKER_ID"
     ;;

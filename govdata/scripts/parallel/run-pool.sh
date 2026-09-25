@@ -179,6 +179,9 @@ for arg in "$@"; do
       _add_sec_13f_years
       queue+=(sec_prices:historical fec:historical fedregister:historical)
       queue+=(officials:historical officials:daily)
+      # law:historical is scoped by worker.sh to the year/congress-addressed tables; law:daily
+      # (queued with econ_reference below) covers the year-agnostic snapshots and the current year.
+      queue+=(law:historical)
       # cyber_threat:historical is intentionally omitted — see the historical) alias comment
       # below: worker-cyber.sh's historical case has no cyber_threat branch (daily-only feed),
       # so queuing it here would just spin up a worker slot that does nothing.
@@ -284,7 +287,7 @@ for arg in "$@"; do
       # Constrained to schemas that have *_dq.sql scripts.
       queue+=(
         sec:dq sec_secondary:dq sec_prices:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
-        fec:dq fedregister:dq officials:dq lands:dq health:dq patents:dq ref:dq
+        fec:dq fedregister:dq officials:dq law:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
         cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq banking:dq
       )
@@ -296,7 +299,7 @@ for arg in "$@"; do
       export GOVDATA_RUN_MODE="historical"
       queue+=(
         sec:dq-rebuild sec_secondary:dq-rebuild sec_prices:dq-rebuild weather:dq-rebuild edu:dq-rebuild census:dq-rebuild econ:dq-rebuild
-        crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild officials:dq-rebuild
+        crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild officials:dq-rebuild law:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
         cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild banking:dq-rebuild
@@ -309,7 +312,7 @@ for arg in "$@"; do
       export GOVDATA_RUN_MODE="historical"
       queue+=(
         sec:dq-etl-resume sec_secondary:dq-etl-resume sec_prices:dq-etl-resume weather:dq-etl-resume edu:dq-etl-resume census:dq-etl-resume econ:dq-etl-resume
-        crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume officials:dq-etl-resume
+        crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume officials:dq-etl-resume law:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
         cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume banking:dq-etl-resume

@@ -192,11 +192,14 @@ dimension_values:
   # Lobbying filings are fetched one calendar quarter at a time by the date they were POSTED
   # (backfill_period: quarterly supplies period_start/period_end to LdaApiProvider). Past quarters
   # are immutable, so completion markers skip them; the current quarter is re-read each run.
-  # LDA.gov holds filings back to 1999; 2010 is this repo's default floor.
+  # LDA.gov holds filings back to 1999; 2010 is this repo's default floor. The end follows
+  # GOVDATA_END_YEAR so a historical or single-year run stays inside its requested years and does
+  # not touch the current year's quarters, which the daily run owns; with no end year it is the
+  # current year.
   lobbying_year_range: &lobbying_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
     descending: true
 
