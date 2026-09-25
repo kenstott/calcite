@@ -146,9 +146,11 @@ public final class ZipDownloadUtils {
         if (dest.exists() && !dest.delete()) {
           LOGGER.warn("Could not delete partial download {} before retry", dest);
         }
-        // Permanent absence (404/403/410): retrying cannot help — skip fast.
+        // Permanent absence (404/410): retrying cannot help — skip fast. A 403 is not this:
+        // it is a refusal (a block, a rate limit, a private object), so it is retried below
+        // like any other failure and reported as forbidden, never as a missing file.
         if (e instanceof java.io.FileNotFoundException) {
-          LOGGER.info("Not published (skipping, no retry): {}", url);
+          LOGGER.info("Not published ({}; no retry): {}", e.getMessage(), url);
           throw e;
         }
         if (attempt < maxAttempts) {
@@ -184,13 +186,17 @@ public final class ZipDownloadUtils {
     }
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
-      // 404/403/410 are permanent — the file is not published (e.g. current-year TIGER
-      // before its ~September release). Signal non-retryable so the wrapper skips fast
-      // instead of burning 4 attempts × backoff per missing file.
-      if (status == HttpURLConnection.HTTP_NOT_FOUND
-          || status == HttpURLConnection.HTTP_FORBIDDEN
-          || status == HttpURLConnection.HTTP_GONE) {
+      // 404/410 are permanent — the file is not published. Signal non-retryable so the wrapper
+      // skips fast instead of burning 4 attempts × backoff per missing file.
+      if (status == HttpURLConnection.HTTP_NOT_FOUND || status == HttpURLConnection.HTTP_GONE) {
         throw new java.io.FileNotFoundException("HTTP " + status + " from " + url);
+      }
+      // 403 says the server refused this request, not that the file is absent: a bot block or a
+      // rate limit clears, and reporting it as "not published" would hide it (and let a caller
+      // fall back to another file). It is retried, and if it persists it fails as forbidden.
+      if (status == HttpURLConnection.HTTP_FORBIDDEN) {
+        throw new IOException("HTTP 403 (forbidden: blocked, rate limited or not permitted; not "
+            + "treated as a missing file) from " + url);
       }
       throw new IOException("HTTP " + status + " from " + url);
     }

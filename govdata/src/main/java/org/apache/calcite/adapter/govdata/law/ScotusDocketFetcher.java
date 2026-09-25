@@ -10,8 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.law;
 
-import org.jsoup.Jsoup;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +39,9 @@ import java.util.regex.Pattern;
  * consolidated case is fetched under the docket number the listing shows, the lead docket; the
  * companion dockets named in the opinion's footnote are not.
  *
+ * <p>Pages are fetched through {@link SupremeCourtSite}, which spaces the requests and retries a
+ * refusal, so no pause is needed here.
+ *
  * <p>Both tables that come from a docket page ({@code scotus_dockets} and
  * {@code scotus_docket_entries}) read through this class, one page at a time.
  */
@@ -49,11 +50,6 @@ final class ScotusDocketFetcher {
   private static final Logger LOGGER = LoggerFactory.getLogger(ScotusDocketFetcher.class);
 
   private static final String SITE = "https://www.supremecourt.gov";
-  private static final String USER_AGENT = "Apache-Calcite-GovData/1.0";
-  private static final int TIMEOUT_MS = 120000;
-
-  /** Pause between docket pages, to keep the load on the site modest. */
-  private static final long PAUSE_MS = 250;
 
   /** A docket the site addresses by its number: {@code 23-583} or an application {@code 24A910}. */
   private static final Pattern FETCHABLE = Pattern.compile("^(?:\\d{1,2}-\\d+|\\d{1,2}A\\d+)$");
@@ -88,16 +84,13 @@ final class ScotusDocketFetcher {
   /** Reads the listing for the term and returns its dockets, fetching each page as it is read. */
   static Iterator<ScotusDocketPage.Docket> forTerm(int term) throws IOException {
     String listingUrl = SITE + "/opinions/slipopinion/" + String.format("%02d", term % 100);
-    String html = Jsoup.connect(listingUrl).userAgent(USER_AGENT).timeout(TIMEOUT_MS)
-        .maxBodySize(0).execute().body();
+    String html = SupremeCourtSite.DEFAULT.getHtml(listingUrl);
     List<ScotusSlipListing.Entry> entries = ScotusSlipListing.parse(html);
     final Deque<String> numbers = new ArrayDeque<String>(docketNumbers(entries));
     LOGGER.info("term {}: {} decided cases, {} dockets to fetch", term, entries.size(),
         numbers.size());
 
     return new Iterator<ScotusDocketPage.Docket>() {
-      private boolean first = true;
-
       @Override public boolean hasNext() {
         return !numbers.isEmpty();
       }
@@ -107,20 +100,11 @@ final class ScotusDocketFetcher {
           throw new NoSuchElementException();
         }
         String number = numbers.removeFirst();
+        String url = pageUrl(number);
         try {
-          if (!first) {
-            Thread.sleep(PAUSE_MS);
-          }
-          first = false;
-          String url = pageUrl(number);
-          String page = Jsoup.connect(url).userAgent(USER_AGENT).timeout(TIMEOUT_MS)
-              .maxBodySize(0).execute().body();
-          return ScotusDocketPage.parse(page, url);
+          return ScotusDocketPage.parse(SupremeCourtSite.DEFAULT.getHtml(url), url);
         } catch (IOException e) {
           throw new UncheckedIOException(e);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new IllegalStateException("Interrupted while fetching docket " + number, e);
         }
       }
     };

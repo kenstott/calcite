@@ -13,15 +13,11 @@ package org.apache.calcite.adapter.govdata.law;
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.govdata.GovDataException;
-import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
-
-import org.jsoup.Jsoup;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -62,8 +58,6 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
   static final String TABLE = "scotus_slip_opinions";
 
   private static final String SITE = "https://www.supremecourt.gov";
-  private static final String USER_AGENT = "Apache-Calcite-GovData/1.0";
-  private static final int TIMEOUT_MS = 120000;
   private static final int DOCKET_PAGES = 3;
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
@@ -79,8 +73,7 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
     int term = Integer.parseInt(yearValue);
 
     String listingUrl = SITE + "/opinions/slipopinion/" + String.format("%02d", term % 100);
-    String html = Jsoup.connect(listingUrl).userAgent(USER_AGENT).timeout(TIMEOUT_MS)
-        .maxBodySize(0).execute().body();
+    String html = SupremeCourtSite.DEFAULT.getHtml(listingUrl);
     List<ScotusSlipListing.Entry> entries = ScotusSlipListing.parse(html);
     if (entries.isEmpty()) {
       LOGGER.warn("{}: term {} lists no opinions ({}); expected only at the start of a term",
@@ -164,7 +157,7 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
     String url = SITE + entry.pdfPath();
     File pdf = File.createTempFile("scotus-slip-", ".pdf");
     try {
-      ZipDownloadUtils.downloadToFile(url, null, pdf);
+      SupremeCourtSite.DEFAULT.download(url, pdf);
       final List<String> pages = new ArrayList<String>();
       PdfPageTexts.forEachPage(pdf, new PdfPageTexts.PageSink() {
         @Override public void page(int pageNumber, String text) {
@@ -184,9 +177,12 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
     File pdf = File.createTempFile("scotus-volume-", ".pdf");
     try {
       try {
-        ZipDownloadUtils.downloadToFile(url, null, pdf);
+        SupremeCourtSite.DEFAULT.download(url, pdf);
         sliceByListedPage(task, url, pdf, out);
-      } catch (FileNotFoundException gone) {
+      } catch (SupremeCourtSite.NotFoundException gone) {
+        // Only a 404 or 410 means the preliminary print was superseded. A 403, a 429 or a server
+        // error is a refusal (SupremeCourtSite retries it and then fails), and is not a reason to
+        // read a different file.
         sliceBoundVolume(task, url, pdf, out, gone);
       }
     } finally {
@@ -222,7 +218,8 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
    * found by printed page. Every case in the group must cite the same volume.
    */
   private static void sliceBoundVolume(Task task, String goneUrl, File pdf,
-      final Deque<Map<String, Object>> out, FileNotFoundException gone) throws IOException {
+      final Deque<Map<String, Object>> out, SupremeCourtSite.NotFoundException gone)
+      throws IOException {
     Integer volume = task.entries.get(0).volume;
     final Map<Integer, ScotusSlipListing.Entry> byCitedPage =
         new HashMap<Integer, ScotusSlipListing.Entry>();
@@ -236,7 +233,12 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
     }
     final String url = SITE + "/opinions/boundvolumes/" + volume + "BV.pdf";
     LOGGER.info("{}: {} is gone; reading bound volume {}", TABLE, goneUrl, url);
-    ZipDownloadUtils.downloadToFile(url, null, pdf);
+    try {
+      SupremeCourtSite.DEFAULT.download(url, pdf);
+    } catch (SupremeCourtSite.NotFoundException also) {
+      throw new IOException(goneUrl + " is gone (HTTP " + gone.status + ") and so is its bound "
+          + "volume " + url + " (HTTP " + also.status + ")", also);
+    }
 
     final ScotusCasePages.PrintedPageRule rule = ScotusCasePages.printedPages(
         new HashSet<Integer>(byCitedPage.keySet()));
