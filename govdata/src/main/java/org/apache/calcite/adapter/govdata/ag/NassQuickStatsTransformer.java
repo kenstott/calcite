@@ -78,6 +78,7 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
       {"county_name", "county_name"},
       {"freq_desc", "freq_desc"},
       {"reference_period_desc", "reference_period_desc"},
+      {"week_ending", "week_ending"},
       {"load_time", "load_time"},
   };
 

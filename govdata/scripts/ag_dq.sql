@@ -66,6 +66,58 @@ SELECT 'ag', 'nass_crop_production', 'T7_no_forecast_vintages',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_production', allow_moved_paths := true) WHERE reference_period_desc LIKE 'YEAR - % FORECAST');
 
 -- ------------------------------------------------------------
+-- TABLE: nass_crop_progress (partition cols: type, year; PK id col: short_desc)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_progress', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_progress', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_progress', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+-- sector_desc/group_desc/source_desc/freq_desc are constant by design: the request is scoped to
+-- SURVEY / CROPS / FIELD CROPS and every weekly row reports WEEKLY.
+SELECT 'ag', 'nass_crop_progress', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'sector_desc', 'group_desc', 'source_desc', 'freq_desc')));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_progress', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true) WHERE short_desc IS NULL);
+
+-- T7: every row carries its week-ending date -- the join key to weekly series such as
+-- cftc.cot_disaggregated_futures.report_date.
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_progress', 'T7_week_ending_present',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with NULL week_ending'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true) WHERE week_ending IS NULL);
+
+-- T8: national corn good/excellent condition ratings -- the series the grain
+-- positioning-vs-crop-condition analysis this table exists for depends on.
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_progress', 'T8_national_corn_condition_present',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Rows with agg_level_desc=NATIONAL, commodity_desc=CORN, unit_desc=PCT GOOD or PCT EXCELLENT'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_progress', allow_moved_paths := true)
+  WHERE agg_level_desc = 'NATIONAL' AND commodity_desc = 'CORN' AND statisticcat_desc = 'CONDITION'
+    AND unit_desc IN ('PCT GOOD', 'PCT EXCELLENT'));
+
+-- ------------------------------------------------------------
 -- TABLE: nass_livestock_inventory (partition cols: type, year; PK id col: short_desc)
 -- ------------------------------------------------------------
 INSERT INTO dq_results

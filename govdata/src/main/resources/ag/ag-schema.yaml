@@ -380,7 +380,9 @@ partitionedTables:
       geography, NassQuickStatsTransformer drops the CENSUS duplicate so the annual series
       stays single-valued and comparable year over year. Joins to geo.counties via the
       derived county_fips column and to geo.state_ref via state_fips_code; also joinable to
-      disasters drought/storm tables by county+year for yield-impact analysis.
+      disasters drought/storm tables by county+year for yield-impact analysis. For the
+      current season's weekly condition and progress with week-ending dates and national
+      rows, use nass_crop_progress.
 
     dimensions:
       type:
@@ -456,6 +458,221 @@ partitionedTables:
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
         incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # NASS_CROP_PROGRESS — weekly in-season crop condition and progress (NASS QuickStats)
+  # ---------------------------------------------------------------------------
+  # Weekly Crop Progress report series. Its own table (not nass_crop_production) because
+  # the cadence differs: the current season publishes every Monday, so the year is not
+  # lagged and the two most recent years are reopened on each run. Verified live against
+  # QuickStats get_counts: STATE + FIELD CROPS + CONDITION or PROGRESS for a whole year
+  # stays under the 50,000-row API cap, so one request per (agg_level, statisticcat, year).
+  - name: nass_crop_progress
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=nass_crop_progress/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA NASS weekly Crop Progress report, national and by state, for field crops —
+      CONDITION (percent of acreage rated very poor / poor / fair / good / excellent) and
+      PROGRESS (percent planted, emerged, blooming, harvested, ...). One row per
+      (week_ending, commodity, class, practice, data item, geography). Filter
+      statisticcat_desc and unit_desc: the condition units sum to 100 for a given
+      week, commodity and geography; progress units do not. week_ending is the Sunday
+      the survey week closes (NASS releases the report the following Monday), so it joins
+      directly to weekly series such as cftc.cot_disaggregated_futures.report_date. The
+      current season loads as it is published. Season coverage varies by commodity and state
+      (e.g. corn April-November) and the ratings series begin per commodity in the 1980s or
+      later; NATIONAL rows carry the acreage-weighted US rating, which cannot be rebuilt from
+      state rows. Annual county/state production, yield and area are in nass_crop_production.
+
+    dimensions:
+      type:
+        - nass_crop_progress
+      agg_level_desc:
+        type: list
+        values: ["NATIONAL", "STATE"]
+      statisticcat_desc:
+        type: list
+        values: ["CONDITION", "PROGRESS"]
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 1994
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+
+    columns:
+      - name: year
+        type: integer
+        source: year
+        nullable: false
+        comment: Calendar year of the survey week (partition column)
+      - name: week_ending
+        type: date
+        source: week_ending
+        nullable: true
+        comment: Sunday the survey week ends — join key to weekly series such as cot_disaggregated_futures.report_date
+      - name: reference_period_desc
+        type: string
+        source: reference_period_desc
+        nullable: true
+        comment: NASS week number within the year ("WEEK #22")
+      - name: freq_desc
+        type: string
+        source: freq_desc
+        nullable: true
+        comment: Reporting frequency (WEEKLY)
+      - name: source_desc
+        type: string
+        source: source_desc
+        nullable: true
+        comment: Program source (SURVEY)
+      - name: sector_desc
+        type: string
+        source: sector_desc
+        nullable: true
+        comment: NASS sector (CROPS)
+      - name: group_desc
+        type: string
+        source: group_desc
+        nullable: true
+        comment: Commodity group (FIELD CROPS)
+      - name: commodity_desc
+        type: string
+        source: commodity_desc
+        nullable: true
+        comment: Commodity (CORN, SOYBEANS, WHEAT, COTTON, ...)
+      - name: class_desc
+        type: string
+        source: class_desc
+        nullable: true
+        comment: Commodity class (ALL CLASSES, WINTER, SPRING, ...)
+      - name: prodn_practice_desc
+        type: string
+        source: prodn_practice_desc
+        nullable: true
+        comment: Production practice (ALL PRODUCTION PRACTICES, IRRIGATED, ...)
+      - name: util_practice_desc
+        type: string
+        source: util_practice_desc
+        nullable: true
+        comment: Utilization practice (GRAIN, SILAGE, ...)
+      - name: statisticcat_desc
+        type: string
+        source: statisticcat_desc
+        nullable: true
+        comment: CONDITION (rating percentages) or PROGRESS (stage-completion percentages)
+      - name: domain_desc
+        type: string
+        source: domain_desc
+        nullable: true
+        comment: Domain (TOTAL)
+      - name: domaincat_desc
+        type: string
+        source: domaincat_desc
+        nullable: true
+        comment: Domain category
+      - name: short_desc
+        type: string
+        source: short_desc
+        nullable: true
+        comment: NASS data-item label, e.g. "CORN - CONDITION, MEASURED IN PCT GOOD"
+      - name: unit_desc
+        type: string
+        source: unit_desc
+        nullable: true
+        comment: Unit — PCT VERY POOR/POOR/FAIR/GOOD/EXCELLENT for CONDITION; PCT PLANTED, PCT EMERGED, PCT HARVESTED, ... for PROGRESS
+      - name: agg_level_desc
+        type: string
+        source: agg_level_desc
+        nullable: true
+        comment: "Geographic level: NATIONAL or STATE"
+      - name: state_alpha
+        type: string
+        source: state_alpha
+        nullable: true
+        comment: State postal code; US for NATIONAL rows
+      - name: state_fips_code
+        type: string
+        source: state_fips_code
+        nullable: true
+        comment: State FIPS code; 99 for NATIONAL rows
+      - name: state_name
+        type: string
+        source: state_name
+        nullable: true
+        comment: State name; US TOTAL for NATIONAL rows
+      - name: value
+        type: double
+        source: value
+        nullable: true
+        comment: Percent of acreage in the category (0-100)
+      - name: value_flag
+        type: string
+        source: value_flag
+        nullable: true
+        comment: Suppression marker when value is null
+      - name: cv_pct
+        type: double
+        source: cv_pct
+        nullable: true
+        comment: Coefficient of variation, percent
+      - name: load_time
+        type: string
+        source: load_time
+        nullable: true
+        comment: NASS record load timestamp
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        source_desc: "SURVEY"
+        sector_desc: "CROPS"
+        group_desc: "FIELD CROPS"
+        agg_level_desc: "{agg_level_desc}"
+        statisticcat_desc: "{statisticcat_desc}"
+        year: "{year}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1
+        retryOn: [429, 403, 500, 503]
+        maxRetries: 6
+        retryBackoffMs: 5000
+        skipOn: [400]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_crop_progress/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         runCompaction: true
