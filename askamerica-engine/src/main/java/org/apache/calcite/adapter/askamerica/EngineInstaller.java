@@ -198,9 +198,19 @@ final class EngineInstaller {
      */
     private static boolean isStale(Path jar) {
         String have;
-        String latest;
         try {
             have = jarVersion(jar);
+        } catch (IOException e) {
+            // The cached jar itself cannot be opened as a jar -- corrupt or truncated on
+            // disk, not a reachability problem. Unlike an unreachable GitHub, this can
+            // never self-heal by keeping the cached jar: every future launch would keep
+            // resolving to the same broken file, since nothing else ever revisits it.
+            report("Cached engine jar could not be read (" + e.getMessage()
+                + ") — treating it as corrupt and re-downloading.");
+            return true;
+        }
+        String latest;
+        try {
             latest = latestVersion();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -352,6 +362,7 @@ final class EngineInstaller {
             progress.done();
             throw e;
         }
+        verifyDownloadedJar(tmp, url);
         try {
             Files.move(tmp, dest,
                 StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
@@ -359,6 +370,29 @@ final class EngineInstaller {
             Files.move(tmp, dest, StandardCopyOption.REPLACE_EXISTING);
         }
         progress.done();
+    }
+
+    /**
+     * A truncated or interrupted transfer can still leave {@code tmp} the right length
+     * (a server that closes the connection mid-body without an error, or a proxy that
+     * substitutes an HTML error page for the asset) without it ever being a valid jar.
+     * Left uncaught, {@code Files.move} below would install it as the shared cache, and
+     * every process that resolves it afterward fails deep inside whichever class it
+     * happens to read first — the exact class of failure {@link McpServer#compactErrorMessage}
+     * has to name after the fact. Confirming the manifest opens here means a bad download
+     * is discarded before it ever reaches {@code dest}, not after a caller's tool call breaks.
+     */
+    private static void verifyDownloadedJar(Path tmp, String url) throws IOException {
+        try (java.util.jar.JarFile jf = new java.util.jar.JarFile(tmp.toFile())) {
+            if (jf.getManifest() == null) {
+                throw new IOException("no manifest");
+            }
+        } catch (IOException e) {
+            Files.deleteIfExists(tmp);
+            throw new IOException("Downloaded engine jar from " + url
+                + " is not a valid jar (" + e.getMessage() + ") — discarding it rather than "
+                + "caching a broken download", e);
+        }
     }
 
     // ── progress reporting ──────────────────────────────────────────────────
