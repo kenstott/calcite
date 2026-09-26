@@ -755,9 +755,6 @@ partitionedTables:
         - "CAGDP8"
         - "CAGDP9"
         - "CAGDP11"
-      response:
-        format: json
-        dataPath: "BEAAPI.Results.ParamValue"
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 3
