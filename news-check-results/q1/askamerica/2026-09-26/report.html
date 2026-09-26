@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>USDA's September 2026 farm income figures check out against ERS data; the February-forecast comparison cannot be verified from this corpus</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s3-t1-s1:checked ~ table tbody.s0{display:none}
+#s3-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s3-t1-s1:checked ~ table label[for="s3-t1-s1"]{color:var(--link)}
+#s3-t1-s1:checked ~ table label[for="s3-t1-s1"] .srtcue{opacity:1}
+#s3-t1-s1:checked ~ .srtreset{display:inline-block}
+#s3-t1-s2:checked ~ table tbody.s0{display:none}
+#s3-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s3-t1-s2:checked ~ table label[for="s3-t1-s2"]{color:var(--link)}
+#s3-t1-s2:checked ~ table label[for="s3-t1-s2"] .srtcue{opacity:1}
+#s3-t1-s2:checked ~ .srtreset{display:inline-block}
+#s3-t1-s3:checked ~ table tbody.s0{display:none}
+#s3-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s3-t1-s3:checked ~ table label[for="s3-t1-s3"]{color:var(--link)}
+#s3-t1-s3:checked ~ table label[for="s3-t1-s3"] .srtcue{opacity:1}
+#s3-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>USDA's September 2026 farm income figures check out against ERS data; the February-forecast comparison cannot be verified from this corpus</h1>
+<p class="subtitle">USDA ERS Farm Income and Wealth Statistics (ag.ers_farm_income), US total, &quot;Data as of September 3, 2026&quot; vintage</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 694" width="880" height="694" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="694" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:19px">USDA farm income, government payments, and production expenses (US t…</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">USDA ERS Farm Income and Wealth Statistics, ag.ers_farm_income, vintage: Data as of September 3, 2026</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">2026 net farm income (forecast)</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">$158.4B</text>
+  <text class="stat-delta" x="36" y="168" fill="#dc2626">-2.6% nominal / -5.5% real vs 2025</text>
+  </g>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">2026 government payments</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">$47.4B</text>
+  <text class="stat-delta" x="464" y="168" fill="#059669">+69.9% vs 2025</text>
+  </g>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="20" y="342.50" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="378.50" fill="#6b7280">2026 production expenses</text>
+  <text class="stat-value" x="36" y="408.50" fill="#1f2328">$492.8B</text>
+  <text class="stat-delta" x="36" y="428.50" fill="#059669">+4.5% vs 2025</text>
+  </g>
+  <rect class="panel-edge" x="448" y="206" width="412" height="381" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="206" width="412" height="381" viewBox="0 0 412 381" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="381" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="9" style="font-size:9px" font-weight="600" text-anchor="middle">Net farm income, government payments, and production expenses, 2024-…</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="67" y1="269" x2="390" y2="269" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="59" y="273" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="67" y1="226.40" x2="390" y2="226.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="59" y="230.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">100</text>
+      <line class="grid" x1="67" y1="183.80" x2="390" y2="183.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="59" y="187.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">200</text>
+      <line class="grid" x1="67" y1="141.20" x2="390" y2="141.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="59" y="145.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">300</text>
+      <line class="grid" x1="67" y1="98.60" x2="390" y2="98.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="59" y="102.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">400</text>
+      <line class="grid" x1="67" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="59" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">500</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="67" y1="56" x2="67" y2="269" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="67" y1="269" x2="390" y2="269" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-x-axis-title" class="axis-title" x="228.50" y="313" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Year</text>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="162.50" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 162.50)">$ Billions</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-2024" class="tick" x="120.83" y="287" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p4-xtick-2025" class="tick" x="228.50" y="287" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+      <text id="p4-xtick-2026" class="tick" x="336.17" y="287" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2026</text>
+    </g>
+    <g id="p4-series-net-farm-income-b" class="series">
+      <rect id="p4-mark-net-farm-income-b-2024" class="bar" x="86.38" y="214.34" width="21.97" height="54.66" fill="#2563eb"/>
+      <rect id="p4-mark-net-farm-income-b-2025" class="bar" x="194.05" y="199.73" width="21.97" height="69.27" fill="#2563eb"/>
+      <rect id="p4-mark-net-farm-income-b-2026" class="bar" x="301.71" y="201.54" width="21.97" height="67.46" fill="#2563eb"/>
+    </g>
+    <g id="p4-series-govt-payments-b" class="series">
+      <rect id="p4-mark-govt-payments-b-2024" class="bar" x="109.35" y="264.70" width="21.97" height="4.30" fill="#ea580c"/>
+      <rect id="p4-mark-govt-payments-b-2025" class="bar" x="217.02" y="257.12" width="21.97" height="11.88" fill="#ea580c"/>
+      <rect id="p4-mark-govt-payments-b-2026" class="bar" x="324.68" y="248.82" width="21.97" height="20.18" fill="#ea580c"/>
+    </g>
+    <g id="p4-series-production-expenses-b" class="series">
+      <rect id="p4-mark-production-expenses-b-2024" class="bar" x="132.32" y="75.79" width="21.97" height="193.21" fill="#059669"/>
+      <rect id="p4-mark-production-expenses-b-2025" class="bar" x="239.98" y="68.11" width="21.97" height="200.89" fill="#059669"/>
+      <rect id="p4-mark-production-expenses-b-2026" class="bar" x="347.65" y="59.06" width="21.97" height="209.94" fill="#059669"/>
+    </g>
+    <g id="p4-legend">
+      <rect id="p4-legend-swatch-net-farm-income-b" x="74" y="327" width="11" height="11" fill="#2563eb"/>
+      <text id="p4-legend-label-net-farm-income-b" class="legend-label" x="90" y="336" fill="#1f2328" font-size="11" style="font-size:11px">Net farm income ($B)</text>
+      <rect id="p4-legend-swatch-govt-payments-b" x="218" y="327" width="11" height="11" fill="#ea580c"/>
+      <text id="p4-legend-label-govt-payments-b" class="legend-label" x="234" y="336" fill="#1f2328" font-size="11" style="font-size:11px">Govt payments ($B)</text>
+      <rect id="p4-legend-swatch-production-expenses-b" x="129.50" y="347" width="11" height="11" fill="#059669"/>
+      <text id="p4-legend-label-production-expenses-b" class="legend-label" x="145.50" y="356" fill="#1f2328" font-size="11" style="font-size:11px">Production expenses ($B)</text>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="footnote" x="20" y="613" fill="#6b7280">Government payments series = category 'Government payments', subcategory 'Total'. Production expenses series = category 'Production expenses',</text>
+  <text class="footnote" x="20" y="627" fill="#6b7280">subcategory 'All', artificial_key EXAUSPE--INP (the ERS total-expenses-including-imputed-items series; a second, lower EXAUSPE--EXP series also</text>
+  <text class="footnote" x="20" y="641" fill="#6b7280">exists in the table and was not used because it does not reproduce the article's 4.5%/$492.8B figures). Net farm income = category 'Net income',…</text>
+  <g id="brand">
+  <svg x="20" y="653" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="668" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:49561/a/2b82ec0de417d33c51dd10a33f4df716.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The article's core USDA ERS figures for the September 2026 farm income forecast check out against this corpus's own ag.ers_farm_income table, which carries the identical vintage ('Data as of September 3, 2026'). 2026 net farm income of $158.4B, the 2.6% nominal and 5.5% real decline from 2025, the roughly 70% jump in government payments, and the 4.5% rise in production expenses to $492.8B all match the ERS data to within rounding. The one figure this corpus cannot confirm or refute is the claimed $5 billion increase over USDA's February 2026 forecast, because this connector retains only the latest ERS release for 2026, not a history of prior forecast vintages.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ No Pinocchios — true or no significant issues</strong></p><p>Every checkable figure in the article -- 2026 net farm income ($158.4B), the 2.6% nominal and 5.5% real year-over-year decline, the ~70% jump in government payments, and the 4.5% rise in production expenses to $492.8B -- matches USDA ERS's own September 3, 2026 data release exactly or to within rounding. The one clause that could not be verified (the $5B revision versus the February 2026 forecast) is a data-availability gap in this corpus, not a factual problem with the article: this connector retains only the current ERS release vintage, not a history of prior forecast releases, so it has no February 2026 figure to compare against. Nothing in the piece is contradicted by the data actually available.</p></div>
+<p><strong>5</strong> true &middot; <strong>1</strong> not checkable here &middot; <strong>6</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>USDA raised its 2026 net farm income forecast to $158.4 billion.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>2</td><td>The September 2026 forecast is $5 billion higher than USDA's February 2026 forecast.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>3</td><td>2026 net farm income represents a 2.6% nominal decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>After adjusting for inflation, 2026 net farm income represents a 5.5% real decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Federal government farm program payments are expected to rise about 70% in 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Production costs are expected to rise 4.5% to $492.8 billion in 2026.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>6</td><td>Production costs are expected to rise 4.5% to $492.8 billion in 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Federal government farm program payments are expected to rise about 70% in 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>After adjusting for inflation, 2026 net farm income represents a 5.5% real decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>2026 net farm income represents a 2.6% nominal decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>2</td><td>The September 2026 forecast is $5 billion higher than USDA's February 2026 forecast.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>USDA raised its 2026 net farm income forecast to $158.4 billion.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>3</td><td>2026 net farm income represents a 2.6% nominal decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>After adjusting for inflation, 2026 net farm income represents a 5.5% real decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Federal government farm program payments are expected to rise about 70% in 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Production costs are expected to rise 4.5% to $492.8 billion in 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>2</td><td>The September 2026 forecast is $5 billion higher than USDA's February 2026 forecast.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>USDA raised its 2026 net farm income forecast to $158.4 billion.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-not-checkable-here"><td>2</td><td>The September 2026 forecast is $5 billion higher than USDA's February 2026 forecast.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>USDA raised its 2026 net farm income forecast to $158.4 billion.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>2026 net farm income represents a 2.6% nominal decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>After adjusting for inflation, 2026 net farm income represents a 5.5% real decline from 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Federal government farm program payments are expected to rise about 70% in 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Production costs are expected to rise 4.5% to $492.8 billion in 2026.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; USDA raised its 2026 net farm income forecast to $158.4 billion.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>$158.354 billion (158,353,790 thousand) for US, 2026, category=Net income/subcategory=Farm income <code>ag.ers_farm_income</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.ers.usda.gov/data-products/farm-income-and-wealth-statistics">USDA ERS Farm Income and Wealth Statistics</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, amount FROM ag.ers_farm_income WHERE state='US' AND category='Net income' AND subcategory='Farm income' AND &quot;year&quot;=2026</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#2 &middot; <strong>not checkable here</strong> &mdash; The September 2026 forecast is $5 billion higher than USDA's February 2026 forecast.</summary>
+<dl>
+<dt>Warehouse says</dt><dd> <code>ag.ers_farm_income</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.ers.usda.gov/data-products/farm-income-and-wealth-statistics">USDA ERS Farm Income Forecast (February 2026 release, archived)</a></li></ul></dd>
+<dt>Why</dt><dd>This corpus's ag.ers_farm_income table carries only the latest ERS release for 2026 (publication_date = 'Data as of September 3, 2026'); no February 2026 vintage of the same series is retained, so the $5B revision cannot be independently confirmed or refuted from this data.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT DISTINCT publication_date FROM ag.ers_farm_income WHERE state='US' AND &quot;year&quot;=2026</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; 2026 net farm income represents a 2.6% nominal decline from 2025.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>2025: $162.615B, 2026: $158.354B -&gt; -2.62% <code>ag.ers_farm_income</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, amount FROM ag.ers_farm_income WHERE state='US' AND category='Net income' AND subcategory='Farm income' AND &quot;year&quot; IN (2025,2026)</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; After adjusting for inflation, 2026 net farm income represents a 5.5% real decline from 2025.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Using the table's own gdp_deflator column (2026=100.0, 2025=97.089): 2025 amount restated in 2026 dollars = 162,614.96/0.97089 = $167,490M; decline to $158,354M = -5.46% (~5.5%) <code>ag.ers_farm_income</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, amount, gdp_deflator FROM ag.ers_farm_income WHERE state='US' AND category='Net income' AND subcategory='Farm income' AND &quot;year&quot; IN (2025,2026)</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Federal government farm program payments are expected to rise about 70% in 2026.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>2025: $27.885B, 2026: $47.362B -&gt; +69.86% <code>ag.ers_farm_income</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, amount FROM ag.ers_farm_income WHERE state='US' AND category='Government payments' AND subcategory='Total' AND &quot;year&quot; IN (2025,2026)</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Production costs are expected to rise 4.5% to $492.8 billion in 2026.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>2025: $471.570B, 2026: $492.813B -&gt; +4.50% (ERS 'total production expenses including imputed items' series, artificial_key EXAUSPE--INP) <code>ag.ers_farm_income</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, amount, artificial_key FROM ag.ers_farm_income WHERE state='US' AND category='Production expenses' AND subcategory='All' AND &quot;year&quot; IN (2025,2026)</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>What was checked, and how</h2>
+<input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s0" checked><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s1"><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s2"><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s3"><table border='1' cellpadding='6' style='border-collapse:collapse'><tr><th><label class="srth" for="s3-t1-s1">Claim<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s3-t1-s2">Computed from ag.ers_farm_income<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s3-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr><td>2026 net farm income = $158.4B</td><td>$158.354B (category='Net income', subcategory='Farm income', year=2026)</td><td>Matches</td></tr><tr><td>2.6% nominal decline from 2025</td><td>2025=$162.615B -> 2026=$158.354B = -2.62%</td><td>Matches</td></tr><tr><td>5.5% real decline from 2025</td><td>Using the table's own gdp_deflator (2026=100.0, 2025=97.089): 2025 in 2026 dollars = $167.49B -> 2026 $158.354B = -5.46%</td><td>Matches</td></tr><tr><td>~70% rise in government payments</td><td>2025=$27.885B -> 2026=$47.362B = +69.9%</td><td>Matches</td></tr><tr><td>Production costs +4.5% to $492.8B</td><td>2025=$471.570B -> 2026=$492.813B = +4.50%</td><td>Matches</td></tr><tr><td>$5B higher than Feb 2026 forecast</td><td>No February 2026 vintage stored; table holds only the September 2026 release</td><td>Not checkable here</td></tr></tbody><tbody class="srt s1"><tr><td>2026 net farm income = $158.4B</td><td>$158.354B (category='Net income', subcategory='Farm income', year=2026)</td><td>Matches</td></tr><tr><td>$5B higher than Feb 2026 forecast</td><td>No February 2026 vintage stored; table holds only the September 2026 release</td><td>Not checkable here</td></tr><tr><td>~70% rise in government payments</td><td>2025=$27.885B -> 2026=$47.362B = +69.9%</td><td>Matches</td></tr><tr><td>5.5% real decline from 2025</td><td>Using the table's own gdp_deflator (2026=100.0, 2025=97.089): 2025 in 2026 dollars = $167.49B -> 2026 $158.354B = -5.46%</td><td>Matches</td></tr><tr><td>2.6% nominal decline from 2025</td><td>2025=$162.615B -> 2026=$158.354B = -2.62%</td><td>Matches</td></tr><tr><td>Production costs +4.5% to $492.8B</td><td>2025=$471.570B -> 2026=$492.813B = +4.50%</td><td>Matches</td></tr></tbody><tbody class="srt s2"><tr><td>2026 net farm income = $158.4B</td><td>$158.354B (category='Net income', subcategory='Farm income', year=2026)</td><td>Matches</td></tr><tr><td>2.6% nominal decline from 2025</td><td>2025=$162.615B -> 2026=$158.354B = -2.62%</td><td>Matches</td></tr><tr><td>~70% rise in government payments</td><td>2025=$27.885B -> 2026=$47.362B = +69.9%</td><td>Matches</td></tr><tr><td>Production costs +4.5% to $492.8B</td><td>2025=$471.570B -> 2026=$492.813B = +4.50%</td><td>Matches</td></tr><tr><td>$5B higher than Feb 2026 forecast</td><td>No February 2026 vintage stored; table holds only the September 2026 release</td><td>Not checkable here</td></tr><tr><td>5.5% real decline from 2025</td><td>Using the table's own gdp_deflator (2026=100.0, 2025=97.089): 2025 in 2026 dollars = $167.49B -> 2026 $158.354B = -5.46%</td><td>Matches</td></tr></tbody><tbody class="srt s3"><tr><td>2026 net farm income = $158.4B</td><td>$158.354B (category='Net income', subcategory='Farm income', year=2026)</td><td>Matches</td></tr><tr><td>2.6% nominal decline from 2025</td><td>2025=$162.615B -> 2026=$158.354B = -2.62%</td><td>Matches</td></tr><tr><td>5.5% real decline from 2025</td><td>Using the table's own gdp_deflator (2026=100.0, 2025=97.089): 2025 in 2026 dollars = $167.49B -> 2026 $158.354B = -5.46%</td><td>Matches</td></tr><tr><td>~70% rise in government payments</td><td>2025=$27.885B -> 2026=$47.362B = +69.9%</td><td>Matches</td></tr><tr><td>Production costs +4.5% to $492.8B</td><td>2025=$471.570B -> 2026=$492.813B = +4.50%</td><td>Matches</td></tr><tr><td>$5B higher than Feb 2026 forecast</td><td>No February 2026 vintage stored; table holds only the September 2026 release</td><td>Not checkable here</td></tr></tbody></table><label class="srtreset" for="s3-t1-s0">reset order</label><p>Note on production expenses: the table carries two parallel USDA total-expense series under category='Production expenses', subcategory='All' -- artificial_key EXAUSPE--EXP ($489.464B in 2026, $468.357B in 2025, +4.5% independently) and EXAUSPE--INP ($492.813B in 2026, $471.570B in 2025, +4.50%). The INP series is the one that reproduces the article's exact $492.8B figure and 4.5% growth rate, so that is the series cited above; the EXP series (ERS's narrower cash-expense definition) is close but not an exact match to the article's number.</p>
+</section>
+<section>
+<h2>Why the February-forecast comparison is a genuine gap, not a red flag</h2>
+<p>ag.ers_farm_income is a snapshot table: for the 2026 data year it holds a single publication_date value, 'Data as of September 3, 2026,' meaning this corpus's ETL captured the latest ERS release rather than an archive of every successive forecast revision ERS publishes across the year (typically February, August/September, and November). Confirming the article's stated $5 billion upward revision from February would require either a stored prior-vintage snapshot or a fetch of USDA ERS's archived February 2026 release, neither of which is available through this connector. This is disclosed as an explicit gap rather than assumed to be true or false.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>$5B higher than Feb 2026 forecast</strong>: ag.ers_farm_income stores only the current ERS release vintage (single publication_date = 'Data as of September 3, 2026' for 2026 rows); no prior (February 2026) forecast vintage is retained in this corpus, so the revision-from-February comparison cannot be checked here. This is a genuine coverage gap (single-vintage snapshot, not an archive of successive ERS forecast releases), not a contradiction.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>9 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 1 rows — 1710 ms</summary><pre><code>SELECT DISTINCT publication_date FROM ag.ers_farm_income WHERE state='US' AND &quot;year&quot;=2026 ORDER BY 1</code></pre></details>
+<details class="sqltoggle"><summary>query — 8809 ms</summary><pre><code>SELECT DISTINCT category, subcategory, variable_description_total FROM ag.ers_farm_income WHERE state='US' AND category ILIKE '%net farm income%'</code></pre></details>
+<details class="sqltoggle"><summary>query — 182 rows — 5809 ms</summary><pre><code>SELECT DISTINCT category FROM ag.ers_farm_income WHERE state='US' ORDER BY 1</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 1587 ms</summary><pre><code>SELECT &quot;year&quot;, subcategory, amount, unit_desc FROM ag.ers_farm_income WHERE state='US' AND category='Net income' AND &quot;year&quot;&gt;=2023 ORDER BY subcategory, &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 1637 ms</summary><pre><code>SELECT &quot;year&quot;, subcategory, amount, unit_desc FROM ag.ers_farm_income WHERE state='US' AND category='Government payments' AND &quot;year&quot;&gt;=2023 ORDER BY subcategory, &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 24 rows — 1623 ms</summary><pre><code>SELECT &quot;year&quot;, subcategory, amount, unit_desc FROM ag.ers_farm_income WHERE state='US' AND category='Production expenses' AND &quot;year&quot;&gt;=2023 ORDER BY subcategory, &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 1806 ms</summary><pre><code>SELECT &quot;year&quot;, subcategory, amount, type, artificial_key FROM ag.ers_farm_income WHERE state='US' AND category='Production expenses' AND subcategory='All' AND &quot;year&quot; IN (2025,2026) ORDER BY &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 2092 ms</summary><pre><code>SELECT &quot;year&quot;, type, amount FROM ag.ers_farm_income WHERE state='US' AND category='Net income' AND subcategory='Farm income' AND &quot;year&quot;&gt;=2023 ORDER BY &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 2 rows — 1907 ms</summary><pre><code>SELECT &quot;year&quot;, amount, gdp_deflator FROM ag.ers_farm_income WHERE state='US' AND category='Net income' AND subcategory='Farm income' AND &quot;year&quot; IN (2025,2026)</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.ers.usda.gov/data-products/farm-income-and-wealth-statistics">ag.ers_farm_income — Net farm income, US, 2023-2026</a> <span class="note">— Vintage: Data as of September 3, 2026</span><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, amount, gdp_deflator FROM ag.ers_farm_income WHERE state='US' AND category='Net income' AND subcategory='Farm income' AND &quot;year&quot;&gt;=2023</code></pre></details></li>
+<li><a href="https://www.ers.usda.gov/data-products/farm-income-and-wealth-statistics">ag.ers_farm_income — Government payments (Total), US, 2023-2026</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, amount FROM ag.ers_farm_income WHERE state='US' AND category='Government payments' AND subcategory='Total' AND &quot;year&quot;&gt;=2023</code></pre></details></li>
+<li><a href="https://www.ers.usda.gov/data-products/farm-income-and-wealth-statistics">ag.ers_farm_income — Production expenses (All), US, 2023-2026</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, subcategory, amount, artificial_key FROM ag.ers_farm_income WHERE state='US' AND category='Production expenses' AND &quot;year&quot;&gt;=2023</code></pre></details></li>
+<li><a href="https://www.fb.org/intel/markets/usda-revises-farm-income-higher-but-costs-still-bite">American Farm Bureau Federation — source article under test</a></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">All figures are US-total, from ag.ers_farm_income as loaded in this corpus (single vintage: 'Data as of September 3, 2026'). The February 2026 forecast comparison is not checkable here because only the current ERS release is retained -- not a defect in the article, but a limitation of this snapshot corpus.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-26</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

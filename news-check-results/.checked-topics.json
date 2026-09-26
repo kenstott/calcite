@@ -1,0 +1,34 @@
+[
+  {
+    "topic_slug": "usda-farm-income-2026-forecast",
+    "headline": "USDA revises 2026 net farm income forecast higher, but costs still bite",
+    "checked_date": "2026-09-26",
+    "run_subpath": "q1/askamerica/2026-09-26",
+    "verdict": "confirmed",
+    "source_url": "https://www.fb.org/intel/markets/usda-revises-farm-income-higher-but-costs-still-bite"
+  },
+  {
+    "topic_slug": "fbi-2025-violent-crime-decline",
+    "headline": "FBI reports record decrease in violent crime in 2025",
+    "checked_date": "2026-09-26",
+    "run_subpath": "q2/askamerica/2026-09-26",
+    "verdict": "confirmed",
+    "source_url": "https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/"
+  },
+  {
+    "topic_slug": "fec-2026-cycle-independent-expenditures",
+    "headline": "2026 election cycle independent expenditures top $1.45 billion",
+    "checked_date": "2026-09-26",
+    "run_subpath": "q3/askamerica/2026-09-26",
+    "verdict": "partial",
+    "source_url": "https://www.fec.gov/updates/?page=1&update_type=fec-record"
+  },
+  {
+    "topic_slug": "federal-research-funding-cuts-2026",
+    "headline": "Federal research funding cuts threaten U.S. innovation and leadership",
+    "checked_date": "2026-09-26",
+    "run_subpath": "q4/askamerica/2026-09-26",
+    "verdict": "confirmed",
+    "source_url": "https://www.aau.edu/resource-library/federal-research-cuts-threaten-us-innovation-and-leadership"
+  }
+]

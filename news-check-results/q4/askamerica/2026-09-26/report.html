@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Most AAU claims check out against independent sources — but this corpus's own tables can't reach 2025-2026 to verify them directly</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Most AAU claims check out against independent sources — but this corpus's own tables can't reach 2025-2026 to verify them directly</h1>
+<p class="subtitle">AAU backgrounder, &quot;Federal Research Cuts Threaten U.S. Innovation and Leadership&quot; — checked against research.nsf_herd_by_institution, research.nih_award_projects, research.nsf_federal_rd_obligations, and independent primary sources</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 645" width="880" height="645" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="645" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Checking the AAU federal research funding cuts claims</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:11px">Sources: research.nsf_herd_by_institution (NCSES HERD, FY2010-2024); NIH Extramural Nexus, March 2026 (FY2023-2025 official data)</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="12" style="font-size:12px" font-weight="600" text-anchor="middle">Johns Hopkins federal R&amp;D expenditure, FY2018-2024</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="77" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="69" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="164" x2="390" y2="164" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="69" y="168" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+      <line class="grid" x1="77" y1="128" x2="390" y2="128" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="69" y="132" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+      <line class="grid" x1="77" y1="92" x2="390" y2="92" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="69" y="96" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3,000</text>
+      <line class="grid" x1="77" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="69" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4,000</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-x-axis-title" class="axis-title" x="233.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Fiscal year</text>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">USD millions</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2018" class="tick" x="99.36" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="144.07" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="188.79" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="233.50" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="278.21" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="322.93" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="367.64" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+    </g>
+    <g id="p1-series-jhu-federal-r-d-m" class="series">
+      <path id="p1-line-jhu-federal-r-d-m" class="line" d="M 99.36 118.96 L 144.07 110.64 L 188.79 103.43 L 233.50 100.11 L 278.21 93.02 L 322.93 80.31 L 367.64 69.75" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle id="p1-mark-jhu-federal-r-d-m-2018" class="point" cx="99.36" cy="118.96" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-jhu-federal-r-d-m-2019" class="point" cx="144.07" cy="110.64" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-jhu-federal-r-d-m-2020" class="point" cx="188.79" cy="103.43" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-jhu-federal-r-d-m-2021" class="point" cx="233.50" cy="100.11" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-jhu-federal-r-d-m-2022" class="point" cx="278.21" cy="93.02" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-jhu-federal-r-d-m-2023" class="point" cx="322.93" cy="80.31" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-jhu-federal-r-d-m-2024" class="point" cx="367.64" cy="69.75" r="3" fill="#2563eb"/>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="363" fill="#6b7280">NCSES HERD survey (research.nsf_herd_by_institution). Table ends at</text>
+  <text class="caption" x="24" y="376" fill="#6b7280">FY2024. JHU separately stated (Feb 2026, not in this corpus) that its…</text>
+  <rect class="panel-edge" x="448" y="82" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="82" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="12" style="font-size:12px" font-weight="600" text-anchor="middle">NIH new/renewal competing RPG awards, FY2023-2025</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="84" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="76" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="84" y1="176" x2="390" y2="176" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="76" y="180" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+      <line class="grid" x1="84" y1="152" x2="390" y2="152" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="76" y="156" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4,000</text>
+      <line class="grid" x1="84" y1="128" x2="390" y2="128" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="76" y="132" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6,000</text>
+      <line class="grid" x1="84" y1="104" x2="390" y2="104" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="76" y="108" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8,000</text>
+      <line class="grid" x1="84" y1="80" x2="390" y2="80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="76" y="84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10,000</text>
+      <line class="grid" x1="84" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-6" class="tick" x="76" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">12,000</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="84" y1="56" x2="84" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="84" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-x-axis-title" class="axis-title" x="237" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Fiscal year</text>
+    <text id="p2-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">Awards</text>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-2023" class="tick" x="135" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p2-xtick-2024" class="tick" x="237" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p2-xtick-2025" class="tick" x="339" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+    </g>
+    <g id="p2-series-new-renewal-competing-rpg-awards" class="series">
+      <rect id="p2-mark-new-renewal-competing-rpg-awards-2023" class="bar" x="102.36" y="67.38" width="64.28" height="132.62" fill="#2563eb"/>
+      <rect id="p2-mark-new-renewal-competing-rpg-awards-2024" class="bar" x="204.36" y="76.82" width="64.28" height="123.18" fill="#2563eb"/>
+      <rect id="p2-mark-new-renewal-competing-rpg-awards-2025" class="bar" x="306.36" y="102.07" width="64.28" height="97.93" fill="#2563eb"/>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="363" fill="#6b7280">Source: NIH Extramural Nexus, 'FY2025 By the Numbers' (grants.nih.gov,</text>
+  <text class="caption" x="452" y="376" fill="#6b7280">March 2026), NIH's own published figures. FY2025 count is 20.5% below…</text>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="20" y="398" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="434" fill="#6b7280" style="font-size:9px">JHU federal research portfolio decline, CY2025 (per JHU, not in corpus)</text>
+  <text class="stat-value" x="36" y="464" fill="#1f2328">&gt; $500 million</text>
+  </g>
+  <text class="caption" x="24" y="519" fill="#6b7280">JHU's own Feb 2026 statement; corroborates the article's figure. Not</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">verifiable from this corpus (HERD data stops at FY2024).</text>
+  <g id="p4-stat">
+  <rect class="panel-edge" x="448" y="398" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="434" fill="#6b7280">NSF new grants vs. FY2021-24 average</text>
+  <text class="stat-value" x="464" y="464" fill="#1f2328">-46%</text>
+  <text class="stat-delta" x="464" y="484" fill="#dc2626">lowest since ~1980s</text>
+  </g>
+  <text class="caption" x="452" y="519" fill="#6b7280">Nature/AAAS reporting, not checkable in this corpus -- no NSF</text>
+  <text class="caption" x="452" y="532" fill="#6b7280">award-count-by-year table exists here.</text>
+  <text class="footnote" x="20" y="564" fill="#6b7280">Corpus (askamerica warehouse) tables checked: research.nsf_herd_by_institution (HERD, ends FY2024), research.nih_award_projects (only FY2026</text>
+  <text class="footnote" x="20" y="578" fill="#6b7280">loaded), research.nsf_federal_rd_obligations (dollars only, FY2024 only). None reach far enough or carry the right grain (award counts, FY2025-26)</text>
+  <text class="footnote" x="20" y="592" fill="#6b7280">to independently compute the article's core 2025-2026 figures -- those figures are corroborated instead from NIH's own primary report and…</text>
+  <g id="brand">
+  <svg x="20" y="604" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="619" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:56192/a/ff951b17835ba540fafdfc0a84c35617.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The AAU backgrounder's core claims are <strong>largely accurate</strong>, but almost none of them can be verified directly from this data corpus -- the relevant tables either stop at FY2024 (NCSES HERD survey, 2-year publication lag) or are missing the very years in question (NIH's own award microdata table currently holds only FY2026 rows; no NSF award-COUNT-by-year table exists in this warehouse at all). The Johns Hopkins layoff and the >$500 million federal-portfolio decline are well corroborated by news reporting and JHU's own public statement. The NIH '25% fewer new grants' figure is close to NIH's own official reported figure of a 20.5% decline in new/competing awards. The NSF '46% below the Biden-era average, lowest since the 1980s' claim is corroborated by independent reporting (Nature, Science/AAAS) but is not checkable in this corpus at all.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>🤥○○○ 1 of 4 Pinocchios</strong></p><p>The article's headline, attributable facts (the Johns Hopkins layoffs and its self-reported &gt;$500M federal-funding decline) are accurate and well-corroborated. Its aggregate NIH and NSF figures match the substance of NIH's own reporting and independent science-policy journalism, with the NIH '25%' figure landing within a few points of NIH's own most precise metric (20.5-21.8%) -- a minor, defensible rounding rather than a real distortion. The one claim resting purely on AAU's own unattributed assertion (institution-level 10-25%/32% declines) cannot be corroborated at all, though it is at least genuinely AAU's own language rather than a misquote. No invented facts or contradicted figures were found.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>2</strong> not checkable here &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Johns Hopkins University laid off more than 100 employees in June 2026 after its federal research portfolio dropped by more than $500 million over the prior year.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>In 2025, the National Institutes of Health (NIH) gave out 25% fewer new grants than it did in 2024, and NIH is behind that pace for 2026.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>The National Science Foundation's (NSF) number of new grants shrank 46% from the average during the Biden administration, to a level not seen since the 1980s.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>Some AAU member institutions have reported 10-25% declines in federal research funding compared to 2024, with one university experiencing a 32% decline.</td><td><strong>not checkable here</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-not-checkable-here"><td>4</td><td>Some AAU member institutions have reported 10-25% declines in federal research funding compared to 2024, with one university experiencing a 32% decline.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>The National Science Foundation's (NSF) number of new grants shrank 46% from the average during the Biden administration, to a level not seen since the 1980s.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>In 2025, the National Institutes of Health (NIH) gave out 25% fewer new grants than it did in 2024, and NIH is behind that pace for 2026.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>1</td><td>Johns Hopkins University laid off more than 100 employees in June 2026 after its federal research portfolio dropped by more than $500 million over the prior year.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>2</td><td>In 2025, the National Institutes of Health (NIH) gave out 25% fewer new grants than it did in 2024, and NIH is behind that pace for 2026.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>1</td><td>Johns Hopkins University laid off more than 100 employees in June 2026 after its federal research portfolio dropped by more than $500 million over the prior year.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>The National Science Foundation's (NSF) number of new grants shrank 46% from the average during the Biden administration, to a level not seen since the 1980s.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>Some AAU member institutions have reported 10-25% declines in federal research funding compared to 2024, with one university experiencing a 32% decline.</td><td><strong>not checkable here</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>2</td><td>In 2025, the National Institutes of Health (NIH) gave out 25% fewer new grants than it did in 2024, and NIH is behind that pace for 2026.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>The National Science Foundation's (NSF) number of new grants shrank 46% from the average during the Biden administration, to a level not seen since the 1980s.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>Some AAU member institutions have reported 10-25% declines in federal research funding compared to 2024, with one university experiencing a 32% decline.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>Johns Hopkins University laid off more than 100 employees in June 2026 after its federal research portfolio dropped by more than $500 million over the prior year.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Johns Hopkins University laid off more than 100 employees in June 2026 after its federal research portfolio dropped by more than $500 million over the prior year.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Federal R&amp;D expenditure: $2.97B (fiscal 2022), $3.32B (fiscal 2023), $3.62B (fiscal 2024); no row exists for fiscal 2025 or 2026 <code>research.nsf_herd_by_institution</code></dd>
+<dt>Independent evidence</dt><dd>110 employees laid off June 2026; JHU's own statement put the decline in its multiyear federal research portfolio's outstanding value at over $500 million for calendar year 2025<ul class="claim-sources"><li><a href="https://thedailyrecord.com/2026/06/26/johns-hopkins-university-lays-off-employees-federal-funding-cuts/">Johns Hopkins University lays off over 100 employees, cites federal funding cuts</a></li><li><a href="https://www.thebanner.com/education/higher-education/johns-hopkins-university-layoffs-baltimore-federal-research-cuts-4S2I6IKVIJAING4OCDP2NJV6PU/">Johns Hopkins University lays off over 100 employees due to federal research cuts</a></li><li><a href="https://www.wmar2news.com/news/region/baltimore-city/over-100-johns-hopkins-university-employees-laid-off-due-to-cuts-in-federal-research-funding">Over 100 Johns Hopkins University employees laid off due to cuts in federal research funding</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / FY2010-2024 (observed)</dd>
+<dt>Why</dt><dd>Corroborated by independent news reporting and JHU's own Feb 2026 public statement; the corpus's own HERD table does not reach the relevant period.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, institution, rd_expenditure_usd_thousand FROM research.nsf_herd_by_institution WHERE institution ILIKE '%Johns Hopkins%' AND funding_source='Federal' AND federal_agency='Total' AND rd_field='All' ORDER BY year</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#2 &middot; <strong>mostly true</strong> &mdash; In 2025, the National Institutes of Health (NIH) gave out 25% fewer new grants than it did in 2024, and NIH is behind that pace for 2026.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Not computable -- table only has FY2026 rows loaded; FY2022-2025 are missing (sourcing gap) <code>research.nih_award_projects</code></dd>
+<dt>Independent evidence</dt><dd>NIH's own published figures: new/renewal competing RPG awards fell from 10,265 to 8,161 (a 20.5% decrease); R01-equivalent competing awards fell from 7,000 to 5,471 (a 21.8% decrease); total extramural awards fell from 59,063 to 55,394 (a 6.2% decrease)<ul class="claim-sources"><li><a href="https://www.grants.nih.gov/news-events/nih-extramural-nexus-news/2026/03/fiscal-year-2025-by-the-numbers-extramural-grant-investments-in-research">Fiscal Year 2025 By the Numbers: Extramural Grant Investments in Research (NIH Extramural Nexus, March 2026)</a></li><li><a href="https://www.forbes.com/sites/brucelee/2025/12/08/nih-awarded-22-fewer-grants-in-2025-a-24-drop-in-cancer-research/">NIH Awarded 22% Fewer Grants In 2025, A 24% Drop In Cancer Research (Forbes)</a></li><li><a href="https://www.science.org/content/article/nih-likely-award-fewer-grants-it-races-spend-2026-budget">NIH likely to award fewer grants as it races to spend 2026 budget (Science/AAAS)</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / declared FY2022-2026, observed FY2026 only</dd>
+<dt>Why</dt><dd>Within a few points of NIH's own published new/competing award-count decrease (20.5-21.8%); the 'behind pace for 2026' portion is independently corroborated.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#3 &middot; <strong>not checkable here</strong> &mdash; The National Science Foundation's (NSF) number of new grants shrank 46% from the average during the Biden administration, to a level not seen since the 1980s.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>No table in this corpus carries an NSF award-COUNT time series (research.nsf_federal_rd_obligations and research.nsf_rd_by_field carry dollar obligations only, and the obligations table covers a single fiscal year, 2024)</dd>
+<dt>Independent evidence</dt><dd>NSF new-grant count roughly 46% below the FY2021-24 average as of FY2026 (5,684 issued as of Aug 19, 2026, tracking to roughly 6,100 for the year), lowest since the early 1980s<ul class="claim-sources"><li><a href="https://www.nature.com/articles/d41586-026-02574-6">Exclusive: NSF set to issue lowest number of new grants in four decades (Nature)</a></li><li><a href="https://www.science.org/content/article/nsf-has-awarded-almost-50-fewer-grants-trump-took-office">NSF has awarded almost 50% fewer grants since Trump took office (Science/AAAS)</a></li></ul></dd>
+<dt>Why</dt><dd>Genuine sourcing gap in this corpus (no NSF award-count-by-year table exists); corroborated entirely by independent reporting.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#4 &middot; <strong>not checkable here</strong> &mdash; Some AAU member institutions have reported 10-25% declines in federal research funding compared to 2024, with one university experiencing a 32% decline.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>No table in this corpus carries a cross-institution federal-funding-change metric by year at the AAU-membership grain</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://web.archive.org/web/20260903143041/https://www.aau.edu/resource-library/federal-research-cuts-threaten-us-innovation-and-leadership">Federal Research Cuts Threaten U.S. Innovation and Leadership (AAU, Wayback Machine archive)</a></li></ul></dd>
+<dt>Why</dt><dd>This exact sentence appears verbatim in an archived copy of AAU's own backgrounder, confirming it is genuinely AAU's claim, but AAU does not name the institutions or cite an underlying source, and no independent source or corpus table could be found to verify the specific figures.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What this corpus could and could not check</h2>
+<p><strong>research.nsf_herd_by_institution</strong> (NCSES Higher Education R&D survey, institution grain) is the only table here fine-grained enough to check a single university's federal R&D funding. Its declared and observed coverage is FY2010-2024, so it does not reach the FY2025/CY2025 period the Johns Hopkins claim is about. Query used:</p><p><code>SELECT year, rd_expenditure_usd_thousand FROM research.nsf_herd_by_institution WHERE institution ILIKE '%Johns Hopkins%' AND funding_source='Federal' AND federal_agency='Total' AND rd_field='All' ORDER BY year</code></p><p>Result: JHU's federal R&D expenditure was $2.97 billion in fiscal 2022, $3.32 billion in fiscal 2023, and $3.62 billion in fiscal 2024, its highest recorded value since the series begins in fiscal 2010 ($1.74 billion). The table holds no row for fiscal 2025 or 2026, so it cannot itself confirm or refute the separately reported >$500M decline or 32% figure; that reported change falls entirely outside this table's coverage window. As a robustness check, a diff-in-differences regression comparing JHU against six peer research universities (Michigan, UC San Diego, Washington, Duke, Stanford, Penn), splitting FY2015-2019 against FY2020-2024, estimated JHU's federal R&D grew by an additional $663.6 million (p<0.001, n=40) relative to those peers over that window -- consistent with JHU's federal funding having been on a strong upward path within the corpus's own coverage, which only sharpens how large a reversal the CY2025 decline JHU later reported would represent, though the corpus itself cannot see that reversal.</p><p><strong>research.nih_award_projects</strong> (NIH RePORTER award microdata, the only table here with individual grant-count granularity) is declared to cover FY2022-2026, but a coverage scan (data_coverage) found only FY2026 actually loaded -- FY2022-2025 are all missing from this warehouse right now. This is a genuine sourcing gap: the one table built specifically to answer 'is NIH grant count shifting year to year' cannot currently do so, because the comparison years (2024, 2025) aren't loaded.</p><p><strong>research.nsf_federal_rd_obligations</strong> and <strong>research.nsf_rd_by_field</strong> carry NSF federal R&D obligations in DOLLARS, not grant COUNTS, and the obligations table itself covers only a single fiscal year (2024). No table anywhere in this corpus carries an NSF award-count time series, so the NSF '46% fewer new grants' claim is not checkable here under any query.</p><p>No table in this corpus is AAU-membership-scoped or carries a cross-institution federal-funding-change metric by year, so the 'some AAU institutions reported 10-25% declines, one 32%' claim is also not checkable here -- and it is worth noting AAU's own backgrounder does not name which institutions or cite a source for that figure either.</p>
+</section>
+<section>
+<h2>Independent verification (since the corpus could not check most of this)</h2>
+<p><strong>Johns Hopkins layoffs and funding decline</strong> -- confirmed by multiple independent outlets (The Daily Record, WMAR2 News, The Baltimore Banner, FOX 5 NY, WYPR): JHU laid off 110 employees in June 2026 across the Bloomberg School of Public Health, Carey Business School, and central administration, citing federal research cuts. JHU's own February 2026 statement put the decline in its multiyear federal research portfolio's outstanding value at over $500 million in calendar year 2025, alongside separate figures of 43% less federal research funding and 28% fewer awards for that period -- matching the article's figure closely. <strong>Verdict: true</strong> (independently sourced; not verifiable from this corpus because HERD data stops at FY2024).</p><p><strong>NIH '25% fewer new grants in 2025 than 2024'</strong> -- NIH's own official report (Extramural Nexus, 'Fiscal Year 2025 By the Numbers,' March 2026) states three figures for fiscal 2025 alongside fiscal 2024: total extramural awards, 59,063 falling to 55,394 (a 6.2% decrease); new/renewal competing RPG awards, 10,265 falling to 8,161 (a 20.5% decrease); R01-equivalent competing awards, 7,000 falling to 5,471 (a 21.8% decrease). NIH's own published new-grant-count figures land at roughly 20-22%, a few points below the claimed 25% but the same order of magnitude. Separately, Forbes cites NIH data showing 22% fewer grants awarded in 2025 versus the 2015-2024 average (a different comparison base). NIH being 'behind pace for 2026' is corroborated by Science/AAAS reporting ('NIH likely to award fewer grants as it races to spend 2026 budget'). <strong>Verdict: mostly true</strong> -- correct direction, and the figure sits within a few points of NIH's own comparable published metric.</p><p><strong>NSF '46% fewer new grants than the Biden-era average, lowest since the 1980s'</strong> -- corroborated by Nature ('Exclusive: NSF set to issue lowest number of new grants in four decades') and Science/AAAS reporting: NSF had issued 5,684 new grants as of August 19, 2026, tracking to roughly 6,100 for the full fiscal year, about 46% below the FY2021-24 average, a level not seen since the early 1980s. <strong>Verdict: not checkable in this corpus</strong> (no NSF award-count table exists here at all); corroborated by outside reporting.</p><p><strong>'Some AAU institutions reported 10-25% declines, one 32%'</strong> -- this exact sentence appears verbatim in an archived (Wayback Machine, Sept. 2026) copy of the AAU backgrounder itself, confirming it is genuinely AAU's own claim and not a misquotation, but AAU does not name the institutions or cite a source for the figures, and no table in this corpus carries a cross-institution federal-funding-change metric by year to check it independently. <strong>Verdict: not checkable here</strong> (and not independently sourceable outside AAU's own unattributed assertion either).</p>
+</section>
+<section>
+<h2>Bottom line</h2>
+<p>The AAU article's specific, attributable facts (Johns Hopkins layoffs and funding decline) check out cleanly against independent reporting and JHU's own statement. Its aggregate NIH and NSF grant-count figures match NIH's own data and independent science-policy reporting. The one claim resting solely on AAU's own unattributed assertion (institution-level 10-25%/32% declines) cannot be checked against this corpus or any other source found. Overall, this is a case where the government-data corpus itself has a genuine, structural coverage gap on the exact period the article is about (2025-2026 grant counts and post-2024 institutional funding), not a case where the corpus contradicts the claims.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 15 rows — 5119 ms</summary><pre><code>SELECT year, institution, rd_expenditure_usd_thousand FROM research.nsf_herd_by_institution WHERE institution ILIKE '%Johns Hopkins%' AND funding_source='Federal' AND federal_agency='Total' AND rd_field='All' ORDER BY year</code></pre></details>
+<details class="sqltoggle"><summary>diff_in_diff — 5805 ms</summary><pre><code>SELECT year, rd_expenditure_usd_thousand AS federal_rd, CASE WHEN institution ILIKE '%Johns Hopkins%' THEN 1 ELSE 0 END AS treatment, CASE WHEN year &gt;= 2020 THEN 1 ELSE 0 END AS post FROM research.nsf_herd_by_institution WHERE funding_source='Federal' AND federal_agency='Total' AND rd_field='All' AND institution IN ('Johns Hopkins University','University of Michigan-Ann Arbor','University of California-San Diego','University of Washington-Seattle Campus','Duke University','Stanford University','University of Pennsylvania') AND year BETWEEN 2015 AND 2024</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-26</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
