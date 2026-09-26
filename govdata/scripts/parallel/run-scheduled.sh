@@ -65,9 +65,13 @@ fi
 # GOVDATA_JAR override, then the staged unversioned sih-govdata.jar (the build-jar
 # skill's source of truth), then the standard name, then a versioned SNAPSHOT.
 if [ -z "${GOVDATA_JAR:-}" ]; then
-  STAGED_JAR=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata.jar" 2>/dev/null | head -1)
-  STANDARD_JAR=$(find "$GOVDATA_ROOT/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
-  SIH_JAR=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata-*-SNAPSHOT.jar" 2>/dev/null | head -1)
+  # Trailing slash matters: build/libs is a symlink (staged off-disk under
+  # /mnt/wsltmp) on some hosts, and default `find` (-P) treats a symlink given
+  # without a trailing slash as a leaf, never descending into it — silently
+  # returning no matches even though the jar is right there.
+  STAGED_JAR=$(find "$GOVDATA_ROOT/build/libs/" -name "sih-govdata.jar" 2>/dev/null | head -1)
+  STANDARD_JAR=$(find "$GOVDATA_ROOT/build/libs/" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
+  SIH_JAR=$(find "$GOVDATA_ROOT/build/libs/" -name "sih-govdata-*-SNAPSHOT.jar" 2>/dev/null | head -1)
   if [ -n "$STAGED_JAR" ]; then export GOVDATA_JAR="$STAGED_JAR"
   elif [ -n "$STANDARD_JAR" ]; then export GOVDATA_JAR="$STANDARD_JAR"
   elif [ -n "$SIH_JAR" ]; then export GOVDATA_JAR="$SIH_JAR"; fi

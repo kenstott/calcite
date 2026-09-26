@@ -59,13 +59,16 @@ echo "Building govdata module..."
 cd "$PROJECT_ROOT"
 ./gradlew :govdata:shadowJar --console=plain -q 2>&1 | tail -3
 
-# Find the shadow JAR
-SHADOW_JAR=$(find "$PROJECT_ROOT/govdata/build/libs" -name "*-all.jar" -o -name "*-shadow.jar" | head -1)
+# Find the shadow JAR. Trailing slash matters: govdata/build/libs is a symlink
+# (staged off-disk under /mnt/wsltmp) on some hosts, and default `find` (-P)
+# treats a symlink given without a trailing slash as a leaf, never descending
+# into it — silently returning no matches even though the jar is right there.
+SHADOW_JAR=$(find "$PROJECT_ROOT/govdata/build/libs/" -name "*-all.jar" -o -name "*-shadow.jar" | head -1)
 if [[ -z "$SHADOW_JAR" ]]; then
   # Fall back to regular classpath
   echo "No shadow JAR found, using classpath..."
-  CLASSPATH=$(find "$PROJECT_ROOT/govdata/build/libs" -name "*.jar" | tr '\n' ':')
-  CLASSPATH="$CLASSPATH:$(find "$PROJECT_ROOT/file/build/libs" -name "*.jar" | tr '\n' ':')"
+  CLASSPATH=$(find "$PROJECT_ROOT/govdata/build/libs/" -name "*.jar" | tr '\n' ':')
+  CLASSPATH="$CLASSPATH:$(find "$PROJECT_ROOT/file/build/libs/" -name "*.jar" | tr '\n' ':')"
   CLASSPATH="$CLASSPATH:$(find "$HOME/.gradle/caches" -name "iceberg-core-*.jar" 2>/dev/null | head -1)"
   CLASSPATH="$CLASSPATH:$(find "$HOME/.gradle/caches" -name "hadoop-common-*.jar" 2>/dev/null | head -1)"
 else

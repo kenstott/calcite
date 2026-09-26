@@ -271,12 +271,16 @@ resolve_classpath() {
     "$GOVDATA_ROOT/scripts/pin-jar.sh" "$jar" || exit 1
     return
   fi
-  jar=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata.jar" 2>/dev/null | head -1)
+  # Trailing slash matters: build/libs is a symlink (staged off-disk under
+  # /mnt/wsltmp) on some hosts, and default `find` (-P) treats a symlink given
+  # without a trailing slash as a leaf, never descending into it — silently
+  # returning no matches even though the jar is right there.
+  jar=$(find "$GOVDATA_ROOT/build/libs/" -name "sih-govdata.jar" 2>/dev/null | head -1)
   if [ -z "$jar" ]; then
-    jar=$(find "$GOVDATA_ROOT/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
+    jar=$(find "$GOVDATA_ROOT/build/libs/" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
   fi
   if [ -z "$jar" ]; then
-    jar=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata-*-SNAPSHOT.jar" 2>/dev/null | head -1)
+    jar=$(find "$GOVDATA_ROOT/build/libs/" -name "sih-govdata-*-SNAPSHOT.jar" 2>/dev/null | head -1)
   fi
   if [ -z "$jar" ]; then
     echo "ERROR: Shadow JAR not found. Run: ./gradlew :govdata:shadowJar" >&2
