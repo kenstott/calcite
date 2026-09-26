@@ -824,6 +824,17 @@ partitionedTables:
       instead of per-ORI API calls. One row per agency (ORI7) per month, unpivoted from
       the wide 12-month record. Cross-references cde_agencies via ori (ORI7 prefix).
 
+      Values are the FBI master file's own, unmodified. The file carries no per-month
+      completeness flag: a month row exists for every agency-year, and an agency that did
+      not report a month can hold 0 or a small late-adjustment count there, which is
+      indistinguishable from a genuine low month. number_of_months_reported is a single
+      header-level count and does not identify which months are empty, so 12 rows are not
+      12 reported months. Some agencies also
+      carry a second record under the same ori (a different population_group, typically
+      zero or small adjustments) that must be summed with the primary record. Some
+      agencies record a whole year's counts in a single month (typically December), so
+      month-level seasonality is unreliable; annual totals are the safer grain.
+
     dimensions:
       type:
         - reta
@@ -889,7 +900,7 @@ partitionedTables:
       - name: number_of_months_reported
         type: integer
         nullable: true
-        comment: Return A header field number of months reported
+        comment: Return A header field number of months reported; an agency-year total, not a per-month indicator, and it can read 12 while several months hold only near-zero counts
       - name: agency_count
         type: integer
         nullable: true
