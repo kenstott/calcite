@@ -577,7 +577,7 @@ failed_count=0
 requeue_count=0
 declare -A _conflict_logged=()   # slot -> last schema+year conflict message logged
 _sec_cap_state=""          # "on" / "off": last logged state of the SEC-family cap
-_sec_hold_logged=""        # last SEC-family hold reason logged (running/waiting)
+_sec_hold_logged=""        # SEC-family running count a hold was last logged for; reset when the cap lifts
 failed_list=()
 restart_count=0
 
@@ -771,12 +771,13 @@ fill_pool() {
           log_info "SEC-family cap of ${SEC_FAMILY_CAP} applies: non-SEC work is queued (first: ${_waiting_other})"
         else
           log_info "SEC-family cap lifted: no non-SEC slot is queued"
+          _sec_hold_logged=""
         fi
       fi
       if [ "$_cap_now" = "on" ] && [ "$_sec_active" -ge "$SEC_FAMILY_CAP" ]; then
         # A held slot is otherwise indistinguishable from an idle pool, so say why once per change.
-        if [ "$_sec_hold_logged" != "${_sec_active}/${_waiting_other}" ]; then
-          _sec_hold_logged="${_sec_active}/${_waiting_other}"
+        if [ "$_sec_hold_logged" != "$_sec_active" ]; then
+          _sec_hold_logged="$_sec_active"
           log_info "HOLDING ${next_id} (and every queued SEC-family slot): ${_sec_active} SEC-family workers running, cap ${SEC_FAMILY_CAP}, while ${_waiting_other} waits"
         fi
         # Requeue at back with backoff, same mechanic as the schema+year conflict case above.
