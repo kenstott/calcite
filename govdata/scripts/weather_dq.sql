@@ -645,19 +645,6 @@ FROM (
   WHERE month IS NOT NULL
 );
 
--- climate_normals_monthly: every station-month normal must be present — all 12 months, and one row
--- per (station_id, month) primary key.
-INSERT INTO dq_results
-SELECT 'weather', 'climate_normals_monthly', 'month_coverage',
-  CASE WHEN months <> 12 OR dup_keys > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(months AS VARCHAR) || ' months, ' || CAST(dup_keys AS VARCHAR) || ' duplicate keys', '12 months, 0 duplicate keys',
-  'distinct months and duplicate (station_id, month) keys'
-FROM (
-  SELECT COUNT(DISTINCT month) AS months,
-         COUNT(*) - COUNT(DISTINCT station_id || '|' || CAST(month AS VARCHAR)) AS dup_keys
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly', allow_moved_paths=true)
-);
-
 -- climate_normals_monthly: normal_tmax_c range — real Celsius bounds; ClimateNormalsTransformer
 -- converts CDO's raw standard-unit (°F) response to true Celsius, so this now actually verifies
 -- the _c suffix rather than tolerating a mislabeled °F value.

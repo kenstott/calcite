@@ -111,24 +111,14 @@ load_env() {
     # Capture any caller-exported overrides before .env.prod stomps them.
     # GOVDATA_PARQUET_DIR is preserved so a DQ orchestrator can point the standard
     # daily/historical workers at the DQ bucket (s3://govdata-parquet-v1-dq) instead of prod.
-    # GOVDATA_JAR is preserved so remediation jobs can specify a private jar (e.g.
-    # GOVDATA_JAR=/path/to/sih-govdata-fix.jar force-reprocess.sh --schema X --tables Y).
-    # GOVDATA_TABLES/GOVDATA_FORCE_REPROCESS_TABLES are preserved so force-reprocess.sh's
-    # table filtering persists through load_env (they restrict enabledTables to the exact set).
     local _pre_start_year="${GOVDATA_START_YEAR+set}"
     local _pre_cache_dir="${GOVDATA_CACHE_DIR+set}"
     local _pre_parquet_dir="${GOVDATA_PARQUET_DIR+set}"
     local _pre_raw_cache="${ETL_LOCAL_RAW_CACHE+set}"
-    local _pre_govdata_jar="${GOVDATA_JAR+set}"
-    local _pre_govdata_tables="${GOVDATA_TABLES+set}"
-    local _pre_force_reprocess_tables="${GOVDATA_FORCE_REPROCESS_TABLES+set}"
     local _saved_start_year="${GOVDATA_START_YEAR:-}"
     local _saved_cache_dir="${GOVDATA_CACHE_DIR:-}"
     local _saved_parquet_dir="${GOVDATA_PARQUET_DIR:-}"
     local _saved_raw_cache="${ETL_LOCAL_RAW_CACHE:-}"
-    local _saved_govdata_jar="${GOVDATA_JAR:-}"
-    local _saved_govdata_tables="${GOVDATA_TABLES:-}"
-    local _saved_force_reprocess_tables="${GOVDATA_FORCE_REPROCESS_TABLES:-}"
     # Tracker backend + PG creds: a caller-supplied override must win over .env.prod's value,
     # otherwise the opt-in is silently ignored.
     local _pre_tracker_backend="${CALCITE_TRACKER_BACKEND+set}"
@@ -164,9 +154,6 @@ load_env() {
     [ "${_pre_start_year}" = "set" ] && export GOVDATA_START_YEAR="$_saved_start_year"
     [ "${_pre_cache_dir}" = "set" ] && export GOVDATA_CACHE_DIR="$_saved_cache_dir"
     [ "${_pre_parquet_dir}" = "set" ] && export GOVDATA_PARQUET_DIR="$_saved_parquet_dir"
-    [ "${_pre_govdata_jar}" = "set" ] && export GOVDATA_JAR="$_saved_govdata_jar"
-    [ "${_pre_govdata_tables}" = "set" ] && export GOVDATA_TABLES="$_saved_govdata_tables"
-    [ "${_pre_force_reprocess_tables}" = "set" ] && export GOVDATA_FORCE_REPROCESS_TABLES="$_saved_force_reprocess_tables"
     # ETL_LOCAL_RAW_CACHE: .env.prod hardcodes /tmp; preserve a caller/overlay override
     # (e.g. .env.preprod's durable ext4 path) so worker staging survives reboots/crashes.
     [ "${_pre_raw_cache}" = "set" ] && export ETL_LOCAL_RAW_CACHE="$_saved_raw_cache"

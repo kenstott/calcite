@@ -1296,8 +1296,7 @@ partitionedTables:
     partitions: *normals_partitions
     comment: >
       NOAA CDO Monthly Climate Normals (NORMAL_MLY dataset, 1981-2010 period).
-      One row per station per month (all 12 months per station). Each state is fetched,
-      paged and pivoted as one unit and stored as its own partition. Values are in metric units (°C, mm). CDO's
+      One row per station per month. Values are in metric units (°C, mm). CDO's
       raw response is in its "standard" units (tenths of °F for temperature,
       hundredths of an inch for precipitation, tenths of an inch for snowfall);
       ClimateNormalsTransformer converts each to metric with the correct formula
@@ -1311,6 +1310,10 @@ partitionedTables:
       type:
         - climate_normals
       state_fips: *all_state_fips
+      month:
+        type: list
+        values: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+        descending: true
 
     columns:
       - name: station_id
@@ -1361,16 +1364,23 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY&locationid=FIPS:{state_fips}&datatypeid=MLY-TMAX-NORMAL,MLY-TMIN-NORMAL,MLY-TAVG-NORMAL,MLY-PRCP-NORMAL,MLY-SNOW-NORMAL,MLY-TMAX-STDDEV,MLY-TMIN-STDDEV&startdate=2010-01-01&enddate=2010-12-01"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY&locationid=FIPS:{state_fips}&datatypeid=MLY-TMAX-NORMAL,MLY-TMIN-NORMAL,MLY-TAVG-NORMAL,MLY-PRCP-NORMAL,MLY-SNOW-NORMAL,MLY-TMAX-STDDEV,MLY-TMIN-STDDEV&startdate=2010-{month}-01&enddate=2010-{month}-01&limit=1000&offset=1"
       method: GET
       response:
         format: json
       headers:
-        token: "${NOAA_CDO_TOKEN}"
+        token: "{env:NOAA_CDO_TOKEN}"
       rateLimit:
         requestsPerSecond: 5.0
         retryOn: [429, 503]
         maxRetries: 3
+      pagination:
+        enabled: true
+        offsetParam: offset
+        limitParam: limit
+        maxPerRequest: 1000
+      rawCache:
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.weather.ClimateNormalsTransformer"
@@ -1380,9 +1390,9 @@ partitionedTables:
       options:
         stagingMode: local
       output:
-        pattern: "type=climate_normals/state_fips=*/"
+        pattern: "type=climate_normals/state_fips=*/month=*/"
       partition:
-        columns: [type, state_fips]
+        columns: [type]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: climate_normals_monthly

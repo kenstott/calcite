@@ -84,52 +84,50 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     // Parse filtering configuration
     Set<String> enabledSources = parseEnabledSources(operand);
     Set<String> enabledBlsTables = parseBlsTableFilter(operand);
-    Set<String> enabledTables = parseEnabledTables(operand);
 
     // WorldBank dimensions are now declarative in YAML using json_catalog type
     // No need for Java hooks - dimensions are resolved automatically by DimensionIterator
 
-    // Add isEnabled hooks for all tables based on enabledSources, enabledTables, and blsConfig
-    addIsEnabledHooks(builder, enabledSources, enabledBlsTables, enabledTables);
+    // Add isEnabled hooks for all tables based on enabledSources and blsConfig
+    addIsEnabledHooks(builder, enabledSources, enabledBlsTables);
 
-    LOGGER.debug("Configured hooks for ECON schema: enabledSources={}, blsTables={}, enabledTables={}",
-        enabledSources, enabledBlsTables != null ? enabledBlsTables.size() : "all",
-        enabledTables != null ? enabledTables.size() : "all");
+    LOGGER.debug("Configured hooks for ECON schema: enabledSources={}, blsTables={}",
+        enabledSources, enabledBlsTables != null ? enabledBlsTables.size() : "all");
   }
 
   /**
-   * Add isEnabled hooks for all tables based on enabledSources, enabledTables, and blsConfig filtering.
+   * Add isEnabled hooks for all tables based on enabledSources and blsConfig filtering.
    */
   private void addIsEnabledHooks(FileSchemaBuilder builder,
-      Set<String> enabledSources, Set<String> enabledBlsTables, Set<String> enabledTables) {
+      Set<String> enabledSources, Set<String> enabledBlsTables) {
     // Add hooks for BLS tables
     for (String tableName : BLS_TABLES) {
       builder.isEnabled(tableName, ctx ->
-          isTableEnabled(tableName, "bls", enabledSources, enabledBlsTables, enabledTables));
+          isTableEnabled(tableName, "bls", enabledSources, enabledBlsTables));
     }
 
     // Add hooks for Treasury tables
     for (String tableName : TREASURY_TABLES) {
       builder.isEnabled(tableName, ctx ->
-          isTableEnabled(tableName, "treasury", enabledSources, null, enabledTables));
+          isTableEnabled(tableName, "treasury", enabledSources, null));
     }
 
     // Add hooks for WorldBank tables
     for (String tableName : WORLDBANK_TABLES) {
       builder.isEnabled(tableName, ctx ->
-          isTableEnabled(tableName, "worldbank", enabledSources, null, enabledTables));
+          isTableEnabled(tableName, "worldbank", enabledSources, null));
     }
 
     // Add hooks for FRED tables
     for (String tableName : FRED_TABLES) {
       builder.isEnabled(tableName, ctx ->
-          isTableEnabled(tableName, "fred", enabledSources, null, enabledTables));
+          isTableEnabled(tableName, "fred", enabledSources, null));
     }
 
     // Add hooks for BEA tables
     for (String tableName : BEA_TABLES) {
       builder.isEnabled(tableName, ctx ->
-          isTableEnabled(tableName, "bea", enabledSources, null, enabledTables));
+          isTableEnabled(tableName, "bea", enabledSources, null));
     }
 
     LOGGER.debug("Added isEnabled hooks for {} BLS, {} Treasury, {} WorldBank, {} FRED, {} BEA tables",
@@ -138,16 +136,10 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * Check if a table is enabled based on enabledSources, enabledTables, and blsConfig.
+   * Check if a table is enabled based on enabledSources and blsConfig.
    */
   private boolean isTableEnabled(String tableName, String dataSource,
-      Set<String> enabledSources, Set<String> enabledBlsTables, Set<String> enabledTables) {
-    // Check enabledTables first (highest priority - when set, only these tables are allowed)
-    if (enabledTables != null && !enabledTables.contains(tableName)) {
-      LOGGER.debug("Table '{}' disabled: not in enabledTables list", tableName);
-      return false;
-    }
-
+      Set<String> enabledSources, Set<String> enabledBlsTables) {
     // Check if data source is enabled
     if (enabledSources != null && !enabledSources.contains(dataSource.toLowerCase())) {
       LOGGER.debug("Table '{}' disabled: source '{}' not in enabledSources", tableName, dataSource);
@@ -227,33 +219,5 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     return null; // No filtering
-  }
-
-  /**
-   * Parse enabledTables configuration from operand (force-reprocess.sh --tables scoping).
-   */
-  private Set<String> parseEnabledTables(Map<String, Object> operand) {
-    Object tablesObj = operand.get("enabledTables");
-    if (tablesObj == null) {
-      return null; // No table filtering
-    }
-
-    Set<String> tables = new HashSet<>();
-    if (tablesObj instanceof List) {
-      for (Object table : (List<?>) tablesObj) {
-        if (table instanceof String) {
-          tables.add((String) table);
-        }
-      }
-    } else if (tablesObj instanceof String[]) {
-      for (String table : (String[]) tablesObj) {
-        tables.add(table);
-      }
-    }
-
-    if (!tables.isEmpty()) {
-      LOGGER.info("Enabled tables (force-reprocess scoping): {}", tables);
-    }
-    return tables.isEmpty() ? null : tables;
   }
 }
