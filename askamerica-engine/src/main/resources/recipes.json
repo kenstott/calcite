@@ -905,6 +905,46 @@
         "few firms control"
       ],
       "body": "Many markets a caller asks to size the concentration of are not one flat market but two stacked layers: an infrastructure/utility layer (an exchange, a clearinghouse, a platform) and an access/intermediary layer (the brokers, banks, or sellers who actually reach end customers through it). It is tempting to treat the question as answered once the layer the corpus's own data can reach is fully worked out, especially when that layer turns out to be extremely concentrated on its own -- but a reader asking \"is this down to a handful of firms\" usually means the whole business, and the access layer is often AT LEAST as concentrated as the infrastructure layer, sometimes more.\n\nMeasured directly in this harness (q38, 2026-09-22): asked how concentrated interest-rate swap clearing is, an askamerica run correctly identified that its own CFTC swap-data tables cannot see the CCP (clearinghouse) side at all -- a real, permanent data-source limitation (Part 43 public dissemination excludes the CCP-facing novation leg by design) -- and built an excellent CCP-layer analysis from external sources instead (HHI=8,250, LCH SwapClear ~91% of global cleared notional). But it never addressed the SEPARATE dealer/clearing-member layer -- which banks control client access to that clearing -- even though nothing about the CFTC-table limitation blocks researching that layer. Two independently-run unaided personas both found and reported it on their own (OCC data: 4 US banks hold 87.1% of bank derivatives notional; a Federal Reserve Bank of Chicago study: 5 bank-affiliated clearing members hold over 80% of client margin for cleared IRS), which is at least as concentrated a picture as the CCP layer and materially changes what \"a handful of firms\" means for this market.\n\nFIX: before finalizing an answer to a market-concentration question, name the distinct layers the market actually has (infrastructure/utility vs. access/intermediary is the most common split, but a market can have others -- upstream supplier concentration vs. downstream retail concentration, for example) and check whether each one is addressed, not just the layer the corpus happens to have data for. A data limitation on ONE layer is never a reason the other layer went unresearched -- that second layer is usually reachable through ordinary external search even when the corpus has nothing on it."
+    },
+    {
+      "id": "test-whether-the-outcome-predicts-the-cause",
+      "title": "Before attributing a cross-sectional relationship to a proposed cause, test whether the outcome predicts the cause going the other direction",
+      "triggers": [
+        "reverse causality",
+        "which way does the relationship run",
+        "does X cause Y or Y cause X",
+        "richer states spend more",
+        "causal direction",
+        "endogeneity",
+        "spending causes growth",
+        "growth causes spending",
+        "did investing in",
+        "led to higher",
+        "resulted in higher",
+        "produced better outcomes",
+        "states that invested"
+      ],
+      "body": "A question phrased as 'did states that did X see better outcomes' invites running a cross-sectional regression of the later outcome on the earlier proposed cause and reading a significant coefficient as support for the causal story implied by the question's own wording. The plausible-but-wrong shortcut is stopping there: a real coefficient in the hypothesized direction is consistent with the causal story, but it is equally consistent with the reverse -- richer places having more resources to spend on the 'cause' in the first place, not the 'cause' having produced the outcome.\n\nMeasured directly in this harness: on a question asking whether investing in education/infrastructure or keeping taxes low produced better income growth since 2010, the highest-scoring run ran an explicit reverse regression -- regressing 2010 income level on SUBSEQUENT per-pupil education spending -- and found states richer in 2010 went on to spend MORE per pupil (r=0.59), a real threat to any 'spending caused growth' reading that a same-direction-only analysis would never surface. A second run reached the same core forward finding (no tax-burden/income relationship) but never ran this check and so could not rule out the same confound.\n\nFIX: whenever a question's own phrasing implies a direction of causation between two time-ordered or plausibly-endogenous variables, run the regression in BOTH directions before reporting either coefficient as evidence of the implied direction -- regress the later outcome on the earlier proposed cause, AND regress the earlier proposed-cause's own starting level on the outcome (or on the proposed cause's subsequent change) to check whether the outcome's initial condition predicts the 'cause' just as well or better. Report both coefficients together; a forward relationship that survives being checked in reverse is far stronger evidence than one that was only ever tested in the direction the question suggested. This is a distinct check from a VIF/collinearity check between two competing predictors (see correlated-predictors-need-a-vif-check) -- collinearity asks whether two candidate causes are proxies for each other; this asks whether the proposed cause is itself downstream of the outcome."
+    },
+    {
+      "id": "disclose-modeling-assumptions-and-baseline-vintage-behind-headline-risk-figures",
+      "title": "A headline mortality or risk figure built from a dose-response model or an old epidemiological baseline needs its assumption and vintage disclosed, not just the number",
+      "triggers": [
+        "how dangerous is",
+        "deaths per unit",
+        "mortality rate comparison",
+        "risk comparison",
+        "attributable deaths",
+        "linear no-threshold",
+        "modeled deaths",
+        "estimated fatalities",
+        "health risk of",
+        "safer than",
+        "more dangerous than",
+        "excess deaths",
+        "deaths attributable to"
+      ],
+      "body": "A cross-technology or cross-source mortality/risk comparison (e.g. nuclear vs. coal vs. gas deaths per unit of power) is easy to answer by citing the standard published per-TWh figures and stopping there, because they already look precise and are widely repeated. The plausible-but-wrong shortcut is treating a modeled estimate as equivalent in kind to a confirmed count, and treating an old epidemiological baseline as still current, without saying either thing to the reader.\n\nMeasured directly in this harness: on a question ranking nuclear/coal/gas by health risk, the highest-scoring run explicitly disclosed two things a lower-scoring run did not: (1) nuclear's low headline death toll rests on a linear-no-threshold (LNT) dose-response model that is itself contested -- only 46 deaths are directly confirmed (Chernobyl/Fukushima combined), against a MODELED range of 4,000-60,000+ from the same events depending on the LNT assumption -- and (2) the standard fossil-fuel mortality figures trace to a 2007 European study, and more recent PM2.5 epidemiology suggests that baseline likely UNDERSTATES current risk by 4-9x, meaning the standard comparison is not just old but probably biased in a specific, statable direction.\n\nFIX: when reporting a mortality/risk figure, check and disclose two things before treating it as settled: (a) whether the figure is a directly confirmed count or the output of a dose-response/extrapolation model, and if the latter, name the model's key contested assumption and the range it produces under that assumption, not just the point estimate; (b) the publication year of the underlying epidemiological baseline, and whether more recent research in the same field has revised the exposure-response relationship it depends on -- a quick check of whether newer studies exist and which direction they'd move the estimate is enough; a full re-derivation is not required, but silence on a known, checkable staleness is."
     }
   ]
 }
