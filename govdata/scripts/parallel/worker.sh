@@ -163,9 +163,10 @@ fi
 # snapshot/full-archive table for the single :once slot. Query-time views live under
 # `views:` rather than `partitionedTables`, so they are excluded automatically.
 _schema_table_split() {   # <schema> <year|once> → JSON-quoted, comma-separated list
-  local schema="$1" kind="$2" jar
+  local schema="$1" kind="$2" jar resource
   jar=$(resolve_classpath) || return 1
-  python3 - "$jar" "$schema" "$kind" <<'PY'
+  resource=$(schema_yaml_resource "$schema")
+  python3 - "$jar" "$schema" "$kind" "$resource" <<'PY'
 import subprocess, sys
 try:
     import yaml
@@ -173,11 +174,10 @@ except ImportError:
     sys.stderr.write("ERROR: PyYAML required to derive the ETL table split\n")
     sys.exit(1)
 
-jar, schema, kind = sys.argv[1], sys.argv[2], sys.argv[3]
-res = subprocess.run(["unzip", "-p", jar, "%s/%s-schema.yaml" % (schema, schema)],
-                     capture_output=True)
+jar, schema, kind, resource = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+res = subprocess.run(["unzip", "-p", jar, resource], capture_output=True)
 if res.returncode != 0 or not res.stdout:
-    sys.stderr.write("ERROR: %s/%s-schema.yaml not found in %s\n" % (schema, schema, jar))
+    sys.stderr.write("ERROR: %s not found in %s\n" % (resource, jar))
     sys.exit(1)
 
 doc = yaml.safe_load(res.stdout) or {}

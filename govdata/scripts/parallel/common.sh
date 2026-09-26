@@ -1163,7 +1163,7 @@ get_timeout_config() {
 
   # Check schema YAML for workerTimeoutMinutes — takes precedence over hardcoded defaults
   local _yaml_file
-  _yaml_file="$(dirname "${BASH_SOURCE[0]}")/../../src/main/resources/${_schema}/${_schema}-schema.yaml"
+  _yaml_file="$(dirname "${BASH_SOURCE[0]}")/../../src/main/resources/$(schema_yaml_resource "$_schema")"
   if [[ -f "$_yaml_file" ]]; then
     local _yaml_timeout
     _yaml_timeout=$(grep -E "^workerTimeoutMinutes:" "$_yaml_file" | awk '{print $2}' | tr -d '"'"'"'')
@@ -1248,6 +1248,18 @@ build_inline_model() {
     "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json" "$user_tables_json"
 }
 
+# Echoes the bundled schema YAML resource path (relative to the resources root) for a schema
+# name. Most schemas live at <schema>/<schema>-schema.yaml; the schemas that share a directory
+# with a sibling (econ_reference beside econ, cyber_vuln/cyber_threat under cyber) do not.
+schema_yaml_resource() {
+  case "$1" in
+    econ_reference) echo "econ/econ-reference-schema.yaml" ;;
+    cyber_vuln)     echo "cyber/cyber-vuln-schema.yaml" ;;
+    cyber_threat)   echo "cyber/cyber-threat-schema.yaml" ;;
+    *)              echo "$1/$1-schema.yaml" ;;
+  esac
+}
+
 # Filter a bespoke worker's hardcoded per-model table list down to a GOVDATA_TABLES override.
 # The schemas with their own model-building function (worker-health.sh, worker-health-rebuild.sh,
 # worker-cyber.sh, worker-edu.sh, worker-lands.sh, worker-patents.sh) bypass build_inline_model
@@ -1264,9 +1276,10 @@ build_inline_model() {
 # Echoes bare, comma-separated names. Fails loudly rather than echoing nothing: an empty list
 # read as "no work" is the silent-skip this exists to catch.
 schema_tables() {
-  local schema="$1" kind="${2:-all}" jar
+  local schema="$1" kind="${2:-all}" jar resource
   jar=$(resolve_classpath) || return 1
-  python3 - "$jar" "$schema" "$kind" <<'PY'
+  resource=$(schema_yaml_resource "$schema")
+  python3 - "$jar" "$schema" "$kind" "$resource" <<'PY'
 import subprocess, sys
 try:
     import yaml
@@ -1274,11 +1287,10 @@ except ImportError:
     sys.stderr.write("ERROR: PyYAML required to derive the schema table list\n")
     sys.exit(1)
 
-jar, schema, kind = sys.argv[1], sys.argv[2], sys.argv[3]
-res = subprocess.run(["unzip", "-p", jar, "%s/%s-schema.yaml" % (schema, schema)],
-                     capture_output=True)
+jar, schema, kind, resource = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+res = subprocess.run(["unzip", "-p", jar, resource], capture_output=True)
 if res.returncode != 0 or not res.stdout:
-    sys.stderr.write("ERROR: %s/%s-schema.yaml not found in %s\n" % (schema, schema, jar))
+    sys.stderr.write("ERROR: %s not found in %s\n" % (resource, jar))
     sys.exit(1)
 
 doc = yaml.safe_load(res.stdout) or {}
