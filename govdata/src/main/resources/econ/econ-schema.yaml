@@ -2613,6 +2613,14 @@ partitionedTables:
           Average annual establishment count. BLS discloses this even for a cell whose
           employment/wage figures are suppressed (disclosure_code = 'N') — see
           annual_avg_emplvl.
+          Washington State discontinuity in BLS's own published counts: NAICS 6241 (Individual and
+          Family Services, inside industry_code 62 and 624) drops from 24,481 establishments in 2021
+          to 2,036 in 2023 in the Seattle-Tacoma-Bellevue CSA (the same ~90% fall appears in King,
+          Pierce and Snohomish counties) while its employment stays flat (54,658 to 55,534), which
+          points to a change in how establishments are counted rather than business closures (BLS
+          does not document the cause in the file). annual_avg_estabs for Washington areas is not
+          comparable across 2021-2023 at industry_code 62, 624, 6241 or the all-industry total
+          (10); employment and wage columns are unaffected.
       - name: annual_avg_emplvl
         type: int
         nullable: true
@@ -3046,6 +3054,14 @@ partitionedTables:
           Average annual establishment count. BLS discloses this even for a cell whose
           employment/wage figures are suppressed (disclosure_code = 'N') — see
           annual_avg_emplvl.
+          Washington State discontinuity in BLS's own published counts: NAICS 6241 (Individual and
+          Family Services, inside industry_code 62 and 624) drops from 24,481 establishments in 2021
+          to 2,036 in 2023 in the Seattle-Tacoma-Bellevue CSA (the same ~90% fall appears in King,
+          Pierce and Snohomish counties) while its employment stays flat (54,658 to 55,534), which
+          points to a change in how establishments are counted rather than business closures (BLS
+          does not document the cause in the file). annual_avg_estabs for Washington areas is not
+          comparable across 2021-2023 at industry_code 62, 624, 6241 or the all-industry total
+          (10); employment and wage columns are unaffected.
       - name: annual_avg_emplvl
         type: int
         nullable: true
@@ -3208,6 +3224,14 @@ partitionedTables:
           employment/wage figures are suppressed (disclosure_code = 'N') — a non-zero count
           here with NULL employment does not mean 0 establishments reported 0 workers, it
           means the count itself was never suppressed. See disclosure_code.
+          Washington State discontinuity in BLS's own published counts: NAICS 6241 (Individual and
+          Family Services, inside industry_code 62 and 624) drops from 24,481 establishments in 2021
+          to 2,036 in 2023 in the Seattle-Tacoma-Bellevue CSA (the same ~90% fall appears in King,
+          Pierce and Snohomish counties) while its employment stays flat (54,658 to 55,534), which
+          points to a change in how establishments are counted rather than business closures (BLS
+          does not document the cause in the file). annual_avg_estabs for Washington areas is not
+          comparable across 2021-2023 at industry_code 62, 624, 6241 or the all-industry total
+          (10); employment and wage columns are unaffected.
       - name: annual_avg_emplvl
         type: int
         nullable: true
@@ -3360,6 +3384,14 @@ partitionedTables:
           Average annual establishment count. BLS discloses this even for a cell whose
           employment/wage figures are suppressed (disclosure_code = 'N') — see
           annual_avg_emplvl.
+          Washington State discontinuity in BLS's own published counts: NAICS 6241 (Individual and
+          Family Services, inside industry_code 62 and 624) drops from 24,481 establishments in 2021
+          to 2,036 in 2023 in the Seattle-Tacoma-Bellevue CSA (the same ~90% fall appears in King,
+          Pierce and Snohomish counties) while its employment stays flat (54,658 to 55,534), which
+          points to a change in how establishments are counted rather than business closures (BLS
+          does not document the cause in the file). annual_avg_estabs for Washington areas is not
+          comparable across 2021-2023 at industry_code 62, 624, 6241 or the all-industry total
+          (10); employment and wage columns are unaffected.
       - name: annual_avg_emplvl
         type: int
         nullable: true
