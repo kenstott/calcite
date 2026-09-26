@@ -3420,7 +3420,11 @@ partitionedTables:
       nickname might suggest) and muzy-jte6 (2020-2023, adds COVID-19 columns). Weekly
       rows surface the all-cause weekly total for the 3yf8-kanr years and the COVID-19
       underlying-cause count for 2020-2023; source_type distinguishes annual from
-      weekly, and age_adjusted_rate is populated for annual rows only.
+      weekly, and age_adjusted_rate is populated for annual rows only. This table has no
+      county grain. For county-level mortality outcomes use chr_premature_death_trends
+      (all-cause years of potential life lost before age 75, county rows via
+      geo_level='county', through 2023), or cdc_county_injury_mortality and
+      cdc_county_overdose_deaths for drug overdose, suicide, homicide and firearm deaths.
     columns:
       - name: year
         comment: "Data year of deaths; MMWR year for weekly rows"
