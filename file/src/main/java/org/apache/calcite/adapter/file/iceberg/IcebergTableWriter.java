@@ -100,6 +100,13 @@ public class IcebergTableWriter {
    */
   private static final Object DROP_ROW = new Object();
 
+  /**
+   * Per table location, the lowest {@code v{N}.metadata.json} version that may still exist in this
+   * JVM's view; set by the first prune's directory listing and advanced by every later prune.
+   */
+  private static final java.util.concurrent.ConcurrentHashMap<String, Integer> PRUNE_FLOORS =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
   private final Table table;
   private final StorageProvider storageProvider;
 
@@ -1426,6 +1433,11 @@ public class IcebergTableWriter {
       return 0;
     }
 
+    Integer floor = PRUNE_FLOORS.get(table.location());
+    if (floor != null && floor <= currentVersion) {
+      return pruneVersionRange(metadataDir, floor, currentVersion - keep);
+    }
+
     List<StorageProvider.FileEntry> metadataFiles;
     try {
       metadataFiles = storageProvider.listFiles(metadataDir, false);
@@ -1454,12 +1466,15 @@ public class IcebergTableWriter {
 
     int toDelete = versionToPath.size() - keep;
     if (toDelete <= 0) {
+      PRUNE_FLOORS.put(table.location(), versionToPath.firstKey());
       return 0;
     }
 
     int deleted = 0;
+    int nextFloor = currentVersion;
     for (Map.Entry<Integer, String> entry : versionToPath.entrySet()) {
       if (deleted >= toDelete) {
+        nextFloor = Math.min(nextFloor, entry.getKey());
         break;
       }
       if (entry.getKey() == currentVersion) {
@@ -1473,10 +1488,44 @@ public class IcebergTableWriter {
       } catch (IOException e) {
         LOGGER.warn("Failed to delete superseded metadata file {}: {}",
             entry.getValue(), e.getMessage());
+        nextFloor = Math.min(nextFloor, entry.getKey());
       }
     }
+    PRUNE_FLOORS.put(table.location(), nextFloor);
     LOGGER.info("Pruned {} superseded metadata.json version file(s) for table {}",
         deleted, table.name());
+    return deleted;
+  }
+
+  /**
+   * Deletes {@code v{N}.metadata.json} for every N in {@code [floor, lastToDelete]} by key, then
+   * advances this JVM's floor for the table. Used once a full listing has established that
+   * everything below {@code floor} is already gone: an S3 LIST of a metadata directory with
+   * thousands of manifest files takes minutes on MinIO, and doing it inside the commit lock after
+   * every commit stalls every other writer of the table for that long. Versions that were never
+   * written (another writer's gap) are a no-op delete. On a failed delete the floor stays at that
+   * version so the next prune retries it.
+   */
+  private int pruneVersionRange(String metadataDir, int floor, int lastToDelete) {
+    int deleted = 0;
+    int nextFloor = Math.max(floor, lastToDelete + 1);
+    for (int version = floor; version <= lastToDelete; version++) {
+      String path = metadataDir + "v" + version + ".metadata.json";
+      try {
+        if (storageProvider.delete(path)) {
+          deleted++;
+        }
+      } catch (IOException e) {
+        LOGGER.warn("Failed to delete superseded metadata file {}: {}", path, e.getMessage());
+        nextFloor = version;
+        break;
+      }
+    }
+    PRUNE_FLOORS.put(table.location(), nextFloor);
+    if (deleted > 0) {
+      LOGGER.info("Pruned {} superseded metadata.json version file(s) for table {}",
+          deleted, table.name());
+    }
     return deleted;
   }
 
