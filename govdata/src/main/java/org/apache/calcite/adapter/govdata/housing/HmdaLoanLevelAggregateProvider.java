@@ -67,17 +67,27 @@ import java.util.Map;
  * loaded into JVM heap as a row list, matching the same temp-file-plus-DuckDB pattern {@code
  * IcebergMaterializationWriter.transformRowsWithDuckDb} already uses for batch expression
  * evaluation — and the temp file is deleted immediately after. The aggregated result (one row per
- * state/county/tract) is small enough to hold in memory and return directly.
+ * census tract) is small enough to hold in memory and return directly.
  */
 public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HmdaLoanLevelAggregateProvider.class);
   private static final int MAX_ATTEMPTS = 3;
 
+  /**
+   * One row per 11-digit census tract. The census tract FIPS encodes its own county, so
+   * {@code county_fips} comes from the tract rather than from the loan record's {@code county_code}
+   * (which the source reports as the literal {@code NA} when absent). {@code state_code} is the
+   * state on records whose reported county agrees with the tract's county; it is null when no
+   * record of the tract carries a matching county. Records whose {@code census_tract} is not an
+   * 11-digit code (the source's {@code NA} for a property with no tract) belong to no tract and
+   * are excluded.
+   */
   private static final String AGGREGATE_SQL =
       "SELECT "
-      + "  state_code, "
-      + "  county_code AS county_fips, "
+      + "  MODE(state_code) FILTER (WHERE county_code = LEFT(census_tract, 5) "
+      + "    AND state_code != 'NA') AS state_code, "
+      + "  LEFT(census_tract, 5) AS county_fips, "
       + "  census_tract, "
       + "  COUNT(*) AS application_count, "
       + "  COUNT(*) FILTER (WHERE action_taken = '1') AS origination_count, "
@@ -94,9 +104,8 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
       + "  MAX(TRY_CAST(tract_to_msa_income_percentage AS DOUBLE)) "
       + "    AS tract_to_msa_income_percentage "
       + "FROM read_csv_auto(?, ALL_VARCHAR=TRUE) "
-      + "WHERE census_tract IS NOT NULL AND census_tract != '' "
-      + "  AND state_code IS NOT NULL AND state_code != '' "
-      + "GROUP BY state_code, county_code, census_tract";
+      + "WHERE regexp_full_match(census_tract, '[0-9]{11}') "
+      + "GROUP BY census_tract";
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
@@ -300,7 +309,7 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     }
   }
 
-  private List<Map<String, Object>> aggregate(File csvFile, String year) throws SQLException {
+  List<Map<String, Object>> aggregate(File csvFile, String year) throws SQLException {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement init = conn.createStatement()) {

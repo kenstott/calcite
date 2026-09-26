@@ -1106,7 +1106,7 @@ partitionedTables:
       tract/county grain requires the loan-level data instead: this table downloads
       CFPB's "Nationwide Data Subset" loan-level export
       (ffiec.cfpb.gov/v2/data-browser-api/view/nationwide/csv) for each year and
-      aggregates to (state, county, tract) via HmdaLoanLevelAggregateProvider — an
+      aggregates to census tract via HmdaLoanLevelAggregateProvider — an
       embedded DuckDB query streamed directly off the downloaded file, never loaded
       into JVM heap as a row list. The API requires an explicit actions_taken filter
       alongside years or it silently returns a small undocumented partial subset
@@ -1131,15 +1131,23 @@ partitionedTables:
       - name: state_code
         type: string
         nullable: true
-        comment: 2-letter USPS state abbreviation (FK to geo.state_ref.state_abbr)
+        comment: >
+          2-letter USPS state abbreviation (FK to geo.state_ref.state_abbr), taken from
+          the loan records whose reported county agrees with the tract's own county;
+          null when no record of the tract carries a matching county
       - name: county_fips
         type: string
         nullable: true
-        comment: 5-digit county FIPS code (FK to geo.counties)
+        comment: >
+          5-digit county FIPS code (FK to geo.counties), the leading five digits of the
+          tract's own FIPS code
       - name: census_tract
         type: string
         nullable: false
-        comment: 11-digit census tract FIPS code; PK component with year
+        comment: >
+          11-digit census tract FIPS code; PK component with year. Loan records the
+          source reports without a tract (census_tract NA) are not attributed to any
+          tract and are not counted
       - name: application_count
         type: long
         nullable: true
