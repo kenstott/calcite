@@ -43,6 +43,9 @@ OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL proce
 # heaviest measured class; the available-memory check in fill_pool gates real pressure on top of
 # this accounting. The runner daemon's POOL_WORKER_MB must equal heap + this value. Tunable via env.
 WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-1024}"
+# Most SEC-family (sec_primary/sec_secondary/sec_13f) workers admitted at once while any other
+# schema's slot is still waiting for a worker; the cap lifts when nothing else is queued.
+SEC_FAMILY_CAP="${SEC_FAMILY_CAP:-3}"
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 RESET_BUDGET_FILE=false  # --reset-budget forces this invocation's -j/-r to become the new baseline
 
@@ -573,6 +576,8 @@ done_count=0
 failed_count=0
 requeue_count=0
 declare -A _conflict_logged=()   # slot -> last schema+year conflict message logged
+_sec_cap_state=""          # "on" / "off": last logged state of the SEC-family cap
+_sec_hold_logged=""        # last SEC-family hold reason logged (running/waiting)
 failed_list=()
 restart_count=0
 
@@ -696,8 +701,29 @@ get_available_mb() {
 }
 
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
+# First queued (not yet launched) slot whose schema is not SEC-family, or nothing. A requeued slot
+# carries a ":_rejected_until_<ts>" suffix, so the schema is everything before the first colon.
+_first_non_sec_waiting() {
+  local i slot schema
+  for (( i=queue_idx; i<total; i++ )); do
+    slot="${queue[$i]}"
+    schema="${slot%%:*}"
+    case "$schema" in
+      sec_primary|sec_secondary|sec_13f) ;;
+      *) echo "${slot%%:_rejected_until_*}"; return 0 ;;
+    esac
+  done
+  return 0
+}
+
 fill_pool() {
   local scan_idx=$queue_idx
+  # One clock reading for the whole pass. A pass can take longer than the requeue backoff (each
+  # conflict check scans every pid file), so a slot requeued during the pass must not be examined
+  # again in the same pass: comparing against a fresh clock made a slow pass chase its own tail
+  # and never return to the monitor loop.
+  local _pass_now
+  _pass_now=$(date +%s)
   while [ "${#active_pids[@]}" -lt "$MAX_WORKERS" ] && [ "$scan_idx" -lt "$total" ]; do
     local next_slot="${queue[$scan_idx]}"
 
@@ -705,7 +731,7 @@ fill_pool() {
     # If so, skip it and move to the next job instead of consuming the run loop.
     if [[ "$next_slot" =~ :_rejected_until_([0-9]+)$ ]]; then
       local _backoff_until="${BASH_REMATCH[1]}"
-      local _now=$(date +%s)
+      local _now="$_pass_now"
       if [ "$_now" -lt "$_backoff_until" ]; then
         # Still in backoff period, skip to next job
         ((scan_idx++)) || true
@@ -721,6 +747,50 @@ fill_pool() {
     local next_schema="${next_slot%%:*}"
     local next_mode="${next_slot#*:}"
     local next_id="worker-${next_schema}-${next_mode}"
+
+    # Cap concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers at SEC_FAMILY_CAP while
+    # any other schema's slot is still waiting for a worker. SEC's historical slot count (up to 16
+    # years x 3 sub-schemas) would otherwise take every free slot and starve the other schemas'
+    # backfills. With no other slot queued there is nothing to starve, so the cap lifts and SEC may
+    # use the remaining slots and memory. sec_prices is excluded: it is a single bulk-fetch worker
+    # (fixed 2010-2026 range regardless of mode), not per-year CIK-reprocessing volume.
+    if [[ "$next_schema" == "sec_primary" || "$next_schema" == "sec_secondary" || "$next_schema" == "sec_13f" ]]; then
+      local _sec_active=0
+      for _active_slot in "${active_slots[@]}"; do
+        local _active_schema="${_active_slot%%:*}"
+        if [[ "$_active_schema" == "sec_primary" || "$_active_schema" == "sec_secondary" || "$_active_schema" == "sec_13f" ]]; then
+          ((_sec_active++)) || true
+        fi
+      done
+      local _waiting_other _cap_now="off"
+      _waiting_other=$(_first_non_sec_waiting)
+      [ -n "$_waiting_other" ] && _cap_now="on"
+      if [ "$_cap_now" != "$_sec_cap_state" ]; then
+        _sec_cap_state="$_cap_now"
+        if [ "$_cap_now" = "on" ]; then
+          log_info "SEC-family cap of ${SEC_FAMILY_CAP} applies: non-SEC work is queued (first: ${_waiting_other})"
+        else
+          log_info "SEC-family cap lifted: no non-SEC slot is queued"
+        fi
+      fi
+      if [ "$_cap_now" = "on" ] && [ "$_sec_active" -ge "$SEC_FAMILY_CAP" ]; then
+        # A held slot is otherwise indistinguishable from an idle pool, so say why once per change.
+        if [ "$_sec_hold_logged" != "${_sec_active}/${_waiting_other}" ]; then
+          _sec_hold_logged="${_sec_active}/${_waiting_other}"
+          log_info "HOLDING ${next_id} (and every queued SEC-family slot): ${_sec_active} SEC-family workers running, cap ${SEC_FAMILY_CAP}, while ${_waiting_other} waits"
+        fi
+        # Requeue at back with backoff, same mechanic as the schema+year conflict case above.
+        local _reject_time=$((_pass_now + 30))
+        queue+=("$next_slot:_rejected_until_$_reject_time")
+        ((total++)) || true
+        ((requeue_count++)) || true
+        if [ "$scan_idx" -eq "$queue_idx" ]; then
+          ((queue_idx++)) || true
+        fi
+        ((scan_idx++)) || true
+        continue
+      fi
+    fi
 
     # Never launch two writers against the same schema+year concurrently (this run-pool.sh's
     # own workers, or another session's force-reprocess.sh/run-pool.sh/worker-dq-run.sh) — see
@@ -741,7 +811,7 @@ fill_pool() {
     if ! _conflict_msg=$(check_schema_year_conflict "$PID_DIR" "$next_schema" "$next_cy_start" "$next_cy_end" "$next_mode" 2>&1); then
       # Requeue at back with backoff: skip re-checking this job for 30 seconds to avoid
       # consuming the run loop with repeated rejections. Record rejection time for comparison.
-      local _reject_time=$(($(date +%s) + 30))
+      local _reject_time=$((_pass_now + 30))
       # A held slot is otherwise indistinguishable from an idle pool, so name the blocker once per
       # distinct refusal.
       if [ "${_conflict_logged[$next_slot]:-}" != "$_conflict_msg" ]; then
@@ -758,34 +828,6 @@ fill_pool() {
       fi
       ((scan_idx++)) || true
       continue
-    fi
-
-    # Cap concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers at 3, regardless of
-    # remaining memory budget — SEC's historical slot count (up to 16 years x 3 sub-schemas) can
-    # otherwise dominate admission purely by volume, starving every other schema's historical
-    # backfill of pool slots for as long as SEC has budget-fitting work queued. sec_prices is
-    # deliberately excluded: it's a single bulk-fetch worker (fixed 2010-2026 range regardless of
-    # mode), not part of the per-year CIK-reprocessing volume this cap is protecting against.
-    if [[ "$next_schema" == "sec_primary" || "$next_schema" == "sec_secondary" || "$next_schema" == "sec_13f" ]]; then
-      local _sec_active=0
-      for _active_slot in "${active_slots[@]}"; do
-        local _active_schema="${_active_slot%%:*}"
-        if [[ "$_active_schema" == "sec_primary" || "$_active_schema" == "sec_secondary" || "$_active_schema" == "sec_13f" ]]; then
-          ((_sec_active++)) || true
-        fi
-      done
-      if [ "$_sec_active" -ge 3 ]; then
-        # Requeue at back with backoff, same mechanic as the schema+year conflict case above.
-        local _reject_time=$(($(date +%s) + 30))
-        queue+=("$next_slot:_rejected_until_$_reject_time")
-        ((total++)) || true
-        ((requeue_count++)) || true
-        if [ "$scan_idx" -eq "$queue_idx" ]; then
-          ((queue_idx++)) || true
-        fi
-        ((scan_idx++)) || true
-        continue
-      fi
     fi
 
     # Skip if this worker's footprint exceeds total budget — can never run on this machine
