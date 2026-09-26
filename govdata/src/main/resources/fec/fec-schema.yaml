@@ -1689,8 +1689,8 @@ partitionedTables:
 
       FEC accepts filings without amount-plausibility vetting, so the bulk file carries
       spam/prank line items of $50M to $10B (e.g. 2022 and 2024 candidates filing
-      $9,999,999,999-scale "expenditures"); a raw SUM(amount) is inflated by one to two orders
-      of magnitude in 2022, 2024 and 2026. Every row is kept and amount is never altered;
+      $9,999,999,999-scale "expenditures"); a raw SUM(amount) is inflated roughly 10x to 23x
+      in 2022, 2024 and 2026. Every row is kept and amount is never altered;
       amount_implausible marks the rows to exclude. Any total, ranking or per-candidate
       aggregate of amount must filter WHERE amount_implausible IS NOT TRUE. Amendments
       (amendment_indicator A1-A3, prev_file_num) are separate rows alongside the filing they
@@ -1798,11 +1798,13 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."exp_amo" AS DOUBLE) >= 50000000'
         comment: >
-          True when amount is at or above $50,000,000, a value no genuine independent
-          expenditure line item has reached in the 2010-2026 bulk files: legitimate amounts top
-          out near $32M, and every line item at or above $50M is a spam/prank filing that FEC
-          published unvetted (spender names such as 'TANKING', 'Republican Emo Girl', candidate
-          'SquarePants, SpongeBob'). The row and its amount are kept as filed. Exclude with
+          True when amount is at or above $50,000,000. The largest independent expenditure
+          line item that corroborates against a real ad buy in the 2010-2026 bulk files is
+          about $32M (a 2020 Future Forward USA PAC ad buy); the 45 line items at or above $50M
+          come from spender names such as 'TANKING', 'Republican Emo Girl' and candidate
+          'SquarePants, SpongeBob', filings FEC published unvetted. The flag is a fixed cutoff,
+          so smaller spam entries (e.g. a $25M line item from the same filer as a $850M one)
+          are not caught. The row and its amount are kept as filed. Exclude with
           WHERE amount_implausible IS NOT TRUE before summing or ranking amount. NULL when
           amount is NULL.
 
