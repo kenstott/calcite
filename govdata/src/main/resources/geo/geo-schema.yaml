@@ -232,7 +232,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 892
-      checkedAt: "2026-09-25T01:59:38Z"
+      checkedAt: "2026-09-26T02:12:21Z"
     comment: >
       U.S. state boundaries and attributes (FIPS code, name, 2-letter postal abbreviation,
       land/water area, WKT geometry) from Census TIGER/Line shapefiles, one row per state
@@ -583,7 +583,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 51729
-      checkedAt: "2026-09-25T01:59:39Z"
+      checkedAt: "2026-09-26T02:12:22Z"
     comment: >
       U.S. county boundaries and attributes (FIPS code, name, GEOID, land/water area,
       WKT geometry) from Census TIGER/Line shapefiles, one row per county per TIGER
@@ -655,7 +655,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 484210
-      checkedAt: "2026-09-25T02:00:00Z"
+      checkedAt: "2026-09-26T02:12:51Z"
     comment: >
       Census designated places (incorporated cities/towns and census-designated
       places/CDPs) with place FIPS code, name, place type, and WKT geometry, one row
@@ -729,7 +729,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 236537
-      checkedAt: "2026-09-25T02:00:01Z"
+      checkedAt: "2026-09-26T02:12:53Z"
     comment: >
       ZIP Code Tabulation Area boundaries (ZCTA code, land/water area, WKT geometry)
       from Census TIGER/Line shapefiles, one row per ZCTA per TIGER vintage year.
@@ -820,7 +820,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 1169345
-      checkedAt: "2026-09-25T02:00:04Z"
+      checkedAt: "2026-09-26T02:13:00Z"
     comment: >
       Census tract boundary geometry (tract FIPS code, parent state/county FIPS, tract
       number, land/water area, WKT geometry) from Census TIGER/Line shapefiles, one row
@@ -893,8 +893,8 @@ partitionedTables:
       maxYear: 2025
       distinctYears: 16
       contiguous: true
-      rowCount: 3363454
-      checkedAt: "2026-09-25T02:00:08Z"
+      rowCount: 3353281
+      checkedAt: "2026-09-26T02:13:09Z"
     comment: >
       Census block group boundary geometry (block group FIPS code, parent
       state/county/tract FIPS, land/water area, WKT geometry) from Census TIGER/Line
@@ -968,7 +968,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023, 2024, 2025]
       rowCount: 14108
-      checkedAt: "2026-09-25T02:00:09Z"
+      checkedAt: "2026-09-26T02:13:10Z"
     comment: >
       Core Based Statistical Area boundaries (CBSA code, name, Metropolitan/Micropolitan
       designation via metro_micro, land/water area, WKT geometry) from Census TIGER/Line
@@ -1044,7 +1044,7 @@ partitionedTables:
       distinctYears: 4
       contiguous: true
       rowCount: 1776
-      checkedAt: "2026-09-25T02:00:10Z"
+      checkedAt: "2026-09-26T02:13:11Z"
     comment: >
       U.S. Congressional district boundaries for the House of Representatives (district
       code, parent state FIPS, district name, land/water area, WKT geometry), one row
@@ -1130,7 +1130,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 174302
-      checkedAt: "2026-09-25T02:00:11Z"
+      checkedAt: "2026-09-26T02:13:12Z"
     comment: >
       Elementary, secondary, and unified school district boundaries (LEA code, parent
       state FIPS, district name, district type — elementary/secondary/unified,
@@ -1206,7 +1206,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 76618
-      checkedAt: "2026-09-25T02:00:32Z"
+      checkedAt: "2026-09-26T02:13:45Z"
     comment: >
       State legislative district boundaries for lower chambers (State House/Assembly) —
       SLDL code, parent state FIPS, district name, land/water area, WKT geometry — one
@@ -1282,7 +1282,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 31290
-      checkedAt: "2026-09-25T02:00:49Z"
+      checkedAt: "2026-09-26T02:14:11Z"
     comment: >
       State legislative district boundaries for upper chambers (State Senate) — SLDU
       code, parent state FIPS, district name, land/water area, WKT geometry — one row
@@ -1354,7 +1354,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 570250
-      checkedAt: "2026-09-25T02:01:10Z"
+      checkedAt: "2026-09-26T02:14:38Z"
     comment: >
       County subdivisions including Minor Civil Divisions (MCDs), census county divisions,
       and unorganized territories. Represents administrative or statistical subdivisions
@@ -1429,7 +1429,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 13471
-      checkedAt: "2026-09-25T02:01:11Z"
+      checkedAt: "2026-09-26T02:14:39Z"
     comment: >
       American Indian reservations, Alaska Native village statistical areas, and Native
       Hawaiian home lands (area code, name, area type — federal reservation, state
@@ -1507,7 +1507,7 @@ partitionedTables:
       distinctYears: 2
       contiguous: true
       rowCount: 5288
-      checkedAt: "2026-09-25T02:01:11Z"
+      checkedAt: "2026-09-26T02:14:40Z"
     comment: >
       Census Bureau urban area boundaries, one row per urban area per TIGER vintage
       year. The 2020-Census-cycle definition (minimum threshold 5,000 people or 2,000
@@ -1609,7 +1609,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 33358
-      checkedAt: "2026-09-25T02:01:12Z"
+      checkedAt: "2026-09-26T02:14:43Z"
     comment: >
       Public Use Microdata Areas for Census microdata products. Each PUMA contains
       at least 100,000 people and is built from census tracts and counties.
@@ -1712,7 +1712,7 @@ partitionedTables:
       contiguous: false
       years: [2012, 2020, 2021, 2022, 2023, 2024, 2025]
       rowCount: 829906
-      checkedAt: "2026-09-25T02:01:14Z"
+      checkedAt: "2026-09-26T02:14:45Z"
     comment: >
       Voting district boundaries (precincts, wards, election districts) as reported
       by states for redistricting. TigerDataProvider handles two distinct URL
@@ -1810,7 +1810,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 731205
-      checkedAt: "2026-09-25T02:01:16Z"
+      checkedAt: "2026-09-26T02:14:48Z"
     comment: >
       ZIP Code to County crosswalk mapping ZIP codes to counties, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -1892,7 +1892,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 653911
-      checkedAt: "2026-09-25T02:01:17Z"
+      checkedAt: "2026-09-26T02:14:50Z"
     comment: >
       ZIP Code to Core Based Statistical Area crosswalk mapping ZIP codes to
       metropolitan/micropolitan statistical areas, with residential/business/other/total
@@ -1977,7 +1977,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 2355514
-      checkedAt: "2026-09-25T02:01:18Z"
+      checkedAt: "2026-09-26T02:14:51Z"
     comment: >
       Census tract to ZIP Code crosswalk mapping tract FIPS to ZIP codes, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -2062,7 +2062,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 2355514
-      checkedAt: "2026-09-25T02:01:19Z"
+      checkedAt: "2026-09-26T02:14:53Z"
     comment: >
       ZIP Code to Census Tract crosswalk mapping ZIP codes to census tracts, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -2148,7 +2148,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 639682
-      checkedAt: "2026-09-25T02:01:20Z"
+      checkedAt: "2026-09-26T02:14:54Z"
     comment: >
       ZIP Code to Congressional District crosswalk mapping ZIP codes to congressional
       districts, with residential/business/other/total address-ratio splits (res_ratio,
@@ -2233,7 +2233,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 731205
-      checkedAt: "2026-09-25T02:01:22Z"
+      checkedAt: "2026-09-26T02:14:56Z"
     comment: >
       County to ZIP Code crosswalk for allocating county-level data to ZIP codes, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -2315,7 +2315,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 639682
-      checkedAt: "2026-09-25T02:01:24Z"
+      checkedAt: "2026-09-26T02:14:59Z"
     comment: >
       Congressional District to ZIP Code crosswalk for allocating district-level data
       to ZIP codes, with residential/business/other/total address-ratio splits
@@ -2405,7 +2405,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 3235
-      checkedAt: "2026-09-25T02:01:24Z"
+      checkedAt: "2026-09-26T02:15:00Z"
     comment: >
       USDA Economic Research Service Rural-Urban Continuum Codes (RUCC) classifying
       counties by degree of urbanization and adjacency to metro areas, with a
@@ -2489,7 +2489,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 85528
-      checkedAt: "2026-09-25T02:01:25Z"
+      checkedAt: "2026-09-26T02:15:01Z"
     comment: >
       USDA Rural-Urban Commuting Area (RUCA) codes at census tract level (2020-vintage
       FIPS), more granular than the county-level geo.rural_urban_continuum (RUCC)
@@ -2589,7 +2589,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 45092
-      checkedAt: "2026-09-25T02:01:26Z"
+      checkedAt: "2026-09-26T02:15:02Z"
     comment: >
       Census Bureau Gazetteer file for counties: county FIPS code, name, land/water
       area in square miles, and centroid latitude/longitude, one row per county per
@@ -2672,7 +2672,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 429461
-      checkedAt: "2026-09-25T02:01:27Z"
+      checkedAt: "2026-09-26T02:15:03Z"
     comment: >
       Census Bureau Gazetteer file for incorporated places and CDPs: place FIPS code,
       name, place type, land/water area in square miles, and centroid latitude/longitude,
@@ -2778,7 +2778,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 467251
-      checkedAt: "2026-09-25T02:01:29Z"
+      checkedAt: "2026-09-26T02:15:05Z"
     comment: >
       Census Bureau Gazetteer file for ZIP Code Tabulation Areas: ZCTA code, land/water
       area in square miles, and centroid latitude/longitude, one row per ZCTA per TIGER
@@ -2880,7 +2880,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 374
-      checkedAt: "2026-09-25T02:01:29Z"
+      checkedAt: "2026-09-26T02:15:06Z"
     comment: >
       USGS Watershed Boundary Dataset HUC2 regions - the largest hydrologic units
       dividing the country into 22 major drainage basins.
@@ -2951,7 +2951,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 4165
-      checkedAt: "2026-09-25T02:01:30Z"
+      checkedAt: "2026-09-26T02:15:07Z"
     comment: >
       USGS Watershed Boundary Dataset HUC4 subregions - subdivisions of HUC2
       regions into approximately 223 subregions.
@@ -3026,7 +3026,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 41752
-      checkedAt: "2026-09-25T02:01:30Z"
+      checkedAt: "2026-09-26T02:15:07Z"
     comment: >
       USGS Watershed Boundary Dataset HUC8 subbasins - commonly used watershed
       level for water quality and resource management with ~2,300 units.
@@ -3102,7 +3102,7 @@ partitionedTables:
       contiguous: false
       years: [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2021, 2023, 2025]
       rowCount: 1752139
-      checkedAt: "2026-09-25T02:01:31Z"
+      checkedAt: "2026-09-26T02:15:09Z"
     comment: >
       USGS Watershed Boundary Dataset HUC12 subwatersheds - the smallest standard
       hydrologic units with approximately 100,000 units nationally.
@@ -3183,7 +3183,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2024, 2026]
       rowCount: 208626
-      checkedAt: "2026-09-25T02:01:32Z"
+      checkedAt: "2026-09-26T02:15:10Z"
     comment: >
       Real Census Bureau County Adjacency File (https://www2.census.gov/geo/docs/
       reference/county_adjacency.txt) — one row per adjacent county pair,
