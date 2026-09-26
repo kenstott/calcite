@@ -28,8 +28,10 @@ import org.apache.commons.math3.stat.regression.SimpleRegression;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -62,6 +64,51 @@ final class StatsEngine {
 
     // ─── Data extraction ───────────────────────────────────────────────────────
 
+    /** Whether the JDBC column at 1-based {@code idx} is a character type. Checked once from
+     *  {@link ResultSetMetaData} rather than per row: many measure columns across this
+     *  warehouse (deaths, age_adjusted_rate, and similar) are typed VARCHAR at the source
+     *  because the raw feed does not guarantee a clean numeric, and Avatica's own accessor
+     *  throws {@link SQLException} outright on {@code getDouble()} for a character-typed
+     *  column instead of parsing it. */
+    private static boolean isCharColumn(ResultSetMetaData md, int idx) throws SQLException {
+        switch (md.getColumnType(idx)) {
+        case Types.CHAR:
+        case Types.VARCHAR:
+        case Types.LONGVARCHAR:
+        case Types.NVARCHAR:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    /** Reads column {@code idx} as a double, or {@code null} when the value should be treated
+     *  as missing — a genuinely null underlying value, or, for a character-typed column, a
+     *  blank or non-numeric string. This mirrors DuckDB's {@code TRY_CAST} (the convention
+     *  this warehouse's own views use for these same VARCHAR measure columns) rather than
+     *  letting the accessor throw, so a caller's null-drop policy applies uniformly whether
+     *  the source column is numeric or a numeric-looking VARCHAR. */
+    private static Double readNumeric(ResultSet rs, int idx, boolean charColumn)
+            throws SQLException {
+        if (!charColumn) {
+            double v = rs.getDouble(idx);
+            return rs.wasNull() ? null : v;
+        }
+        String s = rs.getString(idx);
+        if (s == null) {
+            return null;
+        }
+        String trimmed = s.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(trimmed);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /** Runs {@code sql} and extracts the named columns as an {@link Extraction}, one row per
      *  observation in {@code columns} order. Rows where ANY requested column is null are
      *  dropped (regression and hypothesis tests need complete cases) — the returned
@@ -76,6 +123,11 @@ final class StatsEngine {
                 int[] idx = new int[columns.length];
                 for (int i = 0; i < columns.length; i++) {
                     idx[i] = rs.findColumn(columns[i]);
+                }
+                ResultSetMetaData md = rs.getMetaData();
+                boolean[] charCols = new boolean[columns.length];
+                for (int i = 0; i < columns.length; i++) {
+                    charCols[i] = isCharColumn(md, idx[i]);
                 }
                 List<double[]> rows = new ArrayList<>();
                 int totalRows = 0;
@@ -92,8 +144,8 @@ final class StatsEngine {
                     double[] row = new double[columns.length];
                     boolean hasNull = false;
                     for (int i = 0; i < columns.length; i++) {
-                        double v = rs.getDouble(idx[i]);
-                        if (rs.wasNull()) {
+                        Double v = readNumeric(rs, idx[i], charCols[i]);
+                        if (v == null) {
                             hasNull = true;
                             break;
                         }
@@ -136,6 +188,11 @@ final class StatsEngine {
                 for (int i = 0; i < labelColumns.length; i++) {
                     labelIdx[i] = rs.findColumn(labelColumns[i]);
                 }
+                ResultSetMetaData md = rs.getMetaData();
+                boolean[] charCols = new boolean[numericColumns.length];
+                for (int i = 0; i < numericColumns.length; i++) {
+                    charCols[i] = isCharColumn(md, numIdx[i]);
+                }
                 List<double[]> rows = new ArrayList<>();
                 List<String[]> labelRows = new ArrayList<>();
                 int totalRows = 0;
@@ -151,8 +208,8 @@ final class StatsEngine {
                     double[] row = new double[numericColumns.length];
                     boolean hasNull = false;
                     for (int i = 0; i < numericColumns.length; i++) {
-                        double v = rs.getDouble(numIdx[i]);
-                        if (rs.wasNull()) {
+                        Double v = readNumeric(rs, numIdx[i], charCols[i]);
+                        if (v == null) {
                             hasNull = true;
                             break;
                         }
@@ -278,6 +335,7 @@ final class StatsEngine {
             try {
                 int groupIdx = rs.findColumn(groupCol);
                 int valueIdx = rs.findColumn(valueCol);
+                boolean valueIsChar = isCharColumn(rs.getMetaData(), valueIdx);
                 Map<String, List<Double>> buckets = new java.util.LinkedHashMap<>();
                 int rowCount = 0;
                 while (rs.next()) {
@@ -287,8 +345,8 @@ final class StatsEngine {
                             + "it.");
                     }
                     String g = rs.getString(groupIdx);
-                    double v = rs.getDouble(valueIdx);
-                    if (rs.wasNull() || g == null) {
+                    Double v = readNumeric(rs, valueIdx, valueIsChar);
+                    if (v == null || g == null) {
                         continue;
                     }
                     buckets.computeIfAbsent(g, k -> new ArrayList<>()).add(v);

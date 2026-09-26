@@ -16,11 +16,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -521,6 +524,60 @@ class StatsEngineTest {
         double p = out.get("p_value").asDouble();
         assertTrue(Double.isNaN(p) || p > 0.05,
             "identical groups must not be reported as significantly different: p=" + p);
+    }
+
+    // ─── VARCHAR-typed value columns (extractGroupedColumn / extractColumns) ───────────────
+
+    /** Bare in-memory {@code jdbc:calcite:} connection — no schema, no govdata/R2 dependency —
+     *  whose result set columns are backed by real Avatica accessors, unlike a hand-built
+     *  {@link java.sql.ResultSet}. Many measure columns across this warehouse (deaths,
+     *  age_adjusted_rate, and similar) are typed VARCHAR at the source because the raw feed
+     *  does not guarantee a clean numeric, and Avatica's own accessor throws outright on
+     *  {@code getDouble()} for a character-typed column rather than parsing it. */
+    private static Connection openBareCalciteConnection() throws Exception {
+        return DriverManager.getConnection("jdbc:calcite:", new Properties());
+    }
+
+    @Test void extractGroupedColumnParsesVarcharValueColumn() throws Exception {
+        try (Connection conn = openBareCalciteConnection()) {
+            String sql = "SELECT * FROM (VALUES "
+                + "('a', CAST('1' AS VARCHAR)), ('a', CAST('2' AS VARCHAR)), "
+                + "('a', CAST('1' AS VARCHAR)), ('a', CAST('2' AS VARCHAR)), "
+                + "('a', CAST('1' AS VARCHAR)), "
+                + "('b', CAST('100' AS VARCHAR)), ('b', CAST('101' AS VARCHAR)), "
+                + "('b', CAST('99' AS VARCHAR)), ('b', CAST('102' AS VARCHAR)), "
+                + "('b', CAST('98' AS VARCHAR))"
+                + ") AS t(grp, val)";
+            Map<String, double[]> groups = StatsEngine.extractGroupedColumn(conn, sql, "grp", "val");
+            assertEquals(2, groups.size());
+            assertEquals(5, groups.get("a").length);
+            assertEquals(5, groups.get("b").length);
+            assertEquals(1.0, groups.get("a")[0], 0.0);
+            assertEquals(100.0, groups.get("b")[0], 0.0);
+        }
+    }
+
+    @Test void extractGroupedColumnDropsBlankAndNonNumericVarcharLikeTryCast() throws Exception {
+        try (Connection conn = openBareCalciteConnection()) {
+            String sql = "SELECT * FROM (VALUES "
+                + "('a', CAST('1' AS VARCHAR)), ('a', CAST('2' AS VARCHAR)), "
+                + "('a', CAST('' AS VARCHAR)), ('a', CAST('Suppressed' AS VARCHAR))"
+                + ") AS t(grp, val)";
+            Map<String, double[]> groups = StatsEngine.extractGroupedColumn(conn, sql, "grp", "val");
+            assertEquals(2, groups.get("a").length,
+                "blank and non-numeric strings must be dropped, not thrown, like TRY_CAST");
+        }
+    }
+
+    @Test void extractColumnsParsesVarcharColumn() throws Exception {
+        try (Connection conn = openBareCalciteConnection()) {
+            String sql = "SELECT * FROM (VALUES (CAST('1.5' AS VARCHAR)), (CAST('2.5' AS VARCHAR)))"
+                + " AS t(val)";
+            StatsEngine.Extraction ex = StatsEngine.extractColumns(conn, sql, new String[]{"val"});
+            assertEquals(2, ex.rows.length);
+            assertEquals(1.5, ex.column(0)[0], 0.0);
+            assertEquals(2.5, ex.column(0)[1], 0.0);
+        }
     }
 
     @Test void anovaDetectsGroupDifference() {
