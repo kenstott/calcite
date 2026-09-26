@@ -139,7 +139,10 @@ partitionedTables:
       - name: effective_on
         type: string
         nullable: true
-        comment: Effective date of the rule (YYYY-MM-DD)
+        comment: >
+          Effective date of the rule (YYYY-MM-DD), read from the rule's EFFDATE/DATES text. NULL when
+          the text states no calendar date (e.g. 'effective 30 days after publication'); use
+          publication_date, always populated, as the fallback anchor for such rules.
       - name: action
         type: string
         nullable: true

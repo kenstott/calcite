@@ -248,13 +248,13 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
     if ("PRESDOC".equals(docType)) {
       extractPresDocFields(doc, row);
     } else {
-      extractPreamblFields(doc, row);
+      extractPreamblFields(doc, row, "RULE".equals(docType));
     }
 
     return row;
   }
 
-  private void extractPreamblFields(Element doc, Map<String, Object> row) {
+  private void extractPreamblFields(Element doc, Map<String, Object> row, boolean isRule) {
     Element preamb = firstChildElement(doc, "PREAMB");
 
     if (preamb == null) {
@@ -272,9 +272,14 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
 
     row.put("title", cleanText(firstChildText(preamb, "SUBJECT")));
 
-    // effective_on: text inside EFFDATE (may be wrapped in <P>)
-    row.put("effective_on",
-        extractDateText(deepText(firstChildElement(preamb, "EFFDATE"))));
+    // effective_on: EFFDATE text (may be wrapped in <P>); a final rule without an EFFDATE element
+    // states its effective date in the DATES element instead. DATES of a proposed rule or notice
+    // holds comment deadlines and meeting dates, so it is only read for RULE.
+    String effdate = deepText(firstChildElement(preamb, "EFFDATE"));
+    if (effdate == null && isRule) {
+      effdate = deepText(firstChildElement(preamb, "DATES"));
+    }
+    row.put("effective_on", extractEffectiveDate(effdate));
 
     // action: text inside ACT (may be wrapped in <P>)
     row.put("action", cleanText(deepText(firstChildElement(preamb, "ACT"))));
@@ -357,38 +362,38 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
     return m.find() ? m.group() : null;
   }
 
-  // EFFDATE holds a full prose sentence (e.g. "This AD is effective February 6, 2024. The
-  // Director ... approved ... as of February 6, 2024."), not a bare date -- parseLongDate's
-  // exact-string SimpleDateFormat match never fits the sentence, so the date must be located
-  // within the text instead. The nearest month-day-year phrase after the word "effective" is
-  // the actual effective date; other dates in the sentence (incorporation-by-reference approval,
-  // comment deadlines) consistently appear elsewhere relative to that keyword.
-  private static final Pattern ISO_DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
-  private static final Pattern MONTH_DAY_YEAR_PATTERN = Pattern.compile(
-      "(?i)\\b((?:January|February|March|April|May|June|July|August|September|October|"
-      + "November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\.?)\\s+(\\d{1,2}),?\\s+(\\d{4})\\b");
-  private static final Pattern EFFECTIVE_KEYWORD_PATTERN = Pattern.compile("(?i)effective");
+  // EFFDATE and DATES hold prose (e.g. "This AD is effective February 6, 2024. The Director ...
+  // approved ... as of February 6, 2024."), not a bare date. The effective date is the first
+  // month-day-year phrase following "effective" / "takes effect" / "goes into effect" within the
+  // same sentence. Text naming no such phrase (enforcement windows, comment deadlines, "effective
+  // 30 days after publication") yields null: a date lacking that anchor is not an effective date.
+  // Document identifiers such as "AD 2019-08-51" are never dates.
+  private static final String MONTH_DAY_YEAR =
+      "\\b((?:January|February|March|April|May|June|July|August|September|October|November|"
+      + "December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)\\.?)\\s+(\\d{1,2}),?\\s+(\\d{4})\\b";
+  private static final Pattern EFFECTIVE_DATE_PATTERN = Pattern.compile(
+      "(?i)(?:\\beffective\\b|\\b(?:takes?|goes?\\s+into|going\\s+into)\\s+effect\\b)"
+      + "(?:[^.]|[ap]\\.m\\.){0,60}?" + MONTH_DAY_YEAR);
+  private static final Pattern BARE_DATE_PATTERN = Pattern.compile(
+      "(?i)^(?:DATES:\\s*)?" + MONTH_DAY_YEAR + "\\.?$");
 
-  private String extractDateText(String text) {
+  static String extractEffectiveDate(String text) {
     if (text == null) {
       return null;
     }
-    Matcher iso = ISO_DATE_PATTERN.matcher(text);
-    if (iso.find()) {
-      return iso.group();
-    }
-    Matcher keyword = EFFECTIVE_KEYWORD_PATTERN.matcher(text);
-    int searchFrom = keyword.find() ? keyword.end() : 0;
-    Matcher date = MONTH_DAY_YEAR_PATTERN.matcher(text);
-    boolean found = date.find(searchFrom) || (searchFrom > 0 && date.find(0));
-    if (!found) {
-      return null;
+    String normalized = text.replaceAll("\\s+", " ").trim();
+    Matcher date = EFFECTIVE_DATE_PATTERN.matcher(normalized);
+    if (!date.find()) {
+      date = BARE_DATE_PATTERN.matcher(normalized);
+      if (!date.find()) {
+        return null;
+      }
     }
     String month = date.group(1).replaceAll("\\.$", "");
     return parseLongDate(month + " " + date.group(2) + " " + date.group(3));
   }
 
-  private String parseLongDate(String text) {
+  private static String parseLongDate(String text) {
     if (text == null) {
       return null;
     }
