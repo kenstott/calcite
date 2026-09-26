@@ -14,7 +14,8 @@
         "eia_electricity_generation",
         "eia_electricity_prices",
         "eia_capacity_changes",
-        "eia_fossil_fuel_production",
+        "eia_crude_oil_production",
+        "eia_natural_gas_production",
         "eia_crude_oil_imports",
         "eia_refinery_operations"
       ]

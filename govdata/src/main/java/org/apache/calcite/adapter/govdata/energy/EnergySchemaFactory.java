@@ -31,7 +31,8 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
   private static final Set<String> EIA_API_TABLES = new HashSet<>(Arrays.asList(
       "eia_electricity_generation",
       "eia_electricity_prices",
-      "eia_fossil_fuel_production",
+      "eia_crude_oil_production",
+      "eia_natural_gas_production",
       "eia_state_energy_consumption",
       "eia_natural_gas_storage",
       "eia_petroleum_stocks",

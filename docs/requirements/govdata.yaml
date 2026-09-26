@@ -745,9 +745,10 @@
   priority: SHOULD
   type: behavioral
   description: >
-    Sub-annual EIA series (eia_electricity_generation, eia_fossil_fuel_production,
-    eia_refinery_operations) partition by year+month so each per-month fetch lands its own
-    partition and overwritePartitions replaces a single month rather than the whole year.
+    Sub-annual EIA series (eia_electricity_generation, eia_crude_oil_production,
+    eia_natural_gas_production, eia_refinery_operations) partition by year+month so each
+    per-month fetch lands its own partition and overwritePartitions replaces a single month
+    rather than the whole year.
   scenario: >
     Given a monthly EIA series re-fetched for one month
     When the partition is written
@@ -792,10 +793,14 @@
   priority: SHOULD
   type: behavioral
   description: >
-    eia_fossil_fuel_production unions crude oil and natural gas into one table distinguished by
-    fuel_type ('crude_oil'|'natural_gas'), one row per (eia_area_code, fuel_type, process_code,
-    production_year, production_month), with production_volume in the units named by production_unit.
-  source: "energy-schema.yaml (eia_fossil_fuel_production ~898-955; PK ~1672)"
+    Crude oil and natural gas production are separate tables, each one row per EIA area, process,
+    year and month, with production_volume in the units named by production_unit.
+    eia_crude_oil_production carries fuel_type 'Crude Oil' or 'ANS Crude Oil' and is keyed by
+    (eia_area_code, fuel_type, process_code, production_year, production_month);
+    eia_natural_gas_production is keyed by (eia_area_code, process_code, production_year,
+    production_month). eia_fossil_fuel_production is a view that UNION ALLs the two, adding
+    fuel_type 'Natural Gas' for the gas rows; units are not convertible between fuels.
+  source: "energy-schema.yaml (eia_crude_oil_production, eia_natural_gas_production, view eia_fossil_fuel_production)"
   tests: []
 
 - id: GOV-051
