@@ -135,7 +135,10 @@ public class CpsVotingSupplementTransformer implements ResponseTransformer {
         // Malformed weight cell - the row cannot contribute a population estimate.
         continue;
       }
-      String state = row.get(stateIdx.intValue()).asText();
+      // api.census.gov's for=state:* geography clause returns the FIPS code unpadded
+      // (e.g. "5" for Arkansas); zero-pad to match the declared 2-digit convention shared
+      // with geo.state_ref.state_fips.
+      String state = String.format(Locale.ROOT, "%02d", Integer.parseInt(row.get(stateIdx.intValue()).asText().trim()));
       int pes1 = parseIntSafe(row.get(pes1Idx.intValue()));
       int pes2 = parseIntSafe(row.get(pes2Idx.intValue()));
 
