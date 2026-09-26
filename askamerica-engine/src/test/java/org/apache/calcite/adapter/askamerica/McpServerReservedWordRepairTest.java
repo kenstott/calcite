@@ -107,7 +107,7 @@ public class McpServerReservedWordRepairTest {
     @Test void leavesLagOverOrderByIntactInASubqueryQuery() {
         assertEquals(
             "SELECT LAG(x, 1) OVER (ORDER BY yr) AS prev_x, \"year\" "
-                + "FROM (SELECT year, x, yr FROM t) s",
+                + "FROM (SELECT \"year\", x, yr FROM t) s",
             quote("SELECT LAG(x, 1) OVER (ORDER BY yr) AS prev_x, year "
                 + "FROM (SELECT year, x, yr FROM t) s"));
         assertEquals("SELECT lag(x, 1) over (order by yr), \"year\" FROM t",
@@ -333,14 +333,14 @@ public class McpServerReservedWordRepairTest {
     }
 
     @Test void stripsLimitRegardlessOfClauseOrder() {
-        assertEquals("SELECT * FROM t FETCH FIRST 500 ROWS ONLY ",
+        assertEquals("SELECT * FROM t FETCH FIRST 500 ROWS ONLY",
             McpServer.stripRedundantLimitClause(
                 "SELECT * FROM t FETCH FIRST 500 ROWS ONLY LIMIT 5"));
     }
 
-    @Test void leavesSqlAloneWhenOnlyLimitIsPresent() {
-        String sql = "SELECT * FROM t LIMIT 5";
-        assertEquals(sql, McpServer.stripRedundantLimitClause(sql));
+    @Test void rewritesLoneLimitToFetchFirst() {
+        assertEquals("SELECT * FROM t FETCH FIRST 5 ROWS ONLY",
+            McpServer.stripRedundantLimitClause("SELECT * FROM t LIMIT 5"));
     }
 
     @Test void leavesSqlAloneWhenOnlyFetchFirstIsPresent() {

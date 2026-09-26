@@ -7008,15 +7008,15 @@ public class McpServer {
      * which words were repaired rather than silently changing someone's SQL.
      *
      * <p>One position needs a second exception on top of the {@link #IDENTIFIER_POSITION_TOKENS}
-     * check: the token directly after {@code OVER (} opens a window-frame clause
-     * ({@code PARTITION BY} / {@code ORDER BY} / {@code ROWS} / {@code RANGE}), and every one of
-     * those is a SQL keyword there, never a column reference &mdash; but {@code (} alone is a
-     * legitimate identifier-position trigger everywhere else (e.g. {@code foo(order)}), so the
-     * generic check can't tell the two apart from {@code prev} alone. Tracking one more token of
-     * lookback ({@code prevPrev}) so the rewrite can see "this specific {@code (} was opened by
-     * {@code OVER}" is enough: it was firing this exact word wrong for {@code RANK() OVER
-     * ("order" BY x)}, breaking every window function whenever the same query also referenced an
-     * unrelated reserved-word column elsewhere.
+     * check: the token directly after a window specification's opening paren &mdash;
+     * {@code OVER (} inline, or {@code WINDOW w AS (} for a named window &mdash; starts a
+     * window-frame clause ({@code PARTITION BY} / {@code ORDER BY} / {@code ROWS} /
+     * {@code RANGE}). Every one of those is a SQL keyword there, never a column reference, but
+     * {@code (} alone is a legitimate identifier-position trigger everywhere else (e.g.
+     * {@code foo(order)}), so the generic check cannot tell the two apart from {@code prev}
+     * alone. One more token of lookback ({@code prevPrev}) lets the rewrite see that this
+     * specific {@code (} was opened by {@code OVER} or by {@code AS}; after {@code AS (} only a
+     * subquery or a window specification can follow, never a column reference.
      *
      * <p>A third position needs the same kind of paren-context tracking, one level deeper: the
      * word directly after {@code AS} inside {@code CAST(expr AS type)} names a TYPE, not a
@@ -7084,7 +7084,8 @@ public class McpServer {
                     k++;
                 }
                 boolean isCall = k < sql.length() && sql.charAt(k) == '(';
-                boolean opensWindowFrame = "(".equals(prev) && "OVER".equals(prevPrev);
+                boolean opensWindowFrame = "(".equals(prev)
+                    && ("OVER".equals(prevPrev) || "AS".equals(prevPrev));
                 // D-180: a word that is itself one of IDENTIFIER_POSITION_TOKENS is always
                 // syntax, never a column reference, no matter what precedes it -- that set is
                 // exactly the vocabulary of keywords that mark the position AFTER them as an
