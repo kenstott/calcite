@@ -1100,10 +1100,18 @@ final class QuestionDiagnostics {
             // 14,105 of them.
             ObjectNode observed = IngestedYears.observed(parts[0], parts[1],
                 cov.path("column").asText("year"));
-            if (observed != null && "measured".equals(observed.path("status").asText(""))
-                && observed.has("first_year") && observed.has("last_year")) {
-                first = observed.get("first_year").asInt();
-                last = observed.get("last_year").asInt();
+            boolean scanned = observed != null
+                && "measured".equals(observed.path("status").asText(""))
+                && observed.has("first_year") && observed.has("last_year");
+            // Until the scan lands, the window measured against production and recorded in the
+            // schema's observedCoverage block is the next best evidence of what was loaded.
+            boolean recorded = !scanned && cov.has("observed_first_year")
+                && cov.has("observed_last_year");
+            if (scanned || recorded) {
+                first = scanned ? observed.get("first_year").asInt()
+                    : cov.get("observed_first_year").asInt();
+                last = scanned ? observed.get("last_year").asInt()
+                    : cov.get("observed_last_year").asInt();
                 basis = "observed";
                 if (first != declaredFirst || last != declaredLast) {
                     ObjectNode stale = warning("coverage_declaration_stale", INFO,

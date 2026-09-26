@@ -296,6 +296,17 @@ class QuestionDiagnosticsTest {
     assertTrue(w.get("note").asText().contains("not the same as a zero"));
   }
 
+  @Test void aYearInsideTheRecordedObservedWindowIsNotFlaggedBeforeTheScanLands() {
+    ArrayNode arr = rows("[{\"area_fips\":\"21177\",\"annual_avg_emplvl\":1200}]");
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT area_fips, annual_avg_emplvl FROM econ.county_wages WHERE \"year\" = '2012'",
+        arr, 500);
+    for (JsonNode w : env.path("warnings")) {
+      assertFalse("low_coverage".equals(w.path("type").asText()) && w.has("year"),
+          "2012 is loaded for county_wages: " + w);
+    }
+  }
+
   @Test void aPartialUniverseIsReportedFromItsOwnCoverageColumn() {
     ArrayNode arr = rows(
         "[{\"state_fips\":\"06\",\"population_coverage_pct\":55.0,\"crimes\":10},"

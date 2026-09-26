@@ -231,6 +231,12 @@ final class Catalog {
             return null;
         }
 
+        // A table with no time axis has no window to resolve; the catalog's own node already
+        // says so, and resolving it would invent a ceiling for a table that has no years.
+        if ("none".equals(cov.path("form").asText(null))) {
+            return (ObjectNode) cov.deepCopy();
+        }
+
         int currentYear = Year.now(ZoneOffset.UTC).getValue();
         Integer minYear = intOrNull(cov.get("minYear"));
         Integer maxYear = intOrNull(cov.get("maxYear"));
@@ -315,12 +321,26 @@ final class Catalog {
             out.put("publication_lag_years", dataLag);
         }
         out.put("basis", "declared");
+        for (String field : OBSERVED_FIELDS) {
+            if (cov.has(field)) {
+                out.set(field, cov.get(field));
+            }
+        }
         // partitionColumn coverage states a ceiling but no floor — the caller should not
         // read its absence as "starts at the beginning of time".
         out.put("declared_from", cov.path("form").asText("yearRange"));
         out.put("note", coverageNote(start, end, dataLag, currentYear));
         return out;
     }
+
+    /**
+     * The measured-coverage fields {@code GovDataCatalog} copies from a table's
+     * {@code observedCoverage} block onto its coverage node.
+     */
+    private static final String[] OBSERVED_FIELDS = {
+        "observed_first_year", "observed_last_year", "observed_distinct_years",
+        "observed_contiguous", "observed_row_count", "observed_checked_at", "authoritative"
+    };
 
     private static String coverageNote(Integer start, Integer end, Integer dataLag,
             int currentYear) {

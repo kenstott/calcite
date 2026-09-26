@@ -104,6 +104,13 @@ class CoverageAndExternalSourcesTest {
         if (cov == null) {
           continue;
         }
+        if ("none".equals(cov.path("form").asText())) {
+          assertEquals(false, cov.path("time_varying").asBoolean(true),
+              schema + "." + table + " has no time axis but claims one: " + cov);
+          assertTrue(!cov.has("first_year") && !cov.has("last_year"),
+              schema + "." + table + " invented a window for a table with no years: " + cov);
+          continue;
+        }
         resolved++;
         if (cov.has("first_year") && cov.has("last_year")) {
           assertTrue(cov.path("first_year").asInt() <= cov.path("last_year").asInt(),
@@ -124,6 +131,19 @@ class CoverageAndExternalSourcesTest {
     // YAMLs spell bounds three ways today; a fourth spelling would land right here.
     assertEquals(0, incomplete.length(),
         "every declared window must resolve both bounds, but these did not:" + incomplete);
+  }
+
+  @Test void recordedObservedWindowIsCarriedOntoTheCoverageNode() {
+    // The schema's observedCoverage block is measured against production; dropping it left
+    // describe_table and the out-of-window check with only the declared window.
+    ObjectNode cov = Catalog.coverage("econ", "county_wages");
+    assertNotNull(cov, "county_wages declares a year range");
+    assertTrue(cov.has("observed_first_year") && cov.has("observed_last_year"),
+        "observed window must reach the coverage node: " + cov);
+    assertTrue(cov.get("observed_first_year").asInt() <= cov.get("observed_last_year").asInt(),
+        "observed window is ordered: " + cov);
+    assertEquals("observed", cov.path("authoritative").asText());
+    assertEquals("declared", cov.path("basis").asText());
   }
 
   @Test void tableWithoutAYearRangeReportsNoCoverage() {
