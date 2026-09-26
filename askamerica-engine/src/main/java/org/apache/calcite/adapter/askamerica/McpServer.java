@@ -4310,6 +4310,23 @@ public class McpServer {
         if (e instanceof IllegalArgumentException && e.getMessage() != null) {
             return e.getMessage();
         }
+        // A class the engine jar should contain failing to load says nothing about the request:
+        // the jar this process was started from is no longer readable as it was (rewritten in
+        // place, truncated, or replaced). The raw message is only a class name, so name the
+        // condition and the one action that clears it.
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            if (t instanceof ClassNotFoundException || t instanceof LinkageError
+                || t instanceof java.util.zip.ZipError
+                || t instanceof java.util.zip.ZipException) {
+                return "THE ENGINE'S OWN CODE COULD NOT BE LOADED (" + t.getClass().getSimpleName()
+                    + ": " + t.getMessage() + "). The engine jar this server started from was"
+                    + " changed or damaged on disk while the server was running, so any feature"
+                    + " not yet used in this session will keep failing while ones already used"
+                    + " keep working. Retrying cannot fix it. Restart the AskAmerica MCP server"
+                    + " (quit and reopen the client) so it starts from the current jar, and if it"
+                    + " recurs after a restart, call report_issue.";
+            }
+        }
         // The watchdog (see ACTIVE_STATEMENTS/WATCHDOG_CANCELLED_AT) already builds a complete,
         // accurate message — real elapsed time, which multiple of the timeout fired, the same
         // narrowing guidance the normal timeout gives — before this exception reaches here.

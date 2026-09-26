@@ -126,4 +126,25 @@ class McpServerErrorMessageTest {
     String msg = "No match found for function signature FOO(<CHARACTER>)";
     assertEquals(msg, McpServer.compactErrorMessage(new RuntimeException(msg)));
   }
+
+  @Test @DisplayName("a class that will not load names the jar problem and the restart, not the class")
+  void translatesEngineClassLoadFailure() {
+    String compact = McpServer.compactErrorMessage(new ClassNotFoundException(
+        "org.apache.calcite.adapter.askamerica.ReportPage$Section"));
+    assertTrue(compact.contains("ENGINE'S OWN CODE COULD NOT BE LOADED"),
+        "expected the actionable message, got: " + compact);
+    assertTrue(compact.contains("ReportPage$Section"),
+        "the missing class must still be named, got: " + compact);
+    assertTrue(compact.contains("Restart"),
+        "the message must say what clears it, got: " + compact);
+  }
+
+  @Test @DisplayName("a load failure wrapped as a cause, or a corrupt zip, is still recognized")
+  void translatesWrappedEngineLoadFailure() {
+    String wrapped = McpServer.compactErrorMessage(new RuntimeException("Error while executing",
+        new NoClassDefFoundError("org/apache/calcite/adapter/enumerable/EnumerableValues")));
+    assertTrue(wrapped.contains("ENGINE'S OWN CODE COULD NOT BE LOADED"), wrapped);
+    String zip = McpServer.compactErrorMessage(new java.util.zip.ZipException("invalid LOC header"));
+    assertTrue(zip.contains("ENGINE'S OWN CODE COULD NOT BE LOADED"), zip);
+  }
 }
