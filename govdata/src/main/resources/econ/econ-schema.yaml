@@ -2228,43 +2228,57 @@ partitionedTables:
 
   # --- STATE OCCUPATION EMPLOYMENT (science/engineering headcount) ---
   - name: state_occupation_employment
-    # BLS OEWS publishes one reference year per release (methodology/geography can shift
-    # year to year, so it is not a continuous time series the way SM/QCEW are) — a
-    # freshness-gated snapshot re-fetched and overwritten whenever BLS updates the file,
-    # not a year-partitioned history. Confirmed live: oe.data.1.AllData currently carries
-    # only reference year 2025 for every series, including these three occupation codes.
-    # SOURCE-CHANGE DETECTION: OewsSourceStructureValidator will catch if BLS ever shifts from
-    # snapshot to time-series model (multiple years in response) and fail with a clear error
-    # pointing to file a defect, rather than silently ingesting partial/wrong data.
-    freshness:
-      type: hash
-    pattern: "type=state_occupation_employment/*.parquet"
+    # BLS OEWS publishes one reference year (May of that year) per release, each as its own state
+    # workbook zip at www.bls.gov/oes/special-requests/oesm{YY}st.zip. The year dimension iterates
+    # publish years with dataLag 1, so {effective_year} is the OEWS reference year and the
+    # partition year; releaseMonth 4 holds the range back until BLS's April release. Reference
+    # years 2010-2013 ship as .xls, 2014 on as .xlsx; OewsStateWorkbookTransformer reads both.
+    # Every year is fetched from these workbooks (the oe.data.1.AllData flat file only ever
+    # carries the newest year, so it cannot backfill).
+    pattern: "type=state_occupation_employment/year=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - *partition_type
     comment: >
       BLS Occupational Employment and Wage Statistics (OEWS) state-level employment
-      headcount for science/engineering occupations, cross-industry (not seasonally
-      adjusted). Covers 3 SOC codes: 17-0000 (Architecture and Engineering Occupations),
-      19-0000 (Life, Physical, and Social Science Occupations), and 15-1252 (Software
-      Developers, the one Computer Occupations code that fits "scientist/engineer" —
-      Computer Occupations as a whole (15-1xxx) is not, since it includes many
-      non-engineering roles). Closes the gap left by patents.patent_grants (inventor
-      location only, excludes non-inventing R&D staff and academic researchers) and
+      headcount for science/engineering occupations, cross-industry, all ownership, for
+      OEWS reference years 2010 through the newest published (May 2025 as of the September
+      2026 build), one partition per reference year. Areas are the 50 states, DC, Puerto
+      Rico, Guam and the Virgin Islands (54), keyed by 2-digit FIPS in state_fips.
+      Occupations: 17-0000 (Architecture and Engineering Occupations) and 19-0000 (Life,
+      Physical, and Social Science Occupations) are stable across all years. Software
+      developers are published under whichever SOC code BLS's workbook carries for that
+      year and are NOT remapped, because the definitions differ: 2010-2018 carry two codes,
+      15-1132 (Software Developers, Applications) and 15-1133 (Software Developers, Systems
+      Software) - sum them for a total; 2019-2020 carry the single code 15-1256 (Software
+      Developers and Software Quality Assurance Analysts and Testers, which folds testers
+      in); 2021 onward carry 15-1252 (Software Developers, testers split out to 15-1253 and
+      not included here). Filter on occupation_code for the era you mean and do not chart
+      the software rows as one continuous series across 2018/2019 or 2020/2021. Computer
+      Occupations as a whole (15-1xxx) is not included - it contains many non-engineering
+      roles. Closes the gap left by patents.patent_grants (inventor location only, excludes
+      non-inventing R&D staff and academic researchers) and
       research.nsf_herd_by_institution (dollars, not headcount): this is real state-level
       occupation-count data, the true denominator a research-workforce-concentration
-      question needs. One row per (state, occupation) per published reference year;
-      small state x occupation cells may be suppressed by BLS (row absent, not zero).
+      question needs. One row per (state, occupation) per reference year; a cell BLS marks
+      ** (suppressed, small-count) has no row, not a zero.
 
     dimensions:
       type:
         - state_occupation_employment
+      year:
+        type: yearRange
+        # OEWS reference year 2010 is published in 2011 (dataLag 1 maps publish year to
+        # reference year), so the first publish year is 2011.
+        start: "${GOVDATA_START_YEAR:2011}"
+        minYear: 2011
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1
+        releaseMonth: 4
 
-    # BLS OE-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
-    # Series ID layout (25 chars): OE + seasonal(1) + areatype(1) + area_code(7) +
-    # industry_code(6) + occupation_code(6) + datatype_code(2). This ingest is filtered to
-    # areatype S (state), industry_code 000000 (cross-industry), datatype 01 (employment).
+    # OewsStateWorkbookTransformer emits these columns directly (a StreamingResponseTransformer's
+    # rows are the final row shape), in the same shape the earlier flat-file feed produced.
     columns:
       - name: series
         type: string
@@ -2272,68 +2286,53 @@ partitionedTables:
         comment: >
           BLS OEWS series identifier (PK), 25 characters: OEUS + area_code(7, state FIPS
           padded to 7 digits, e.g. 0100000 for Alabama) + industry_code(6, always 000000
-          here) + occupation_code(6) + datatype_code(2, always 01 here). Decode with
+          here) + occupation_code(6) + datatype_code(2, always 01 here). Built from the
+          workbook's area and occupation columns; decode with
           state_fips/occupation_code/occupation_name below rather than re-parsing this.
-        source: series_id
       - name: year
         type: integer
         nullable: true
-        comment: OEWS reference year (single most-recently-published year; see table comment)
-        source: year
+        comment: OEWS reference year (the May survey reference period, not the publish year)
       - name: state_fips
         type: string
         nullable: true
-        comment: 2-digit state FIPS code, derived from series positions 5-6
-        expression: "SUBSTRING(series, 5, 2)"
+        comment: 2-digit state FIPS code (includes 11 DC, 72 Puerto Rico, 66 Guam, 78 Virgin Islands)
       - name: occupation_code
         type: string
         nullable: true
-        comment: 6-digit SOC code, derived from series positions 18-23
-        expression: "SUBSTRING(series, 18, 6)"
+        comment: >
+          6-digit SOC code as published for that reference year, no dash: 170000, 190000,
+          151132 and 151133 (2010-2018), 151256 (2019-2020), 151252 (2021 on). Software codes
+          are different occupation definitions and are not remapped; see the table comment.
       - name: occupation_name
         type: string
         nullable: true
-        comment: SOC occupation name for occupation_code
-        expression: "CASE SUBSTRING(series, 18, 6) WHEN '170000' THEN 'Architecture and Engineering Occupations' WHEN '190000' THEN 'Life, Physical, and Social Science Occupations' WHEN '151252' THEN 'Software Developers' ELSE NULL END"
+        comment: SOC occupation name for occupation_code as BLS titles it for that code
       - name: employment
         type: double
         nullable: true
         comment: >
           Total employment headcount for the occupation in the state, across all
-          industries (BLS OEWS datatype 01, not seasonally adjusted — OEWS has no
-          seasonal-adjustment concept, it is an annual survey).
-        source: value
+          industries (BLS OEWS tot_emp / datatype 01, not seasonally adjusted - OEWS is an
+          annual survey).
       - name: footnotes
         type: string
         nullable: true
-        comment: BLS footnote codes for the data point
-        source: footnote_codes
+        comment: Always empty; the state workbooks carry no per-cell footnote codes
 
-    # Bulk flat-file source, same mechanism as state_industry/metro_industry (sm.data.1.AllData):
-    # BLS publishes the entire OE-program series set as TSV with no key and no daily limit,
-    # avoiding the ~500/day cap on the registered api.bls.gov path. Confirmed live 5 Sep 2026:
-    # rowFilter matches 160 rows (54 state-level areas x 3 occupations, minus 2 suppressed cells).
-    # Year partitioning is handled at materialization time; all years land in year=* partition.
     source:
       type: http
-      url: "https://download.bls.gov/pub/time.series/oe/oe.data.1.AllData"
+      url: "https://www.bls.gov/oes/special-requests/oesm{year_short}st.zip"
       method: GET
       headers:
-        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        # www.bls.gov 403s a fake-browser or blank User-Agent and throttles bursts; requires a
+        # self-identifying UA, paced by the transformer (same convention as download.bls.gov)
         User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
-      response:
-        format: tsv
-      rateLimit:
-        requestsPerSecond: 1.0
-        maxRetries: 3
-      rawCache:
-        enabled: true
-      # OEUS (state areatype) + industry_code 000000 (cross-industry) + occupation_code
-      # 170000/190000/151252 + datatype 01 (employment). Trailing .* tolerates the fixed-width
-      # whitespace padding BLS pads series_id to in this TSV.
-      rowFilter:
-        column: series_id
-        pattern: '^OEUS\d{7}000000(170000|190000|151252)01.*$'
+      # No rawCache: block - a StreamingResponseTransformer opens its own connection and HttpSource
+      # returns before its rawCache path runs.
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.OewsStateWorkbookTransformer"
 
     # Materialization configuration
     materialize:
@@ -2342,7 +2341,7 @@ partitionedTables:
       output:
         pattern: "type=state_occupation_employment/year=*/"
       partition:
-        columns: [type, year]  # year partition enables historical backfill alongside current snapshot
+        columns: [type, year]
       options:
         compression: snappy
         batchSize: 50000

@@ -1039,7 +1039,7 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/t
       WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
 
 -- ============================================================================
--- state_occupation_employment (BLS OEWS science/engineer headcount, new 5 Sep 2026)
+-- state_occupation_employment (BLS OEWS science/engineer headcount, per-year state workbooks)
 -- ============================================================================
 
 INSERT INTO dq_results
@@ -1049,8 +1049,9 @@ SELECT 'econ', 'state_occupation_employment', 'existence',
   CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
 FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1));
 
--- 54 state-level areas x 3 occupations = 162 possible rows; small-count cells can be
--- suppressed by BLS, so the floor is set a little below the live-confirmed 160.
+-- 54 state-level areas x 3-4 occupations per reference year (17-0000, 19-0000, plus one or two
+-- software codes by era); small-count cells can be suppressed by BLS, so the floor is set a
+-- little below the smallest single year (150) and scales with the years ingested.
 INSERT INTO dq_results
 SELECT 'econ', 'state_occupation_employment', 'row_count',
   CASE WHEN n >= 150 THEN 'pass' ELSE 'fail' END,
@@ -1070,16 +1071,48 @@ SELECT 'econ', 'state_occupation_employment', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
-  AND column_name NOT IN ('type', 'year');  -- single-reference-year snapshot: year is expected constant
+  AND column_name NOT IN ('type', 'year');  -- a DQ run over one reference year has a constant year
 
--- occupation_code must be one of the 3 codes this table is scoped to
+-- occupation_code must be one of the codes this table is scoped to (software developers change
+-- SOC code by era: 151132/151133 for 2010-2018, 151256 for 2019-2020, 151252 from 2021)
 INSERT INTO dq_results
 SELECT 'econ', 'state_occupation_employment', 'expected_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
   CAST(bad AS VARCHAR), '0',
-  'rows with occupation_code outside (170000, 190000, 151252)'
+  'rows with occupation_code outside (170000, 190000, 151132, 151133, 151256, 151252)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
-      WHERE occupation_code NOT IN ('170000', '190000', '151252'));
+      WHERE occupation_code NOT IN ('170000', '190000', '151132', '151133', '151256', '151252'));
+
+-- each software SOC code must appear only in the reference years that publish it
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows carrying a software SOC code in a reference year that does not publish it'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
+      WHERE (occupation_code IN ('151132', '151133') AND year NOT BETWEEN 2010 AND 2018)
+         OR (occupation_code = '151256' AND year NOT IN (2019, 2020))
+         OR (occupation_code = '151252' AND year < 2021));
+
+-- every ingested reference year must carry a full state x occupation set
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'per_year_row_count',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'reference years with fewer than 150 rows'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT year, COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
+        GROUP BY year HAVING COUNT(*) < 150));
+
+-- PK (series, year) must be unique
+INSERT INTO dq_results
+SELECT 'econ', 'state_occupation_employment', 'pk_duplicates',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (series, year) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
+        GROUP BY series, year HAVING COUNT(*) > 1));
 
 -- employment headcount must be non-negative
 INSERT INTO dq_results
