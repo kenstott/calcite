@@ -5416,8 +5416,10 @@ public class McpServer {
 
     // ── Per-process tool-call log ─────────────────────────────────────────────
 
-    /** Every tool call this process has served, oldest first, capped so a runaway session
-     *  cannot grow it without bound. "One process serves one client session" does NOT hold in
+    /** The most recent {@link #CALL_LOG_MAX} tool calls this process has served, oldest first;
+     *  the oldest entry is evicted when the cap is reached, so the log always ends at the
+     *  current call and the provenance checks never read a frozen, stale history.
+     *  "One process serves one client session" does NOT hold in
      *  practice -- Claude Desktop connects an MCP server once per app launch and reuses that
      *  same process across every chat window opened afterward, with no protocol-level signal
      *  marking where one conversation ends and the next begins. Confirmed live (2026-09-18): a
@@ -5535,9 +5537,6 @@ public class McpServer {
 
     private static void recordCall(String tool, JsonNode args, long ms, int rows,
             ObjectNode diagnostics, String error) {
-        if (CALL_LOG.size() >= CALL_LOG_MAX) {
-            return;
-        }
         ObjectNode e = MAPPER.createObjectNode();
         e.put("seq", CALL_SEQ.incrementAndGet());
         e.put("ts", java.time.Instant.now().toString());
@@ -5652,7 +5651,12 @@ public class McpServer {
         if (error != null) {
             e.put("error", error);
         }
-        CALL_LOG.add(e);
+        synchronized (CALL_LOG) {
+            if (CALL_LOG.size() >= CALL_LOG_MAX) {
+                CALL_LOG.remove(0);
+            }
+            CALL_LOG.add(e);
+        }
     }
 
     /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
@@ -6439,7 +6443,7 @@ public class McpServer {
             new String[]{"ols_regression", "robust_regression", "flexible_regression",
                 "panel_fixed_effects"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
-            "(?i)difference[- ]in[- ]differences|diff[- ]in[- ]diff\\b|\\bDiD\\b"),
+            "(?i)difference[- ]in[- ]differences|diff[- ]in[- ]diff\\b|(?-i:\\bDiD\\b)"),
             new String[]{"diff_in_diff"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
             "(?i)instrumental variable|\\b2SLS\\b|IV regression"),
