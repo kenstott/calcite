@@ -138,7 +138,11 @@ column_templates:
     name: unit_ref_normalized
     type: string
     nullable: true
-    comment: Canonical unit (e.g. USD, shares, pure, usdPerShare); equals unit_ref when no normalization rule matches
+    comment: >
+      Canonical unit resolved from the filing's own unit definition, not from the unit id:
+      an iso4217 measure gives its currency code (USD, EUR), xbrli:shares gives shares,
+      xbrli:pure gives pure, USD divided by shares gives usdPerShare, any other divide gives
+      <numerator>/<denominator>. Filter on this column, not unit_ref, which is the filer's arbitrary id.
 
   value_numeric_column: &value_numeric
     name: value_numeric

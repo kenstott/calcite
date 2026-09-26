@@ -1028,6 +1028,8 @@ public class XbrlToParquetConverter implements FileConverter {
       contextPeriodMap.put(id, cp);
     }
 
+    Map<String, String> unitLabels = resolveUnitLabels(doc);
+
     // Extract all fact elements
     List<Map<String, Object>> dataList = new ArrayList<>();
     NodeList allElements = doc.getElementsByTagName("*");
@@ -1123,7 +1125,15 @@ public class XbrlToParquetConverter implements FileConverter {
         String unitRef = element.getAttribute("unitRef");
         String unitRefRaw = unitRef.isEmpty() ? null : unitRef;
         data.put("unit_ref", unitRefRaw);
-        data.put("unit_ref_normalized", unitRefRaw != null ? normalizeUnitRef(unitRefRaw) : null);
+        String unitLabel = null;
+        if (unitRefRaw != null) {
+          unitLabel = unitLabels.get(unitRefRaw);
+          if (unitLabel == null) {
+            throw new IllegalStateException("Fact " + concept + " in accession " + accession
+                + " references unit '" + unitRefRaw + "' that the filing does not define");
+          }
+        }
+        data.put("unit_ref_normalized", unitLabel);
         // decimals (xbrli:decimalsType) is a union of xsd:integer and the token "INF".
         // "INF" means infinite precision (an exact value) and legitimately has no integer
         // form -> null. Any other non-integer value is corruption and must fail loudly.
@@ -1766,7 +1776,96 @@ public class XbrlToParquetConverter implements FileConverter {
     return "parquet";
   }
 
-  private String normalizeUnitRef(String unitRef) {
+  /**
+   * Copies the measure structure of an inline {@code <xbrli:unit>} into the flattened document
+   * under canonical element names. The HTML parser lower-cases tag names, so the divide members
+   * are matched case-insensitively.
+   */
+  private static void copyUnitDefinition(Document doc, org.jsoup.nodes.Element from, Element to) {
+    for (org.jsoup.nodes.Element child : from.children()) {
+      String tag = child.tagName();
+      String local = tag.substring(tag.indexOf(':') + 1).toLowerCase(Locale.ROOT);
+      Element copy;
+      switch (local) {
+      case "measure":
+        copy = doc.createElement("measure");
+        copy.setTextContent(child.text().trim());
+        break;
+      case "divide":
+        copy = doc.createElement("divide");
+        copyUnitDefinition(doc, child, copy);
+        break;
+      case "unitnumerator":
+        copy = doc.createElement("unitNumerator");
+        copyUnitDefinition(doc, child, copy);
+        break;
+      case "unitdenominator":
+        copy = doc.createElement("unitDenominator");
+        copyUnitDefinition(doc, child, copy);
+        break;
+      default:
+        continue;
+      }
+      to.appendChild(copy);
+    }
+  }
+
+  /**
+   * Maps each unit id in the filing to its canonical label, read from the filing's own unit
+   * definition. The id is arbitrary per filer ({@code USD}, {@code U_iso4217USD}, {@code Unit12});
+   * the {@code <measure>} inside the definition is what says which unit it is.
+   */
+  static Map<String, String> resolveUnitLabels(Document doc) {
+    Map<String, String> labels = new HashMap<>();
+    for (Element unit : elementsByLocalName(doc, "unit")) {
+      String id = unit.getAttribute("id");
+      if (id.isEmpty() || elementsByLocalName(unit, "measure").isEmpty()) continue;
+      List<Element> divides = elementsByLocalName(unit, "divide");
+      String label;
+      if (divides.isEmpty()) {
+        label = joinMeasures(unit, "*");
+      } else {
+        Element divide = divides.get(0);
+        List<Element> numerators = elementsByLocalName(divide, "unitNumerator");
+        List<Element> denominators = elementsByLocalName(divide, "unitDenominator");
+        if (numerators.isEmpty() || denominators.isEmpty()) {
+          throw new IllegalStateException("Unit '" + id + "' has a divide without both a numerator"
+              + " and a denominator");
+        }
+        String numerator = joinMeasures(numerators.get(0), "*");
+        String denominator = joinMeasures(denominators.get(0), "*");
+        label = "USD".equals(numerator) && "shares".equals(denominator)
+            ? "usdPerShare" : numerator + "/" + denominator;
+      }
+      labels.put(id, label);
+    }
+    return labels;
+  }
+
+  private static String joinMeasures(Element scope, String separator) {
+    List<Element> measures = elementsByLocalName(scope, "measure");
+    if (measures.isEmpty()) {
+      throw new IllegalStateException("Unit numerator or denominator has no measure");
+    }
+    StringBuilder joined = new StringBuilder();
+    for (Element measure : measures) {
+      if (joined.length() > 0) joined.append(separator);
+      joined.append(measureLabel(measure.getTextContent().trim()));
+    }
+    return joined.toString();
+  }
+
+  /** ISO 4217 currency measures become their code; every other measure by its local name. */
+  private static String measureLabel(String qname) {
+    int colon = qname.indexOf(':');
+    String local = colon < 0 ? qname : qname.substring(colon + 1);
+    if (colon > 0 && "iso4217".equalsIgnoreCase(qname.substring(0, colon))) {
+      return local.toUpperCase(Locale.ROOT);
+    }
+    return normalizeUnitRef(local);
+  }
+
+  private static String normalizeUnitRef(String unitRef) {
     if (unitRef == null) return null;
     String lower = unitRef.toLowerCase();
     // Currency: case variants, U_/Unit_ prefixes, and XBRL Unit_Standard_<currency>_<hash>
@@ -2677,6 +2776,20 @@ public class XbrlToParquetConverter implements FileConverter {
         }
 
         root.appendChild(xmlContext);
+      }
+
+      Map<String, org.jsoup.nodes.Element> unitById = new java.util.LinkedHashMap<>();
+      for (String unitTag : new String[]{"xbrli:unit", "i:unit", "unit"}) {
+        for (org.jsoup.nodes.Element unit : jsoupDoc.getElementsByTag(unitTag)) {
+          String uid = unit.attr("id");
+          if (!uid.isEmpty()) unitById.putIfAbsent(uid, unit);
+        }
+      }
+      for (org.jsoup.nodes.Element unit : unitById.values()) {
+        Element xmlUnit = doc.createElement("unit");
+        xmlUnit.setAttribute("id", unit.attr("id"));
+        copyUnitDefinition(doc, unit, xmlUnit);
+        root.appendChild(xmlUnit);
       }
 
       // Log the summary
