@@ -1239,7 +1239,7 @@ partitionedTables:
     comment: >
       NIFC WFIGS Interagency wildfire perimeters — one row per fire perimeter
       (~39k features) with a simplified WGS84 perimeter polygon (geometry_wkt),
-      gis_acres/final_acres burned area, fire_cause (Human / Natural /
+      gis_acres/incident_size_acres/final_acres burned area, fire_cause (Human / Natural /
       Undetermined), and point-of-origin land ownership (landowner_kind:
       Federal / Private / Other; landowner_category: USFS, BLM, NPS, BIA,
       State, Tribal, City, County, etc.) and jurisdictional_agency — enabling
@@ -1325,8 +1325,20 @@ partitionedTables:
         comment: >
           GIS-calculated perimeter area in acres — the populated burned-area
           measure (about 70-99% of rows for fire_year 2020 onward); null where
-          the source has no polygon area. Includes prescribed burns
-          (incident_type_category RX); filter to WF for wildfire totals.
+          the source has no polygon area (about 31% of fire_year 2020
+          wildfires); use incident_size_acres where gis_acres is null. Includes
+          prescribed burns (incident_type_category RX); filter to WF for
+          wildfire totals.
+      - name: incident_size_acres
+        type: double
+        nullable: true
+        comment: >
+          Incident size in acres as reported on the incident record
+          (attr_IncidentSize) — populated on about 99% of wildfire (WF) rows,
+          including those with no polygon area, so it is the complete-coverage
+          burned-area measure. It is the reported incident size, not a
+          geometry-derived area, so it can differ from gis_acres.
+          COALESCE(gis_acres, incident_size_acres) fills the gaps.
       - name: final_acres
         type: double
         nullable: true

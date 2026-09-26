@@ -213,6 +213,7 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
     row.put("fire_cause", text(a, "attr_FireCause"));
     row.put("incident_type_category", text(a, "attr_IncidentTypeCategory"));
     row.put("gis_acres", dbl(a, "poly_GISAcres"));
+    row.put("incident_size_acres", dbl(a, "attr_IncidentSize"));
     row.put("final_acres", dbl(a, "attr_FinalAcres"));
 
     EsriGeometryConverter.Result geom = EsriGeometryConverter.convert(feature.path("geometry"));
