@@ -96,6 +96,19 @@ public class UsaSpendingDistrictRecipientsProvider implements CachingDataProvide
       "\"A\",\"B\",\"C\",\"D\",\"IDV_A\",\"IDV_B\",\"IDV_C\",\"IDV_D\",\"IDV_E\","
       + "\"02\",\"03\",\"04\",\"05\",\"06\",\"10\",\"07\",\"08\",\"09\",\"11\"";
 
+  /** Table name used in log lines; subclasses that reuse this fetch for a different
+   * award-type scope override it. */
+  protected String tableName() {
+    return "usaspending_recipients_by_district";
+  }
+
+  /** Comma-separated, quoted award-type codes the per-district recipient ranking is
+   * computed over. The district enumeration call always uses the all-award-types set so
+   * every table shares one district list. */
+  protected String recipientAwardTypeCodes() {
+    return AWARD_TYPE_CODES;
+  }
+
   private static String cacheKey(String endpoint, String label, String body) {
     return endpoint + "/" + label + "?" + body;
   }
@@ -107,8 +120,7 @@ public class UsaSpendingDistrictRecipientsProvider implements CachingDataProvide
       year = variables.get("year");
     }
     if (year == null || year.isEmpty()) {
-      LOGGER.warn("usaspending_recipients_by_district: no year in dimension variables {}",
-          variables);
+      LOGGER.warn("{}: no year in dimension variables {}", tableName(), variables);
       return Collections.emptyIterator();
     }
     int fy;
@@ -116,15 +128,14 @@ public class UsaSpendingDistrictRecipientsProvider implements CachingDataProvide
       fy = Integer.parseInt(year.trim());
     // fallback-guard: allow narrow guard on a framework-supplied dimension value, before any download/parse; bad value is logged
     } catch (NumberFormatException e) {
-      LOGGER.warn("usaspending_recipients_by_district: non-numeric year {}", year);
+      LOGGER.warn("{}: non-numeric year {}", tableName(), year);
       return Collections.emptyIterator();
     }
     String start = (fy - 1) + "-10-01";
     String end = fy + "-09-30";
 
     List<String[]> districts = fetchDistrictList(rawCache, start, end, fy);
-    LOGGER.info("usaspending_recipients_by_district: {} districts for fy {}",
-        districts.size(), fy);
+    LOGGER.info("{}: {} districts for fy {}", tableName(), districts.size(), fy);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     for (String[] d : districts) {
@@ -138,7 +149,7 @@ public class UsaSpendingDistrictRecipientsProvider implements CachingDataProvide
           + "\",\"end_date\":\"" + end + "\"}],"
           + "\"place_of_performance_locations\":[{\"country\":\"USA\",\"state\":\""
           + stateAbbr + "\",\"district_current\":\"" + districtNumber + "\"}],"
-          + "\"award_type_codes\":[" + AWARD_TYPE_CODES + "]},"
+          + "\"award_type_codes\":[" + recipientAwardTypeCodes() + "]},"
           + "\"category\":\"recipient\",\"spending_level\":\"transactions\","
           + "\"limit\":" + TOP_N + ",\"page\":1}";
 
@@ -176,8 +187,7 @@ public class UsaSpendingDistrictRecipientsProvider implements CachingDataProvide
         rows.add(row);
       }
     }
-    LOGGER.info("usaspending_recipients_by_district: {} recipient rows for fy {}",
-        rows.size(), fy);
+    LOGGER.info("{}: {} recipient rows for fy {}", tableName(), rows.size(), fy);
     return rows.iterator();
   }
 

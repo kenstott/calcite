@@ -15,6 +15,7 @@
 #   - USAspending by agency          — /api/v2/spending/   (UsaSpendingAgencyProvider)
 #   - USAspending by state           — /api/v2/search/spending_by_geography/ (UsaSpendingStateProvider)
 #   - USAspending by county          — /api/v2/search/spending_by_geography/ (UsaSpendingCountyProvider)
+#   - USAspending contract recipients by district — /api/v2/search/spending_by_category/recipient/ (UsaSpendingDistrictContractRecipientsProvider)
 #   - USAspending entitlement spend  — /api/v2/search/spending_by_geography/ (UsaSpendingEntitlementProvider)
 #   - SBA 7(a) & 504 loan approvals  — data.sba.gov DKAN CSV (SbaLoansProvider)
 #   - Census Annual Survey of State Government Tax Collections (STC) —
@@ -3245,6 +3246,139 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: usaspending_recipients_by_district
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  - name: usaspending_contract_recipients_by_district
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=usaspending_contract_recipients_by_district/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Top 100 procurement-contract recipients by obligated dollar amount for each
+      place-of-performance congressional district x fiscal year — the contracts-only
+      counterpart to usaspending_recipients_by_district. The ranking is computed
+      server-side by USAspending's spending_by_category/recipient endpoint over
+      contract and IDV award types only (award_type_codes A, B, C, D, IDV_A-IDV_E; the
+      same set as usaspending_by_district.obligated_amount_contracts), so grant,
+      direct-payment and loan recipients never occupy a rank. Use this table, not
+      usaspending_recipients_by_district, for "which contractors dominate a district"
+      questions; the all-award-types table ranks universities, health systems and
+      benefit administrators alongside contractors. Same columns, same request shape
+      and same top-100 ceiling (the API's page-size maximum) as
+      usaspending_recipients_by_district: a district with concentrated contract
+      spending is fully captured, one with many small dispersed contractors below the
+      100th rank is not. An aggregate "MULTIPLE RECIPIENTS" row (null
+      recipient_id/uei/duns) is USAspending's own bucket for sub-reporting-threshold
+      transactions; it is kept as a ranked row and flagged by is_aggregate_recipient.
+      recipient_duns is the endpoint's "code" field (9-digit legacy DUNS-shaped
+      identifier); recipient_uei is USAspending's own UEI when known; recipient_id is
+      USAspending's internal recipient hash. cd_fips matches
+      geo.congressional_districts.cd_fips exactly. YEAR SCOPE: defaults to
+      the 2 most recent complete fiscal years (usaspending_recipient_district_year_range);
+      one API call per (year, district), so GOVDATA_START_YEAR widens it at ~8 minutes
+      per added year. Joins to geo.congressional_districts via cd_fips. Source:
+      api.usaspending.gov/api/v2/search/spending_by_category/recipient/ (plus one
+      spending_by_geography call per year to enumerate current districts).
+
+    dimensions:
+      type:
+        - usaspending_contract_recipients_by_district
+      year: *usaspending_recipient_district_year_range
+
+    columns:
+      - name: cd_fips
+        type: string
+        nullable: false
+        comment: 4-digit congressional district code (state FIPS + district number), matches geo.congressional_districts.cd_fips
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation, decoded from USAspending's display_name
+      - name: district_number
+        type: string
+        nullable: true
+        comment: >
+          District number as text (e.g. "04"); "00" means an at-large single-district
+          state, "98" means a non-voting delegate district (DC, Puerto Rico, Guam,
+          U.S. Virgin Islands, American Samoa, Northern Mariana Islands)
+      - name: rank
+        type: integer
+        nullable: false
+        comment: Position (1-100) in USAspending's own descending-by-amount contracts-only recipient ranking for this district/year
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: >
+          Recipient/contractor name as reported by USAspending; "MULTIPLE RECIPIENTS"
+          is USAspending's own aggregate bucket for sub-reporting-threshold transactions.
+          Check is_aggregate_recipient rather than string-matching this column directly
+          (D-280) — a naive ORDER BY obligated_amount DESC per district otherwise returns
+          this bucket at rank 1 for the largest-total districts, reading as a single
+          dominant contractor when it is really an aggregation artifact.
+      - name: recipient_id
+        type: string
+        nullable: true
+        comment: USAspending's internal recipient hash identifier (e.g. "edc402f7-...-C"); null for the MULTIPLE RECIPIENTS aggregate
+      - name: recipient_uei
+        type: string
+        nullable: true
+        comment: SAM.gov Unique Entity Identifier (12-character alphanumeric), when known
+      - name: recipient_duns
+        type: string
+        nullable: true
+        comment: Legacy 9-digit DUNS-shaped identifier (USAspending's "code" field), when known
+      - name: is_aggregate_recipient
+        type: boolean
+        nullable: false
+        comment: >
+          True when recipient_name is USAspending's "MULTIPLE RECIPIENTS" aggregate bucket
+          rather than a real, individually-identified recipient (D-280). Filter this out (or
+          handle separately) before ranking recipients by obligated_amount.
+      - name: obligated_amount
+        type: double
+        nullable: true
+        comment: Aggregated obligations for this recipient in this district/fiscal year (USD), contract and IDV award types only
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_category/recipient/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      # The provider POSTs through this cache, keyed per request (endpoint + label +
+      # body), so each district/year call is issued once and a changed body re-keys.
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingDistrictContractRecipientsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_contract_recipients_by_district/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_contract_recipients_by_district
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
