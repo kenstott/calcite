@@ -533,6 +533,13 @@ partitionedTables:
       class, geography, product line, business segment) rather than one consolidated total, join
       this table's context_ref to filing_contexts.context_id (same cik + accession_number) and
       read filing_contexts.segment for the dimension — see that column's comment.
+      Coverage is limited to registrants that file XBRL with the SEC. A bank without a holding
+      company registers with its primary federal regulator (FDIC, OCC or the Federal Reserve)
+      instead of the SEC, so it has no 10-K here: First Republic Bank (CIK 0001132979) and
+      Signature Bank Corp (CIK 0001288784) appear on EDGAR only through third-party ownership
+      filings (SC 13G/13D), have no EDGAR company-facts record, and are absent from this table
+      for every period. SVB Financial Group (CIK 0000719739), a holding company, has full 10-K
+      history. For a bank's own balance sheet use the banking schema's financials table (FDIC BankFind data).
 
     columns:
       - *cik_column
