@@ -2360,8 +2360,8 @@ partitionedTables:
   # F-33 DISTRICT FINANCE — Census Bureau Annual Survey of School System
   # Finances, individual-unit file. One row per LEA per fiscal year.
   # ~14,000 LEAs per year; real dollar revenue/expenditure figures (the only
-  # such table in this schema — see ccd_districts and district_naep_spending's
-  # comments, both of which explicitly note the absence of finance data).
+  # district-dollar table in this schema; ccd_districts and district_naep_spending
+  # carry staffing/enrollment/poverty proxies only).
   # ==========================================================================
   - name: f33_district_finance
     pattern: "year={year}"
@@ -2402,6 +2402,13 @@ partitionedTables:
       PPCSTOT/ENROLL carried a negative value in that file, so (unlike CCD)
       this table does not null out negative sentinel codes — none were
       observed, but this has only been checked for FY2023/FY2024.
+      Per-pupil caution: the file includes tiny and non-operating units (county
+      special-school operators, education service districts, units with an
+      ENROLL of 1-15) whose source per-pupil figures run into the millions of
+      dollars. An unweighted AVG of per_pupil_current_expenditure across all rows
+      is dominated by them; use a median, weight by enrollment
+      (SUM(current_expenditure_thousand)*1000/SUM(enrollment)), or filter on
+      enrollment and unit_type/school_level first.
 
     columns:
       - name: leaid
@@ -3105,8 +3112,8 @@ views:
       lunch share), and district_count. Enables correlating per-pupil staffing and
       poverty resources with NAEP outcomes. DESPITE THE NAME, this view carries NO dollar or
       per-pupil expenditure figures — "spending" here is proxied only by staffing
-      (avg_pupil_teacher_ratio) and poverty (avg_frpl_rate); NCES CCD in this catalog has no
-      district finance/dollars, so per-pupil spending in dollars is not available anywhere here.
+      (avg_pupil_teacher_ratio) and poverty (avg_frpl_rate). For per-pupil dollars use
+      f33_district_finance (Census F-33 district revenue/expenditure, joins on leaid).
       One row per jurisdiction × year × subject ×
       grade; jurisdiction=0 (national aggregate) will not match any state's district data.
       d2.enrollment, d2.teachers_total_fte, and ccd_schools.free_or_reduced_price_lunch
