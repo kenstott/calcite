@@ -2478,7 +2478,8 @@ constraints:
         targetColumns: [state_abbr]
 
   onrr_revenues:
-    primaryKey: [fiscal_year, county_fips, land_class, commodity, revenue_type, product]
+    primaryKey: [fiscal_year, land_class, land_category, state_name, county_name, county_fips,
+                 offshore_region, revenue_type, mineral_lease_type, commodity, product]
     foreignKeys:
       - columns: [county_fips]
         targetSchema: geo
