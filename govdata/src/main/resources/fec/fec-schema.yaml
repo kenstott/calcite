@@ -1687,6 +1687,15 @@ partitionedTables:
       Includes Super PAC spending. Source: independent_expenditure_{YYYY}.csv
       (CSV with headers).
 
+      FEC accepts filings without amount-plausibility vetting, so the bulk file carries
+      spam/prank line items of $50M to $10B (e.g. 2022 and 2024 candidates filing
+      $9,999,999,999-scale "expenditures"); a raw SUM(amount) is inflated by one to two orders
+      of magnitude in 2022, 2024 and 2026. Every row is kept and amount is never altered;
+      amount_implausible marks the rows to exclude. Any total, ranking or per-candidate
+      aggregate of amount must filter WHERE amount_implausible IS NOT TRUE. Amendments
+      (amendment_indicator A1-A3, prev_file_num) are separate rows alongside the filing they
+      amend.
+
     columns:
       - name: candidate_id
         type: string
@@ -1784,6 +1793,18 @@ partitionedTables:
         nullable: true
         comment: Image number
         source: image_num
+      - name: amount_implausible
+        type: boolean
+        nullable: true
+        expression: 'TRY_CAST(src."exp_amo" AS DOUBLE) >= 50000000'
+        comment: >
+          True when amount is at or above $50,000,000, a value no genuine independent
+          expenditure line item has reached in the 2010-2026 bulk files: legitimate amounts top
+          out near $32M, and every line item at or above $50M is a spam/prank filing that FEC
+          published unvetted (spender names such as 'TANKING', 'Republican Emo Girl', candidate
+          'SquarePants, SpongeBob'). The row and its amount are kept as filed. Exclude with
+          WHERE amount_implausible IS NOT TRUE before summing or ranking amount. NULL when
+          amount is NULL.
 
     source:
       type: http

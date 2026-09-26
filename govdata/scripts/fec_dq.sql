@@ -674,6 +674,15 @@ SELECT 'fec', 'independent_expenditures', 'T7_support_oppose',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/independent_expenditures', allow_moved_paths := true)
       WHERE support_oppose IS NOT NULL AND support_oppose NOT IN ('S', 'O'));
 
+-- T8: amount_implausible flag populated and consistent with amount
+INSERT INTO dq_results
+SELECT 'fec', 'independent_expenditures', 'T8_amount_implausible_flag',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'rows where amount_implausible is NULL/false for amount >= 50M, or true/NULL for amount < 50M'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/independent_expenditures', allow_moved_paths := true)
+      WHERE amount IS NOT NULL
+        AND (amount_implausible IS DISTINCT FROM (amount >= 50000000)));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: electioneering_communications
 -- ─────────────────────────────────────────────────────────────
