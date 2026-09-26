@@ -21,6 +21,10 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:housing}"
+# The HMDA loan-level files are 4-7 GB per year and log only when a download is interrupted, so a
+# healthy download looks idle for a long time; the 60-min default idle cap would kill it mid-file.
+# Read by the pool's get_timeout_config (common.sh) from this source YAML; not consumed by the ETL.
+workerTimeoutMinutes: 240
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
