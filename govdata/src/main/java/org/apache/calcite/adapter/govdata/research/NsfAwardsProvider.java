@@ -53,7 +53,7 @@ import java.util.Set;
  * are calendar year N-1. Pages are read one at a time through the raw cache and streamed to the
  * caller; only the award ids of the current slice are retained, to drop rows that straddle a page
  * boundary (the API documents no sort tiebreaker) and to check the slice against its own
- * {@code totalCount} on exhaustion.
+ * {@code totalCount} on exhaustion. The API's {@code offset} counts records from zero.
  */
 public class NsfAwardsProvider implements CachingDataProvider {
 
@@ -92,7 +92,7 @@ public class NsfAwardsProvider implements CachingDataProvider {
     private final RawCache rawCache;
     private final Set<String> seenIds = new HashSet<String>();
     private Iterator<JsonNode> page = Collections.emptyIterator();
-    private int nextOffset = 1;
+    private int nextOffset;
     private int totalCount = -1;
     private boolean exhausted;
     private Map<String, Object> pending;
