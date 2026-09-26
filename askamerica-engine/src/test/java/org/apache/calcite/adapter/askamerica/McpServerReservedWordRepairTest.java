@@ -104,6 +104,22 @@ public class McpServerReservedWordRepairTest {
                 + "FROM ag.rma_crop_insurance"));
     }
 
+    @Test void leavesLagOverOrderByIntactInASubqueryQuery() {
+        assertEquals(
+            "SELECT LAG(x, 1) OVER (ORDER BY yr) AS prev_x, \"year\" "
+                + "FROM (SELECT year, x, yr FROM t) s",
+            quote("SELECT LAG(x, 1) OVER (ORDER BY yr) AS prev_x, year "
+                + "FROM (SELECT year, x, yr FROM t) s"));
+        assertEquals("SELECT lag(x, 1) over (order by yr), \"year\" FROM t",
+            quote("SELECT lag(x, 1) over (order by yr), year FROM t"));
+    }
+
+    @Test void leavesNamedWindowDefinitionOrderByIntact() {
+        assertEquals(
+            "SELECT LAG(x, 1) OVER w, \"year\" FROM t WINDOW w AS (ORDER BY yr)",
+            quote("SELECT LAG(x, 1) OVER w, year FROM t WINDOW w AS (ORDER BY yr)"));
+    }
+
     @Test void quotesAColumnUsedInAWherePredicate() {
         assertEquals(
             "SELECT \"year\", \"value\" FROM econ.inflation_metrics "
