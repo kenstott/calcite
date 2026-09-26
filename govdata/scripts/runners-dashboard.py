@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 
@@ -23,6 +24,7 @@ OPS_REPO = "kenstott/govdata-ops"
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RUNS = os.path.join(REPO, "govdata", "scripts", "parallel", "runs")
 JOURNAL_WINDOW = "-6h"
+GH_TTL = 60
 
 USE_COLOR = sys.stdout.isatty()
 
@@ -70,14 +72,24 @@ def clip(text, width):
 # ── collectors: each returns data or raises; render() shows the error under its section ──
 
 _gh_cache = {"at": 0, "data": None}
+# On disk so an external loop (`watch ...`) that starts a fresh process each time still shares it.
+_GH_CACHE_FILE = os.path.join(tempfile.gettempdir(), "runners-dashboard-issues-%d.json" % os.getuid())
 
 
 def issues(ttl):
+    if _gh_cache["data"] is None and os.path.exists(_GH_CACHE_FILE):
+        with open(_GH_CACHE_FILE) as f:
+            _gh_cache["data"] = json.load(f)
+        _gh_cache["at"] = os.path.getmtime(_GH_CACHE_FILE)
     if _gh_cache["data"] is None or time.time() - _gh_cache["at"] > ttl:
         out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "all", "--limit", "400",
                    "--json", "number,title,state,labels,updatedAt,closedAt"], timeout=60)
         _gh_cache["data"] = json.loads(out)
         _gh_cache["at"] = time.time()
+        tmp = _GH_CACHE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(out)
+        os.replace(tmp, _GH_CACHE_FILE)
     for i in _gh_cache["data"]:
         i["labelset"] = {l["name"] for l in i["labels"]}
     return _gh_cache["data"]
@@ -400,7 +412,8 @@ def render(ttl):
 
         # daemon activity
         out.append(section("DAEMON ACTIVITY (spawns, last 6h)", width))
-        spawns = [l for l in jl if "Spawning agent" in l or "Orphan found" in l][-8:]
+        spawns = [l for l in jl if "Spawning agent" in l or "Orphan found" in l
+                  or "Orphan reaped" in l or "Unreaped orphan" in l][-8:]
         for l in spawns:
             m = re.match(r"(\S+)\s+\S+\s+\S+\[\d+\]:\s+(.*)$", l)
             if m:
@@ -414,14 +427,17 @@ def render(ttl):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--watch", type=int, metavar="SECONDS", help="redraw every SECONDS")
+    ap.add_argument("--watch", type=int, nargs="?", const=15, metavar="SECONDS",
+                    help="redraw every SECONDS (15 when given without a value; minimum 5)")
     args = ap.parse_args()
+    if args.watch is not None and args.watch < 5:
+        ap.error("--watch must be at least 5 seconds: each redraw forks git, ps, systemctl and journalctl")
     if not args.watch:
-        print(render(ttl=0))
+        print(render(ttl=GH_TTL))
         return 0
     try:
         while True:
-            frame = render(ttl=max(args.watch, 60))
+            frame = render(ttl=max(args.watch, GH_TTL))
             sys.stdout.write("\033[H\033[J" + frame + "\n" + dim("\nrefresh every %ds — Ctrl-C to exit" % args.watch) + "\n")
             sys.stdout.flush()
             time.sleep(args.watch)
