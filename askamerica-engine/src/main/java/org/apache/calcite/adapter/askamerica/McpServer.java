@@ -5484,22 +5484,91 @@ public class McpServer {
      * started at all; this uses the one real signal CALL_LOG actually contains for "a report
      * concluded here" instead of guessing from a time window.
      */
+    /** A conversation this idle is a new one, not a pause in the same one -- chosen generously
+     *  (most real analytical back-and-forth doesn't leave a gap this long) so this almost never
+     *  fires mid-conversation, only across genuinely separate app-launch-lifetime chat windows. */
+    private static final long IDLE_GAP_BOUNDARY_MS = 10 * 60 * 1000L;
+
+    /** A hard backstop independent of any boundary detection succeeding: no snapshot reaches
+     *  further back than this from the current moment, however long the process has been alive
+     *  and however many chat windows it has silently served. Bounds the known gap in the
+     *  publish_report-success boundary (a conversation that never successfully publishes leaves
+     *  no marker) to "reach back at most this far" instead of "reach back to process start." */
+    private static final long MAX_LOOKBACK_MS = 2 * 60 * 60 * 1000L;
+
+    /**
+     * {@link #CALL_LOG}, cut down to calls that plausibly belong to the report being validated
+     * right now, not a stale earlier conversation sharing the same long-lived process (see
+     * {@link #CALL_LOG}'s javadoc for why that happens). Three boundary signals, checked from
+     * newest backward, first hit wins (the boundary closest to "now" is used):
+     *
+     * <p>1. The most recent PRIOR SUCCESSFUL {@code publish_report} call, if any (unchanged from
+     * before) -- everything from just after it onward is kept, everything at-or-before it belongs
+     * to whatever report that call concluded. A REJECTED attempt is deliberately not a boundary
+     * (see the long-standing javadoc on this below); only a call that actually returned marks the
+     * end of one.
+     *
+     * <p>2. A gap of {@link #IDLE_GAP_BOUNDARY_MS} or more between two consecutive calls -- MCP
+     * over stdio gives the server no protocol-level signal that a new conversation started (a
+     * long-lived Desktop connection is reused silently across chat windows), so this is the one
+     * proxy available: real back-and-forth within one conversation is rarely idle this long.
+     *
+     * <p>3. A hard cap at {@link #MAX_LOOKBACK_MS} from now, applied regardless of whether 1 or 2
+     * found anything -- this is the backstop for the specific documented gap in signal 1 (a
+     * conversation that calls compose_dashboard and never successfully publishes leaves no
+     * marker at all), so a missed boundary degrades to "bounded reach-back" rather than
+     * unbounded.
+     *
+     * <p>Deliberately NOT a schema/topic-shift heuristic (comparing which tables consecutive
+     * calls touch): real single-conversation analyses routinely pivot across schemas mid-report
+     * (a join, a cross-check against an unrelated table, a recipe-suggested pivot), so that
+     * signal's false-positive rate against genuine within-conversation work was judged too high
+     * to add here without much more evidence than the single incident that motivated this pass.
+     */
     private static java.util.List<ObjectNode> recentCallLogSnapshot() {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
             snapshot = new java.util.ArrayList<>(CALL_LOG);
         }
+        long now = System.currentTimeMillis();
         int boundary = -1;
+        Long prevTs = null;
         for (int i = snapshot.size() - 1; i >= 0; i--) {
             ObjectNode entry = snapshot.get(i);
             if ("publish_report".equals(entry.path("tool").asText("")) && !entry.has("error")) {
                 boundary = i;
                 break;
             }
+            Long entryTs = parseInstantMillis(entry.path("ts").asText(null));
+            if (entryTs != null) {
+                if (now - entryTs > MAX_LOOKBACK_MS) {
+                    boundary = i;
+                    break;
+                }
+                if (prevTs != null && prevTs - entryTs > IDLE_GAP_BOUNDARY_MS) {
+                    boundary = i;
+                    break;
+                }
+                prevTs = entryTs;
+            }
         }
         return boundary < 0
             ? snapshot
             : new java.util.ArrayList<>(snapshot.subList(boundary + 1, snapshot.size()));
+    }
+
+    /** Parses a {@code ts} field written by {@link #recordCall} ({@link java.time.Instant#now()}
+     *  ISO-8601); null (rather than throwing) for anything unparseable so a single malformed or
+     *  missing timestamp degrades that one boundary check, not the whole snapshot. */
+    private static Long parseInstantMillis(String ts) {
+        if (ts == null || ts.isEmpty()) {
+            return null;
+        }
+        try {
+            return java.time.Instant.parse(ts).toEpochMilli();
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
     }
 
     private static final java.util.concurrent.atomic.AtomicInteger CALL_SEQ =
