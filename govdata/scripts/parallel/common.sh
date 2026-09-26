@@ -1547,7 +1547,10 @@ _schemas_write_same_tables() {
   return 1
 }
 
-# Usage: check_schema_year_conflict <pid_dir> <schema> <start_year> <end_year>
+# Usage: check_schema_year_conflict <pid_dir> <schema> <start_year> <end_year> [<mode>]
+# The optional mode lets a `serial` worker (the year tables that share one rate-limited API) run
+# beside the year and :once slots of its schema: those slots skip the serial tables, so the two
+# never write the same table. Without it every keyword mode spans all years, as before.
 # Returns 1 (and prints a message to stderr) if a live worker registered under
 # <pid_dir> already targets the same schema with an overlapping year range; 0 otherwise.
 #
@@ -1567,7 +1570,7 @@ _schemas_write_same_tables() {
 # there's no separate child pid to embed the path into. Anything else is treated as a
 # stale/PID-reused leftover and skipped, matching detect_active_schemas' existing rule.
 check_schema_year_conflict() {
-  local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4
+  local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4 _new_mode=${5:-}
   [ -d "$_pid_dir" ] || return 0
   local _pf _id _wpid _rest _other_schema _other_mode _o_start _o_end
   for _pf in "$_pid_dir"/worker-*.pid; do
@@ -1588,6 +1591,14 @@ check_schema_year_conflict() {
     _other_mode="${_rest#*-}"                          # after first hyphen (may itself have hyphens)
     read -r _o_start _o_end <<< "$(_year_range_from_mode "$_other_mode")"
     _schemas_write_same_tables "$_other_schema" "$_schema" || continue
+    if [ "$_other_schema" = "$_schema" ]; then
+      if [ "$_new_mode" = serial ] && [[ "$_other_mode" =~ ^([0-9]{4}(-[0-9]{4})?|once)$ ]]; then
+        continue
+      fi
+      if [ "$_other_mode" = serial ] && [[ "$_new_mode" =~ ^([0-9]{4}(-[0-9]{4})?|once)$ ]]; then
+        continue
+      fi
+    fi
     if (( _o_start <= _new_end && _new_start <= _o_end )); then
       echo "REFUSING: schema '${_schema}' years ${_new_start}-${_new_end} overlaps" \
            "already-running worker '${_id}' (pid ${_wpid}, years ${_o_start}-${_o_end})" \

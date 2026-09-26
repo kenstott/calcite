@@ -260,6 +260,10 @@ for arg in "$@"; do
       for _s in ag disasters housing transport environment fiscal census banking; do
         hcy_enqueue "$_s" once
       done
+      # housing's HUD-API tables (fair_market_rents, income_limits, income_limits_county) share one
+      # rate-limited token, so parallel per-year workers only throttle each other. They run as one
+      # sequential :serial worker over all years; the per-year housing slots below skip them.
+      hcy_enqueue housing serial
       # Year loop (current year is daily's slot, so start at cy-1).
       # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
       # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
@@ -734,7 +738,7 @@ fill_pool() {
     # kill-and-requeue), and everything behind it keeps flowing in the meantime.
     local next_cy_start next_cy_end _conflict_msg
     read -r next_cy_start next_cy_end <<< "$(_year_range_from_mode "$next_mode")"
-    if ! _conflict_msg=$(check_schema_year_conflict "$PID_DIR" "$next_schema" "$next_cy_start" "$next_cy_end" 2>&1); then
+    if ! _conflict_msg=$(check_schema_year_conflict "$PID_DIR" "$next_schema" "$next_cy_start" "$next_cy_end" "$next_mode" 2>&1); then
       # Requeue at back with backoff: skip re-checking this job for 30 seconds to avoid
       # consuming the run loop with repeated rejections. Record rejection time for comparison.
       local _reject_time=$(($(date +%s) + 30))

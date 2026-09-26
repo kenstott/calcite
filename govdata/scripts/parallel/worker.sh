@@ -122,7 +122,7 @@ else
   fi
   # Skip conflict check if this is a pool-launched worker (pool already checked at admission time)
   if [ "$_is_pool_launched" = false ]; then
-    if ! check_schema_year_conflict "$PID_DIR" "$SCHEMA" "$_self_start_year" "$_self_end_year"; then
+    if ! check_schema_year_conflict "$PID_DIR" "$SCHEMA" "$_self_start_year" "$_self_end_year" "$MODE"; then
       exit 1
     fi
   fi
@@ -162,11 +162,19 @@ fi
 # A table is year-addressable when it declares a `year` dimension; everything else is a
 # snapshot/full-archive table for the single :once slot. Query-time views live under
 # `views:` rather than `partitionedTables`, so they are excluded automatically.
-_schema_table_split() {   # <schema> <year|once> → JSON-quoted, comma-separated list
+#
+# Year tables whose source is the HUD API (`huduser.gov/hudapi`) form a third group, `serial`,
+# for the schemas in SERIAL_SCHEMAS. Every request to that API draws on one shared token and
+# rate limit, so running them once per year slot in parallel gives no extra throughput: the
+# workers throttle each other (HTTP 429/5xx retries) while each holds a full memory slot. The
+# serial slot runs them in one worker, years in sequence. Adding a schema to SERIAL_SCHEMAS
+# also needs a `hcy_enqueue <schema> serial` line in run-pool.sh, or its serial tables never run.
+SERIAL_SCHEMAS="housing"
+_schema_table_split() {   # <schema> <year|once|serial> → JSON-quoted, comma-separated list
   local schema="$1" kind="$2" jar resource
   jar=$(resolve_classpath) || return 1
   resource=$(schema_yaml_resource "$schema")
-  python3 - "$jar" "$schema" "$kind" "$resource" <<'PY'
+  python3 - "$jar" "$schema" "$kind" "$resource" "$SERIAL_SCHEMAS" <<'PY'
 import subprocess, sys
 try:
     import yaml
@@ -175,6 +183,7 @@ except ImportError:
     sys.exit(1)
 
 jar, schema, kind, resource = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+serial_schemas = sys.argv[5].split()
 res = subprocess.run(["unzip", "-p", jar, resource], capture_output=True)
 if res.returncode != 0 or not res.stdout:
     sys.stderr.write("ERROR: %s not found in %s\n" % (resource, jar))
@@ -187,7 +196,19 @@ for t in doc.get("partitionedTables") or []:
     if not name:
         continue
     dims = t.get("dimensions") or {}
-    if ("year" in dims) == (kind == "year"):
+    has_year = "year" in dims
+    serial = has_year and schema in serial_schemas \
+        and "huduser.gov/hudapi/" in ((t.get("source") or {}).get("url") or "")
+    if kind == "once":
+        keep = not has_year
+    elif kind == "year":
+        keep = has_year and not serial
+    elif kind == "serial":
+        keep = serial
+    else:
+        sys.stderr.write("ERROR: unknown table-split kind '%s'\n" % kind)
+        sys.exit(1)
+    if keep:
         names.append(name)
 
 # Fail loudly rather than emitting an empty set: an empty enabledTables would scope the
@@ -205,6 +226,9 @@ _split_year_tables() {   # year-addressable base tables → per-year slots
 }
 _split_once_tables() {   # snapshot / full-archive base tables → single :once slot
   _schema_table_split "$1" once
+}
+_split_serial_tables() {   # year tables sharing one rate-limited API → single :serial slot
+  _schema_table_split "$1" serial
 }
 
 case "$SCHEMA" in
@@ -638,6 +662,8 @@ PY
   # year-addressable tables with snapshot/full-archive tables — see the
   # _split_year_tables/_split_once_tables sets above. Modes:
   #   once           — snapshot/full-archive tables only, ingested once over the full range
+  #   serial         — the year tables that share one rate-limited API (SERIAL_SCHEMAS), all
+  #                    years in one worker, in sequence; the per-year slots skip them
   #   <year>|<range> — year-addressable tables ONLY (the pool's per-year slots); skips the
   #                    snapshots so they are not re-fetched on every year slot
   #   historical     — ALL tables (manual/`all` full backfill; the pool does NOT emit this —
@@ -653,6 +679,11 @@ PY
         export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
         ENABLED="\"enabledTables\":[$(_split_once_tables "$SCHEMA")]"
         ;;
+      serial)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ENABLED="\"enabledTables\":[$(_split_serial_tables "$SCHEMA")]"
+        ;;
       historical)
         export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
         export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
@@ -667,7 +698,7 @@ PY
         export GOVDATA_END_YEAR="${MODE#*-}"
         ENABLED="\"enabledTables\":[$(_split_year_tables "$SCHEMA")]"
         ;;
-      *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily, once, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+      *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily, once, serial, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     # census's ACS tables need enabledSources regardless of mode/enabledTables. banking has no
     # equivalent gating — every FDIC/CFPB table is unauthenticated (see BankingSchemaFactory).
