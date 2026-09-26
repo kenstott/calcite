@@ -4807,9 +4807,11 @@ partitionedTables:
       injury, from CDC's Mapping Injury, Overdose, and Violence (MIOV) tool. Both yearly and
       trailing-twelve-month periods. Currently updated. Complements cdc_county_overdose_deaths
       with suicide/homicide/firearm categories. Counts of 1-9 are suppressed for privacy (see
-      count_sup); when suppressed, rate is NULL (the source has no crude estimate) and rate_m
-      flags that a Bayesian small-area model was used instead, with its credible interval in
-      rate_m_ci.
+      count_sup); for those counties CDC publishes a Bayesian small-area model estimate in rate
+      instead of a crude rate, flagged by rate_m=true with its credible interval in rate_m_ci.
+      rate is therefore a crude rate where rate_m is false and a model estimate where rate_m is
+      true, so a population-weighted rate over many counties blends the two. rate is NULL only
+      where CDC publishes no estimate at all.
     columns:
       - name: geoid
         comment: "County FIPS code"
@@ -4840,12 +4842,12 @@ partitionedTables:
         type: VARCHAR
         nullable: true
       - name: rate
-        comment: "Crude death rate per 100,000 population; NULL when suppressed (see rate_m) rather than the source's -999 sentinel"
+        comment: "Death rate per 100,000 population: the crude rate when rate_m is false, CDC's Bayesian small-area model estimate when rate_m is true (count suppressed as 1-9). NULL where CDC publishes no estimate at all (the source's -999 sentinel is mapped to NULL)"
         type: DOUBLE
         nullable: true
         expression: 'CASE WHEN TRY_CAST(src."rate" AS DOUBLE) <= -900 THEN NULL ELSE TRY_CAST(src."rate" AS DOUBLE) END'
       - name: rate_m
-        comment: "True when the crude rate was suppressed and CDC substituted a Bayesian small-area model estimate (source field is a 0/1 flag, not a rate, despite its name)"
+        comment: "True when rate is a Bayesian small-area model estimate rather than a crude rate, which CDC does for counts of 1-9 (source field is a 0/1 flag, not a rate, despite its name)"
         type: BOOLEAN
         nullable: true
         expression: 'CASE WHEN TRY_CAST(src."rate_m" AS DOUBLE) = 1 THEN TRUE WHEN TRY_CAST(src."rate_m" AS DOUBLE) = 0 THEN FALSE ELSE NULL END'
