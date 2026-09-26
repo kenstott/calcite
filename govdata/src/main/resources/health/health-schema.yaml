@@ -5256,6 +5256,384 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: cdc_state_drug_overdose_deaths
+    freshness:
+      type: etag
+    comment: >
+      Provisional drug overdose death counts by state of occurrence and drug class, from CDC's
+      Vital Statistics Rapid Release (VSRR) program (Socrata xkb8-kh2a). Currently updated. Each
+      row is one jurisdiction x reporting month x indicator, and the period is a 12-month-ending
+      window: a row is the count over the twelve months ending in its year and month, not that
+      single month. Indicators are counts by ICD-10 drug class (all opioids T40.0-T40.4/T40.6,
+      natural and semi-synthetic opioids T40.2, methadone T40.3, synthetic opioids excluding
+      methadone T40.4 which is where illicit fentanyl sits, heroin T40.1, cocaine T40.5,
+      psychostimulants T43.6) plus total deaths, total drug overdose deaths and the percent of
+      deaths with a drug specified. Drug-class counts overlap because one death can involve
+      several drugs, so do not sum them. Jurisdictions are the 50 states, DC, PR, the national
+      total ('US') and New York City ('YC'). State of occurrence, not residence; for county
+      residence see cdc_county_overdose_deaths, and for national counts by named drug (fentanyl,
+      xylazine, oxycodone and others) see cdc_drug_overdose_deaths_by_drug.
+    columns:
+      - name: state
+        comment: "Jurisdiction postal abbreviation: 50 states, DC, PR, 'US' national total, 'YC' New York City"
+        type: VARCHAR
+        nullable: true
+      - name: state_name
+        comment: "Jurisdiction name"
+        type: VARCHAR
+        nullable: true
+      - name: year
+        comment: "Year in which the 12-month-ending period ends"
+        type: VARCHAR
+        nullable: true
+      - name: month
+        comment: "Month name in which the 12-month-ending period ends"
+        type: VARCHAR
+        nullable: true
+      - name: period
+        comment: "Period type, always '12 month-ending'"
+        type: VARCHAR
+        nullable: true
+      - name: indicator
+        comment: "Death measure or ICD-10 drug class, e.g. 'Synthetic opioids, excl. methadone (T40.4)', 'Opioids (T40.0-T40.4,T40.6)', 'Number of Drug Overdose Deaths', 'Percent with drugs specified'. Drug-class indicators overlap; do not sum them"
+        type: VARCHAR
+        nullable: true
+      - name: data_value
+        comment: "Reported value for the indicator: a death count, or a percent for 'Percent with drugs specified'. NULL where CDC suppresses it (see footnote)"
+        type: DOUBLE
+        nullable: true
+        expression: 'TRY_CAST(src."data_value" AS DOUBLE)'
+      - name: predicted_value
+        comment: "CDC's estimate of the final value after adjusting for records still pending; NULL where CDC publishes none"
+        type: DOUBLE
+        nullable: true
+        expression: 'TRY_CAST(src."predicted_value" AS DOUBLE)'
+      - name: percent_complete
+        comment: "Percent of expected death records received for this jurisdiction and period"
+        type: VARCHAR
+        nullable: true
+      - name: percent_pending_investigation
+        comment: "Percent of records still pending investigation; reported counts rise as these finalize"
+        type: VARCHAR
+        nullable: true
+      - name: footnote
+        comment: "Reliability or suppression note for the value, e.g. data not shown due to low data quality"
+        type: VARCHAR
+        nullable: true
+      - name: footnote_symbol
+        comment: "Symbol that marks the footnote on the source table"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_state_drug_overdose_deaths"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/xkb8-kh2a.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_state_drug_overdose_deaths
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_drug_overdose_deaths_by_drug
+    freshness:
+      type: etag
+    comment: >
+      Provisional national and HHS-region drug overdose death counts by named drug, from CDC's
+      Vital Statistics Rapid Release (VSRR) program (Socrata 8hzs-zshh). Currently updated. Drugs
+      are fentanyl, heroin, oxycodone, cocaine, methamphetamine, amphetamine, xylazine, ketamine,
+      MDMA, gabapentin, bromazolam and mitragynine. Each row is one jurisdiction x month x drug and
+      the period is a 12-month-ending window: a row is the count over the twelve months ending in
+      its month. A death is counted under every drug involved, so drug counts overlap and must not
+      be summed. Jurisdictions are 'United States' and the ten HHS regions ('Region 1' to
+      'Region 10'), by state of occurrence. This is the table for separating fentanyl and other
+      illicit-drug involvement from prescription opioids such as oxycodone; state-level opioid
+      drug classes are in cdc_state_drug_overdose_deaths, and prescription dispensing volume is in
+      cdc_opioid_dispensing_rates_state and cdc_opioid_dispensing_rates_county.
+    columns:
+      - name: data_as_of
+        comment: "Date this provisional data snapshot was generated"
+        type: VARCHAR
+        nullable: true
+      - name: death_year
+        comment: "Year in which the 12-month-ending period ends"
+        type: VARCHAR
+        nullable: true
+      - name: death_month
+        comment: "Month name in which the 12-month-ending period ends"
+        type: VARCHAR
+        nullable: true
+      - name: jurisdiction_occurrence
+        comment: "'United States' or an HHS region ('Region 1' to 'Region 10'), by state of occurrence"
+        type: VARCHAR
+        nullable: true
+      - name: drug_involved
+        comment: "Named drug involved in the death, e.g. Fentanyl, Heroin, Oxycodone, Xylazine. A death is counted under each drug involved, so rows overlap"
+        type: VARCHAR
+        nullable: true
+      - name: time_period
+        comment: "Period type, always '12 month-ending'"
+        type: VARCHAR
+        nullable: true
+      - name: month_ending_date
+        comment: "Last date of the 12-month-ending window"
+        type: VARCHAR
+        nullable: true
+      - name: drug_overdose_deaths
+        comment: "Provisional count of drug overdose deaths involving this drug over the 12-month-ending window"
+        type: DOUBLE
+        nullable: true
+        expression: 'TRY_CAST(src."drug_overdose_deaths" AS DOUBLE)'
+      - name: type
+        comment: "Constant record-type discriminator cdc_drug_overdose_deaths_by_drug"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/8hzs-zshh.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_drug_overdose_deaths_by_drug
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_opioid_dispensing_rates_state
+    freshness:
+      type: etag
+    comment: >
+      Retail-pharmacy opioid prescriptions dispensed per 100 persons per year, by state, from
+      CDC's opioid dispensing rate maps (IQVIA retail pharmacy prescription data), 2019 onward.
+      One row per state per year for the 50 states and DC. This is prescribing volume, not
+      overdose deaths and not pills or dosage: prescriptions per 100 residents. Pair with
+      cdc_state_drug_overdose_deaths to compare dispensing against overdose deaths, noting that
+      prescription opioids are no longer the main driver of overdose deaths. The county version is
+      cdc_opioid_dispensing_rates_county. Rates are revised in later updates.
+    columns:
+      - name: year
+        comment: "Calendar year of the dispensing rate"
+        type: INTEGER
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR" AS INTEGER)'
+      - name: state_name
+        comment: "State name"
+        type: VARCHAR
+        nullable: true
+        source: STATE_NAME
+      - name: state_abbr
+        comment: "State postal abbreviation"
+        type: VARCHAR
+        nullable: true
+        source: STATE_ABBREV
+      - name: state_fips
+        comment: "2-digit state FIPS code"
+        type: VARCHAR
+        nullable: true
+        expression: 'LPAD(src."STATE_FIPS", 2, ''0'')'
+      - name: opioid_dispensing_rate
+        comment: "Opioid prescriptions dispensed at retail pharmacies per 100 persons in the year"
+        type: DOUBLE
+        nullable: true
+        expression: 'TRY_CAST(src."opioid_dispensing_rate" AS DOUBLE)'
+      - name: rate_category
+        comment: "CDC's map legend bin for the rate, e.g. '>= 49.9' or '33.9 to < 40.4'; the bin edges are those of the latest map"
+        type: VARCHAR
+        nullable: true
+        source: "Opioid Dispensing Rate (per 100 persons)"
+      - name: type
+        comment: "Constant record-type discriminator cdc_opioid_dispensing_rates_state"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://www.cdc.gov/overdose-prevention/modules/rx-dispensing/state-opioid-dispensing.json"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_opioid_dispensing_rates_state
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_opioid_dispensing_rates_county
+    freshness:
+      type: etag
+    comment: >
+      Retail-pharmacy opioid prescriptions dispensed per 100 persons per year, by county, from
+      CDC's opioid dispensing rate maps (IQVIA retail pharmacy prescription data), 2019 onward.
+      One row per county per year covering about 98% of US counties; counties CDC does not
+      publish a rate for carry a NULL opioid_dispensing_rate. This is prescribing volume, not
+      overdose deaths: prescriptions per 100 residents. Join county overdose deaths on the
+      5-digit FIPS code (cdc_county_overdose_deaths.fips). The state version is
+      cdc_opioid_dispensing_rates_state. Rates are revised in later updates.
+    columns:
+      - name: year
+        comment: "Calendar year of the dispensing rate"
+        type: INTEGER
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR" AS INTEGER)'
+      - name: state_name
+        comment: "State name"
+        type: VARCHAR
+        nullable: true
+        source: STATE_NAME
+      - name: state_abbr
+        comment: "State postal abbreviation"
+        type: VARCHAR
+        nullable: true
+        source: STATE_ABBREV
+      - name: county_name
+        comment: "County name"
+        type: VARCHAR
+        nullable: true
+        source: COUNTY_NAME
+      - name: county_fips
+        comment: "5-digit combined state+county FIPS code"
+        type: VARCHAR
+        nullable: true
+        source: STATE_COUNTY_FIP_U
+      - name: opioid_dispensing_rate
+        comment: "Opioid prescriptions dispensed at retail pharmacies per 100 persons in the year; NULL where CDC publishes no rate ('Data unavailable')"
+        type: DOUBLE
+        nullable: true
+        expression: 'TRY_CAST(src."opioid_dispensing_rate" AS DOUBLE)'
+      - name: rate_category
+        comment: "CDC's map legend bin for the rate, e.g. '< 17.7' or 'Data unavailable'; the bin edges are those of the latest map"
+        type: VARCHAR
+        nullable: true
+        source: "Opioid Dispensing Rate (per 100 persons)"
+      - name: type
+        comment: "Constant record-type discriminator cdc_opioid_dispensing_rates_county"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://www.cdc.gov/overdose-prevention/modules/rx-dispensing/county-opioid-dispensing.json"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_opioid_dispensing_rates_county
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: cdc_county_injury_mortality
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when

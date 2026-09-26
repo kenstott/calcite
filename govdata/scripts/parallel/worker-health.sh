@@ -207,7 +207,7 @@ run_all_health_tables() {
 # 15s-per-request budget for no new data). Same rationale as cyber_threat being daily-only in
 # worker-cyber.sh.
 DAILY_ONLY_GROUPS=(
-  "health-cdc-geo|cdc_county_overdose_deaths,cdc_county_injury_mortality,cdc_state_vital_provisional,cdc_teen_birth_rates_county,cdc_places_county"
+  "health-cdc-geo|cdc_county_overdose_deaths,cdc_county_injury_mortality,cdc_state_vital_provisional,cdc_teen_birth_rates_county,cdc_places_county,cdc_state_drug_overdose_deaths,cdc_drug_overdose_deaths_by_drug,cdc_opioid_dispensing_rates_state,cdc_opioid_dispensing_rates_county"
   # County Health Rankings' 13MB annual CSV, isolated so its one long download cannot stall the
   # Socrata group above.
   "health-chr|chr_premature_death,chr_premature_death_trends"
