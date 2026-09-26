@@ -5418,7 +5418,7 @@ partitionedTables:
         - name: tablename
           type: VARCHAR
     comment: >
-      National Income and Product Accounts (NIPA) data from BEA covering comprehensive economic statistics. Includes ALL NIPA tables across 8 sections: 1=Domestic Product & Income (GDP, national income), 2=Personal Income & Outlays (wages, consumer spending), 3=Government (receipts, expenditures), 4=Foreign Transactions (exports, imports), 5=Saving & Investment (capital formation), 6=Industry (sectoral data), 7=Supplemental (per capita, additional details), 8=Not Seasonally Adjusted. Tables dynamically discovered from BEA reference catalog.
+      National Income and Product Accounts (NIPA) data from BEA for a curated set of 18 tables, listed in the tablename dimension (query national_accounts_tables for the description of each table_id): GDP and its real/chained forms (T10101, T10105, T10301, T10303), personal income and consumption (T20100, T20200), government receipts and expenditures (T30100, T30200), foreign transactions (T40100, T40205B), national income by type of income including corporate profits with IVA and CCAdj and profits after tax (T11200), corporate-business gross value added and unit profit (T11400, T11500), corporate profits by industry (T61600D before/after adjustments, T61700D before tax, T61900D after tax, T62100D undistributed) and the NIPA-to-IRS profits reconciliation (T71600). T61700D, T61900D, T62100D and T71600 are annual only (frequency A). Other NIPA tables are not loaded.
     columns:
       # Source columns from NationalAccountsTransformer output (snake_case)
       - name: table_name
@@ -5574,6 +5574,15 @@ partitionedTables:
         # Section 4: Foreign Transactions
         - T40100   # Foreign Transactions in GDP
         - T40205B  # Exports and Imports of Goods and Services
+        # Corporate profits and national income by type of income
+        - T11200   # National Income by Type of Income (corporate profits with IVA and CCAdj, profits after tax)
+        - T11400   # Gross Value Added of Domestic Corporate Business
+        - T11500   # Price, Costs, and Profit Per Unit of Real Gross Value Added of Nonfinancial Domestic Corporate Business
+        - T61600D  # Corporate Profits by Industry
+        - T61700D  # Corporate Profits Before Tax by Industry (annual only)
+        - T61900D  # Corporate Profits After Tax by Industry (annual only)
+        - T62100D  # Undistributed Corporate Profits by Industry (annual only)
+        - T71600   # Corporate Profits, Taxes, and Dividends in the NIPA vs. IRS Measures (annual only)
 
     # Materialization configuration
     materialize:
