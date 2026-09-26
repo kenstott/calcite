@@ -4691,7 +4691,18 @@ partitionedTables:
       notable codes for capital-vs-operating comparisons: E12/F12 (elementary-
       secondary education current operations / construction), E36/F36 (hospitals
       current operations / construction), E61/F61 (parks & recreation current
-      operations / construction). There is no single item code for "Total
+      operations / construction). Local water and sewer utilities: A91 water
+      supply utility revenue (charges billed to customers) and A80 sewerage
+      charges, with E91/E80 the matching operating expenditure and F91/F80
+      construction; A81/E81 are solid waste. These give what each city, county,
+      township or special district collects and spends on water and sewer service
+      per year (2022: ~20k units report A91) — dollar totals, not per-customer
+      rates or tariffs. For a per-person comparison, divide by the local
+      population (geo/census tables via county_fips; environment.drinking_water
+      has population_served_count per water system but shares no key with
+      government units).
+      For the national trend in water/sewer prices see the CPI series
+      CUUR0000SEHG02 in econ.inflation_metrics. There is no single item code for "Total
       Taxes" — T01 is Property Tax specifically (the classification manual's
       largest single tax category, not an aggregate); a total-taxes figure for
       a unit or state requires summing every T-prefixed row (T01, T09-T16,
