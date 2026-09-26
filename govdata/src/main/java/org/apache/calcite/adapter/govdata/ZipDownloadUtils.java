@@ -260,16 +260,18 @@ public final class ZipDownloadUtils {
     }
     final StorageProvider sp = provider;
 
-    // Check cache first
+    // Check cache first. Object stores list by key prefix, so the listing must end at a
+    // directory boundary: "…/title=05" alone would also return everything under "…/title=05a/".
+    String cacheDir = cachePath.endsWith("/") ? cachePath : cachePath + "/";
     try {
-      List<StorageProvider.FileEntry> cached = sp.listFiles(cachePath, true);
+      List<StorageProvider.FileEntry> cached = sp.listFiles(cacheDir, true);
       if (!cached.isEmpty()) {
         LOGGER.info("Cache hit: {} ({} files) — restoring to temp dir", cachePath, cached.size());
         File tempDir = java.nio.file.Files.createTempDirectory(prefix + "-cached-").toFile();
         for (StorageProvider.FileEntry entry : cached) {
           if (entry.isDirectory()) continue;
           String entryPath = entry.getPath();
-          int stripLen = cachePath.endsWith("/") ? cachePath.length() : cachePath.length() + 1;
+          int stripLen = cacheDir.length();
           String relative = stripLen <= entryPath.length()
               ? entryPath.substring(stripLen) : entryPath;
           File dest = new File(tempDir, relative);
