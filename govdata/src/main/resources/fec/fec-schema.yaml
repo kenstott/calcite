@@ -1760,8 +1760,14 @@ partitionedTables:
       - name: support_oppose
         type: string
         nullable: true
-        comment: Support/oppose indicator (S=support, O=oppose)
-        source: sup_opp
+        comment: >
+          Support/oppose indicator (S=support, O=oppose). Case is normalized to upper case
+          because some filers enter a lowercase 's'. A value that is not S or O (a filer
+          keystroke error such as the digit 0) is NULL; the amendment rows that supersede
+          such a filing carry the corrected indicator.
+        expression: >
+          CASE WHEN UPPER(TRIM(CAST(src."sup_opp" AS VARCHAR))) IN ('S', 'O')
+               THEN UPPER(TRIM(CAST(src."sup_opp" AS VARCHAR))) END
       - name: purpose
         type: string
         nullable: true
