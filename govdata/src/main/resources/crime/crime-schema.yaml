@@ -414,6 +414,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
@@ -508,6 +509,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
@@ -652,6 +654,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
@@ -722,6 +725,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
@@ -794,6 +798,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
@@ -1636,6 +1641,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
@@ -1711,6 +1717,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
@@ -1785,6 +1792,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
