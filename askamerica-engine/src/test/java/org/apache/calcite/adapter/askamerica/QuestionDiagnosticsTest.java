@@ -347,6 +347,14 @@ class QuestionDiagnosticsTest {
         "flagging every percent change would make the warning noise");
   }
 
+  @Test void aTrendPercentIsLegitimatelyNegative() {
+    ArrayNode arr = rows("[{\"trend_pct\":-21.7},{\"trend_pct\":-6.2}]");
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT trend_pct FROM crime.cde_trends", arr, 500);
+    assertFalse(hasType(env, "broken_field"),
+        "a year-over-year trend percentage is signed by definition");
+  }
+
   @Test void anAlmostEntirelyNullColumnIsFlaggedAsUnusable() {
     ArrayNode arr = MAPPER.createArrayNode();
     for (int i = 0; i < 30; i++) {

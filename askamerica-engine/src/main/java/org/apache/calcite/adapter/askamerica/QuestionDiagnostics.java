@@ -1216,7 +1216,7 @@ final class QuestionDiagnostics {
                 // for a "defect" that was never actually one.
                 && !lower.contains("change") && !lower.contains("growth")
                 && !lower.contains("delta") && !lower.contains("diff")
-                && !lower.contains("chg");
+                && !lower.contains("chg") && !lower.contains("trend");
             boolean count = lower.equals("population") || lower.endsWith("_count")
                 || lower.startsWith("count_") || lower.endsWith("_total")
                 || lower.startsWith("total_");
