@@ -2393,6 +2393,125 @@ partitionedTables:
         compactionMinFiles: 5
         overwritePartitions: true
 
+  # --- CFOI STATE x INDUSTRY FATAL INJURY RATES ---
+  - name: cfoi_state_industry_rates
+    pattern: "type=cfoi_state_industry_rates/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      BLS Census of Fatal Occupational Injuries (CFOI) workplace fatality rates by state
+      of incident and industry sector, all ownerships (private and government combined),
+      one partition per reference year from 2018 through the newest year BLS has published.
+      The rate is fatal work injuries per 100,000 full-time-equivalent workers, computed by
+      BLS from CFOI counts and state hours worked. One row per (jurisdiction, industry_sector,
+      year) with a published rate; industry_sector is 'All industries' (the jurisdiction's
+      overall rate) or one of 13 sectors: Agriculture, forestry, fishing and hunting; Mining,
+      quarrying, and oil and gas extraction; Construction; Manufacturing; Wholesale and retail
+      trade; Transportation and utilities; Information; Financial activities; Professional and
+      business services; Education and health services; Leisure and hospitality; Other
+      services, except public administration; Public administration. Answers "which state and
+      industry combination has the highest fatality rate" and "how do death rates differ
+      between industries and states". Where BLS printed "-" (fewer cases than the publication
+      threshold, or no data) there is no row, not a zero, so most jurisdiction-by-sector cells
+      are absent; the overall rate is published for every jurisdiction. Jurisdictions are the
+      50 states, DC (jurisdiction_type DISTRICT) and New York City (CITY), which BLS lists as
+      an indented sub-row of New York: it is a subset of the New York rows, so do not add it to
+      them, and its state_fips is null. State rows include government workers within their
+      industry sector and BLS warns state rates are not comparable across states with different
+      industry mixes or with national industry rates. Only rates are held here, not counts of
+      deaths. Reference year Y is published by BLS between December of Y+1 and February of Y+2.
+
+    dimensions:
+      type:
+        - cfoi_state_industry_rates
+      year:
+        type: yearRange
+        # Reference year 2018 is the first state-by-industry page BLS serves (earlier years
+        # redirect to the BLS home page); dataLag 1 maps publish year to reference year, so the
+        # first publish year is 2019.
+        start: "${GOVDATA_START_YEAR:2019}"
+        minYear: 2019
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1
+        # BLS releases CFOI between December and February after the reference year; December is
+        # the earliest month the newest reference year can exist. A run inside the release window
+        # before the page is served fails loudly (the page is not a data table) instead of
+        # loading nothing.
+        releaseMonth: 12
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: CFOI reference year (the calendar year of the fatal injuries, not the publish year)
+      - name: jurisdiction_name
+        type: string
+        nullable: false
+        comment: Row label as BLS prints it - a state name, "District of Columbia" or "New York City"
+      - name: jurisdiction_type
+        type: string
+        nullable: false
+        comment: STATE | DISTRICT (District of Columbia) | CITY (New York City, a subset of the New York row)
+      - <<: *state_fips
+        comment: >
+          2-digit state FIPS (FK to geo.states); null for New York City, whose rate is already
+          contained in the New York row
+      - name: industry_sector
+        type: string
+        nullable: false
+        comment: >
+          BLS industry sector as headed on the page (NAICS 2022 sector groupings), or
+          'All industries' for the jurisdiction's overall rate across every sector
+      - name: fatal_injury_rate
+        type: double
+        nullable: false
+        comment: >
+          Fatal work injuries per 100,000 full-time-equivalent workers, one decimal place as
+          published; computed by BLS as fatalities / hours worked x 200,000,000
+
+    source:
+      type: http
+      url: "https://www.bls.gov/iif/state-data/fatal-injury-rates-by-state-and-industry-{effective_year}.htm"
+      method: GET
+      headers:
+        # www.bls.gov 403s a fake-browser or blank User-Agent; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.CfoiStateIndustryRatesTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=cfoi_state_industry_rates/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
   # --- NATIONAL INDUSTRY-BY-OCCUPATION EMPLOYMENT MIX ---
   - name: industry_occupation_employment
     # Same BLS OEWS survey as state_occupation_employment, same snapshot caveat: BLS
@@ -9173,6 +9292,20 @@ constraints:
         targetColumns:
           - supersector_code
         comment: Links to NAICS supersector reference for industry name lookups
+
+  cfoi_state_industry_rates:
+    primaryKey:
+      - year
+      - jurisdiction_name
+      - industry_sector
+    foreignKeys:
+      - columns:
+          - state_fips
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns:
+          - state_fips
+        comment: Links state fatality rates to geographic and demographic data for state-level analysis
 
   industry_occupation_employment:
     primaryKey:
