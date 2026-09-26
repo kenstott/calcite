@@ -558,7 +558,7 @@ partitionedTables:
       checkedAt: "2026-10-04T04:21:20Z"
     partitions: *standard_partitions
     comment: >
-      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted), and CPS labor force/employment/unemployment level and unemployment rate broken out by veteran status (total veterans, nonveterans, Gulf War-era II veterans; not seasonally adjusted). Updated monthly with seasonal adjustments. Each row is the CURRENT (most-revised) value only; for first-print vs. revised payroll figures (size and direction of revisions, benchmark revisions) use ces_revision_vintages, which carries the as-published history of total nonfarm and total private payrolls.
+      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted), and CPS labor force/employment/unemployment level unemployment rate, and labor force participation rate broken out by veteran status (total veterans, nonveterans, Gulf War-era II veterans; not seasonally adjusted). Updated monthly with seasonal adjustments. Each row is the CURRENT (most-revised) value only; for first-print vs. revised payroll figures (size and direction of revisions, benchmark revisions) use ces_revision_vintages, which carries the as-published history of total nonfarm and total private payrolls.
 
     # Dimension definitions for iteration
     dimensions:
@@ -580,7 +580,7 @@ partitionedTables:
         comment: >
           BLS series identifier. This table is long-format: one row per (series, period),
           so ALWAYS filter on series — mixing series in an aggregate mixes incompatible units
-          (percent, thousands of persons, weeks, hours). The 35 series loaded are:
+          (percent, thousands of persons, weeks, hours). The 50 series loaded are:
           LNS14000000 unemployment rate, 16+ (percent);
           LNS11300000 labor force participation rate, 16+ (percent);
           LNS12300000 employment-population ratio, 16+ (percent);
@@ -611,7 +611,9 @@ partitionedTables:
           adjusted veteran breakout) —
           LNU01049526/LNU02049526/LNU03049526/LNU04049526 total veterans,
           LNU01049601/LNU02049601/LNU03049601/LNU04049601 nonveterans,
-          LNU01066408/LNU02066408/LNU03066408/LNU04066408 Gulf War-era II veterans.
+          LNU01066408/LNU02066408/LNU03066408/LNU04066408 Gulf War-era II veterans;
+          labor force participation rate (percent) by veteran status, 18+, not seasonally adjusted —
+          LNU01349526 total veterans, LNU01349601 nonveterans, LNU01366408 Gulf War-era II veterans.
           All LNS (CPS) series are seasonally adjusted; the LNU veteran-status series are not.
           Use SELECT DISTINCT series to see what a given partition actually contains.
       - name: year
@@ -775,6 +777,12 @@ partitionedTables:
           - "LNU02066408"   # Employment level - Gulf War-era II veterans
           - "LNU03066408"   # Unemployment level - Gulf War-era II veterans
           - "LNU04066408"   # Unemployment rate - Gulf War-era II veterans
+          # CPS labor force participation rate (percent) by veteran status, 18+, not seasonally
+          # adjusted. This list is at BLS's 50-series-per-request cap; a further series needs its
+          # own request body.
+          - "LNU01349526"   # Labor force participation rate - total veterans
+          - "LNU01349601"   # Labor force participation rate - nonveterans
+          - "LNU01366408"   # Labor force participation rate - Gulf War-era II veterans
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
