@@ -4572,7 +4572,13 @@ partitionedTables:
       so this table has no year fetch dimension — the provider parses the full history
       from one download and materialize partitions by the year column found in each row,
       same as fiscal's other single-workbook bulk sources. Excludes P-EBT (Pandemic EBT)
-      figures, which USDA reports separately.
+      figures, which USDA reports separately. FY2019 (Oct 2018-Sep 2019) carries a
+      source-published distortion: because of the partial federal government shutdown,
+      most February 2019 benefits were issued in January 2019, so month 1 of FY2019
+      shows roughly double a normal month's total_benefits_usd and month 2 shows
+      almost none, and the per-state fiscal-year Total row (month IS NULL) averages
+      persons and households over those two months as published, which pulls the FY2019
+      average persons_participating below the surrounding months.
 
     dimensions:
       type:

@@ -101,9 +101,12 @@ public class SnapBenefitsProvider implements DataProvider {
    */
   private static final int NEW_LAYOUT_START_YEAR = 2015;
 
-  /** Matches a monthly data row's label, e.g. {@code "Oct 2023"}. */
+  /**
+   * Matches a monthly data row's label, e.g. {@code "Oct 2023"}, with an optional trailing
+   * workbook footnote marker as in FY2019's {@code "Jan 2019 /2"} and {@code "Feb 2019 /2"}.
+   */
   private static final Pattern MONTH_ROW = Pattern.compile(
-      "^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{4}$");
+      "^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{4}( /\\d+)?$");
 
   private static final Map<String, Integer> MONTH_NUM = buildMonthMap();
 
