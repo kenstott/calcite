@@ -230,7 +230,7 @@ partitionedTables:
       annual file carries no AQI column, so aqi is always null here — for AQI use
       air_quality_daily, which is also site-level. Keyless national bulk file
       annual_conc_by_monitor_<year>.zip. Moved here from the weather schema.
-      Joins geo.states via state_fips and geo.counties via county_fips.
+      Joins geo.state_ref via state_fips and geo.counties via county_fips.
     dqRowLimit: 25000
 
     dimensions:
@@ -339,7 +339,7 @@ partitionedTables:
       (county-level, no AQI), this table retains site_number and a real AQI
       value. Keyless national bulk files daily_<param>_<year>.zip, one per
       pollutant-year. Moved here from the weather schema. Joins
-      geo.states/geo.counties.
+      geo.state_ref/geo.counties.
     dqRowLimit: 5000
 
     dimensions:
@@ -1507,7 +1507,7 @@ partitionedTables:
       connections count, owner type, and primary source-water type (ground vs.
       surface). Envirofacts efservice full-state CSV (active systems only).
       Snapshot. pwsid joins drinking_water_violations; state_abbr joins
-      geo.states.
+      geo.state_ref.
 
     dimensions:
       type:
@@ -2374,7 +2374,7 @@ partitionedTables:
       compilation once every 5 years (Circulars 1950-2015 then per-category ScienceBase
       releases from 2020); this table currently holds only the 2015 vintage — the last year
       published as one combined all-sector county file — see the dataset_type note above for
-      why later vintages are not mechanically addable. Joins geo.states via state_fips and
+      why later vintages are not mechanically addable. Joins geo.state_ref via state_fips and
       geo.counties via county_fips.
 
     dimensions:

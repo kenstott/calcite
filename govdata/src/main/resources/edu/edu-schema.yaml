@@ -82,7 +82,7 @@ partitionedTables:
       - name: fips
         type: int
         nullable: true
-        comment: State FIPS code (integer 1-56) — FK to geo.states.state_fips
+        comment: State FIPS code (integer 1-56) — FK to geo.state_ref.state_fips
       - name: state_abbr
         type: string
         nullable: true
@@ -302,7 +302,7 @@ partitionedTables:
       - name: fips
         type: int
         nullable: true
-        comment: State FIPS (integer) — FK to geo.states.state_fips
+        comment: State FIPS (integer) — FK to geo.state_ref.state_fips
       - name: county_code
         type: string
         nullable: true
@@ -511,7 +511,7 @@ partitionedTables:
       NAEP (National Assessment of Educational Progress) state-level mean scale scores for
       grade 4 and grade 8 math/reading. One row per jurisdiction × year × subject × grade ×
       variable_type × subgroup_name; jurisdiction=0 is the national aggregate, otherwise state
-      FIPS (joins to ccd_districts.fips or geo.states.state_fips). Administered in odd years
+      FIPS (joins to ccd_districts.fips or geo.state_ref.state_fips). Administered in odd years
       2013-2019, then 2022 and 2024 (COVID-19 postponed the 2021 cycle) — not a strict biennial
       cadence. Proficiency-level (below_basic/basic/proficient/advanced) breakdowns are in the
       separate naep_achievement_levels table, joinable via the full key.
@@ -1095,7 +1095,7 @@ partitionedTables:
       - name: state_abbr
         type: string
         nullable: true
-        comment: State abbreviation — FK to geo.states.state_abbr
+        comment: State abbreviation — FK to geo.state_ref.state_abbr
       - name: zip
         type: string
         nullable: true
@@ -1103,7 +1103,7 @@ partitionedTables:
       - name: fips
         type: int
         nullable: true
-        comment: State FIPS (integer) — FK to geo.states.state_fips
+        comment: State FIPS (integer) — FK to geo.state_ref.state_fips
       - name: county_fips
         type: int
         nullable: true
@@ -1915,7 +1915,7 @@ partitionedTables:
       - name: state
         type: string
         nullable: true
-        comment: State abbreviation — FK to geo.states.state_abbr
+        comment: State abbreviation — FK to geo.state_ref.state_abbr
       - name: ownership
         type: int
         nullable: true
@@ -2438,7 +2438,7 @@ partitionedTables:
         type: string
         nullable: true
         comment: >
-          2-digit state FIPS code — FK to geo.states.state_fips. From source column FIPST for
+          2-digit state FIPS code — FK to geo.state_ref.state_fips. From source column FIPST for
           FY2022 and later; earlier files publish a narrower header with no FIPST at all, so it
           is taken from the leading two digits of CONUM (a county FIPS is the state FIPS plus a
           3-digit county code). Null for the handful of multi-county educational cooperatives
@@ -2680,7 +2680,7 @@ partitionedTables:
       - name: fips
         type: int
         nullable: true
-        comment: State FIPS code — FK to geo.states.state_fips
+        comment: State FIPS code — FK to geo.state_ref.state_fips
       - name: read_test_num_valid
         type: int
         nullable: true
@@ -3321,10 +3321,10 @@ views:
 
   - name: state_naep_geography
     comment: >
-      NAEP state-level assessment scores joined to geo.states for state name
+      NAEP state-level assessment scores joined to geo.state_ref for state name
       and geographic context. Filters to all-student total rows to avoid
       double-counting disaggregations. jurisdiction=0 (national aggregate)
-      will not join to geo.states and is retained with null geo fields.
+      will not join to geo.state_ref and is retained with null geo fields.
       Requires geo schema present in the same Calcite model.
     sql: >
       SELECT
@@ -3338,7 +3338,7 @@ views:
         n.avg_score,
         n.is_displayable
       FROM naep_scores n
-      LEFT JOIN geo.states s
+      LEFT JOIN geo.state_ref s
         ON n.jurisdiction = s.state_fips
       WHERE n.variable_type = 'TOTAL'
         AND n.subgroup_name = 'All students'
@@ -3423,7 +3423,7 @@ constraints:
         targetSchema: "geo"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: Links NAEP state to geo.states; jurisdiction=0 (national aggregate) will not match
+        comment: Links NAEP state to geo.state_ref; jurisdiction=0 (national aggregate) will not match
 
   naep_achievement_levels:
     primaryKey: [year, jurisdiction, subject, grade, variable_type, subgroup_name, level]

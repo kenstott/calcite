@@ -31,7 +31,7 @@ comment: >
   (net sales, outstanding sales, and shipments by commodity and destination
   country, published every Thursday); plus USGS estimated agricultural
   pesticide use by county (NAWQA Pesticide National Synthesis Project). County-
-  and state-level, joinable to geo.counties / geo.states via state_fips_code +
+  and state-level, joinable to geo.counties / geo.state_ref via state_fips_code +
   county_code, to disasters (drought/storm) for yield-impact analysis, and to
   econ.fred_indicators for commodity-price context.
 
@@ -133,7 +133,7 @@ column_templates:
       type: string
       source: state_fips_code
       nullable: true
-      comment: 2-digit state FIPS code (FK to geo.states.state_fips)
+      comment: 2-digit state FIPS code (FK to geo.state_ref.state_fips)
     - name: state_ansi
       type: string
       source: state_ansi
@@ -357,7 +357,7 @@ partitionedTables:
       identical annual total ('TOTAL'/'YEAR') for the same commodity/class/practice/
       geography, NassQuickStatsTransformer drops the CENSUS duplicate so the annual series
       stays single-valued and comparable year over year. Joins to geo.counties via the
-      derived county_fips column and to geo.states via state_fips_code; also joinable to
+      derived county_fips column and to geo.state_ref via state_fips_code; also joinable to
       disasters drought/storm tables by county+year for yield-impact analysis.
 
     dimensions:
@@ -469,7 +469,7 @@ partitionedTables:
       'FIRST OF DEC') — summing across reference_period_desc for those classes double-,
       triple-, or 12x-counts the same animals rather than adding distinct populations.
       Filter to a single reference_period_desc before aggregating. Joins to geo.counties
-      via the derived county_fips column and to geo.states via state_fips_code.
+      via the derived county_fips column and to geo.state_ref via state_fips_code.
 
     dimensions:
       type:
@@ -577,7 +577,7 @@ partitionedTables:
       carries organic-status, financing-source, and NAICS-classification breakdowns
       for the same farm population — filter statisticcat_desc/domain_desc for the
       measure needed. Joins to geo.counties via the derived county_fips column and
-      to geo.states via state_fips_code; combine with nass_land_values (land value
+      to geo.state_ref via state_fips_code; combine with nass_land_values (land value
       per acre) for farm-consolidation-vs-land-value analysis.
 
     dimensions:
@@ -674,7 +674,7 @@ partitionedTables:
       area, farm-operation counts on that land, and landlord/tenant statistics
       (statisticcat_desc AREA/OPERATIONS/TENANTS) — a different, land-tenure-focused
       angle from nass_farm_operations' farm-population angle. Joins to geo.counties
-      via the derived county_fips column and to geo.states via state_fips_code;
+      via the derived county_fips column and to geo.state_ref via state_fips_code;
       combine with nass_farm_operations (farm count/size) for
       farm-consolidation-vs-land-value analysis.
 
@@ -784,7 +784,7 @@ partitionedTables:
         type: string
         source: state_fips
         nullable: true
-        comment: 2-digit state FIPS (FK to geo.states.state_fips)
+        comment: 2-digit state FIPS (FK to geo.state_ref.state_fips)
       - name: state_abbr
         type: string
         source: state_abbr
@@ -1011,7 +1011,7 @@ partitionedTables:
         type: string
         source: state_fips
         nullable: true
-        comment: 2-digit state FIPS (FK to geo.states.state_fips)
+        comment: 2-digit state FIPS (FK to geo.state_ref.state_fips)
       - name: state_abbr
         type: string
         source: state_abbr
@@ -1227,7 +1227,7 @@ partitionedTables:
       receipts, government payments, production expenses, net farm income, and
       balance-sheet items. Tall — one row per year x state x variable. Values are
       generally thousands of USD (see unit_desc; some rows are Percent/Ratio/per
-      farm). Joins to geo.states via the state USPS abbreviation.
+      farm). Joins to geo.state_ref via the state USPS abbreviation.
 
     dimensions:
       type:
@@ -1243,7 +1243,7 @@ partitionedTables:
         type: string
         source: state
         nullable: true
-        comment: "USPS state abbreviation, or 'US' for the national total (FK to geo.states.state_abbr)"
+        comment: "USPS state abbreviation, or 'US' for the national total (FK to geo.state_ref.state_abbr)"
       - name: artificial_key
         type: string
         source: artificial_key
@@ -1376,7 +1376,7 @@ partitionedTables:
         type: string
         source: state_fips
         nullable: true
-        comment: 2-digit state FIPS (FSA state code; FK to geo.states.state_fips)
+        comment: 2-digit state FIPS (FSA state code; FK to geo.state_ref.state_fips)
       - name: county_fips
         type: string
         source: county_fips
@@ -1829,7 +1829,7 @@ partitionedTables:
       in 2015 (the survey provider discontinued those estimates) and excludes the
       separate state-level-by-crop-group series (different grain, not in this
       table). Joins to geo.counties via the derived county_fips column and to
-      geo.states via state_fips_code.
+      geo.state_ref via state_fips_code.
 
     dimensions:
       type:
@@ -1850,7 +1850,7 @@ partitionedTables:
         type: string
         source: state_fips_code
         nullable: true
-        comment: 2-digit state FIPS code (FK to geo.states.state_fips)
+        comment: 2-digit state FIPS code (FK to geo.state_ref.state_fips)
       - name: county_fips_code
         type: string
         source: county_fips_code
@@ -2065,7 +2065,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: NASS state FIPS to geo.states
+        comment: NASS state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -2089,7 +2089,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: RMA state FIPS to geo.states
+        comment: RMA state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -2135,7 +2135,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: RMA state FIPS to geo.states
+        comment: RMA state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -2160,7 +2160,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_abbr]
-        comment: ERS state USPS abbreviation to geo.states (excludes the 'US' national total)
+        comment: ERS state USPS abbreviation to geo.state_ref (excludes the 'US' national total)
 
   fsa_commodity_payments:
     # One aggregated row per disbursement year x program year x county x program.
@@ -2175,7 +2175,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: FSA state FIPS to geo.states
+        comment: FSA state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -2198,7 +2198,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: NASS state FIPS to geo.states
+        comment: NASS state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -2223,7 +2223,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: NASS state FIPS to geo.states
+        comment: NASS state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -2246,7 +2246,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: NASS state FIPS to geo.states
+        comment: NASS state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -2294,7 +2294,7 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
-        comment: USGS state FIPS to geo.states
+        comment: USGS state FIPS to geo.state_ref
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties

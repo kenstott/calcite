@@ -7761,7 +7761,7 @@ views:
         SUM(TRY_CAST(m.number_of_prescriptions    AS BIGINT)) AS total_prescriptions,
         COUNT(DISTINCT m.ndc)                                  AS distinct_drugs
       FROM medicaid_drug_utilization m
-      LEFT JOIN "geo"."states" s ON m.state = s.state_abbr
+      LEFT JOIN "geo"."state_ref" s ON m.state = s.state_abbr
       GROUP BY s.state_fips, s.state_name, m.state, m.year
 
   - name: mortality_brfss_by_state
@@ -7854,7 +7854,7 @@ views:
       FROM cms_hospital_quality h
       LEFT JOIN "geo"."zip_county_crosswalk" zc ON h.zip_code = zc.zip
       LEFT JOIN "geo"."counties"              c  ON zc.county_fips = c.county_fips
-      LEFT JOIN "geo"."states"               gs  ON c.state_fips = gs.state_fips
+      LEFT JOIN "geo"."state_ref"               gs  ON c.state_fips = gs.state_fips
       GROUP BY c.county_fips, c.county_name, c.state_fips, gs.state_abbr
 
   - name: drug_spend_trends

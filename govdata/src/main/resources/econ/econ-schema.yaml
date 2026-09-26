@@ -9656,7 +9656,7 @@ constraints:
         targetColumns:
           - state_abbr
         comment: >
-          Origin state (USPS abbreviation) links to geo.states for state name/FIPS/geometry.
+          Origin state (USPS abbreviation) links to geo.state_ref for state name/FIPS (geo.states carries boundary geometry per TIGER vintage year).
           Metadata only; the state='-' U.S.-total roll-up rows do not resolve.
       - columns:
           - country_code
@@ -10124,7 +10124,7 @@ constraints:
       - year
     # No geo_fips FK: unlike regional_income (state-only), this table's geo_fips is a state
     # FIPS for tablename=SARPP, an MSA/CBSA code for tablename=MARPP, or '00000' (the national
-    # baseline row) — a single FK to geo.states would misrepresent the MARPP and national rows.
+    # baseline row) — a single FK to geo.state_ref would misrepresent the MARPP and national rows.
 
   regional_income:
     primaryKey:
@@ -10568,7 +10568,7 @@ views:
       industry_code combination would cross-multiply against every JOLTS month x
       metric row for no added meaning. jolts_month (period, e.g. 'M01') is exposed
       so the grain — one row per state+year+jolts_month+jolts_series — is explicit
-      in the output. Use state_fips to join with geo.states, census, or health
+      in the output. Use state_fips to join with geo.state_ref, census, or health
       schemas.
     sql: >
       SELECT
@@ -10588,7 +10588,7 @@ views:
       FROM state_wages w
       LEFT JOIN jolts_state j
         ON w.state_fips = j.state_fips AND w.year = j.year
-      LEFT JOIN "geo"."states" gs ON w.state_fips = gs.state_fips
+      LEFT JOIN "geo"."state_ref" gs ON w.state_fips = gs.state_fips
       WHERE w.own_code = '0' AND w.industry_code = '10'
 
   - name: fdi_data

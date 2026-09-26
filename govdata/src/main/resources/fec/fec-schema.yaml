@@ -3669,7 +3669,7 @@ views:
         cd.cd_fips,
         cd.cd_name
       FROM candidates c
-      LEFT JOIN "geo"."states" gs ON c.state = gs.state_abbr
+      LEFT JOIN "geo"."state_ref" gs ON c.state = gs.state_abbr
       LEFT JOIN "geo"."congressional_districts" cd
         ON c.office = 'H'
         AND gs.state_fips = cd.state_fips

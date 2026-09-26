@@ -10,7 +10,7 @@
 # (see environment-schema.yaml) — air quality is a distinct domain from weather.
 #
 # Features:
-#   - Cross-references with geo.states via state_abbr and state_fips
+#   - Cross-references with geo.state_ref via state_abbr and state_fips
 #   - Cross-references with geo.counties via county_fips
 #   - Token-gated table enablement (CDO requires NOAA_CDO_TOKEN)
 #   - Hive-style partitioning for efficient querying
@@ -26,7 +26,7 @@ comment: >
   metadata and active severe weather alerts by state (no auth required). CDO
   tables provide historical monthly and annual climate summaries (GSOM/GSOY) with
   temperature, precipitation, and snowfall metrics (requires NOAA_CDO_TOKEN). All
-  state-level tables join with geo.states via state_abbr or state_fips; county-grain
+  state-level tables join with geo.state_ref via state_abbr or state_fips; county-grain
   tables join geo.counties via county_fips. (EPA AQS air-quality data now lives in
   the environment schema.)
 
@@ -268,7 +268,7 @@ partitionedTables:
     comment: >
       NWS weather station metadata from weather.gov. Includes station ID, name,
       coordinates, elevation, timezone, and zone IDs. One row per station.
-      Cross-references geo.states via state_abbr. No authentication required.
+      Cross-references geo.state_ref via state_abbr. No authentication required.
 
     dimensions:
       type:
@@ -359,7 +359,7 @@ partitionedTables:
     comment: >
       NWS active weather alerts from weather.gov. Includes alert type, severity,
       certainty, urgency, and temporal bounds. Snapshot of current alerts per state.
-      Cross-references geo.states via state_abbr. No authentication required.
+      Cross-references geo.state_ref via state_abbr. No authentication required.
 
     dimensions:
       type:
@@ -463,7 +463,7 @@ partitionedTables:
       NOAA CDO weather station metadata (GHCND and COOP network stations).
       Includes CDO station ID, name, coordinates, elevation, data coverage
       date range (min_date/max_date), and coverage fraction (datacoverage).
-      One row per station. Cross-references geo.states via state_fips.
+      One row per station. Cross-references geo.state_ref via state_fips.
       Requires NOAA_CDO_TOKEN environment variable. Unlike
       ghcnd_stations_with_county (no auth required), this table carries no
       county_fips — use ghcnd_stations_with_county for county-level station
@@ -571,7 +571,7 @@ partitionedTables:
       (TAVG, TMAX, TMIN), precipitation (PRCP), snowfall (SNOW), and other
       monthly climate metrics per station. One row per station+month+datatype.
       Monthly companion to cdo_annual_summaries (GSOY, same station network
-      at annual grain). Cross-references geo.states via state_fips and
+      at annual grain). Cross-references geo.state_ref via state_fips and
       cdo_stations via station_id. Requires NOAA_CDO_TOKEN environment
       variable.
 
@@ -681,7 +681,7 @@ partitionedTables:
       the specific element code of each row) per station. One row per
       station+datatype+year. Annual companion to cdo_monthly_summaries
       (GSOM, same station network at monthly grain — use that table for
-      TAVG/TMAX/TMIN/PRCP/SNOW by month). Cross-references geo.states via
+      TAVG/TMAX/TMIN/PRCP/SNOW by month). Cross-references geo.state_ref via
       state_fips and cdo_stations via station_id. Requires NOAA_CDO_TOKEN
       environment variable.
 
@@ -1003,7 +1003,7 @@ partitionedTables:
       loaded here; check it rather than assuming a 2000 floor. Includes D0-D4
       drought category percentages (exclusive area fractions) and the Drought Severity
       and Coverage Index (DSCI, range 0-500). week_date is the Tuesday release date.
-      Cross-references geo.counties via county_fips and geo.states via state_abbr.
+      Cross-references geo.counties via county_fips and geo.state_ref via state_abbr.
       No authentication required.
 
     # DQ sample cap (GOVDATA_DQ mode): USDM returns weekly county rows per year×state. Each combo

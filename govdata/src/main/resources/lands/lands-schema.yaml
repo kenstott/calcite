@@ -234,7 +234,7 @@ partitionedTables:
     comment: >
       USDA Forest Service timber harvest activities from FACTS EDW. One row per
       completed harvest activity. Joins to national_forests via forest_code and to
-      geo.states via state_abbr. Units_accomplished and uom describe harvest volume
+      geo.state_ref via state_abbr. Units_accomplished and uom describe harvest volume
       (CCF, MBF, ACRE, etc.). Enables analysis of federal timber activity by
       forest, district, and year. Also carries cost_per_uom (USD per unit of measure)
       for harvest cost analysis. Source: EDW_TimberHarvest_01/MapServer/{layer}
@@ -372,7 +372,7 @@ partitionedTables:
       ZIP archives (apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip). One row per
       inventory_year × state × forest_type_group × ownership_class. Filtered to
       COND_STATUS_CD=1 (accessible forest land). Basal area is a CONDPROP_UNADJ-weighted
-      average of BALIVE. Joins to geo.states via state_fips. ETL fans out across states;
+      average of BALIVE. Joins to geo.state_ref via state_fips. ETL fans out across states;
       cached per-state archives in $GOVDATA_CACHE_DIR/lands/ are shared across workers.
       Materialization keeps state as a row column, not a partition column, so that
       Iceberg per-partition compaction merges the 55 per-state ETL flushes into a
@@ -1497,7 +1497,7 @@ partitionedTables:
     comment: >
       National Park Service unit boundaries — parks, monuments, recreation areas,
       seashores, parkways, and all other NPS-designated units. ~430 units. Reference
-      and dimension table; FK target for nps_visitation.unit_code. Joins to geo.states
+      and dimension table; FK target for nps_visitation.unit_code. Joins to geo.state_ref
       and geo.counties for gateway-community economic impact analysis. Updated annually
       in April following annual report administrative updates. geometry_wkt carries the
       unit's own WGS84 boundary polygon, sourced from the same ArcGIS query at ingest
@@ -2112,7 +2112,7 @@ partitionedTables:
       latitude/longitude — the corpus previously had no way to do this,
       only a rurality proxy via census.acs_veterans joined to
       health.ahrf_physician_supply's RUCC. Joins to geo.counties via
-      county_fips and geo.states via state_abbr. Source: HIFLD Veterans
+      county_fips and geo.state_ref via state_abbr. Source: HIFLD Veterans
       Health Administration Medical Facilities ArcGIS FeatureServer.
 
     dimensions:

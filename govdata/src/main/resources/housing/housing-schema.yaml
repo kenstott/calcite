@@ -48,7 +48,7 @@ column_templates:
     name: state_fips
     type: string
     nullable: true
-    comment: 2-digit state FIPS code (FK to geo.states)
+    comment: 2-digit state FIPS code (FK to geo.state_ref)
 
   county_fips_column: &county_fips_column
     name: county_fips
@@ -205,7 +205,7 @@ partitionedTables:
       (hpi_type, hpi_flavor, frequency, level, place, period). Snapshot table:
       the whole file is re-fetched and the partition overwritten each run;
       history lives in Iceberg snapshots. State-level place_id is the USPS
-      abbreviation (join to geo.states.state_abbr); MSA-level place_id is the
+      abbreviation (join to geo.state_ref.state_abbr); MSA-level place_id is the
       5-digit CBSA code (join to geo.cbsa.cbsa_fips). Source:
       fhfa.gov/hpi/download/monthly/hpi_master.csv.
 
@@ -2298,7 +2298,7 @@ constraints:
   # opportunity_zones and hud_subsidized_housing are tract-grain. census_tract
   # is NOT declared an FK to geo.census_tracts: that table is year-partitioned
   # over multiple TIGER vintages (heterogeneous key domain), so — as with
-  # geo.zctas / geo.states — the stable FK targets are county_fips -> geo.counties
+  # geo.zctas / geo.state_ref — the stable FK targets are county_fips -> geo.counties
   # and state_fips / state_abbr -> geo.state_ref.
   opportunity_zones:
     primaryKey: [census_tract]
@@ -2389,7 +2389,7 @@ views:
       filter by frequency, so monthly and quarterly readings for the same
       state/year are aggregated together. Columns: data_year, state_abbr (the
       USPS abbreviation, sourced from house_price_index.place_id — ready to
-      join geo.states.state_abbr and to sec homebuilder/REIT filings by
+      join geo.state_ref.state_abbr and to sec homebuilder/REIT filings by
       state), state_name, index_sa_year_end, index_sa_year_avg. There is no
       place_id column; the view is year-organized on data_year.
     sql: >

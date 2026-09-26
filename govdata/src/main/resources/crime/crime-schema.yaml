@@ -9,7 +9,7 @@
 #     (personal + household), NCVS population data
 #
 # Features:
-#   - Cross-references with geo.states via state_abbr
+#   - Cross-references with geo.state_ref via state_abbr
 #   - Hive-style partitioning for efficient querying
 #   - Rate-limited API integration (10 req/sec)
 # ============================================================================
@@ -27,7 +27,7 @@ comment: >
   employment, hate crimes, use of force, LEOKA (officers killed/assaulted), cargo theft,
   human trafficking, agency participation rates, and estimated crime counts. BJS tables cover
   NIBRS national crime estimates, NCVS personal and household victimization, and NCVS
-  population data. All state-level tables join with geo.states via state_abbr.
+  population data. All state-level tables join with geo.state_ref via state_abbr.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -241,7 +241,7 @@ partitionedTables:
     comment: >
       FBI CDE law enforcement agency registry. ~19,600 agencies across 51 jurisdictions
       with ORI identifiers, agency type, county, NIBRS reporting status, and coordinates.
-      One row per agency. Cross-references geo.states via state_abbr.
+      One row per agency. Cross-references geo.state_ref via state_abbr.
 
     dimensions:
       type:
@@ -333,7 +333,7 @@ partitionedTables:
     comment: >
       FBI CDE summarized crime rates by state and offense type. Includes offense rate,
       clearance rate, national comparison rates, population, and coverage percentage.
-      One row per state + offense + month. Cross-references geo.states via state_abbr.
+      One row per state + offense + month. Cross-references geo.state_ref via state_abbr.
 
     dimensions:
       type:
@@ -859,7 +859,7 @@ partitionedTables:
       - name: state
         type: string
         nullable: true
-        comment: FBI Return A internal state numbering, NOT a FIPS code (e.g. Texas is '42', not '48'); cross-reference agency_state_name or geo.states for the FIPS crosswalk
+        comment: FBI Return A internal state numbering, NOT a FIPS code (e.g. Texas is '42', not '48'); cross-reference agency_state_name or geo.state_ref for the FIPS crosswalk
       - name: ori
         type: string
         nullable: false
@@ -1967,7 +1967,7 @@ partitionedTables:
     comment: >
       FBI CDE supplemental property crime data. Stolen and recovered property
       values by category (Firearms, Motor Vehicles, Currency, Jewelry, etc.)
-      aggregated at the state level. Cross-references geo.states via state_abbr.
+      aggregated at the state level. Cross-references geo.state_ref via state_abbr.
 
     dimensions:
       type:
@@ -2794,7 +2794,7 @@ views:
       FROM cde_offenses o
       LEFT JOIN cde_police_employment pe
         ON o.state_abbr = pe.state_abbr AND o.year = pe.year
-      LEFT JOIN "geo"."states" gs ON o.state_abbr = gs.state_abbr
+      LEFT JOIN "geo"."state_ref" gs ON o.state_abbr = gs.state_abbr
       GROUP BY o.state_abbr, gs.state_name, gs.state_fips, o.year, o.offense_code,
                pe.officers_per_1000, pe.male_officers, pe.female_officers
 

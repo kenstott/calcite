@@ -52,7 +52,7 @@ column_templates:
     name: state_fips
     type: string
     nullable: true
-    comment: 2-digit state FIPS code (FK to geo.states)
+    comment: 2-digit state FIPS code (FK to geo.state_ref)
 
   county_fips_column: &county_fips_column
     name: county_fips
@@ -395,7 +395,7 @@ partitionedTables:
         type: string
         nullable: true
         expression: 'src."STATE"'
-        comment: Consumer's state code (USPS abbr; FK component to geo.states)
+        comment: Consumer's state code (USPS abbr; FK component to geo.state_ref)
       - name: vin
         type: string
         nullable: true
@@ -902,7 +902,7 @@ partitionedTables:
       - name: state_code
         type: string
         nullable: true
-        comment: State (USPS abbr; FK component to geo.states)
+        comment: State (USPS abbr; FK component to geo.state_ref)
       - name: state_name
         type: string
         nullable: true
@@ -1067,7 +1067,7 @@ partitionedTables:
         type: string
         nullable: true
         expression: 'src."state"'
-        comment: State (USPS abbr; FK component to geo.states)
+        comment: State (USPS abbr; FK component to geo.state_ref)
       - name: fta_region
         type: string
         nullable: true
@@ -1319,7 +1319,7 @@ partitionedTables:
       total) for the data year. FHWA publishes MV-1 only as a merged multi-header
       Excel workbook, so a ResponseTransformer parses the fixed MV-1 layout and
       derives state_fips. Delta by year; dataLag 2 targets the newest available
-      data year. Joins to geo.states via state_fips. Source:
+      data year. Joins to geo.state_ref via state_fips. Source:
       fhwa.dot.gov/policyinformation/statistics/{year}/xls/mv1.xlsx.
 
     dimensions:
@@ -1426,7 +1426,7 @@ partitionedTables:
       principal arterial, minor arterial — the last reported for rural only). FHWA
       publishes HM-64 only as a merged multi-header, multi-block Excel workbook (4 sheets,
       one or more 10-column road-class blocks per sheet), so a ResponseTransformer parses
-      the fixed HM-64 layout and derives state_fips. Joins to geo.states via state_fips.
+      the fixed HM-64 layout and derives state_fips. Joins to geo.state_ref via state_fips.
       Source: fhwa.dot.gov/policyinformation/statistics/{year}/xls/hm64.xlsx.
 
     dimensions:
@@ -1550,7 +1550,7 @@ partitionedTables:
       backlog. Hosted on ArcGIS Hub under an individual account rather than an official
       USACE/HIFLD org account; re-verify the URL if it ever 404s, same caveat class as this
       warehouse's other individually-hosted ArcGIS mirrors (housing.opportunity_zones,
-      lands.va_facilities). Joins to geo.states via state_abbr.
+      lands.va_facilities). Joins to geo.state_ref via state_abbr.
       Source: opendata.arcgis.com dataset 78ef8693f30b40b980737c561ce6b103_0.
 
     dimensions:
@@ -1575,7 +1575,7 @@ partitionedTables:
         type: string
         nullable: true
         expression: 'src."STATE"'
-        comment: 2-letter USPS state code (FK component to geo.states)
+        comment: 2-letter USPS state code (FK component to geo.state_ref)
       - name: division
         type: string
         nullable: true
@@ -5042,7 +5042,7 @@ views:
   - name: fatal_crashes_by_state_year
     comment: >
       Fatal crashes, total fatalities, and pedestrians involved by state and
-      year — the core FARS rollup over fatal_crashes, joinable to geo.states
+      year — the core FARS rollup over fatal_crashes, joinable to geo.state_ref
       and census population for per-capita rates.
     sql: >
       SELECT
