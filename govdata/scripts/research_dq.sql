@@ -174,7 +174,7 @@ FROM (
 );
 
 -- ─────────────────────────────────────────────────────────────
--- TABLE: nih_award_projects (NIH RePORTER; FY2022-2024 recent-years window, not full history)
+-- TABLE: nih_award_projects (NIH RePORTER; FY2010+ award-level microdata)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
 SELECT 'research', 'nih_award_projects', 'T1_existence',
@@ -224,6 +224,68 @@ SELECT 'research', 'nih_award_projects', 'T7_amount_plausible',
   'award_amount outside plausible [0, 50000000] range for a single project-year'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true)
       WHERE award_amount IS NOT NULL AND (award_amount < 0 OR award_amount > 50000000));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nsf_award_projects (NSF Award Search; FY2010+ award-level microdata)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T2_row_count',
+  CASE WHEN n >= 8000 THEN 'pass' ELSE 'fail' END, n, 8000,
+  'Expected >=8000 awards for a single fiscal year (NSF makes ~11,000-13,000 a year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true) WHERE fiscal_year = 2023);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL award_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true) WHERE award_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate award_id rows (an award has one initial award date, so it falls in exactly one month slice)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT award_id, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true)
+  GROUP BY award_id HAVING COUNT(*) > 1
+));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T7_fiscal_year_matches_award_date',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Rows whose award_date is outside the Oct-Sep window of their fiscal_year'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true)
+      WHERE award_date IS NOT NULL
+        AND (CASE WHEN month(award_date) >= 10 THEN year(award_date) + 1 ELSE year(award_date) END) <> fiscal_year);
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T7_amount_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
+  'funds_obligated_amt / estimated_total_amt negative or above $2 billion for a single award'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true)
+      WHERE (funds_obligated_amt IS NOT NULL AND (funds_obligated_amt < 0 OR funds_obligated_amt > 2000000000))
+         OR (estimated_total_amt IS NOT NULL AND (estimated_total_amt < 0 OR estimated_total_amt > 2000000000)));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_award_projects', 'T7_month_coverage',
+  CASE WHEN n = 12 THEN 'pass' ELSE 'fail' END, n, 12,
+  'Distinct award months in fiscal_year 2023 (every calendar month has awards)'
+FROM (SELECT COUNT(DISTINCT month(award_date)) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true) WHERE fiscal_year = 2023);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: nih_publications (NIH RePORTER; FY2022-2024 recent-years window, appl_id -> pmid links)
