@@ -1626,6 +1626,37 @@ partitionedTables:
           dates — a study can be COMPLETED with no results ever posted). Sourced from the
           top-level `hasResults` field on the API v2 study element (sibling of
           protocolSection, not nested under it).
+      - name: results_first_submit_date
+        type: string
+        nullable: true
+        comment: >
+          Date the sponsor first submitted results (YYYY-MM-DD; may be YYYY-MM at month
+          precision). Null when no results were ever submitted. Compare with
+          primary_completion_date to measure how long after completion results were
+          submitted — FDAAA 801 sets the due date at 12 months after primary completion for
+          applicable clinical trials. The API publishes no due-date field and no
+          applicable-clinical-trial flag, so the due date is derived by the reader.
+      - name: results_first_post_date
+        type: string
+        nullable: true
+        comment: >
+          Date results first became public on ClinicalTrials.gov (YYYY-MM-DD; may be YYYY-MM
+          at month precision), after the registry's quality-control review. Later than
+          results_first_submit_date; null until posted.
+      - name: is_fda_regulated_drug
+        type: boolean
+        nullable: true
+        comment: >
+          Sponsor-declared: the study studies a drug product regulated by the FDA
+          (oversightModule.isFdaRegulatedDrug). One input to FDAAA 801 applicability; null
+          when the sponsor did not declare it, as on many studies registered before 2017.
+      - name: is_fda_regulated_device
+        type: boolean
+        nullable: true
+        comment: >
+          Sponsor-declared: the study studies a device product regulated by the FDA
+          (oversightModule.isFdaRegulatedDevice). One input to FDAAA 801 applicability; null
+          when the sponsor did not declare it, as on many studies registered before 2017.
 
     source:
       type: http

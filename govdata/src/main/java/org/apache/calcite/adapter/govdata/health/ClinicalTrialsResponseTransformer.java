@@ -36,6 +36,13 @@ public class ClinicalTrialsResponseTransformer extends AbstractClinicalTrialsRes
     put(row, "completion_date", nestedText(statusModule, "completionDateStruct.date"));
     put(row, "first_submit_date", text(statusModule, "studyFirstSubmitDate"));
     put(row, "last_update_date", text(statusModule, "lastUpdateSubmitDate"));
+    put(row, "results_first_submit_date", text(statusModule, "resultsFirstSubmitDate"));
+    put(row, "results_first_post_date", nestedText(statusModule, "resultsFirstPostDateStruct.date"));
+
+    // oversightModule
+    JsonNode oversightModule = ps.path("oversightModule");
+    put(row, "is_fda_regulated_drug", asBoolean(oversightModule, "isFdaRegulatedDrug"));
+    put(row, "is_fda_regulated_device", asBoolean(oversightModule, "isFdaRegulatedDevice"));
 
     // designModule
     JsonNode designModule = ps.path("designModule");
