@@ -20,6 +20,10 @@ import org.apache.calcite.sql.validate.SqlConformanceEnum;
 
 import org.junit.jupiter.api.Test;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,5 +73,32 @@ class CalciteConnectionConfigConformanceTest {
 
   @Test void overridePropertyDefaultsToFalse() {
     assertFalse(config("DEFAULT", null).conformance().shouldConvertRaggedUnionTypesToVarying());
+  }
+
+  private static final String RAGGED_VALUES_LIKE =
+      "select c.name from (values ('MCHENRY, PATRICK TIMOTHY'), ('ROGERS, MICHAEL JOHN')) "
+          + "as c(name) join (values ('MCHENRY,', 'NC'), ('ROGERS, MICHAEL', 'AL')) "
+          + "as r(pat, st) on c.name like r.pat || '%' order by 1";
+
+  private static String matches(String extraUrlProperties) throws Exception {
+    try (Connection connection =
+             DriverManager.getConnection("jdbc:calcite:" + extraUrlProperties);
+         Statement statement = connection.createStatement();
+         ResultSet resultSet = statement.executeQuery(RAGGED_VALUES_LIKE)) {
+      StringBuilder buf = new StringBuilder();
+      while (resultSet.next()) {
+        buf.append(resultSet.getString(1)).append(';');
+      }
+      return buf.toString();
+    }
+  }
+
+  @Test void raggedValuesPatternsMatchLikePrefixWhenConvertedToVarying() throws Exception {
+    assertEquals("MCHENRY, PATRICK TIMOTHY;ROGERS, MICHAEL JOHN;",
+        matches("conformance.raggedUnionTypesToVarying=true"));
+  }
+
+  @Test void raggedValuesPatternsArePaddedByDefault() throws Exception {
+    assertFalse(matches("").contains("MCHENRY"));
   }
 }
