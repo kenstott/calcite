@@ -1148,7 +1148,9 @@ get_dq_start_year() {
 get_timeout_config() {
   local worker_id=$1
   local _id="${worker_id#worker-}"
-  local _schema="${_id%-*}"
+  # <schema>-<mode>: a schema name never contains a hyphen, but a mode can (2019-2026), so the
+  # schema is everything before the FIRST hyphen.
+  local _schema="${_id%%-*}"
 
   # Inner DQ workers: worker-dq-<schema>-<mode> → use the inner schema
   if [[ "$worker_id" == worker-dq-*-* ]]; then
