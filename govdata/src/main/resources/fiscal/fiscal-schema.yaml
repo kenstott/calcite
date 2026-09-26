@@ -2743,8 +2743,13 @@ partitionedTables:
       alongside obligated_amount_excl_loans, which drops award types '07'/'08' (loans):
       loans report face value at the lender/servicer's place of performance rather than
       the borrower's, which inflates place-of-performance totals for states with large
-      loan servicers. For per-capita, join census.acs_population rather than a stored
-      figure here. From USAspending spending_by_geography (geo_layer=state, all award
+      loan servicers. CMS-funded awards are likewise attributed to the Medicare
+      Administrative Contractor's state (North Dakota, Minnesota and Indiana host
+      contractors paying Medicare claims for beneficiaries nationwide), so
+      obligated_amount and obligated_amount_excl_loans are not a measure of spending
+      landing in the state and must not be divided by population to rank states; use
+      obligated_amount_excl_loans_excl_cms_admin for that. For per-capita, join
+      census.acs_population rather than a stored figure here. From USAspending spending_by_geography (geo_layer=state, all award
       types, FY expressed as Oct-Sep). Joins to geo.state_ref via state_abbr. Source:
       api.usaspending.gov/api/v2/search/spending_by_geography/.
 
@@ -2763,7 +2768,13 @@ partitionedTables:
       - name: obligated_amount
         type: double
         nullable: true
-        comment: Aggregated obligations for the fiscal year (USD), all award types
+        comment: >
+          Aggregated obligations for the fiscal year (USD), all award types, by
+          place of performance. Includes loan face value and CMS-funded awards booked
+          at the Medicare Administrative Contractor's state, so it overstates spending
+          received in states hosting large loan servicers or Medicare contractors (ND,
+          MN, IN); for per-capita or cross-state comparison use
+          obligated_amount_excl_loans_excl_cms_admin.
       - name: obligated_amount_excl_loans
         type: double
         nullable: true
