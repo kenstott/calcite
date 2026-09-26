@@ -2746,8 +2746,8 @@ partitionedTables:
       - name: foreign_born_moe
         type: bigint
         nullable: true
-        expression: 'CASE WHEN TRY_CAST(src."B05001_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_006M" AS BIGINT) END'
-        comment: 90% CI margin of error for foreign_born (Census variable B05001_006M; negative sentinels normalized to null)
+        expression: 'CASE WHEN TRY_CAST(src."B05001_005M" AS BIGINT) < 0 OR TRY_CAST(src."B05001_006M" AS BIGINT) < 0 THEN NULL ELSE CAST(ROUND(SQRT(POWER(TRY_CAST(src."B05001_005M" AS DOUBLE), 2) + POWER(TRY_CAST(src."B05001_006M" AS DOUBLE), 2))) AS BIGINT) END'
+        comment: 90% CI margin of error for foreign_born, aggregated per Census MOE-of-a-sum convention (sqrt of sum of squared component MOEs — B05001_005M/006M; negative sentinels on either component normalize the whole value to null)
       - name: naturalized_citizen
         type: long
         nullable: true
