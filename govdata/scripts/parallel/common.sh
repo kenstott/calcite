@@ -1577,7 +1577,10 @@ check_schema_year_conflict() {
   local _pf _id _wpid _rest _other_schema _other_mode _o_start _o_end
   for _pf in "$_pid_dir"/worker-*.pid; do
     [ -e "$_pf" ] || continue
-    _id=$(basename "$_pf" .pid)
+    # Pure parameter expansion, no fork: this loop visits every pid file ever written (hundreds),
+    # almost all of them finished workers, on every admission check.
+    _id="${_pf##*/}"
+    _id="${_id%.pid}"
     [ -f "$_pid_dir/${_id}.exit" ] && continue        # worker already finished
     _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
     { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
