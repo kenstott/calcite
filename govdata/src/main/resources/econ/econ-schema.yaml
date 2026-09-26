@@ -547,7 +547,7 @@ partitionedTables:
       checkedAt: "2026-09-26T02:07:43Z"
     partitions: *standard_partitions
     comment: >
-      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted), and CPS labor force/employment/unemployment level and unemployment rate broken out by veteran status (total veterans, nonveterans, Gulf War-era II veterans; not seasonally adjusted). Updated monthly with seasonal adjustments.
+      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted), and CPS labor force/employment/unemployment level and unemployment rate broken out by veteran status (total veterans, nonveterans, Gulf War-era II veterans; not seasonally adjusted). Updated monthly with seasonal adjustments. Each row is the CURRENT (most-revised) value only; for first-print vs. revised payroll figures (size and direction of revisions, benchmark revisions) use ces_revision_vintages, which carries the as-published history of total nonfarm and total private payrolls.
 
     # Dimension definitions for iteration
     dimensions:
@@ -4870,7 +4870,10 @@ partitionedTables:
       is only the CURRENT, most-revised value; this table lets a caller see what a series
       looked like as first published vs. after subsequent revisions). One row per (series,
       release, reference_period): release_year/release_month identify which monthly
-      Employment Situation release this vintage snapshot is from; reference_year/
+      Employment Situation release this vintage snapshot is from, labeled by the data
+      month that release covers (published the following month — the first print of a
+      reference month M is the row whose release_period equals M, the second print is
+      M+1, the third print M+2; later rows are the values after those); reference_year/
       reference_month identify which data month the value describes; value is that
       release's published estimate for that data month (thousands of employees, CES
       convention). Comparing rows with the same series_id + reference_period across
