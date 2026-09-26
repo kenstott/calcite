@@ -22,6 +22,8 @@ GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 REPO_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 FORK="kenstott/calcite"
 STAGE_DIR="${STAGE_DIR:-$GOVDATA_ROOT/build/libs}"
+# Minimum seconds between engine releases.
+RELEASE_MIN_INTERVAL="${RELEASE_MIN_INTERVAL:-72000}"
 # Paths whose changes need a new engine release.
 RELEASE_PATHS=(govdata/src file/src core/src linq4j/src askamerica-engine/src driver-base/src)
 
@@ -99,6 +101,11 @@ if $release_ok; then
   [ -n "$last_tag" ] || { log "ERROR: no engine-v* tag to release after"; exit 1; }
   if git diff --quiet "$last_tag" HEAD -- "${RELEASE_PATHS[@]}"; then
     log "no engine code changed since $last_tag; no release"
+  elif ! published="$(gh release view "$last_tag" --repo "$FORK" --json publishedAt --jq .publishedAt)"; then
+    log "ERROR: could not read when $last_tag was published; not releasing"
+  elif [ $(( $(date +%s) - $(date -d "$published" +%s) )) -lt "$RELEASE_MIN_INTERVAL" ]; then
+    # Every scheduler restart starts a new daily window; without this each one would publish.
+    log "$last_tag was published $published, under $((RELEASE_MIN_INTERVAL / 3600))h ago; not releasing again"
   else
     ver="${last_tag#engine-v}"
     next="${ver%.*}.$(( ${ver##*.} + 1 ))"
