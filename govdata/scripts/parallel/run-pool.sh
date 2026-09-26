@@ -43,8 +43,9 @@ OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL proce
 # heaviest measured class; the available-memory check in fill_pool gates real pressure on top of
 # this accounting. The runner daemon's POOL_WORKER_MB must equal heap + this value. Tunable via env.
 WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-1024}"
-# Most SEC-family (sec_primary/sec_secondary/sec_13f) workers admitted at once while any other
-# schema's slot is still waiting for a worker; the cap lifts when nothing else is queued.
+# Hard cap on concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers, whatever else is
+# queued: SEC's historical slot count (up to 16 years x 3 sub-schemas) would otherwise take every
+# worker slot, and the workers all hit sec.gov.
 SEC_FAMILY_CAP="${SEC_FAMILY_CAP:-3}"
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 RESET_BUDGET_FILE=false  # --reset-budget forces this invocation's -j/-r to become the new baseline
@@ -576,8 +577,7 @@ done_count=0
 failed_count=0
 requeue_count=0
 declare -A _conflict_logged=()   # slot -> last schema+year conflict message logged
-_sec_cap_state=""          # "on" / "off": last logged state of the SEC-family cap
-_sec_hold_logged=""        # SEC-family running count a hold was last logged for; reset when the cap lifts
+_sec_hold_logged=""        # SEC-family running count a hold was last logged for
 failed_list=()
 restart_count=0
 
@@ -701,30 +701,6 @@ get_available_mb() {
 }
 
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
-# State of the queued (not yet launched) non-SEC-family slots, for the SEC-family cap:
-#   "ready <slot>"  a non-SEC slot no conflict has held: it may be launchable, so it needs a worker slot
-#   "held <slot>"   every queued non-SEC slot is currently held by a schema+year conflict (a requeued
-#                   slot carries a ":_rejected_until_<ts>" suffix): more SEC workers cannot starve it
-#   nothing         no non-SEC slot is queued
-_non_sec_waiting_state() {
-  local i slot schema held=""
-  for (( i=queue_idx; i<total; i++ )); do
-    slot="${queue[$i]}"
-    schema="${slot%%:*}"
-    case "$schema" in
-      sec_primary|sec_secondary|sec_13f) continue ;;
-    esac
-    if [[ "$slot" == *:_rejected_until_* ]]; then
-      [ -z "$held" ] && held="${slot%%:_rejected_until_*}"
-    else
-      echo "ready ${slot}"
-      return 0
-    fi
-  done
-  [ -n "$held" ] && echo "held ${held}"
-  return 0
-}
-
 fill_pool() {
   local scan_idx=$queue_idx
   # One clock reading for the whole pass. A pass can take longer than the requeue backoff (each
@@ -757,14 +733,7 @@ fill_pool() {
     local next_mode="${next_slot#*:}"
     local next_id="worker-${next_schema}-${next_mode}"
 
-    # Limit concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers so they cannot starve
-    # the other schemas' backfills: SEC's historical slot count (up to 16 years x 3 sub-schemas)
-    # would otherwise take every free slot. The limit depends on what else is queued:
-    #   a non-SEC slot that may be launchable -> SEC_FAMILY_CAP
-    #   only non-SEC slots held by conflicts   -> every slot but one (MAX_WORKERS-1), so the first
-    #                                             held slot to clear can launch at once; more SEC
-    #                                             workers cannot starve a slot that cannot run
-    #   no non-SEC slot queued                 -> no limit
+    # Hard cap of SEC_FAMILY_CAP concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers.
     # sec_prices is excluded: it is a single bulk-fetch worker (fixed 2010-2026 range regardless of
     # mode), not per-year CIK-reprocessing volume.
     if [[ "$next_schema" == "sec_primary" || "$next_schema" == "sec_secondary" || "$next_schema" == "sec_13f" ]]; then
@@ -775,28 +744,11 @@ fill_pool() {
           ((_sec_active++)) || true
         fi
       done
-      local _wstate _waiting_other _cap_now="off" _sec_limit="$MAX_WORKERS"
-      _wstate=$(_non_sec_waiting_state)
-      _waiting_other="${_wstate#* }"
-      case "$_wstate" in
-        ready\ *) _cap_now="on"; _sec_limit="$SEC_FAMILY_CAP" ;;
-        held\ *)  _cap_now="held"
-                  _sec_limit=$(( MAX_WORKERS - 1 > SEC_FAMILY_CAP ? MAX_WORKERS - 1 : SEC_FAMILY_CAP )) ;;
-      esac
-      if [ "$_cap_now" != "$_sec_cap_state" ]; then
-        _sec_cap_state="$_cap_now"
-        _sec_hold_logged=""
-        case "$_cap_now" in
-          on)   log_info "SEC-family cap of ${SEC_FAMILY_CAP} applies: a non-SEC slot that may be launchable is queued (first: ${_waiting_other})" ;;
-          held) log_info "SEC-family limit is ${_sec_limit}: the only queued non-SEC slots are held by conflicts (first: ${_waiting_other}); one slot stays free for the first to clear" ;;
-          off)  log_info "SEC-family cap lifted: no non-SEC slot is queued" ;;
-        esac
-      fi
-      if [ "$_cap_now" != "off" ] && [ "$_sec_active" -ge "$_sec_limit" ]; then
+      if [ "$_sec_active" -ge "$SEC_FAMILY_CAP" ]; then
         # A held slot is otherwise indistinguishable from an idle pool, so say why once per change.
         if [ "$_sec_hold_logged" != "$_sec_active" ]; then
           _sec_hold_logged="$_sec_active"
-          log_info "HOLDING ${next_id} (and every queued SEC-family slot): ${_sec_active} SEC-family workers running, limit ${_sec_limit}, non-SEC slot ${_waiting_other} is ${_cap_now/on/waiting}"
+          log_info "HOLDING ${next_id} (and every queued SEC-family slot): ${_sec_active} SEC-family workers running, cap ${SEC_FAMILY_CAP}"
         fi
         # Requeue at back with backoff, same mechanic as the schema+year conflict case above.
         local _reject_time=$((_pass_now + 30))
