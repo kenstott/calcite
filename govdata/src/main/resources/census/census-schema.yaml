@@ -3874,15 +3874,12 @@ partitionedTables:
       checkedAt: "2026-09-26T02:03:48Z"
     partitions: *standard_partitions
     comment: >
-      Population Estimates Program (PEP) annual population estimate, at state and county
-      levels, for the years between decennial censuses. Data years <= 2020 come from the
-      pep/population dataset (which also includes a population density column for those
-      years); data years >= 2021 come from the shared latest pep/charv vintage (population
-      only). The vintage column identifies which of the two source datasets produced each
-      row, so the two never double-claim a data year. KNOWN GAP: year 2020 itself is absent
-      from production despite being within the pep/population vintage's range — see
-      observedCoverage below (contiguous: false) before assuming a query over 2019-2021 has
-      every year.
+      Population Estimates Program (PEP) annual population estimate (July 1 reference date), at
+      state and county levels, for the years between decennial censuses. Data year 2019 comes
+      from the pep/population dataset (which also includes a population density column for
+      that year); data years >= 2020 come from the shared latest pep/charv vintage (population
+      only, July 1 estimate; the April 1, 2020 census base is not loaded). The vintage column
+      identifies which source dataset produced each row. One row per geography per data year.
 
     dimensions:
       type:
@@ -3891,7 +3888,7 @@ partitionedTables:
         type: yearRange
         # Floor is a literal 2022 (NOT ${GOVDATA_START_YEAR}): with dataLag=3 this yields data
         # years 2019-2023 — the only range the PEP API serves cleanly (charv vintage 2023 covers
-        # 2021-2023; pep/population for 2019-2020). Pre-2019 vintages use different variable
+        # 2020-2023; pep/population for 2019). Pre-2019 vintages use different variable
         # names and are intentionally excluded. Bump the floor when CURRENT_VINTAGE advances in
         # the resolver.
         start: 2022
@@ -3928,16 +3925,16 @@ partitionedTables:
         type: double
         nullable: true
         expression: 'TRY_CAST(src."DENSITY" AS DOUBLE)'
-        comment: Population density (only for pep/population data years, i.e. <= 2020)
+        comment: Population density (only for pep/population data years, i.e. 2019)
       - name: vintage
         type: string
         nullable: true
         expression: '{vintage}'
         comment: >
           PEP data vintage used to fetch this row: either the data year itself
-          (pep/population, data years <= 2020) or the shared latest published
-          vintage (pep/charv, data years >= 2021). Distinguishes the two source
-          datasets so a data year is never ambiguous between them.
+          (pep/population, data year 2019) or the shared latest published
+          vintage (pep/charv, data years >= 2020). Distinguishes the two source
+          datasets.
 
     source:
       type: http

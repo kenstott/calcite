@@ -24,26 +24,25 @@ import java.util.Map;
 /**
  * Dimension resolver for Population Estimates Program (PEP) API.
  *
- * <p>Handles the API structure change at the 2021 data-year boundary. All decisions key on the
+ * <p>Handles the API structure change at the 2020 data-year boundary. All decisions key on the
  * data reference year ({@code publish year - dataLag}), not the publish year:
  * <ul>
- *   <li>data year &le; 2020: /pep/population, vintage = the data year, POP+DENSITY, no YEAR</li>
- *   <li>data year &ge; 2021: /pep/charv in the latest vintage, POP, selected via &amp;YEAR=&lt;data year&gt;</li>
+ *   <li>data year &lt; 2020: /pep/population, vintage = the data year, POP+DENSITY, no YEAR</li>
+ *   <li>data year &ge; 2020: /pep/charv in the latest vintage, POP, selected via
+ *       &amp;YEAR=&lt;data year&gt;&amp;MONTH=7</li>
  * </ul>
  *
- * <p>The boundary is deliberately at 2021, not 2020: both the pep/population dataset (queried
- * per data year, vintage = the data year) and pep/charv (queried in a single latest vintage,
- * selected via YEAR) are capable of answering for data year 2020, but with different reported
- * values -- fetching 2020 from both would double-claim that year with conflicting figures.
- * Keeping data year 2020 exclusively on the pep/population side (and starting pep/charv at
- * 2021) keeps every data year claimed by exactly one vintage.
+ * <p>pep/population has no vintage for data year 2020, so pep/charv is the only source from 2020
+ * on. Its data year 2020 carries two reference dates per geography (MONTH=4, the April 1 census
+ * base, and MONTH=7, the July 1 estimate); every other charv year carries only MONTH=7. Pinning
+ * MONTH=7 keeps every data year a single July 1 estimate per geography.
  *
  * <p>The resolver injects these companion dimensions, used in the URL template:
  * <ul>
  *   <li>endpoint: "pep/population" or "pep/charv"</li>
  *   <li>variables: "POP,DENSITY" or "POP"</li>
  *   <li>vintage: the data year (old API) or the latest published vintage (new API)</li>
- *   <li>year_filter: Empty (old API) or "&amp;YEAR=&lt;data year&gt;" (new API)</li>
+ *   <li>year_filter: Empty (old API) or "&amp;YEAR=&lt;data year&gt;&amp;MONTH=7" (new API)</li>
  * </ul>
  *
  * <h3>Usage in schema YAML:</h3>
@@ -68,18 +67,20 @@ public class CensusPepDimensionResolver implements DimensionResolver {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(CensusPepDimensionResolver.class);
 
-  // PEP restructured at Vintage 2020: data years 2021+ live in the pep/charv dataset, selected
-  // by a YEAR predicate; 2020 and earlier are standalone pep/population vintages. The cutoff is
-  // 2021 (not 2020) so that data year 2020 -- answerable by both APIs, with different reported
-  // values -- is claimed by exactly one of them (pep/population). See the class Javadoc.
-  private static final int NEW_API_CUTOFF = 2021;
+  // PEP restructured at Vintage 2020: data years 2020+ live in the pep/charv dataset, selected by
+  // YEAR and MONTH predicates; earlier years are standalone pep/population vintages (there is no
+  // pep/population vintage for 2020).
+  private static final int NEW_API_CUTOFF = 2020;
 
-  // Latest published PEP vintage. pep/charv serves every year it covers (2021..this) via the
+  // Latest published PEP vintage. pep/charv serves every year it covers (2020..this) via the
   // YEAR predicate, so this is a fixed value — bump it when the Census Bureau releases a new
   // vintage (and revisit the year-range floor / dataLag in census-schema.yaml's pep block).
   // Confirmed live 2026-09-14: api.census.gov/data/2024/pep/charv returns 404 (Census has not
   // yet published the vintage 2024 PEP dataset, despite the ACS 2024 vintage being available);
   // the api.census.gov/data.html vintage-2024 catalog lists only ACS endpoints, no pep/*.
+  // July 1 reference-date code in pep/charv; the only reference date every data year has.
+  private static final String JULY_MONTH = "7";
+
   private static final String CURRENT_VINTAGE = "2023";
 
   @Override public List<String> resolve(String dimensionName, DimensionConfig config,
@@ -101,15 +102,15 @@ public class CensusPepDimensionResolver implements DimensionResolver {
       return Collections.singletonList(isNewApi ? "POP" : "POP,DENSITY");
 
     case "vintage":
-      // New API: every covered year lives in the single latest vintage, selected via YEAR.
+      // New API: every covered year lives in the single latest vintage, selected via YEAR and MONTH.
       // Old API: each data year is its own vintage.
       LOGGER.debug("PEP: dataYear={} -> vintage={}", dataYear,
           isNewApi ? CURRENT_VINTAGE : dataYear);
       return Collections.singletonList(isNewApi ? CURRENT_VINTAGE : String.valueOf(dataYear));
 
     case "year_filter":
-      // New API: select the data year within the vintage. Old API: no YEAR predicate.
-      return Collections.singletonList(isNewApi ? "&YEAR=" + dataYear : "");
+      // New API: select the data year within the vintage. Old API: no predicate.
+      return Collections.singletonList(isNewApi ? "&YEAR=" + dataYear + "&MONTH=" + JULY_MONTH : "");
 
     default:
       return Collections.emptyList();
