@@ -20,8 +20,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Orchestrates schema processing with lifecycle hooks.
@@ -140,7 +142,7 @@ public class SchemaLifecycleProcessor {
       schemaListener.beforeSchema(schemaContext);
 
       // Phase 2: Bulk downloads (download once, use many)
-      processBulkDownloads(schemaContext);
+      processBulkDownloads(schemaContext, bulkDownloadsUsedByEnabledTables(schemaContext));
 
       // Phase 2b: Preload table completion markers (single S3 query)
       incrementalTracker.preloadAllCompletions();
@@ -682,8 +684,10 @@ public class SchemaLifecycleProcessor {
    * the cached file instead of downloading separately.
    *
    * @param schemaContext Schema context
+   * @param neededBulkDownloads Names of the bulk downloads to fetch; the rest are skipped
    */
-  private void processBulkDownloads(SchemaContext schemaContext) {
+  private void processBulkDownloads(SchemaContext schemaContext,
+      Set<String> neededBulkDownloads) {
     Map<String, BulkDownloadConfig> bulkDownloads = config.getBulkDownloads();
     if (bulkDownloads == null || bulkDownloads.isEmpty()) {
       LOGGER.debug("No bulk downloads configured, skipping phase 2");
@@ -695,6 +699,11 @@ public class SchemaLifecycleProcessor {
     for (Map.Entry<String, BulkDownloadConfig> entry : bulkDownloads.entrySet()) {
       String name = entry.getKey();
       BulkDownloadConfig bulkConfig = entry.getValue();
+
+      if (!neededBulkDownloads.contains(name)) {
+        LOGGER.info("Skipping bulk download {}: no enabled table references it", name);
+        continue;
+      }
 
       LOGGER.info("Processing bulk download: {}", name);
 
@@ -717,6 +726,35 @@ public class SchemaLifecycleProcessor {
     }
 
     LOGGER.info("Phase 2 complete: bulk downloads processed");
+  }
+
+  /**
+   * Names of the bulk downloads referenced by at least one table that will run, using the same
+   * enabled check as phase 3 (YAML {@code enabled} flag and the table's {@code isEnabled} hook).
+   * A run scoped to a subset of tables therefore downloads only the bulk files those tables read.
+   */
+  private Set<String> bulkDownloadsUsedByEnabledTables(SchemaContext schemaContext) {
+    Set<String> used = new HashSet<>();
+    List<EtlPipelineConfig> tables = config.getTables();
+    int totalTables = tables.size();
+    for (int i = 0; i < totalTables; i++) {
+      EtlPipelineConfig tableConfig = tables.get(i);
+      TableContext tableContext = TableContext.builder()
+          .tableConfig(tableConfig)
+          .schemaContext(schemaContext)
+          .tableIndex(i)
+          .totalTables(totalTables)
+          .build();
+      String bulkName = tableContext.getBulkDownloadName();
+      if (bulkName == null || used.contains(bulkName)) {
+        continue;
+      }
+      TableLifecycleListener tableListener = loadTableListener(tableConfig, defaultTableListener);
+      if (tableConfig.isEnabled() && tableListener.isTableEnabled(tableContext)) {
+        used.add(bulkName);
+      }
+    }
+    return used;
   }
 
   /**
