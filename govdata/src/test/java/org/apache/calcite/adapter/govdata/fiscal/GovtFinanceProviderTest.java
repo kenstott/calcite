@@ -19,11 +19,14 @@ package org.apache.calcite.adapter.govdata.fiscal;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link GovtFinanceProvider}'s zip-link discovery and fixed-width record parsing.
@@ -123,7 +126,7 @@ class GovtFinanceProviderTest {
    */
   @Test void testParsesOldLayout34Char() throws Exception {
     Map<String, Object> row = toRow("0610010010000019T      4110002013I", "2013");
-    assertEquals("06", row.get("state_fips"));
+    assertEquals("08", row.get("state_fips"), "Census state code 06 (Colorado) is FIPS 08");
     assertEquals("1", row.get("gov_type_code"));
     assertEquals("County", row.get("gov_type_name"));
     assertEquals("001", row.get("county_fips"));
@@ -132,6 +135,30 @@ class GovtFinanceProviderTest {
     assertEquals(411000L, row.get("amount_thousands"));
     assertEquals(2013, row.get("year"));
     assertEquals("I", row.get("imputation_flag"));
+  }
+
+  /** Census alphabetical state code to FIPS for the 2012-2016 layout, spot-checked at the edges. */
+  @Test void testOldLayoutTranslatesCensusStateCodeToFips() throws Exception {
+    String[][] censusToFips = {
+        {"01", "01"}, {"03", "04"}, {"08", "10"}, {"09", "11"}, {"29", "32"}, {"30", "33"},
+        {"33", "36"}, {"40", "44"}, {"44", "48"}, {"48", "53"}, {"49", "54"}, {"50", "55"},
+        {"51", "56"}};
+    for (String[] pair : censusToFips) {
+      Map<String, Object> row =
+          toRow(pair[0] + "000000000000" + "19T      4110002013I", "2013");
+      assertEquals(pair[1], row.get("state_fips"), "Census state code " + pair[0]);
+    }
+  }
+
+  @Test void testNewLayoutStateCodeIsAlreadyFips() throws Exception {
+    assertEquals("48", toRow("48000022634919T    331689552019R", "2019").get("state_fips"));
+    assertEquals("56", toRow("56000022634919T    331689552019R", "2019").get("state_fips"));
+  }
+
+  @Test void testOldLayoutRejectsCodeOutsideCensusRange() throws Exception {
+    InvocationTargetException e = assertThrows(InvocationTargetException.class,
+        () -> toRow("52" + "000000000000" + "19T      4110002013I", "2013"));
+    assertTrue(e.getCause() instanceof IllegalStateException);
   }
 
   @Test void testSkipsRecordOfUnexpectedLength() throws Exception {

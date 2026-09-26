@@ -4727,12 +4727,12 @@ partitionedTables:
       government units (large governments fully enumerated, smaller ones
       sampled) even in Census-of-Governments years (2012/2017/2022) — a raw
       per-state sum over the units present in this table is not guaranteed to
-      equal that state's true total, and for at least some small states this
-      file's own item-code totals (verified against Census's own bundled
-      state-level crosstab file, e.g. NNstatetypepu.txt) are implausible
-      against independently published state totals; treat any state-level
-      dollar aggregate from this table as needing cross-validation against an
-      external published figure before use. Source (per year):
+      equal that state's true total; cross-validate a state-level dollar
+      aggregate against Census's own state-level crosstab file (NNstatetypepu.txt,
+      bundled in each year's ZIP) before relying on it. state_fips is a FIPS
+      code for every year: the 2012-2016 files number states with Census's own
+      alphabetical codes (01-51, District of Columbia 09), which
+      GovtFinanceProvider translates. Source (per year):
       census.gov/data/datasets/{year}/econ/local/public-use-datasets.html.
     dqRowLimit: 100000
 

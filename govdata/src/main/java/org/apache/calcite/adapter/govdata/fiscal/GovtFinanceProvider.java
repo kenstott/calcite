@@ -63,6 +63,10 @@ import java.util.zip.ZipInputStream;
  * shifts every later field right by two. Confirmed live against the 2012, 2013 and 2016 files (all
  * records 34 characters, positions 13-14 always {@code "00"}) and the 2017 and 2019 files (all
  * records 32).
+ *
+ * <p>The first two ID characters are FIPS state codes in the 2017-and-later layout but Census's
+ * own alphabetical state numbering (01-51, District of Columbia = 09) in the 2012-2016 layout;
+ * the latter are translated to FIPS so {@code state_fips} joins to {@code geo.state_ref}.
  */
 public class GovtFinanceProvider implements CachingDataProvider {
 
@@ -86,6 +90,8 @@ public class GovtFinanceProvider implements CachingDataProvider {
   private static final String DATA_ENTRY_MARKER = "finestdat";
 
   private static final Map<String, String> GOV_TYPE_NAMES = buildGovTypeNameMap();
+
+  private static final Map<String, String> CENSUS_STATE_CODE_TO_FIPS = buildCensusStateCodeMap();
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
@@ -183,6 +189,9 @@ public class GovtFinanceProvider implements CachingDataProvider {
       return null;
     }
 
+    final String stateFips = idWidth == 14
+        ? censusStateCodeToFips(line.substring(0, 2)) : line.substring(0, 2);
+
     String itemCode = line.substring(idWidth, idWidth + 3).trim();
     String amountRaw = line.substring(idWidth + 3, idWidth + 15).trim();
     String dataYearRaw = line.substring(idWidth + 15, idWidth + 19).trim();
@@ -193,7 +202,7 @@ public class GovtFinanceProvider implements CachingDataProvider {
 
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     row.put("year", dataYear != null ? dataYear : parseIntOrNull(yearStr));
-    row.put("state_fips", line.substring(0, 2));
+    row.put("state_fips", stateFips);
     row.put("gov_type_code", govTypeCode);
     row.put("gov_type_name", GOV_TYPE_NAMES.get(govTypeCode));
     row.put("county_fips", line.substring(3, 6));
@@ -278,6 +287,38 @@ public class GovtFinanceProvider implements CachingDataProvider {
     } catch (NumberFormatException e) {
       return null;
     }
+  }
+
+  /**
+   * Translates the two-digit state code of a 2012-2016 (14-character ID) record to a FIPS state
+   * code. Those files use Census's own alphabetical numbering (01 = Alabama ... 09 = District of
+   * Columbia ... 51 = Wyoming, per the "State Code Definitions" in the technical documentation),
+   * while 2017 and later records already carry the FIPS code.
+   */
+  private static String censusStateCodeToFips(String censusCode) {
+    String fips = CENSUS_STATE_CODE_TO_FIPS.get(censusCode);
+    if (fips == null) {
+      throw new IllegalStateException("govt_finance_by_unit: state code '" + censusCode
+          + "' is not one of the 51 Census state codes 01-51");
+    }
+    return fips;
+  }
+
+  /**
+   * FIPS state codes of the 50 states and DC in alphabetical order of state name, which is the
+   * order of the Census state codes: index i holds the FIPS code of Census state code i + 1.
+   */
+  private static Map<String, String> buildCensusStateCodeMap() {
+    String[] fipsInCensusOrder = {
+        "01", "02", "04", "05", "06", "08", "09", "10", "11", "12", "13", "15", "16", "17", "18",
+        "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33",
+        "34", "35", "36", "37", "38", "39", "40", "41", "42", "44", "45", "46", "47", "48", "49",
+        "50", "51", "53", "54", "55", "56"};
+    Map<String, String> m = new HashMap<>();
+    for (int i = 0; i < fipsInCensusOrder.length; i++) {
+      m.put(String.format(java.util.Locale.ROOT, "%02d", i + 1), fipsInCensusOrder[i]);
+    }
+    return m;
   }
 
   private static Map<String, String> buildGovTypeNameMap() {
