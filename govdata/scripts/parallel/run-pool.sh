@@ -570,6 +570,7 @@ queue_idx=0
 done_count=0
 failed_count=0
 requeue_count=0
+declare -A _conflict_logged=()   # slot -> last schema+year conflict message logged
 failed_list=()
 restart_count=0
 
@@ -739,6 +740,12 @@ fill_pool() {
       # Requeue at back with backoff: skip re-checking this job for 30 seconds to avoid
       # consuming the run loop with repeated rejections. Record rejection time for comparison.
       local _reject_time=$(($(date +%s) + 30))
+      # A held slot is otherwise indistinguishable from an idle pool, so name the blocker once per
+      # distinct refusal.
+      if [ "${_conflict_logged[$next_slot]:-}" != "$_conflict_msg" ]; then
+        _conflict_logged[$next_slot]="$_conflict_msg"
+        log_info "HOLDING ${next_id}: ${_conflict_msg}"
+      fi
       queue+=("$next_slot:_rejected_until_$_reject_time")
       # Increment total so the loop reaches this requeued job, but track requeue_count
       # separately so Queued display doesn't inflate (Queued = total - done - failed - requeue_count - running).
