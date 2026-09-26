@@ -1285,8 +1285,11 @@ partitionedTables:
         overwritePartitions: true
 
   - name: fema_nri_earthquake_by_county
-    # FEMA republishes the NRI layer periodically (not a continuous series); a hash probe
-    # skips reprocessing when the layer's content is unchanged since the last successful run.
+    # Latest-snapshot table (no year axis): FEMA republishes the NRI layer periodically, not as
+    # a continuous series, and the hash probe skips the write when the layer is unchanged since
+    # the last successful run. dataset_type: snapshot makes a run that writes zero rows fail
+    # loudly instead of silently marking an empty table complete.
+    dataset_type: snapshot
     freshness:
       type: hash
     pattern: "type=fema_nri_earthquake_by_county/*.parquet"
