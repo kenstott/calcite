@@ -3471,16 +3471,6 @@ partitionedTables:
       plus the 4 Census regions (Northeast, Midwest, South, West). For national industry-level
       detail see jolts_industry; for state-level detail see jolts_state.
 
-    # Dimension definitions for iteration
-    dimensions:
-      type:
-        - jolts_regional  # Static table type
-      frequency: *monthly_frequency  # Monthly JOLTS releases
-      year:
-        type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2001}"  # JOLTS data only available from December 2000
-        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-
     columns:
       # BLS TSV columns: series_id, year, period, value, footnote_codes
       # Series ID format: JTS{industry:4-9}{region:10-11}{area:12-16}{sizeclass:17-18}{element:19-20}{ratelevel:21}
