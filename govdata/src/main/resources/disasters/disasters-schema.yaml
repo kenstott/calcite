@@ -1035,7 +1035,12 @@ partitionedTables:
       State, Tribal, City, County, etc.) and jurisdictional_agency — enabling
       federal-vs-nonfederal burn comparisons directly from this table. Snapshot
       table with no year partition (refreshed via overwritePartitions);
-      fire_year is derived from the fire discovery date. Joins to geo.counties
+      fire_year is derived from the fire discovery date. Coverage follows the
+      WFIGS layer, which is complete only from fire_year 2020 (about 4k-8k
+      perimeters a year); 2016-2019 hold a handful of features in total, so
+      this is not a national multi-decade history. Use gis_acres, not
+      final_acres, for burned-area totals: final_acres is set only on certified
+      final perimeters (under 20% of rows in any year). Joins to geo.counties
       via county_fips (from point-of-origin FIPS) and to nfip_claims for
       post-fire flood exposure. Source:
       WFIGS_Interagency_Perimeters/FeatureServer/0.
@@ -1107,11 +1112,19 @@ partitionedTables:
       - name: gis_acres
         type: double
         nullable: true
-        comment: GIS-calculated perimeter area in acres
+        comment: >
+          GIS-calculated perimeter area in acres — the populated burned-area
+          measure (about 70-99% of rows for fire_year 2020 onward); null where
+          the source has no polygon area. Includes prescribed burns
+          (incident_type_category RX); filter to WF for wildfire totals.
       - name: final_acres
         type: double
         nullable: true
-        comment: Reported final fire size in acres
+        comment: >
+          Final fire size in acres, set by WFIGS only on certified final
+          perimeters — null on most rows (under 20% populated in every fire_year), so
+          SUM(final_acres) understates burned area by orders of magnitude; use
+          gis_acres for totals.
       - name: centroid_lat
         type: double
         nullable: true
