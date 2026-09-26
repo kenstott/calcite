@@ -217,8 +217,7 @@ public class StooqDownloader {
         }
         return; // bulk path complete (history + top-up)
       } catch (Exception e) {
-        LOGGER.warn("Bulk stock-price ingest failed, falling back to per-ticker downloads: {}",
-            e.getMessage());
+        throw new IllegalStateException("Bulk stock-price ingest failed: " + e.getMessage(), e);
       }
     }
 

@@ -27,6 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.BufferedReader;
 import java.io.StringReader;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -255,6 +256,19 @@ class StooqDownloaderTest {
     elapsed = System.currentTimeMillis() - start;
     assertTrue(elapsed >= 80, "Second call should wait at least ~80ms");
     assertTrue(elapsed < 200, "Second call should not wait more than ~200ms");
+  }
+
+  @Test void testBulkIngestFailureIsNotSwallowed() {
+    StorageProvider storageProvider = new LocalFileStorageProvider();
+    StooqBulkProxy missingZip = new StooqBulkProxy(
+        tempDir.resolve("absent").resolve("d_us_txt.zip").toString(),
+        tempDir.resolve("cache").toString(), storageProvider);
+    downloader.setBulkProxy(missingZip);
+
+    IllegalStateException e = assertThrows(IllegalStateException.class, () ->
+        downloader.downloadStockPrices(tempDir.toString(),
+            Collections.<StooqDownloader.TickerCikPair>emptyList(), 2010, 2026));
+    assertTrue(e.getMessage().startsWith("Bulk stock-price ingest failed"), e.getMessage());
   }
 
   @Test void testConstructorRequiresStorageProvider() {

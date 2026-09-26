@@ -1334,7 +1334,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     LOGGER.info("Price-only path: downloading and materializing stock_prices, years {}-{}",
         startYear, endYear);
-    downloadStockPrices(secParquetDir, ciks, startYear, endYear);
+    downloadStockPrices(secParquetDir, ciks, startYear, endYear, true);
     materializeStockPricesOnly(operand, secParquetDir);
   }
 
@@ -4047,9 +4047,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * Downloads stock prices for all configured CIKs.
-   * Implements daily caching - stock prices are only downloaded once per day.
+   * Implements daily caching - stock prices are only downloaded once per day. A failure is logged
+   * and does not fail the run.
    */
   private void downloadStockPrices(String baseDirPath, List<String> ciks, int startYear, int endYear) {
+    downloadStockPrices(baseDirPath, ciks, startYear, endYear, false);
+  }
+
+  /**
+   * Downloads stock prices; when {@code failOnError} is set a failure propagates, for the
+   * prices-only worker whose sole job is this table.
+   */
+  private void downloadStockPrices(String baseDirPath, List<String> ciks, int startYear, int endYear,
+      boolean failOnError) {
     try {
       // Use the parquet directory for stock prices - same as other SEC data
       // Try getGovDataParquetDir() first, but fall back to passed baseDirPath if null
@@ -4169,8 +4179,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 LOGGER.info("No ALPHA_VANTAGE_KEY set; bulk snapshot only, no current-price top-up");
               }
             } catch (Exception e) {
-              LOGGER.warn("Failed to initialize bulk proxy: {}", e.getMessage());
-              // Continue without bulk proxy - will use HTTP API instead
+              throw new IllegalStateException("Failed to initialize bulk stock price proxy: "
+                  + e.getMessage(), e);
             }
           }
 
@@ -4184,8 +4194,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
     } catch (Exception e) {
+      if (failOnError) {
+        throw new IllegalStateException("Failed to download stock prices: " + e.getMessage(), e);
+      }
       LOGGER.warn("Failed to download stock prices: " + e.getMessage());
-      // Don't fail the schema creation if stock prices fail
+      // Prices are an add-on to a filings run, so a price failure does not fail schema creation
     }
   }
 
