@@ -1781,9 +1781,12 @@ partitionedTables:
       - name: transaction_date
         type: date
         nullable: true
-        comment: Expenditure date
+        comment: >
+          Expenditure date as filed (source exp_date, DD-MON-YY). NULL where the filer left
+          exp_date blank (about 20% of 2026 rows and 35-41% of 2022-2024 rows); the
+          dissemination and receipt dates are not carried in this table.
         source: exp_date
-        dateFormat: SLASH
+        dateFormat: DD_MON_YY
       - name: amount
         type: double
         nullable: true
