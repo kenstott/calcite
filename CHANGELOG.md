@@ -1,5 +1,95 @@
 # Changelog
 
+## [0.98.0](https://github.com/kenstott/calcite/compare/engine-v0.97.4...engine-v0.98.0) (2026-09-26)
+
+
+### Features
+
+* **askamerica-engine:** add reverse-causality/modeling-assumption recipes, disclose recipe categories ([1b680ea](https://github.com/kenstott/calcite/commit/1b680ea0f2140b7b22b0b35ed193b219aa93d070))
+* **askamerica-engine:** broaden paired-test recipe to cover demographic-composition confounds ([e782625](https://github.com/kenstott/calcite/commit/e7826259711b493d0bbd6573d35a1c98764bb4f9))
+* **askamerica-engine:** broaden test-every-named-outcome recipe to cover comparison subjects ([1c6d5eb](https://github.com/kenstott/calcite/commit/1c6d5eb7846bbb8e31fc98ec12c526995805606f))
+* **askamerica-engine:** fuzzy find_recipe matching, two more recipes, literal sample topics ([37900f8](https://github.com/kenstott/calcite/commit/37900f8ac1545fd5ed60aabd0555a5123accbe8e))
+* **askamerica-engine:** strengthen recurring-phenomenon instruction to a bare MANDATORY ([d13bfa7](https://github.com/kenstott/calcite/commit/d13bfa7b505a67bfb2671e65443c105d5ef304a4))
+* **govdata/econ:** backfill state_occupation_employment 2010-2025 from BLS OEWS state workbooks ([5fa2f5c](https://github.com/kenstott/calcite/commit/5fa2f5cbf1f847bbb6395d1c31022a52433e91de))
+* **govdata/energy:** interconnection_queue + county_interconnection_queue (LBNL Queued Up) ([80c3ace](https://github.com/kenstott/calcite/commit/80c3ace0a24d5b6465e01f2b2330c6539bafd0bd))
+* **govdata/housing:** run the HUD-API tables as one serial slot instead of once per year ([03b1bb8](https://github.com/kenstott/calcite/commit/03b1bb8bb1f784c87c0a71fd9cfe1dff5eb63910))
+* **govdata/law:** split U.S. Code sections into subsection units; declare keys and foreign keys ([d906d9a](https://github.com/kenstott/calcite/commit/d906d9ade9ae37d95da44f7cf9e8922180a1f22a))
+* **govdata/ref:** register law lobbying and Supreme Court names in the entity bridge ([62dae8c](https://github.com/kenstott/calcite/commit/62dae8cf7ff9f03527879cd7e615c6a63e8e058e))
+* **govdata/ref:** register law text sources for embedding; per-column HTML stripping ([4a5e85f](https://github.com/kenstott/calcite/commit/4a5e85f21ed5cdb4311d9cbef603f509c598bf6d))
+* **govdata/scheduled:** daily windows push, release and build before the pool starts ([bca547b](https://github.com/kenstott/calcite/commit/bca547bc51bda2611da6185437591b6a278a9c59))
+* **govdata/scripts:** every ETL/DQ process runs on a pinned, immutable copy of the jar ([e2566ad](https://github.com/kenstott/calcite/commit/e2566ad1fbcb0a8ee2f7378554893b179ab4f427))
+* **govdata/scripts:** fix-branch.sh gives autonomous fixes a worktree branch that merges only after DQ ([fd45ac7](https://github.com/kenstott/calcite/commit/fd45ac78abd325fc802cba82a03dc1ef90180b7d))
+* **govdata/scripts:** runners-dashboard.py text dashboard for the govdata runners ([4f98b2d](https://github.com/kenstott/calcite/commit/4f98b2dc8d44fa0f336b919251a8b5367a7562d0))
+* **govdata/transport:** class1_rail_county_adjacency — Class I rail presence by county ([ec8a425](https://github.com/kenstott/calcite/commit/ec8a425b2a5452625c3c61413017e4ec2c130cbc))
+* **news-check:** first 4 days of askamerica-news-check results ([566129c](https://github.com/kenstott/calcite/commit/566129ce0e1fef3bc8be60eca7a49e0d0684e2bc))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** don't mis-quote ORDER in WINDOW w AS (ORDER BY ...) ([452bd77](https://github.com/kenstott/calcite/commit/452bd7732b15f6949b4b85c0f951a87e3c4c3929))
+* **askamerica-engine:** explain an engine-jar class-load failure instead of echoing the class name ([352e5fa](https://github.com/kenstott/calcite/commit/352e5fa8b15abb8fb33cfc12cff09d2b6c765151))
+* **askamerica-engine:** keep publish_report gates reading current calls, not a frozen log ([782d46a](https://github.com/kenstott/calcite/commit/782d46a6a637ac20d057dda66771936c1943cc44))
+* **askamerica-engine:** stop flagging trend_pct columns as broken_field ([7e3c26c](https://github.com/kenstott/calcite/commit/7e3c26cdc1ef75800e11872b4b8e22da89c1d919))
+* **askamerica-engine:** use recorded observed coverage before the scan lands; align QCEW declared start ([001c86c](https://github.com/kenstott/calcite/commit/001c86c579a042e7ec6c954881a01465e5d49536))
+* **cyber:** declare the OSV source response as text ([857ced2](https://github.com/kenstott/calcite/commit/857ced2b3bdcedbd56fccd844d61ac4c8bd4cc98))
+* **file/etl:** carry the bulk download reference through withDimensions ([68901ec](https://github.com/kenstott/calcite/commit/68901ecbe22908487bfa87d8c2d069c14dc09c51))
+* **file/etl:** document-source pass no longer sums the -1 writer sentinel into EtlResult rows ([4475917](https://github.com/kenstott/calcite/commit/4475917a91daca7b6943b8e12dadb32fa9bc6692))
+* **file/etl:** download only bulk files referenced by enabled tables ([3cc6b11](https://github.com/kenstott/calcite/commit/3cc6b11adbf525127d94b8b11f1838a1a4898517))
+* **file/etl:** let a bypassing raw cache serve the entry it just wrote ([8dd633e](https://github.com/kenstott/calcite/commit/8dd633e84b46cb623b0332ae7cbdcefd482ef674))
+* **file/etl:** resolve a table's bulk download from its download block ([8b12c4e](https://github.com/kenstott/calcite/commit/8b12c4ecbc8941565602a19047f72cc66817c209))
+* **file/iceberg:** compare list column types without their element IDs ([c964e21](https://github.com/kenstott/calcite/commit/c964e213fd5f7f4c2a2515993b9727c997e4e162))
+* **file/iceberg:** prune superseded metadata.json by key instead of re-listing under the commit lock ([d18e2ce](https://github.com/kenstott/calcite/commit/d18e2cede271f2007a78d73fc8b85a09997d2182))
+* **file/iceberg:** reject the REST catalog type up front instead of throwing NoClassDefFoundError ([442c5e1](https://github.com/kenstott/calcite/commit/442c5e1863f0bf6d5399baf06821699424a354c1))
+* **file:** keep lookbackPeriods when dimensions are resolved ([608ca47](https://github.com/kenstott/calcite/commit/608ca47e614a8aaf4c231198259cb0edb2cf2c3f))
+* **govdata,file/iceberg:** verifier's PK-statistic commit no longer falls back to the highest vN ([57492e6](https://github.com/kenstott/calcite/commit/57492e63d30c707c220fbadf27d3c59942f1a9e5))
+* **govdata/census:** acs_nativity foreign_born_moe aggregates both components ([b9a33ad](https://github.com/kenstott/calcite/commit/b9a33ad6c8fe75d2dfb1f1514f8b4f0d23705185))
+* **govdata/census:** pep_population 2020 from pep/charv pinned to MONTH=7 ([ea0cb25](https://github.com/kenstott/calcite/commit/ea0cb25a427b03d646578e9a478adbde4c94edba))
+* **govdata/econ:** drop the dead first dimensions block from jolts_regional ([441ae0d](https://github.com/kenstott/calcite/commit/441ae0db2289c838a820e366b22e32c0e2f8c4fd))
+* **govdata/econ:** drop the dead second response block from regional_linecodes download ([522ce48](https://github.com/kenstott/calcite/commit/522ce482fc1825bd7137038f8e7d693f24b95a3f))
+* **govdata/econ:** honor enabledTables in EconSchemaFactory hooks ([215a968](https://github.com/kenstott/calcite/commit/215a968139845cb6d99ce575643e269158513b1f))
+* **govdata/econ:** load the NIPA corporate-profits tables into national_accounts ([007b483](https://github.com/kenstott/calcite/commit/007b48338bc4cb7923777de989ab4a37f70c08f3))
+* **govdata/environment:** update egrid_emission_rates coverage after restore ([7b216ca](https://github.com/kenstott/calcite/commit/7b216ca54e06c492cbb150fb116f90c52200c56f))
+* **govdata/fec:** flag implausible independent_expenditures amounts ([5ab83a3](https://github.com/kenstott/calcite/commit/5ab83a36c69878f7871273711812db3baaf83252))
+* **govdata/fec:** state the amount_implausible evidence precisely ([f948076](https://github.com/kenstott/calcite/commit/f948076d6e42c0821aa04b932df474eccc4649b1))
+* **govdata/fiscal:** keep footnoted month rows in snap_benefits_by_geography ([3744641](https://github.com/kenstott/calcite/commit/3744641b9151cefcffb3bba86ddfb5736ebff982))
+* **govdata/fiscal:** warn that usaspending_by_state.obligated_amount is unsuitable for per-capita ranking ([8640e74](https://github.com/kenstott/calcite/commit/8640e74dbbbbbcbccca50c05941e0cb299962a59))
+* **govdata/housing:** aggregate hmda_lending_by_tract per census tract, not per reported state/county ([1d87dbc](https://github.com/kenstott/calcite/commit/1d87dbc2b110f6f58a587c5ec82a79a4b21ea16e))
+* **govdata/housing:** allow 240 idle minutes per worker for the multi-GB HMDA downloads ([8864dda](https://github.com/kenstott/calcite/commit/8864ddaa50bfc9b3450d944d4519d40459dc6c81))
+* **govdata/housing:** reject HMDA downloads that end short of Content-Length ([be45b18](https://github.com/kenstott/calcite/commit/be45b18c3ba40c6efa3684e7e59122a3dac8ee6b))
+* **govdata/housing:** request HMDA by data year (effective_year), not publish year ([d43d5ed](https://github.com/kenstott/calcite/commit/d43d5ed51c669588bd413c4b5fd101f67c93d319))
+* **govdata/housing:** resume a dropped HMDA download with a Range request ([dd2dbed](https://github.com/kenstott/calcite/commit/dd2dbed355e85a2ac2a110b3f24f81b922640546))
+* **govdata/lands:** onrr_revenues declared primaryKey now matches the row grain ([ac67213](https://github.com/kenstott/calcite/commit/ac67213c206b5242ab7a63d912c34d72faf21a5e))
+* **govdata/law:** wire law into all/historical/DQ pool queues; honour year bounds; tree-kill stop-pool ([c929072](https://github.com/kenstott/calcite/commit/c92907266ce1cdc93acc786d03b4d4a9a8c0269d))
+* **govdata/pool:** fill_pool always terminates; SEC-family cap only while other work is queued ([fe1bbb0](https://github.com/kenstott/calcite/commit/fe1bbb0b4270c9b99eb2e2a8f0fa2c859b5c990b))
+* **govdata/pool:** log a SEC-family hold once per change in running count ([ad6e948](https://github.com/kenstott/calcite/commit/ad6e9487172fc7230e3833cb5c8a089f72640fea))
+* **govdata/pool:** log why run-pool holds a slot on a schema+year conflict ([4f40319](https://github.com/kenstott/calcite/commit/4f4031976b034648e8ad86b5a6a88befd4ef2aea))
+* **govdata/pool:** SEC-family concurrency is a hard cap of 3 ([121d0ff](https://github.com/kenstott/calcite/commit/121d0ff1001d21d4508941834b6b6f2bdd3eb9b8))
+* **govdata/pool:** SEC-family limit distinguishes launchable from conflict-held non-SEC slots ([251aa72](https://github.com/kenstott/calcite/commit/251aa72d9e3c6fcc2059f391a723cf83b7d35bc0))
+* **govdata/scheduled:** release at most once per 20 hours ([70576f3](https://github.com/kenstott/calcite/commit/70576f358ae79119e43778bb209d8b543dbe3f47))
+* **govdata/scripts:** charge 1024MB native per pool worker instead of 2048MB ([817c2a4](https://github.com/kenstott/calcite/commit/817c2a4fcbb269b7118b1afa7540d17f77dc5628))
+* **govdata/scripts:** get_timeout_config takes the schema before the first hyphen ([0b23ee0](https://github.com/kenstott/calcite/commit/0b23ee0a571c89d58b5ddf4d0c17cc686731ebfd))
+* **govdata/scripts:** parse worker.sh as one group so an in-place edit cannot break a running worker ([52772bf](https://github.com/kenstott/calcite/commit/52772bf1ea99ac836333db91f43638b98f2bece9))
+* **govdata/scripts:** preserve GOVDATA_JAR and GOVDATA_TABLES through load_env ([bf268ae](https://github.com/kenstott/calcite/commit/bf268ae9ea28b386fad855a2ebe447f711c4bc30))
+* **govdata/scripts:** resolve econ_reference and cyber_* schema YAML paths in worker helpers ([9550661](https://github.com/kenstott/calcite/commit/9550661ff2784aa5e708d6b051156bcbc24ea9e4))
+* **govdata/scripts:** runners-dashboard.py no longer hammers gh/git under an external watch loop ([f732cf0](https://github.com/kenstott/calcite/commit/f732cf06f96e6c815842cb713b48de3e745a4623))
+* **govdata/scripts:** worker-dq-run.sh --rebuild clears the Postgres tracker rows for the schema ([e9d152b](https://github.com/kenstott/calcite/commit/e9d152b0fc54b8cd261763229d6889c23eb91a14))
+* **govdata/scripts:** worker.sh skips the schema+year guard for isolated -dq buckets ([fcb8b6c](https://github.com/kenstott/calcite/commit/fcb8b6c88876c2a9e6faf8a617e7c6c81e8fe42d))
+* **govdata/sec:** resolve unit_ref_normalized from the filing's unit definition ([a3f5d3d](https://github.com/kenstott/calcite/commit/a3f5d3d8b4aff9fbfae603ca6d233ba742f5b36b))
+* **govdata:** bound the ZIP cache listing at a directory so sibling keys are not restored ([38b93e4](https://github.com/kenstott/calcite/commit/38b93e483089330b1d493f6578d5cbd2d7e265d3))
+* **govdata:** replace deprecated JsonNode.fields() to unblock -Werror build ([4426212](https://github.com/kenstott/calcite/commit/4426212688fa8e3b3e2ff0bdb6ace7d50b6a843c))
+* **govdata:** treat HTTP 403 as a refusal, not a missing file ([145d9e6](https://github.com/kenstott/calcite/commit/145d9e6bbd67480ec9e4708b80104b1402c42dab))
+* **scripts:** make start-minio-with-disk.ps1 attach and mount the MinIO disk reliably ([51da1e4](https://github.com/kenstott/calcite/commit/51da1e4da93cd22ad234e87d129dff39214e4510))
+
+
+### Performance Improvements
+
+* **govdata/scripts:** check_schema_year_conflict scans pid files without forking ([c4df113](https://github.com/kenstott/calcite/commit/c4df113a0792fb5e279e9d120e808dbde4e2cb03))
+
+
+### Reverts
+
+* undo runner changes that were never DQ-validated ([61a8b37](https://github.com/kenstott/calcite/commit/61a8b37e907b1b211794847a5e9480f908302fa4))
+
 ## [0.97.4](https://github.com/kenstott/calcite/compare/engine-v0.97.3...engine-v0.97.4) (2026-09-24)
 
 
