@@ -18,7 +18,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -38,15 +41,18 @@ import java.util.Map;
  *       state-week, sourcing mmwryear, weekendingdate, and jurisdiction_of_occurrence.</li>
  *   <li>weekly, 2020-2023 vintage (muzy-jte6) — the same wide-table shape as 3yf8-kanr but
  *       with underscored field names (all_cause, week_ending_date) and added COVID-19
- *       columns. We surface the COVID-19 underlying-cause count
- *       (covid_19_u071_underlying_cause_of_death) as a single COVID-19 row per state-week,
- *       sourcing mmwryear, week_ending_date, and jurisdiction_of_occurrence.</li>
+ *       columns. Each state-week fans out to two rows: an "All Cause" row from all_cause and a
+ *       COVID-19 row from the underlying-cause count
+ *       (covid_19_u071_underlying_cause_of_death), sourcing mmwryear, week_ending_date, and
+ *       jurisdiction_of_occurrence.</li>
  * </ul>
  * All three are normalised to: year, week_ending_date, state, cause_name, full_cause_name,
  * deaths, age_adjusted_rate. Weekly carries raw counts only, so age_adjusted_rate is null.
  *
  * <p>Implements {@link PerRecordResponseTransformer} so HttpSource's streamFromRawCache path
- * handles the paginated {@code {"results":[...]}} cache envelope correctly.
+ * handles the paginated {@code {"results":[...]}} cache envelope correctly. The muzy-jte6
+ * fan-out goes through {@link #transformRecordToMany}; {@link #transformRecord} serves the
+ * one-row-per-record sources only.
  */
 public class CdcMortalityResponseTransformer implements PerRecordResponseTransformer {
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -71,7 +77,10 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
         if (isPreCovidWeekly) {
           mapPreCovidWeekly(record, row);
         } else if (isWeekly) {
-          mapWeekly(record, row);
+          mapWeeklyAllCause(record, row);
+          out.add(row);
+          row = MAPPER.createObjectNode();
+          mapWeeklyCovid(record, row);
         } else {
           mapAnnual(record, row);
         }
@@ -86,15 +95,34 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
 
   @Override
   public void transformRecord(Map<String, Object> row, RequestContext context) {
+    if (isWeekly(context) && !isPreCovidWeekly(context)) {
+      throw new UnsupportedOperationException(
+          "muzy-jte6 weekly records fan out to two rows; use transformRecordToMany");
+    }
     Map<String, Object> source = new HashMap<>(row);
     row.clear();
-    if (isWeekly(context) && isPreCovidWeekly(context)) {
+    if (isWeekly(context)) {
       mapPreCovidWeeklyMap(source, row);
-    } else if (isWeekly(context)) {
-      mapWeeklyMap(source, row);
     } else {
       mapAnnualMap(source, row);
     }
+  }
+
+  @Override
+  public List<Map<String, Object>> transformRecordToMany(
+      Map<String, Object> source, RequestContext context) {
+    if (!isWeekly(context) || isPreCovidWeekly(context)) {
+      transformRecord(source, context);
+      return Collections.singletonList(source);
+    }
+    List<Map<String, Object>> rows = new ArrayList<>(2);
+    Map<String, Object> allCause = new HashMap<>();
+    mapWeeklyAllCauseMap(source, allCause);
+    rows.add(allCause);
+    Map<String, Object> covid = new HashMap<>();
+    mapWeeklyCovidMap(source, covid);
+    rows.add(covid);
+    return rows;
   }
 
   private static boolean isWeekly(RequestContext context) {
@@ -132,28 +160,38 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
     put(row, "source_type", "annual");
   }
 
-  private void mapWeekly(JsonNode r, ObjectNode row) {
+  private void mapWeeklyCovid(JsonNode r, ObjectNode row) {
     put(row, "year", text(r, "mmwryear"));
     put(row, "week_ending_date", text(r, "week_ending_date"));
     put(row, "state", text(r, "jurisdiction_of_occurrence"));
     put(row, "cause_name", "COVID-19");
     put(row, "full_cause_name", "COVID-19 (underlying cause of death)");
-    put(row, "deaths", isCovidSuppressed(r) ? null : text(r, "covid_19_u071_underlying_cause_of_death"));
+    put(row, "deaths", isSuppressed(r, "flag_cov19ucod")
+        ? null : text(r, "covid_19_u071_underlying_cause_of_death"));
+    put(row, "age_adjusted_rate", null);
+    put(row, "source_type", "weekly");
+  }
+
+  private void mapWeeklyAllCause(JsonNode r, ObjectNode row) {
+    put(row, "year", text(r, "mmwryear"));
+    put(row, "week_ending_date", text(r, "week_ending_date"));
+    put(row, "state", text(r, "jurisdiction_of_occurrence"));
+    put(row, "cause_name", "All Cause");
+    put(row, "full_cause_name", "All Cause (weekly provisional)");
+    put(row, "deaths", isSuppressed(r, "flag_allcause") ? null : text(r, "all_cause"));
     put(row, "age_adjusted_rate", null);
     put(row, "source_type", "weekly");
   }
 
   /**
-   * CDC flags a suppressed (1-9, privacy-withheld) COVID-19 weekly count two different ways in
-   * this vintage: some weeks omit {@code covid_19_u071_underlying_cause_of_death} entirely
-   * (already null via {@link #text}), others include the field as the literal placeholder
-   * {@code "0"} alongside a companion {@code flag_cov19mcod} field (value always
-   * {@code "Suppressed (counts 1-9)"} when present — confirmed live, only ever that one value).
-   * Reading the count field alone silently reports a suppressed 1-9 range as a real zero;
-   * checking this flag is what {@code flag_cov19mcod} exists in the source for.
+   * CDC flags a suppressed (1-9, privacy-withheld) weekly count with a companion
+   * {@code flag_*} field (value {@code "Suppressed (counts 1-9)"} when present). For the
+   * COVID-19 underlying-cause count that is {@code flag_cov19ucod}; the count field is absent
+   * in those weeks. {@code flag_cov19mcod} flags the multiple-cause count, a different column,
+   * and is set on weeks where the underlying-cause count is a real value.
    */
-  private static boolean isCovidSuppressed(JsonNode r) {
-    return !r.path("flag_cov19mcod").isMissingNode() && !r.path("flag_cov19mcod").isNull();
+  private static boolean isSuppressed(JsonNode r, String flagField) {
+    return !r.path(flagField).isMissingNode() && !r.path(flagField).isNull();
   }
 
   private void mapPreCovidWeekly(JsonNode r, ObjectNode row) {
@@ -189,14 +227,25 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
     row.put("source_type", "annual");
   }
 
-  private void mapWeeklyMap(Map<String, Object> r, Map<String, Object> row) {
+  private void mapWeeklyCovidMap(Map<String, Object> r, Map<String, Object> row) {
     row.put("year", str(r.get("mmwryear")));
     row.put("week_ending_date", str(r.get("week_ending_date")));
     row.put("state", str(r.get("jurisdiction_of_occurrence")));
     row.put("cause_name", "COVID-19");
     row.put("full_cause_name", "COVID-19 (underlying cause of death)");
-    row.put("deaths", r.get("flag_cov19mcod") != null
+    row.put("deaths", r.get("flag_cov19ucod") != null
         ? null : str(r.get("covid_19_u071_underlying_cause_of_death")));
+    row.put("age_adjusted_rate", null);
+    row.put("source_type", "weekly");
+  }
+
+  private void mapWeeklyAllCauseMap(Map<String, Object> r, Map<String, Object> row) {
+    row.put("year", str(r.get("mmwryear")));
+    row.put("week_ending_date", str(r.get("week_ending_date")));
+    row.put("state", str(r.get("jurisdiction_of_occurrence")));
+    row.put("cause_name", "All Cause");
+    row.put("full_cause_name", "All Cause (weekly provisional)");
+    row.put("deaths", r.get("flag_allcause") != null ? null : str(r.get("all_cause")));
     row.put("age_adjusted_rate", null);
     row.put("source_type", "weekly");
   }

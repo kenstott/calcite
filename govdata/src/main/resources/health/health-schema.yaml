@@ -3733,10 +3733,14 @@ partitionedTables:
       same "AH Weekly Death Counts by State and Select Causes" series: 3yf8-kanr
       (no COVID columns; loaded here from 2014 through 2019, not just 2018-2019 as its
       nickname might suggest) and muzy-jte6 (2020-2023, adds COVID-19 columns). Weekly
-      rows surface the all-cause weekly total for the 3yf8-kanr years and the COVID-19
-      underlying-cause count for 2020-2023; source_type distinguishes annual from
-      weekly, and age_adjusted_rate is populated for annual rows only. This table has no
-      county grain. For county-level mortality outcomes use chr_premature_death_trends
+      rows carry an All Cause total for every state-week 2014-2023, plus a COVID-19
+      underlying-cause count for each 2020-2023 state-week (two rows per state-week in
+      those years). The annual series with cause_name 'All causes' ends at 2017, so weekly
+      All Cause rows are the only all-cause series after 2017. The 2020-2023 weekly rows
+      cover the 50 states, DC, New York City, Puerto Rico and a United States total, by
+      state of occurrence. source_type distinguishes annual from weekly, and age_adjusted_rate is
+      populated for annual rows only.
+      This table has no county grain. For county-level mortality outcomes use chr_premature_death_trends
       (all-cause years of potential life lost before age 75, county rows via
       geo_level='county', through 2023), or cdc_county_injury_mortality and
       cdc_county_overdose_deaths for drug overdose, suicide, homicide and firearm deaths.
@@ -3754,26 +3758,26 @@ partitionedTables:
         type: VARCHAR
         nullable: true
       - name: cause_name
-        comment: "Cause-of-death name; NCHS leading cause (annual) or COVID-19 (weekly)"
+        comment: "Cause-of-death name; NCHS leading cause (annual), or All Cause / COVID-19 (weekly; COVID-19 for 2020-2023 only)"
         type: VARCHAR
         nullable: true
       - name: full_cause_name
-        comment: "Detailed cause name (NCHS 113-cause for annual; COVID-19 detail for weekly)"
+        comment: "Detailed cause name (NCHS 113-cause for annual; All Cause / COVID-19 detail for weekly)"
         type: VARCHAR
         nullable: true
       - name: deaths
         comment: >
-          Number of deaths for the cause/period (COVID-19 deaths for weekly rows). NULL means
+          Number of deaths for the cause/period (weekly rows: All Cause total or COVID-19
+          underlying-cause deaths, per cause_name). NULL means
           CDC suppressed this week's count under its small-cell privacy threshold (typically
           <10), NOT that zero deaths occurred — confirmed live (2,296 weekly state-level
           COVID-19 rows carry this NULL). Do not treat NULL as 0 in a SUM; a plain SUM(deaths)
           already excludes these rows correctly by SQL's own NULL-skipping behavior, but an
           explicit COALESCE(deaths, 0) or an outer join that backfills a missing week with 0
           would silently convert real suppression into a false zero. CDC signals weekly COVID-19
-          suppression two different ways in the source: some weeks omit the count field
-          entirely, others include it as a "0" placeholder alongside a companion suppression
-          flag field — CdcMortalityResponseTransformer checks that flag and nulls the placeholder
-          case too, so every suppressed weekly COVID-19 row reaches this table as NULL either way.
+          suppression in the source with a companion flag_cov19ucod field on weeks where the
+          underlying-cause count field is absent; CdcMortalityResponseTransformer maps both
+          to NULL. A zero COVID-19 count is a real zero.
         type: VARCHAR
         nullable: true
       - name: age_adjusted_rate
