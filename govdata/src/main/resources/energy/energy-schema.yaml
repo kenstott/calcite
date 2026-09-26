@@ -1427,23 +1427,30 @@ partitionedTables:
       - name: snapshot_year
         type: integer
         nullable: false
-        comment: Year of the monthly snapshot file
+        comment: >
+          Year of the December EIA-860M snapshot file this row came from. Every event
+          reappears in each later snapshot it survives into, so pin one snapshot_year or reduce
+          to the newest snapshot per (plant_id, generator_id, change_year) before summing capacity.
       - name: snapshot_month
         type: integer
         nullable: false
-        comment: Month of the monthly snapshot file (12 for December)
+        comment: Always NULL — only the December file is ingested and no month dimension is set.
       - name: change_type
         type: string
         nullable: false
-        comment: Type of capacity change (e.g., 'Planned Addition', 'Planned Retirement', 'New Unit')
+        comment: >
+          Source sheet the row came from: 'Addition' (Operating sheet), 'Retirement' (Retired),
+          'Planned Addition' (Planned) or 'Cancellation' (Canceled or Postponed).
       - name: change_year
         type: integer
         nullable: true
-        comment: Year the change is expected to take effect
+        comment: >
+          Year the change took effect (Addition, Retirement) or is planned to (Planned Addition).
+          NULL on 'Cancellation' rows: the source's Canceled or Postponed sheet has no date column.
       - name: change_month
         type: integer
         nullable: true
-        comment: Month the change is expected to take effect
+        comment: Month the change took effect or is planned to; NULL where change_year is NULL
       - name: plant_name
         type: string
         nullable: true
