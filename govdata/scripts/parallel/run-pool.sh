@@ -37,14 +37,12 @@ MAX_WORKERS=99       # Effectively unlimited — memory budget is the real const
 TIMEOUT_MINS=60
 OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL processes
 # Per-worker native footprint the heap budget can't see: each ETL JVM also holds
-# the in-process DuckDB working set (DUCKDB_MEMORY_LIMIT, default 2GB) + NIO/S3A
-# direct buffers (MaxDirectMemorySize 768m) + metaspace (256m). Admission must
-# count this on top of -Xmx or it over-admits and the box pages (free→~180MB at
-# 8 workers). Live jcmd sampling showed actual native ≈0.9-2.1GB/worker (avg
-# ~1.5GB) under the old 1500m direct cap; with direct now 768m it drops further,
-# so 2048 covers typical + peak headroom without the over-conservatism of the
-# 3200MB absolute ceiling. Tunable via env.
-WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-2048}"
+# the in-process DuckDB working set + NIO/S3A direct buffers (MaxDirectMemorySize 768m) +
+# metaspace (256m). Admission counts this on top of -Xmx so the box does not page. Live worker
+# JVMs peak at <=3.7GB RSS with a 3GB heap (sec; law ~2.1GB, housing ~0.9GB), so 1024 covers the
+# heaviest measured class; the available-memory check in fill_pool gates real pressure on top of
+# this accounting. The runner daemon's POOL_WORKER_MB must equal heap + this value. Tunable via env.
+WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-1024}"
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 RESET_BUDGET_FILE=false  # --reset-budget forces this invocation's -j/-r to become the new baseline
 
