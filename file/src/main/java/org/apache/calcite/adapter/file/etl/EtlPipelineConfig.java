@@ -81,6 +81,7 @@ public class EtlPipelineConfig {
   private final String sourceType;
   private final HttpSourceConfig source;
   private final Map<String, Object> rawSourceConfig;
+  private final String bulkDownload;
   private final Map<String, DimensionConfig> dimensions;
   private final List<ColumnConfig> columns;
   private final MaterializeConfig materialize;
@@ -99,6 +100,7 @@ public class EtlPipelineConfig {
     this.sourceType = builder.sourceType != null ? builder.sourceType : SOURCE_TYPE_HTTP;
     this.source = builder.source;
     this.rawSourceConfig = builder.rawSourceConfig;
+    this.bulkDownload = builder.bulkDownload;
     this.dimensions = builder.dimensions != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, DimensionConfig>(builder.dimensions))
         : Collections.<String, DimensionConfig>emptyMap();
@@ -159,6 +161,14 @@ public class EtlPipelineConfig {
    */
   public Map<String, Object> getRawSourceConfig() {
     return rawSourceConfig;
+  }
+
+  /**
+   * Returns the name of the schema-level bulk download this table's {@code download} block
+   * references, or null when it references none.
+   */
+  public String getBulkDownload() {
+    return bulkDownload;
   }
 
   /**
@@ -344,6 +354,11 @@ public class EtlPipelineConfig {
       if (SOURCE_TYPE_HTTP.equals(sourceType)) {
         builder.source(HttpSourceConfig.fromMap(sourceMap, providerBacked));
       }
+    }
+
+    Map<String, Object> downloadMap = toMap(map.get("download"));
+    if (downloadMap != null && downloadMap.get("bulkDownload") instanceof String) {
+      builder.bulkDownload((String) downloadMap.get("bulkDownload"));
     }
 
     Map<String, Object> dimensionsMap = toMap(map.get("dimensions"));
@@ -795,6 +810,7 @@ public class EtlPipelineConfig {
     private String sourceType;
     private HttpSourceConfig source;
     private Map<String, Object> rawSourceConfig;
+    private String bulkDownload;
     private Map<String, DimensionConfig> dimensions;
     private List<ColumnConfig> columns;
     private MaterializeConfig materialize;
@@ -829,6 +845,11 @@ public class EtlPipelineConfig {
 
     public Builder rawSourceConfig(Map<String, Object> rawSourceConfig) {
       this.rawSourceConfig = rawSourceConfig;
+      return this;
+    }
+
+    public Builder bulkDownload(String bulkDownload) {
+      this.bulkDownload = bulkDownload;
       return this;
     }
 

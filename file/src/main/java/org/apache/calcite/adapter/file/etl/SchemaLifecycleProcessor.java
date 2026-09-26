@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -731,6 +732,7 @@ public class SchemaLifecycleProcessor {
   /**
    * Names of the bulk downloads referenced by at least one table that will run, using the same
    * enabled check as phase 3 (YAML {@code enabled} flag and the table's {@code isEnabled} hook).
+   * A table references a bulk download from its {@code download} block or its {@code source}.
    * A run scoped to a subset of tables therefore downloads only the bulk files those tables read.
    */
   private Set<String> bulkDownloadsUsedByEnabledTables(SchemaContext schemaContext) {
@@ -745,13 +747,19 @@ public class SchemaLifecycleProcessor {
           .tableIndex(i)
           .totalTables(totalTables)
           .build();
-      String bulkName = tableContext.getBulkDownloadName();
-      if (bulkName == null || used.contains(bulkName)) {
+      List<String> bulkNames = new ArrayList<>();
+      if (tableContext.getBulkDownloadName() != null) {
+        bulkNames.add(tableContext.getBulkDownloadName());
+      }
+      if (tableConfig.getBulkDownload() != null) {
+        bulkNames.add(tableConfig.getBulkDownload());
+      }
+      if (bulkNames.isEmpty() || used.containsAll(bulkNames)) {
         continue;
       }
       TableLifecycleListener tableListener = loadTableListener(tableConfig, defaultTableListener);
       if (tableConfig.isEnabled() && tableListener.isTableEnabled(tableContext)) {
-        used.add(bulkName);
+        used.addAll(bulkNames);
       }
     }
     return used;
