@@ -927,6 +927,45 @@
       "body": "A question phrased as 'did states that did X see better outcomes' invites running a cross-sectional regression of the later outcome on the earlier proposed cause and reading a significant coefficient as support for the causal story implied by the question's own wording. The plausible-but-wrong shortcut is stopping there: a real coefficient in the hypothesized direction is consistent with the causal story, but it is equally consistent with the reverse -- richer places having more resources to spend on the 'cause' in the first place, not the 'cause' having produced the outcome.\n\nMeasured directly in this harness: on a question asking whether investing in education/infrastructure or keeping taxes low produced better income growth since 2010, the highest-scoring run ran an explicit reverse regression -- regressing 2010 income level on SUBSEQUENT per-pupil education spending -- and found states richer in 2010 went on to spend MORE per pupil (r=0.59), a real threat to any 'spending caused growth' reading that a same-direction-only analysis would never surface. A second run reached the same core forward finding (no tax-burden/income relationship) but never ran this check and so could not rule out the same confound.\n\nFIX: whenever a question's own phrasing implies a direction of causation between two time-ordered or plausibly-endogenous variables, run the regression in BOTH directions before reporting either coefficient as evidence of the implied direction -- regress the later outcome on the earlier proposed cause, AND regress the earlier proposed-cause's own starting level on the outcome (or on the proposed cause's subsequent change) to check whether the outcome's initial condition predicts the 'cause' just as well or better. Report both coefficients together; a forward relationship that survives being checked in reverse is far stronger evidence than one that was only ever tested in the direction the question suggested. This is a distinct check from a VIF/collinearity check between two competing predictors (see correlated-predictors-need-a-vif-check) -- collinearity asks whether two candidate causes are proxies for each other; this asks whether the proposed cause is itself downstream of the outcome."
     },
     {
+      "id": "test-the-mechanism-behind-a-reported-pattern",
+      "title": "A real correlation, regression, or concentration finding is a description, not an explanation - test what actually drives it when the corpus has the ingredients",
+      "triggers": [
+        "why does this vary",
+        "explain the outlier",
+        "why does this diverge",
+        "what drives",
+        "what explains",
+        "does size explain",
+        "does scale predict",
+        "regional pattern",
+        "outlier state",
+        "diverges from",
+        "tracks tightly",
+        "runs flat",
+        "inverted relationship",
+        "one state dominates",
+        "concentration is driven by"
+      ],
+      "body": "Reporting a real, correctly-computed quantitative finding - a correlation, a fixed-effects regression, a state dominating a total - is easy to treat as the finished answer, because it IS a genuine result and stopping there is not wrong, only incomplete. The plausible-but-wrong shortcut is describing the pattern (which state dominates, how tightly two series correlate, that a regional split exists) without taking the one further step available in the same corpus to explain WHY - and a described-but-unexplained pattern is a materially thinner answer than one that names its driver.\n\nMeasured directly in this harness, three separate instances: (1) a question about whether tax cuts or education spending grew incomes found both null, and separately found the two predictors were themselves collinear (r=0.98) - but never tested whether an EARLIER value of the outcome predicted the LATER value of the proposed cause, the standard reverse-causality check a real relationship would need (moot here since both relationships were null, but the gap is the missing check, not this run's stakes); (2) a question about which state dominates federal oil/gas royalty revenue correctly found and quantified the dominant state's share, but never tested whether leased ACREAGE SIZE correlates with revenue at all - the run that did found acreage barely predicts revenue (r=0.54, rising to r=0.85 excluding the dominant state), meaning formation QUALITY, not quantity, drives the concentration - a materially different and more useful finding than the raw share alone; (3) a question about whether crop-insurance payouts track drought found a real two-way fixed-effects panel result AND a striking regional split (Plains states tracking tightly, Southeast states inverted) but explicitly declined to test any candidate mechanism for the split, leaving it as 'the likely mechanism, not separately regression-tested here' - when the same corpus's policy-type/coverage-plan columns could have tested the leading candidate directly.\n\nFIX: after reporting a correlation, regression, or concentration/skew finding, ask whether the corpus holds a further, reachable test of WHY it holds - a scale/size variable to correlate against the outcome (does quantity explain the skew, or does something else?), a reverse-direction or lagged version of the same regression (does the outcome predict the cause, undermining the causal story?), or a categorical column that could test a named candidate mechanism (a policy type, a coverage plan, a formation type) directly rather than leaving it as an unverified aside. Not every question has a reachable next step - but before treating a described pattern as the finished answer, check for one."
+    },
+    {
+      "id": "recompute-a-stale-external-estimate-from-corpus-tables",
+      "title": "A single old external study's headline figure should be recomputed from current corpus data when the corpus holds (or can be joined to reach) both halves of the calculation",
+      "triggers": [
+        "how much does this cover",
+        "shortfall",
+        "does X compensate for Y",
+        "in lieu of",
+        "make up for",
+        "cost equivalency",
+        "tax-equivalent",
+        "foregone revenue",
+        "compensation ratio",
+        "coverage ratio"
+      ],
+      "body": "A 'does the payment cover the cost' or 'does X compensate for Y' question is easy to answer by finding the one study that already computed a comparable ratio and reporting its headline figure, because it looks authoritative and directly on-point. The plausible-but-wrong shortcut is treating that figure as current when it is not, without checking whether the corpus - possibly by joining two different schemas, not just querying one table - already holds the ingredients to recompute it for the present day.\n\nMeasured directly in this harness: asked whether federal PILT payments to counties cover the property tax counties can't collect on federal land, one run found the ONLY national tax-equivalency study in existence - a real, well-sourced 1999 USDA Forest Service report using FY1997 data - and reported its implied ~30% coverage ratio as the answer, without attempting a current recomputation despite having the payment-side table (`lands.pilt_county_payments`) already queried and a Census county government-finance table (property-tax revenue by county) plausibly reachable in the same corpus's fiscal schema - confirmed reachable because a DIFFERENT run in the same session used exactly that fiscal table for an unrelated question. Two independently-run unaided personas, using two different methods (an original current dataset build, and independent case-study literature), both converged on a materially lower current coverage ratio (1.5%-11%, not ~30%) - meaning the 26-year-old study was not just old but likely wrong by a factor of 3-6x for today.\n\nFIX: when the best available quantified answer to a compensation/coverage/shortfall question is a single study more than a few years old, and the corpus holds one side of the underlying calculation already, check for the OTHER side before reporting the stale figure as the headline number - including checking a different schema than the one the first half came from; the two halves of a 'does the payment cover the cost' question often live in different domains (a payments table in one schema, a tax/finance table in another) and are easy to treat as unconnected because they were never queried in the same session. A current, corpus-built recomputation is a stronger answer than even a well-sourced old study, and the old study still has value - as context for how the ratio has moved over time, not as the headline number itself."
+    },
+    {
       "id": "disclose-modeling-assumptions-and-baseline-vintage-behind-headline-risk-figures",
       "title": "A headline mortality or risk figure built from a dose-response model or an old epidemiological baseline needs its assumption and vintage disclosed, not just the number",
       "triggers": [
