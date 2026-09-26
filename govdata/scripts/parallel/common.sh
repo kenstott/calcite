@@ -254,7 +254,8 @@ configure_r2_remote() {
   export RCLONE_CONFIG_R2_UPLOAD_CONCURRENCY=1
 }
 
-# Resolve the govdata shadow JAR (fat JAR with all dependencies).
+# Resolve the govdata shadow JAR (fat JAR with all dependencies), returned as an immutable pinned
+# copy (scripts/pin-jar.sh) so replacing the original never affects a running job.
 # Override the default search path by setting GOVDATA_JAR to an explicit path,
 # e.g. when building from a worktree in parallel with production:
 #   export GOVDATA_JAR=/path/to/worktree/govdata/build/libs/calcite-govdata-*-all.jar
@@ -267,7 +268,7 @@ resolve_classpath() {
       echo "ERROR: GOVDATA_JAR set but file not found: $jar" >&2
       exit 1
     fi
-    echo "$jar"
+    "$GOVDATA_ROOT/scripts/pin-jar.sh" "$jar" || exit 1
     return
   fi
   jar=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata.jar" 2>/dev/null | head -1)
@@ -282,7 +283,7 @@ resolve_classpath() {
     echo "       Or set GOVDATA_JAR=/path/to/sih-govdata.jar to use a downloaded release jar." >&2
     exit 1
   fi
-  echo "$jar"
+  "$GOVDATA_ROOT/scripts/pin-jar.sh" "$jar" || exit 1
 }
 
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>

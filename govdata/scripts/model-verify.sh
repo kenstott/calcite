@@ -225,6 +225,7 @@ else
     echo "Build it: ./gradlew :govdata:shadowJar" >&2
     exit 2
 fi
+CLASSPATH="$("$GOVDATA_HOME/scripts/pin-jar.sh" "$CLASSPATH")"
 echo "Using jar:  $CLASSPATH"
 echo "Mode:       $MODE"
 echo "Endpoint:   ${AWS_ENDPOINT_OVERRIDE:-<default>}   dir: ${GOVDATA_PARQUET_DIR:-<driver default>}"

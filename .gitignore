@@ -148,3 +148,6 @@ comparative-test-results/
 \#*\#
 .\#*
 *.pid
+
+# Pinned, immutable jar copies (govdata/scripts/pin-jar.sh)
+govdata/.jars/

@@ -112,6 +112,21 @@ if $release_ok; then
   fi
 fi
 
+# ── pinned jar copies ────────────────────────────────────────────────────────
+# Pinned copies (scripts/pin-jar.sh) stay while any process references them, and for a day
+# after they were made; older unused ones are removed.
+snap_dir="$GOVDATA_ROOT/.jars"
+if [ -d "$snap_dir" ] && ! $DRY_RUN; then
+  in_use="$(cat /proc/[0-9]*/environ /proc/[0-9]*/cmdline 2>/dev/null | tr '\0' '\n' \
+            | grep -aoE "$snap_dir/[^ :]+\.jar" | sort -u || true)"
+  while IFS= read -r old_jar; do
+    if ! grep -qxF "$old_jar" <<<"$in_use"; then
+      log "removing unused pinned jar $(basename "$old_jar")"
+      rm -f "$old_jar"
+    fi
+  done < <(find "$snap_dir" -maxdepth 1 -name '*.jar' -mmin +1440)
+fi
+
 # ── 4. build ─────────────────────────────────────────────────────────────────
 stamp="$STAGE_DIR/sih-govdata.jar.commit"
 dest="$STAGE_DIR/sih-govdata.jar"
