@@ -835,10 +835,21 @@ partitionedTables:
       agencies record a whole year's counts in a single month (typically December), so
       month-level seasonality is unreliable; annual totals are the safer grain.
 
+      The FBI revises this master file for the current and recent years as agencies file
+      late or corrected submissions (e.g. NYPD's 2024 monthly murder counts increased
+      after initial publication); a fixed year=YYYY.zip URL is not a stable snapshot. The
+      month dimension below is a pure cache-buster (not present in the URL) so every
+      calendar month re-fetches and re-materializes each year, picking up FBI-side
+      revisions instead of freezing the ingest-time snapshot. Even the fully revised FBI
+      total for a year can still trail an agency's own published figure (e.g. NYPD's own
+      site), since Return A submissions lag and consolidate on the FBI's schedule, not
+      the agency's; that residual gap is a source/methodology difference, not a defect.
+
     dimensions:
       type:
         - reta
       year: *crime_year_range
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     columns:
       - name: identifier_code
@@ -1547,6 +1558,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
         batchPartitionColumns: [year]
