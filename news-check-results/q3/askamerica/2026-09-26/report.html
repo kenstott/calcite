@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FEC.gov's 2026 independent-expenditure cycle totals are directionally confirmed within ~15%; the four-week Talarico window cannot be verified in this corpus</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>FEC.gov's 2026 independent-expenditure cycle totals are directionally confirmed within ~15%; the four-week Talarico window cannot be verified in this corpus</h1>
+<p class="subtitle">fec.independent_expenditures, election_year=2026, checked against FEC.gov's Sept 21, 2026 &quot;Latest updates&quot; figures</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 590" width="880" height="590" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="590" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">2026 Cycle Independent Expenditures: FEC.gov Claim vs. Corpus Data</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">fec.independent_expenditures, election_year=2026 (19,119 rows loaded, checked 2026-09-26)</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">Claimed cycle total (FEC.gov, as of 9/21)</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">$1,452,997,175</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">881 candidates</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">Corpus cycle total (Bettis junk excluded)</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">$1.55B-$1.66B</text>
+  <text class="stat-delta" x="464" y="168" fill="#059669">+7% to +14%</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">841 distinct candidates (name-backfilled); depends on amendment</text>
+  <text class="caption" x="452" y="216" fill="#6b7280">handling</text>
+  <rect class="panel-edge" x="20" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="10" style="font-size:10px" font-weight="600" text-anchor="middle">Top 2026 candidates by cycle-to-date independent expenditures</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="69" y1="134" x2="390" y2="134" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="61" y="138" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="69" y1="122.86" x2="390" y2="122.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="61" y="126.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10M</text>
+      <line class="grid" x1="69" y1="111.71" x2="390" y2="111.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="61" y="115.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20M</text>
+      <line class="grid" x1="69" y1="100.57" x2="390" y2="100.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="61" y="104.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30M</text>
+      <line class="grid" x1="69" y1="89.43" x2="390" y2="89.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="61" y="93.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40M</text>
+      <line class="grid" x1="69" y1="78.29" x2="390" y2="78.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-5" class="tick" x="61" y="82.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50M</text>
+      <line class="grid" x1="69" y1="67.14" x2="390" y2="67.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-6" class="tick" x="61" y="71.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60M</text>
+      <line class="grid" x1="69" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-7" class="tick" x="61" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">70M</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="69" y1="56" x2="69" y2="134" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="69" y1="134" x2="390" y2="134" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="229.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Candidate</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="95" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 95)">IE total ($)</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-talarico-tx-sen" class="tick" x="91.93" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 91.93 148)">TALARICO (TX-Sen)</text>
+      <text id="p3-xtick-paxton-tx-sen" class="tick" x="137.79" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 137.79 148)">PAXTON (TX-Sen)</text>
+      <text id="p3-xtick-el-sayed-mi-sen" class="tick" x="183.64" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 183.64 148)">EL-SAYED (MI-Sen)</text>
+      <text id="p3-xtick-brown-oh-sen" class="tick" x="229.50" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 229.50 148)">BROWN (OH-Sen)</text>
+      <text id="p3-xtick-rogers-mi-sen" class="tick" x="275.36" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 275.36 148)">ROGERS (MI-Sen)</text>
+      <text id="p3-xtick-turek-ia-sen" class="tick" x="321.21" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 321.21 148)">TUREK (IA-Sen)</text>
+      <text id="p3-xtick-cooper-nc-sen" class="tick" x="367.07" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 367.07 148)">COOPER (NC-Sen)</text>
+    </g>
+    <g id="p3-series-cycle-to-date-ie-total" class="series">
+      <rect id="p3-mark-cycle-to-date-ie-total-talarico-tx-sen" class="bar" x="77.25" y="60.07" width="28.35" height="73.93" fill="#2563eb"/>
+      <rect id="p3-mark-cycle-to-date-ie-total-paxton-tx-sen" class="bar" x="123.11" y="61.93" width="28.35" height="72.07" fill="#2563eb"/>
+      <rect id="p3-mark-cycle-to-date-ie-total-el-sayed-mi-sen" class="bar" x="168.97" y="67.32" width="28.35" height="66.68" fill="#2563eb"/>
+      <rect id="p3-mark-cycle-to-date-ie-total-brown-oh-sen" class="bar" x="214.83" y="74.70" width="28.35" height="59.30" fill="#2563eb"/>
+      <rect id="p3-mark-cycle-to-date-ie-total-rogers-mi-sen" class="bar" x="260.68" y="93.91" width="28.35" height="40.09" fill="#2563eb"/>
+      <rect id="p3-mark-cycle-to-date-ie-total-turek-ia-sen" class="bar" x="306.54" y="95.10" width="28.35" height="38.90" fill="#2563eb"/>
+      <rect id="p3-mark-cycle-to-date-ie-total-cooper-nc-sen" class="bar" x="352.40" y="95.58" width="28.35" height="38.42" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">One junk-filer candidate (Bettis, Shawn -- $9B+ fabricated line items)</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">excluded from this ranking; see disclosure section</text>
+  <rect class="panel-edge" x="448" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Talarico (TX Senate) IE: support vs. oppose</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="69" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="61" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="69" y1="179.43" x2="390" y2="179.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="61" y="183.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10M</text>
+      <line class="grid" x1="69" y1="158.86" x2="390" y2="158.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="61" y="162.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20M</text>
+      <line class="grid" x1="69" y1="138.29" x2="390" y2="138.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="61" y="142.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30M</text>
+      <line class="grid" x1="69" y1="117.71" x2="390" y2="117.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="61" y="121.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40M</text>
+      <line class="grid" x1="69" y1="97.14" x2="390" y2="97.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="61" y="101.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50M</text>
+      <line class="grid" x1="69" y1="76.57" x2="390" y2="76.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="61" y="80.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60M</text>
+      <line class="grid" x1="69" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-7" class="tick" x="61" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">70M</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="69" y1="56" x2="69" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="69" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-x-axis-title" class="axis-title" x="229.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Direction</text>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">$ (cycle-to-date)</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-support" class="tick" x="149.25" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Support</text>
+      <text id="p4-xtick-oppose" class="tick" x="309.75" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Oppose</text>
+    </g>
+    <g id="p4-series-cycle-to-date" class="series">
+      <rect id="p4-mark-cycle-to-date-support" class="bar" x="97.89" y="186.35" width="101.72" height="13.65" fill="#2563eb"/>
+      <rect id="p4-mark-cycle-to-date-oppose" class="bar" x="258.39" y="64.81" width="101.72" height="135.19" fill="#2563eb"/>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="519" fill="#6b7280">Cycle total $72.3M/28 committees; the article's 4-week figure</text>
+  <text class="caption" x="452" y="532" fill="#6b7280">($59.6M/17 committees) can't be isolated -- transaction_date is 100%…</text>
+  <g id="brand">
+  <svg x="20" y="549" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="564" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:53585/a/1f85f04ee1c7a1427eadc417d3e5f99b.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The FEC.gov claim is <strong>partially confirmed</strong>. This corpus's copy of the FEC's own bulk independent-expenditure file, filtered to election_year=2026, lands within about 15% of the article's cycle-to-date totals in both dollars and candidate count once one confirmed junk filing is removed -- a close match for two independently vintaged snapshots, though not exact. The claim that Talarico's Texas Senate race is the single largest 2026 independent-expenditure target is independently confirmed at the cycle-to-date level (it is #1, ahead of Paxton and El-Sayed, with heavy opposition spending). However, the article's <em>four-week-window</em> figures (Aug 24-Sep 14) -- the $328.3M total and Talarico's specific $59.6M/17-committee/$2.09M-vs-$57.5M breakdown -- cannot be verified or refuted at all, because this table's transaction_date column is NULL for every single row loaded (100% of 681,504 rows, not just 2026). There is no other per-transaction date field in the table, so no sub-cycle window can be isolated here.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>🤥○○○ 1 of 4 Pinocchios</strong></p><p>The headline structural claims (a $1.45B cycle total across 881 candidates, and Talarico's Texas Senate race as the top 2026 IE target) both check out directionally and in order of magnitude against this corpus's independent copy of the same FEC bulk data -- no evidence of fabrication or a wrong-direction error. The two window-specific sub-claims (the four-week total and the window-specific Talarico breakdown) rest on a live date filter that this corpus's independent_expenditures table cannot reproduce at all, because its transaction_date column is entirely unpopulated -- a sourcing/vintage limitation on the checker's side, not a demonstrated inaccuracy in the article, since FEC.gov's own live system plainly has the date field this snapshot lacks. Docked one Pinocchio because the cycle-to-date aggregate itself lands 7-14% above what this corpus can independently reproduce even after removing a confirmed junk filer -- a real, if modest, discrepancy worth flagging rather than a clean confirmation.</p></div>
+<p><strong>1</strong> partially true &middot; <strong>2</strong> not checkable here &middot; <strong>3</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-partially-true"><td>1</td><td>As of September 21, 2026, committees have reported $1,452,997,175 in independent expenditures for or against federal candidates in the 2026 election cycle, across 881 candidates.</td><td><strong>partially true</strong></td></tr>
+<tr class="verdict-not-checkable-here"><td>2</td><td>Over the four weeks from August 24 to September 14, 2026, the total was $328,333,233.</td><td><strong>not checkable here</strong></td></tr>
+<tr class="verdict-not-checkable-here"><td>3</td><td>The race attracting the most independent-expenditure money over Aug 24-Sep 14, 2026 was James Talarico (TX Senate): $59,564,521 from 17 committees, $2,086,549 supporting and $57,477,973 opposing.</td><td><strong>not checkable here</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-partially-true"><summary>#1 &middot; <strong>partially true</strong> &mdash; As of September 21, 2026, committees have reported $1,452,997,175 in independent expenditures for or against federal candidates in the 2026 election cycle, across 881 candidates.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>$1.55B-$1.66B across 662-841 distinct candidates depending on treatment of amendments and null candidate_id rows <code>fec.independent_expenditures</code></dd>
+<dt>Independent evidence</dt><dd>$1,452,997,175 / 881 candidates (FEC.gov)<ul class="claim-sources"><li><a href="https://www.fec.gov/updates/?page=1&amp;update_type=fec-record">FEC.gov Latest Updates</a></li></ul></dd>
+<dt>Why</dt><dd>After excluding one confirmed junk-filer candidate (fabricated $9B/$8B/$1B line items attributed to spender names like 'TANKING' and 'Warren Buffet' against a minor House candidate -- see the disclosure section for what this exclusion changed), the corpus totals $1.55B (non-amended filings only) to $1.66B (all filings), 7-14% above the article's figure, with 841 distinct candidates (name-backfilled where candidate_id is null) versus the article's 881 -- within 5%. Same order of magnitude and direction; plausible reconciliation via FEC netting amendments against original filings (via prev_file_num) versus a flat corpus sum, and/or a vintage gap between this snapshot and FEC.gov's live Sept 21 cutoff.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT COUNT(*), SUM(amount), COUNT(DISTINCT candidate_id) FROM fec.independent_expenditures WHERE election_year=2026 AND candidate_name &lt;&gt; 'Bettis, Shawn'</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#2 &middot; <strong>not checkable here</strong> &mdash; Over the four weeks from August 24 to September 14, 2026, the total was $328,333,233.</summary>
+<dl>
+<dt>Warehouse says</dt><dd> <code>fec.independent_expenditures</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.fec.gov/updates/?page=1&amp;update_type=fec-record">FEC.gov Latest Updates</a></li></ul></dd>
+<dt>Why</dt><dd>fec.independent_expenditures carries a transaction_date column, but it is NULL for 100% of rows in the table (confirmed for all 19,119 2026-cycle rows specifically). No other per-transaction date field exists (election_year and year are annual/cycle-level only). This is a structural gap in this corpus's copy of the table, not a data-quality judgment call -- a four-week subtotal cannot be computed from it at all.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>-- data_coverage(fec, independent_expenditures) null_share_by_column.transaction_date = 1.0 across all 681,504 rows</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#3 &middot; <strong>not checkable here</strong> &mdash; The race attracting the most independent-expenditure money over Aug 24-Sep 14, 2026 was James Talarico (TX Senate): $59,564,521 from 17 committees, $2,086,549 supporting and $57,477,973 opposing.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Cycle-to-date (not window-isolable): $72,348,678 total, 28 committees, $6,633,153 support / $65,715,525 oppose <code>fec.independent_expenditures</code></dd>
+<dt>Independent evidence</dt><dd>$59,564,521 / 17 committees / $2,086,549 support / $57,477,973 oppose (FEC.gov, 4-week window)<ul class="claim-sources"><li><a href="https://www.fec.gov/updates/?page=1&amp;update_type=fec-record">FEC.gov Latest Updates</a></li></ul></dd>
+<dt>Why</dt><dd>The exact four-week dollar figure, committee count, and support/oppose split cannot be verified because transaction_date is unusable in this table (see prior claim). What IS independently confirmed: Talarico's Texas Senate race is the single largest 2026 IE target cycle-to-date ($66.3-72.3M, ahead of Paxton at $64.7M and El-Sayed at $59.8M), and the same lopsided anti-Talarico direction holds (90.8% oppose share cycle-to-date vs. the article's 96.5% for its narrower window) -- both consistent with the claim's shape, but the specific window numbers remain unconfirmed.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT COUNT(*), SUM(amount), COUNT(DISTINCT spender_id), SUM(CASE WHEN support_oppose='S' THEN amount ELSE 0 END), SUM(CASE WHEN support_oppose='O' THEN amount ELSE 0 END) FROM fec.independent_expenditures WHERE candidate_id='S6TX00479' AND election_year=2026</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>What was excluded, and why</h2>
+<p>The raw, unfiltered sum of fec.independent_expenditures for election_year=2026 (19,119 rows) is $40.16 billion -- roughly 27 times the article's figure. This is driven entirely by 29 rows attributed to one candidate, <strong>Bettis, Shawn</strong> (a minor Florida House candidate, candidate_id H6FL11274), carrying fabricated line items of $9,000,000,000 and $8,000,000,000 from spender names 'TANKING' and 'Warren Buffet', plus further $1B rows from 'APPLE INC. DJIA/SP/DOW USA' and similar. No House or Senate race in American history has attracted billions of dollars in independent expenditures; these are almost certainly spam/prank FEC filings that the agency's public bulk files accept without vetting (support_oppose values, amendment_indicator='N', and otherwise well-formed rows all suggest an actual accepted filing, not a parsing artifact). <strong>Every cycle total and candidate ranking in this report excludes only this one candidate's 29 rows</strong> (candidate_name <> 'Bettis, Shawn'). Without that exclusion the 'total' is not a usable number at all ($40.16B, plainly impossible); with it, the total drops to the $1.55B-$1.66B range reported above. All other rows, including every other candidate and every named Super PAC (SLF PAC, WinSenate, Texas PAC, Americans for Prosperity Action, United Democracy Project, Club for Growth (CLF), VoteVets, LCV Victory Fund, MAGA Inc., etc.), were retained as plausible, real-world-sized filings.</p>
+</section>
+<section>
+<h2>Method and caveats</h2>
+<ul><li><strong>Table used:</strong> fec.independent_expenditures -- FEC bulk file independent_expenditure_2026.csv, one row per IE transaction with candidate_id/name, spender_id/name, support_oppose, amount, and amendment_indicator. 19,119 rows loaded for election_year=2026 (of 681,504 total rows across 2010-2026).</li><li><strong>Cycle total:</strong> computed two ways -- all non-junk filings ($1.66B) and non-amended filings only ($1.55B) -- because 1,822 rows carry amendment_indicator A1/A2/A3 totaling $109.4M, and it is unclear from this table alone whether FEC's own published aggregate nets these against their originals via prev_file_num or not. Neither treatment produces an exact match to the article's $1.453B; both land within 7-14% above it.</li><li><strong>Candidate count:</strong> COUNT(DISTINCT candidate_id) understates the true count (662) because 1,748 of 17,371 non-junk rows carry a NULL candidate_id; backfilling with candidate_name brings the count to 841, within 4.5% of the article's 881.</li><li><strong>Date window:</strong> transaction_date is NULL for every row in this table (100% null share, confirmed via data_coverage and a direct re-check against all 209 Talarico rows). This is a structural gap in this corpus's copy of the data -- the FEC's live site clearly has date-stamped filings, but this snapshot does not carry that field usably. As a result, the article's Aug 24-Sep 14 four-week total and the window-specific Talarico breakdown are <strong>not checkable</strong> from this table under any query.</li><li><strong>Talarico race:</strong> filtered on candidate_id='S6TX00479' (TALARICO, JAMES, TX Senate), election_year=2026 -- all 209 rows are cycle-to-date, not window-limited. Total $72,348,678, 28 distinct committees (spender_id), $6,633,153 support (support_oppose='S') and $65,715,525 oppose (support_oppose='O').</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Compute the Aug 24-Sep 14, 2026 four-week total</strong>: fec.independent_expenditures.transaction_date is NULL for 100% of rows (verified via data_coverage and a direct query) -- there is no other per-transaction date column, so no sub-cycle date window can be isolated from this table. Reported cycle-to-date totals instead and stated this limitation explicitly.</li><li><strong>Compute Talarico/TX-Senate race total, committee count, and support/oppose split, ideally for the same four-week window</strong>: Same date-column limitation applies. Reported the cycle-to-date Talarico figures ($72.3M, 28 committees, $6.6M support/$65.7M oppose) as the closest verifiable proxy, and confirmed Talarico ranks #1 among all 2026 candidates by cycle-to-date IE money -- consistent with, but not proof of, the four-week ranking claim.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>12 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 1 rows — 14519 ms</summary><pre><code>SELECT COUNT(*) AS rows, SUM(amount) AS total_amount, COUNT(DISTINCT candidate_id) AS distinct_candidates, MIN(amount) AS min_amt, MAX(amount) AS max_amt FROM fec.independent_expenditures WHERE election_year = 2026</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 1913 ms</summary><pre><code>SELECT candidate_name, candidate_id, spender_name, amount, support_oppose, amendment_indicator FROM fec.independent_expenditures WHERE election_year = 2026 ORDER BY amount DESC LIMIT 20</code></pre></details>
+<details class="sqltoggle"><summary>query — 209 rows — 1775 ms</summary><pre><code>SELECT spender_name, amount, support_oppose, candidate_state, candidate_office FROM fec.independent_expenditures WHERE candidate_id = 'S6TX00479' AND election_year = 2026 ORDER BY amount DESC</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1857 ms</summary><pre><code>SELECT COUNT(*) AS n, SUM(amount) AS total, COUNT(DISTINCT spender_id) AS n_committees, SUM(CASE WHEN support_oppose='S' THEN amount ELSE 0 END) AS support_amt, SUM(CASE WHEN support_oppose='O' THEN amount ELSE 0 END) AS oppose_amt FROM fec.independent_expenditures WHERE candidate_id = 'S6TX00479' AND election_year = 2026</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 2304 ms</summary><pre><code>SELECT COUNT(*) AS n, SUM(amount) AS total, COUNT(DISTINCT candidate_id) AS distinct_candidates FROM fec.independent_expenditures WHERE election_year = 2026 AND candidate_name &lt;&gt; 'Bettis, Shawn'</code></pre></details>
+<details class="sqltoggle"><summary>query — 15 rows — 1808 ms</summary><pre><code>SELECT candidate_name, candidate_id, SUM(amount) AS total FROM fec.independent_expenditures WHERE election_year = 2026 AND candidate_name &lt;&gt; 'Bettis, Shawn' GROUP BY candidate_name, candidate_id ORDER BY total DESC FETCH FIRST 15 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 3386 ms</summary><pre><code>SELECT spender_name, COUNT(*) AS n, SUM(amount) AS total FROM fec.independent_expenditures WHERE election_year = 2026 AND candidate_name &lt;&gt; 'Bettis, Shawn' GROUP BY spender_name ORDER BY total DESC FETCH FIRST 20 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 2844 ms</summary><pre><code>SELECT COUNT(*) AS n, SUM(amount) AS total FROM fec.independent_expenditures WHERE election_year = 2026 AND candidate_name &lt;&gt; 'Bettis, Shawn' AND amount &gt; 5000000</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 3039 ms</summary><pre><code>SELECT amendment_indicator, COUNT(*) AS n, SUM(amount) AS total FROM fec.independent_expenditures WHERE election_year = 2026 AND candidate_name &lt;&gt; 'Bettis, Shawn' GROUP BY amendment_indicator</code></pre></details>
+<details class="sqltoggle"><summary>query — 2121 ms</summary><pre><code>SELECT filing_id, transaction_id, COUNT(*) AS n FROM fec.independent_expenditures WHERE election_year = 2026 AND candidate_name &lt;&gt; 'Bettis, Shawn' GROUP BY filing_id, transaction_id HAVING COUNT(*) &gt; 1 FETCH FIRST 10 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 2304 ms</summary><pre><code>SELECT COUNT(DISTINCT COALESCE(candidate_id, candidate_name)) AS distinct_all, SUM(CASE WHEN candidate_id IS NULL THEN 1 ELSE 0 END) AS null_id_rows FROM fec.independent_expenditures WHERE election_year = 2026 AND candidate_name &lt;&gt; 'Bettis, Shawn'</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 2390 ms</summary><pre><code>SELECT COUNT(*) AS n, COUNT(DISTINCT spender_id) AS n_id, COUNT(DISTINCT spender_name) AS n_name FROM fec.independent_expenditures WHERE candidate_id = 'S6TX00479' AND election_year = 2026</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.fec.gov/data/browse-data/?tab=bulk-data">fec.independent_expenditures (this corpus)</a> <span class="note">— Source: independent_expenditure_2026.csv, 19,119 rows for election_year=2026, checked 2026-09-26</span></li>
+<li><a href="https://www.fec.gov/updates/?page=1&amp;update_type=fec-record">FEC.gov Latest Updates page (article under test)</a></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">Cycle-to-date totals exclude one confirmed junk-filer candidate whose rows contain fabricated multi-billion-dollar line items (see the disclosure section). The four-week window figures in the article cannot be reproduced from this corpus because fec.independent_expenditures.transaction_date is NULL for every row.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-26</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

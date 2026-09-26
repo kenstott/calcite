@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FBI's claimed 2024-to-2025 crime decline is confirmed by independent computation, except historical superlatives which cannot be checked here</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s3-t1-s1:checked ~ table tbody.s0{display:none}
+#s3-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s3-t1-s1:checked ~ table label[for="s3-t1-s1"]{color:var(--link)}
+#s3-t1-s1:checked ~ table label[for="s3-t1-s1"] .srtcue{opacity:1}
+#s3-t1-s1:checked ~ .srtreset{display:inline-block}
+#s3-t1-s2:checked ~ table tbody.s0{display:none}
+#s3-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s3-t1-s2:checked ~ table label[for="s3-t1-s2"]{color:var(--link)}
+#s3-t1-s2:checked ~ table label[for="s3-t1-s2"] .srtcue{opacity:1}
+#s3-t1-s2:checked ~ .srtreset{display:inline-block}
+#s3-t1-s3:checked ~ table tbody.s0{display:none}
+#s3-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s3-t1-s3:checked ~ table label[for="s3-t1-s3"]{color:var(--link)}
+#s3-t1-s3:checked ~ table label[for="s3-t1-s3"] .srtcue{opacity:1}
+#s3-t1-s3:checked ~ .srtreset{display:inline-block}
+#s3-t1-s4:checked ~ table tbody.s0{display:none}
+#s3-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s3-t1-s4:checked ~ table label[for="s3-t1-s4"]{color:var(--link)}
+#s3-t1-s4:checked ~ table label[for="s3-t1-s4"] .srtcue{opacity:1}
+#s3-t1-s4:checked ~ .srtreset{display:inline-block}
+#s3-t1-s5:checked ~ table tbody.s0{display:none}
+#s3-t1-s5:checked ~ table tbody.s5{display:table-row-group}
+#s3-t1-s5:checked ~ table label[for="s3-t1-s5"]{color:var(--link)}
+#s3-t1-s5:checked ~ table label[for="s3-t1-s5"] .srtcue{opacity:1}
+#s3-t1-s5:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>FBI's claimed 2024-to-2025 crime decline is confirmed by independent computation, except historical superlatives which cannot be checked here</h1>
+<p class="subtitle">crime.cde_offenses (FBI CDE), 51 states + DC, full calendar years 2024 vs 2025</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 694" width="880" height="694" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="694" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">FBI 2025 Crime Data Claim: Computed vs. Claimed Year-over-Year Ch…</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">Source: crime.cde_offenses (FBI CDE), 51 states+DC, full calendar years 2024 vs 2025, ~96% population coverage</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="404" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="404" viewBox="0 0 412 404" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="404" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="12" style="font-size:12px" font-weight="600" text-anchor="middle">Computed % change 2024→2025 vs. article's claimed %</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="66" y1="277.12" x2="390" y2="277.12" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="58" y="281.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-20</text>
+      <line class="grid" x1="66" y1="245.53" x2="390" y2="245.53" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="58" y="249.53" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-18</text>
+      <line class="grid" x1="66" y1="213.94" x2="390" y2="213.94" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="58" y="217.94" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-16</text>
+      <line class="grid" x1="66" y1="182.35" x2="390" y2="182.35" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="58" y="186.35" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-14</text>
+      <line class="grid" x1="66" y1="150.77" x2="390" y2="150.77" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="58" y="154.77" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-12</text>
+      <line class="grid" x1="66" y1="119.18" x2="390" y2="119.18" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="58" y="123.18" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-10</text>
+      <line class="grid" x1="66" y1="87.59" x2="390" y2="87.59" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="58" y="91.59" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-8</text>
+      <line class="grid" x1="66" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-7" class="tick" x="58" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-6</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="66" y1="56" x2="66" y2="277.12" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="66" y1="277.12" x2="390" y2="277.12" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="166.56" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 166.56)">% change</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-violent-crime" class="tick" x="98.40" y="291.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 98.40 291.12)">Violent crime</text>
+      <text id="p1-xtick-murder" class="tick" x="163.20" y="291.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 163.20 291.12)">Murder</text>
+      <text id="p1-xtick-robbery" class="tick" x="228" y="291.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 228 291.12)">Robbery</text>
+      <text id="p1-xtick-agg-assault" class="tick" x="292.80" y="291.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 292.80 291.12)">Agg. assault</text>
+      <text id="p1-xtick-property-crime" class="tick" x="357.60" y="291.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 357.60 291.12)">Property crime</text>
+    </g>
+    <g id="p1-series-computed-this-corpus" class="series">
+      <rect id="p1-mark-computed-this-corpus-violent-crime" class="bar" x="77.66" y="-38.77" width="19.74" height="146.26" fill="#2563eb"/>
+      <rect id="p1-mark-computed-this-corpus-murder" class="bar" x="142.46" y="-38.77" width="19.74" height="277.82" fill="#2563eb"/>
+      <rect id="p1-mark-computed-this-corpus-robbery" class="bar" x="207.26" y="-38.77" width="19.74" height="295.35" fill="#2563eb"/>
+      <rect id="p1-mark-computed-this-corpus-agg-assault" class="bar" x="272.06" y="-38.77" width="19.74" height="114.67" fill="#2563eb"/>
+      <rect id="p1-mark-computed-this-corpus-property-crime" class="bar" x="336.86" y="-38.77" width="19.74" height="191.74" fill="#2563eb"/>
+    </g>
+    <g id="p1-series-claimed-fbi-cbs" class="series">
+      <rect id="p1-mark-claimed-fbi-cbs-violent-crime" class="bar" x="98.40" y="-38.77" width="19.74" height="146.89" fill="#ea580c"/>
+      <rect id="p1-mark-claimed-fbi-cbs-murder" class="bar" x="163.20" y="-38.77" width="19.74" height="285.88" fill="#ea580c"/>
+      <rect id="p1-mark-claimed-fbi-cbs-robbery" class="bar" x="228.00" y="-38.77" width="19.74" height="292.19" fill="#ea580c"/>
+      <rect id="p1-mark-claimed-fbi-cbs-agg-assault" class="bar" x="292.80" y="-38.77" width="19.74" height="113.72" fill="#ea580c"/>
+      <rect id="p1-mark-claimed-fbi-cbs-property-crime" class="bar" x="357.60" y="-38.77" width="19.74" height="195.85" fill="#ea580c"/>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-computed-this-corpus" x="70.50" y="370" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-computed-this-corpus" class="legend-label" x="86.50" y="379" fill="#1f2328" font-size="11" style="font-size:11px">Computed (this corpus)</text>
+      <rect id="p1-legend-swatch-claimed-fbi-cbs" x="230.50" y="370" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-claimed-fbi-cbs" class="legend-label" x="246.50" y="379" fill="#1f2328" font-size="11" style="font-size:11px">Claimed (FBI/CBS)</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="499" fill="#6b7280">Computed from SUM(offense_rate*population/100000) across 12 months, 51</text>
+  <text class="caption" x="24" y="512" fill="#6b7280">states+DC</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="230" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="266" fill="#6b7280">Computed 2025 murder rate</text>
+  <text class="stat-value" x="464" y="296" fill="#1f2328">4.19 per 100k</text>
+  <text class="stat-delta" x="464" y="316" fill="#6b7280">claimed 4.1</text>
+  </g>
+  <text class="caption" x="452" y="499" fill="#6b7280">14,308 est. homicides / 341.8M population x 100k</text>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="20" y="534" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="570" fill="#6b7280">Violent crime match</text>
+  <text class="stat-value" x="36" y="600" fill="#1f2328">-9.26% vs -9.3%</text>
+  <text class="stat-delta" x="36" y="620" fill="#dc2626">within 0.04 pts</text>
+  </g>
+  <g id="p4-stat">
+  <rect class="panel-edge" x="448" y="534" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="570" fill="#6b7280">Property crime match</text>
+  <text class="stat-value" x="464" y="600" fill="#1f2328">-12.14% vs -12.4%</text>
+  <text class="stat-delta" x="464" y="620" fill="#dc2626">within 0.3 pts</text>
+  </g>
+  <g id="brand">
+  <svg x="20" y="653" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="668" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:51087/a/6558fae6d25d99207c4fd59c332f397f.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The core numerical claims in the FBI's 'First Look: 2025 Crime Data' release, as reported by CBS News, are <strong>confirmed</strong> by an independent computation from this corpus's FBI Crime Data Explorer (CDE) table. Summing monthly state-level offense rates x population across all 51 states + DC for full calendar years 2024 and 2025 gives: violent crime -9.26% (claimed -9.3%), murder -17.6% (claimed -18.1%), robbery -18.70% (claimed -18.5%), aggravated assault -7.26% (claimed -7.2%), and property crime -12.14% (claimed -12.4%). Every figure matches within about half a percentage point or less. The computed 2025 murder rate is 4.19 per 100,000, close to the claimed 4.1. The one part of the claim this corpus cannot check is the historical superlative -- 'largest decline since 1936' and 'tied with 1955 and 1956 for lowest rate' -- because this corpus's crime data only goes back to 2010.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ No Pinocchios — true or no significant issues</strong></p><p>Every checkable figure in the article's central claim -- the magnitude of the 2024-to-2025 decline in violent crime, murder, robbery, aggravated assault, and property crime, plus the 2025 murder rate -- is confirmed by an independent computation from this corpus's FBI CDE data, matching within a fraction of a percentage point in every case. The only parts that cannot be graded are two historical superlatives (largest decline since 1936; tied with 1955/1956 for lowest rate) that reach far outside this corpus's 2010-2026 coverage window -- a genuine data-availability gap, not a factual problem with the article's claim, which is consistent with, though not verifiable against, the FBI's own longer historical series.</p></div>
+<p><strong>3</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>2</strong> not checkable here &middot; <strong>7</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Violent crime decreased an estimated 9.3% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>2</td><td>The 9.3% violent crime decline is the largest year-to-year decline since FBI estimations began in 1936.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Murder and non-negligent manslaughter decreased approximately 18.1% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Robbery decreased approximately 18.5% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Aggravated assault decreased approximately 7.2% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Property crime decreased an estimated 12.4% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>The 2025 murder rate was 4.1 per 100,000 inhabitants, tied with 1955 and 1956 for the lowest rate since FBI estimations began.</td><td><strong>not checkable here</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-not-checkable-here"><td>7</td><td>The 2025 murder rate was 4.1 per 100,000 inhabitants, tied with 1955 and 1956 for the lowest rate since FBI estimations began.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Property crime decreased an estimated 12.4% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Aggravated assault decreased approximately 7.2% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Robbery decreased approximately 18.5% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Murder and non-negligent manslaughter decreased approximately 18.1% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>2</td><td>The 9.3% violent crime decline is the largest year-to-year decline since FBI estimations began in 1936.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>Violent crime decreased an estimated 9.3% from 2024 to 2025.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>5</td><td>Aggravated assault decreased approximately 7.2% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Murder and non-negligent manslaughter decreased approximately 18.1% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Property crime decreased an estimated 12.4% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Robbery decreased approximately 18.5% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>The 2025 murder rate was 4.1 per 100,000 inhabitants, tied with 1955 and 1956 for the lowest rate since FBI estimations began.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>2</td><td>The 9.3% violent crime decline is the largest year-to-year decline since FBI estimations began in 1936.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>Violent crime decreased an estimated 9.3% from 2024 to 2025.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>3</td><td>Murder and non-negligent manslaughter decreased approximately 18.1% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Property crime decreased an estimated 12.4% from 2024 to 2025.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>2</td><td>The 9.3% violent crime decline is the largest year-to-year decline since FBI estimations began in 1936.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>The 2025 murder rate was 4.1 per 100,000 inhabitants, tied with 1955 and 1956 for the lowest rate since FBI estimations began.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>Violent crime decreased an estimated 9.3% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Robbery decreased approximately 18.5% from 2024 to 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Aggravated assault decreased approximately 7.2% from 2024 to 2025.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Violent crime decreased an estimated 9.3% from 2024 to 2025.</summary>
+<dl>
+<dt>Article says</dt><dd>-9.3%</dd>
+<dt>Warehouse says</dt><dd>-9.26% (1,242,777 -&gt; 1,127,691 estimated violent crimes) <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News: FBI crime data shows violent crime, murder rate falling</a></li></ul></dd>
+<dt>Why</dt><dd>Independently computed change matches the claimed figure within 0.04 percentage points. Note: crime.cde_trends also carries a national 'Violent Crime' trend_pct of -9.0%, but that column was flagged by this session's diagnostics as broken/out-of-domain (example flagged value: -6.2 for Aggravated Assault) and covers a different, rolling 'June 2025-May 2026' window, not calendar 2024 vs 2025 -- it was not used for this or any other figure in this report.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(offense_rate*population/100000.0) AS est_count FROM crime.cde_offenses WHERE offense_code='violent-crime' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#2 &middot; <strong>not checkable here</strong> &mdash; The 9.3% violent crime decline is the largest year-to-year decline since FBI estimations began in 1936.</summary>
+<dl>
+<dt>Article says</dt><dd>largest since 1936</dd>
+<dt>Warehouse says</dt><dd> <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News: FBI crime data shows violent crime, murder rate falling</a></li></ul></dd>
+<dt>Why</dt><dd>This corpus's only national violent-crime series (crime.cde_offenses) covers 2010-2026 only (declared and observed). No table reaches back to 1936, so this superlative cannot be tested here.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#3 &middot; <strong>mostly true</strong> &mdash; Murder and non-negligent manslaughter decreased approximately 18.1% from 2024 to 2025.</summary>
+<dl>
+<dt>Article says</dt><dd>-18.1%</dd>
+<dt>Warehouse says</dt><dd>-17.6% (17,363 -&gt; 14,308 estimated homicides) <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News: FBI crime data shows violent crime, murder rate falling</a></li></ul></dd>
+<dt>Why</dt><dd>Same direction and closely matching magnitude, within 0.5 percentage points. crime.cde_trends separately shows a 'Murder' trend_pct of -18.7% for its rolling June2025-May2026 window, but that column was flagged broken/out-of-domain by this session's diagnostics and was not used as evidence here -- only the calendar-year crime.cde_offenses computation was used.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(offense_rate*population/100000.0) AS est_count FROM crime.cde_offenses WHERE offense_code='homicide' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; Robbery decreased approximately 18.5% from 2024 to 2025.</summary>
+<dl>
+<dt>Article says</dt><dd>-18.5%</dd>
+<dt>Warehouse says</dt><dd>-18.70% (209,700 -&gt; 170,493 estimated robberies) <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News: FBI crime data shows violent crime, murder rate falling</a></li></ul></dd>
+<dt>Why</dt><dd>Matches within 0.2 percentage points.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(offense_rate*population/100000.0) AS est_count FROM crime.cde_offenses WHERE offense_code='robbery' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Aggravated assault decreased approximately 7.2% from 2024 to 2025.</summary>
+<dl>
+<dt>Article says</dt><dd>-7.2%</dd>
+<dt>Warehouse says</dt><dd>-7.26% (881,425 -&gt; 817,458 estimated aggravated assaults) <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News: FBI crime data shows violent crime, murder rate falling</a></li></ul></dd>
+<dt>Why</dt><dd>Essentially exact match. Note: crime.cde_trends' rolling-window snapshot shows Aggravated Assault trend_pct of -6.2%, the specific value this session's diagnostics flagged as out-of-domain/broken for that column; that table/column was not used as evidence for this or any other figure here.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(offense_rate*population/100000.0) AS est_count FROM crime.cde_offenses WHERE offense_code='aggravated-assault' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; Property crime decreased an estimated 12.4% from 2024 to 2025.</summary>
+<dl>
+<dt>Article says</dt><dd>-12.4%</dd>
+<dt>Warehouse says</dt><dd>-12.14% (6,035,622 -&gt; 5,302,985 estimated property crimes) <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News: FBI crime data shows violent crime, murder rate falling</a></li></ul></dd>
+<dt>Why</dt><dd>Matches within 0.3 percentage points.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(offense_rate*population/100000.0) AS est_count FROM crime.cde_offenses WHERE offense_code='property-crime' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#7 &middot; <strong>not checkable here</strong> &mdash; The 2025 murder rate was 4.1 per 100,000 inhabitants, tied with 1955 and 1956 for the lowest rate since FBI estimations began.</summary>
+<dl>
+<dt>Article says</dt><dd>4.1 per 100,000, tied with 1955/1956</dd>
+<dt>Warehouse says</dt><dd>4.19 per 100,000 (14,308 estimated homicides / 341,784,857 population x 100,000) <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News: FBI crime data shows violent crime, murder rate falling</a></li></ul></dd>
+<dt>Why</dt><dd>The computed 2025 rate (4.19) is close to the claimed 4.1, but crime.cde_offenses only covers 2010-2026, so the comparison to 1955/1956 cannot be verified from this corpus at all.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT SUM(offense_rate*population/100000.0) AS est_homicides, SUM(population)/12.0 AS avg_pop FROM crime.cde_offenses WHERE offense_code='homicide' AND &quot;year&quot;='2025'</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Data and method</h2>
+<p>Table used: <code>crime.cde_offenses</code> (FBI Crime Data Explorer, summarized crime rates by state, offense, and month). This table has no single 'national' row, so a national estimate was built by summing <code>offense_rate * population / 100000</code> across all 51 state_abbr values (50 states + DC) and all 12 months of each calendar year -- the same units the FBI's own national estimate procedure aggregates from agency-level reports. Coverage was checked first: both 2024 and 2025 have all 51 jurisdictions and 12 months present, with average population_coverage_pct of 96.5% (2024) and 96.2% (2025), and monthly coverage stable in the 95-97% range throughout both years (no anomalous low-coverage month distorting either year's total).</p><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s0" checked><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s1"><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s2"><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s3"><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s4"><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s5"><table border=1 cellpadding=6><tr><th><label class="srth" for="s3-t1-s1">Offense<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s3-t1-s2">2024 est. count<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s3-t1-s3">2025 est. count<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s3-t1-s4">Computed % change<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s3-t1-s5">Claimed % change<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>Violent crime</td><td>1,242,777</td><td>1,127,691</td><td>-9.26%</td><td>-9.3%</td></tr><tr><td>Murder</td><td>17,363</td><td>14,308</td><td>-17.59%</td><td>-18.1%</td></tr><tr><td>Robbery</td><td>209,700</td><td>170,493</td><td>-18.70%</td><td>-18.5%</td></tr><tr><td>Aggravated assault</td><td>881,425</td><td>817,458</td><td>-7.26%</td><td>-7.2%</td></tr><tr><td>Property crime</td><td>6,035,622</td><td>5,302,985</td><td>-12.14%</td><td>-12.4%</td></tr></tbody><tbody class="srt s1"><tr><td>Aggravated assault</td><td>881,425</td><td>817,458</td><td>-7.26%</td><td>-7.2%</td></tr><tr><td>Murder</td><td>17,363</td><td>14,308</td><td>-17.59%</td><td>-18.1%</td></tr><tr><td>Property crime</td><td>6,035,622</td><td>5,302,985</td><td>-12.14%</td><td>-12.4%</td></tr><tr><td>Robbery</td><td>209,700</td><td>170,493</td><td>-18.70%</td><td>-18.5%</td></tr><tr><td>Violent crime</td><td>1,242,777</td><td>1,127,691</td><td>-9.26%</td><td>-9.3%</td></tr></tbody><tbody class="srt s2"><tr><td>Property crime</td><td>6,035,622</td><td>5,302,985</td><td>-12.14%</td><td>-12.4%</td></tr><tr><td>Violent crime</td><td>1,242,777</td><td>1,127,691</td><td>-9.26%</td><td>-9.3%</td></tr><tr><td>Aggravated assault</td><td>881,425</td><td>817,458</td><td>-7.26%</td><td>-7.2%</td></tr><tr><td>Robbery</td><td>209,700</td><td>170,493</td><td>-18.70%</td><td>-18.5%</td></tr><tr><td>Murder</td><td>17,363</td><td>14,308</td><td>-17.59%</td><td>-18.1%</td></tr></tbody><tbody class="srt s3"><tr><td>Property crime</td><td>6,035,622</td><td>5,302,985</td><td>-12.14%</td><td>-12.4%</td></tr><tr><td>Violent crime</td><td>1,242,777</td><td>1,127,691</td><td>-9.26%</td><td>-9.3%</td></tr><tr><td>Aggravated assault</td><td>881,425</td><td>817,458</td><td>-7.26%</td><td>-7.2%</td></tr><tr><td>Robbery</td><td>209,700</td><td>170,493</td><td>-18.70%</td><td>-18.5%</td></tr><tr><td>Murder</td><td>17,363</td><td>14,308</td><td>-17.59%</td><td>-18.1%</td></tr></tbody><tbody class="srt s4"><tr><td>Aggravated assault</td><td>881,425</td><td>817,458</td><td>-7.26%</td><td>-7.2%</td></tr><tr><td>Violent crime</td><td>1,242,777</td><td>1,127,691</td><td>-9.26%</td><td>-9.3%</td></tr><tr><td>Property crime</td><td>6,035,622</td><td>5,302,985</td><td>-12.14%</td><td>-12.4%</td></tr><tr><td>Murder</td><td>17,363</td><td>14,308</td><td>-17.59%</td><td>-18.1%</td></tr><tr><td>Robbery</td><td>209,700</td><td>170,493</td><td>-18.70%</td><td>-18.5%</td></tr></tbody><tbody class="srt s5"><tr><td>Aggravated assault</td><td>881,425</td><td>817,458</td><td>-7.26%</td><td>-7.2%</td></tr><tr><td>Violent crime</td><td>1,242,777</td><td>1,127,691</td><td>-9.26%</td><td>-9.3%</td></tr><tr><td>Property crime</td><td>6,035,622</td><td>5,302,985</td><td>-12.14%</td><td>-12.4%</td></tr><tr><td>Murder</td><td>17,363</td><td>14,308</td><td>-17.59%</td><td>-18.1%</td></tr><tr><td>Robbery</td><td>209,700</td><td>170,493</td><td>-18.70%</td><td>-18.5%</td></tr></tbody></table><label class="srtreset" for="s3-t1-s0">reset order</label><p>2025 murder rate: 14,308 estimated homicides / 341,784,857 average 2025 population x 100,000 = <strong>4.19 per 100,000</strong> (claimed: 4.1).</p><p><strong>A separate, less reliable table was checked and set aside:</strong> <code>crime.cde_trends</code> carries a single live snapshot of FBI-published national year-over-year trend percentages (e.g. Violent Crime -9.0%, Murder -18.7%, Aggravated Assault -6.2%, as of a 'June 2025 - May 2026' rolling 12-month window refreshed September 15, 2026). This table's <code>trend_pct</code> column was flagged by this session's own query diagnostics as a high-severity 'broken_field' issue -- values reported out-of-domain for what the column name implies, with the Aggravated Assault row's -6.2% cited by the diagnostic as the example flagged value across all 10 rows. Separately, cde_trends's window is a rolling trailing-12-month comparison that keeps moving forward each month rather than a fixed calendar-year 2024-vs-2025 comparison, so it is not even measuring the same thing as the article's claim. For both reasons, no figure in this report or in the claims table above relies on cde_trends or its trend_pct column -- every cited value comes solely from the independently-aggregated crime.cde_offenses calendar-year computation.</p>
+</section>
+<section>
+<h2>What could not be checked, and why</h2>
+<p><code>crime.cde_offenses</code>, along with every other crime table in this corpus, has a declared and observed coverage window of 2010-2026. No table here carries a national violent-crime or murder-rate series reaching back to 1936, or even to 1955-1956. The claims that the 9.3% violent-crime decline is 'the largest year-to-year decline since FBI estimations began in 1936' and that the 4.1 murder rate is 'tied with 1955 and 1956 for the lowest rate since FBI estimations began' are therefore <strong>not checkable from this corpus</strong> -- this is a genuine data-availability gap (the underlying FBI historical series predates this connector's ingestion window), not evidence the claims are wrong. A search of this corpus's catalog (search_catalog, describe_table) confirmed no substitute table covers pre-2010 national crime rates.</p>
+</section>
+<section>
+<h2>Small residual gaps and their likely source</h2>
+<p>The computed figures are close to but not identical to the claimed figures (typically within 0.05-0.5 percentage points, largest gap on murder at 0.5 points). This is consistent with a methodology difference rather than a data problem: the FBI's official 'First Look' release uses its own estimation procedure to project a national total from ~17,000+ reporting agencies (~96% of population), while this corpus's cde_offenses table separately estimates each state's rate and this analysis sums state-level rate x population products -- a slightly different aggregation path that will not reproduce the FBI's national estimate to the decimal point even when both start from the same underlying agency submissions. The direction and rough magnitude of every figure agree.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Verify 'largest decline since 1936' and 'tied with 1955/1956 for lowest rate' historical superlatives</strong>: crime.cde_offenses (the only national crime time series in this corpus) has coverage of 2010-2026 only, both declared and observed. No table here carries a crime series reaching back to 1936, 1955, or 1956, so these specific historical comparisons cannot be verified or refuted from this data. Graded 'not checkable here' rather than assumed true or false.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>12 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 10 rows — 1103 ms</summary><pre><code>SELECT offense_name, trend_pct, current_range, last_refresh_date, type FROM crime.cde_trends ORDER BY offense_name</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1777 ms</summary><pre><code>SELECT DISTINCT time_series_start_year FROM crime.bjs_nibrs_estimates ORDER BY time_series_start_year DESC LIMIT 10</code></pre></details>
+<details class="sqltoggle"><summary>query — 10 rows — 7507 ms</summary><pre><code>SELECT DISTINCT &quot;year&quot; FROM crime.cde_offenses ORDER BY &quot;year&quot; DESC LIMIT 10</code></pre></details>
+<details class="sqltoggle"><summary>query — 1018 ms</summary><pre><code>SELECT &quot;year&quot;, offense_code, COUNT(*) AS n_months, SUM(offense_rate) AS annual_rate, AVG(population) AS pop, AVG(population_coverage_pct) AS cov FROM crime.cde_offenses WHERE state_abbr='national' AND &quot;year&quot; IN ('2024','2025') AND offense_code IN ('violent-crime','homicide','robbery','aggravated-assault','property-crime') GROUP BY &quot;year&quot;, offense_code ORDER BY offense_code, &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 992 ms</summary><pre><code>SELECT DISTINCT offense_code FROM crime.cde_offenses WHERE state_abbr='national' ORDER BY offense_code</code></pre></details>
+<details class="sqltoggle"><summary>query — 51 rows — 2023 ms</summary><pre><code>SELECT DISTINCT state_abbr FROM crime.cde_offenses ORDER BY state_abbr</code></pre></details>
+<details class="sqltoggle"><summary>query — 10 rows — 2017 ms</summary><pre><code>SELECT DISTINCT offense_code FROM crime.cde_offenses ORDER BY offense_code</code></pre></details>
+<details class="sqltoggle"><summary>query — 2 rows — 1391 ms</summary><pre><code>SELECT &quot;year&quot;, COUNT(DISTINCT state_abbr) AS n_states, COUNT(DISTINCT month) AS n_months, AVG(population_coverage_pct) AS avg_cov, MIN(population_coverage_pct) AS min_cov FROM crime.cde_offenses WHERE offense_code='violent-crime' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 12 rows — 1153 ms</summary><pre><code>SELECT month FROM crime.cde_offenses WHERE offense_code='violent-crime' AND &quot;year&quot;='2025' GROUP BY month ORDER BY month</code></pre></details>
+<details class="sqltoggle"><summary>query — 10 rows — 1329 ms</summary><pre><code>SELECT &quot;year&quot;, offense_code,
+  SUM(offense_rate * population / 100000.0) AS est_count,
+  SUM(population)/12.0 AS avg_pop_proxy
+FROM crime.cde_offenses
+WHERE offense_code IN ('violent-crime','homicide','robbery','aggravated-assault','property-crime')
+  AND &quot;year&quot; IN ('2024','2025')
+GROUP BY &quot;year&quot;, offense_code
+ORDER BY offense_code, &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 24 rows — 1308 ms</summary><pre><code>SELECT &quot;year&quot;, month, SUM(population) AS total_pop FROM crime.cde_offenses WHERE offense_code='violent-crime' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;, month ORDER BY &quot;year&quot;, month</code></pre></details>
+<details class="sqltoggle"><summary>query — 24 rows — 1552 ms</summary><pre><code>SELECT &quot;year&quot;, month, AVG(population_coverage_pct) AS cov FROM crime.cde_offenses WHERE offense_code='violent-crime' AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;, month ORDER BY &quot;year&quot;, month</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://cde.ucr.cjis.gov/">FBI CDE summarized offense rates by state/month</a> <span class="note">— crime.cde_offenses, queried 2026-09-26</span><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, offense_code, SUM(offense_rate*population/100000.0) AS est_count FROM crime.cde_offenses WHERE offense_code IN ('violent-crime','homicide','robbery','aggravated-assault','property-crime') AND &quot;year&quot; IN ('2024','2025') GROUP BY &quot;year&quot;, offense_code</code></pre></details></li>
+<li><a href="https://www.cbsnews.com/news/fbi-crime-data-violent-crime-murder-white-house/">CBS News coverage of FBI 2025 crime data release</a> <span class="note">— Article under test, May 2026</span></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">All computed figures independently derived from crime.cde_offenses (FBI CDE); the historical 1936/1955/1956 superlatives are outside this corpus's 2010-2026 coverage and are reported as not checkable, not as false. crime.cde_trends.trend_pct (a separate live rolling-window snapshot, e.g. Aggravated Assault -6.2%) was flagged by this session's diagnostics as a broken/out-of-domain field and was not used for any figure in this report.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-26</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
