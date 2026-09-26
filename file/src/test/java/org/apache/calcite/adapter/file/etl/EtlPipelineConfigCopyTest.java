@@ -52,6 +52,7 @@ public class EtlPipelineConfigCopyTest {
         "name", "econ.demo",
         "enabled", false,
         "source", map("type", "http", "url", "https://example.invalid/data"),
+        "download", map("bulkDownload", "demo_bulk"),
         "materialize", map("enabled", false),
         "dimensions", map("region", Arrays.asList("east", "west")),
         "columns", Collections.singletonList(map("name", "c1", "type", "string")),

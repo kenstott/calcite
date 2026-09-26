@@ -296,6 +296,7 @@ public class EtlPipelineConfig {
         .sourceType(sourceType)
         .source(source)
         .rawSourceConfig(rawSourceConfig)
+        .bulkDownload(bulkDownload)
         .dimensions(resolvedDimensions)
         .columns(columns)
         .materialize(materialize)
