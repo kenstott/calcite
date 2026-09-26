@@ -209,6 +209,16 @@ run_window() {
     true
   } | tee -a "$window_log"
 
+  # Daily windows start on the code merged since the last window: push, release, build and
+  # stage the jar. A failure leaves the previously staged jar in place, and says so.
+  if [ "$mode" = "daily" ]; then
+    echo "[$(ts)] pre-daily release: push, release, build" | tee -a "$window_log"
+    if ! "$SCRIPT_DIR/pre-daily-release.sh" >> "$window_log" 2>&1; then
+      log_error "ERROR: pre-daily-release failed — the daily window continues on the jar already staged; see $window_log"
+      echo "[$(ts)] ERROR: pre-daily-release failed; continuing on the jar already staged" >> "$window_log"
+    fi
+  fi
+
   while true; do
     local now; now=$(date +%s)
     local remaining=$(( window_end - now ))
