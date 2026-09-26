@@ -298,7 +298,11 @@ partitionedTables:
       - name: review_priority
         type: string
         nullable: true
-        comment: STANDARD or PRIORITY
+        comment: >
+          STANDARD or PRIORITY, taken from the latest submission (see latest_submission_type),
+          so it describes a supplement's review whenever one is the latest action. openFDA
+          leaves it empty on many submissions, mostly older ones, so NULL is common; the
+          ORIG submission's own value is in fda_drug_submissions.review_priority.
       - name: original_approval_date
         type: string
         nullable: true
@@ -424,7 +428,9 @@ partitionedTables:
       - name: review_priority
         type: string
         nullable: true
-        comment: STANDARD or PRIORITY
+        comment: >
+          STANDARD or PRIORITY for this submission. openFDA leaves it empty on many
+          submissions, mostly older ones, so NULL is common.
 
     source:
       type: http
