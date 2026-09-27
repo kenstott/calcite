@@ -388,9 +388,14 @@ final class PgwireGovDataConnector {
       // Reuse the exact catalog file this engine's own embedded mode already seeds/maintains
       // (~/.mcp_askamerica/.duckdb/govdata.duckdb by default — see McpServer's ASKAMERICA_DATA_DIR
       // resolution) rather than letting the spawned server default to its own relative path and
-      // pay for a redundant seed extraction.
+      // pay for a redundant seed extraction. A durable, shared singleton must not adopt a caller's
+      // ephemeral data dir for this, though: a path under the OS temp directory does not outlive
+      // the process that set it, so every later caller would be pinned to a catalog file that can
+      // vanish out from under the running server. Skipped rather than substituted — the server's
+      // own relative-path default is the correct fallback here, same as the "no data dir at all"
+      // case just below this check.
       String dataDir = System.getProperty("ASKAMERICA_DATA_DIR");
-      if (dataDir != null && !dataDir.isEmpty()) {
+      if (dataDir != null && !dataDir.isEmpty() && !isUnderTempDir(dataDir)) {
         pb.environment().put("GOVDATA_DUCKDB_CATALOG",
             new File(new File(dataDir, ".duckdb"), "govdata.duckdb").getAbsolutePath());
       }
@@ -418,6 +423,30 @@ final class PgwireGovDataConnector {
     } catch (Exception e) {
       log().println("[askamerica-mcp] Failed to spawn pgwire-govdata: "
           + e.getClass().getSimpleName() + ": " + e.getMessage());
+    }
+  }
+
+  /** True when {@code path} resolves under the JVM's own OS temp directory ({@code
+   *  java.io.tmpdir}) — where {@code @TempDir}, {@code Files.createTempDirectory}, and similar
+   *  ephemeral-directory facilities always place their output, and where no legitimate durable
+   *  data dir is ever configured. An unresolvable path is treated as not-temp, since the caller's
+   *  own {@code File} construction from it will surface any real problem. */
+  static boolean isUnderTempDir(String path) {
+    String tmpDir = System.getProperty("java.io.tmpdir");
+    if (tmpDir == null || tmpDir.isEmpty()) {
+      return false;
+    }
+    try {
+      File tmp = new File(tmpDir).getCanonicalFile();
+      File candidate = new File(path).getCanonicalFile();
+      for (File p = candidate; p != null; p = p.getParentFile()) {
+        if (p.equals(tmp)) {
+          return true;
+        }
+      }
+      return false;
+    } catch (java.io.IOException e) {
+      return false;
     }
   }
 
