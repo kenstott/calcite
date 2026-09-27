@@ -424,6 +424,15 @@ dimension_values:
     - "MSPUS"
     - "RRVRUSQ156N"
     - "MORTGAGE30US"
+    # New residential sales (Census/HUD New Home Sales, SAAR, mirrored on FRED)
+    - "HSN1F"          # New one-family houses sold, United States (SAAR)
+    - "HSN1FNE"        # New one-family houses sold, Northeast Census region (SAAR)
+    - "HSN1FMW"        # New one-family houses sold, Midwest Census region (SAAR)
+    - "HSN1FS"         # New one-family houses sold, South Census region (SAAR)
+    - "HSN1FW"         # New one-family houses sold, West Census region (SAAR)
+    - "MSPNHSUS"       # Median sales price of new houses sold, United States (monthly, NSA)
+    - "ASPNHSUS"       # Average sales price of new houses sold, United States (monthly, NSA)
+    - "MSACSR"         # Monthly supply of new houses, United States (SA)
     # Sentiment
     - "UMCSENT"
     # Energy & commodities
@@ -5311,7 +5320,7 @@ partitionedTables:
           FRED series identifier (foreign key to reference_fred_series, which carries the title,
           units, frequency, and seasonal adjustment for each). This table is long-format:
           one row per (series, date), so ALWAYS filter on series — units differ per series
-          (percent, index, billions of dollars, thousands of units). The 50 curated series are:
+          (percent, index, billions of dollars, thousands of units). The 59 curated series are:
           rates and monetary policy — DFF effective federal funds rate, FEDFUNDS federal funds
           target rate, DGS3MO / DGS2 / DGS5 / DGS10 / DGS30 Treasury yields at those maturities,
           T10Y2Y 10Y-2Y yield spread, T10YIE 10-year breakeven inflation,
@@ -5335,7 +5344,11 @@ partitionedTables:
           housing — HOUST housing starts, HOUST1F single-family starts, PERMIT building permits,
           EXHOSLUSM495S existing home sales, CSUSHPISA Case-Shiller national home price index,
           MSPUS median sales price of houses sold, RRVRUSQ156N rental vacancy rate,
-          MORTGAGE30US 30-year fixed mortgage rate;
+          MORTGAGE30US 30-year fixed mortgage rate, HSN1F new one-family houses sold (SAAR,
+          the Census/HUD New Residential Sales headline number), HSN1FNE / HSN1FMW / HSN1FS /
+          HSN1FW the same series by Northeast/Midwest/South/West Census region (SAAR),
+          MSPNHSUS median sales price of new houses sold, ASPNHSUS average sales price of new
+          houses sold, MSACSR monthly supply of new houses;
           commodities and FX — DCOILWTICO WTI crude oil price,
           DTWEXBGS broad trade-weighted dollar index;
           business cycle — USREC NBER recession indicator (1=recession, 0=expansion).
@@ -5498,13 +5511,13 @@ partitionedTables:
         # stale marker, simply never dispatched. Raised to 1986, DCOILWTICO's own real
         # observation_start (confirmed live via FRED's /fred/series metadata endpoint), so
         # WTI crude - the series the reported gap was filed against - gets its actual
-        # history rather than 2026-only. The 50 curated series do not share one start date
+        # history rather than 2026-only. The 59 curated series do not share one start date
         # (DFF reaches 1954, DTWEXBGS only 2006), and a year before a given series' own
         # start simply returns an empty observations array rather than erring (already
         # relied upon by this table's own current-year-in-progress handling above), so
         # widening past any one series' floor costs a wasted request, not a failure. Deeper
         # floors for individual series (many reach the 1950s-60s) are a follow-up, not
-        # audited exhaustively here across all 50.
+        # audited exhaustively here across all 59.
         start: "{env:GOVDATA_START_YEAR:1986}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
@@ -9760,9 +9773,24 @@ tables:
 
   - name: housing_indicators
     type: view
-    sql: "SELECT date, MAX(CASE WHEN series = 'HOUST' THEN value END) AS housing_starts, MAX(CASE WHEN series = 'HOUST1F' THEN value END) AS single_family_starts, MAX(CASE WHEN series = 'PERMIT' THEN value END) AS building_permits, MAX(CASE WHEN series = 'EXHOSLUSM495S' THEN value END) AS existing_sales, MAX(CASE WHEN series = 'CSUSHPISA' THEN value END) AS case_shiller_index, MAX(CASE WHEN series = 'MSPUS' THEN value END) AS median_sale_price, MAX(CASE WHEN series = 'MORTGAGE30US' THEN value END) AS mortgage_rate_30y, MAX(CASE WHEN series = 'RRVRUSQ156N' THEN value END) AS rental_vacancy_rate FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('HOUST', 'HOUST1F', 'PERMIT', 'EXHOSLUSM495S', 'CSUSHPISA', 'MSPUS', 'MORTGAGE30US', 'RRVRUSQ156N') GROUP BY date"
+    sql: "SELECT date, MAX(CASE WHEN series = 'HOUST' THEN value END) AS housing_starts, MAX(CASE WHEN series = 'HOUST1F' THEN value END) AS single_family_starts, MAX(CASE WHEN series = 'PERMIT' THEN value END) AS building_permits, MAX(CASE WHEN series = 'EXHOSLUSM495S' THEN value END) AS existing_sales, MAX(CASE WHEN series = 'HSN1F' THEN value END) AS new_home_sales_saar, MAX(CASE WHEN series = 'CSUSHPISA' THEN value END) AS case_shiller_index, MAX(CASE WHEN series = 'MSPUS' THEN value END) AS median_sale_price, MAX(CASE WHEN series = 'MORTGAGE30US' THEN value END) AS mortgage_rate_30y, MAX(CASE WHEN series = 'RRVRUSQ156N' THEN value END) AS rental_vacancy_rate FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('HOUST', 'HOUST1F', 'PERMIT', 'EXHOSLUSM495S', 'HSN1F', 'CSUSHPISA', 'MSPUS', 'MORTGAGE30US', 'RRVRUSQ156N') GROUP BY date"
     comment: >
-      Comprehensive housing market health dashboard. Columns: date, housing_starts (total new housing units started in thousands, annualized), single_family_starts (single-family housing starts subset in thousands), building_permits (authorized building permits in thousands, leading indicator), existing_sales (existing home sales in millions annualized), case_shiller_index (S&P CoreLogic Case-Shiller U.S. National Home Price Index), median_sale_price (median sales price of houses sold in USD), mortgage_rate_30y (30-year fixed rate mortgage average %), rental_vacancy_rate (percentage of rental units vacant). Essential for real estate analysis, construction sector tracking, and housing affordability assessment.
+      Comprehensive housing market health dashboard. Columns: date, housing_starts (total new housing units started in thousands, annualized), single_family_starts (single-family housing starts subset in thousands), building_permits (authorized building permits in thousands, leading indicator), existing_sales (existing home sales in millions annualized), new_home_sales_saar (Census/HUD New Residential Sales: new one-family houses sold, thousands of units, seasonally adjusted annual rate — see new_residential_sales for the regional breakdown and price detail), case_shiller_index (S&P CoreLogic Case-Shiller U.S. National Home Price Index), median_sale_price (median sales price of houses sold in USD), mortgage_rate_30y (30-year fixed rate mortgage average %), rental_vacancy_rate (percentage of rental units vacant). Essential for real estate analysis, construction sector tracking, and housing affordability assessment.
+
+  - name: new_residential_sales
+    type: view
+    sql: "SELECT date, MAX(CASE WHEN series = 'HSN1F' THEN value END) AS sales_saar, MAX(CASE WHEN series = 'HSN1FNE' THEN value END) AS sales_saar_northeast, MAX(CASE WHEN series = 'HSN1FMW' THEN value END) AS sales_saar_midwest, MAX(CASE WHEN series = 'HSN1FS' THEN value END) AS sales_saar_south, MAX(CASE WHEN series = 'HSN1FW' THEN value END) AS sales_saar_west, MAX(CASE WHEN series = 'MSPNHSUS' THEN value END) AS median_price, MAX(CASE WHEN series = 'ASPNHSUS' THEN value END) AS average_price, MAX(CASE WHEN series = 'MSACSR' THEN value END) AS months_supply FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('HSN1F', 'HSN1FNE', 'HSN1FMW', 'HSN1FS', 'HSN1FW', 'MSPNHSUS', 'ASPNHSUS', 'MSACSR') GROUP BY date"
+    comment: >
+      Census/HUD Monthly New Residential Sales (new one-family houses sold), the source of the
+      widely-quoted "new home sales" headline number. Columns: date, sales_saar (United States,
+      thousands of units, seasonally adjusted annual rate — the headline figure, also exposed as
+      housing_indicators.new_home_sales_saar), sales_saar_northeast / sales_saar_midwest /
+      sales_saar_south / sales_saar_west (the same measure by Census region, SAAR),
+      median_price / average_price (sales price of new houses sold, USD, monthly, not seasonally
+      adjusted), months_supply (ratio of new houses for sale to the sales rate, seasonally
+      adjusted). Values mirror FRED's copy of Census's release (series HSN1F/HSN1FNE/HSN1FMW/
+      HSN1FS/HSN1FW/MSPNHSUS/ASPNHSUS/MSACSR); cross-check against
+      census.gov/construction/nrs if a figure looks stale.
 
   - name: monetary_aggregates
     type: view
