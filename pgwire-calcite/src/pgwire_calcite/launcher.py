@@ -36,35 +36,41 @@ from pgwire_calcite.state import ServerState
 log = logging.getLogger(__name__)
 
 
-def probe_bind(host: str, port: int) -> bool:
-    """True if (host, port) looks bindable right now, False if something is already
-    listening there.
+def claim_listen_socket(host: str, port: int) -> socket.socket | None:
+    """Bind AND listen on (host, port) right now, before anything else — the actual fix
+    for kenstott/calcite#(pgwire port exhaustion), not just a pre-flight check.
 
-    Called BEFORE build_backend() specifically to avoid kenstott/calcite#(pgwire port
-    exhaustion): a losing bind race used to construct the full CalciteBackend first —
-    embedding a JVM via JPype and opening ~250 S3/Iceberg connections for govdata — and
-    only then attempt the real bind in start_pgwire_server(). On failure there, the
-    embedded JVM's own non-daemon threads (the S3 SDK's connection-pool threads, in
-    particular) kept the OS process alive even after the Python main thread hit the
-    unhandled OSError, so a loser never actually exited — it just sat there holding
-    ~250 leaked connections forever. Observed live: 37 such zombies exhausted the host's
-    ephemeral port range and broke every other outbound connection on the machine,
-    including unrelated R2 sync and loopback MinIO traffic.
+    The bind used to happen only deep inside start_pgwire_server(), AFTER build_backend()
+    had already run to completion — and build_backend() embeds a JVM via JPype and cold-
+    mounts all 26 govdata schemas from S3/Iceberg metadata, which the SPAWN_TIMEOUT_MILLIS
+    comment on the Java caller's side documents as taking *minutes*, not seconds. During
+    that whole window nobody had actually claimed the port yet, so every other process
+    racing to connect (e.g. many fleet-wide sync workers starting around the same time)
+    would each independently conclude "nothing is listening" and spawn its own redundant,
+    equally expensive backend build — that's why there were 37 of these processes at once,
+    not just two. And whichever ones lost the eventual bind used to leak forever: an
+    embedded JVM's own non-daemon threads (the S3 SDK's connection-pool threads) kept the
+    OS process alive even past the unhandled OSError from a failed bind. Observed live: 37
+    such zombies leaked ~8,300 connections between them, exhausting the host's ephemeral
+    port range and breaking every other outbound/loopback connection on the machine
+    (unrelated R2 sync, MinIO) for 17+ hours.
 
-    This is a best-effort pre-flight check, not a substitute for the real bind (there is
-    an unavoidable TOCTOU gap between this probe and start_pgwire_server's actual bind) —
-    it just makes sure the overwhelmingly common case (a real listener already bound
-    well before this process was even spawned) is caught BEFORE the expensive backend is
-    built, not after."""
-    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    Claiming the real listening socket here, in milliseconds, before build_backend() is
+    called at all, closes both problems at once: the kernel's bind is atomic, so only one
+    process can ever win it, and every other process finds out within milliseconds of its
+    own startup — not minutes into a redundant cold-mount it should never have started.
+
+    Returns the live socket (caller must pass it through to start_pgwire_server(sock=...)
+    and must NOT close it) on success, or None if something else already holds the port."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        probe.bind((host, port))
-        return True
+        sock.bind((host, port))
+        sock.listen()
+        return sock
     except OSError:
-        return False
-    finally:
-        probe.close()
+        sock.close()
+        return None
 
 
 def build_state(
@@ -118,6 +124,7 @@ def serve(
     mtls_mode: str | None = None,
     mtls_bind_principal: bool | None = None,
     statement_timeout_ms: int = 0,
+    sock: socket.socket | None = None,
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking).
 
@@ -125,6 +132,10 @@ def serve(
     (PGWIRE_CALCITE_CLIENT_CA / _MTLS_MODE / _MTLS_BIND_PRINCIPAL when left None); mTLS is
     off unless a CA is configured either way. Only meaningful with ``certfile``/``keyfile``
     also set — mTLS needs a server certificate to negotiate TLS in the first place.
+
+    ``sock``, when given, is an already bound+listening socket from
+    ``claim_listen_socket()`` — see that function's docstring for why binding this early,
+    before the backend is built, is the actual fix for the pgwire port-exhaustion bug.
     """
     # Set the catalog/database name reported to clients (current_database, pg_database,
     # information_schema) BEFORE catalog population reads it. Single source of truth,
@@ -180,7 +191,7 @@ def serve(
             "mTLS client CA is configured but no --tls-cert/--tls-key (or certfile/keyfile) "
             "was given; a server certificate is required to negotiate TLS at all"
         )
-    srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth)
+    srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth, sock=sock)
     return srv
 
 
@@ -374,10 +385,12 @@ def main(argv: list | None = None) -> int:
         extra_props[name] = value
     jdbc = {"lex": args.lex, "fun": args.fun, "schema": args.schema, "extra_props": extra_props}
 
-    # Pre-flight bind check BEFORE the expensive backend build — see probe_bind()'s
-    # docstring. A losing bind race must never get as far as building a CalciteBackend
-    # (JVM + ~250 S3/Iceberg connections) in the first place.
-    if not probe_bind(args.host, args.port):
+    # Claim the real listening socket BEFORE the expensive backend build — see
+    # claim_listen_socket()'s docstring. A losing race must never get as far as building
+    # a CalciteBackend (JVM + ~250 S3/Iceberg connections) in the first place, and must
+    # find out it lost within milliseconds, not minutes into a redundant cold-mount.
+    listen_sock = claim_listen_socket(args.host, args.port)
+    if listen_sock is None:
         log.error(
             "[PGWIRE] %s:%d is already in use — another pgwire-calcite instance is "
             "presumably the real listener. Exiting without building a backend.",
@@ -417,21 +430,22 @@ def main(argv: list | None = None) -> int:
             mtls_mode=args.mtls_mode,
             mtls_bind_principal=args.mtls_bind_principal,
             statement_timeout_ms=args.statement_timeout_ms,
+            sock=listen_sock,
         )
     except OSError:
-        # The bind still failed here despite probe_bind() passing above (an unavoidable
-        # TOCTOU gap — another process won the race in between). The backend is already
-        # built at this point (JVM embedded, S3/Iceberg connections open), and a plain
-        # unhandled exception is exactly what let a loser linger forever before: an
-        # embedded JVM's own non-daemon threads (S3 SDK connection-pool threads) can keep
-        # this OS process alive even after Python's main thread would otherwise exit.
-        # os._exit() forces immediate process termination regardless of what the JVM's
-        # native threads are doing, guaranteeing the leaked connections are actually
-        # released (by the OS closing every fd) rather than held indefinitely.
+        # No bind can fail here anymore — claim_listen_socket() already holds the real
+        # listening socket, and CalciteServer adopts it rather than rebinding (see its
+        # __init__). This is a last-resort safety net for a genuinely unexpected failure,
+        # not the normal bind-race path anymore. Kept anyway because the old failure mode
+        # (a Python-level exception left the process alive forever, held open by an
+        # embedded JVM's own non-daemon threads — the S3 SDK's connection-pool threads in
+        # particular) was exactly the port-exhaustion bug this whole change exists to fix:
+        # os._exit() guarantees the process actually dies and its fds actually close,
+        # regardless of what native JVM threads are doing, rather than trusting a plain
+        # exception to be enough.
         log.error(
-            "[PGWIRE] bind to %s:%d failed after backend was already built — "
-            "another process won the race. Forcing immediate exit to release its "
-            "connections rather than lingering.",
+            "[PGWIRE] unexpected failure starting the server on %s:%d after the listen "
+            "socket was already claimed — forcing immediate exit rather than lingering.",
             args.host, args.port,
         )
         os._exit(1)

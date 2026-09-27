@@ -34,6 +34,7 @@ import decimal
 import logging
 import os
 import re
+import socket
 import socketserver
 import ssl
 import struct
@@ -1203,8 +1204,22 @@ class CalciteServer(BuenaVistaServer):  # PGW-001
         conn: CalciteConnection,
         ssl_ctx: ssl.SSLContext | None = None,
         mtls_auth=None,
+        sock: socket.socket | None = None,
     ) -> None:
-        socketserver.ThreadingTCPServer.__init__(self, server_address, CalciteHandler)  # type: ignore[arg-type]
+        # `sock`, when given, is an already bound+listening socket (see launcher.py's
+        # claim_listen_socket()) claimed BEFORE the caller built its backend — closing the
+        # port-exhaustion leak where a losing bind race used to build a full CalciteBackend
+        # (JVM + ~250 S3/Iceberg connections) first and only discover it lost minutes later.
+        # bind_and_activate=False skips TCPServer's own bind/listen so we don't rebind (which
+        # would race all over again); we just adopt the socket that already won.
+        if sock is not None:
+            socketserver.ThreadingTCPServer.__init__(  # type: ignore[arg-type]
+                self, server_address, CalciteHandler, bind_and_activate=False
+            )
+            self.socket.close()
+            self.socket = sock
+        else:
+            socketserver.ThreadingTCPServer.__init__(self, server_address, CalciteHandler)  # type: ignore[arg-type]
         self.conn = conn
         self.rewriter = None
         self.extensions: dict = {}
@@ -1302,6 +1317,7 @@ def start_pgwire_server(
     port: int,
     ssl_ctx: ssl.SSLContext | None = None,
     mtls_auth=None,
+    sock: socket.socket | None = None,
 ) -> CalciteServer:
     """Start the pgwire server in a daemon thread. Returns the server instance.
 
@@ -1309,6 +1325,11 @@ def start_pgwire_server(
     the Calcite child), so there is no event loop to hand in. ``mtls_auth`` is a
     ``pgwire_calcite.mtls.ClientAuth`` (or None) already applied to ``ssl_ctx`` by the
     caller; it is carried onto the server for principal-binding checks post-handshake.
+
+    ``sock``, when given, is an already bound+listening socket from
+    ``launcher.claim_listen_socket()`` — see ``CalciteServer.__init__`` for why this
+    matters (it's what actually closes the pgwire port-exhaustion bug, not just the
+    caller checking it built a backend for nothing).
     """
     if os.environ.get("PGWIRE_CALCITE_DEBUG_LOG"):
         _debug_log = os.path.expanduser("~/pgwire_calcite_debug.log")
@@ -1321,7 +1342,7 @@ def start_pgwire_server(
         logging.getLogger("buenavista").setLevel(logging.DEBUG)
 
     conn = CalciteConnection()
-    server = CalciteServer((host, port), conn, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth)
+    server = CalciteServer((host, port), conn, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth, sock=sock)
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     log.info("[PGWIRE] listening on %s:%d (TLS=%s)", host, port, ssl_ctx is not None)
