@@ -745,9 +745,15 @@ public class DuckDBJdbcSchemaFactory {
               }
             }
 
-            if (!isCacheHttpfsDisabled()) {
-              addIcebergCacheExclusions(conn);
-            }
+            // Do NOT call addIcebergCacheExclusions here. cache_httpfs_add_exclusion_regex adds
+            // to a single exclusion list shared by every connection to this database instance
+            // (cache_httpfs's settings, including the exclusion list, are GLOBAL, not per-session)
+            // and never de-duplicates. configureCacheHttpfs already registers it once on the
+            // setup connection when the schema is created; every later query connection inherits
+            // that list for free. Registering it again here on every query connection would grow
+            // the list without bound for the life of the process, and cache_httpfs must test that
+            // list against every file it touches, so the more queries a long-running process
+            // serves, the slower every later query against a many-file table becomes.
           }
           // Every query Calcite pushes down to DuckDB runs through a connection from this
           // DataSource. Wrap it so a live Iceberg commit racing a read (version-hint.text
