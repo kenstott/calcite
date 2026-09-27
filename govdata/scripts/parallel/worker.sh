@@ -114,8 +114,19 @@ else
   # worker identity. When launched through run-pool.sh's own detached-launcher wrapper, that
   # registration already exists (the wrapper writes it before invoking this script) and must
   # be left alone, not clobbered with a different PID here.
+  # run-pool.sh's wrapper now suffixes every pid/exit file it writes with its own PID
+  # (POOL_RUN_ID, #741) so two pool instances can never clobber each other's tracking files —
+  # but this self-check still only looked for the old unsuffixed form, so it never found the
+  # wrapper's (correctly suffixed) registration, always concluded "not pool-launched", and ran
+  # the redundant standalone conflict check below — which then found that very same suffixed
+  # pid file via check_schema_year_conflict's worker-*.pid glob and refused against itself.
+  # Confirmed live 2026-09-27: 85 of 93 workers in one historical pool run self-collided this
+  # way. Match either form, same as check_schema_year_conflict/detect_active_schemas already do.
   _existing_worker_pid=""
-  [ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_worker_pid=$(head -1 "$PID_DIR/${WORKER_ID}.pid" 2>/dev/null | tr -d '[:space:]')
+  _existing_pid_file="$PID_DIR/${WORKER_ID}.pid"
+  [ -f "$_existing_pid_file" ] || _existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1)
+  [ -n "$_existing_pid_file" ] && [ -f "$_existing_pid_file" ] \
+    && _existing_worker_pid=$(head -1 "$_existing_pid_file" 2>/dev/null | tr -d '[:space:]')
   _is_pool_launched=false
   if [ -n "$_existing_worker_pid" ] && kill -0 "$_existing_worker_pid" 2>/dev/null; then
     _is_pool_launched=true
