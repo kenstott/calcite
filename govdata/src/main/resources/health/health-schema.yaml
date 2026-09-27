@@ -5053,6 +5053,268 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: cdc_nndss_weekly
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
+    freshness:
+      type: etag
+    comment: >
+      Weekly provisional case counts for nationally notifiable infectious diseases (measles,
+      pertussis, mumps, salmonellosis, Lyme disease, tuberculosis-adjacent conditions not
+      already covered by cdc_wonder_tb, and ~130 others), from CDC's National Notifiable
+      Diseases Surveillance System (NNDSS). State/territory/HHS-region/national grain, by
+      MMWR year and week. Currently updated weekly (confirmed live 2026-09-27: latest data is
+      MMWR week 37 of 2026). disease carries a suffix distinguishing case classification for
+      some conditions (e.g. "Measles, Imported" vs "Measles, Indigenous" — sum both for a
+      total). current_week_count/previous_52_week_max/cumulative_ytd_current_year/
+      cumulative_ytd_previous_year are the source's four case-count measures; each has a
+      companion _flag column that is populated INSTEAD of the count when CDC did not publish
+      a number — see each flag column's comment for the code meanings. Do not treat a NULL
+      count as zero; a flag value of "-" (no reported cases) is the only code that means zero,
+      "U" (unavailable) and "NN"/"N" (not nationally/jurisdictionally notifiable) are not.
+      Complements cdc_wonder_std_morbidity (STI-specific, 1984-2014, frozen) and cdc_wonder_tb
+      (tuberculosis-specific, 1993-2024) with a live, broader disease panel; there is no county
+      grain here (NNDSS publishes at state/territory grain only). reporting_area/location1/
+      location2 casing is inconsistent across years in the source itself (confirmed live
+      2026-09-27: ALL CAPS for 2022 rows, mixed case e.g. "Connecticut" for current 2026 rows)
+      — use UPPER()/LOWER() when joining or filtering on state name rather than assuming one
+      casing convention.
+    columns:
+      - name: reporting_area
+        comment: "State, territory, HHS region, 'U.S. Residents' total, or 'Non-U.S. Residents' category"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."states"'
+      - name: mmwr_year
+        comment: "MMWR (epidemiological) year"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."year"'
+      - name: mmwr_week
+        comment: "MMWR week number (1-53)"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."week"'
+      - name: disease
+        comment: "Disease/condition label; may carry a case-classification suffix (e.g. Imported, Indigenous, Confirmed, Probable)"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."label"'
+      - name: current_week_count
+        comment: "Cases reported for mmwr_week; NULL when current_week_flag is populated instead"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m1"'
+      - name: current_week_flag
+        comment: "Populated instead of current_week_count when no number was published: U=unavailable, -=no reported cases, N=not reportable in this jurisdiction, NN=not nationally notifiable, NP=nationally notifiable but not published"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m1_flag"'
+      - name: previous_52_week_max
+        comment: "Maximum weekly case count over the previous 52 weeks the condition was reportable; NULL when previous_52_week_max_flag is populated instead"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m2"'
+      - name: previous_52_week_max_flag
+        comment: "Populated instead of previous_52_week_max when no number was published (same codes as current_week_flag)"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m2_flag"'
+      - name: cumulative_ytd_current_year
+        comment: "Cumulative year-to-date case count for mmwr_year (partial year when the condition was reportable less than the full year); NULL when cumulative_ytd_current_year_flag is populated instead"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m3"'
+      - name: cumulative_ytd_current_year_flag
+        comment: "Populated instead of cumulative_ytd_current_year when no number was published (same codes as current_week_flag)"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m3_flag"'
+      - name: cumulative_ytd_previous_year
+        comment: "Cumulative year-to-date case count for the prior MMWR year, same week cutoff; NULL when cumulative_ytd_previous_year_flag is populated instead"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m4"'
+      - name: cumulative_ytd_previous_year_flag
+        comment: "Populated instead of cumulative_ytd_previous_year when no number was published (same codes as current_week_flag)"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."m4_flag"'
+      - name: location1
+        comment: "State/territory name; populated only for individually-mappable reporting_area rows, not regional/national aggregates"
+        type: VARCHAR
+        nullable: true
+      - name: location2
+        comment: "Region/national grouping name; populated only for aggregate reporting_area rows, not individual states"
+        type: VARCHAR
+        nullable: true
+      - name: sort_order
+        comment: "Source-assigned display sort key"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_nndss_weekly"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/x9gk-5huc.json"
+      method: GET
+      parameters:
+        "$limit": "5000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_nndss_weekly
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_school_vaccination_coverage
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+      # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
+      # the dataset's own version is the change signal. A hash gate would have to download the
+      # whole response every run to compute one, since the hash is taken from the body.
+    freshness:
+      type: etag
+    comment: >
+      Annual kindergarten vaccination coverage and exemption rates, from CDC's School
+      Vaccination Assessment Program (SchoolVaxView). National and state grain, by school
+      year (e.g. "2025-26"); no county grain. vaccine covers DTP/DTaP/DT, MMR, MMR (PAC,
+      Puerto Rico/American Samoa/Commonwealths reporting), Polio, Hepatitis B, Varicella, and
+      a separate "Exemption" row-type (dose distinguishes Medical/Non-Medical/Any Exemption
+      for those rows). geography_type is National (geography is either "United States" —
+      weighted national estimate — or "U.S. Median" — median of state estimates, NOT the same
+      number) or States (geography is the state name). coverage_estimate is a percentage;
+      confirmed live 2026-09-27 against CDC's Sept 24, 2026 measles update: MMR/United States
+      is 92.4% for 2025-26, down from 95.2% for 2019-20, matching the cited figures exactly.
+      number_of_exemptions is populated only for Exemption rows. Complements
+      cdc_covid_vaccinations (COVID-only, national, frozen at 2023-05-10) with a live,
+      routinely-updated non-COVID childhood vaccination series.
+    columns:
+      - name: vaccine
+        comment: "Vaccine (DTP, DTaP, or DT; MMR; MMR (PAC); Polio; Hepatitis B; Varicella) or 'Exemption' for exemption-rate rows"
+        type: VARCHAR
+        nullable: true
+      - name: dose
+        comment: "Dose/status description (e.g. '2 Doses (or disease history)', 'UTD (or disease history)'); for vaccine='Exemption' this is Medical Exemption, Non-Medical Exemption, or Any Exemption instead"
+        type: VARCHAR
+        nullable: true
+      - name: geography_type
+        comment: "National or States"
+        type: VARCHAR
+        nullable: true
+      - name: geography
+        comment: "State name, or (for geography_type=National) 'United States' (weighted national estimate) or 'U.S. Median' (median of state estimates)"
+        type: VARCHAR
+        nullable: true
+      - name: school_year
+        comment: "School year, e.g. 2025-26"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."year_season"'
+      - name: coverage_estimate
+        comment: "Coverage or exemption percentage"
+        type: VARCHAR
+        nullable: true
+      - name: population_sample_size
+        comment: "Kindergartner population size the estimate is based on"
+        type: VARCHAR
+        nullable: true
+      - name: percent_surveyed
+        comment: "Percent of the kindergartner population represented by the survey"
+        type: VARCHAR
+        nullable: true
+      - name: foot_notes
+        comment: "Source footnote text, when present"
+        type: VARCHAR
+        nullable: true
+      - name: number_of_exemptions
+        comment: "Exemption count; populated only for vaccine='Exemption' rows"
+        type: VARCHAR
+        nullable: true
+      - name: survey_type
+        comment: "Survey methodology description (varies by state/year; public and private-school methodology often differ within one row)"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_school_vaccination_coverage"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/ijqb-a7ye.json"
+      method: GET
+      parameters:
+        "$limit": "5000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_school_vaccination_coverage
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: cdc_teen_birth_rates_county
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when

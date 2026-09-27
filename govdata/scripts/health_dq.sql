@@ -690,6 +690,126 @@ SELECT 'health', 'cdc_county_injury_mortality', 'T7_county_coverage',
 FROM (SELECT COUNT(DISTINCT geoid) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_nndss_weekly (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nndss_weekly', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nndss_weekly', allow_moved_paths := true));
+
+-- T2: row_count (1,991,640 upstream at 2026-09-27: reporting_area x disease x mmwr_week, 2022-2026)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nndss_weekly', 'T2_row_count',
+  CASE WHEN n >= 1900000 THEN 'pass' ELSE 'fail' END,
+  n, 1900000, 'Expected ~1,990,000+ rows (reporting_area x disease x mmwr_week)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nndss_weekly', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nndss_weekly', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nndss_weekly', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nndss_weekly', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nndss_weekly', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL reporting_area, mmwr_year, mmwr_week or disease'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nndss_weekly', allow_moved_paths := true)
+      WHERE reporting_area IS NULL OR mmwr_year IS NULL OR mmwr_week IS NULL OR disease IS NULL);
+
+-- T7: disease coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nndss_weekly', 'T7_disease_coverage',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Distinct disease label values (139 upstream at 2026-09-27)'
+FROM (SELECT COUNT(DISTINCT disease) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nndss_weekly', allow_moved_paths := true));
+
+-- T7: measles present
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nndss_weekly', 'T7_measles_present',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Rows with disease LIKE Measles%'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nndss_weekly', allow_moved_paths := true)
+      WHERE disease LIKE 'Measles%');
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_school_vaccination_coverage (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_school_vaccination_coverage', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_school_vaccination_coverage', allow_moved_paths := true));
+
+-- T2: row_count (8,753 upstream at 2026-09-27: geography x vaccine/dose x school_year, 2009-10 to 2025-26)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_school_vaccination_coverage', 'T2_row_count',
+  CASE WHEN n >= 8000 THEN 'pass' ELSE 'fail' END,
+  n, 8000, 'Expected ~8,750 rows (geography x vaccine/dose x school_year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_school_vaccination_coverage', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_school_vaccination_coverage', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_school_vaccination_coverage', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_school_vaccination_coverage', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_school_vaccination_coverage', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL vaccine, geography_type, geography or school_year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_school_vaccination_coverage', allow_moved_paths := true)
+      WHERE vaccine IS NULL OR geography_type IS NULL OR geography IS NULL OR school_year IS NULL);
+
+-- T7: vaccine coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_school_vaccination_coverage', 'T7_vaccine_coverage',
+  CASE WHEN n >= 5 THEN 'pass' ELSE 'fail' END,
+  n, 5, 'Distinct vaccine values (7 upstream at 2026-09-27, including MMR and Exemption)'
+FROM (SELECT COUNT(DISTINCT vaccine) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_school_vaccination_coverage', allow_moved_paths := true));
+
+-- T7: MMR national 2025-26 sanity check
+INSERT INTO dq_results
+SELECT 'health', 'cdc_school_vaccination_coverage', 'T7_mmr_national_current',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Rows with vaccine=MMR, geography=United States, school_year=2025-26'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_school_vaccination_coverage', allow_moved_paths := true)
+      WHERE vaccine = 'MMR' AND geography = 'United States' AND school_year = '2025-26');
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: cdc_teen_birth_rates_county (data.cdc.gov Socrata; one paginated JSON artifact)
 -- ─────────────────────────────────────────────────────────────
 
