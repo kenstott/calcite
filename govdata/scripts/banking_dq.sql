@@ -3,8 +3,9 @@
 -- Data Quality Script: banking schema
 -- Sources: FDIC BankFind Suite (institutions, locations, history, failures,
 --          sod, financials, summary), CFPB Consumer Complaint Database
---          (consumer_complaints)
--- Tables: 8 Iceberg tables
+--          (consumer_complaints), Federal Reserve Board bulk CSV
+--          (enforcement_actions)
+-- Tables: 9 Iceberg tables
 -- ============================================================================
 
 SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
@@ -261,6 +262,76 @@ FROM (
   SELECT COUNT(*) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/failures', allow_moved_paths := true)
   WHERE id IS NULL
+);
+
+-- ============================================================================
+-- enforcement_actions (Federal Reserve enforcement actions; ~2,893 rows since
+-- 1989, full-history bulk CSV refetched each cycle; partition: type only)
+-- ============================================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'banking', 'enforcement_actions', 'existence',
+  CASE WHEN n = 0 THEN 'fail' ELSE 'pass' END,
+  n, 1, 'row count across full history'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/enforcement_actions', allow_moved_paths := true));
+
+-- T2: row_count. Not year-windowed — one fetch is the Fed's entire published history,
+-- so a low count is a real defect (parse failure or a truncated fetch), not a sparse
+-- period like failures'.
+INSERT INTO dq_results
+SELECT 'banking', 'enforcement_actions', 'row_count',
+  CASE WHEN n < 1000 THEN 'fail' ELSE 'pass' END,
+  n, 1000, 'full-history bulk file; ~2,893 rows observed as of 2026-09'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/enforcement_actions', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/enforcement_actions', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'banking', 'enforcement_actions', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/enforcement_actions', allow_moved_paths := true))
+  WHERE null_percentage = 100.0 AND column_name NOT IN ('type')
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'banking', 'enforcement_actions', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/enforcement_actions', allow_moved_paths := true))
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+);
+
+-- T6: pk_nulls (effective_date NOT NULL; no single-column PK exists in the source —
+-- effective_date + banking_organization is not unique, see table comment)
+INSERT INTO dq_results
+SELECT 'banking', 'enforcement_actions', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  n, 0, 'NULL effective_date'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/enforcement_actions', allow_moved_paths := true)
+  WHERE effective_date IS NULL
+);
+
+-- T7: action_type has multiple distinct non-null values (real variety of enforcement
+-- action types, not a parse artifact collapsing everything into one label)
+INSERT INTO dq_results
+SELECT 'banking', 'enforcement_actions', 'action_type_variety',
+  CASE WHEN n < 2 THEN 'fail' ELSE 'pass' END,
+  n, 2, 'distinct non-null action_type values'
+FROM (
+  SELECT COUNT(DISTINCT action_type) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/enforcement_actions', allow_moved_paths := true)
+  WHERE action_type IS NOT NULL AND action_type != ''
 );
 
 -- ============================================================================

@@ -699,6 +699,116 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # Enforcement Actions — Federal Reserve Board bulk CSV (full-history, static)
+  # ---------------------------------------------------------------------------
+  - name: enforcement_actions
+    freshness:
+      type: last_modified
+    pattern: "type=enforcement_actions/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Federal Reserve enforcement actions against state member banks, bank
+      holding companies, and individuals under Fed jurisdiction — cease-and-
+      desist orders, written agreements, civil money penalties, prohibitions
+      from banking, and prompt corrective action notices. Board of Governors
+      bulk CSV, full history back to 1989, refetched and overwritten in full
+      each cycle (the source carries no per-row last-modified field, so an
+      incremental append could miss a later-added termination_date on an
+      already-seen row). Covers Federal Reserve-supervised entities only:
+      OCC-regulated national banks and FDIC-regulated state non-member banks
+      are NOT covered here, since neither publishes a bulk enforcement feed
+      (OCC's EASearch is a search-only web form; FDIC's BankFind Suite API has
+      no enforcement endpoint). No natural primary key: effective_date +
+      banking_organization is not unique (the source legitimately carries
+      multiple concurrent actions against the same organization on the same
+      date), and there is no cert number to join against banking.institutions
+      — individual_affiliation/banking_organization are free-text name and
+      location strings only. Source: federalreserve.gov/supervisionreg bulk
+      CSV.
+
+    dimensions:
+      type:
+        - enforcement_actions
+
+    columns:
+      - name: effective_date
+        type: date
+        nullable: false
+        comment: Effective date of the action
+        source: "Effective Date"
+      - name: termination_date
+        type: date
+        nullable: true
+        comment: Date the action was terminated/lifted, if any
+        source: "Termination Date"
+      - name: individual_name
+        type: string
+        nullable: true
+        comment: Named individual subject to the action (blank when the action targets an institution, not a person)
+        source: "Individual"
+      - name: individual_affiliation
+        type: string
+        nullable: true
+        comment: Free-text institution name and location the individual was affiliated with at the time of the action (not normalized — no join key to banking.institutions)
+        source: "Individual Affiliation"
+      - name: banking_organization
+        type: string
+        nullable: true
+        comment: Free-text banking organization name and location subject to the action (blank when the action targets an individual rather than the institution itself)
+        source: "Banking Organization"
+      - name: action_type
+        type: string
+        nullable: true
+        comment: Type of enforcement action (e.g. Cease and Desist Order, Written Agreement, Civil Money Penalty — a dollar amount is sometimes appended into this same field by the source); blank for press-release-only entries with no formal action recorded
+        source: "Action"
+      - name: source_url
+        type: string
+        nullable: true
+        comment: Relative path under federalreserve.gov to the source press release or order document; literal "DNE" when the source has no linkable document
+        source: "URL"
+      - name: document_name
+        type: string
+        nullable: true
+        comment: Source document label (e.g. "Press Release")
+        source: "Name"
+      - name: note
+        type: string
+        nullable: true
+        comment: Free-text note from the source, usually blank
+        source: "Note"
+
+    source:
+      type: http
+      url: "https://www.federalreserve.gov/supervisionreg/files/enforcementactions.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=enforcement_actions/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: enforcement_actions
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [type]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # SOD (Summary of Deposits) — FDIC BankFind Suite /banks/sod (delta, annual)
   # ---------------------------------------------------------------------------
   - name: sod
