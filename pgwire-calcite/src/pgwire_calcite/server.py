@@ -660,9 +660,49 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
     #: connected interactive session is never disconnected mid-use.
     _STARTUP_TIMEOUT_SECONDS = 15.0
 
+    #: TCP keepalive tuning for the case _STARTUP_TIMEOUT_SECONDS doesn't cover: a client
+    #: that completes the handshake, then vanishes without a clean close (its machine is
+    #: killed, its network drops) rather than sending FIN/RST. Once authenticated, the
+    #: socket timeout is cleared to blocking forever (see handle_startup's authenticated
+    #: returns) precisely so a real idle-but-connected session isn't disconnected -- but
+    #: that means a plain read on a silently-dead peer blocks forever too: finish() never
+    #: runs, connection_closed() never fires, and CalciteServer's idle-shutdown watcher
+    #: (see maybe_start_idle_shutdown_watcher) never sees the connection count reach zero,
+    #: so an orphaned singleton server can never self-reap. TCP keepalive makes the kernel
+    #: itself probe a silent peer and force a read error if it's actually gone, without
+    #: touching genuinely idle-but-alive sessions (which keep answering pings just fine).
+    #: ~30s idle + 3 probes * 10s apart = dead peer detected within ~60s worst case.
+    _KEEPALIVE_IDLE_SECONDS = 30
+    _KEEPALIVE_INTERVAL_SECONDS = 10
+    _KEEPALIVE_PROBE_COUNT = 3
+
+    def _enable_tcp_keepalive(self) -> None:
+        sock = self.request
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        except OSError:
+            return  # not a real TCP socket (e.g. a test double) -- nothing more to do
+        # Option names differ by platform (Linux: TCP_KEEPIDLE; macOS: TCP_KEEPALIVE for
+        # the same "seconds idle before the first probe" role) -- set whichever exist
+        # rather than assuming one platform, and never let a missing/rejected option
+        # (an unsupported kernel, a mocked socket in a unit test) abort the connection.
+        for opt_name, value in (
+            (getattr(socket, "TCP_KEEPIDLE", None), self._KEEPALIVE_IDLE_SECONDS),
+            (getattr(socket, "TCP_KEEPALIVE", None), self._KEEPALIVE_IDLE_SECONDS),
+            (getattr(socket, "TCP_KEEPINTVL", None), self._KEEPALIVE_INTERVAL_SECONDS),
+            (getattr(socket, "TCP_KEEPCNT", None), self._KEEPALIVE_PROBE_COUNT),
+        ):
+            if opt_name is None:
+                continue
+            try:
+                sock.setsockopt(socket.IPPROTO_TCP, opt_name, value)
+            except OSError:
+                pass
+
     def setup(self) -> None:
         super().setup()
         self.request.settimeout(self._STARTUP_TIMEOUT_SECONDS)
+        self._enable_tcp_keepalive()
         self.server.connection_opened()
 
     def finish(self) -> None:
