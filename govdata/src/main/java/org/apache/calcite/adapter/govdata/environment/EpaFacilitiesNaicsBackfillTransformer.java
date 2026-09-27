@@ -79,7 +79,9 @@ public class EpaFacilitiesNaicsBackfillTransformer implements RowTransformer {
       }
       JsonNode root = MAPPER.readTree(in);
       Map<String, String> map = new HashMap<>();
-      root.fields().forEachRemaining(e -> map.put(e.getKey(), e.getValue().asText()));
+      for (Map.Entry<String, JsonNode> e : root.properties()) {
+        map.put(e.getKey(), e.getValue().asText());
+      }
       return map;
     } catch (Exception e) {
       throw new RuntimeException("Failed to load " + CROSSWALK_RESOURCE + ": " + e.getMessage(),
