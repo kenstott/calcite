@@ -331,18 +331,31 @@ partitionedTables:
       reference_period_desc is annual ('YEAR') for production/yield/area but weekly
       ('WEEK #nn') or monthly for condition/progress measures, so filter statisticcat_desc
       before comparing reference_period_desc across rows. NassQuickStatsTransformer drops
-      the in-season forecast vintages NASS also publishes for production/yield
-      (reference_period_desc 'YEAR - AUG/SEP/OCT/NOV FORECAST') so this table carries only
-      each year's final published annual estimate for those measures, not every revision.
-      agg_level_desc carries COUNTY and STATE rows for the same commodity/year side by
-      side, each independently summing to the true total (COUNTY rows for a state already
-      sum to that state's STATE row, including 'OTHER (COMBINED) COUNTIES' placeholder
-      rows — one per asd_code — for counties NASS suppresses from individual disclosure);
-      filter to a single agg_level_desc before aggregating, since summing across levels
-      multiplies the total. PRODUCTION additionally carries a parallel unit_desc='$' series
-      (crop value) alongside the physical unit_desc='BU' series for the same key; filter
-      unit_desc to one before summing — combining agg_level_desc and unit_desc unfiltered
-      inflates a national PRODUCTION total roughly 5x. Joins to geo.counties via the
+      the in-season vintages NASS also publishes for production/yield/area
+      (reference_period_desc 'YEAR - AUG/SEP/OCT/NOV FORECAST' or 'YEAR - JAN/MAR/JUN/AUG/
+      SEP/OCT/DEC ACREAGE') so this table carries only each year's final published annual
+      estimate for those measures, not every in-season revision. agg_level_desc carries
+      COUNTY and STATE rows for the same commodity/year side by side, each independently
+      summing to the true total (COUNTY rows for a state already sum to that state's STATE
+      row, including 'OTHER (COMBINED) COUNTIES' placeholder rows — one per asd_code — for
+      counties NASS suppresses from individual disclosure); filter to a single
+      agg_level_desc before aggregating, since summing across levels multiplies the total.
+      PRODUCTION additionally carries a parallel unit_desc='$' series (crop value)
+      alongside the physical unit_desc='BU' series for the same key; filter unit_desc to
+      one before summing — combining agg_level_desc and unit_desc unfiltered inflates a
+      national PRODUCTION total roughly 5x. domain_desc/domaincat_desc and class_desc are
+      further crosstab dimensions, not row-count noise — 'TOTAL'/'ALL CLASSES' is the
+      aggregate row, everything else is a breakdown (e.g. domain_desc 'ECONOMIC CLASS',
+      class_desc a named cultivar); filter both to 'TOTAL'/'ALL CLASSES' for a single
+      per-geography annual figure. Likewise prodn_practice_desc/util_practice_desc
+      distinguish irrigated-vs-not and grain-vs-silage submeasures — filter to 'ALL
+      PRODUCTION PRACTICES'/the desired utilization for a single total. source_desc is
+      'SURVEY' (the continuous annual series) or 'CENSUS' (the quinquennial Census of
+      Agriculture, years ending 2 or 7); most CENSUS rows have no SURVEY counterpart and
+      carry commodities/geographies SURVEY doesn't cover, but where both report the
+      identical annual total ('TOTAL'/'YEAR') for the same commodity/class/practice/
+      geography, NassQuickStatsTransformer drops the CENSUS duplicate so the annual series
+      stays single-valued and comparable year over year. Joins to geo.counties via the
       derived county_fips column and to geo.states via state_fips_code; also joinable to
       disasters drought/storm tables by county+year for yield-impact analysis.
 

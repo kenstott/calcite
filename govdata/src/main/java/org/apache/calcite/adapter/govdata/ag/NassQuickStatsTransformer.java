@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Transformer for the USDA NASS QuickStats API, shared by nass_crop_production
  * and nass_livestock_inventory (QuickStats returns a uniform record shape across
@@ -108,11 +111,25 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
         return "[]";
       }
 
+      Set<String> surveyTotalAnnualKeys = new HashSet<>();
+      for (JsonNode record : data) {
+        if ("SURVEY".equals(getTextValue(record, "source_desc"))
+            && "TOTAL".equals(getTextValue(record, "domain_desc"))
+            && "YEAR".equals(getTextValue(record, "reference_period_desc"))) {
+          surveyTotalAnnualKeys.add(totalAnnualKey(record));
+        }
+      }
+
       ArrayNode out = MAPPER.createArrayNode();
       int skippedForecasts = 0;
+      int skippedCensusDuplicates = 0;
       for (JsonNode record : data) {
         if (isForecastVintage(record)) {
           skippedForecasts++;
+          continue;
+        }
+        if (isCensusDuplicateOfSurvey(record, surveyTotalAnnualKeys)) {
+          skippedCensusDuplicates++;
           continue;
         }
         out.add(transformRecord(record));
@@ -120,6 +137,10 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
       if (skippedForecasts > 0) {
         LOGGER.debug("NASS: dropped {} in-season forecast-vintage records for {}",
             skippedForecasts, context.getDimensionValues());
+      }
+      if (skippedCensusDuplicates > 0) {
+        LOGGER.debug("NASS: dropped {} CENSUS records duplicating a SURVEY annual total for {}",
+            skippedCensusDuplicates, context.getDimensionValues());
       }
       LOGGER.debug("NASS: transformed {} records for {}", out.size(),
           context.getDimensionValues());
@@ -151,6 +172,38 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
       return false;
     }
     return referencePeriod.endsWith(" FORECAST") || referencePeriod.endsWith(" ACREAGE");
+  }
+
+  /**
+   * NASS's quinquennial Census of Agriculture re-publishes its own state/county estimate for
+   * the same annual total ({@code domain_desc} "TOTAL", {@code reference_period_desc} "YEAR")
+   * that the continuous SURVEY program already reports for that year, commodity, class and
+   * geography -- source_desc "CENSUS" vs "SURVEY" is the only field that distinguishes the two
+   * rows. Most CENSUS rows have no SURVEY counterpart (SURVEY skips many minor commodities and
+   * small producing states that CENSUS still enumerates) and must be kept; only the subset that
+   * duplicates an already-present SURVEY row is dropped, so the annual series stays continuous
+   * and comparable year over year rather than double-counting in census years (ending 2 or 7).
+   */
+  private boolean isCensusDuplicateOfSurvey(JsonNode record, Set<String> surveyTotalAnnualKeys) {
+    if (!"CENSUS".equals(getTextValue(record, "source_desc"))
+        || !"TOTAL".equals(getTextValue(record, "domain_desc"))
+        || !"YEAR".equals(getTextValue(record, "reference_period_desc"))) {
+      return false;
+    }
+    return surveyTotalAnnualKeys.contains(totalAnnualKey(record));
+  }
+
+  /**
+   * Identifies a single annual-total statistical series independent of {@code source_desc}:
+   * {@code short_desc} already encodes commodity, class, production/utilization practice,
+   * statisticcat and unit; combined with geography and year, it is the natural key SURVEY and
+   * CENSUS both populate when they report the same series.
+   */
+  private String totalAnnualKey(JsonNode record) {
+    return getTextValue(record, "short_desc") + "|" + getTextValue(record, "agg_level_desc")
+        + "|" + getTextValue(record, "state_alpha") + "|" + getTextValue(record, "county_ansi")
+        + "|" + getTextValue(record, "county_code") + "|" + getTextValue(record, "asd_code")
+        + "|" + record.path("year").asText();
   }
 
   private ObjectNode transformRecord(JsonNode record) {
