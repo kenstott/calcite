@@ -1685,7 +1685,14 @@ partitionedTables:
         type: string
         nullable: true
         expression: 'src."FAC_NAICS_CODES"'
-        comment: NAICS codes (space-separated)
+        comment: >
+          NAICS codes (space-separated). Blank for ~51% of facilities in the
+          ECHO Exporter bulk feed, including many with real compliance/violation
+          history and a populated sic_codes — the source only carries FAC_SIC_CODES
+          for these, no NAICS equivalent in any program-specific field either
+          (CAA/CWA/RCRA_NAICS). A naics_codes-only industrial-sector filter will
+          silently exclude such facilities; sic_codes is the fallback classification
+          when naics_codes is null.
       - name: sic_codes
         type: string
         nullable: true
@@ -1750,7 +1757,13 @@ partitionedTables:
         type: integer
         nullable: true
         expression: 'TRY_CAST(src."CWA_13QTRS_EFFLNT_EXCEEDANCES" AS INTEGER)'
-        comment: CWA effluent-limit exceedance violations, last 13 quarters (null when none)
+        comment: >
+          CWA effluent-limit exceedance violations, last 13 quarters. Null both
+          for facilities with no CWA/NPDES permit at all and for permitted
+          dischargers with zero reported exceedances (source represents both as
+          blank, not 0) — confirmed live: ~93% of facilities under active CWA
+          compliance tracking still carry a blank value here. Not a coverage gap;
+          a positive count reliably indicates a real exceedance history.
       - name: caa_compliance_status
         type: string
         nullable: true
