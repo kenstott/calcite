@@ -1620,8 +1620,10 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       EPA ECHO Exporter — one row per regulated facility (~3.2M) with registry
-      identity, location (address, lat/lon, NAICS/SIC codes), and a rolled-up
-      compliance/enforcement summary: inspection count and last-inspection date,
+      identity, location (address, lat/lon, NAICS/SIC codes — naics_codes is
+      backfilled from sic_codes for some SIC-only facilities, see
+      naics_codes_derived), and a rolled-up compliance/enforcement summary:
+      inspection count and last-inspection date,
       formal enforcement action count, total penalties, significant-noncompliance
       flag, overall plus per-statute (CAA/CWA/RCRA/SDWA) compliance status, and
       violation-frequency rollups — quarters (of the last 12) in noncompliance
@@ -1686,13 +1688,22 @@ partitionedTables:
         nullable: true
         expression: 'src."FAC_NAICS_CODES"'
         comment: >
-          NAICS codes (space-separated). Blank for ~51% of facilities in the
-          ECHO Exporter bulk feed, including many with real compliance/violation
-          history and a populated sic_codes — the source only carries FAC_SIC_CODES
-          for these, no NAICS equivalent in any program-specific field either
-          (CAA/CWA/RCRA_NAICS). A naics_codes-only industrial-sector filter will
-          silently exclude such facilities; sic_codes is the fallback classification
-          when naics_codes is null.
+          NAICS codes (space-separated); source-native, or a 2-digit NAICS
+          sector backfilled from sic_codes when the source has none — see
+          naics_codes_derived. Still blank for ~9% of facilities: those with
+          no sic_codes either, or whose sic_codes span more than one NAICS
+          sector (EpaFacilitiesNaicsBackfillTransformer will not guess a
+          sector). A naics_codes-only industrial-sector filter that also wants
+          those excludes them; sic_codes is the fallback classification.
+      - name: naics_codes_derived
+        type: boolean
+        nullable: false
+        expression: 'src."NAICS_CODES_DERIVED" = ''Y'''
+        comment: >
+          True when naics_codes was backfilled from sic_codes via the
+          Census 1997-NAICS-to-1987-SIC crosswalk (govdata-ops#694) rather
+          than sourced natively from FAC_NAICS_CODES. A derived value is a
+          coarse 2-digit NAICS sector, not a precise source-native code.
       - name: sic_codes
         type: string
         nullable: true
@@ -1784,6 +1795,11 @@ partitionedTables:
         nullable: true
         expression: 'src."SDWA_COMPLIANCE_STATUS"'
         comment: Safe Drinking Water Act compliance status
+
+    hooks:
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.environment.EpaFacilitiesNaicsBackfillTransformer"
 
     source:
       type: http
