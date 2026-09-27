@@ -2785,16 +2785,6 @@ public class McpServer {
             + "Current status: " + (telemetryOptIn ? "OPTED IN" : "OPTED OUT") + ".",
             schema(telemetryProps, new String[]{"enabled"})));
 
-        ObjectNode updateSchemaProps = MAPPER.createObjectNode();
-        tools.add(
-            tool("update_schema",
-            "Rebuild the catalog against current data and reconnect, without a new server "
-            + "deploy. Use after a data problem that broke one or more deferred views has been "
-            + "fixed (e.g. a sync gap), to retry them now instead of waiting for a query to "
-            + "stumble onto each one. Discards every cached connection — the next tool call "
-            + "reconnects fresh, so expect one slower call right after this.",
-            schema(updateSchemaProps, new String[]{})));
-
         ObjectNode memoryLimitProps = MAPPER.createObjectNode();
         memoryLimitProps.set(
             "limit",
@@ -3214,11 +3204,6 @@ public class McpServer {
                 case "web_fetch": {
                     log.println("[askamerica-mcp] tool=web_fetch url=" + args.path("url").asText());
                     text = webFetch(args);
-                    break;
-                }
-                case "update_schema": {
-                    log.println("[askamerica-mcp] tool=update_schema");
-                    text = updateSchema();
                     break;
                 }
                 case "set_memory_limit": {
@@ -11920,43 +11905,6 @@ public class McpServer {
             : "Telemetry disabled. No data will be shared.";
     }
 
-    /**
-     * Rebuilds every still-pending deferred view against current data on the live catalog
-     * connection, then discards all cached schema connections so the next call reconnects
-     * fresh. The rebuild writes into the on-disk DuckDB catalog file, which makes it newer
-     * than the running jar's bundled seed — {@code GovDataSeedInstaller} checks exactly that
-     * before ever re-extracting, so a later process restart won't overwrite this rebuild.
-     */
-    private static String updateSchema() throws Exception {
-        // Not reachable over the shared pgwire connection (kenstott/calcite#364): it isn't a
-        // CalciteConnection to unwrap, and a schema rebuild there would affect every process
-        // sharing the server, not just this one. No side-channel admin path exists yet.
-        if (PgwireGovDataConnector.isEnabled()) {
-            return "update_schema is not available while ASKAMERICA_PGWIRE_MODE is enabled "
-                + "(this engine is a thin client of a shared pgwire-govdata server; "
-                + "rebuild that server's catalog directly instead).";
-        }
-        Connection conn = getCatalogConnection();
-        org.apache.calcite.jdbc.CalciteConnection calciteConn =
-            conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
-        org.apache.calcite.adapter.file.duckdb.DuckDBCatalogMaintenance.rebuildPendingViews(
-            calciteConn);
-
-        int discarded = 0;
-        for (String key : new java.util.ArrayList<>(schemaConns.keySet())) {
-            Connection existing = schemaConns.remove(key);
-            schemaConnOpenedAtMillis.remove(key);
-            schemaLatches.remove(key);
-            schemaErrors.remove(key);
-            closeQuietly(existing, key);
-            discarded++;
-        }
-        log.println("[askamerica-mcp] update_schema rebuilt catalog, discarded " + discarded
-            + " cached connection(s)");
-        return "Schema catalog rebuilt against current data. " + discarded
-            + " cached connection(s) discarded — the next tool call reconnects fresh.";
-    }
-
     private static final java.util.regex.Pattern MEMORY_LIMIT_PATTERN =
         java.util.regex.Pattern.compile("^[0-9]+(\\.[0-9]+)?\\s*(B|KB|MB|GB|TB|KIB|MIB|GIB|TIB)?$",
             java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -11964,8 +11912,8 @@ public class McpServer {
     /**
      * Sets DuckDB's memory_limit/max_memory on the live connection immediately, and updates the
      * calcite.duckdb.memoryLimit system property so connections opened later (e.g. after
-     * update_schema discards the cache, or a TTL-driven reconnect) pick up the same value
-     * instead of reverting to the 8GB startup default.
+     * a TTL-driven reconnect) pick up the same value instead of reverting to the 8GB startup
+     * default.
      */
     private static String setMemoryLimit(String limit) throws Exception {
         if (limit == null || !MEMORY_LIMIT_PATTERN.matcher(limit.trim()).matches()) {
@@ -11975,8 +11923,8 @@ public class McpServer {
         String normalized = limit.trim();
         System.setProperty("calcite.duckdb.memoryLimit", normalized);
 
-        // Same reason as update_schema: the shared pgwire connection isn't a CalciteConnection,
-        // and DuckDB's memory_limit there is server-wide, shared across every connected client.
+        // The shared pgwire connection isn't a CalciteConnection, and DuckDB's memory_limit
+        // there is server-wide, shared across every connected client.
         if (PgwireGovDataConnector.isEnabled()) {
             return "set_memory_limit is not available while ASKAMERICA_PGWIRE_MODE is enabled "
                 + "(this engine is a thin client of a shared pgwire-govdata server; "
