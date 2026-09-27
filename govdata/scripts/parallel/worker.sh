@@ -122,9 +122,16 @@ else
   # pid file via check_schema_year_conflict's worker-*.pid glob and refused against itself.
   # Confirmed live 2026-09-27: 85 of 93 workers in one historical pool run self-collided this
   # way. Match either form, same as check_schema_year_conflict/detect_active_schemas already do.
+  # Check the suffixed (pool-launched) form FIRST, not the plain form: a pool-launched
+  # invocation always has a freshly-written suffixed file (written by the wrapper moments
+  # before this script starts), but plain ${WORKER_ID}.pid can easily be a stale leftover
+  # from an unrelated earlier invocation of the SAME schema+mode (confirmed live 2026-09-27:
+  # a worker-energy-2018.pid dated 2026-09-26 was still sitting there) — checking that first
+  # meant a genuinely fresh pool launch could find a dead year-old PID instead of its own
+  # live registration and still misclassify itself as standalone.
   _existing_worker_pid=""
-  _existing_pid_file="$PID_DIR/${WORKER_ID}.pid"
-  [ -f "$_existing_pid_file" ] || _existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1)
+  _existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1)
+  [ -n "$_existing_pid_file" ] || { [ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_pid_file="$PID_DIR/${WORKER_ID}.pid"; }
   [ -n "$_existing_pid_file" ] && [ -f "$_existing_pid_file" ] \
     && _existing_worker_pid=$(head -1 "$_existing_pid_file" 2>/dev/null | tr -d '[:space:]')
   _is_pool_launched=false
