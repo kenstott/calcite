@@ -81,6 +81,8 @@ FROM (
   UNION ALL SELECT 'industry_gdp',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',         allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'trade_exports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',        allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'trade_imports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',        allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'trade_exports_critical_minerals', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'trade_imports_critical_minerals', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'labor_productivity',   (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',   allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'regional_price_parities', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1) t)
 ) src
@@ -141,6 +143,10 @@ FROM (
   -- streamed with a bounded DQ row cap; a low floor just confirms the partition ingested.
   UNION ALL SELECT 'trade_exports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',         allow_moved_paths := true)), 100
   UNION ALL SELECT 'trade_imports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',         allow_moved_paths := true)), 100
+  -- trade_*_critical_minerals: curated to 9 HS-2 chapters at HS-10, ~1k-17k rows/chapter/month;
+  -- a low floor just confirms the partition ingested for the DQ-scoped month.
+  UNION ALL SELECT 'trade_exports_critical_minerals', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true)), 50
+  UNION ALL SELECT 'trade_imports_critical_minerals', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true)), 50
   -- labor_productivity: 6 series x 4 quarters/year x DQ lookback window (2 years) = ~48 rows
   UNION ALL SELECT 'labor_productivity',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',    allow_moved_paths := true)), 10
   -- regional_price_parities: 2 tablenames x 5 line_codes x (~52 areas for SARPP + ~387 for MARPP) is prod-scale;
@@ -186,6 +192,8 @@ SELECT 'gdp_statistics'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'industry_gdp'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',           allow_moved_paths := true) LIMIT 1;
 SELECT 'trade_exports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',          allow_moved_paths := true) LIMIT 1;
 SELECT 'trade_imports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',          allow_moved_paths := true) LIMIT 1;
+SELECT 'trade_exports_critical_minerals' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true) LIMIT 1;
+SELECT 'trade_imports_critical_minerals' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true) LIMIT 1;
 SELECT 'labor_productivity'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',     allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1;
 SELECT 'state_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1;
@@ -446,6 +454,22 @@ SELECT 'econ', 'trade_imports', 'all_null_cols', 'fail',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports', allow_moved_paths := true))
 WHERE null_percentage = 100.0
   -- cif_charges is legitimately absent for many HS-6 import lines
+  AND column_name NOT IN ('cif_charges');
+
+-- trade_exports_critical_minerals
+INSERT INTO dq_results
+SELECT 'econ', 'trade_exports_critical_minerals', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- trade_imports_critical_minerals
+INSERT INTO dq_results
+SELECT 'econ', 'trade_imports_critical_minerals', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  -- cif_charges is legitimately absent for many HS-10 import lines
   AND column_name NOT IN ('cif_charges');
 
 -- labor_productivity
@@ -779,6 +803,26 @@ WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   -- type='trade'/direction='imports' are constant by design
   AND column_name NOT IN ('type', 'direction');
 
+-- trade_exports_critical_minerals
+INSERT INTO dq_results
+SELECT 'econ', 'trade_exports_critical_minerals', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  -- type='trade_critical_minerals'/direction='exports' are constant by design; chapter is
+  -- a fixed 9-value list, legitimately constant when the DQ run is scoped to one chapter
+  AND column_name NOT IN ('type', 'direction', 'chapter');
+
+-- trade_imports_critical_minerals
+INSERT INTO dq_results
+SELECT 'econ', 'trade_imports_critical_minerals', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  -- type='trade_critical_minerals'/direction='imports' are constant by design; chapter is
+  -- a fixed 9-value list, legitimately constant when the DQ run is scoped to one chapter
+  AND column_name NOT IN ('type', 'direction', 'chapter');
+
 -- labor_productivity
 INSERT INTO dq_results
 SELECT 'econ', 'labor_productivity', 'all_same_value', 'warn',
@@ -1037,6 +1081,37 @@ SELECT 'econ', 'trade_by_state', 'geo_level_domain',
   'rows with geo_level outside (world, bloc, continent, country)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_by_state', allow_moved_paths := true)
       WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'trade_imports_critical_minerals', 'geo_level_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with geo_level outside (world, bloc, continent, country)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true)
+      WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'trade_exports_critical_minerals', 'geo_level_domain',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with geo_level outside (world, bloc, continent, country)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true)
+      WHERE geo_level NOT IN ('world', 'bloc', 'continent', 'country'));
+
+-- trade_*_critical_minerals: I_COMMODITY/E_COMMODITY prefix-wildcard fetch (I_COMMODITY=
+-- {chapter}*) must only ever return codes actually starting with the requested chapter —
+-- confirms the Census prefix filter isn't silently returning an unfiltered/mismatched set.
+INSERT INTO dq_results
+SELECT 'econ', 'trade_imports_critical_minerals', 'hs10_chapter_match',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows whose hs10 does not start with its own chapter partition value'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true)
+      WHERE hs10 NOT LIKE chapter || '%');
+
+INSERT INTO dq_results
+SELECT 'econ', 'trade_exports_critical_minerals', 'hs10_chapter_match',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows whose hs10 does not start with its own chapter partition value'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true)
+      WHERE hs10 NOT LIKE chapter || '%');
 
 -- ============================================================================
 -- state_occupation_employment (BLS OEWS science/engineer headcount, per-year state workbooks)
