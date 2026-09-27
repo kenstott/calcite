@@ -1,1 +1,82 @@
-[]
+[
+  {
+    "topic_slug": "dhs-ice-rent-drop-claim",
+    "headline": "DHS: mass deportations are driving down rents",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q1/askamerica/2026-09-27",
+    "pinocchios": 3,
+    "source_url": "https://twitchy.com/justmindy/2026/09/25/rents-drop-when-illegals-leave-n2432727"
+  },
+  {
+    "topic_slug": "ppsl-education-dept-canceled-loans-lawsuit",
+    "headline": "Lawsuit: Education Dept still reporting $4.6B canceled loans as debt",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q2/askamerica/2026-09-27",
+    "pinocchios": 1,
+    "source_url": "https://www.aol.com/articles/canceled-student-loans-still-showing-201914000.html"
+  },
+  {
+    "topic_slug": "ohio-governor-candidates-power-bill-claims",
+    "headline": "What's going on with your power bill, and what Ohio's candidates for governor will do about it",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q3/askamerica/2026-09-27",
+    "pinocchios": 1,
+    "source_url": "https://www.clevescene.com/news/ohio-news/whats-going-on-with-your-power-bill-and-what-ohios-candidates-for-governor-will-do-about-it"
+  },
+  {
+    "topic_slug": "nfip-september-30-2026-deadline-closings",
+    "headline": "Your home sale could freeze Sept. 30: the NFIP deadline and 40,000 closings a month",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q4/askamerica/2026-09-27",
+    "pinocchios": 1,
+    "source_url": "https://www.callthelocal.com/guides/nfip-flood-insurance-september-30-2026-deadline-home-closings"
+  },
+  {
+    "topic_slug": "hochul-safer-streets-crime-decline-claim",
+    "headline": "Gov. Hochul announces continued declines in crime across New York",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q5/askamerica/2026-09-27",
+    "pinocchios": 1,
+    "source_url": "https://www.governor.ny.gov/news/safer-streets-governor-hochul-announces-continued-declines-crime-across-new-york"
+  },
+  {
+    "topic_slug": "gop-tax-cuts-pay-for-themselves-reality",
+    "headline": "Republicans said their tax cuts would pay for themselves. Now they are confronting reality.",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q6/askamerica/2026-09-27",
+    "pinocchios": 0,
+    "source_url": "https://www.ms.now/news/republicans-tax-cuts-pay-for-themselves-confronting-reality"
+  },
+  {
+    "topic_slug": "flight-chaos-september-25-2026-tally",
+    "headline": "US flight chaos, Sept 25, 2026: 4,375 delays, 107 cancellations nationwide",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q7/askamerica/2026-09-27",
+    "pinocchios": 2,
+    "source_url": "https://www.traveltourister.com/news/us-flight-chaos-september-25-2026-4375-delays-107-cancellations-nationwide-southwest-airlines-1128-delays-todays-worst-carrier-american-airlines-583-united-453/"
+  },
+  {
+    "topic_slug": "apple-taction-haptics-patent-verdict",
+    "headline": "Apple faces $5.7 billion patent infringement verdict over iPhone and Apple Watch haptics",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q8/askamerica/2026-09-27",
+    "pinocchios": 1,
+    "source_url": "https://www.cnbc.com/2026/09/26/apple-taction-technology-patent-infringement-verdict.html"
+  },
+  {
+    "topic_slug": "hawaii-storm-damage-infrastructure-schools",
+    "headline": "Storm damage to Hawaii infrastructure and schools costing hundreds of millions",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q9/askamerica/2026-09-27",
+    "pinocchios": 1,
+    "source_url": "https://www.thegardenisland.com/2026/09/24/hawaii-news/storm-damage-to-hawaii-infrastructure-and-schools-costing-hundreds-of-millions/"
+  },
+  {
+    "topic_slug": "congress-stock-trades-weekly-roundup-w37",
+    "headline": "120 congressional stock trades disclosed in the week to September 7, 2026",
+    "checked_date": "2026-09-27",
+    "run_subpath": "q10/askamerica/2026-09-27",
+    "pinocchios": 1,
+    "source_url": "https://www.capitolexposed.com/news/weekly-roundup-2026-w37"
+  }
+]

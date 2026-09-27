@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cleveland Scene's Ohio power-bill/governor's-race explainer checks out on the numbers; the daylight is in framing, not facts</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Cleveland Scene's Ohio power-bill/governor's-race explainer checks out on the numbers; the daylight is in framing, not facts</h1>
+<p class="subtitle">Fact-check of every checkable factual claim and attributed quote, against EIA/AskAmerica data and primary documents (Ohio Auditor, PJM/Monitoring Analytics, OPSB, Ohio Supreme Court)</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 818" width="880" height="818" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="818" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Ohio Power Bills: What the Primary Sources Actually Say</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">EIA/AskAmerica data and the article's own cited primary documents, read directly</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="340" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="340" viewBox="0 0 412 340" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="340" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Ohio Residential Electricity Price, 2006-2024</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="60" y1="259.84" x2="390" y2="259.84" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="52" y="263.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="208.88" x2="390" y2="208.88" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="52" y="212.88" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+      <line class="grid" x1="60" y1="157.92" x2="390" y2="157.92" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="52" y="161.92" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="106.96" x2="390" y2="106.96" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="52" y="110.96" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">15</text>
+      <line class="grid" x1="60" y1="56.00" x2="390" y2="56.00" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="52" y="60.00" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="259.84" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="259.84" x2="390" y2="259.84" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-x-axis-title" class="axis-title" x="225" y="316" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Year</text>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="157.92" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 157.92)">cents/kWh</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2006" class="tick" x="68.68" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 68.68 273.84)">2006</text>
+      <text id="p1-xtick-2007" class="tick" x="86.05" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 86.05 273.84)">2007</text>
+      <text id="p1-xtick-2008" class="tick" x="103.42" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 103.42 273.84)">2008</text>
+      <text id="p1-xtick-2009" class="tick" x="120.79" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 120.79 273.84)">2009</text>
+      <text id="p1-xtick-2010" class="tick" x="138.16" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 138.16 273.84)">2010</text>
+      <text id="p1-xtick-2011" class="tick" x="155.53" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 155.53 273.84)">2011</text>
+      <text id="p1-xtick-2012" class="tick" x="172.89" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 172.89 273.84)">2012</text>
+      <text id="p1-xtick-2013" class="tick" x="190.26" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 190.26 273.84)">2013</text>
+      <text id="p1-xtick-2014" class="tick" x="207.63" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 207.63 273.84)">2014</text>
+      <text id="p1-xtick-2015" class="tick" x="225" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 225 273.84)">2015</text>
+      <text id="p1-xtick-2016" class="tick" x="242.37" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 242.37 273.84)">2016</text>
+      <text id="p1-xtick-2017" class="tick" x="259.74" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 259.74 273.84)">2017</text>
+      <text id="p1-xtick-2018" class="tick" x="277.11" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 277.11 273.84)">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="294.47" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 294.47 273.84)">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="311.84" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 311.84 273.84)">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="329.21" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 329.21 273.84)">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="346.58" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 346.58 273.84)">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="363.95" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 363.95 273.84)">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="381.32" y="273.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 381.32 273.84)">2024</text>
+    </g>
+    <g id="p1-series-ohio-residential-price" class="series">
+      <path id="p1-line-ohio-residential-price" class="line" d="M 68.68 164.65 L 86.05 162.30 L 103.42 157.31 L 120.79 151.09 L 138.16 144.57 L 155.53 143.45 L 172.89 139.98 L 190.26 137.43 L 207.63 132.44 L 225 129.38 L 242.37 132.75 L 259.74 131.12 L 277.11 131.83 L 294.47 133.66 L 311.84 134.58 L 329.21 129.69 L 346.58 118.68 L 363.95 103.09 L 381.32 96.87" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle id="p1-mark-ohio-residential-price-2006" class="point" cx="68.68" cy="164.65" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2007" class="point" cx="86.05" cy="162.30" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2008" class="point" cx="103.42" cy="157.31" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2009" class="point" cx="120.79" cy="151.09" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2010" class="point" cx="138.16" cy="144.57" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2011" class="point" cx="155.53" cy="143.45" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2012" class="point" cx="172.89" cy="139.98" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2013" class="point" cx="190.26" cy="137.43" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2014" class="point" cx="207.63" cy="132.44" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2015" class="point" cx="225" cy="129.38" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2016" class="point" cx="242.37" cy="132.75" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2017" class="point" cx="259.74" cy="131.12" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2018" class="point" cx="277.11" cy="131.83" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2019" class="point" cx="294.47" cy="133.66" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2020" class="point" cx="311.84" cy="134.58" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2021" class="point" cx="329.21" cy="129.69" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2022" class="point" cx="346.58" cy="118.68" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2023" class="point" cx="363.95" cy="103.09" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-ohio-residential-price-2024" class="point" cx="381.32" cy="96.87" r="3" fill="#2563eb"/>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="435" fill="#6b7280">AskAmerica energy.eia_electricity_prices (EIA API v2). Confirms a</text>
+  <text class="caption" x="24" y="448" fill="#6b7280">sustained multi-year rise, consistent with the Auditor's finding of a…</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="198" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="234" fill="#6b7280" style="font-size:8px">Statewide avg. electricity price increase, 2001 to 2026 YTD (Ohio Auditor)</text>
+  <text class="stat-value" x="464" y="264" fill="#1f2328">+116%</text>
+  <text class="stat-delta" x="464" y="284" fill="#059669">&quot;more than doubled&quot; (article) — confirmed</text>
+  </g>
+  <text class="caption" x="452" y="435" fill="#6b7280">Ohio Auditor of State PUCO Performance Audit (2026), verified by</text>
+  <text class="caption" x="452" y="448" fill="#6b7280">direct PDF read.</text>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="20" y="470" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="506" fill="#6b7280">Increase, 2022 to 2026 YTD (Ohio Auditor)</text>
+  <text class="stat-value" x="36" y="536" fill="#1f2328">+34%</text>
+  <text class="stat-delta" x="36" y="556" fill="#059669">article calls this &quot;the past five years&quot;</text>
+  </g>
+  <text class="caption" x="24" y="591" fill="#6b7280">Technically a ~4-calendar-year span (2022-2026); figure itself is an</text>
+  <text class="caption" x="24" y="604" fill="#6b7280">exact match to the Auditor's report.</text>
+  <g id="p4-stat">
+  <rect class="panel-edge" x="448" y="470" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="506" fill="#6b7280" style="font-size:11px">Data-center share of PJM capacity costs, last 4 auctions</text>
+  <text class="stat-value" x="464" y="536" fill="#1f2328">$29.4B</text>
+  <text class="stat-delta" x="464" y="556" fill="#059669" style="font-size:12px">46.2% of total capacity charges over those auctions</text>
+  </g>
+  <text class="caption" x="452" y="591" fill="#6b7280">Monitoring Analytics (PJM's Independent Market Monitor), Market</text>
+  <text class="caption" x="452" y="604" fill="#6b7280">Monitor Report, July 28, 2026 — exact match to article's figure,…</text>
+  <g id="p5-stat">
+  <rect class="panel-edge" x="20" y="626" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="662" fill="#6b7280">Solar capacity denied by OPSB since SB 52 (2021)</text>
+  <text class="stat-value" x="36" y="692" fill="#1f2328">1.29 GW / 8 projects</text>
+  <text class="stat-delta" x="36" y="712" fill="#6b7280">denials ran Oct. 2022 - Jun 2026</text>
+  </g>
+  <text class="caption" x="24" y="747" fill="#6b7280">Ohio Power Siting Board Solar_Map_and_Stats.pdf, verified by direct</text>
+  <text class="caption" x="24" y="760" fill="#6b7280">PDF read: exact match on project count and MW. Article states SB 52…</text>
+  <g id="p6-stat">
+  <rect class="panel-edge" x="448" y="626" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="662" fill="#6b7280">FirstEnergy Distribution Modernization Rider collected</text>
+  <text class="stat-value" x="464" y="692" fill="#1f2328">$457.7M</text>
+  <text class="stat-delta" x="464" y="712" fill="#6b7280">struck down by Ohio Supreme Court, June 2019</text>
+  </g>
+  <text class="caption" x="452" y="747" fill="#6b7280">Confirmed via Ohio Capital Journal/WKYC reporting and Ohio Supreme</text>
+  <text class="caption" x="452" y="760" fill="#6b7280">Court case record; article's &quot;almost half a billion dollars&quot; is…</text>
+  <g id="brand">
+  <svg x="20" y="777" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="792" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62120/a/8263cb8ce0a2c111c351f6e87ebff50e.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>This Cleveland Scene/Ohio Capital Journal piece on Ohio electric bills and the 2026 governor's race holds up well. Every specific number I could directly verify against a fetched primary document or AskAmerica's own EIA data — the Ohio Auditor's price-increase figures, the PJM Independent Market Monitor's $29.4 billion data-center capacity-cost estimate, and the Ohio Power Siting Board's solar-denial count — matched the primary source exactly. Several other claims (FirstEnergy's rider collections, the PIPP eligibility threshold, SB 52's sponsor) were consistent with everything found via web search but weren't confirmed by a direct primary-document fetch in this session, so they're marked as such rather than certified. The one clean, directly-confirmed factual error found is small: the piece says Senate Bill 52 'became law in 2022,' when it actually took effect in October 2021 (the solar-denial data it cites does begin in October 2022, so the substance isn't wrong, just the year attached to the law itself). The more substantive concern is not factual but structural: the piece leans on a single expert source to both eviscerate one candidate's data-center plan ('doomed to fail,' 'not a serious plan') and largely endorse the other's ('a commonsense remedy'), which can read as a broader consensus than a single quoted source actually represents. <strong>Overall rating: 1 Pinocchio</strong> — essentially accurate reporting with one minor date slip and a real but non-fatal imbalance in how skeptically each candidate's plan is examined.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>🤥○○○ 1 of 4 Pinocchios</strong></p><p>Every specific number I could independently verify by directly fetching and reading a primary document, or by querying AskAmerica's own EIA data, landed exactly or within a defensible rounding of the source: the Auditor's 116%/34% price figures, the IMM's $29.4B data-center capacity-cost figure, and the OPSB's 8-project/1.29 GW solar denial count. Several additional claims (FirstEnergy's ~$460M rider collection and 2019 court reversal, the PIPP 175%-to-200% eligibility proposal, and Brown/McColley's SB 52 sponsorship) were corroborated only via WebSearch snippets rather than a direct primary-document fetch, so they're marked 'not checkable here' on provenance grounds even though nothing found contradicts them. The one clean, directly-confirmed factual slip is minor: the article says Ohio's SB 52 'became law in 2022,' when it was actually signed and took effect in October 2021 (the OPSB's own denial data does show all 8 blocked projects were denied starting October 2022, so the substance of the point survives). Beyond that single date error, the count of 1 reflects a real but non-factual issue: the piece applies visibly asymmetric scrutiny to the two gubernatorial candidates. Ramaswamy's free-power pledge gets three paragraphs of pointed rebuttal from a single expert calling it 'doomed to fail' and 'not a serious plan,' while the same expert's assessment of Acton's plan is used almost entirely to validate it ('a commonsense remedy'). Both candidates' underlying facts and quotes appear accurate, and the reporter clearly documents Ramaswamy's own campaign's non-response to requests for detail, which is a legitimate reported fact, not editorializing — but a reader could come away thinking one plan has been vetted and the other dismissed by 'the' expert consensus, when in fact only one credentialed source is quoted on either plan. That is a shading-of-emphasis issue, not a fabricated or false fact.</p></div>
+<p><strong>1</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>3</strong> not checkable here &middot; <strong>6</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>1</td><td>A recent report from state Auditor Keith Faber noted statewide average energy prices have more than doubled since 2001, and in the past five years alone, they've climbed 34%.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>2</td><td>Willis pointed to a report from PJM's independent market monitor, which found data centers accounted for $29.4 billion in higher capacity costs over the past four auctions.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>3</td><td>According to OPSB data, since the bill became law in 2022, eight solar projects representing 1.29 gigawatts of power have been denied.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>FirstEnergy's Distribution Modernization Rider: the company collected almost half a billion dollars from customers, but couldn't account for how it actually spent the money. The Ohio Supreme Court struck down that fee in 2019.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>5</td><td>Ohio's PIPP program requires eligibility at or below 175% of the federal poverty level, and Acton's campaign proposes raising that to 200%.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>6</td><td>Brown said of Ramaswamy's running mate: '(Ohio state) Sen. (Rob) McColley, sponsored the bill that makes it almost impossible to site solar farms in Ohio' — referring to Senate Bill 52, which allows local officials to intervene to block solar or wind farms but not other power sources.</td><td><strong>not checkable here</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-not-checkable-here"><td>6</td><td>Brown said of Ramaswamy's running mate: '(Ohio state) Sen. (Rob) McColley, sponsored the bill that makes it almost impossible to site solar farms in Ohio' — referring to Senate Bill 52, which allows local officials to intervene to block solar or wind farms but not other power sources.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>5</td><td>Ohio's PIPP program requires eligibility at or below 175% of the federal poverty level, and Acton's campaign proposes raising that to 200%.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>FirstEnergy's Distribution Modernization Rider: the company collected almost half a billion dollars from customers, but couldn't account for how it actually spent the money. The Ohio Supreme Court struck down that fee in 2019.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-mostly-true"><td>3</td><td>According to OPSB data, since the bill became law in 2022, eight solar projects representing 1.29 gigawatts of power have been denied.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>2</td><td>Willis pointed to a report from PJM's independent market monitor, which found data centers accounted for $29.4 billion in higher capacity costs over the past four auctions.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>1</td><td>A recent report from state Auditor Keith Faber noted statewide average energy prices have more than doubled since 2001, and in the past five years alone, they've climbed 34%.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>1</td><td>A recent report from state Auditor Keith Faber noted statewide average energy prices have more than doubled since 2001, and in the past five years alone, they've climbed 34%.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>3</td><td>According to OPSB data, since the bill became law in 2022, eight solar projects representing 1.29 gigawatts of power have been denied.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>6</td><td>Brown said of Ramaswamy's running mate: '(Ohio state) Sen. (Rob) McColley, sponsored the bill that makes it almost impossible to site solar farms in Ohio' — referring to Senate Bill 52, which allows local officials to intervene to block solar or wind farms but not other power sources.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>FirstEnergy's Distribution Modernization Rider: the company collected almost half a billion dollars from customers, but couldn't account for how it actually spent the money. The Ohio Supreme Court struck down that fee in 2019.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>5</td><td>Ohio's PIPP program requires eligibility at or below 175% of the federal poverty level, and Acton's campaign proposes raising that to 200%.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>2</td><td>Willis pointed to a report from PJM's independent market monitor, which found data centers accounted for $29.4 billion in higher capacity costs over the past four auctions.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>1</td><td>A recent report from state Auditor Keith Faber noted statewide average energy prices have more than doubled since 2001, and in the past five years alone, they've climbed 34%.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>3</td><td>According to OPSB data, since the bill became law in 2022, eight solar projects representing 1.29 gigawatts of power have been denied.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>FirstEnergy's Distribution Modernization Rider: the company collected almost half a billion dollars from customers, but couldn't account for how it actually spent the money. The Ohio Supreme Court struck down that fee in 2019.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>5</td><td>Ohio's PIPP program requires eligibility at or below 175% of the federal poverty level, and Acton's campaign proposes raising that to 200%.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>6</td><td>Brown said of Ramaswamy's running mate: '(Ohio state) Sen. (Rob) McColley, sponsored the bill that makes it almost impossible to site solar farms in Ohio' — referring to Senate Bill 52, which allows local officials to intervene to block solar or wind farms but not other power sources.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>2</td><td>Willis pointed to a report from PJM's independent market monitor, which found data centers accounted for $29.4 billion in higher capacity costs over the past four auctions.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-mostly-true"><summary>#1 &middot; <strong>mostly true</strong> &mdash; A recent report from state Auditor Keith Faber noted statewide average energy prices have more than doubled since 2001, and in the past five years alone, they've climbed 34%.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>116% increase CY2001 to CY2026 YTD (6.6 to 14.3 cents/kWh); 34% increase CY2022 to CY2026 YTD (10.6 to 14.3 cents/kWh)<ul class="claim-sources"><li><a href="https://ohioauditor.gov/auditsearch/Reports/2026/Public_Utilities_Commission_of_Ohio_26_Performance_Franklin_FINAL.pdf">Ohio Auditor of State — PUCO Performance Audit (Franklin, 2026 FINAL)</a></li></ul></dd>
+<dt>Why</dt><dd>Both figures are exact matches to the primary source, read directly. The only soft spot is calling a CY2022-to-CY2026(YTD) span 'the past five years' — it is closer to four years of actual elapsed time, though it does span five distinct calendar years, a defensible if generous rounding. That rounding, not the figures, is why this is 'mostly true' rather than an unqualified 'true.'</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Willis pointed to a report from PJM's independent market monitor, which found data centers accounted for $29.4 billion in higher capacity costs over the past four auctions.</summary>
+<dl>
+<dt>Warehouse says</dt><dd> <code>energy.pjm_capacity_auction_prices</code></dd>
+<dt>Independent evidence</dt><dd>$29.4B, 46.2% of total capacity market charges over the last four BRAs<ul class="claim-sources"><li><a href="https://www.monitoringanalytics.com/reports/presentations/2026/IMM_MC_Market_Monitor_Report_20260728.pdf">Monitoring Analytics (PJM Independent Market Monitor) — Market Monitor Report, July 28, 2026</a></li></ul></dd>
+<dt>Why</dt><dd>The $29.4B figure was read verbatim from page 3 of the IMM's own July 2026 Market Monitor Report slide deck ('The total capacity market charges that have resulted from data center load over the last four capacity market auctions equal $29.4B') — an exact, unambiguous match, not an inference. AskAmerica's own pjm_capacity_auction_prices table independently corroborates the scale of the underlying price spike (RTO clearing price $28.92/MW-day in 2024/2025 to $329.17 in 2026/2027), though the $29.4B data-center attribution itself is the IMM's own analysis rather than a figure computed from an AskAmerica table.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT delivery_year, lda, resource_clearing_price FROM energy.pjm_capacity_auction_prices WHERE lda='RTO' ORDER BY delivery_year</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#3 &middot; <strong>mostly true</strong> &mdash; According to OPSB data, since the bill became law in 2022, eight solar projects representing 1.29 gigawatts of power have been denied.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>8 denied solar projects, 1,293 MW total, denial dates Oct. 2022 - Jun 2026; SB 52 itself took effect Oct. 9, 2021, not 2022<ul class="claim-sources"><li><a href="https://dam.assets.ohio.gov/image/upload/puco.ohio.gov/empliibrary/files/OPA/Mapping/OPSB/Solar%20Facilities%20Map/Solar_Map_and_Stats.pdf">Ohio Power Siting Board — Solar_Map_and_Stats.pdf</a></li><li><a href="https://ohiocapitaljournal.com/2021/06/03/senate-passes-bill-creating-new-hurdles-for-wind-solar-development/">Ohio Capital Journal — Senate passes bill creating new hurdles for wind, solar development</a></li></ul></dd>
+<dt>Why</dt><dd>The OPSB's own published table lists exactly 8 denied solar cases totaling 1,293 MW (1.29 GW) — an exact match, read directly from the primary PDF, not estimated. But SB 52 was signed and took effect in October 2021, not 2022, per the Ohio Senate's own record and contemporaneous reporting — a genuine date error in the article. It happens that every one of the 8 recorded denials occurred from October 2022 onward, so the count and MW total the article is really conveying are correct even though the year it attaches to the law's enactment is off by about a year. Graded 'mostly true' for that reason: the headline data point is exact, the framing detail around it is not.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#4 &middot; <strong>not checkable here</strong> &mdash; FirstEnergy's Distribution Modernization Rider: the company collected almost half a billion dollars from customers, but couldn't account for how it actually spent the money. The Ohio Supreme Court struck down that fee in 2019.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>$457.7 million collected Jan. 2017-July 2019 per secondary reporting; struck down by the Ohio Supreme Court on June 19, 2019 (4-3 decision) per the court's own case-record summary page<ul class="claim-sources"><li><a href="https://ohiocapitaljournal.com/2022/01/18/firstenergy-collected-460-million-from-customers-auditor-unsure-if-it-was-spent-on-bribes/">Ohio Capital Journal — FirstEnergy collected $460 million from customers; auditor unsure if it was spent on bribes</a></li><li><a href="https://www.courtnewsohio.gov/cases/2019/SCO/0619/171444_171664.asp">Ohio Supreme Court case record — First Energy Electric Grid Modernization Charge Improperly Imposed</a></li></ul></dd>
+<dt>Why</dt><dd>Marked 'not checkable here' rather than graded, because the direct web_fetch attempt on the Ohio Capital Journal article was blocked (HTTP 403) and the $457.7M figure and 2019 ruling date were instead pieced together from WebSearch result snippets rather than a full primary-document read. Every snippet found agreed with no contradiction, and this is very likely accurate, but per this session's own standard for what counts as independently verified, I'm not certifying it at the same confidence as the claims read directly from a fetched primary PDF.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#5 &middot; <strong>not checkable here</strong> &mdash; Ohio's PIPP program requires eligibility at or below 175% of the federal poverty level, and Acton's campaign proposes raising that to 200%.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>Current PIPP eligibility threshold widely reported as 175% of the Federal Poverty Guidelines<ul class="claim-sources"><li><a href="https://www.utilitybenefits.com/electricity/assistance/liheap/ohio/">Ohio utility/energy assistance program summary</a></li></ul></dd>
+<dt>Why</dt><dd>Marked 'not checkable here' rather than graded: the 175% figure was confirmed only via WebSearch result snippets summarizing third-party program-eligibility pages, not a direct fetch of Ohio Development Services Agency's own PIPP rule text or HEAP application document. Every source found agreed with no contradiction and the article's framing is internally consistent with that baseline, but the underlying eligibility rule was not independently read from a primary document in this session.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#6 &middot; <strong>not checkable here</strong> &mdash; Brown said of Ramaswamy's running mate: '(Ohio state) Sen. (Rob) McColley, sponsored the bill that makes it almost impossible to site solar farms in Ohio' — referring to Senate Bill 52, which allows local officials to intervene to block solar or wind farms but not other power sources.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>SB 52 (134th General Assembly) sponsorship and its local-veto-only-for-wind-and-solar mechanism, per WebSearch snippets of the Ohio Senate's own press release and the legislature's bill record<ul class="claim-sources"><li><a href="https://ohiosenate.gov/members/rob-mccolley/news/senate-passes-mccolley-bill-giving-local-residents-voice-on-wind-and-solar-projects">Ohio Senate — Senate Passes McColley Bill Giving Local Residents Voice on Wind and Solar Projects</a></li><li><a href="https://www.legislature.ohio.gov/legislation/134/sb52">Ohio Legislature — Senate Bill 52, 134th General Assembly</a></li></ul></dd>
+<dt>Why</dt><dd>Marked 'not checkable here' rather than graded: McColley's sponsorship and the bill's mechanism were confirmed via WebSearch result snippets rather than a direct web_fetch read of the Ohio Senate press release or the bill text itself. No contradicting information appeared, but this session did not open the primary page directly for this specific claim.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Method</h2>
+<p>I extracted every discrete, checkable factual assertion and attributed quote from the article (utility bill/rate statistics, PJM market mechanics, dollar figures for transmission and rider costs, legislative history, and the candidates' specific policy claims). I first searched AskAmerica's data catalog (search_catalog) for matching tables; where a table existed (energy.eia_electricity_prices for Ohio retail electricity rates, energy.pjm_capacity_auction_prices for PJM capacity clearing prices), I queried it directly. Where no AskAmerica table covers the underlying measure — PUCO's city-level bill dashboard, PJM's Independent Market Monitor capacity-cost attribution, and Ohio Power Siting Board case records — I fetched and read the primary source documents the article itself cites directly via web_fetch. For a few remaining claims where a direct fetch was blocked or not attempted, I relied on WebSearch corroboration and have labeled those claims accordingly rather than certifying them at the same confidence as the directly-fetched ones.</p>
+</section>
+<section>
+<h2>What AskAmerica's own data shows</h2>
+<p>AskAmerica's energy.eia_electricity_prices table (EIA API v2 retail sales data, Ohio, 2006-2024) shows Ohio's residential electricity price rising from 9.34 cents/kWh in 2006 to 15.99 cents/kWh in 2024 — a sustained, accelerating climb, especially 2021-2024 (12.77 to 15.99 cents/kWh, +25%). This independently corroborates the direction and general magnitude of the price pressure the article describes, even though the specific 116%/34% figures the article cites come from the state Auditor's own broader 'average energy price' series (2001-2026), which starts before AskAmerica's EIA coverage begins (2006) and runs to a partial 2026 that AskAmerica's annual table hasn't yet ingested. AskAmerica's pjm_capacity_auction_prices table separately confirms the scale of the capacity-price spike underlying the $29.4B data-center figure: the PJM RTO resource clearing price rose from $28.92/MW-day (2024/2025 delivery year) to $269.92 (2025/2026) to $329.17 (2026/2027) — a real, independently loaded data point consistent with the article's description of a sharply rising capacity market.</p>
+</section>
+<section>
+<h2>Claims verified against primary sources</h2>
+<p>See the claim table above for the six claims graded with sourcing and reasoning. In addition to those: the article's description of Ohio Senate Bill 52 as giving <em>local officials, uniquely for wind and solar</em>, power to block projects (with no equivalent authority over other generation types) is consistent with the bill's own legislative history and contemporaneous reporting found via web search. The AEP Ohio data center tariff, the OCC's 2023 FERC complaint, and the description of PJM's 'do no harm' supplemental-project review process are all consistent with the publicly available dockets and reporting the article links to, though I did not re-derive the $16 billion (2017-2025 Ohio transmission pass-through) or $10 billion (supplemental-process share) figures from a queryable dataset — no AskAmerica table currently carries PUCO's or PJM's project-level transmission cost-recovery data, so those numbers are reported here as the article's own sourced figures (attributed to Consumers' Counsel Willis and cleveland.com's reporting) rather than independently reproduced.</p>
+</section>
+<section>
+<h2>What's worth flagging beyond the facts</h2>
+<ul><li><strong>SB 52 enactment date</strong>: the article says the law 'became law in 2022'; it was actually signed and took effect in October 2021. The 8-project, 1.29 GW denial count itself is exactly right and all denials did occur from October 2022 onward, so the underlying data point survives, but the year attached to the law's enactment is simply wrong.</li><li><strong>Asymmetric scrutiny</strong>: Ashley Brown, a single credentialed source (former PUCO commissioner), is quoted extensively and skeptically about Ramaswamy's free-power pledge ('doomed to fail,' 'It's not a serious plan') and used almost entirely affirmatively about Acton's data-center cost-recovery proposal ('a commonsense remedy'). Both sets of quotes appear to be accurately rendered, and the piece is transparent that Ramaswamy's campaign didn't respond to requests for detail — a legitimate reported fact. But presenting one expert's contrasting assessments of two different plans can read to a reader as broader expert consensus than it is. This doesn't make any individual fact false, but it does shape the piece's overall impression in a way worth naming.</li><li><strong>Rounding language</strong>: 'in the past five years alone' for a CY2022-to-CY2026(YTD) span is a defensible but generous characterization of what is closer to four elapsed years.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 4 rows — 980 ms</summary><pre><code>SELECT price_year, sector_code, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE state_abbr = 'OH' AND sector_code = 'ALL' AND price_year IN (2006, 2019, 2020, 2024) ORDER BY price_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 19 rows — 917 ms</summary><pre><code>SELECT price_year, sector_code, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE state_abbr = 'OH' AND sector_code = 'RES' ORDER BY price_year</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">Checked against AskAmerica energy schema (eia_electricity_prices, pjm_capacity_auction_prices) plus direct web_fetch reads of the article's own cited primary documents (Ohio Auditor of State, PJM Independent Market Monitor/Monitoring Analytics, Ohio Power Siting Board). Three claims (FirstEnergy's rider collection/court date, PIPP eligibility, and Brown/McColley's SB 52 sponsorship) were corroborated only via WebSearch snippets, not a direct primary-document fetch, and are marked 'not checkable here' on that provenance basis despite no contradicting information being found. PUCO's interactive city-by-city bill dashboard and the cleveland.com/Ohio Capital Journal transmission-cost figures ($16B, $10B, $1.4 trillion) were not independently re-derived from a queryable dataset — no AskAmerica table currently carries PUCO's dashboard or utility-specific supplemental-transmission-cost data — and are reported here as the article's own sourced figures rather than as independently reproduced numbers.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-27</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

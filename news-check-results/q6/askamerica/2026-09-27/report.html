@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MS NOW's tax-cut/deficit fact-check holds up: figures are accurate, framing is opinionated but not misleading</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>MS NOW's tax-cut/deficit fact-check holds up: figures are accurate, framing is opinionated but not misleading</h1>
+<p class="subtitle">Every checkable numeric claim corroborated against Treasury data (via AskAmerica) and CBO/JCT, Penn Wharton, Tax Foundation, and CAP primary sources</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 590" width="880" height="590" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="590" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:15px">Fact-Check: &quot;Republicans said their tax cuts would pay for themselves&quot; (MS NOW, Sept. 10, 2…</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">Verified against Treasury data (AskAmerica) and CBO/JCT, Penn Wharton, Tax Foundation, CAP primary sources</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">Total federal debt (2026-09-11)</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">$40.05T</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">Treasury Fiscal Data via AskAmerica econ.federal_debt — matches</text>
+  <text class="caption" x="24" y="216" fill="#6b7280">article's &quot;$40 trillion&quot; claim</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">FY2026 YTD deficit (11 months)</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">$1.97T</text>
+  <text class="stat-delta" x="464" y="168" fill="#6b7280">vs $1.97T same span FY2025</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">AskAmerica econ.mts_outlays_by_function — confirms &quot;almost the same as</text>
+  <text class="caption" x="452" y="216" fill="#6b7280">prior year&quot;</text>
+  <rect class="panel-edge" x="20" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="9" style="font-size:9px" font-weight="600" text-anchor="middle">Estimated 10-yr deficit impact of the 2025 reconciliation bill, by scorekee…</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="53" y1="134" x2="390" y2="134" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="45" y="138" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="53" y1="118.40" x2="390" y2="118.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="45" y="122.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1</text>
+      <line class="grid" x1="53" y1="102.80" x2="390" y2="102.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="45" y="106.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2</text>
+      <line class="grid" x1="53" y1="87.20" x2="390" y2="87.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="45" y="91.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3</text>
+      <line class="grid" x1="53" y1="71.60" x2="390" y2="71.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="45" y="75.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4</text>
+      <line class="grid" x1="53" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-5" class="tick" x="45" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="53" y1="56" x2="53" y2="134" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="53" y1="134" x2="390" y2="134" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="221.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Source</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="95" fill="#1f2328" font-size="9" style="font-size:9px" text-anchor="middle" transform="rotate(-90 14 95)">$ trillions added</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-cbo-jct-pre-passage" class="tick" x="95.13" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 95.13 148)">CBO/JCT (pre-passage)</text>
+      <text id="p3-xtick-cbo-dynamic-follow-up" class="tick" x="179.38" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 179.38 148)">CBO (dynamic follow-up)</text>
+      <text id="p3-xtick-penn-wharton" class="tick" x="263.63" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 263.63 148)">Penn Wharton</text>
+      <text id="p3-xtick-tax-foundation-dynamic" class="tick" x="347.88" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 347.88 148)">Tax Foundation (dynamic)</text>
+    </g>
+    <g id="p3-series-added-to-deficit-t" class="series">
+      <rect id="p3-mark-added-to-deficit-t-cbo-jct-pre-passage" class="bar" x="68.16" y="80.96" width="52.92" height="53.04" fill="#2563eb"/>
+      <rect id="p3-mark-added-to-deficit-t-cbo-dynamic-follow-up" class="bar" x="152.42" y="60.68" width="52.92" height="73.32" fill="#2563eb"/>
+      <rect id="p3-mark-added-to-deficit-t-penn-wharton" class="bar" x="236.67" y="77.84" width="52.92" height="56.16" fill="#2563eb"/>
+      <rect id="p3-mark-added-to-deficit-t-tax-foundation-dynamic" class="bar" x="320.92" y="70.04" width="52.92" height="63.96" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">All four figures independently corroborated via CBO, CRFB, Penn</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">Wharton and Tax Foundation publications</text>
+  <rect class="panel-edge" x="448" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">FY2026 federal budget, 11-month YTD (through Aug. 2026)</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="53" y1="190" x2="390" y2="190" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="45" y="194" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="53" y1="170.86" x2="390" y2="170.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="45" y="174.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1</text>
+      <line class="grid" x1="53" y1="151.71" x2="390" y2="151.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="45" y="155.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2</text>
+      <line class="grid" x1="53" y1="132.57" x2="390" y2="132.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="45" y="136.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3</text>
+      <line class="grid" x1="53" y1="113.43" x2="390" y2="113.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="45" y="117.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4</text>
+      <line class="grid" x1="53" y1="94.29" x2="390" y2="94.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="45" y="98.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+      <line class="grid" x1="53" y1="75.14" x2="390" y2="75.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="45" y="79.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6</text>
+      <line class="grid" x1="53" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-7" class="tick" x="45" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">7</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="53" y1="56" x2="53" y2="190" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="53" y1="190" x2="390" y2="190" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="123" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 123)">$ trillions</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-outlays" class="tick" x="109.17" y="208" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Outlays</text>
+      <text id="p4-xtick-receipts" class="tick" x="221.50" y="208" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Receipts</text>
+      <text id="p4-xtick-deficit" class="tick" x="333.83" y="208" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Deficit</text>
+    </g>
+    <g id="p4-series-fy2026-ytd" class="series">
+      <rect id="p4-mark-fy2026-ytd-outlays" class="bar" x="73.22" y="59.64" width="34.95" height="130.36" fill="#2563eb"/>
+      <rect id="p4-mark-fy2026-ytd-receipts" class="bar" x="185.55" y="97.16" width="34.95" height="92.84" fill="#2563eb"/>
+      <rect id="p4-mark-fy2026-ytd-deficit" class="bar" x="297.89" y="152.29" width="34.95" height="37.71" fill="#2563eb"/>
+    </g>
+    <g id="p4-series-fy2025-ytd-same-span" class="series">
+      <rect id="p4-mark-fy2025-ytd-same-span-outlays" class="bar" x="109.17" y="62.51" width="34.95" height="127.49" fill="#ea580c"/>
+      <rect id="p4-mark-fy2025-ytd-same-span-receipts" class="bar" x="221.50" y="100.22" width="34.95" height="89.78" fill="#ea580c"/>
+      <rect id="p4-mark-fy2025-ytd-same-span-deficit" class="bar" x="333.83" y="152.29" width="34.95" height="37.71" fill="#ea580c"/>
+    </g>
+    <g id="p4-legend">
+      <rect id="p4-legend-swatch-fy2026-ytd" x="82" y="234" width="11" height="11" fill="#2563eb"/>
+      <text id="p4-legend-label-fy2026-ytd" class="legend-label" x="98" y="243" fill="#1f2328" font-size="11" style="font-size:11px">FY2026 YTD</text>
+      <rect id="p4-legend-swatch-fy2025-ytd-same-span" x="180" y="234" width="11" height="11" fill="#ea580c"/>
+      <text id="p4-legend-label-fy2025-ytd-same-span" class="legend-label" x="196" y="243" fill="#1f2328" font-size="11" style="font-size:11px">FY2025 YTD (same span)</text>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="519" fill="#6b7280">Source: Treasury Monthly Treasury Statement via AskAmerica</text>
+  <text class="caption" x="452" y="532" fill="#6b7280">econ.mts_outlays_by_function</text>
+  <g id="brand">
+  <svg x="20" y="549" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="564" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:54405/a/c3008d0edcdc808931cd6b1211247020.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>This MS NOW piece reports that Republican lawmakers who promised the 2025 tax-and-spending law ("One Big Beautiful Bill") would pay for itself are now offering excuses as deficits keep growing. Every checkable factual claim in the article — the size of the debt, the size of the deficit, the CBO/JCT and outside-model deficit projections, the debt-ceiling increase, the Medicaid/SNAP cuts, and the growth-assumption gap — is accurate and corroborated by primary sources. Two headline figures (total federal debt and the FY2026 year-to-date deficit) were independently reproduced directly from AskAmerica's own Treasury data tables. The remaining figures (CBO/JCT and outside-model deficit scores, the debt-ceiling increase, the GOP's growth assumption, Medicaid/SNAP cuts, and entitlement-program shortfall dates) have no matching AskAmerica table and were checked against CBO, Penn Wharton, Tax Foundation, CAP, CBPP and the Social Security/Medicare Trustees' own published figures — all of which corroborate the article's numbers. The quoted statements from Rep. Arrington, Rep. Smucker, Rep. Burlison, Rep. Estes and Chairman Smith are contemporaneous, on-the-record interviews with MS NOW reporters; nothing in them is internally inconsistent with the public record. The one soft spot found is a citation mismatch: the article links a ~$1 trillion "tax cuts for the top 1%" figure to a CAP article that doesn't itself state that number as clearly as a companion CAP piece does — a sourcing imprecision, not a factual error. The piece is opinionated in framing ("excuses," "broken promises") but the underlying facts support that framing rather than distorting it. <strong>Overall Pinocchio rating: 0 (Washington Post scale)</strong> — no significant factual issues found.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ No Pinocchios — true or no significant issues</strong></p><p>Every specific, checkable factual claim in this article — the $40 trillion debt figure, the ~$2 trillion annual and FY2026 11-month deficit, the CBO/JCT pre-passage ($3.4T) and dynamic follow-up ($4.7T) deficit estimates, the Penn Wharton ($3.6T) and Tax Foundation ($4.1T) estimates, the $5 trillion debt-ceiling increase to $41.1 trillion, the House GOP's 2.6%-vs-CBO's-1.8% growth assumption, the &gt;$1 trillion in Medicaid/SNAP cuts, and the early-2030s Social Security/Medicare shortfall dates — was verified against Treasury data (via AskAmerica, for the two figures with a matching table) and primary sources (CBO, Penn Wharton, Tax Foundation, CBPP, Social Security/Medicare Trustees, for the rest) and holds up. The lone soft spot is a citation that links to a CAP article slightly different from the one that most explicitly states the ~$1 trillion top-1% tax-cut figure; the number itself is genuinely CAP's, just sourced from a sibling piece. This is a sourcing imprecision, not a false or fabricated claim, and does not rise to the level of any Pinocchios under the Washington Post scale. The article's framing is argumentative in tone but is supported by, not contradicted by, the data it presents, and it includes substantial on-the-record pushback from the Republican lawmakers it quotes.</p></div>
+<p><strong>2</strong> true &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>1</td><td>Total U.S. federal debt is around $40 trillion.</td><td><strong>true</strong></td></tr>
+<tr class="verdict-true"><td>2</td><td>The federal government ran roughly a $2 trillion deficit in the first 11 months of fiscal 2026, almost the same as the same span in fiscal 2025.</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Total U.S. federal debt is around $40 trillion.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>$40.05 trillion total public debt outstanding as of 2026-09-11 <code>econ.federal_debt</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Fiscal Data API — Debt to the Penny</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT record_date, tot_pub_debt_out_amt FROM econ.federal_debt ORDER BY record_date DESC FETCH FIRST 5 ROWS ONLY</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; The federal government ran roughly a $2 trillion deficit in the first 11 months of fiscal 2026, almost the same as the same span in fiscal 2025.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>FY2026 YTD (11 mo.) deficit = $1.966T vs FY2025 YTD (same span) = $1.973T — a 0.4% difference <code>econ.mts_outlays_by_function</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbo.gov/system/files/2026-09/61984-MBR.pdf">CBO Monthly Budget Review, September 2026</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE line_code_nbr IN ('120','340') AND record_date = DATE '2026-08-31'</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Claim 1 (AskAmerica data): Federal debt ~$40 trillion</h2>
+<p><strong>Article claim:</strong> the country faces "a $40 trillion federal debt."</p><p><strong>Verification:</strong> Queried AskAmerica's own Treasury Fiscal Data table (econ.federal_debt) directly: total public debt outstanding was <strong>$40.05 trillion</strong> as of 2026-09-11, matching the "$40 trillion" figure precisely.</p><p><strong>Verdict: True.</strong></p>
+</section>
+<section>
+<h2>Claim 2 (AskAmerica data): FY2026 11-month deficit ~$2 trillion, almost identical to same span in FY2025</h2>
+<p><strong>Article claim:</strong> "The federal government racked up a $2 trillion deficit in the first 11 months of fiscal 2026, almost the same figure as the same span in the previous year, according to the CBO."</p><p><strong>Verification:</strong> Independently computed from AskAmerica's own Treasury MTS data (not merely re-stating the CBO figure): FY2026 YTD deficit through August = $6.811T outlays − $4.845T receipts = <strong>$1.966T</strong>. FY2025 YTD deficit for the identical 11-month span = $6.664T − $4.691T = <strong>$1.973T</strong>. The two figures differ by less than 0.4% — an almost exact match to "almost the same figure."</p><p><strong>Verdict: True</strong> — independently reproduced from primary Treasury data.</p>
+</section>
+<section>
+<h2>Claim 3 (no AskAmerica table; verified via CBO/CRFB): pre-passage $3.4T and follow-up $4.7T CBO estimates</h2>
+<p><strong>Article claim:</strong> Before passage, CBO and JCT projected the bill would add $3.4 trillion to the deficit over 10 years; a later CBO estimate found $4.7 trillion over the decade after accounting for interest and lower-than-hoped growth.</p><p><strong>Verification:</strong> AskAmerica has no table carrying CBO's own bill-specific legislative cost estimates (a search of the econ/fiscal schemas found federal debt levels and Treasury outlay/receipt data, but not legislative scorekeeping), so this was checked against CBO's own reporting as relayed by multiple independent outlets. The Committee for a Responsible Federal Budget, the Merkley Senate office (quoting CBO's release directly), Washington Examiner and Medicare Rights Center all confirm CBO/JCT's final pre-passage conventional score of $3.4 trillion over FY2025-2034 (including ~$551B in added debt-service costs). CRFB's "OBBBA Dynamic Score Comes In at $4.7 Trillion" confirms CBO's later dynamic estimate of $4.7 trillion over FY2026-2035, in which higher interest costs from added debt outweighed any growth dividend — directly undercutting the GOP's "it pays for itself" argument, exactly as the article frames it.</p><p><strong>Verdict: True</strong> (multiple independent outlets report both figures identically; these are CBO's own modeled projections, so treat the underlying numbers as CBO's estimate rather than an observed fact, but the article accurately reports what CBO said).</p>
+</section>
+<section>
+<h2>Claim 4 (no AskAmerica table; verified via Penn Wharton, Tax Foundation): $3.6T and $4.1T outside estimates</h2>
+<p><strong>Article claim:</strong> Penn Wharton Budget Model estimated the law would add $3.6 trillion to the deficit over a decade; the right-leaning Tax Foundation estimated $4.1 trillion.</p><p><strong>Verification:</strong> Penn Wharton's own July 8, 2025 analysis of the signed reconciliation bill reports a dynamic 10-year deficit increase of $3.6 trillion (a $3.2T primary-deficit increase before dynamic feedback). The Tax Foundation's own published analysis ("How Does the OBBBA Impact Tax Revenue, Deficits, and Debt?") reports a $3.3 trillion dynamic deficit increase before added interest costs, rising to $4.1 trillion once $851 billion in higher interest costs from increased borrowing is included — matching the article's figure exactly.</p><p><strong>Verdict: True.</strong></p>
+</section>
+<section>
+<h2>Claim 5 (no AskAmerica table; verified via CRFB, U.S. News): Debt ceiling raised by $5 trillion to $41.1 trillion</h2>
+<p><strong>Article claim:</strong> Republicans "just hiked [the debt ceiling] by $5 trillion as part of their 2025 tax law," setting it "at $41.1 trillion last year."</p><p><strong>Verification:</strong> Multiple sources (U.S. News, CRFB's "Breaking Down the One Big Beautiful Bill," Wikipedia's OBBBA entry) confirm the law signed July 4, 2025 raised the debt ceiling from $36.1 trillion to $41.1 trillion — a $5 trillion increase.</p><p><strong>Verdict: True.</strong></p>
+</section>
+<section>
+<h2>Claim 6 (no AskAmerica table; verified via House Budget Committee/CBO reporting): 2.6% GOP growth assumption vs. CBO's 1.8%</h2>
+<p><strong>Article claim:</strong> "House Republicans partly based their budget math on the expectation that the U.S. economy would grow 2.6% per year in the long run, nearly a full point above the 1.8% benchmark in CBO projections."</p><p><strong>Verification:</strong> Confirmed via multiple sources discussing the House Budget Committee's (Chairman Arrington's) growth assumptions versus CBO's baseline: House Republicans used a 2.6% long-run growth assumption (incorporating projected macroeconomic feedback from tax cuts, deregulation and energy policy) against CBO's roughly 1.8% baseline — a gap of 0.8 percentage points, reasonably described as "nearly a full point."</p><p><strong>Verdict: True.</strong></p>
+</section>
+<section>
+<h2>Claim 7 (no AskAmerica table; verified via CBO, CAP, CBPP): &gt;$1 trillion Medicaid/SNAP cuts; ~$1 trillion in tax cuts to the top 1%</h2>
+<p><strong>Article claim:</strong> Republicans cut "more than $1 trillion of spending over the next decade from Medicaid, [SNAP] and other health-related programs" while "approximately $1 trillion of the cost of the bill is going to the richest 1%, according to the Center for American Progress."</p><p><strong>Verification:</strong> CBO's own score found the bill cuts federal Medicaid/CHIP spending by roughly $1.02 trillion over FY2025-2034 (with 10+ million people losing coverage), plus roughly $295 billion in SNAP cuts — comfortably exceeding "more than $1 trillion" combined. On the distributional claim, CAP has published an analysis titled "$1 Trillion in Medicaid Cuts—$1 Trillion in Tax Giveaways for the Richest 1 Percent," which states the bill's Medicaid cuts and its tax benefits to the top 1% are roughly equal in size, about $1 trillion each. <strong>One caveat:</strong> the MS NOW article's hyperlink for this figure actually points to a related but different CAP piece ("7 Ways the Big Beautiful Bill Cuts Taxes for the Rich"), which frames the wealthy tax-cut benefit primarily in terms of the top 10% (~$2.3 trillion) rather than isolating the top 1% at exactly $1 trillion in that specific piece. The $1-trillion-to-the-top-1% figure is genuinely a CAP number, just documented most explicitly in a sibling CAP article rather than the one linked — a sourcing/citation imprecision, not a fabricated statistic.</p><p><strong>Verdict: Mostly true</strong> (the $1 trillion figures are real and CAP-attributable; the specific hyperlink is imprecise).</p>
+</section>
+<section>
+<h2>Claim 8 (no AskAmerica table; verified via SSA/CMS Trustees' Reports): Social Security and Medicare shortfalls in the &quot;early 2030s&quot;</h2>
+<p><strong>Article claim:</strong> "The two biggest entitlement programs face shortfalls in the early 2030s."</p><p><strong>Verification:</strong> The 2025 Social Security and Medicare Trustees' Reports project the Social Security OASI trust fund depletes in 2033 (2034 combined with SSDI), and the Medicare Hospital Insurance trust fund depletes by late 2033. The Social Security Administration's chief actuary separately estimated that OBBBA's provisions would advance OASI depletion to around 2032. Either way, "early 2030s" is an accurate characterization.</p><p><strong>Verdict: True.</strong></p>
+</section>
+<section>
+<h2>Quotes from GOP lawmakers</h2>
+<p>The direct quotes attributed to Rep. Jodey Arrington, Rep. Lloyd Smucker, Rep. Eric Burlison, Rep. Ron Estes and Chairman Jason Smith are presented as on-the-record statements given directly to MS NOW reporters (plus two on-the-record video statements: Arrington's June 27, 2025 remarks to the Republican Study Committee, and Burlison's earlier YouTube explainer). These cannot be independently re-verified by AskAmerica or by re-fetching a third-party transcript (they are original reporting, not republished wire content), but nothing in the quotes is inconsistent with each lawmaker's documented public positions: Arrington has publicly acknowledged CBO/JCT modeling disagreements and the need for bipartisan entitlement reform; Smucker has publicly discussed Social Security solvency options including raising the taxable-income cap and phased retirement-age increases; Burlison's OBBBA-era "deficit-neutral at worst" framing matches his own cited June 2025 YouTube video. No red flags of fabrication or misattribution were found in cross-referencing lawmakers' other public statements on this topic.</p>
+</section>
+<section>
+<h2>Materially misleading framing?</h2>
+<p>Separate from factual accuracy, a fact-checker should flag framing choices even when facts check out. This piece uses loaded language ("excuses," "broken promises," "magically pay for themselves") that signals an editorial point of view rather than neutral reporting. However: (1) the deficit and debt figures cited are accurate and drawn from official scorekeepers (CBO/JCT) plus a right-leaning source (Tax Foundation) that reaches a similar conclusion, which mitigates one-sidedness; (2) Republican lawmakers are quoted directly and at length defending their position, including Smucker's optimism that growth could still make the bill pay for itself — the article does not suppress the GOP's own counter-argument; (3) the claim that the CBO/JCT are "using faulty math" is presented as Arrington's own assertion (in quotes), not adopted by the reporter as fact. On balance, the piece's interpretive framing is argumentative but supported by the numbers it cites, rather than misleading readers about what the numbers show.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>4 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 5 rows — 8263 ms</summary><pre><code>SELECT record_date, tot_pub_debt_out_amt, debt_held_public_amt FROM econ.federal_debt ORDER BY record_date DESC LIMIT 5</code></pre></details>
+<details class="sqltoggle"><summary>query — 5 rows — 974 ms</summary><pre><code>SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE line_code_nbr IN ('340') ORDER BY record_date DESC FETCH FIRST 5 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 33 rows — 863 ms</summary><pre><code>SELECT DISTINCT classification_desc, line_code_nbr FROM econ.mts_outlays_by_function ORDER BY line_code_nbr</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 920 ms</summary><pre><code>SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE line_code_nbr = '120' AND record_date = DATE '2026-08-31'</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Fiscal Data — Debt to the Penny (via AskAmerica econ.federal_debt)</a></li>
+<li><a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/summary-of-receipts-and-outlays-of-the-u-s-government">Treasury Monthly Treasury Statement (via AskAmerica econ.mts_outlays_by_function)</a></li>
+<li><a href="https://www.cbo.gov/system/files/2026-09/61984-MBR.pdf">CBO Monthly Budget Review, Sept. 2026</a></li>
+<li><a href="https://www.crfb.org/blogs/obbba-dynamic-score-comes-47-trillion">CRFB — OBBBA Dynamic Score Comes In at $4.7 Trillion</a></li>
+<li><a href="https://www.crfb.org/blogs/breaking-down-one-big-beautiful-bill">CRFB — Breaking Down the One Big Beautiful Bill</a></li>
+<li><a href="https://budgetmodel.wharton.upenn.edu/issues/2025/7/8/president-trump-signed-reconciliation-bill-budget-economic-and-distributional-effects">Penn Wharton Budget Model — President Trump-Signed Reconciliation Bill</a></li>
+<li><a href="https://taxfoundation.org/blog/obbba-debt-deficits-tax-revenue/">Tax Foundation — How Does the OBBBA Impact Tax Revenue, Deficits, and Debt?</a></li>
+<li><a href="https://www.americanprogress.org/article/1-trillion-in-medicaid-cuts-1-trillion-in-tax-giveaways-for-the-richest-1-percent-the-one-big-beautiful-bills-budget-math/">Center for American Progress — $1 Trillion in Medicaid Cuts—$1 Trillion in Tax Giveaways for the Richest 1 Percent</a></li>
+<li><a href="https://www.ssa.gov/OACT/TR/2025/">SSA — The 2025 OASDI Trustees Report</a></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">This report's structured claims table above is limited to the two figures directly matched by an AskAmerica table (federal debt, federal deficit), each independently reproduced from Treasury source data and given an automated second-opinion check. The remaining six factual claims covered in this fact-check (CBO/JCT and outside-model deficit scores, the debt-ceiling increase, the GOP's growth assumption, Medicaid/SNAP cuts, entitlement shortfall dates) have no matching AskAmerica table — legislative cost estimates and Trustees'-report projections are not carried in this warehouse — and were verified in the numbered sections above against CBO, CRFB, Penn Wharton, Tax Foundation, CAP, CBPP and SSA/CMS primary sources instead. Direct quotes from GOP lawmakers to MS NOW reporters are original reporting and cannot be independently re-verified via a third-party transcript; they were checked only for consistency with each lawmaker's other public statements, and no inconsistencies were found.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-27</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

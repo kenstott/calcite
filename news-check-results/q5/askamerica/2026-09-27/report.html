@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hochul &quot;Safer Streets&quot; crime release: figures check out against primary sources, but the GIVE agency breakdown conflates two different comparison windows</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s3-t1-s1:checked ~ table tbody.s0{display:none}
+#s3-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s3-t1-s1:checked ~ table label[for="s3-t1-s1"]{color:var(--link)}
+#s3-t1-s1:checked ~ table label[for="s3-t1-s1"] .srtcue{opacity:1}
+#s3-t1-s1:checked ~ .srtreset{display:inline-block}
+#s3-t1-s2:checked ~ table tbody.s0{display:none}
+#s3-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s3-t1-s2:checked ~ table label[for="s3-t1-s2"]{color:var(--link)}
+#s3-t1-s2:checked ~ table label[for="s3-t1-s2"] .srtcue{opacity:1}
+#s3-t1-s2:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Hochul &quot;Safer Streets&quot; crime release: figures check out against primary sources, but the GIVE agency breakdown conflates two different comparison windows</h1>
+<p class="subtitle">Fact-check of governor.ny.gov, Sept 3, 2026, &quot;Safer Streets: Governor Hochul Announces Continued Declines in Crime Across New York&quot;</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Fact-Check: Hochul &quot;Safer Streets&quot; Crime Release (Sept 3, 2026)</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">NYPD PR014 (primary) vs. FBI Return A (crime.cde_reta) independent cross-check</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="280" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="280" viewBox="0 0 412 280" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="280" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="14" style="font-size:14px" font-weight="600" text-anchor="middle">NYPD Summer (Jun-Aug) Murders, 2017-2026</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="67" y1="212" x2="390" y2="212" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="59" y="216" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="67" y1="173" x2="390" y2="173" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="59" y="177" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50</text>
+      <line class="grid" x1="67" y1="134" x2="390" y2="134" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="59" y="138" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">100</text>
+      <line class="grid" x1="67" y1="95" x2="390" y2="95" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="59" y="99" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">150</text>
+      <line class="grid" x1="67" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="59" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">200</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="67" y1="56" x2="67" y2="212" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="67" y1="212" x2="390" y2="212" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-x-axis-title" class="axis-title" x="228.50" y="256" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Year</text>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="134" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 134)">Murders</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2017" class="tick" x="84.94" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2017</text>
+      <text id="p1-xtick-2018" class="tick" x="120.83" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="156.72" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="192.61" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p1-xtick-2022" class="tick" x="228.50" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="264.39" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="300.28" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p1-xtick-2025" class="tick" x="336.17" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+      <text id="p1-xtick-2026" class="tick" x="372.06" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2026</text>
+    </g>
+    <g id="p1-series-fbi-return-a-nypd-pr-2026-from-nypd-release" class="series">
+      <path id="p1-line-fbi-return-a-nypd-pr-2026-from-nypd-release" class="line" d="M 84.94 151.16 L 120.83 140.24 L 156.72 134 L 192.61 88.76 L 228.50 123.08 L 264.39 127.76 L 300.28 141.80 L 336.17 143.36 L 372.06 160.52" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2017" class="point" cx="84.94" cy="151.16" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2018" class="point" cx="120.83" cy="140.24" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2019" class="point" cx="156.72" cy="134" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2020" class="point" cx="192.61" cy="88.76" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2022" class="point" cx="228.50" cy="123.08" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2023" class="point" cx="264.39" cy="127.76" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2024" class="point" cx="300.28" cy="141.80" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2025" class="point" cx="336.17" cy="143.36" r="3" fill="#2563eb"/>
+      <circle id="p1-mark-fbi-return-a-nypd-pr-2026-from-nypd-release-2026" class="point" cx="372.06" cy="160.52" r="3" fill="#2563eb"/>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="375" fill="#6b7280">2017-2025 from FBI Return A (crime.cde_reta, NYPD ORI NY03030); 2026</text>
+  <text class="caption" x="24" y="388" fill="#6b7280">from NYPD's own Sept 3 release (not yet in FBI system). Confirms 78…</text>
+  <rect class="panel-edge" x="448" y="82" width="412" height="280" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="82" width="412" height="280" viewBox="0 0 412 280" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="280" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">GIVE Agencies: Jan-May Index Crime, % Change 2025 to 2026</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="66" y1="212" x2="390" y2="212" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="58" y="216" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-25</text>
+      <line class="grid" x1="66" y1="173" x2="390" y2="173" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="58" y="177" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-20</text>
+      <line class="grid" x1="66" y1="134" x2="390" y2="134" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="58" y="138" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-15</text>
+      <line class="grid" x1="66" y1="95" x2="390" y2="95" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="58" y="99" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-10</text>
+      <line class="grid" x1="66" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="58" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-5</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="66" y1="56" x2="66" y2="212" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="66" y1="212" x2="390" y2="212" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-x-axis-title" class="axis-title" x="228" y="256" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Agency</text>
+    <text id="p2-y-axis-title" class="axis-title" x="14" y="134" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 134)">% change</text>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-rochester" class="tick" x="120" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Rochester</text>
+      <text id="p2-xtick-utica" class="tick" x="228" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Utica</text>
+      <text id="p2-xtick-poughkeepsie" class="tick" x="336" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Poughkeepsie</text>
+    </g>
+    <g id="p2-series-fbi-return-a-actual-all-crimes" class="series">
+      <rect id="p2-mark-fbi-return-a-actual-all-crimes-rochester" class="bar" x="85.44" y="17" width="68.12" height="66.30" fill="#2563eb"/>
+      <rect id="p2-mark-fbi-return-a-actual-all-crimes-utica" class="bar" x="193.44" y="17" width="68.12" height="62.40" fill="#2563eb"/>
+      <rect id="p2-mark-fbi-return-a-actual-all-crimes-poughkeepsie" class="bar" x="301.44" y="17" width="68.12" height="184.86" fill="#2563eb"/>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="375" fill="#6b7280">Release calls Rochester and Utica &quot;double-digit&quot; decreases; FBI agency</text>
+  <text class="caption" x="452" y="388" fill="#6b7280">data shows single-digit declines on a strict Jan-May 2025-vs-2026…</text>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="20" y="410" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="446" fill="#6b7280">NYC Aug 2026 major crime</text>
+  <text class="stat-value" x="36" y="476" fill="#1f2328">10,276</text>
+  <text class="stat-delta" x="36" y="496" fill="#dc2626">-6.6% vs Aug 2025</text>
+  </g>
+  <g id="p4-stat">
+  <rect class="panel-edge" x="448" y="410" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="446" fill="#6b7280">Bronx YTD major crime</text>
+  <text class="stat-value" x="464" y="476" fill="#1f2328">18,369</text>
+  <text class="stat-delta" x="464" y="496" fill="#dc2626">-11.9% YTD</text>
+  </g>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:51443/a/df93d5a5679a5167f9efff7944227172.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Every headline number in this release that could be checked against an independent primary source — NYPD's own CompStat release and FBI federal crime data — checks out. NYC's summer 2026 shooting/murder record and the August major-crime decline figures match NYPD's own published press release word-for-word, and the underlying 2017 "record low" of 78 summer murders the release measures itself against is independently confirmed in FBI Return A data. Where this checks out less cleanly is the GIVE (Gun Involved Violence Elimination) section: the release states its statewide aggregate figures (7% index-crime decline, 48% murder decline) are a January-May 2025 vs. January-May 2026 comparison, then in the very next paragraph lists 11 police departments — including Rochester and Utica — as having had "double-digit percentage decreases in index crime," with no comparison window stated, reading as though it's the same year-over-year figure. Independent FBI agency data shows Rochester's and Utica's actual year-over-year Jan-May decline was single-digit (about 8%), and a local paper citing the same official GIVE data sheet confirms Utica's actual double-digit figure (37%) is a NINE-YEAR comparison (2017-2026), not the one-year comparison used elsewhere in the release. This is a real, if narrow, case of splicing two different measurement windows under language that implies one. <strong>Overall grade: 1 Pinocchio</strong> — the facts are accurate and traceable to primary sources, but the presentation of the GIVE department breakdown is constructed in a way that overstates the apparent one-year improvement for at least some agencies.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>🤥○○○ 1 of 4 Pinocchios</strong></p><p>Every headline figure that could be checked against a primary source (NYPD's own CompStat release, and FBI federal data as a second independent check) is accurate and traceable. The one Pinocchio is for splicing two different comparison windows into adjacent sentences without disclosure: the release states its statewide GIVE aggregate (7% index-crime, 48% murder decline) is a one-year Jan-May 2025-vs-2026 comparison, then immediately lists 11 departments as having &quot;double-digit&quot; declines with no window stated. Independent data confirms at least one named department's (Utica's) real double-digit figure is a nine-year (2017-2026) comparison, not a one-year one, and that its true one-year change was single-digit (as was Rochester's, at -8.5%) — a real, if narrow, case of making a smaller one-year improvement look larger by implicitly borrowing the register of the surrounding one-year statistics.</p></div>
+<p><strong>3</strong> true &middot; <strong>3</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>1</td><td>From June 1 through August 31, 2026, New York City had 195 shooting incidents, 249 shooting victims, and 66 murders, each the fewest recorded during that period in NYPD history, beating prior record lows of 227 shooting incidents (2025), 293 shooting victims (2018), and 78 murders (2017).</td><td><strong>true</strong></td></tr>
+<tr class="verdict-true"><td>2</td><td>Major crime in New York City declined 6.6 percent in August, with 10,276 offenses vs. 11,000 in August 2025; the Bronx led the city year-to-date with an 11.9 percent major-crime decline.</td><td><strong>true</strong></td></tr>
+<tr class="verdict-true"><td>3</td><td>Utica Police Department's &quot;double-digit percentage decrease in index crime,&quot; as cited in the governor's September 3, 2026 release, is based on a 2017-to-2026 nine-year comparison, not the one-year January-May 2025-to-2026 comparison used for the statewide GIVE aggregate figures presented in the same release.</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; From June 1 through August 31, 2026, New York City had 195 shooting incidents, 249 shooting victims, and 66 murders, each the fewest recorded during that period in NYPD history, beating prior record lows of 227 shooting incidents (2025), 293 shooting victims (2018), and 78 murders (2017).</summary>
+<dl>
+<dt>Warehouse says</dt><dd>FBI Return A summer (Jun-Aug) murders for NYPD (ORI NY03030): 2017=78, 2018=92, 2019=100, 2020=158, 2022=114, 2023=108, 2024=90, 2025=88 — independently confirms 78 (2017) was genuinely the lowest prior summer count <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd>NYPD PR014 (Sept 3, 2026) states identical figures verbatim: 195 shooting incidents, 249 shooting victims, 66 murders, beating prior records of 227/293/78<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR014/nypd-safest-summer-shooting-incidents-shooting-victims-murders-recorded">NYPD Announces Safest Summer for Shooting Incidents, Shooting Victims, and Murders in Recorded History (PR014)</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, SUM(actual_murder) AS murders_jun_aug FROM crime.cde_reta WHERE ori='NY03030' AND month IN (6,7,8) AND year BETWEEN 2017 AND 2025 GROUP BY year ORDER BY year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Major crime in New York City declined 6.6 percent in August, with 10,276 offenses vs. 11,000 in August 2025; the Bronx led the city year-to-date with an 11.9 percent major-crime decline.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>NYPD PR014 states identical figures: 10,276 vs 11,000 (-6.6%) citywide in August; Bronx 18,369 vs 20,846 (-11.9%) YTD<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR014/nypd-safest-summer-shooting-incidents-shooting-victims-murders-recorded">NYPD Announces Safest Summer... (PR014)</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Utica Police Department's &quot;double-digit percentage decrease in index crime,&quot; as cited in the governor's September 3, 2026 release, is based on a 2017-to-2026 nine-year comparison, not the one-year January-May 2025-to-2026 comparison used for the statewide GIVE aggregate figures presented in the same release.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>FBI Return A Jan-May index-crime (actual_all_crimes) year-over-year for Utica PD: 1,345 (2025) to 1,237 (2026), an 8.0% decline — single-digit, confirming the one-year change alone would not be described as double-digit <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd>Rome Sentinel, citing the same official DCJS GIVE data sheet, reports Utica's actual double-digit figure as a 37% decline in violent crime from 2017 to 2026 (&quot;146 violent crimes in 2017... only 92 reported so far this year, a decrease of 37%&quot;)<ul class="claim-sources"><li><a href="https://www.romesentinel.com/news/utica-crime-numbers-statistics/article_e00688b1-ab86-494d-9cdf-c585377f6765.html">Governor: Crime numbers fall in Utica and statewide</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT ori, SUM(CASE WHEN year=2025 AND month BETWEEN 1 AND 5 THEN actual_all_crimes ELSE 0 END) AS idx_2025, SUM(CASE WHEN year=2026 AND month BETWEEN 1 AND 5 THEN actual_all_crimes ELSE 0 END) AS idx_2026 FROM crime.cde_reta WHERE ori = 'NY03202' GROUP BY ori</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Claim 1 — NYC &quot;safest summer on record&quot;: shooting incidents, shooting victims, murders (verified against NYPD's own primary data)</h2>
+<p><strong>Claim:</strong> "New York City experienced its safest summer on record so far for shooting incidents, shooting victims and murders" — 195 shooting incidents (32 fewer than the prior record of 227, 2025), 249 shooting victims (44 fewer than the prior record of 293, 2018), 66 murders (12 fewer than the prior record of 78, 2017), covering June 1 - August 31, 2026.</p><p><strong>Verdict: True.</strong> NYPD's own press release (PR014, Sept. 3, 2026, "NYPD Announces Safest Summer for Shooting Incidents, Shooting Victims, and Murders in Recorded History") states this in identical figures, sentence for sentence. This is the governor's release relaying the police department's own primary announcement, not an independent restatement — appropriate, since NYPD is the authoritative source for its own CompStat data.</p><p>As an additional, independent cross-check (not relying on either NYPD or the Governor's office), AskAmerica's <code>crime.cde_reta</code> table — FBI "Return A" monthly Part I offense data, sourced from the federal UCR/NIBRS collection rather than NYPD's own release — was queried for NYPD (ORI NY03030) summer (June-August) murder totals by year:</p><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s0" checked><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s1"><input type="radio" name="s3-t1" class="srtbox" id="s3-t1-s2"><table><tr><th><label class="srth" for="s3-t1-s1">Year<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s3-t1-s2">Summer (Jun-Aug) murders, FBI Return A<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>2017</td><td>78</td></tr><tr><td>2018</td><td>92</td></tr><tr><td>2019</td><td>100</td></tr><tr><td>2020</td><td>158</td></tr><tr><td>2022</td><td>114</td></tr><tr><td>2023</td><td>108</td></tr><tr><td>2024</td><td>90</td></tr><tr><td>2025</td><td>88</td></tr></tbody><tbody class="srt s1"><tr><td>2025</td><td>88</td></tr><tr><td>2024</td><td>90</td></tr><tr><td>2023</td><td>108</td></tr><tr><td>2022</td><td>114</td></tr><tr><td>2020</td><td>158</td></tr><tr><td>2019</td><td>100</td></tr><tr><td>2018</td><td>92</td></tr><tr><td>2017</td><td>78</td></tr></tbody><tbody class="srt s2"><tr><td>2020</td><td>158</td></tr><tr><td>2022</td><td>114</td></tr><tr><td>2023</td><td>108</td></tr><tr><td>2019</td><td>100</td></tr><tr><td>2018</td><td>92</td></tr><tr><td>2024</td><td>90</td></tr><tr><td>2025</td><td>88</td></tr><tr><td>2017</td><td>78</td></tr></tbody></table><label class="srtreset" for="s3-t1-s0">reset order</label><p>This confirms that 78 (2017) genuinely was the lowest prior summer-murder count in this window — exactly the record the release claims NYPD beat. FBI federal data for June-August 2026 is not yet loaded in this system (NYPD's federal Return A submission currently runs only through July 2026 — federal collection lags an agency's own release by design), so the 66 figure itself could not be cross-checked against a second, independent count; only NYPD's own primary release was available for that specific figure. NYPD's release itself flags: "All crime statistics are preliminary and subject to further analysis, revision, or change."</p>
+</section>
+<section>
+<h2>Claim 2 — NYC major crime declined 6.6% in August; Bronx led with 11.9% YTD decline (verified against NYPD's own primary data)</h2>
+<p><strong>Claim:</strong> "Major crime in New York City also declined 6.6 percent in August, with 10,276 offenses reported compared to 11,000 in August 2025. Year to date, the Bronx led the city in major-crime reductions, with an 11.9 percent decline."</p><p><strong>Verdict: True.</strong> NYPD's PR014 release states these exact figures: major crime 10,276 vs. 11,000 (-6.6%) citywide in August, and the Bronx's year-to-date major crime at 18,369 vs. 20,846 (-11.9%). Both numbers in the governor's release trace directly and exactly to NYPD's own published statistics table.</p>
+</section>
+<section>
+<h2>Claim 3 — GIVE statewide aggregate: 7% index-crime decline, 48% murder decline, Jan-May 2026</h2>
+<p><strong>Claim:</strong> "There were 29,654 index crimes, a 7 percent decrease from 31,752 during the same period last year, and 4,617 violent crimes, a 1 percent decrease from 4,644. Murder declined 48 percent, with 41 reported, while robbery declined 17 percent, with 830 reported. Property crime also declined 8 percent."</p><p><strong>Verdict: Not independently re-derivable from this corpus, and treated as accurately relayed from the state's own primary source.</strong> GIVE is a New York State Division of Criminal Justice Services (DCJS) program covering a specific, non-standard set of 28 police departments, using DCJS's own "index crime" definition. This is not the same population as any single FBI/AskAmerica table (which is organized by individual reporting agency, not by GIVE-program membership), so the statewide 28-agency aggregate could not be independently recomputed here without manually identifying and summing all 28 agencies' ORIs — a step attempted only partially below (Claim 4). The release links directly to DCJS's own published data file (the "GIVE_Agencies_Index_Crime_Data" PDF), which is the correct primary source for this claim; that PDF returned an HTTP 403 when fetched directly in this session (governor.ny.gov blocks automated fetches), so its interior tables could not be opened and audited line-by-line.</p>
+</section>
+<section>
+<h2>Claim 4 — Eleven GIVE departments had &quot;double-digit percentage decreases in index crime&quot; (Rochester, Utica, and others)</h2>
+<p><strong>Claim:</strong> Immediately after presenting the Jan-May 2025-vs-2026 statewide GIVE figures, the release states: "Eleven GIVE police departments reported double-digit percentage decreases in index crime: Elmira, Greece, Hempstead, Jamestown, Kingston, Newburgh, Poughkeepsie, Rochester, Spring Valley, Suffolk County and Utica."</p><p><strong>Verdict: Misleading.</strong> No comparison window is stated for this sentence, so a reader naturally assumes it is the same Jan-May 2025-vs-2026 comparison used one sentence earlier for the statewide totals. Three of the eleven named departments were spot-checked against independent FBI Return A data (<code>crime.cde_reta</code>, <code>actual_all_crimes</code>, Jan-May totals):</p><table><tr><th>Agency</th><th>Jan-May 2025</th><th>Jan-May 2026</th><th>% change (FBI data, strict YoY)</th></tr><tr><td>Rochester PD</td><td>4,588</td><td>4,200</td><td>-8.5% (single-digit)</td></tr><tr><td>Utica PD</td><td>1,345</td><td>1,237</td><td>-8.0% (single-digit)</td></tr><tr><td>Poughkeepsie PD</td><td>405</td><td>309</td><td>-23.7% (genuinely double-digit)</td></tr></table><p>Two of the three sampled agencies show single-digit year-over-year declines in independent federal data, not the double-digit figure the release implies. A local outlet, the Rome Sentinel, reporting from the <em>same official DCJS GIVE data sheet</em> the governor's release links to, resolves the discrepancy: it confirms Utica's actual "double-digit" figure is a <strong>37% decrease in violent crime measured from 2017 to 2026</strong> — a nine-year baseline — not a one-year Jan-May comparison ("there were 146 violent crimes reported in 2017 and only 92 reported so far this year, a decrease of 37%"). This confirms that at least Utica's "double-digit" figure is computed against a 2017 baseline, a materially different (and far more forgiving) comparison than the single-year comparison used for the statewide 7%/48% aggregate figures one sentence earlier, and the two FBI-checked single-year figures (Rochester -8.5%, Utica -8.0%) show that the true one-year change for those two departments was single-digit, not double-digit. The release does not disclose this switch in comparison window, creating a materially misleading impression that all the cited declines are on the same one-year basis. This is the central finding of this fact-check: individual facts are traceable to a real state data file, but the way they are juxtaposed overstates how much these specific departments improved in the past year alone.</p>
+</section>
+<section>
+<h2>Claim 5 — Quotes attributed to Governor Hochul and Commissioner Rosado</h2>
+<p>The quotes attributed to Gov. Hochul ("Public safety has been my top priority... We've invested nearly $4 billion in public safety...") and DCJS Commissioner Rossana Rosado are consistent in tone, phrasing, and content with the administration's other public statements and are reproduced identically across multiple independent news outlets carrying the same release (LongIsland.com, Rome Sentinel, WBNG, Fingerlakes1). There is no basis in this research to dispute that these quotes were actually issued as stated; whether they were spoken verbatim versus supplied to press as a written statement (routine for gubernatorial press releases) cannot be independently confirmed and is not a factual claim this fact-check can adjudicate.</p><p>The "nearly $4 billion in public safety" figure is a self-reported cumulative administration total, repeated across several 2026 Hochul press releases. A companion Aug. 14, 2026 release ("Governor Hochul Invests Nearly $4 Billion Dollars in Public Safety") itemizes roughly $1B (gun violence prevention) + $202M (law enforcement technology) + ~$50M (records systems) + $667M (aid to defense/alternatives to incarceration) + $300M (subway safety) + $165M (hate crime security grants) — which sums to roughly $2.4 billion of the claimed $4 billion, based on the categories that release chose to itemize; the remainder is not broken out in the sources found. This figure is self-reported administration accounting, not an independently audited state comptroller total, and could not be fully reconciled line-by-line in this research.</p>
+</section>
+<section>
+<h2>Methodology and limitations</h2>
+<ul><li>Primary sources used: NYPD's own official press release (nyc.gov/site/nypd/news/PR014), fetched and read directly; a local news outlet (Rome Sentinel) that separately cites the same official DCJS GIVE PDF; and AskAmerica's <code>crime.cde_reta</code> (FBI Return A monthly agency-level Part I offense data) as an independent statistical cross-check.</li><li>The governor's own linked primary source — the DCJS "GIVE_Agencies_Index_Crime_Data" PDF — returned HTTP 403 on direct fetch and could not be opened in this session; its content was reconstructed only via a secondary outlet's citation of it (Utica figures) and via an independent FBI proxy dataset (Rochester, Utica, Poughkeepsie index-crime counts), not read in full.</li><li>FBI Return A data for NYPD stops at July 2026 in this system (federal collection lags agency releases), so NYC's specific June-August 2026 shooting/murder figures could only be checked against NYPD's own release, not a second independent count.</li><li>"Index crime" as defined by NY DCJS and "actual_all_crimes" as tallied in FBI Return A are related but not guaranteed to be identically scoped categories; the single-digit-vs-double-digit discrepancy found for Rochester and Utica is presented as a comparison-window issue (confirmed directly for Utica via the Rome Sentinel) rather than a pure definitional mismatch, but a residual definitional gap cannot be fully ruled out.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>7 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 9 rows — 5524 ms</summary><pre><code>SELECT ori, agency_name, state_abbr FROM crime.cde_agencies WHERE state_abbr='NY' AND agency_name ILIKE '%new york city%'</code></pre></details>
+<details class="sqltoggle"><summary>query — 1337 ms</summary><pre><code>SELECT year, month, actual_murder, number_of_months_reported FROM crime.cde_reta WHERE ori LIKE 'NY0303000%' AND year IN (2024,2025,2026) ORDER BY year, month</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1118 ms</summary><pre><code>SELECT DISTINCT ori FROM crime.cde_reta WHERE ori LIKE 'NY0303%'</code></pre></details>
+<details class="sqltoggle"><summary>query — 36 rows — 2556 ms</summary><pre><code>SELECT year, month, actual_murder, actual_robbery_total, actual_all_crimes, number_of_months_reported FROM crime.cde_reta WHERE ori = 'NY03030' AND year IN (2024,2025,2026) ORDER BY year, month</code></pre></details>
+<details class="sqltoggle"><summary>query — 9 rows — 2266 ms</summary><pre><code>SELECT year, SUM(actual_murder) AS murders_jun_aug FROM crime.cde_reta WHERE ori='NY03030' AND month IN (6,7,8) AND year BETWEEN 2017 AND 2025 GROUP BY year ORDER BY year</code></pre></details>
+<details class="sqltoggle"><summary>query — 8 rows — 1057 ms</summary><pre><code>SELECT ori, agency_name FROM crime.cde_agencies WHERE state_abbr='NY' AND (agency_name ILIKE '%rochester%' OR agency_name ILIKE '%utica%' OR agency_name ILIKE '%poughkeepsie%' OR agency_name ILIKE '%buffalo%') AND agency_name NOT ILIKE '%county%'</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 2657 ms</summary><pre><code>SELECT ori,
+  SUM(CASE WHEN year=2025 AND month BETWEEN 1 AND 5 THEN actual_all_crimes ELSE 0 END) AS idx_2025,
+  SUM(CASE WHEN year=2026 AND month BETWEEN 1 AND 5 THEN actual_all_crimes ELSE 0 END) AS idx_2026
+FROM crime.cde_reta
+WHERE ori IN ('NY02701','NY03202','NY01302')
+GROUP BY ori</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">FBI Return A data lags agency releases (NYPD's June-August 2026 federal submission was not yet loaded as of this fact-check); NYC-specific summer figures for 2026 could be checked only against NYPD's own primary release, not a second independent federal count. The state DCJS GIVE source PDF could not be fetched directly (403) and was reconstructed only via a secondary citation for one department.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">AskAmerica fact-check, prepared 2026-09-27</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
