@@ -167,6 +167,7 @@ public interface GovDataSubSchemaFactory extends SubSchemaFactory {
     Logger logger = LoggerFactory.getLogger(getClass());
     List<Map<String, Object>> tableDefs =
         GovDataUtils.loadTableDefinitions(getClass(), getSchemaResourceName());
+    Set<String> knownTableNames = new HashSet<>();
     int gated = 0;
     for (Map<String, Object> tableDef : tableDefs) {
       Object nameObj = tableDef.get("name");
@@ -174,8 +175,25 @@ public interface GovDataSubSchemaFactory extends SubSchemaFactory {
         continue;
       }
       String tableName = String.valueOf(nameObj);
+      knownTableNames.add(tableName);
       builder.isEnabled(tableName, ctx -> enabledTables.contains(tableName));
       gated++;
+    }
+    // A requested name absent from every table this jar's schema resource knows about is never
+    // a legitimate scoping request (that's an empty list, handled above) — it means either a
+    // typo or, confirmed live on kenstott/govdata-ops#719, a stale jar whose bundled schema
+    // resource predates the table being requested. Silently proceeding here processes zero
+    // tables and reports overall success (exit 0), which is exactly what let #719 leave
+    // nsf_award_projects at zero rows in production with no error anywhere in the run.
+    Set<String> unknown = new HashSet<>(enabledTables);
+    unknown.removeAll(knownTableNames);
+    if (!unknown.isEmpty()) {
+      throw new IllegalStateException(
+          "enabledTables requested unknown table(s) " + unknown + " -- not found among the "
+          + tableDefs.size() + " tables " + getSchemaResourceName() + " declares in this jar ("
+          + knownTableNames + "). If the table was added recently, this jar's bundled schema "
+          + "resource is stale -- verify GOVDATA_JAR actually resolved to the intended jar "
+          + "(check resolve_classpath's pinned-copy timestamp), not a fallback default build.");
     }
     logger.info("enabledTables filter: {} of {} — gated {} tables from {}",
         enabledTables, tableDefs.size(), gated, getSchemaResourceName());
