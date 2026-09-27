@@ -44,24 +44,27 @@ import java.util.Set;
  * Search API ({@code GET /services/v1/awards.json}), one fetch per (fiscal year, award month)
  * dimension combo.
  *
- * <p>The API truncates every query at {@link #RESULT_CAP} results, reporting the truncated figure
- * as {@code totalCount}. A full year runs ~12,000 awards, so the fetch is sliced by the calendar
- * month of the award date; the busiest month on record (August 2018) is ~3,600. A slice that
- * reports the cap is rejected rather than accepted as a truncated prefix.
+ * <p>The API has no documented sort order, and confirmed live: two identical requests for the same
+ * slice return the same {@code totalCount} but a different relative order of results. Walking a
+ * slice across multiple {@code offset}-paged requests is therefore unsound — a record that shifts
+ * position between two page fetches can fall on both sides of the offset boundary and never appear
+ * on any page (silent data loss, not a duplicate). The fix is to never page at all: {@code rpp} (the
+ * API's page-size parameter) accepts values far above any single month's volume (confirmed live up
+ * to 10,000, one HTTP call, no pagination), so every slice is fetched as one request. A slice whose
+ * {@code totalCount} reaches {@link #RESULT_CAP} is rejected rather than silently accepted as a
+ * truncated prefix — the busiest month on record (August 2018) is ~3,600, well under the cap, so
+ * hitting it means the monthly slice itself needs a finer split, not a paging fix.
  *
  * <p>The fiscal year runs October through September, so fiscal year N's October-December slices
- * are calendar year N-1. Pages are read one at a time through the raw cache and streamed to the
- * caller; only the award ids of the current slice are retained, to drop rows that straddle a page
- * boundary (the API documents no sort tiebreaker) and to check the slice against its own
- * {@code totalCount} on exhaustion. The API's {@code offset} counts records from zero.
+ * are calendar year N-1.
  */
 public class NsfAwardsProvider implements CachingDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(NsfAwardsProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String ENDPOINT = "https://api.nsf.gov/services/v1/awards.json";
-  private static final int PAGE_SIZE = 100;
-  // The API reports at most this many results for any query, however many match.
+  // The API reports at most this many results for any query, however many match; requesting this
+  // many per page guarantees a single-page fetch for any slice actually seen (see class javadoc).
   private static final int RESULT_CAP = 10000;
   private static final DateTimeFormatter API_DATE = DateTimeFormatter.ofPattern("MM/dd/yyyy");
   private static final int FISCAL_YEAR_START_MONTH = 10;
@@ -84,17 +87,14 @@ public class NsfAwardsProvider implements CachingDataProvider {
     return value.trim();
   }
 
-  /** Walks one slice's pages lazily, holding a single page of the response at a time. */
+  /** Fetches one slice's entire result set in a single request (see class javadoc). */
   private static final class AwardIterator implements Iterator<Map<String, Object>> {
     private final int fiscalYear;
     private final String dateStart;
     private final String dateEnd;
     private final RawCache rawCache;
     private final Set<String> seenIds = new HashSet<String>();
-    private Iterator<JsonNode> page = Collections.emptyIterator();
-    private int nextOffset;
-    private int totalCount = -1;
-    private boolean exhausted;
+    private Iterator<JsonNode> page;
     private Map<String, Object> pending;
 
     AwardIterator(int fiscalYear, YearMonth slice, RawCache rawCache) {
@@ -105,25 +105,21 @@ public class NsfAwardsProvider implements CachingDataProvider {
     }
 
     @Override public boolean hasNext() {
-      while (pending == null) {
-        if (page.hasNext()) {
-          JsonNode award = page.next();
-          String id = text(award, "id");
-          if (id == null) {
-            throw new IllegalStateException("nsf_award_projects: award without an id in "
-                + dateStart + ".." + dateEnd);
-          }
-          if (seenIds.add(id)) {
-            pending = toRow(award);
-          }
-        } else if (exhausted) {
-          checkComplete();
-          return false;
-        } else {
-          loadNextPage();
+      if (page == null) {
+        loadSlice();
+      }
+      while (pending == null && page.hasNext()) {
+        JsonNode award = page.next();
+        String id = text(award, "id");
+        if (id == null) {
+          throw new IllegalStateException("nsf_award_projects: award without an id in "
+              + dateStart + ".." + dateEnd);
+        }
+        if (seenIds.add(id)) {
+          pending = toRow(award);
         }
       }
-      return true;
+      return pending != null;
     }
 
     @Override public Map<String, Object> next() {
@@ -135,42 +131,34 @@ public class NsfAwardsProvider implements CachingDataProvider {
       return row;
     }
 
-    private void loadNextPage() {
+    private void loadSlice() {
       String url = ENDPOINT + "?dateStart=" + dateStart + "&dateEnd=" + dateEnd
-          + "&rpp=" + PAGE_SIZE + "&offset=" + nextOffset;
+          + "&rpp=" + RESULT_CAP + "&offset=0";
       JsonNode response;
       try (InputStream in = rawCache.openStream(url, () -> rawGet(url))) {
         response = MAPPER.readTree(in).path("response");
       } catch (IOException e) {
         throw new UncheckedIOException(e);
       }
+      int totalCount = response.path("metadata").path("totalCount").asInt(-1);
       if (totalCount < 0) {
-        totalCount = response.path("metadata").path("totalCount").asInt(-1);
-        if (totalCount < 0) {
-          throw new IllegalStateException("nsf_award_projects: no totalCount in response for "
-              + url + ": " + response);
-        }
-        if (totalCount >= RESULT_CAP) {
-          throw new IllegalStateException("nsf_award_projects: slice " + dateStart + ".."
-              + dateEnd + " reports " + totalCount + " awards, the API's result cap; the slice "
-              + "is truncated and needs a finer split");
-        }
+        throw new IllegalStateException("nsf_award_projects: no totalCount in response for "
+            + url + ": " + response);
+      }
+      if (totalCount >= RESULT_CAP) {
+        throw new IllegalStateException("nsf_award_projects: slice " + dateStart + ".."
+            + dateEnd + " reports " + totalCount + " awards, the API's result cap; the slice "
+            + "is truncated and needs a finer split");
       }
       JsonNode awards = response.path("award");
       int size = awards.isArray() ? awards.size() : 0;
-      page = size == 0 ? Collections.<JsonNode>emptyIterator() : awards.iterator();
-      if (size < PAGE_SIZE) {
-        exhausted = true;
-      }
-      nextOffset += PAGE_SIZE;
-    }
-
-    private void checkComplete() {
-      if (seenIds.size() != totalCount) {
+      if (size != totalCount) {
         throw new IllegalStateException("nsf_award_projects: slice " + dateStart + ".." + dateEnd
-            + " returned " + seenIds.size() + " distinct awards but the API reports " + totalCount);
+            + " requested rpp=" + RESULT_CAP + " but got " + size + " awards for a reported "
+            + "totalCount of " + totalCount);
       }
-      LOGGER.info("nsf_award_projects: {} awards for fy={} {}..{}", seenIds.size(), fiscalYear,
+      page = size == 0 ? Collections.<JsonNode>emptyIterator() : awards.iterator();
+      LOGGER.info("nsf_award_projects: {} awards for fy={} {}..{}", totalCount, fiscalYear,
           dateStart, dateEnd);
     }
 
