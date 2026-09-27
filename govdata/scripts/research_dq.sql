@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- U.S. Research & Development (NSF NCSES) Data Quality Checks
 -- Schema: research
--- Tables: nsf_national_rd, nsf_federal_rd_obligations, nsf_herd_by_institution
+-- Tables: nsf_national_rd, nsf_federal_rd_obligations, nsf_federal_rd_by_state, nsf_herd_by_institution
 -- All tables are Iceberg; reads via iceberg_scan (single-nested path).
 -- T4/T5 exclude partition columns 'type' and 'year'.
 -- NOTE: thresholds are provisional — no prod data has been ingested yet; revise
@@ -107,6 +107,49 @@ INSERT INTO dq_results
 SELECT 'research', 'nsf_federal_rd_obligations', 'T7_all_agencies_present',
   CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END, n, 1, 'Presence of the All agencies total row'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_obligations', allow_moved_paths := true) WHERE funding_agency = 'All agencies');
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nsf_federal_rd_by_state
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T2_row_count',
+  CASE WHEN n >= 700 THEN 'pass' ELSE 'fail' END, n, 700, 'Expected >=700 state/location x agency rows (61 locations x up to 12 agencies)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'state_fips')));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL year or state_location rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true) WHERE year IS NULL OR state_location IS NULL);
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T7_all_locations_present',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END, n, 1, 'Presence of the All locations national-total row'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true) WHERE state_location = 'All locations');
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: nsf_rd_by_field

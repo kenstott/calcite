@@ -9,6 +9,7 @@
 #
 #   - nsf_national_rd              National Patterns of R&D (multi-year XLSX, Table 1)
 #   - nsf_federal_rd_obligations   Federal Funds for R&D (single-FY XLSX, Table 7)
+#   - nsf_federal_rd_by_state      Federal Funds for R&D by state or location x agency (single-FY XLSX, Table 60)
 #   - nsf_rd_by_field              Federal Funds for R&D by field, all-agency/all-performer (XLSX)
 #   - nsf_herd_by_institution      HERD survey institution microdata (per-year ZIP CSV)
 #
@@ -251,6 +252,108 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: nsf_federal_rd_obligations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # --- FEDERAL FUNDS FOR R&D BY STATE (Federal obligations by state x agency) --
+  - name: nsf_federal_rd_by_state
+    pattern: "type=nsf_federal_rd_by_state/year=*/*.parquet"
+    partitions: *standard_partitions
+    freshness:
+      type: last_modified
+    comment: >
+      NSF NCSES Survey of Federal Funds for R&D — federal R&D obligations by
+      state or location x funding agency for the latest fiscal year in the
+      publication (Table 60). Values in current USD thousands (note: Table 7's
+      nsf_federal_rd_obligations reports USD millions — different unit, same
+      survey). funding_agency names are normalized to the full department/agency
+      name nsf_federal_rd_obligations already uses (e.g. Table 60's "DOD" header
+      becomes "Department of Defense") so the two tables' agency values line up
+      for a join. Answers "which places get the most federal (and defense) R&D
+      money, by agency" at state grain — the DOD column is this table's
+      state-level view of defense R&D spending; NCSES's own DOD-specific RDT&E
+      table (Table 63, by performer and RDT&E sub-category) is a narrower,
+      DOD-only cut not carried here.
+
+      Table 60's per-location "Total" column (sum across the twelve agencies) is
+      not emitted as its own row — same rollup-omission convention as
+      nsf_federal_rd_obligations dropping Table 7's per-agency total column:
+      summing the twelve funding_agency rows for a state recovers it. state_fips
+      is populated only for the 50 states + DC (FK to geo.state_ref); it is null
+      for "All locations" (the national total row, this table's equivalent of
+      nsf_federal_rd_obligations' "All agencies" row), "Outlying areas" (a
+      territories subtotal), the five individual territories, "Other areas",
+      "Offices abroad", and "Undistributed" — none of those resolve to a real
+      state FIPS code, the same best-effort-FK limitation
+      nsf_herd_by_institution.state_fips already documents for territory
+      institutions. "Undistributed" carries a value for only DOD and the grand
+      total; every other agency column is NA there and is not emitted as a row.
+
+      Only the publication's latest fiscal year is available at this state x
+      agency grain — like nsf_federal_rd_obligations, each past edition only
+      ever published its own latest FY in this table, so there is no bulk
+      historical backfill of state x agency detail; history accumulates one
+      year per edition going forward. NCSES's own Table 97 (state x year,
+      FYs 2016-24) covers the historical trend at state grain but carries only
+      the all-agency total, no agency split — considered and rejected as a
+      separate table here since it would add a year dimension with no agency
+      detail to join against this table's agency rows.
+
+    dimensions:
+      type:
+        - nsf_federal_rd_by_state
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (partition column; read from the Table 60 title)
+      - name: state_location
+        type: string
+        nullable: false
+        comment: State or location label as published (state name, "All locations", a territory, or a non-state aggregate row — see table comment)
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: 2-digit state FIPS (FK to geo.state_ref); null for the national total, territories, and other non-state aggregate rows
+      - name: funding_agency
+        type: string
+        nullable: false
+        comment: Federal department/agency obligating funds, normalized to match nsf_federal_rd_obligations.funding_agency
+      - name: obligations_usd_thousand
+        type: double
+        nullable: true
+        comment: Federal R&D obligations in current USD thousands ("*" in source rounds to 0.0)
+
+    source:
+      type: http
+      # Same NCSES edition (nsf26316, FY2024) nsf_federal_rd_obligations already reads;
+      # the publication id must be bumped by hand per edition (D-277), matching that
+      # table's own note. Verified live 2026-09-27: Table 60 layout (title format, 12
+      # fixed agency columns after Total) matches NsfFederalRdByStateTransformer's
+      # fixed-column-index parsing.
+      url: "https://ncses.nsf.gov/pubs/nsf26316/assets/data-tables/tables/nsf26316-tab060.xlsx"
+      method: GET
+      response:
+        format: TEXT   # NsfFederalRdByStateTransformer re-downloads the XLSX and emits JSON rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfFederalRdByStateTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nsf_federal_rd_by_state/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nsf_federal_rd_by_state
         runMaintenance: true
         snapshotRetentionDays: 7
 
