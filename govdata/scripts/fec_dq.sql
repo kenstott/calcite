@@ -683,6 +683,15 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/in
       WHERE amount IS NOT NULL
         AND (amount_implausible IS DISTINCT FROM (amount >= 50000000)));
 
+-- T9: amendment rows must carry prev_file_num — the independent_expenditures_current view's
+-- superseded_by_amendment lookup depends on it to find the filing an amendment replaces
+INSERT INTO dq_results
+SELECT 'fec', 'independent_expenditures', 'T9_amendment_prev_file_num',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'amendment_indicator A1/A2/A3 rows with a NULL prev_file_num'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/independent_expenditures', allow_moved_paths := true)
+      WHERE amendment_indicator IN ('A1', 'A2', 'A3') AND prev_file_num IS NULL);
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: electioneering_communications
 -- ─────────────────────────────────────────────────────────────

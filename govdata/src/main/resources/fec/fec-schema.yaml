@@ -1692,9 +1692,12 @@ partitionedTables:
       $9,999,999,999-scale "expenditures"); a raw SUM(amount) is inflated roughly 10x to 23x
       in 2022, 2024 and 2026. Every row is kept and amount is never altered;
       amount_implausible marks the rows to exclude. Any total, ranking or per-candidate
-      aggregate of amount must filter WHERE amount_implausible IS NOT TRUE. Amendments
-      (amendment_indicator A1-A3, prev_file_num) are separate rows alongside the filing they
-      amend.
+      aggregate of amount must filter WHERE amount_implausible IS NOT TRUE. A filer amending a
+      filing resubmits the whole thing under a new file_num (amendment_indicator A1/A2/A3,
+      prev_file_num naming the file_num it replaces) rather than correcting it in place, so the
+      superseded filing's rows stay in this table alongside the amendment — use the
+      independent_expenditures_current view (superseded_by_amendment) to exclude them from a
+      SUM/count.
 
     columns:
       - name: candidate_id
@@ -3582,6 +3585,24 @@ constraints:
 # ============================================================================
 
 views:
+
+  - name: independent_expenditures_current
+    comment: >
+      independent_expenditures with amendment supersession resolved. A filer amending a Schedule
+      E filing resubmits the whole filing under a new file_num (amendment_indicator A1/A2/A3,
+      prev_file_num naming the file_num it replaces) rather than correcting it in place, so
+      superseded_by_amendment is true when some other row's prev_file_num names this row's
+      filing_id. Amendments chain (N -> A1 -> A2 -> A3); every link except the last in a chain is
+      marked superseded. amount_implausible is untouched by this view — combine both filters
+      (WHERE superseded_by_amendment IS NOT TRUE AND amount_implausible IS NOT TRUE) before
+      summing or ranking amount. Live-verified 2026: 1,472 of 19,735 rows superseded, removing
+      $107.8M of $1.75B from a raw amount_implausible-filtered SUM.
+    sql: >
+      SELECT t.*,
+        EXISTS (
+          SELECT 1 FROM independent_expenditures o WHERE o.prev_file_num = t.filing_id
+        ) AS superseded_by_amendment
+      FROM independent_expenditures t
 
   - name: active_candidates
     comment: >
