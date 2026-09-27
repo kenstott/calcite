@@ -1116,16 +1116,21 @@ public class EntityBridgeListener implements TableLifecycleListener {
     // vehicle from the operating company itself (e.g. "Oracle Trust" and "Oracle Partners, L.P."
     // are not Oracle Corporation, even though they normalize to the same "oracle" under
     // norm_org_name). Stripping only the generic corporate-form tokens keeps those vehicles
-    // distinguishable from the entity that actually holds the CIK.
+    // distinguishable from the entity that actually holds the CIK. Includes the spelled-out
+    // "incorporated" alongside "inc" — sec.filing_metadata.company_name and gleif_entities.
+    // legal_name pick different forms for the same real company (confirmed live: QUALCOMM's
+    // GLEIF legal_name is "QUALCOMM INCORPORATED", its SEC company_name is "QUALCOMM INC/DE";
+    // only the abbreviation was covered here, so this join produced no CIK for it at all).
     execute(conn,
         "CREATE OR REPLACE MACRO strip_generic_corp_suffix_once(x) AS (trim(regexp_replace(x, "
-        + "'\\s+(inc|llc|corp|corporation|co|company|ltd|llp|lp|plc|pc|pa|na|n a|partnership)"
-        + "\\.?\\s*$', '', 'i')))");
+        + "'\\s+(inc|incorporated|llc|corp|corporation|co|company|ltd|llp|lp|plc|pc|pa|na|n a|"
+        + "partnership)\\.?\\s*$', '', 'i')))");
     execute(conn,
         "CREATE OR REPLACE MACRO sec_cik_norm_name(x) AS (trim(regexp_replace("
         + "strip_generic_corp_suffix_once(strip_generic_corp_suffix_once("
         + "strip_generic_corp_suffix_once(regexp_replace(regexp_replace(regexp_replace("
-        + "lower(trim(x)), '&', ' and ', 'g'), '[.,]', '', 'g'), '^(the|a|an) +', '', 'i')))), "
+        + "regexp_replace(lower(trim(x)), '\\s*/[a-z]{2}\\s*$', ''), "
+        + "'&', ' and ', 'g'), '[.,]', '', 'g'), '^(the|a|an) +', '', 'i')))), "
         + "'\\s+', ' ', 'g')))");
     execute(conn,
         "CREATE OR REPLACE MACRO org_block_key(x) AS (split_part(norm_org_name(x), ' ', 1))");
