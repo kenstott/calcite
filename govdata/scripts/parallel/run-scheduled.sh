@@ -261,6 +261,20 @@ run_window() {
       if [ "$EXIT_CODE" -eq 2 ]; then
         log_error "WARNING: $current pool completed WITH worker failures (attempt $attempt) — not restarting; failed schemas retry next $current window"
         echo "[$(ts)] $current pool completed with worker failures (exit 2) — see $ERROR_LOG" >> "$window_log"
+        # run-pool.sh's own x-schema/vss trigger sits AFTER its "any worker failed" check,
+        # which exits 2 before ever reaching it (see run-pool.sh's own comment on that exit) —
+        # so exit 2 never runs x-schema naturally, same gap as the exit-124/143 timeout case
+        # below, just reached a different way. Confirmed live 2026-09-27: a daily pool with
+        # 2 failed workers (unrelated causes, since independently root-caused and fixed) exited
+        # 2 and skipped x-schema entirely, with no backstop — unlike the timeout case, which
+        # already has one. At least one worker failing is common enough (concurrency-guard
+        # false-failures alone; see #740/#741) that relying only on an all-green exit 0 would
+        # leave x-schema stale far more often than the timeout gap this mirrors.
+        if [ "$current" = "daily" ]; then
+          echo "[$(ts)] daily completed with worker failures — running x-schema.sh explicitly (its own natural-completion trigger never got the chance)" | tee -a "$window_log"
+          bash "$SCRIPT_DIR/../x-schema.sh" >> "$window_log" 2>&1 \
+            || log_error "WARNING: explicit x-schema.sh run (after daily exit 2) failed — see $window_log"
+        fi
       else
         echo "[$(ts)] $current pool completed all schemas (exit 0)" >> "$window_log"
       fi
