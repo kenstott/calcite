@@ -1689,7 +1689,8 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Veteran and nonveteran population counts, with a male/female veteran breakdown, from
-      the ACS 5-Year survey, at state and county levels. No breakdown by period of service.
+      the ACS 5-Year survey, at state and county levels. No breakdown by period of service
+      or employment status — see acs_veterans_by_period and acs_veterans_employment.
 
     dimensions:
       type:
@@ -1998,6 +1999,401 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_veterans_by_period
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # ACS VETERANS EMPLOYMENT - Employment status by veteran status and age
+  # ---------------------------------------------------------------------------
+  - name: acs_veterans_employment
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Civilian population 18 to 64 years by veteran status, age group (18-34, 35-54, 55-64)
+      and labor force status (in labor force / employed / unemployed / not in labor force),
+      from ACS table B21005, at state and county levels. Complements acs_veterans (population
+      counts, no labor force breakdown) — unemployment rate by veteran status is
+      unemployed / in_labor_force for the matching age group and veteran status.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: population_18_to_64
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_001E" AS BIGINT)'
+        comment: Civilian population 18 to 64 years
+      - name: population_18_to_64_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for population_18_to_64 (Census variable B21005_001M; negative sentinels normalized to null)
+      - name: population_18_to_34
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_002E" AS BIGINT)'
+        comment: Civilian population 18 to 34 years
+      - name: population_18_to_34_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for population_18_to_34 (Census variable B21005_002M; negative sentinels normalized to null)
+      - name: veterans_18_to_34
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_003E" AS BIGINT)'
+        comment: Veterans, 18 to 34 years
+      - name: veterans_18_to_34_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_18_to_34 (Census variable B21005_003M; negative sentinels normalized to null)
+      - name: veterans_18_to_34_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_004E" AS BIGINT)'
+        comment: Veterans, 18 to 34 years, in labor force
+      - name: veterans_18_to_34_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_18_to_34_in_labor_force (Census variable B21005_004M; negative sentinels normalized to null)
+      - name: veterans_18_to_34_employed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_005E" AS BIGINT)'
+        comment: Veterans, 18 to 34 years, in labor force, employed
+      - name: veterans_18_to_34_employed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_005M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_005M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_18_to_34_employed (Census variable B21005_005M; negative sentinels normalized to null)
+      - name: veterans_18_to_34_unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_006E" AS BIGINT)'
+        comment: Veterans, 18 to 34 years, in labor force, unemployed
+      - name: veterans_18_to_34_unemployed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_18_to_34_unemployed (Census variable B21005_006M; negative sentinels normalized to null)
+      - name: veterans_18_to_34_not_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_007E" AS BIGINT)'
+        comment: Veterans, 18 to 34 years, not in labor force
+      - name: veterans_18_to_34_not_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_007M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_007M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_18_to_34_not_in_labor_force (Census variable B21005_007M; negative sentinels normalized to null)
+      - name: nonveterans_18_to_34
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_008E" AS BIGINT)'
+        comment: Nonveterans, 18 to 34 years
+      - name: nonveterans_18_to_34_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_008M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_008M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_18_to_34 (Census variable B21005_008M; negative sentinels normalized to null)
+      - name: nonveterans_18_to_34_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_009E" AS BIGINT)'
+        comment: Nonveterans, 18 to 34 years, in labor force
+      - name: nonveterans_18_to_34_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_009M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_009M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_18_to_34_in_labor_force (Census variable B21005_009M; negative sentinels normalized to null)
+      - name: nonveterans_18_to_34_employed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_010E" AS BIGINT)'
+        comment: Nonveterans, 18 to 34 years, in labor force, employed
+      - name: nonveterans_18_to_34_employed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_18_to_34_employed (Census variable B21005_010M; negative sentinels normalized to null)
+      - name: nonveterans_18_to_34_unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_011E" AS BIGINT)'
+        comment: Nonveterans, 18 to 34 years, in labor force, unemployed
+      - name: nonveterans_18_to_34_unemployed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_011M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_011M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_18_to_34_unemployed (Census variable B21005_011M; negative sentinels normalized to null)
+      - name: nonveterans_18_to_34_not_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_012E" AS BIGINT)'
+        comment: Nonveterans, 18 to 34 years, not in labor force
+      - name: nonveterans_18_to_34_not_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_012M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_012M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_18_to_34_not_in_labor_force (Census variable B21005_012M; negative sentinels normalized to null)
+      - name: population_35_to_54
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_013E" AS BIGINT)'
+        comment: Civilian population 35 to 54 years
+      - name: population_35_to_54_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_013M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_013M" AS BIGINT) END'
+        comment: 90% CI margin of error for population_35_to_54 (Census variable B21005_013M; negative sentinels normalized to null)
+      - name: veterans_35_to_54
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_014E" AS BIGINT)'
+        comment: Veterans, 35 to 54 years
+      - name: veterans_35_to_54_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_014M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_014M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_35_to_54 (Census variable B21005_014M; negative sentinels normalized to null)
+      - name: veterans_35_to_54_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_015E" AS BIGINT)'
+        comment: Veterans, 35 to 54 years, in labor force
+      - name: veterans_35_to_54_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_015M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_015M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_35_to_54_in_labor_force (Census variable B21005_015M; negative sentinels normalized to null)
+      - name: veterans_35_to_54_employed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_016E" AS BIGINT)'
+        comment: Veterans, 35 to 54 years, in labor force, employed
+      - name: veterans_35_to_54_employed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_016M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_016M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_35_to_54_employed (Census variable B21005_016M; negative sentinels normalized to null)
+      - name: veterans_35_to_54_unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_017E" AS BIGINT)'
+        comment: Veterans, 35 to 54 years, in labor force, unemployed
+      - name: veterans_35_to_54_unemployed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_017M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_017M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_35_to_54_unemployed (Census variable B21005_017M; negative sentinels normalized to null)
+      - name: veterans_35_to_54_not_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_018E" AS BIGINT)'
+        comment: Veterans, 35 to 54 years, not in labor force
+      - name: veterans_35_to_54_not_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_018M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_018M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_35_to_54_not_in_labor_force (Census variable B21005_018M; negative sentinels normalized to null)
+      - name: nonveterans_35_to_54
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_019E" AS BIGINT)'
+        comment: Nonveterans, 35 to 54 years
+      - name: nonveterans_35_to_54_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_019M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_019M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_35_to_54 (Census variable B21005_019M; negative sentinels normalized to null)
+      - name: nonveterans_35_to_54_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_020E" AS BIGINT)'
+        comment: Nonveterans, 35 to 54 years, in labor force
+      - name: nonveterans_35_to_54_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_020M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_020M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_35_to_54_in_labor_force (Census variable B21005_020M; negative sentinels normalized to null)
+      - name: nonveterans_35_to_54_employed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_021E" AS BIGINT)'
+        comment: Nonveterans, 35 to 54 years, in labor force, employed
+      - name: nonveterans_35_to_54_employed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_021M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_021M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_35_to_54_employed (Census variable B21005_021M; negative sentinels normalized to null)
+      - name: nonveterans_35_to_54_unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_022E" AS BIGINT)'
+        comment: Nonveterans, 35 to 54 years, in labor force, unemployed
+      - name: nonveterans_35_to_54_unemployed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_022M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_022M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_35_to_54_unemployed (Census variable B21005_022M; negative sentinels normalized to null)
+      - name: nonveterans_35_to_54_not_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_023E" AS BIGINT)'
+        comment: Nonveterans, 35 to 54 years, not in labor force
+      - name: nonveterans_35_to_54_not_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_023M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_023M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_35_to_54_not_in_labor_force (Census variable B21005_023M; negative sentinels normalized to null)
+      - name: population_55_to_64
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_024E" AS BIGINT)'
+        comment: Civilian population 55 to 64 years
+      - name: population_55_to_64_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_024M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_024M" AS BIGINT) END'
+        comment: 90% CI margin of error for population_55_to_64 (Census variable B21005_024M; negative sentinels normalized to null)
+      - name: veterans_55_to_64
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_025E" AS BIGINT)'
+        comment: Veterans, 55 to 64 years
+      - name: veterans_55_to_64_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_025M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_025M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_55_to_64 (Census variable B21005_025M; negative sentinels normalized to null)
+      - name: veterans_55_to_64_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_026E" AS BIGINT)'
+        comment: Veterans, 55 to 64 years, in labor force
+      - name: veterans_55_to_64_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_026M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_026M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_55_to_64_in_labor_force (Census variable B21005_026M; negative sentinels normalized to null)
+      - name: veterans_55_to_64_employed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_027E" AS BIGINT)'
+        comment: Veterans, 55 to 64 years, in labor force, employed
+      - name: veterans_55_to_64_employed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_027M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_027M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_55_to_64_employed (Census variable B21005_027M; negative sentinels normalized to null)
+      - name: veterans_55_to_64_unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_028E" AS BIGINT)'
+        comment: Veterans, 55 to 64 years, in labor force, unemployed
+      - name: veterans_55_to_64_unemployed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_028M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_028M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_55_to_64_unemployed (Census variable B21005_028M; negative sentinels normalized to null)
+      - name: veterans_55_to_64_not_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_029E" AS BIGINT)'
+        comment: Veterans, 55 to 64 years, not in labor force
+      - name: veterans_55_to_64_not_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_029M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_029M" AS BIGINT) END'
+        comment: 90% CI margin of error for veterans_55_to_64_not_in_labor_force (Census variable B21005_029M; negative sentinels normalized to null)
+      - name: nonveterans_55_to_64
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_030E" AS BIGINT)'
+        comment: Nonveterans, 55 to 64 years
+      - name: nonveterans_55_to_64_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_030M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_030M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_55_to_64 (Census variable B21005_030M; negative sentinels normalized to null)
+      - name: nonveterans_55_to_64_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_031E" AS BIGINT)'
+        comment: Nonveterans, 55 to 64 years, in labor force
+      - name: nonveterans_55_to_64_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_031M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_031M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_55_to_64_in_labor_force (Census variable B21005_031M; negative sentinels normalized to null)
+      - name: nonveterans_55_to_64_employed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_032E" AS BIGINT)'
+        comment: Nonveterans, 55 to 64 years, in labor force, employed
+      - name: nonveterans_55_to_64_employed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_032M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_032M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_55_to_64_employed (Census variable B21005_032M; negative sentinels normalized to null)
+      - name: nonveterans_55_to_64_unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_033E" AS BIGINT)'
+        comment: Nonveterans, 55 to 64 years, in labor force, unemployed
+      - name: nonveterans_55_to_64_unemployed_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_033M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_033M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_55_to_64_unemployed (Census variable B21005_033M; negative sentinels normalized to null)
+      - name: nonveterans_55_to_64_not_in_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B21005_034E" AS BIGINT)'
+        comment: Nonveterans, 55 to 64 years, not in labor force
+      - name: nonveterans_55_to_64_not_in_labor_force_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B21005_034M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21005_034M" AS BIGINT) END'
+        comment: 90% CI margin of error for nonveterans_55_to_64_not_in_labor_force (Census variable B21005_034M; negative sentinels normalized to null)
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B21005_001E,B21005_001M,B21005_002E,B21005_002M,B21005_003E,B21005_003M,B21005_004E,B21005_004M,B21005_005E,B21005_005M,B21005_006E,B21005_006M,B21005_007E,B21005_007M,B21005_008E,B21005_008M,B21005_009E,B21005_009M,B21005_010E,B21005_010M,B21005_011E,B21005_011M,B21005_012E,B21005_012M,B21005_013E,B21005_013M,B21005_014E,B21005_014M,B21005_015E,B21005_015M,B21005_016E,B21005_016M,B21005_017E,B21005_017M,B21005_018E,B21005_018M,B21005_019E,B21005_019M,B21005_020E,B21005_020M,B21005_021E,B21005_021M,B21005_022E,B21005_022M,B21005_023E,B21005_023M,B21005_024E,B21005_024M,B21005_025E,B21005_025M,B21005_026E,B21005_026M,B21005_027E,B21005_027M,B21005_028E,B21005_028M,B21005_029E,B21005_029M,B21005_030E,B21005_030M,B21005_031E,B21005_031M,B21005_032E,B21005_032M,B21005_033E,B21005_033M,B21005_034E,B21005_034M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_veterans_employment
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
