@@ -7,7 +7,9 @@
 #               tracked changes still uncommitted in the shared tree are somebody's edit in
 #               progress, so they are reported and left out of the release and the jar.
 #   2. push     origin main (kenstott/calcite), only as a fast-forward.
-#   3. release  engine-v<next patch> on kenstott/calcite when code changed since the last tag.
+#   3. release  engine-v<next patch> on kenstott/calcite when code changed since the last tag
+#               AND we're about to build a fresh jar for this head_sha (step 4's own gate) —
+#               a release always accompanies the build it corresponds to, not a wall-clock timer.
 #   4. build    shadowJar from a clean checkout of HEAD, staged over the shared sih-govdata.jar
 #               by atomic rename (JVMs that already loaded classes from the old file keep them).
 #
@@ -22,8 +24,6 @@ GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 REPO_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 FORK="kenstott/calcite"
 STAGE_DIR="${STAGE_DIR:-$GOVDATA_ROOT/build/libs}"
-# Minimum seconds between engine releases.
-RELEASE_MIN_INTERVAL="${RELEASE_MIN_INTERVAL:-72000}"
 # Paths whose changes need a new engine release.
 RELEASE_PATHS=(govdata/src file/src core/src linq4j/src askamerica-engine/src driver-base/src)
 
@@ -96,16 +96,26 @@ else
 fi
 
 # ── 3. release ───────────────────────────────────────────────────────────────
+# Gated on the same signal step 4 uses to decide whether to build: a real release only
+# happens on a window where we're actually building a new jar for this head_sha, so it
+# stays tied to genuine new code rather than a wall-clock timer. Every scheduler restart
+# starts a new daily window, but a restart with no new commits leaves the stamp matching
+# head_sha, so will_build is false and this doesn't re-release — the RELEASE_PATHS diff
+# below already prevents releasing when nothing release-relevant changed since the last
+# tag; will_build additionally prevents releasing a head_sha whose jar isn't being (re)built
+# this run.
+stamp="$STAGE_DIR/sih-govdata.jar.commit"
+dest="$STAGE_DIR/sih-govdata.jar"
+will_build=true
+[ -f "$dest" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$head_sha" ] && will_build=false
+
 if $release_ok; then
   last_tag="$(git tag -l 'engine-v*' --sort=-v:refname | head -1)"
   [ -n "$last_tag" ] || { log "ERROR: no engine-v* tag to release after"; exit 1; }
   if git diff --quiet "$last_tag" HEAD -- "${RELEASE_PATHS[@]}"; then
     log "no engine code changed since $last_tag; no release"
-  elif ! published="$(gh release view "$last_tag" --repo "$FORK" --json publishedAt --jq .publishedAt)"; then
-    log "ERROR: could not read when $last_tag was published; not releasing"
-  elif [ $(( $(date +%s) - $(date -d "$published" +%s) )) -lt "$RELEASE_MIN_INTERVAL" ]; then
-    # Every scheduler restart starts a new daily window; without this each one would publish.
-    log "$last_tag was published $published, under $((RELEASE_MIN_INTERVAL / 3600))h ago; not releasing again"
+  elif ! $will_build; then
+    log "the staged jar is already built from $head_sha; not releasing again for the same commit"
   else
     ver="${last_tag#engine-v}"
     next="${ver%.*}.$(( ${ver##*.} + 1 ))"
@@ -135,8 +145,8 @@ if [ -d "$snap_dir" ] && ! $DRY_RUN; then
 fi
 
 # ── 4. build ─────────────────────────────────────────────────────────────────
-stamp="$STAGE_DIR/sih-govdata.jar.commit"
-dest="$STAGE_DIR/sih-govdata.jar"
+# stamp/dest/will_build are computed above, ahead of step 3, so the release step can gate on
+# the same "are we building fresh for this head_sha" signal.
 
 # The DuckDB catalog seed bundled in the jar goes stale when a schema YAML changes without a
 # reseed; workers then keep serving the old view definitions.
@@ -150,7 +160,7 @@ if [ -n "$stale_yaml" ]; then
   echo "$stale_yaml" | sed 's/^/    /'
 fi
 
-if [ -f "$dest" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$head_sha" ]; then
+if ! $will_build; then
   log "the staged jar is already built from $head_sha"
   exit 0
 fi
