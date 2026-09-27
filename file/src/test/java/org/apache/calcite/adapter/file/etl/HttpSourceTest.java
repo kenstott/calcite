@@ -170,6 +170,22 @@ public class HttpSourceTest {
     assertEquals(1000, pagination.getPageSize());
   }
 
+  @Test void testPaginationConfigStartOffset() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "OFFSET");
+    map.put("limitParam", "limit");
+    map.put("offsetParam", "offset");
+    map.put("startOffset", 1);
+    map.put("countPath", "metadata.resultset.count");
+
+    HttpSourceConfig.PaginationConfig pagination =
+        HttpSourceConfig.PaginationConfig.fromMap(map);
+
+    assertEquals(1, pagination.getStartOffset());
+    assertEquals(0, HttpSourceConfig.PaginationConfig.offset("limit", "offset", 1000)
+        .getStartOffset());
+  }
+
   @Test void testRateLimitConfigFromMap() {
     Map<String, Object> map = new HashMap<String, Object>();
     map.put("requestsPerSecond", 5);

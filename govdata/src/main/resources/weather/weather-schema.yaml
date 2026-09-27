@@ -511,21 +511,23 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/stations?locationid=FIPS:{state_fips}&limit=1000&offset=1"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/stations?locationid=FIPS:{state_fips}"
       method: GET
       response:
         format: json
+        pagination:
+          type: OFFSET
+          limitParam: limit
+          offsetParam: offset
+          startOffset: 1
+          pageSize: 1000
+          countPath: metadata.resultset.count
       headers:
         token: "{env:NOAA_CDO_TOKEN}"
       rateLimit:
         requestsPerSecond: 5.0
         retryOn: [429, 503]
         maxRetries: 3
-      pagination:
-        enabled: true
-        offsetParam: offset
-        limitParam: limit
-        maxPerRequest: 1000
       rawCache:
         enabled: true
 
@@ -615,21 +617,23 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOM&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31&limit=1000&offset=1"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOM&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31"
       method: GET
       response:
         format: json
+        pagination:
+          type: OFFSET
+          limitParam: limit
+          offsetParam: offset
+          startOffset: 1
+          pageSize: 1000
+          countPath: metadata.resultset.count
       headers:
         token: "{env:NOAA_CDO_TOKEN}"
       rateLimit:
         requestsPerSecond: 5.0
         retryOn: [429, 503]
         maxRetries: 3
-      pagination:
-        enabled: true
-        offsetParam: offset
-        limitParam: limit
-        maxPerRequest: 1000
       rawCache:
         enabled: true
 
@@ -713,21 +717,23 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOY&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31&limit=1000&offset=1"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOY&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31"
       method: GET
       response:
         format: json
+        pagination:
+          type: OFFSET
+          limitParam: limit
+          offsetParam: offset
+          startOffset: 1
+          pageSize: 1000
+          countPath: metadata.resultset.count
       headers:
         token: "{env:NOAA_CDO_TOKEN}"
       rateLimit:
         requestsPerSecond: 5.0
         retryOn: [429, 503]
         maxRetries: 3
-      pagination:
-        enabled: true
-        offsetParam: offset
-        limitParam: limit
-        maxPerRequest: 1000
       rawCache:
         enabled: true
 

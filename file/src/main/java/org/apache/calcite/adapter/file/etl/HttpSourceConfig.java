@@ -1213,10 +1213,12 @@ public class HttpSourceConfig {
      * empty, quoted otherwise). The raw value is read from the fetch variable of the same name.
      */
     private final String boundParam;
+    /** Value of the offset parameter on the first request; 1 for APIs whose offsets are 1-based. */
+    private final int startOffset;
 
     private PaginationConfig(PaginationType type, String limitParam, String offsetParam,
         String cursorParam, String cursorPath, String pageParam, int pageSize, String countPath,
-        String cursorIn, String hasNextPath, String boundParam) {
+        String cursorIn, String hasNextPath, String boundParam, int startOffset) {
       this.type = type;
       this.limitParam = limitParam;
       this.offsetParam = offsetParam;
@@ -1228,21 +1230,22 @@ public class HttpSourceConfig {
       this.cursorIn = cursorIn;
       this.hasNextPath = hasNextPath;
       this.boundParam = boundParam;
+      this.startOffset = startOffset;
     }
 
     public static PaginationConfig none() {
       return new PaginationConfig(PaginationType.NONE, null, null, null, null, null, 0, null,
-          null, null, null);
+          null, null, null, 0);
     }
 
     public static PaginationConfig offset(String limitParam, String offsetParam, int pageSize) {
       return new PaginationConfig(PaginationType.OFFSET, limitParam, offsetParam,
-          null, null, null, pageSize, null, null, null, null);
+          null, null, null, pageSize, null, null, null, null, 0);
     }
 
     public static PaginationConfig cursor(String cursorParam, String cursorPath, int pageSize) {
       return new PaginationConfig(PaginationType.CURSOR, null, null,
-          cursorParam, cursorPath, null, pageSize, null, null, null, null);
+          cursorParam, cursorPath, null, pageSize, null, null, null, null, 0);
     }
 
     public PaginationType getType() {
@@ -1298,6 +1301,11 @@ public class HttpSourceConfig {
       return boundParam;
     }
 
+    /** Offset parameter value of the first OFFSET request (0 unless the API is 1-based). */
+    public int getStartOffset() {
+      return startOffset;
+    }
+
     public static PaginationConfig fromMap(Map<String, Object> map) {
       if (map == null) {
         return none();
@@ -1314,6 +1322,12 @@ public class HttpSourceConfig {
         pageSize = ((Number) pageSizeObj).intValue();
       }
 
+      int startOffset = 0;
+      Object startOffsetObj = map.get("startOffset");
+      if (startOffsetObj instanceof Number) {
+        startOffset = ((Number) startOffsetObj).intValue();
+      }
+
       return new PaginationConfig(
           type,
           (String) map.get("limitParam"),
@@ -1325,7 +1339,8 @@ public class HttpSourceConfig {
           (String) map.get("countPath"),
           (String) map.get("cursorIn"),
           (String) map.get("hasNextPath"),
-          (String) map.get("boundParam"));
+          (String) map.get("boundParam"),
+          startOffset);
     }
   }
 

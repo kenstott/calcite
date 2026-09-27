@@ -661,7 +661,7 @@ public class HttpSource implements DataSource {
     private final String cacheKey;
     private final String rawCacheFilePath;
 
-    private int offset = 0;
+    private int offset;
     private int pageSize;
     private String cursor = null;
     private boolean hasMore = true;
@@ -693,6 +693,7 @@ public class HttpSource implements DataSource {
       this.variables = variables;
       this.pagination = pagination;
       this.pageSize = pagination.getPageSize();
+      this.offset = pagination.getStartOffset();
       this.cacheKey = cacheKey;
       this.rawCacheFilePath = rawCacheFilePath;
     }
@@ -881,7 +882,7 @@ public class HttpSource implements DataSource {
           // When the API reports a total count, use it as the sole termination signal.
           // When no count is available, fall back to partial-page detection.
           boolean reachedEnd = totalCount >= 0
-              ? offset >= totalCount
+              ? offset - pagination.getStartOffset() >= totalCount
               : pageData.size() < pageSize;
           if (reachedEnd) {
             hasMore = false;
