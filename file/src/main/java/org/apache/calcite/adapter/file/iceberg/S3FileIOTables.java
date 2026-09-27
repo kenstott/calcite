@@ -19,6 +19,7 @@ import org.apache.iceberg.TableMetadata;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.exceptions.NotFoundException;
 import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.io.FileInfo;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -26,6 +27,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -169,6 +171,69 @@ public final class S3FileIOTables {
       ops.refresh();
       return new BaseTable(ops, tableName(root));
     });
+  }
+
+  /** Bounded retries for {@link #drop}'s post-delete verification — mirrors
+   * {@link #VERSION_HINT_MAX_ATTEMPTS}'s backoff for the same underlying cause (MinIO's S3 LIST
+   * can lag behind a write or delete that already completed). */
+  private static final int DROP_VERIFY_MAX_ATTEMPTS = 5;
+  private static final long DROP_VERIFY_RETRY_DELAY_MS = 200;
+
+  /**
+   * Deletes every object at or under {@code tablePath} (both {@code metadata/} and {@code data/}),
+   * verifying the prefix is actually empty afterward before returning.
+   *
+   * <p>A single {@code deletePrefix} call is not proof nothing survived it: {@code deletePrefix}
+   * itself is a list-then-bulk-delete, and MinIO's S3 LIST can return a listing that lags behind
+   * objects already written (the same lag {@link #readVersionHint} retries on for reads). An
+   * object the list missed survives the delete silently, with the caller seeing no error — exactly
+   * how a drop-and-recreate can leave a prior lineage's {@code vN.metadata.json} files behind for
+   * a later reader to pick up instead of the fresh table this call is about to create in its place.
+   * This retries the delete+verify cycle so a listing that catches up on a later attempt still
+   * gets swept, and throws rather than returning silently if objects are still listed after
+   * {@link #DROP_VERIFY_MAX_ATTEMPTS} attempts.
+   *
+   * @param tablePath table root, e.g. {@code s3://bucket/schema/table}
+   * @param s3Config the credential map (may be null)
+   */
+  public static void drop(String tablePath, Map<String, String> s3Config) {
+    withAppClassLoader(() -> {
+      String prefix = stripTrailingSlash(tablePath) + "/";
+      try (S3FileIO io = newIO(s3Config)) {
+        dropPrefix(io, prefix);
+      }
+      return null;
+    });
+  }
+
+  /**
+   * Delete+verify loop backing {@link #drop}, factored out (package-private) so it can be
+   * exercised against a mocked {@code S3FileIO} the way {@link #readVersionHint} is.
+   */
+  static void dropPrefix(S3FileIO io, String prefix) {
+    int attempts = 0;
+    while (true) {
+      attempts++;
+      io.deletePrefix(prefix);
+      Iterator<FileInfo> remaining = io.listPrefix(prefix).iterator();
+      if (!remaining.hasNext()) {
+        return;
+      }
+      if (attempts >= DROP_VERIFY_MAX_ATTEMPTS) {
+        throw new IllegalStateException(
+            "Failed to fully delete Iceberg table at " + prefix + " after " + attempts
+            + " delete+verify attempts — objects are still listed under this prefix. "
+            + "Not safe to create a fresh table here: a surviving file from the old table "
+            + "would interleave with the new one's version sequence.");
+      }
+      try {
+        Thread.sleep(DROP_VERIFY_RETRY_DELAY_MS * attempts);
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(
+            "Interrupted while verifying Iceberg table drop at " + prefix, ie);
+      }
+    }
   }
 
   /**

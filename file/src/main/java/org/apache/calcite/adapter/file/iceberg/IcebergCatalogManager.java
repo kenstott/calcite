@@ -576,6 +576,18 @@ public class IcebergCatalogManager {
    * @return true if the table was dropped, false if it didn't exist
    */
   public static boolean dropTable(Map<String, Object> config, String tableId, boolean purge) {
+    if (isS3Warehouse(config)) {
+      String path = s3TablePath(config, tableId);
+      Map<String, String> creds = s3Creds(config);
+      if (!S3FileIOTables.exists(path, creds)) {
+        LOGGER.debug("Table {} does not exist, nothing to drop", path);
+        return false;
+      }
+      LOGGER.info("Dropping Iceberg table (S3FileIO): {} (purge={})", path, purge);
+      S3FileIOTables.drop(path, creds);
+      return true;
+    }
+
     String catalogType = (String) config.get("catalog");
     if (catalogType == null) {
       catalogType = "hadoop";
