@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The claim's 2026 wildfire figures are plausible in magnitude but neither our corpus nor NIFC's own published table yet confirms them</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The claim's 2026 wildfire figures are plausible in magnitude but neither our corpus nor NIFC's own published table yet confirms them</h1>
+<p class="subtitle">disasters.wildfire_perimeters (NIFC WFIGS) vs. a 2026 NIFC/Wikipedia wildfire-statistics claim, cross-checked against NIFC's live statistics page</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 613" width="880" height="613" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="613" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:16px">NIFC 2026 Wildfire Claim: Not Verifiable From This Corpus or NIFC's Public Archive Yet</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">disasters.wildfire_perimeters (NIFC WFIGS) and NIFC's own live statistics page, both checked live 2026-09-26</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">Latest fire_year loaded in wildfire_perimeters</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">2023</text>
+  <text class="stat-delta" x="36" y="168" fill="#dc2626">claim is about 2026</text>
+  </g>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">NIFC's own public annual table's latest year</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">2025</text>
+  <text class="stat-delta" x="464" y="168" fill="#dc2626">no 2026 row posted yet either</text>
+  </g>
+  <rect class="panel-edge" x="20" y="206" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="206" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">disasters.wildfire_perimeters: fire count by fire_year (corpus)</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="77" y1="232" x2="390" y2="232" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="69" y="236" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="188" x2="390" y2="188" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="69" y="192" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+      <line class="grid" x1="77" y1="144" x2="390" y2="144" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="69" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+      <line class="grid" x1="77" y1="100" x2="390" y2="100" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="69" y="104" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3,000</text>
+      <line class="grid" x1="77" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="69" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4,000</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="232" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="232" x2="390" y2="232" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="233.50" y="276" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Fire year</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="144" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 144)">Fire count</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-2018" class="tick" x="103.08" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2018</text>
+      <text id="p3-xtick-2019" class="tick" x="155.25" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p3-xtick-2020" class="tick" x="207.42" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p3-xtick-2021" class="tick" x="259.58" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p3-xtick-2022" class="tick" x="311.75" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p3-xtick-2023" class="tick" x="363.92" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+    </g>
+    <g id="p3-series-fire-count" class="series">
+      <rect id="p3-mark-fire-count-2018" class="bar" x="86.39" y="231.96" width="32.39" height="0.04" fill="#2563eb"/>
+      <rect id="p3-mark-fire-count-2019" class="bar" x="138.56" y="231.91" width="32.39" height="0.09" fill="#2563eb"/>
+      <rect id="p3-mark-fire-count-2020" class="bar" x="190.72" y="108.58" width="32.39" height="123.42" fill="#2563eb"/>
+      <rect id="p3-mark-fire-count-2021" class="bar" x="242.89" y="79.72" width="32.39" height="152.28" fill="#2563eb"/>
+      <rect id="p3-mark-fire-count-2022" class="bar" x="295.06" y="67.92" width="32.39" height="164.08" fill="#2563eb"/>
+      <rect id="p3-mark-fire-count-2023" class="bar" x="347.22" y="231.91" width="32.39" height="0.09" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <rect class="panel-edge" x="448" y="206" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="206" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="10" style="font-size:10px" font-weight="600" text-anchor="middle">NIFC published annual acres burned, 2016-2025 (primary source)</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="69" y1="219.84" x2="390" y2="219.84" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="61" y="223.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="69" y1="192.53" x2="390" y2="192.53" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="61" y="196.53" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2M</text>
+      <line class="grid" x1="69" y1="165.23" x2="390" y2="165.23" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="61" y="169.23" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4M</text>
+      <line class="grid" x1="69" y1="137.92" x2="390" y2="137.92" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="61" y="141.92" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6M</text>
+      <line class="grid" x1="69" y1="110.61" x2="390" y2="110.61" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="61" y="114.61" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8M</text>
+      <line class="grid" x1="69" y1="83.31" x2="390" y2="83.31" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="61" y="87.31" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10M</text>
+      <line class="grid" x1="69" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="61" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">12M</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="69" y1="56" x2="69" y2="219.84" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="69" y1="219.84" x2="390" y2="219.84" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-x-axis-title" class="axis-title" x="229.50" y="276" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Year</text>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="137.92" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 137.92)">Acres burned</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-2016" class="tick" x="85.05" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 85.05 233.84)">2016</text>
+      <text id="p4-xtick-2017" class="tick" x="117.15" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 117.15 233.84)">2017</text>
+      <text id="p4-xtick-2018" class="tick" x="149.25" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 149.25 233.84)">2018</text>
+      <text id="p4-xtick-2019" class="tick" x="181.35" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 181.35 233.84)">2019</text>
+      <text id="p4-xtick-2020" class="tick" x="213.45" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 213.45 233.84)">2020</text>
+      <text id="p4-xtick-2021" class="tick" x="245.55" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 245.55 233.84)">2021</text>
+      <text id="p4-xtick-2022" class="tick" x="277.65" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 277.65 233.84)">2022</text>
+      <text id="p4-xtick-2023" class="tick" x="309.75" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 309.75 233.84)">2023</text>
+      <text id="p4-xtick-2024" class="tick" x="341.85" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 341.85 233.84)">2024</text>
+      <text id="p4-xtick-2025" class="tick" x="373.95" y="233.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 373.95 233.84)">2025</text>
+    </g>
+    <g id="p4-series-acres-burned" class="series">
+      <rect id="p4-mark-acres-burned-2016" class="bar" x="74.78" y="144.61" width="19.54" height="75.23" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2017" class="bar" x="106.88" y="82.95" width="19.54" height="136.89" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2018" class="bar" x="138.98" y="100.13" width="19.54" height="119.71" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2019" class="bar" x="171.08" y="156.16" width="19.54" height="63.68" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2020" class="bar" x="203.18" y="81.64" width="19.54" height="138.20" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2021" class="bar" x="235.28" y="122.55" width="19.54" height="97.29" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2022" class="bar" x="267.38" y="116.39" width="19.54" height="103.45" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2023" class="bar" x="299.48" y="183.06" width="19.54" height="36.78" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2024" class="bar" x="331.58" y="97.99" width="19.54" height="121.85" fill="#2563eb"/>
+      <rect id="p4-mark-acres-burned-2025" class="bar" x="363.68" y="149.78" width="19.54" height="70.06" fill="#2563eb"/>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="footnote" x="20" y="532" fill="#6b7280">Left: this corpus's wildfire_perimeters table (NIFC WFIGS) has no 2024-2026 rows. Right: NIFC's own public 'Wildfires and Acres' page, fetched</text>
+  <text class="footnote" x="20" y="546" fill="#6b7280">live, also has no 2026 row yet -- its 2016-2025 average is 7,054,337 acres/year and 63,872 fires/year, a full-year (not YTD-to-date) baseline that</text>
+  <text class="footnote" x="20" y="560" fill="#6b7280">cannot substitute for the claim's specific April-10 YTD comparison.</text>
+  <g id="brand">
+  <svg x="20" y="572" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="587" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:49511/a/bb8623f699b1e07fc9e19e747b69e8f4.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p><strong>Verdict: not checkable, from this corpus or from NIFC's own public archive.</strong> The claim's 2026 wildfire statistics (52,253 fires, 8,238,284 acres, 9 deaths through August; 1,707,778 acres YTD as of April 10 at 231% of the ten-year average) are attributed to NIFC. This corpus's only NIFC-sourced wildfire table, <code>disasters.wildfire_perimeters</code>, has <strong>no rows for fire_year 2024, 2025, or 2026</strong> and only 2 rows for 2023 -- it is a stale, partially-refreshed snapshot. Reaching past the corpus to NIFC's own live statistics page (fetched directly, not via a secondary summary) confirms the gap is real at the source too: as of this check, NIFC's public 'Wildfires and Acres' table itself has not yet posted a full 2026 row (it stops at 2025), and it publishes year-end totals only, not the within-year, date-matched cumulative series the claim's '231% of the ten-year average as of April 10' figure requires. The specific numbers in the claim are therefore unconfirmed by any source reached in this session -- not contradicted, just unconfirmed -- though their overall magnitude (tens of thousands of fires, single-digit millions of acres) sits comfortably within NIFC's own historical range.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ No Pinocchios — true or no significant issues</strong></p><p>Both claims are graded 'not checkable here' because neither this corpus's NIFC-derived wildfire table (which stops at 2023 and is barely populated even then) nor NIFC's own live annual statistics page (which has not yet posted a full 2026 total) can confirm or refute the specific interim 2026 figures cited. This is a data-availability gap on our end and a reporting-cadence gap on the primary source's public archive page, not evidence the article's numbers are wrong -- the figures are within the plausible historical range NIFC's own 1983-2025 table shows. No Pinocchios are warranted absent any actual contradiction.</p></div>
+<p><strong>2</strong> not checkable here &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>1</td><td>Through August 2026, the U.S. has recorded 52,253 total wildfires burning 8,238,284 acres, with 9 deaths reported.</td><td><strong>not checkable here</strong></td></tr>
+<tr class="verdict-not-checkable-here"><td>2</td><td>As of April 10, 2026, year-to-date acreage burned stood at 1,707,778 acres, representing 231 percent of the ten-year average.</td><td><strong>not checkable here</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-not-checkable-here"><summary>#1 &middot; <strong>not checkable here</strong> &mdash; Through August 2026, the U.S. has recorded 52,253 total wildfires burning 8,238,284 acres, with 9 deaths reported.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Max fire_year loaded = 2023, with only 2 rows for that year; zero rows for 2024, 2025, or 2026. <code>disasters.wildfire_perimeters</code></dd>
+<dt>Independent evidence</dt><dd>NIFC's own live statistics page (fetched directly) publishes annual final totals only through 2025 (2025: 77,850 fires / 5,131,474 acres) and carries no 2026 row at all as of this fetch, so it cannot confirm the claim's specific August-2026 interim figure either. In magnitude, 52,253 fires / 8,238,284 acres sits within the historical range NIFC's own table shows (annual fires 47,579-96,385; annual acres 1.15M-10.1M over 1983-2025), so the claim is not implausible on its face, but no primary source available here actually states it.<ul class="claim-sources"><li><a href="https://www.nifc.gov/fire-information/statistics/wildfires">NIFC National Interagency Fire Center statistics page (Wildfires and Acres, 1983-2025)</a></li><li><a href="https://en.wikipedia.org/wiki/2026_United_States_wildfires">Wikipedia: 2026 United States wildfires</a></li></ul></dd>
+<dt>Why</dt><dd>This corpus's only NIFC-derived wildfire table (disasters.wildfire_perimeters, sourced from NIFC WFIGS) is a stale snapshot that stops at fire_year 2023 and holds only 2 rows even for that year, versus ~2,800-3,700 rows/year for 2020-2022 -- it was never refreshed with 2024-2026 data. Reaching for NIFC's own primary statistics page directly (per this corpus's own research-first guidance) confirms the gap is real at the source too: as of this fetch NIFC's published annual table itself has not yet posted a 2026 total (it stops at 2025), consistent with 2026 being a live, in-progress season whose interim YTD figures are reported elsewhere (e.g. NICC situation reports) rather than on this particular archival table. Neither this corpus nor the fetched primary table can confirm or refute the specific 52,253/8,238,284/9-deaths figures.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT fire_year, COUNT(*) AS fire_count, SUM(COALESCE(final_acres, gis_acres)) AS total_acres FROM disasters.wildfire_perimeters WHERE fire_year BETWEEN 2015 AND 2026 GROUP BY fire_year ORDER BY fire_year; SELECT MAX(fire_year), MIN(fire_year), COUNT(*) FROM disasters.wildfire_perimeters;</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#2 &middot; <strong>not checkable here</strong> &mdash; As of April 10, 2026, year-to-date acreage burned stood at 1,707,778 acres, representing 231 percent of the ten-year average.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>No fire_year 2026 rows exist, so no April 2026 YTD acreage figure or 10-year (2016-2025) average acreage can be computed from this table. <code>disasters.wildfire_perimeters</code></dd>
+<dt>Independent evidence</dt><dd>NIFC's live statistics page gives a real annual (not YTD-to-April) 2016-2025 average of 7,054,337 acres/year and 63,872 fires/year across the ten most recent complete years -- a different quantity than the claim's 'YTD-through-April-10 vs 10-year YTD-through-April-10 average' comparison, which requires a NICC/NIFC year-to-date situation report this corpus does not carry and which the annual archival table cannot substitute for.<ul class="claim-sources"><li><a href="https://www.nifc.gov/fire-information/statistics/wildfires">NIFC National Interagency Fire Center statistics page (Wildfires and Acres, 1983-2025)</a></li></ul></dd>
+<dt>Why</dt><dd>The claim's 231%-of-ten-year-average figure is a YTD-to-YTD (same calendar date each year) comparison, a specific NICC situation-report statistic. Neither disasters.wildfire_perimeters (no 2026 data) nor NIFC's public annual archive (year-end totals only, no within-year cumulative-by-date series) can reproduce that specific denominator, so this cannot be verified from any source reached in this session.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT fire_year, COUNT(*) AS fire_count, SUM(COALESCE(final_acres, gis_acres)) AS total_acres FROM disasters.wildfire_perimeters WHERE fire_year BETWEEN 2015 AND 2026 GROUP BY fire_year ORDER BY fire_year;</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>What is in the corpus</h2>
+<p><code>disasters.wildfire_perimeters</code> (NIFC WFIGS Interagency Perimeters) is the right table in principle, but a direct query shows it stops at 2023 with almost nothing loaded even that year:</p><pre>SELECT fire_year, COUNT(*) AS fire_count, SUM(COALESCE(final_acres, gis_acres)) AS total_acres
+FROM disasters.wildfire_perimeters
+WHERE fire_year BETWEEN 2015 AND 2026
+GROUP BY fire_year ORDER BY fire_year;</pre><p>Result: 2018 (1 row), 2019 (2 rows), 2020 (2,805 fires / 1,410,366 acres), 2021 (3,461 fires / 730,189 acres), 2022 (3,729 fires / 1,424,127 acres), 2023 (2 fires / 783 acres). <code>SELECT MAX(fire_year), MIN(fire_year), COUNT(*) FROM disasters.wildfire_perimeters</code> confirms max fire_year = 2023 across 10,000 total rows. No 2024-2026 rows exist. A structurally different table, <code>disasters.storm_events</code> filtered to <code>event_type='Wildfire'</code>, reaches 2026 (223 episodes, 2 deaths so far) but measures NOAA local storm-report episodes, not NIFC's incident-level fire/acreage tally, and has no acreage column -- it cannot substitute for the claim's figures.</p>
+</section>
+<section>
+<h2>What NIFC's own live page shows (fetched directly, per this corpus's research-first practice)</h2>
+<p>Per this warehouse's own guidance to fetch a primary source directly rather than settle for a caveated gap, NIFC's live 'Wildfires and Acres' page (nifc.gov/fire-information/statistics/wildfires) was fetched. It publishes one row per year, 1983-2025, sourced from the National Interagency Coordination Center -- and as of this fetch, it has <strong>no 2026 row at all</strong>. Its most recent five years: 2025 (77,850 fires / 5,131,474 acres), 2024 (64,897 / 8,924,884), 2023 (56,580 / 2,693,910), 2022 (68,988 / 7,577,183), 2021 (58,985 / 7,125,643). The 2016-2025 average works out to 63,872 fires/year and 7,054,337 acres/year. This is a genuine annual, year-end baseline -- useful for judging whether the claim's magnitude is plausible (it is: the claimed 52,253 fires and 8,238,284 acres both fall within the range this table shows across 1983-2025) -- but it is not the same statistic as the claim's 'year-to-date through April 10, compared to the ten-year YTD-through-April-10 average,' which is a NICC/NIFC situation-report figure not carried on this archival annual page and not present anywhere in this corpus.</p>
+</section>
+<section>
+<h2>Bottom line</h2>
+<p>Neither <code>disasters.wildfire_perimeters</code> nor NIFC's own public annual statistics table can confirm or refute the claim's specific 2026 interim figures (52,253 fires, 8,238,284 acres, 9 deaths through August; 1,707,778 acres and 231% of the ten-year average as of April 10). The corpus's table is stale (stops at 2023, sparsely). NIFC's own year-end archive has not posted 2026 yet and does not carry the YTD-by-date series the claim's percentage figure needs. The claim's magnitude is consistent with NIFC's historical range, but that is not the same as verifying it -- an actual confirmation would require NIFC's or NICC's current-year situation reports, which were not available to fetch in this session.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Query the data directly and compute actual total 2026 fire count and burned acreage through August, plus comparison to 10-year average</strong>: The only NIFC-derived table in this corpus, disasters.wildfire_perimeters, has no rows for fire_year 2024, 2025, or 2026, and only 2 rows for 2023. It cannot produce a 2026 fire count/acreage or a usable multi-year baseline. To go further than the corpus allows, NIFC's own live statistics page (nifc.gov/fire-information/statistics/wildfires) was fetched directly; it publishes annual final totals through 2025 only (no 2026 row yet), so it also cannot confirm the specific mid-2026 interim figures in the claim, though it does let us compute a real 2016-2025 ten-year average (7,054,337 acres/year, 63,872 fires/year) for magnitude context.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>4 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 6 rows — 2464 ms</summary><pre><code>SELECT fire_year, COUNT(*) AS fire_count, SUM(COALESCE(final_acres, gis_acres)) AS total_acres, MIN(discovery_date) AS min_date, MAX(discovery_date) AS max_date FROM disasters.wildfire_perimeters WHERE fire_year BETWEEN 2015 AND 2026 GROUP BY fire_year ORDER BY fire_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1372 ms</summary><pre><code>SELECT MAX(fire_year) AS max_year, MIN(fire_year) AS min_year, COUNT(*) AS total_rows FROM disasters.wildfire_perimeters</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 905 ms</summary><pre><code>SELECT fire_year, COUNT(*) FROM disasters.wildfire_perimeters WHERE fire_year &gt;= 2023 GROUP BY fire_year ORDER BY fire_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 7 rows — 15617 ms</summary><pre><code>SELECT event_type, &quot;year&quot;, COUNT(*) AS event_count, SUM(deaths_direct+deaths_indirect) AS deaths FROM disasters.storm_events WHERE event_type ILIKE '%wildfire%' AND &quot;year&quot; &gt;= 2020 GROUP BY event_type, &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters/FeatureServer/0">disasters.wildfire_perimeters (NIFC WFIGS Interagency Perimeters)</a> <span class="note">— Queried live 2026-09-26; max fire_year loaded = 2023, 10,000 total rows</span><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT fire_year, COUNT(*) AS fire_count, SUM(COALESCE(final_acres, gis_acres)) AS total_acres FROM disasters.wildfire_perimeters WHERE fire_year BETWEEN 2015 AND 2026 GROUP BY fire_year ORDER BY fire_year</code></pre></details></li>
+<li><a href="https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/">disasters.storm_events (NOAA Storm Events Database, event_type='Wildfire')</a> <span class="note">— Different methodology than NIFC; queried live 2026-09-26</span><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT event_type, &quot;year&quot;, COUNT(*) AS event_count, SUM(deaths_direct+deaths_indirect) AS deaths FROM disasters.storm_events WHERE event_type ILIKE '%wildfire%' AND &quot;year&quot; &gt;= 2020 GROUP BY event_type, &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details></li>
+<li><a href="https://www.nifc.gov/fire-information/statistics/wildfires">NIFC &quot;Wildfires and Acres&quot; statistics page (primary source, fetched directly 2026-09-26)</a> <span class="note">— Table covers 1983-2025; no 2026 row posted as of this fetch</span></li>
+<li><a href="https://en.wikipedia.org/wiki/2026_United_States_wildfires">Wikipedia: 2026 United States wildfires (article under test)</a></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">Verdict: not checkable, from this corpus or from NIFC's own current public archive. wildfire_perimeters stops at 2023 and NIFC's own annual table has not posted a 2026 total yet; neither carries the date-matched YTD series the claim's percentage figure needs.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

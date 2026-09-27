@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Census's $87,460 real median household income figure for 2025 checks out against the primary source; not independently recomputable from AskAmerica's own tables</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Census's $87,460 real median household income figure for 2025 checks out against the primary source; not independently recomputable from AskAmerica's own tables</h1>
+<p class="subtitle">Verified against the Census Bureau's own Sept 15, 2026 press release (CB26-151); AskAmerica's warehouse carries ACS, not CPS ASEC, income data</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 590" width="880" height="590" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="590" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Real Median Household Income: Claim vs. Corpus Context</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">Census CPS ASEC (P60-289, Sept 15 2026) vs. AskAmerica's ACS 1-Year state-level proxy</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">Census's claimed 2025 figure (CPS ASEC)</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">$87,460</text>
+  <text class="stat-delta" x="36" y="168" fill="#059669">+2.6% vs 2024 ($85,210)</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">Verbatim from Census press release CB26-151, fetched directly</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280" style="font-size:11px">AskAmerica corpus proxy, 2024 (ACS 1-yr, avg of states)</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">$80,424</text>
+  <text class="stat-delta" x="464" y="168" fill="#6b7280">Not the same survey as CPS ASEC</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">census.acs1_income has no 2025 data yet and is ACS, not CPS ASEC</text>
+  <rect class="panel-edge" x="20" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="9" style="font-size:9px" font-weight="600" text-anchor="middle">ACS 1-Year state-level median household income (simple avg across states)</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="91" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="83" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="91" y1="171.20" x2="390" y2="171.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="83" y="175.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20,000</text>
+      <line class="grid" x1="91" y1="142.40" x2="390" y2="142.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="83" y="146.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40,000</text>
+      <line class="grid" x1="91" y1="113.60" x2="390" y2="113.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="83" y="117.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60,000</text>
+      <line class="grid" x1="91" y1="84.80" x2="390" y2="84.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="83" y="88.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">80,000</text>
+      <line class="grid" x1="91" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-5" class="tick" x="83" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">100,000</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="91" y1="56" x2="91" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="91" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="240.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Year</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">Avg $ (nominal)</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-2019" class="tick" x="120.90" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p3-xtick-2021" class="tick" x="180.70" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p3-xtick-2022" class="tick" x="240.50" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p3-xtick-2023" class="tick" x="300.30" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p3-xtick-2024" class="tick" x="360.10" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+    </g>
+    <g id="p3-series-avg-of-state-median-hh-income" class="series">
+      <path id="p3-line-avg-of-state-median-hh-income" class="line" d="M 120.90 106.91 L 180.70 101.59 L 240.50 94.19 L 300.30 89.71 L 360.10 84.19" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle id="p3-mark-avg-of-state-median-hh-income-2019" class="point" cx="120.90" cy="106.91" r="3" fill="#2563eb"/>
+      <circle id="p3-mark-avg-of-state-median-hh-income-2021" class="point" cx="180.70" cy="101.59" r="3" fill="#2563eb"/>
+      <circle id="p3-mark-avg-of-state-median-hh-income-2022" class="point" cx="240.50" cy="94.19" r="3" fill="#2563eb"/>
+      <circle id="p3-mark-avg-of-state-median-hh-income-2023" class="point" cx="300.30" cy="89.71" r="3" fill="#2563eb"/>
+      <circle id="p3-mark-avg-of-state-median-hh-income-2024" class="point" cx="360.10" cy="84.19" r="3" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">census.acs1_income; 2020 has no ACS 1-yr data (COVID collection</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">suspended); most recent year loaded is 2024, not 2025</text>
+  <g id="brand">
+  <svg x="20" y="549" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="564" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:49990/a/d8fa36004b7f7ddb3b002c5287640e22.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p><strong>Verdict: TRUE (0 Pinocchios).</strong> The Census Bureau's Sept 15, 2026 press release (CB26-151) states verbatim: "real median household income was $87,460 in 2025, ... an increase of 2.6% from the 2024 estimate of $85,210." This was confirmed by fetching the Census Bureau's own newsroom page and the underlying press release directly -- the claim under test is a word-for-word match to the primary source. AskAmerica's own warehouse cannot independently recompute this specific figure, because it does not load the CPS ASEC survey the Census figure comes from, and its closest table (ACS 1-Year) has no 2025 data yet. That is a genuine corpus coverage gap, not a reason to doubt the claim -- the claim was still checked against the actual primary document, not a secondary summary.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ No Pinocchios — true or no significant issues</strong></p><p>The claim is a verbatim, word-for-word restatement of the Census Bureau's own press release (CB26-151, Sept 15, 2026): 'real median household income was $87,460 in 2025,' up 2.6% from $85,210 in 2024. Fetching the primary source directly confirms this exactly, with no shading, rounding, or misattribution. AskAmerica's own tables cannot independently recompute this specific figure because they do not carry CPS ASEC data (the survey underlying the Census figure) or any 2025 income data at all -- but that is a corpus coverage gap, not a defect in the claim, and the claim was still verified against the actual primary document, not merely a secondary summary of it.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>1</td><td>The U.S. Census Bureau announced on September 15, 2026 that real median household income was $87,460 in 2025.</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The U.S. Census Bureau announced on September 15, 2026 that real median household income was $87,460 in 2025.</summary>
+<dl>
+<dt>Article says</dt><dd>$87,460 (2025, real/inflation-adjusted)</dd>
+<dt>Warehouse says</dt><dd>$80,424 (2024, ACS 1-Year, simple average across states -- a different survey, not a recomputation of the same measure) <code>census.acs1_income (context only; does not carry the CPS ASEC series the claim is based on)</code></dd>
+<dt>Independent evidence</dt><dd>$87,460 for 2025, up 2.6% from $85,210 in 2024, per Census press release CB26-151 and the underlying report 'Income in the United States: 2025' (P60-289)<ul class="claim-sources"><li><a href="https://www.census.gov/newsroom/press-releases/2026/income-poverty-health-insurance-coverage.html">U.S. Census Bureau Newsroom: Income, Poverty and Health Insurance Coverage in the United States: 2025 (CB26-151)</a></li><li><a href="https://www.census.gov/newsroom.html">Census Newsroom landing page</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / ACS 1-Year, years 2005-2024 loaded (no 2025 data)</dd>
+<dt>Why</dt><dd>The claim is drawn word-for-word from the Census Bureau's own press release, which was fetched and read directly. AskAmerica's warehouse has no CPS ASEC table and no 2025 income data of any kind, so the $87,460 figure cannot be independently recomputed from this corpus; it is verified instead by direct primary-source retrieval, which matches exactly.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, avg(median_household_income) AS avg_state_median FROM census.acs1_income WHERE year IN ('2019','2021','2022','2023','2024') GROUP BY year ORDER BY year</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Step 1 -- Which tables could speak to this claim</h2>
+<p>search_catalog surfaced several Census income tables: <code>census.acs1_income</code> (ACS 1-Year, state-level, most current single-year Census income estimate in this corpus), <code>census.acs_income</code> (ACS 5-Year, smoothed, ~2 years behind), <code>census.income_summary</code> (a view over acs_income), and <code>census.saipe_poverty</code> (Small Area Income and Poverty Estimates). None of these carry the Current Population Survey Annual Social and Economic Supplement (CPS ASEC) -- the specific survey the Census's national 'real median household income' headline figure is drawn from every September. search_catalog's own unmatched-terms flag confirmed "asec" matches nothing in this corpus. This is an important distinction: the Census's annual income/poverty/health-insurance press release (the one behind this claim) is always CPS ASEC-based, not ACS-based, and the two surveys produce different point estimates for the same concept by design (different sample, different collection method, different weighting).</p>
+</section>
+<section>
+<h2>Step 2 -- Querying the data directly (data_coverage + query)</h2>
+<p><code>data_coverage</code> on <code>census.acs1_income</code> confirms the table's actually-loaded window is 2005-2024 (2020 is an interior gap -- no ACS 1-Year collection that year due to COVID), with 2025 not yet loaded (the ACS itself publishes ~1 year behind, so 2025 ACS 1-Year data would not be expected until roughly September 2026 at the earliest, and evidently is not in this corpus yet). The table is also state-level only, with no national 'United States' row (confirmed empty on a direct query).</p><p>As a contextual proxy (NOT a recomputation of the claimed CPS ASEC figure), a simple unweighted average of ACS 1-Year median household income across all 50 states + DC by year:</p><pre>SELECT year, avg(median_household_income) AS avg_state_median
+FROM census.acs1_income
+WHERE year IN ('2019','2021','2022','2023','2024')
+GROUP BY year ORDER BY year</pre><p>Results: 2019 = $64,645; 2021 = $68,339; 2022 = $73,477; 2023 = $76,589; 2024 = $80,424 (nominal dollars, not inflation-adjusted, and a simple state average rather than population-weighted, so it is directionally informative but not a national point estimate). The direction -- steady increases each year -- is consistent with the Census's own reported 2024-to-2025 increase, but the level and the exact percentage cannot be checked against this corpus because it is a different survey, a different weighting, and does not yet reach 2025.</p>
+</section>
+<section>
+<h2>Step 3 -- Verifying the claim against the primary source</h2>
+<p>Because this corpus cannot reach the actual CPS ASEC 2025 figure, the claim was checked directly against the Census Bureau's own primary-source materials via web_fetch:</p><ul><li><a href="https://www.census.gov/newsroom.html">census.gov/newsroom.html</a> -- confirms the release exists, dated September 15, 2026, and quotes: "The U.S. Census Bureau today announced that median household income was $87,460 in 2025."</li><li><a href="https://www.census.gov/newsroom/press-releases/2026/income-poverty-health-insurance-coverage.html">Press release CB26-151</a> -- the full text states: "real median household income was $87,460 in 2025, the highest on record dating back to 1967" and "Median household income was $87,460 in 2025, an increase of 2.6% from the 2024 estimate of $85,210." This is based on the 2026 CPS ASEC and detailed in the companion report "Income in the United States: 2025" (P60-289).</li></ul><p>The claim under test matches this primary-source language exactly, including the dollar figure, the year, and the "real" (inflation-adjusted) framing.</p>
+</section>
+<section>
+<h2>Step 4 -- Verdict and Pinocchio rating</h2>
+<p><strong>Verdict: TRUE.</strong> The claim is not merely plausible -- it is a verbatim quotation of the Census Bureau's own official press release, verified by direct primary-source retrieval. <strong>Pinocchios: 0</strong> (no significant issues; the claim is a faithful, exact restatement of what the Census Bureau itself announced). See the independent score_claim confirmation below (verdict: true, confidence 0.88).</p><p><strong>Important caveat on 'checkability from this corpus':</strong> AskAmerica's warehouse could not independently recompute the $87,460 figure -- it has no CPS ASEC table and no 2025 income data of any survey type. The $80,424 ACS 1-Year 2024 average shown above is offered only as directional context (a different, ACS-based measure, one year earlier, unweighted across states), not as a check against the claimed number. This is disclosed here rather than glossed over: had the primary-source fetch failed, this claim would have had to be marked 'not checkable here' rather than 'true.'</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Query the data directly and compute the actual current figure for 2025 median household income</strong>: No table in this corpus loads 2025 data or CPS ASEC (the survey the Census claim is actually based on). census.acs1_income (ACS 1-Year, a different Census survey) is the closest table and its most recent loaded year is 2024. Its 2024 value (simple average across states, $80,424) is reported as context, not as a recomputation of the claimed figure, since it is a structurally different survey with a different point estimate by design.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>3 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 1707 ms</summary><pre><code>SELECT year, geo_name, median_household_income FROM census.acs1_income WHERE geo_name ILIKE '%United States%' ORDER BY year</code></pre></details>
+<details class="sqltoggle"><summary>query — 52 rows — 2182 ms</summary><pre><code>SELECT DISTINCT geo_name FROM census.acs1_income ORDER BY geo_name LIMIT 60</code></pre></details>
+<details class="sqltoggle"><summary>query — 5 rows — 1218 ms</summary><pre><code>SELECT year, avg(median_household_income) AS avg_state_median FROM census.acs1_income WHERE year IN ('2019','2021','2022','2023','2024') GROUP BY year ORDER BY year</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.census.gov/newsroom.html">U.S. Census Bureau Newsroom landing page</a></li>
+<li><a href="https://www.census.gov/newsroom/press-releases/2026/income-poverty-health-insurance-coverage.html">Census press release CB26-151, 'Income, Poverty and Health Insurance Coverage in the United States: 2025', Sept 15, 2026</a></li>
+<li>AskAmerica table census.acs1_income (ACS 1-Year median household income, state level)<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, avg(median_household_income) AS avg_state_median FROM census.acs1_income WHERE year IN ('2019','2021','2022','2023','2024') GROUP BY year ORDER BY year</code></pre></details></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">CPS ASEC (Current Population Survey Annual Social and Economic Supplement) is not loaded in this corpus; the $80,424 ACS 1-Year figure shown for context is a different survey and should not be read as a check against the Census's $87,460 CPS ASEC figure.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-26</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

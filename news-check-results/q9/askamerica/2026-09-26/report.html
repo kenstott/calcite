@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crude oil claim matches EIA's September 2026 STEO exactly; natural gas figures are one release-cycle stale</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Crude oil claim matches EIA's September 2026 STEO exactly; natural gas figures are one release-cycle stale</h1>
+<p class="subtitle">Checked against EIA's own September 2026 Short-Term Energy Outlook (primary source) and askamerica's energy schema actuals</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 645" width="880" height="645" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="645" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">EIA Sept 2026 STEO: Crude Oil Confirmed, Gas Figures One Month Stale</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:12px">EIA Sept 2026 STEO (primary source) vs. askamerica actuals (energy.eia_crude_oil_production, eia_natural_gas_production)</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">Crude oil, 2026 STEO forecast</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">13.83 mb/d</text>
+  <text class="stat-delta" x="36" y="168" fill="#059669">vs 13.66 mb/d in 2025</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">Matches claim (13.8 vs 13.7) exactly - Table 4a, Sept 2026 STEO</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">Marketed gas, 2026 STEO forecast</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">123.0 Bcf/d</text>
+  <text class="stat-delta" x="464" y="168" fill="#059669">claim says 122.5 (Aug STEO, stale)</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">Sept STEO Table 5a revised 2026 up from Aug's 122.5 to 123.0</text>
+  <rect class="panel-edge" x="20" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="9" style="font-size:9px" font-weight="600" text-anchor="middle">Crude oil production: STEO forecast vs askamerica actuals (million b/d)</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="60" y1="148" x2="390" y2="148" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="52" y="152" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="134.86" x2="390" y2="134.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="52" y="138.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2</text>
+      <line class="grid" x1="60" y1="121.71" x2="390" y2="121.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="52" y="125.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4</text>
+      <line class="grid" x1="60" y1="108.57" x2="390" y2="108.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="52" y="112.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6</text>
+      <line class="grid" x1="60" y1="95.43" x2="390" y2="95.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="52" y="99.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8</text>
+      <line class="grid" x1="60" y1="82.29" x2="390" y2="82.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-5" class="tick" x="52" y="86.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="69.14" x2="390" y2="69.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-6" class="tick" x="52" y="73.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">12</text>
+      <line class="grid" x1="60" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-7" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">14</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="148" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="148" x2="390" y2="148" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="102" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 102)">Million b/d</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-2024" class="tick" x="101.25" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 101.25 162)">2024</text>
+      <text id="p3-xtick-2025" class="tick" x="183.75" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 183.75 162)">2025</text>
+      <text id="p3-xtick-2026-h1-actual" class="tick" x="266.25" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 266.25 162)">2026 (H1 actual)</text>
+      <text id="p3-xtick-2026-steo-full-yr-fcst" class="tick" x="348.75" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 348.75 162)">2026 (STEO full-yr fcst)</text>
+    </g>
+    <g id="p3-series-value" class="series">
+      <rect id="p3-mark-value-2024" class="bar" x="74.85" y="60.80" width="51.80" height="87.20" fill="#2563eb"/>
+      <rect id="p3-mark-value-2025" class="bar" x="157.35" y="58.23" width="51.80" height="89.77" fill="#2563eb"/>
+      <rect id="p3-mark-value-2026-h1-actual" class="bar" x="239.85" y="57.91" width="51.80" height="90.09" fill="#2563eb"/>
+      <rect id="p3-mark-value-2026-steo-full-yr-fcst" class="bar" x="322.35" y="57.12" width="51.80" height="90.88" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">askamerica energy.eia_crude_oil_production (NUS, Crude Oil) actuals</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">for 2024/2025/2026-H1; STEO Table 4a for 2026 full-year forecast</text>
+  <rect class="panel-edge" x="448" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="9" style="font-size:9px" font-weight="600" text-anchor="middle">Marketed natural gas production: STEO forecast vs askamerica actuals (Bcf…</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="67" y1="148" x2="390" y2="148" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="59" y="152" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="67" y1="134.86" x2="390" y2="134.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="59" y="138.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="67" y1="121.71" x2="390" y2="121.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="59" y="125.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40</text>
+      <line class="grid" x1="67" y1="108.57" x2="390" y2="108.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="59" y="112.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60</text>
+      <line class="grid" x1="67" y1="95.43" x2="390" y2="95.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="59" y="99.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">80</text>
+      <line class="grid" x1="67" y1="82.29" x2="390" y2="82.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="59" y="86.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">100</text>
+      <line class="grid" x1="67" y1="69.14" x2="390" y2="69.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="59" y="73.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">120</text>
+      <line class="grid" x1="67" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-7" class="tick" x="59" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">140</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="67" y1="56" x2="67" y2="148" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="67" y1="148" x2="390" y2="148" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="102" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 102)">Bcf/d</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-2024" class="tick" x="99.30" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 99.30 162)">2024</text>
+      <text id="p4-xtick-2025" class="tick" x="163.90" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 163.90 162)">2025</text>
+      <text id="p4-xtick-2026-h1-actual" class="tick" x="228.50" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 228.50 162)">2026 (H1 actual)</text>
+      <text id="p4-xtick-2026-aug-steo-fcst" class="tick" x="293.10" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 293.10 162)">2026 (Aug STEO fcst)</text>
+      <text id="p4-xtick-2026-sept-steo-fcst" class="tick" x="357.70" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 357.70 162)">2026 (Sept STEO fcst)</text>
+    </g>
+    <g id="p4-series-value" class="series">
+      <rect id="p4-mark-value-2024" class="bar" x="78.63" y="73.55" width="40.34" height="74.45" fill="#2563eb"/>
+      <rect id="p4-mark-value-2025" class="bar" x="143.23" y="70.26" width="40.34" height="77.74" fill="#2563eb"/>
+      <rect id="p4-mark-value-2026-h1-actual" class="bar" x="207.83" y="68.09" width="40.34" height="79.91" fill="#2563eb"/>
+      <rect id="p4-mark-value-2026-aug-steo-fcst" class="bar" x="272.43" y="67.50" width="40.34" height="80.50" fill="#2563eb"/>
+      <rect id="p4-mark-value-2026-sept-steo-fcst" class="bar" x="337.03" y="67.17" width="40.34" height="80.83" fill="#2563eb"/>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="519" fill="#6b7280">askamerica energy.eia_natural_gas_production (NUS, VGM Marketed</text>
+  <text class="caption" x="452" y="532" fill="#6b7280">Production) actuals; STEO Table 5a for forecasts</text>
+  <text class="footnote" x="20" y="564" fill="#6b7280">Crude oil claim matches the September 2026 STEO exactly. The natural gas figures (122.5 / 118.5 Bcf/d) in the claim match EIA's AUGUST 2026 STEO /</text>
+  <text class="footnote" x="20" y="578" fill="#6b7280">Aug 12 Today in Energy article, not the September 2026 STEO the article cites as its source; the September STEO revised 2026 to 123.0 Bcf/d and</text>
+  <text class="footnote" x="20" y="592" fill="#6b7280">2025 to 118.4 Bcf/d.</text>
+  <g id="brand">
+  <svg x="20" y="604" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="619" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:53878/a/787342bb10ade75197c56d512c9b615c.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The crude-oil half of the claim is <strong>accurate</strong>: EIA's own September 2026 Short-Term Energy Outlook (STEO), read directly from its Table 4a, forecasts 2026 U.S. crude oil production at 13.83 million b/d (rounds to 13.8) versus a 2025 average of 13.66 million b/d (rounds to 13.7) — exactly matching the claim and EIA's own September 9, 2026 press release.</p><p>The natural-gas half is <strong>one release-cycle stale</strong>: the numbers in the claim (122.5 Bcf/d for 2026, 118.5 Bcf/d for 2025) are EIA's AUGUST 2026 STEO figures, not the September 2026 STEO the article cites. The actual September 2026 STEO (Table 5a) revised 2026 marketed natural gas production up to 123.0 Bcf/d and the 2025 figure to 118.4 Bcf/d. The direction of the claim (2026 sets a new record above 2025) still holds, and the magnitude is close (within 0.5 Bcf/d, under 0.5%), but the specific cited numbers do not match the vintage of report attributed to them.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>🤥○○○ 1 of 4 Pinocchios</strong></p><p>The crude oil figures are exactly right for the cited report. The natural gas figures are real EIA output, correct in direction and close in magnitude, but are quietly one STEO release-cycle stale (August 2026 numbers presented as if from the September 2026 STEO). That is a minor, checkable factual slip rather than any exaggeration or fabrication -- one Pinocchio.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> stale vintage &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>1</td><td>The EIA forecasts U.S. crude oil production will average 13.8 million barrels per day (b/d) in 2026, surpassing the previous record of 13.7 million b/d set in 2025.</td><td><strong>true</strong></td></tr>
+<tr class="verdict-stale-vintage"><td>2</td><td>Marketed natural gas production will average 122.5 billion cubic feet per day (Bcf/d) in 2026, surpassing the previous record of 118.5 Bcf/d set in 2025.</td><td><strong>stale vintage</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The EIA forecasts U.S. crude oil production will average 13.8 million barrels per day (b/d) in 2026, surpassing the previous record of 13.7 million b/d set in 2025.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>2025 actual avg 13,660 MBBL/D (13.66 mb/d); 2026 H1 actual avg 13,712 MBBL/D (13.71 mb/d) <code>energy.eia_crude_oil_production</code></dd>
+<dt>Independent evidence</dt><dd>STEO Table 4a: 2025 = 13.66, 2026 forecast = 13.83, 2027 = 14.26 million b/d<ul class="claim-sources"><li><a href="https://www.eia.gov/outlooks/steo/pdf/steo_full.pdf">EIA September 2026 Short-Term Energy Outlook (Table 4a)</a></li><li><a href="https://www.eia.gov/pressroom/releases/press592.php">EIA Press Release, September 9, 2026</a></li></ul></dd>
+<dt>Why</dt><dd>Directly matches the September 2026 STEO, the report the article names as its source, to the rounded decimal.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT production_year, AVG(production_volume) FROM energy.eia_crude_oil_production WHERE eia_area_code='NUS' AND fuel_type='Crude Oil' AND production_unit='MBBL/D' GROUP BY production_year</code></pre></details>
+</details>
+<details class="claim-detail verdict-stale-vintage"><summary>#2 &middot; <strong>stale vintage</strong> &mdash; Marketed natural gas production will average 122.5 billion cubic feet per day (Bcf/d) in 2026, surpassing the previous record of 118.5 Bcf/d set in 2025.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>2025 actual avg ~118.3 Bcf/d; 2026 H1 actual avg ~121.6 Bcf/d <code>energy.eia_natural_gas_production</code></dd>
+<dt>Independent evidence</dt><dd>September 2026 STEO Table 5a: 2025 = 118.4 Bcf/d, 2026 forecast = 123.0 Bcf/d (not 118.5 / 122.5, which are the August 2026 STEO's figures)<ul class="claim-sources"><li><a href="https://www.eia.gov/outlooks/steo/pdf/steo_full.pdf">EIA September 2026 Short-Term Energy Outlook (Table 5a)</a></li><li><a href="https://www.eia.gov/todayinenergy/detail.php?id=67944">EIA Today in Energy, August 12, 2026 (source of the 122.5/118.5 figures, attributed to the August STEO)</a></li></ul></dd>
+<dt>Why</dt><dd>The 122.5/118.5 figures are real EIA STEO numbers but come from the August 2026 STEO, one release cycle before the September 2026 STEO the article cites; the September STEO revised these to 123.0/118.4.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT production_year, SUM(production_volume)/1000.0 AS total_bcf FROM energy.eia_natural_gas_production WHERE eia_area_code='NUS' AND process_code='VGM' GROUP BY production_year</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Step 1 — Which tables can speak to this</h2>
+<p>askamerica's <code>energy</code> schema carries EIA API v2 <strong>actual</strong> production data — <code>energy.eia_crude_oil_production</code> (petroleum/crd/crpdn) and <code>energy.eia_natural_gas_production</code> (natural-gas/prod/sum, filtered to process_code='VGM' for 'Marketed Production' at the national area code 'NUS'). These tables carry only realized monthly production through the data's observed coverage (crude oil and gas both loaded through June 2026 at the time of this check), <strong>not EIA's STEO forecast series itself</strong>. So this corpus can verify (a) whether the claimed 2025 'record' figures match actual production, and (b) whether the 2026 actual-to-date trend is consistent with the forecast direction/magnitude — but the forecast numbers themselves (13.8 mb/d, 122.5 Bcf/d) had to be checked against EIA's own STEO report directly, which was fetched as a primary source.</p>
+</section>
+<section>
+<h2>Step 2 — Computed actuals from askamerica</h2>
+<p><strong>Crude oil</strong> (query: <code>SELECT production_year, AVG(production_volume) FROM energy.eia_crude_oil_production WHERE eia_area_code='NUS' AND fuel_type='Crude Oil' AND production_unit='MBBL/D' GROUP BY production_year</code>):</p><ul><li>2024 full year: 13,267 MBBL/D (13.27 mb/d)</li><li>2025 full year: 13,660 MBBL/D (13.66 mb/d — matches STEO's 2025 historical value and rounds to the claim's cited 13.7 record)</li><li>2026 Jan–Jun (only months loaded): 13,712 MBBL/D (13.71 mb/d) — already running above the 2025 full-year average, consistent with a full-year 2026 landing near 13.8</li></ul><p><strong>Marketed natural gas</strong> (query: summed monthly MMCF from <code>energy.eia_natural_gas_production</code> where <code>eia_area_code='NUS' AND process_code='VGM'</code>, converted to Bcf/d by dividing by ~30.4 days/month):</p><ul><li>2024 full year: ~113.3 Bcf/d</li><li>2025 full year: ~118.3 Bcf/d (closely matches both STEO vintages' 2025 figure of 118.4–118.5)</li><li>2026 Jan–Jun: ~121.6 Bcf/d, trending toward, but below, either STEO's full-year 2026 forecast (122.5 or 123.0) since production typically continues rising through the year</li></ul>
+</section>
+<section>
+<h2>Step 3 — Verifying the forecast numbers against the primary source</h2>
+<p>Because the actual data tables don't carry STEO's own forecast series, the September 2026 STEO PDF (<a href="https://www.eia.gov/outlooks/steo/pdf/steo_full.pdf">steo_full.pdf</a>, completed by EIA on September 3, 2026) was fetched and read directly:</p><ul><li><strong>Table 4a</strong> (U.S. Petroleum and Other Liquids Supply): annual 'U.S. total crude oil production' = 13.66 (2025), <strong>13.83</strong> (2026), 14.26 (2027) million b/d. This matches the claim (13.7 / 13.8) and matches EIA's own September 9, 2026 press release table exactly.</li><li><strong>Table 5a</strong> (U.S. Natural Gas Supply): annual 'U.S. total marketed natural gas production' = 118.4 (2025), <strong>123.0</strong> (2026), 127.6 (2027) Bcf/d — NOT 118.5 / 122.5 as the claim states.</li></ul><p>Tracing the 122.5 / 118.5 figures: they appear verbatim in EIA's 'Today in Energy' article published <strong>August 12, 2026</strong> (<a href="https://www.eia.gov/todayinenergy/detail.php?id=67944">'United States on track for record natural gas production in 2026'</a>), which explicitly attributes them to the AUGUST 2026 STEO, not the September edition. Between August and September, EIA revised the 2026 marketed natural gas forecast up by 0.5 Bcf/d and the 2025 figure down by 0.1 Bcf/d.</p>
+</section>
+<section>
+<h2>Step 4 — Verdict</h2>
+<p><strong>Crude oil claim:</strong> TRUE. Confirmed directly against the primary source named in the article (September 2026 STEO), and cross-checked against askamerica's own production actuals.</p><p><strong>Natural gas claim:</strong> STALE VINTAGE. The direction (2026 record exceeding 2025) and approximate magnitude are correct, and the numbers are real EIA STEO output — but they are the prior month's (August) forecast, not the September 2026 STEO the article cites as its source. The September STEO's actual numbers are 123.0 Bcf/d (2026) and 118.4 Bcf/d (2025), each about 0.1–0.5 Bcf/d different from what's quoted.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>5 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 9 rows — 2983 ms</summary><pre><code>SELECT DISTINCT eia_area_code, state_abbr, fuel_type, process_code, process_name FROM energy.eia_crude_oil_production WHERE eia_area_code ILIKE '%US%' OR state_abbr IS NULL ORDER BY 1</code></pre></details>
+<details class="sqltoggle"><summary>query — 33 rows — 3431 ms</summary><pre><code>SELECT DISTINCT eia_area_code, state_abbr, process_code, process_name FROM energy.eia_natural_gas_production WHERE eia_area_code ILIKE '%US%' OR state_abbr IS NULL ORDER BY 1</code></pre></details>
+<details class="sqltoggle"><summary>query — 21 rows — 2726 ms</summary><pre><code>SELECT production_year, MIN(production_month) AS min_m, MAX(production_month) AS max_m, COUNT(*) AS n, AVG(production_volume) AS avg_vol, production_unit
+FROM energy.eia_crude_oil_production
+WHERE eia_area_code = 'NUS' AND fuel_type = 'Crude Oil' AND production_unit = 'MBBL/D'
+GROUP BY production_year, production_unit
+ORDER BY production_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 21 rows — 3800 ms</summary><pre><code>SELECT production_year, MIN(production_month) AS min_m, MAX(production_month) AS max_m, COUNT(*) AS n, AVG(production_volume) AS avg_vol, production_unit
+FROM energy.eia_natural_gas_production
+WHERE eia_area_code = 'NUS' AND process_code = 'VGM'
+GROUP BY production_year, production_unit
+ORDER BY production_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1488 ms</summary><pre><code>SELECT production_year,
+       SUM(production_volume) AS total_mmcf,
+       SUM(production_volume) / 1000.0 AS total_bcf,
+       AVG(production_volume / (1000.0 * CASE production_month
+             WHEN 2 THEN 28.25 WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END)) AS avg_bcf_per_day
+FROM energy.eia_natural_gas_production
+WHERE eia_area_code = 'NUS' AND process_code = 'VGM' AND production_year IN (2024,2025,2026)
+GROUP BY production_year
+ORDER BY production_year</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-26</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
