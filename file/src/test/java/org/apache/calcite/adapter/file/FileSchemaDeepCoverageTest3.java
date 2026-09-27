@@ -39,8 +39,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1225,18 +1227,17 @@ public class FileSchemaDeepCoverageTest3 {
 
   @Test void testCheckTableExistsLocalSchema() throws Exception {
     FileSchema schema = createSchema(tempDir.toFile());
-    Map<String, Table> localTables = new HashMap<>();
-    Table mockTable = mock(Table.class);
-    localTables.put("my_table", mockTable);
+    Set<String> localTables = new HashSet<>();
+    localTables.add("my_table");
 
     // null schema should check local tables
     assertTrue(
         (Boolean) invokePrivate(schema, "checkTableExists",
-        new Class[]{String.class, String.class, Map.class},
+        new Class[]{String.class, String.class, Set.class},
         null, "my_table", localTables));
     assertFalse(
         (Boolean) invokePrivate(schema, "checkTableExists",
-        new Class[]{String.class, String.class, Map.class},
+        new Class[]{String.class, String.class, Set.class},
         null, "missing_table", localTables));
   }
 
@@ -1254,11 +1255,11 @@ public class FileSchemaDeepCoverageTest3 {
     when(parentSchema.getSubSchema("other_schema")).thenReturn(subSchemaPlus);
 
     FileSchema schema = createSchema(tempDir.toFile());
-    Map<String, Table> localTables = new HashMap<>();
+    Set<String> localTables = new HashSet<>();
 
     assertTrue(
         (Boolean) invokePrivate(schema, "checkTableExists",
-        new Class[]{String.class, String.class, Map.class},
+        new Class[]{String.class, String.class, Set.class},
         "other_schema", "target_table", localTables));
   }
 
@@ -1266,7 +1267,7 @@ public class FileSchemaDeepCoverageTest3 {
     when(parentSchema.getSubSchema("missing_schema")).thenReturn(null);
 
     FileSchema schema = createSchema(tempDir.toFile());
-    Map<String, Table> localTables = new HashMap<>();
+    Set<String> localTables = new HashSet<>();
 
     // An unresolved target schema is not an absent one. Schemas mount incrementally, so a
     // cross-schema FK can be validated before its target schema is registered; answering
@@ -1275,7 +1276,7 @@ public class FileSchemaDeepCoverageTest3 {
     // resolved and genuinely lacks the table.
     assertTrue(
         (Boolean) invokePrivate(schema, "checkTableExists",
-        new Class[]{String.class, String.class, Map.class},
+        new Class[]{String.class, String.class, Set.class},
         "missing_schema", "any_table", localTables));
   }
 

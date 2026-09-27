@@ -1651,6 +1651,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   // Make volatile for thread visibility
   private volatile Map<String, Table> tableCache = null;
 
+  // FILE-697: per-table results of getDeclaredTable(), for a caller that only ever needs one
+  // declared table at a time (the DuckDB read path) instead of the whole schema via getTableMap().
+  // Superseded the moment tableCache itself is populated (getDeclaredTable checks that first).
+  private final Map<String, Table> lazyTableCache = new ConcurrentHashMap<>();
+
   /**
    * Finds the original source file for a converted JSON file using metadata.
    * Returns null if this JSON file is not a conversion result.
@@ -2410,6 +2415,132 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       throw new RuntimeException(
           "Failed to compute tables for schema '" + name + "': " + e.getMessage(), e);
     }
+  }
+
+  /**
+   * Declared table names from {@code tables:} and {@code partitionedTables:} — read from the
+   * already-parsed schema YAML config, with none of {@link #getTableMap()}'s per-table
+   * discovery/conversion/materialization work. Cheap enough to call on every DuckDB connection
+   * setup; see {@link #getDeclaredTable} for the lazy single-table equivalent of the full
+   * computation {@link #getTableMap()} would otherwise force for every declared table at once
+   * (FILE-697).
+   */
+  public Set<String> getDeclaredTableNames() {
+    Set<String> names = new java.util.LinkedHashSet<>();
+    for (Map<String, Object> tableDef : this.tables) {
+      Object tableName = tableDef.get("name");
+      if (tableName != null) {
+        names.add(String.valueOf(tableName));
+      }
+    }
+    if (this.partitionedTables != null) {
+      for (Map<String, Object> tableDef : this.partitionedTables) {
+        Object tableName = tableDef.get("name");
+        if (tableName != null) {
+          names.add(String.valueOf(tableName));
+        }
+      }
+    }
+    return names;
+  }
+
+  /**
+   * One declared table's Iceberg location, computed purely from its own config (the ETL writer's
+   * warehousePath/tableName convention — see {@code IcebergMaterializationWriter}) — no I/O, no
+   * catalog lookup. Returns null when the table's config doesn't resolve one this cheaply: not
+   * materialize:iceberg, disabled, or missing altogether. A null here means the caller must fall
+   * back to {@link #getDeclaredTable} to resolve the table the normal way.
+   */
+  @SuppressWarnings("unchecked")
+  public @Nullable String declaredIcebergTablePath(String tableName) {
+    Map<String, Object> tableDef = findDeclaredTableDef(tableName);
+    if (tableDef == null) {
+      return null;
+    }
+    Object materializeObj = tableDef.get("materialize");
+    if (!(materializeObj instanceof Map)) {
+      return null;
+    }
+    Map<String, Object> materializeConf = (Map<String, Object>) materializeObj;
+    if (!Boolean.TRUE.equals(materializeConf.get("enabled"))) {
+      return null;
+    }
+    if (!"iceberg".equals(materializeConf.get("format"))) {
+      return null;
+    }
+    Object icebergObj = materializeConf.get("iceberg");
+    Map<String, Object> icebergConf = icebergObj instanceof Map ? (Map<String, Object>) icebergObj : null;
+    String warehousePath = icebergConf != null ? (String) icebergConf.get("warehousePath") : null;
+    if (warehousePath == null) {
+      if (baseDirectory == null) {
+        return null;
+      }
+      String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
+      warehousePath = baseDirectory + "/" + schemaSegment;
+    }
+    String icebergTableName = icebergConf != null ? (String) icebergConf.get("tableName") : null;
+    if (icebergTableName == null) {
+      icebergTableName = tableName;
+    }
+    return warehousePath.endsWith("/") ? warehousePath + icebergTableName : warehousePath + "/" + icebergTableName;
+  }
+
+  private @Nullable Map<String, Object> findDeclaredTableDef(String tableName) {
+    for (Map<String, Object> tableDef : this.tables) {
+      if (tableName.equals(tableDef.get("name"))) {
+        return tableDef;
+      }
+    }
+    if (this.partitionedTables != null) {
+      for (Map<String, Object> tableDef : this.partitionedTables) {
+        if (tableName.equals(tableDef.get("name"))) {
+          return tableDef;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Resolves exactly one declared table — from {@code tables:} or {@code partitionedTables:} —
+   * running the same per-table logic {@link #getTableMap()} would run for it, without touching
+   * any other declared table (FILE-697). Once {@link #getTableMap()} has run the normal way (by
+   * this or any other caller), every lookup is served from that cache instead, same as today.
+   */
+  public synchronized @Nullable Table getDeclaredTable(String tableName) {
+    Map<String, Table> cached = tableCache;
+    if (cached != null) {
+      return cached.get(tableName);
+    }
+    Table existing = lazyTableCache.get(tableName);
+    if (existing != null) {
+      return existing;
+    }
+    for (Map<String, Object> tableDef : this.tables) {
+      if (tableName.equals(tableDef.get("name"))) {
+        ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
+        addTable(builder, tableDef);
+        Table result = builder.build().get(tableName);
+        if (result != null) {
+          lazyTableCache.put(tableName, result);
+        }
+        return result;
+      }
+    }
+    if (this.partitionedTables != null) {
+      for (Map<String, Object> tableDef : this.partitionedTables) {
+        if (tableName.equals(tableDef.get("name"))) {
+          ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
+          processPartitionedTables(builder, tableName);
+          Table result = builder.build().get(tableName);
+          if (result != null) {
+            lazyTableCache.put(tableName, result);
+          }
+          return result;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -4131,6 +4262,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * Process partitioned table configurations.
    */
   private void processPartitionedTables(ImmutableMap.Builder<String, Table> builder) {
+    processPartitionedTables(builder, null);
+  }
+
+  /**
+   * Process partitioned table configurations.
+   *
+   * @param onlyTableName when non-null, every entry but this one is skipped — the single-table
+   *     lookup {@link #getDeclaredTable} uses so it pays only for the table it was asked for
+   *     (FILE-697), not the full {@code partitionedTables:} list. Null preserves the original,
+   *     whole-list behavior unchanged.
+   */
+  private void processPartitionedTables(ImmutableMap.Builder<String, Table> builder,
+      @Nullable String onlyTableName) {
     LOGGER.debug("=== PARTITIONED TABLE PROCESSING START ===");
     LOGGER.info("partitionedTables: {}, baseDirectory: {}",
                 partitionedTables != null ? partitionedTables.size() + " tables" : "null", baseDirectory);
@@ -4157,8 +4301,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     for (Map<String, Object> partTableConfig : partitionedTables) {
       try {
-        LOGGER.info("Processing partitioned table config: {}", redactSensitive(partTableConfig));
         PartitionedTableConfig config = PartitionedTableConfig.fromMap(partTableConfig);
+        if (onlyTableName != null && !onlyTableName.equals(config.getName())) {
+          continue;
+        }
+        LOGGER.info("Processing partitioned table config: {}", redactSensitive(partTableConfig));
 
         // Check if this is a DuckDB+Hive refreshable table that should use lazy initialization
         boolean useLazyInit = shouldUseLazyInitialization(config);
@@ -6429,7 +6576,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    */
   public void ensureForeignKeysValidated() {
     if (foreignKeysValidated.compareAndSet(false, true)) {
-      validateForeignKeyConstraints(getTableMap());
+      // FILE-697: existence-checking a FK target only needs table NAMES, not full Table
+      // objects — forcing getTableMap() here reintroduced, on this schema's first query, the
+      // exact eager per-table cost the DuckDB read path now avoids at connection setup. When
+      // the full map already happens to be computed (e.g. a non-DuckDB caller), its key set is
+      // the authoritative name list (covers directory-scanned tables getDeclaredTableNames()
+      // cannot see); otherwise the declared names alone are correct for every govdata schema,
+      // where every table is explicitly declared.
+      Map<String, Table> cached = tableCache;
+      Set<String> tableNames = cached != null ? cached.keySet() : getDeclaredTableNames();
+      validateForeignKeyConstraints(tableNames);
     }
   }
 
@@ -6441,10 +6597,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * <p>This method should be called after all tables are registered to filter out
    * invalid cross-table or cross-schema references before statistics are built.
    *
-   * @param tables The map of table names to tables in this schema
+   * @param tableNames The set of table names known to exist in this schema
    */
   @SuppressWarnings("unchecked")
-  private void validateForeignKeyConstraints(Map<String, Table> tables) {
+  private void validateForeignKeyConstraints(Set<String> tableNames) {
     if (constraintMetadata == null || constraintMetadata.isEmpty()) {
       return;
     }
@@ -6491,7 +6647,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         }
 
         // Check if target table exists
-        boolean targetExists = checkTableExists(targetSchema, targetTable, tables);
+        boolean targetExists = checkTableExists(targetSchema, targetTable, tableNames);
 
         if (!targetExists) {
           invalidFkCount++;
@@ -6515,15 +6671,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    *
    * @param schemaName The target schema name (null means same schema)
    * @param tableName The target table name
-   * @param localTables Tables in the current schema
+   * @param localTableNames Names of tables known to exist in the current schema
    * @return true if the table exists
    */
   @SuppressWarnings("deprecation")
   private boolean checkTableExists(@Nullable String schemaName, String tableName,
-      Map<String, Table> localTables) {
+      Set<String> localTableNames) {
     // If no schema specified or same schema, check local tables
     if (schemaName == null || schemaName.equals(this.name)) {
-      return localTables.containsKey(tableName);
+      return localTableNames.contains(tableName);
     }
 
     // Check in a different schema via parentSchema

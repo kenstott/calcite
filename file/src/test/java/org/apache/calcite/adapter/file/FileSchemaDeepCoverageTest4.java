@@ -43,8 +43,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1046,7 +1048,7 @@ public class FileSchemaDeepCoverageTest4 {
     FileSchema schema = createSchema(tempDir.toFile());
     schema.setConstraintMetadata(new HashMap<>());
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, Collections.emptyMap());
+        new Class[]{Set.class}, Collections.emptySet());
   }
 
   @Test void testValidateForeignKeyConstraintsNullConstraints() throws Exception {
@@ -1055,7 +1057,7 @@ public class FileSchemaDeepCoverageTest4 {
     metadata.put("table1", null);
     schema.setConstraintMetadata(metadata);
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, Collections.emptyMap());
+        new Class[]{Set.class}, Collections.emptySet());
   }
 
   @Test void testValidateForeignKeyConstraintsNoForeignKeys() throws Exception {
@@ -1066,7 +1068,7 @@ public class FileSchemaDeepCoverageTest4 {
     metadata.put("table1", constraints);
     schema.setConstraintMetadata(metadata);
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, Collections.emptyMap());
+        new Class[]{Set.class}, Collections.emptySet());
   }
 
   @Test void testValidateForeignKeyConstraintsWithInvalidFk() throws Exception {
@@ -1085,7 +1087,7 @@ public class FileSchemaDeepCoverageTest4 {
     schema.setConstraintMetadata(metadata);
 
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, Collections.emptyMap());
+        new Class[]{Set.class}, Collections.emptySet());
 
     assertTrue(foreignKeys.isEmpty(), "Invalid FK should be removed");
   }
@@ -1104,11 +1106,11 @@ public class FileSchemaDeepCoverageTest4 {
     metadata.put("source_table", constraints);
     schema.setConstraintMetadata(metadata);
 
-    Map<String, Table> tables = new HashMap<>();
-    tables.put("existing_table", mock(Table.class));
+    Set<String> tables = new HashSet<>();
+    tables.add("existing_table");
 
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, tables);
+        new Class[]{Set.class}, tables);
 
     assertEquals(1, foreignKeys.size(), "Valid FK should remain");
   }
@@ -1128,7 +1130,7 @@ public class FileSchemaDeepCoverageTest4 {
     schema.setConstraintMetadata(metadata);
 
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, Collections.emptyMap());
+        new Class[]{Set.class}, Collections.emptySet());
 
     // Cross-schema target: 'other_schema' is not registered on the parent. An unresolved schema
     // is not an absent one — schemas mount incrementally, so the FK is kept rather than silently
@@ -1150,11 +1152,11 @@ public class FileSchemaDeepCoverageTest4 {
     metadata.put("source_table", constraints);
     schema.setConstraintMetadata(metadata);
 
-    Map<String, Table> tables = new HashMap<>();
-    tables.put("target_table", mock(Table.class));
+    Set<String> tables = new HashSet<>();
+    tables.add("target_table");
 
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, tables);
+        new Class[]{Set.class}, tables);
 
     assertEquals(1, foreignKeys.size());
   }
@@ -1173,7 +1175,7 @@ public class FileSchemaDeepCoverageTest4 {
     schema.setConstraintMetadata(metadata);
 
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class[]{Map.class}, Collections.emptyMap());
+        new Class[]{Set.class}, Collections.emptySet());
 
     assertEquals(1, foreignKeys.size());
   }
@@ -1184,23 +1186,23 @@ public class FileSchemaDeepCoverageTest4 {
 
   @Test void testCheckTableExistsLocalSchema() throws Exception {
     FileSchema schema = createSchema(tempDir.toFile());
-    Map<String, Table> localTables = new HashMap<>();
-    localTables.put("my_table", mock(Table.class));
+    Set<String> localTables = new HashSet<>();
+    localTables.add("my_table");
 
     Boolean result =
-        (Boolean) invokePrivate(schema, "checkTableExists", new Class[]{String.class, String.class, Map.class},
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class[]{String.class, String.class, Set.class},
         null, "my_table", localTables);
     assertTrue(result);
 
     result =
-        (Boolean) invokePrivate(schema, "checkTableExists", new Class[]{String.class, String.class, Map.class},
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class[]{String.class, String.class, Set.class},
         null, "nonexistent", localTables);
     assertFalse(result);
   }
 
   @Test void testCheckTableExistsCrossSchemaNotFound() throws Exception {
     FileSchema schema = createSchema(tempDir.toFile());
-    Map<String, Table> localTables = new HashMap<>();
+    Set<String> localTables = new HashSet<>();
 
     // An unresolved target schema is not an absent one. Schemas mount incrementally, so a
     // cross-schema FK can be validated before its target schema is registered; answering
@@ -1208,7 +1210,7 @@ public class FileSchemaDeepCoverageTest4 {
     // FK when it cannot confirm absence, and only removes it when the target schema IS
     // resolved and genuinely lacks the table.
     Boolean result =
-        (Boolean) invokePrivate(schema, "checkTableExists", new Class[]{String.class, String.class, Map.class},
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class[]{String.class, String.class, Set.class},
         "nonexistent_schema", "other_table", localTables);
     assertTrue(result);
   }

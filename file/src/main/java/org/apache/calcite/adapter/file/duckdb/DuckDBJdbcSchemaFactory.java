@@ -676,11 +676,10 @@ public class DuckDBJdbcSchemaFactory {
         }
       }
 
-      // Register Parquet files as views
-      // FileSchemaFactory has already run conversions via FileSchema
-      // Pass the FileSchema to use its unique instance ID for cache lookup
-      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
-          fileSchema, recreatedIcebergTables);
+      // Register declared tables as DuckDB views — deferred (lazy iceberg_scan on first use) for
+      // any table whose location is deterministic from config, eager only for the rest (FILE-697)
+      registerDeclaredTablesForDuckDB(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
+          fileSchema, recreatedIcebergTables, catalogPath);
 
       // Enqueue SQL views for deferred creation (views may reference cross-schema tables
       // that don't exist yet during schema init — flushed lazily on first getTable() call)
@@ -853,9 +852,9 @@ public class DuckDBJdbcSchemaFactory {
       // Register similarity functions for this schema (macros are database-level, so only once)
       // Note: Macros are global in DuckDB, so they're already registered from the first schema
 
-      // Register Parquet files as views in this schema
-      registerFilesAsViews(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
-          fileSchema, recreatedIcebergTables);
+      // Register declared tables as DuckDB views in this schema (FILE-697: deferred where possible)
+      registerDeclaredTablesForDuckDB(setupConn, directoryPath, recursive, duckdbSchema, schemaName,
+          fileSchema, recreatedIcebergTables, sharedInfo.catalogPath);
 
       // Enqueue SQL views for deferred creation
       registerSqlViewsInDuckDB(sharedInfo.catalogPath, duckdbSchema, operand);
@@ -1758,6 +1757,173 @@ public class DuckDBJdbcSchemaFactory {
   }
 
   /**
+   * FILE-697: registers every table a schema declares in DuckDB without paying, on every fresh
+   * connection, for every declared table's full discovery/conversion/materialization — the cost
+   * {@link #registerFilesAsViews} pays because it works from {@code fileSchema.getAllTableRecords()},
+   * which only has entries for tables {@code FileSchema.getTableMap()} has already processed.
+   *
+   * <p>A table whose Iceberg location is deterministic from its own YAML config (the ETL writer's
+   * warehousePath/tableName convention — the case for essentially every govdata table) is enqueued
+   * into {@link DuckDBPendingViews} exactly like a YAML SQL view: its {@code CREATE VIEW ...
+   * iceberg_scan(...)} is issued lazily, the first time something asks for that one table by name,
+   * not for the whole schema up front. A table that doesn't resolve that way (no materialize:iceberg
+   * block, disabled, or a location override) still needs {@code FileSchema}'s normal per-table
+   * resolution — {@link org.apache.calcite.adapter.file.FileSchema#getDeclaredTable} runs that for
+   * just that one table, and {@link #registerFilesAsViews} then creates its view exactly as before
+   * (it will find that table's record and no others, since no other table was forced through
+   * {@code getTableMap()}).
+   *
+   * @param catalogPath canonical DuckDB database file path used as the {@link DuckDBPendingViews}
+   *     key, or null for an ephemeral (non-persistent) catalog — deferred registration needs a
+   *     stable key, so a null path falls back to today's fully-eager registration instead
+   *     (matching {@link #registerSqlViewsInDuckDB}'s own limitation for ephemeral schemas)
+   */
+  private static void registerDeclaredTablesForDuckDB(Connection conn, String directoryPath,
+      boolean recursive, String duckdbSchema, String calciteSchemaName,
+      org.apache.calcite.adapter.file.FileSchema fileSchema,
+      java.util.Set<String> recreatedIcebergTables, @Nullable String catalogPath)
+      throws SQLException {
+    if (fileSchema == null) {
+      throw new SQLException("DuckDB engine requires FileSchema to be available for table discovery");
+    }
+    if (catalogPath == null) {
+      // Ephemeral (in-memory) catalog, e.g. a temp-directory schema — DuckDBPendingViews needs a
+      // stable key it doesn't have here, so there's nothing to defer. Same eager fallback as the
+      // no-declared-tables case below: force full discovery before registering.
+      registerAllTablesEagerly(conn, directoryPath, recursive, duckdbSchema, calciteSchemaName,
+          fileSchema, recreatedIcebergTables);
+      return;
+    }
+
+    java.util.Set<String> declaredNames = fileSchema.getDeclaredTableNames();
+    if (declaredNames.isEmpty()) {
+      // No explicit tables:/partitionedTables: entries (a plain directory-scan schema — table
+      // names come only from FileSchema scanning the filesystem, so there's nothing to defer by
+      // name). Fall back to the original eager path: force full discovery, then register
+      // everything it found.
+      registerAllTablesEagerly(conn, directoryPath, recursive, duckdbSchema, calciteSchemaName,
+          fileSchema, recreatedIcebergTables);
+      return;
+    }
+
+    int deferredCount = 0;
+    int eagerCount = 0;
+    for (String tableName : declaredNames) {
+      if (recreatedIcebergTables.contains(tableName)) {
+        // A schema-changed table's stale view must not be left for the pending-view existence
+        // check to find and skip — drop it up front exactly like registerFilesAsViews always has.
+        dropStaleViewIfRecreated(conn, duckdbSchema, tableName);
+      }
+      String icebergPath = fileSchema.declaredIcebergTablePath(tableName);
+      if (icebergPath != null) {
+        String sql = String.format("SELECT * FROM iceberg_scan('%s', allow_moved_paths=true)", icebergPath);
+        DuckDBPendingViews.enqueue(catalogPath, duckdbSchema, tableName, sql);
+        deferredCount++;
+      } else {
+        // Not deterministically resolvable from config alone — resolve just this one table now,
+        // the normal FileSchema way, instead of the whole schema.
+        fileSchema.getDeclaredTable(tableName);
+        eagerCount++;
+      }
+    }
+    LOGGER.info("DuckDB table registration for '{}': {} deferred (lazy iceberg_scan on first use), "
+        + "{} resolved now (non-deterministic config)", calciteSchemaName, deferredCount, eagerCount);
+
+    if (deferredCount > 0) {
+      // iceberg_scan() must be loaded on this connection before DuckDBPendingViews can later
+      // CREATE VIEW against it — registerFilesAsViews only installs the extension when its own
+      // eager loop finds an ICEBERG_PARQUET record, which the deferred tables never leave behind.
+      ensureIcebergExtensionLoaded(conn);
+    }
+    if (eagerCount > 0) {
+      // These tables now have conversionMetadata records (from getDeclaredTable above) and no
+      // other table does, so this creates views for exactly this subset — same code path and
+      // behavior registerFilesAsViews has always had for a non-deterministic table.
+      registerFilesAsViews(conn, directoryPath, recursive, duckdbSchema, calciteSchemaName,
+          fileSchema, recreatedIcebergTables);
+    }
+  }
+
+  /**
+   * Installs and loads the DuckDB {@code iceberg} extension and enables version guessing, once per
+   * connection — extracted from {@link #registerFilesAsViews}'s pre-loop setup so
+   * {@link #registerDeclaredTablesForDuckDB} can call it for a connection whose Iceberg tables are
+   * all deferred (so {@code registerFilesAsViews}'s own record-count-based check never runs).
+   *
+   * <p>Version guessing is enabled ONLY as a fallback for when version-hint.text is absent. Verified
+   * DuckDB semantics (iceberg ext): when version-hint.text is PRESENT the pointer is always
+   * followed and this flag is ignored (a higher/orphaned vN.metadata.json is NOT picked up); when
+   * it is ABSENT, guessing=true resolves the highest *valid* metadata (skipping garbage) while
+   * guessing=false errors with "no version-hint could be found". So this flag changes nothing for
+   * established tables (every one carries version-hint.text via the writer's ensureVersionHint) —
+   * those reads already resolve the atomic committed snapshot and stay robust under an in-flight
+   * writer (that guarantee comes from write-then-commit + the maintenance retention window + the
+   * orphan-cleanup fix, not from this setting). It only covers the version-hint-momentarily-absent
+   * window during a table's first commit, so leave it on. Use SET GLOBAL: query connections
+   * (getConnection() below) share this in-process DuckDB database and a connection-scoped SET
+   * would not reach them.
+   */
+  private static void ensureIcebergExtensionLoaded(Connection conn) {
+    try {
+      conn.createStatement().execute("INSTALL iceberg");
+      LOGGER.debug("Iceberg extension installed");
+    } catch (SQLException e) {
+      LOGGER.debug("Iceberg extension may already be installed: {}", e.getMessage());
+    }
+
+    try {
+      conn.createStatement().execute("LOAD iceberg");
+      LOGGER.debug("Iceberg extension loaded");
+    } catch (SQLException e) {
+      LOGGER.debug("Iceberg extension may already be loaded: {}", e.getMessage());
+    }
+
+    try {
+      conn.createStatement().execute("SET GLOBAL unsafe_enable_version_guessing = true");
+      LOGGER.debug("Iceberg version guessing enabled globally");
+    } catch (SQLException e) {
+      LOGGER.debug("Failed to enable version guessing: {}", e.getMessage());
+    }
+  }
+
+  /** Extracted from {@link #registerFilesAsViews}'s per-record drop-and-recreate handling, for
+   * reuse by {@link #registerDeclaredTablesForDuckDB} where no record exists yet to iterate. */
+  private static void dropStaleViewIfRecreated(Connection conn, String duckdbSchema, String tableName) {
+    try {
+      if (viewExists(conn, duckdbSchema, tableName)) {
+        String dropSql = String.format("DROP VIEW IF EXISTS \"%s\".\"%s\"", duckdbSchema, tableName);
+        LOGGER.info("Dropping stale Iceberg view for recreated table: {}.{}", duckdbSchema, tableName);
+        conn.createStatement().execute(dropSql);
+        LOGGER.info("Dropped stale view: {}.{}", duckdbSchema, tableName);
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Failed to drop stale view {}.{}: {}", duckdbSchema, tableName, e.getMessage());
+    }
+  }
+
+  /**
+   * Original, pre-FILE-697 eager path: force {@code FileSchema}'s full table discovery, then
+   * register everything it found. {@link #registerFilesAsViews} reads only from
+   * {@code fileSchema.getAllTableRecords()}, which has no entries until something has run
+   * {@code getTableMap()} — {@link #registerDeclaredTablesForDuckDB} skips straight to
+   * {@code registerFilesAsViews} only when it already resolved every table itself (per-table
+   * {@code getDeclaredTable} calls populate the same records); every other case (an ephemeral
+   * catalog with no {@link DuckDBPendingViews} key to defer against, or a plain directory-scan
+   * schema with no declared names to iterate) must force that discovery here first — skipping it
+   * left {@code getAllTableRecords()} empty except when it happened to win a race against
+   * {@code FileSchema}'s unrelated background {@code CachePrimer} thread, which also calls
+   * {@code getTableMap()} but on its own schedule.
+   */
+  private static void registerAllTablesEagerly(Connection conn, String directoryPath, boolean recursive,
+      String duckdbSchema, String calciteSchemaName,
+      org.apache.calcite.adapter.file.FileSchema fileSchema,
+      java.util.Set<String> recreatedIcebergTables) throws SQLException {
+    fileSchema.getTableNames();
+    registerFilesAsViews(conn, directoryPath, recursive, duckdbSchema, calciteSchemaName,
+        fileSchema, recreatedIcebergTables);
+  }
+
+  /**
    * Registers tables from the FileSchema's conversion registry as DuckDB views.
    * This ensures all tables discovered by FileSchema are available in DuckDB.
    *
@@ -1821,39 +1987,7 @@ public class DuckDBJdbcSchemaFactory {
         .anyMatch(r -> "ICEBERG_PARQUET".equals(r.getConversionType()));
 
     if (hasIcebergTables) {
-      // Install and load iceberg extension once (outside the loop for efficiency)
-      try {
-        conn.createStatement().execute("INSTALL iceberg");
-        LOGGER.debug("Iceberg extension installed");
-      } catch (SQLException e) {
-        LOGGER.debug("Iceberg extension may already be installed: {}", e.getMessage());
-      }
-
-      try {
-        conn.createStatement().execute("LOAD iceberg");
-        LOGGER.debug("Iceberg extension loaded");
-      } catch (SQLException e) {
-        LOGGER.debug("Iceberg extension may already be loaded: {}", e.getMessage());
-      }
-
-      // Enable version guessing ONLY as a fallback for when version-hint.text is absent. Verified
-      // DuckDB semantics (iceberg ext): when version-hint.text is PRESENT the pointer is always
-      // followed and this flag is ignored (a higher/orphaned vN.metadata.json is NOT picked up);
-      // when it is ABSENT, guessing=true resolves the highest *valid* metadata (skipping garbage)
-      // while guessing=false errors with "no version-hint could be found". So this flag changes
-      // nothing for established tables (every one carries version-hint.text via the writer's
-      // ensureVersionHint) — those reads already resolve the atomic committed snapshot and stay
-      // robust under an in-flight writer (that guarantee comes from write-then-commit + the
-      // maintenance retention window + the orphan-cleanup fix, not from this setting). It only
-      // covers the version-hint-momentarily-absent window during a table's first commit, so leave
-      // it on. Use SET GLOBAL: query connections (getConnection() below) share this in-process
-      // DuckDB database and a connection-scoped SET would not reach them.
-      try {
-        conn.createStatement().execute("SET GLOBAL unsafe_enable_version_guessing = true");
-        LOGGER.debug("Iceberg version guessing enabled globally");
-      } catch (SQLException e) {
-        LOGGER.debug("Failed to enable version guessing: {}", e.getMessage());
-      }
+      ensureIcebergExtensionLoaded(conn);
     }
 
     // Process each table from the registry
@@ -1939,16 +2073,7 @@ public class DuckDBJdbcSchemaFactory {
             // For Iceberg tables that were recreated (schema changed), drop existing stale view
             // This ensures DuckDB views stay in sync with Iceberg table schema changes
             if (recreatedIcebergTables.contains(tableName)) {
-              if (viewExists(conn, duckdbSchema, tableName)) {
-                String dropSql = String.format("DROP VIEW IF EXISTS \"%s\".\"%s\"", duckdbSchema, tableName);
-                LOGGER.info("Dropping stale Iceberg view for recreated table: {}.{}", duckdbSchema, tableName);
-                try {
-                  conn.createStatement().execute(dropSql);
-                  LOGGER.info("Dropped stale view: {}.{}", duckdbSchema, tableName);
-                } catch (SQLException dropError) {
-                  LOGGER.warn("Failed to drop stale view {}.{}: {}", duckdbSchema, tableName, dropError.getMessage());
-                }
-              }
+              dropStaleViewIfRecreated(conn, duckdbSchema, tableName);
             }
 
             // For Iceberg tables, check if view exists first for fast start (no S3 calls)

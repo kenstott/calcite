@@ -230,9 +230,9 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
           || record.sourceFile == null || record.sourceFile.endsWith(".parquet")) {
         return;
       }
-      Table fsTable = fileSchema.tables().get(name);
+      Table fsTable = fileSchema.getDeclaredTable(name);
       if (fsTable == null) {
-        fsTable = fileSchema.tables().get(name.toLowerCase());
+        fsTable = fileSchema.getDeclaredTable(name.toLowerCase());
       }
       if (fsTable == null) {
         return;
@@ -316,8 +316,10 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     // This ensures JDBC metadata (getTables/getColumns) works even when iceberg views
     // haven't been created yet (e.g., first connection before ETL runs).
     if (fileSchema != null) {
-      tableNames.addAll(fileSchema.tables()
-          .getNames(org.apache.calcite.schema.lookup.LikePattern.any()));
+      // FILE-697: declared names only — no per-table discovery/materialization work, unlike
+      // fileSchema.tables(), which forces FileSchema.getTableMap() to run for every declared
+      // table just to list their names.
+      tableNames.addAll(fileSchema.getDeclaredTableNames());
     }
     // Deferred SQL views (YAML views: section) that haven't been created yet still have a known
     // name — list it without creating the view, so a listing never creates (or hangs on) one.
@@ -347,9 +349,12 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       // ALWAYS wrap the table to provide FileSchema metadata, even if the JDBC table
       // already implements CommentableTable (the JDBC implementation doesn't have our metadata)
       if (fileSchema != null) {
-        Table originalTable = fileSchema.tables().get(name);
+        // FILE-697: resolves just this one declared table (running its own discovery/
+        // materialization the first time it's needed) instead of fileSchema.tables(), which
+        // forces every declared table in the schema through FileSchema.getTableMap() at once.
+        Table originalTable = fileSchema.getDeclaredTable(name);
         if (originalTable == null) {
-          originalTable = fileSchema.tables().get(name.toLowerCase());
+          originalTable = fileSchema.getDeclaredTable(name.toLowerCase());
         }
         LOGGER.info("Found original table for '{}': {} (CommentableTable: {})",
                     name, originalTable != null ? originalTable.getClass().getSimpleName() : "null",
@@ -398,7 +403,7 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
         }
 
         if (fileSchema != null) {
-          Table originalTable = fileSchema.tables().get(name.toLowerCase());
+          Table originalTable = fileSchema.getDeclaredTable(name.toLowerCase());
           if (originalTable instanceof CommentableTable) {
             return new CommentableJdbcTableWrapper(table, (CommentableTable) originalTable);
           }
@@ -414,9 +419,9 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     // Table not in DuckDB catalog — fall back to FileSchema definition.
     // This allows JDBC metadata to describe tables even when DuckDB views aren't created yet.
     if (table == null && fileSchema != null) {
-      Table fsTable = fileSchema.tables().get(name);
+      Table fsTable = fileSchema.getDeclaredTable(name);
       if (fsTable == null) {
-        fsTable = fileSchema.tables().get(name.toLowerCase());
+        fsTable = fileSchema.getDeclaredTable(name.toLowerCase());
       }
       if (fsTable != null) {
         LOGGER.info("Table '{}' not in DuckDB catalog — returning FileSchema table for metadata", name);

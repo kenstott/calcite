@@ -792,35 +792,18 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         fileSchema.setConversionRecords(conversionRecords);
       }
 
-      // Force initialization to run conversions and populate the FileSchema for DuckDB
-      LOGGER.info("DuckDB: About to call fileSchema.getTableMap() for table discovery");
+      // FILE-697: table discovery no longer forces fileSchema.getTableMap() here, which used to
+      // run every declared table's discovery/conversion/materialization up front — on every fresh
+      // connection, whether or not the query needed more than one of them. DuckDBJdbcSchemaFactory
+      // now registers each declared table's DuckDB view lazily (deferred to that table's first
+      // getTable() call), falling back to FileSchema's normal per-table resolution only for a
+      // table whose Iceberg location isn't deterministic from config alone. See
+      // FileSchema#getDeclaredTableNames/#declaredIcebergTablePath/#getDeclaredTable.
       LOGGER.info("DuckDB: Internal FileSchema created successfully: {}", fileSchema.getClass().getSimpleName());
       LOGGER.info("DuckDB: Internal FileSchema directory: {}", directoryPath);
 
-      Map<String, Table> tableMap;
-      try {
-        tableMap = fileSchema.getTableMap();
-        LOGGER.info("DuckDB: Internal FileSchema discovered {} tables: {}", tableMap.size(), tableMap.keySet());
-      } catch (Exception e) {
-        LOGGER.error("ERROR calling fileSchema.getTableMap(): {}", e.getMessage(), e);
-        throw new RuntimeException("Failed to discover tables in FileSchema for DuckDB", e);
-      }
-
-      if (tableMap.containsKey("sales_custom")) {
-        LOGGER.info("DuckDB: Found sales_custom table in internal FileSchema!");
-      } else {
-        LOGGER.warn("DuckDB: sales_custom table NOT found in internal FileSchema");
-      }
-
       // Check the conversion metadata immediately after table discovery
       if (fileSchema.getConversionMetadata() != null) {
-        java.util.Map<String, org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord> records =
-            fileSchema.getAllTableRecords();
-        LOGGER.info("FileSchemaFactory: After getTableMap(), conversion metadata has {} records", records.size());
-        for (String key : records.keySet()) {
-          LOGGER.debug("FileSchemaFactory: Conversion record key: {}", key);
-        }
-
         // Update conversion metadata with materialization info from ETL results
         // This enables DuckDB to use iceberg_scan() for Iceberg-materialized tables
         @SuppressWarnings("unchecked")

@@ -16,22 +16,37 @@
  */
 package org.apache.calcite.schema.lookup;
 
+import org.apache.calcite.linq4j.function.Predicate1;
 import org.apache.calcite.util.LazyReference;
 import org.apache.calcite.util.NameMap;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 /**
  * This class can be used to make a snapshot of a lookups.
+ *
+ * <p>The name set is frozen the first time any method is called (so a query resolved against
+ * this snapshot sees a consistent set of names for its whole lifetime, unaffected by a
+ * concurrent change to the underlying schema) but each entity's value is resolved from the
+ * delegate, and memoized, only the first time that specific name is actually asked for via
+ * {@link #get} or {@link #getIgnoreCase} — not for every name the moment any one of them, or
+ * {@link #getNames}, is requested. A caller that only needs to know what names exist (a FROM
+ * -clause identifier resolution, for instance, via {@code getTableNames()}) does not force
+ * every table in the schema to be constructed.
  *
  * @param <T> Element Type
  */
 public class SnapshotLookup<T> implements Lookup<T> {
 
   private final Lookup<T> delegate;
-  private LazyReference<Lookup<T>> cachedDelegate = new LazyReference<>();
+  private final LazyReference<NameMap<String>> namesRef = new LazyReference<>();
+  private final ConcurrentMap<String, T> resolved = new ConcurrentHashMap<>();
   private boolean enabled = true;
 
   public SnapshotLookup(Lookup<T> delegate) {
@@ -39,38 +54,74 @@ public class SnapshotLookup<T> implements Lookup<T> {
   }
 
   @Override public @Nullable T get(final String name) {
-    return delegate().get(name);
+    if (!enabled) {
+      return delegate.get(name);
+    }
+    Map.Entry<String, String> entry = names().range(name, true).firstEntry();
+    if (entry == null) {
+      return null;
+    }
+    return resolve(entry.getKey());
   }
 
   @Override public @Nullable Named<T> getIgnoreCase(final String name) {
-    return delegate().getIgnoreCase(name);
+    if (!enabled) {
+      return delegate.getIgnoreCase(name);
+    }
+    Map.Entry<String, String> entry = names().range(name, false).firstEntry();
+    if (entry == null) {
+      return null;
+    }
+    String canonicalName = entry.getKey();
+    T value = resolve(canonicalName);
+    return value == null ? null : new Named<>(canonicalName, value);
   }
 
   @Override public Set<String> getNames(final LikePattern pattern) {
-    return delegate().getNames(pattern);
-  }
-
-  private Lookup<T> delegate() {
     if (!enabled) {
-      return delegate;
+      return delegate.getNames(pattern);
     }
-    return cachedDelegate.getOrCompute(() -> new NameMapLookup<>(loadNameMap()));
+    final Predicate1<String> matcher = pattern.matcher();
+    return names().map().keySet().stream()
+        .filter(matcher::apply)
+        .collect(Collectors.toSet());
   }
 
-  private NameMap<T> loadNameMap() {
-    NameMap<T> map = new NameMap<>();
-    for (String name : delegate.getNames(LikePattern.any())) {
-      T entry = delegate.get(name);
-      if (entry != null) {
-        map.put(name, entry);
-      }
+  /**
+   * Resolves and memoizes one name's value against the delegate, lazily. Called only for a name
+   * already confirmed present in the frozen name set, so a miss here means the delegate's value
+   * for a known name turned out null (e.g. a table that failed to load) rather than an absent
+   * name — not memoized, so a later call can retry it.
+   */
+  private @Nullable T resolve(String name) {
+    T cached = resolved.get(name);
+    if (cached != null) {
+      return cached;
     }
-    return map;
+    T value = delegate.get(name);
+    if (value == null) {
+      return null;
+    }
+    T race = resolved.putIfAbsent(name, value);
+    return race != null ? race : value;
+  }
+
+  private NameMap<String> names() {
+    return namesRef.getOrCompute(this::loadNames);
+  }
+
+  private NameMap<String> loadNames() {
+    NameMap<String> result = new NameMap<>();
+    for (String name : delegate.getNames(LikePattern.any())) {
+      result.put(name, name);
+    }
+    return result;
   }
 
   public void enable(boolean enabled) {
     if (!enabled) {
-      cachedDelegate.reset();
+      namesRef.reset();
+      resolved.clear();
     }
     this.enabled = enabled;
   }

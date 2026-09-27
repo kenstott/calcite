@@ -46,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -2336,10 +2337,10 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
     setField(schema, "constraintMetadata", metadata);
 
-    Map<String, Table> tables = new HashMap<>();
+    Set<String> tables = new HashSet<>();
     // Call validateForeignKeyConstraints
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class<?>[]{Map.class}, tables);
+        new Class<?>[]{Set.class}, tables);
     // Should not throw - invalid FK is removed
   }
 
@@ -2357,11 +2358,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
     setField(schema, "constraintMetadata", metadata);
 
-    Map<String, Table> tables = new HashMap<>();
-    tables.put("local_table", mock(Table.class));
+    Set<String> tables = new HashSet<>();
+    tables.add("local_table");
 
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class<?>[]{Map.class}, tables);
+        new Class<?>[]{Set.class}, tables);
   }
 
   @Test void testValidateForeignKeyConstraintsNullConstraintEntry() throws Exception {
@@ -2371,10 +2372,10 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
     setField(schema, "constraintMetadata", metadata);
 
-    Map<String, Table> tables = new HashMap<>();
+    Set<String> tables = new HashSet<>();
     // Should not throw
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class<?>[]{Map.class}, tables);
+        new Class<?>[]{Set.class}, tables);
   }
 
   @Test void testValidateForeignKeyConstraintsNullForeignKeys() throws Exception {
@@ -2386,10 +2387,10 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
     setField(schema, "constraintMetadata", metadata);
 
-    Map<String, Table> tables = new HashMap<>();
+    Set<String> tables = new HashSet<>();
     // Should not throw
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class<?>[]{Map.class}, tables);
+        new Class<?>[]{Set.class}, tables);
   }
 
   @Test void testValidateForeignKeyConstraintsValidLocalFk() throws Exception {
@@ -2405,11 +2406,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
     setField(schema, "constraintMetadata", metadata);
 
-    Map<String, Table> tables = new HashMap<>();
-    tables.put("existing_table", mock(Table.class));
+    Set<String> tables = new HashSet<>();
+    tables.add("existing_table");
 
     invokePrivate(schema, "validateForeignKeyConstraints",
-        new Class<?>[]{Map.class}, tables);
+        new Class<?>[]{Set.class}, tables);
 
     // FK should still be there (not removed) since target exists
     @SuppressWarnings("unchecked")
@@ -2427,11 +2428,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testCheckTableExistsLocalNoSchema() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
-    Map<String, Table> localTables = new HashMap<>();
-    localTables.put("my_table", mock(Table.class));
+    Set<String> localTables = new HashSet<>();
+    localTables.add("my_table");
 
     Boolean result =
-        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Map.class},
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Set.class},
         null, "my_table", localTables);
     assertTrue(result);
   }
@@ -2440,11 +2441,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
     String schemaName = (String) getField(schema, "name");
 
-    Map<String, Table> localTables = new HashMap<>();
-    localTables.put("my_table", mock(Table.class));
+    Set<String> localTables = new HashSet<>();
+    localTables.add("my_table");
 
     Boolean result =
-        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Map.class},
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Set.class},
         schemaName, "my_table", localTables);
     assertTrue(result);
   }
@@ -2452,7 +2453,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCheckTableExistsCrossSchemaNotFound() throws Exception {
     FileSchema schema = createSchemaSimple(tempDir.toFile());
 
-    Map<String, Table> localTables = new HashMap<>();
+    Set<String> localTables = new HashSet<>();
     // Set parentSchema to null to trigger the "schema not found" path
     setField(schema, "parentSchema", null);
 
@@ -2462,7 +2463,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     // FK when it cannot confirm absence, and only removes it when the target schema IS
     // resolved and genuinely lacks the table.
     Boolean result =
-        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Map.class},
+        (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Set.class},
         "other_schema", "other_table", localTables);
     assertTrue(result);
   }
