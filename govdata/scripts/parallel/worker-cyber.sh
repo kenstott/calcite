@@ -93,11 +93,19 @@ run_cyber_model() {
   shift 3
   local extra_operands="${1:-}"
 
-  local enabled_tables
-  enabled_tables="$(filter_enabled_tables "$table_csv")"
-  if [ -z "$enabled_tables" ]; then
-    log_info "$WORKER_ID: skipping $model_name — none of its tables match GOVDATA_TABLES=${GOVDATA_TABLES}"
-    return
+  # An empty table_csv (cyber_threat's own call, since the hourly/weekly/static/otx-initial
+  # split was collapsed into one threat-$MODE call) means this caller never named an explicit
+  # table set to begin with — "run whatever the schema currently wants", same as before
+  # filter_enabled_tables existed. That's a different case from GOVDATA_TABLES scoping a real
+  # list down to nothing: skip filtering entirely rather than treating "no list given" as "zero
+  # tables match", which would silently no-op this model on every single run.
+  local enabled_tables=""
+  if [ -n "$table_csv" ]; then
+    enabled_tables="$(filter_enabled_tables "$table_csv")"
+    if [ -z "$enabled_tables" ]; then
+      log_info "$WORKER_ID: skipping $model_name — none of its tables match GOVDATA_TABLES=${GOVDATA_TABLES:-}"
+      return
+    fi
   fi
 
   local model_file="$MODEL_DIR/${model_name}.json"
