@@ -24,6 +24,7 @@ import argparse
 import logging
 import os
 import signal
+import socket
 import ssl
 import sys
 import threading
@@ -33,6 +34,37 @@ from pgwire_calcite.backend import StubBackend
 from pgwire_calcite.state import ServerState
 
 log = logging.getLogger(__name__)
+
+
+def probe_bind(host: str, port: int) -> bool:
+    """True if (host, port) looks bindable right now, False if something is already
+    listening there.
+
+    Called BEFORE build_backend() specifically to avoid kenstott/calcite#(pgwire port
+    exhaustion): a losing bind race used to construct the full CalciteBackend first —
+    embedding a JVM via JPype and opening ~250 S3/Iceberg connections for govdata — and
+    only then attempt the real bind in start_pgwire_server(). On failure there, the
+    embedded JVM's own non-daemon threads (the S3 SDK's connection-pool threads, in
+    particular) kept the OS process alive even after the Python main thread hit the
+    unhandled OSError, so a loser never actually exited — it just sat there holding
+    ~250 leaked connections forever. Observed live: 37 such zombies exhausted the host's
+    ephemeral port range and broke every other outbound connection on the machine,
+    including unrelated R2 sync and loopback MinIO traffic.
+
+    This is a best-effort pre-flight check, not a substitute for the real bind (there is
+    an unavoidable TOCTOU gap between this probe and start_pgwire_server's actual bind) —
+    it just makes sure the overwhelmingly common case (a real listener already bound
+    well before this process was even spawned) is caught BEFORE the expensive backend is
+    built, not after."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        probe.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
 
 
 def build_state(
@@ -341,6 +373,18 @@ def main(argv: list | None = None) -> int:
         name, value = spec.split("=", 1)
         extra_props[name] = value
     jdbc = {"lex": args.lex, "fun": args.fun, "schema": args.schema, "extra_props": extra_props}
+
+    # Pre-flight bind check BEFORE the expensive backend build — see probe_bind()'s
+    # docstring. A losing bind race must never get as far as building a CalciteBackend
+    # (JVM + ~250 S3/Iceberg connections) in the first place.
+    if not probe_bind(args.host, args.port):
+        log.error(
+            "[PGWIRE] %s:%d is already in use — another pgwire-calcite instance is "
+            "presumably the real listener. Exiting without building a backend.",
+            args.host, args.port,
+        )
+        return 1
+
     from pgwire_calcite.extensions import resolve as _resolve_ext
 
     enabled_ext = _resolve_ext(args.extension)
@@ -358,21 +402,39 @@ def main(argv: list | None = None) -> int:
                 parser.error(f"--auth {args.auth} requires --auth-store")
             store = AccountStore(args.auth_store)
             auth_provider = LocalAccountsProvider(store, scram_wire=(args.auth == "scram"))
-    srv = serve(
-        host=args.host,
-        port=args.port,
-        auth=args.auth if args.auth in ("none", "simple") else "none",
-        users=users,
-        certfile=args.tls_cert,
-        keyfile=args.tls_key,
-        backend=backend,
-        auth_provider=auth_provider,
-        database=args.database,
-        client_ca=args.client_ca,
-        mtls_mode=args.mtls_mode,
-        mtls_bind_principal=args.mtls_bind_principal,
-        statement_timeout_ms=args.statement_timeout_ms,
-    )
+    try:
+        srv = serve(
+            host=args.host,
+            port=args.port,
+            auth=args.auth if args.auth in ("none", "simple") else "none",
+            users=users,
+            certfile=args.tls_cert,
+            keyfile=args.tls_key,
+            backend=backend,
+            auth_provider=auth_provider,
+            database=args.database,
+            client_ca=args.client_ca,
+            mtls_mode=args.mtls_mode,
+            mtls_bind_principal=args.mtls_bind_principal,
+            statement_timeout_ms=args.statement_timeout_ms,
+        )
+    except OSError:
+        # The bind still failed here despite probe_bind() passing above (an unavoidable
+        # TOCTOU gap — another process won the race in between). The backend is already
+        # built at this point (JVM embedded, S3/Iceberg connections open), and a plain
+        # unhandled exception is exactly what let a loser linger forever before: an
+        # embedded JVM's own non-daemon threads (S3 SDK connection-pool threads) can keep
+        # this OS process alive even after Python's main thread would otherwise exit.
+        # os._exit() forces immediate process termination regardless of what the JVM's
+        # native threads are doing, guaranteeing the leaked connections are actually
+        # released (by the OS closing every fd) rather than held indefinitely.
+        log.error(
+            "[PGWIRE] bind to %s:%d failed after backend was already built — "
+            "another process won the race. Forcing immediate exit to release its "
+            "connections rather than lingering.",
+            args.host, args.port,
+        )
+        os._exit(1)
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
         args.backend,
