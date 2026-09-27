@@ -1,42 +1,46 @@
-# Fact-Check: "Your Home Sale Could Freeze on September 30" (Call The Local, NFIP deadline guide)
+# Fact-Check: "Your Home Sale Could Freeze on September 30" (Call The Local, NFIP guide)
 
 **Article checked:** https://www.callthelocal.com/guides/nfip-flood-insurance-september-30-2026-deadline-home-closings
 
-**Overall Washington Post Pinocchio rating: 1 out of 4** — mostly accurate, with one clear, narrow numeric error; nothing that rises to materially misleading framing.
+**Report saved to:** `/Volumes/main/Users/kennethstott/IdeaProjects/calcite/news-check-results/q4/askamerica/2026-09-27/report.html` (also published in-session; the http://127.0.0.1 link is not durable past this process).
 
-Report saved to: `/Volumes/main/Users/kennethstott/IdeaProjects/calcite/news-check-results/q4/askamerica/2026-09-27/report.html` (also published via publish_report; the http://127.0.0.1 link returned in-session is not durable past this process).
+## Split Pinocchios rating (as required — several graded claims are attributed to NAR, a named third party)
 
-## Summary
+- **Fidelity: 2/4** — the article accurately, often verbatim, transcribes 8 of 9 statistics it attributes to NAR. Its state-by-state breakdown (13,460 FL / 3,140 TX / 1,840 CA monthly NFIP-dependent closings) does **not** match NAR's actual published figures (14,870 FL / 3,590 TX / 1,680 CA — confirmed via direct `web_fetch` of NAR's Economists' Outlook, March 11, 2025). FL and TX are understated, CA overstated — not a rounding artifact.
+- **Claims accuracy: 3/4** — every NAR figure the article transcribed *correctly* is genuinely accurate. But the article's central premise — "put one date on your calendar in bold: September 30, 2026" — was superseded. **Congress already extended NFIP's authorization past September 30, 2026 to December 11, 2026 on September 2, 2026** (P.L. 119-103 / H.R.6500), confirmed independently by NAHB (published Sept 4, 2026: "National Flood Insurance Program Extended Through Dec. 11") and by CRS's own IN10835 report as revised September 11, 2026 ("The NFIP is currently authorized until December 11, 2026"). This is a headline claim the most recent primary-source data runs directly against — the count=3 case on the WaPo scale.
 
-This is an unusually careful piece for the genre. It correctly separates NFIP's *authorization* (through Sept 30, 2026) from separate Homeland Security *appropriations*; it correctly corrects the common media error that the mandatory flood-insurance purchase requirement is eliminated during a lapse (it's actually *suspended*, with the decision shifted to individual lenders); and it repeatedly hedges that a lapse is "largely a headline, not an emergency" for people not mid-transaction. Every national statistic and every piece of legislative history checks out against primary sources (NAR, FEMA, CRS, GAO, Congress.gov, White House press materials).
+## This is a new, more consequential finding than the prior same-day check
 
-One real error: the article's state-by-state breakdown of NFIP-dependent monthly closings — **13,460 Florida / 3,140 Texas / 1,840 California**, explicitly attributed to "NAR's state breakdown estimates" — does not match NAR's own published breakdown (Nadia Evangelou, NAR Economists' Outlook, March 11, 2025), which is **14,870 Florida / 3,590 Texas / 1,680 California**. Florida and Texas are understated, California is overstated — not simple rounding, and no other NAR source with an updated state breakdown could be found (checked NAR's magazine piece, economists' outlook, and the live Sept 30, 2026 FAQ via Wayback Machine captures). Likely an AI-generation artifact, given the article discloses AI-assisted content.
+The earlier run today caught the state-breakdown misquote (a fidelity problem) but used a single blended Pinocchio count and did not catch that the article's entire deadline framing had already been overtaken by events 25 days before this check. That is the more serious issue: a reader today planning a home closing around "September 30" is acting on a deadline that no longer applies — the actual authorization now runs through December 11, 2026.
 
-## Claim-by-claim (11 checkable factual claims)
+## Claim-by-claim (11 claims checked, all against primary sources fetched directly this session)
 
-| Claim | Verdict | Source |
+| Claim | Attribution | Verdict |
 |---|---|---|
-| NFIP authority expires Sept 30, 2026, 11:59pm ET | TRUE | FEMA.gov, Congress.gov (H.R.7148) |
-| "1,360/day, ~41,300/month" NFIP-dependent closings | TRUE | NAR Economists' Outlook, Mar 2025 — verbatim match |
-| H.R.7148 signed by Trump Feb 3, 2026 | TRUE | whitehouse.gov, congress.gov |
-| Oct 1, 2025 lapse in 43-day shutdown → reauthorized to Jan 30, 2026 → lapsed again ~Jan 30 → H.R.7148 fixed it; "35th extension, 5th lapse since 2017" | TRUE | Insurance Journal, EveryCRSReport/CRS IN10835 |
-| Existing policies stay in force; 30-day grace period; FEMA pays claims from available funds | TRUE | NAR's own Sept 30, 2026 FAQ, verbatim |
-| Regulators suspend (not eliminate) mandatory-purchase requirement; lenders decide | TRUE | NAR FAQ, verbatim |
-| Risk Rating 2.0 caps: 18% primary / 25% non-primary & commercial | TRUE | CRS R45999, CRS IN11777 |
-| $1.3T coverage / 4.7M policyholders / 23,000 communities | TRUE (AskAmerica's own `disasters.nfip_policies` table could NOT corroborate this — see data-gap note below) | NAR Realtor Magazine, Oct 2025, verbatim |
-| NFIP underpins ~500K home sales/yr, ~1M jobs, ~$70B economic activity | TRUE | NAR Realtor Magazine (Shannon McGahn quote), verbatim |
-| **State breakdown: 13,460 FL / 3,140 TX / 1,840 CA** | **FALSE** | Actual NAR figures: 14,870 FL / 3,590 TX / 1,680 CA |
-| Standard homeowners insurance excludes flood damage | TRUE | Uncontroversial, NFIP's founding rationale |
-| CRS description of lapse mechanics | TRUE | CRS IN10835 |
+| "Sept 30, 2026" is THE deadline to plan around | Article's own central framing | **FALSE/STALE** — extended to Dec 11, 2026 on Sept 2, 2026 |
+| H.R.7148 (Sept 30, 2026 extension) signed by Trump Feb 3, 2026 | Article's own assertion | TRUE (accurate as a historical statement) |
+| Oct 2025 shutdown lapse → reauthorized → lapsed again → H.R.7148 fixed it; dozens of extensions since 2017 | Article's own assertion | TRUE |
+| ~1,360/day, ~41,300/month NFIP-dependent closings | Attributed to NAR | TRUE — verbatim |
+| Grace period, claims still paid during lapse | Attributed to NAR/CRS | TRUE |
+| Mandatory-purchase requirement suspended, not eliminated | Article's own assertion | TRUE |
+| Risk Rating 2.0 caps: 18%/25% | Article's own assertion | TRUE |
+| $1.3T / 4.7M policyholders / 23,000 communities | Attributed to NAR | TRUE — verbatim |
+| ~500K sales/yr, ~1M jobs, ~$70B economic activity | Attributed to NAR (McGahn quote) | TRUE — verbatim |
+| **State breakdown: 13,460 FL / 3,140 TX / 1,840 CA** | Attributed to NAR | **FALSE** — real NAR figures: 14,870/3,590/1,680 |
+| Standard homeowners insurance excludes flood damage | Article's own assertion | TRUE |
 
 ## AskAmerica data-coverage finding
 
-`disasters.nfip_policies` was queried directly (`SELECT year, SUM(policy_count), SUM(total_building_coverage+total_contents_coverage) FROM disasters.nfip_policies GROUP BY year`). It returned only 227,424 policy-term rows for all of 2024 and 23,945 for 2025 — a documented partial OpenFEMA extract (~2.5M of ~74M all-history rows), nowhere near FEMA's true national scale of ~4.7 million active policyholders. This is a genuine corpus coverage gap, not a discrepancy with the article; national totals were instead verified against NAR's and FEMA's own published text.
+`disasters.nfip_policies` was queried live this session (`SELECT year, SUM(policy_count), SUM(coverage) ... GROUP BY year`) — a partial OpenFEMA extract (2,478,000 rows across 2010–2026, gaps present; only 23,945 rows for all of 2025). It cannot corroborate FEMA's true ~4.7M-policyholder national scale; national and state totals were instead verified against NAR's, CRS's, and NAHB's own published text via direct `web_fetch`.
 
-## Note on independent grading (score_claim/Jev)
+## Materially misleading beyond the individual facts?
 
-An independent second-opinion grader was run against each claim using the exact primary-source evidence. It returned persistently low-confidence verdicts (0.30–0.75) across nearly every claim — including ones matched verbatim, word-for-word, to primary-source text (e.g., 0.36 confidence on the $1.3T/4.7M/23,000-communities figure, 0.75 on the H.R.7148 signing date) — and its automated publish-time validation gate would only pass 2 of 11 claims through the structured `claims[]` mechanism. Rather than omit nine well-evidenced findings or force an artificially low confidence score into the published record, the report presents the full claim-by-claim verdict as narrative content with underlying primary-source citations, and discloses this grader limitation explicitly in the report's methodology section. This is worth flagging as a possible defect/limitation in the score_claim tool for topics involving direct primary-source-quote verification rather than inferential judgment calls.
+Yes — the stale core premise, independent of any single wrong number. The article's own site published other content dated September 11 and 13, 2026 (after the extension was public), yet this piece's headline framing was never updated. A reader relying on it today would over-prepare for a deadline that already passed without incident.
 
-## Materially misleading framing?
-
-No. The piece's hedging and mechanical accuracy are better than average for the genre. The one gap (state breakdown) could mislead a Florida/Texas/California reader about precise local exposure, though the underlying ranking (FL most exposed, then TX, then CA) is still correct.
+## Sources fetched directly this session (6 distinct primary/independent sources)
+- NAR Economists' Outlook (Mar 11, 2025)
+- NAR Realtor Magazine, "NFIP by the Numbers" (Oct 7, 2025)
+- CRS IN10835 via EveryCRSReport (revised Sept 11, 2026)
+- GovTrack H.R.7148 status page
+- NAHB, "NFIP Extended Through Dec. 11" (Sept 4, 2026)
+- The article itself

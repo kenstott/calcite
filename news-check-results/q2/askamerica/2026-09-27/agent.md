@@ -1,38 +1,22 @@
-# Fact-check: "Canceled Student Loans Are Still Showing Up as Debt, Lawsuit Says" (AOL, Sept 24, 2026, syndicated from Investopedia)
+## Fact-check: "Canceled Student Loans Are Still Showing Up as Debt, Lawsuit Says" (AOL/Investopedia, Sept 24, 2026)
 
-**Article checked:** https://www.aol.com/articles/canceled-student-loans-still-showing-201914000.html
+**Verdict: Fidelity 0 Pinocchios / Claims Accuracy 1 Pinocchio** (split rating, as required, because the headline claim is attributed to a named third party — PPSL — not asserted by the article itself).
 
-## Verdict: 1 Pinocchio (out of 4) — essentially accurate, with one shading concern
+### Why split, not blended
+The article's headline claim ($4.6 billion in canceled debt still being reported as overdue, affecting 300,000+ borrowers) is explicitly PPSL's own estimate ("advocates say," "according to PPSL estimates"), not the reporter's independent assertion. WaPo-style Pinocchio grading requires separating **fidelity** (did the article accurately relay what PPSL said) from **claims_accuracy** (is what PPSL said actually true) whenever a claim carries this kind of attribution — collapsing the two into one blended count (as an earlier run today did) hides that these are different questions with different answers here.
 
-Every specific, checkable fact in this short article matches the underlying primary source (the Project on Predatory Student Lending's own Sept 24, 2026 press release and the lawsuit complaint, *Woods v. U.S. Department of Education*, filed that day in U.S. District Court for D.C.) almost word for word, and is independently corroborated by CNBC's own separate same-day report. Nothing is fabricated or contradicted.
+### Findings
 
-The one flag: the article's two most quotable numbers — **$4.6 billion in canceled debt still reported as owed, affecting more than 300,000 borrowers** — are a self-reported estimate from the plaintiffs' own advocacy organization/law firm (PPSL), with no disclosed methodology and no independent government or third-party confirmation. The body text correctly attributes this as an estimate ("according to PPSL estimates based on public data"), but the bolded "Key Takeaways" bullet states it with less hedging — a reader skimming only the bullets could mistake it for a settled figure rather than one side's number in unresolved litigation.
+**Fidelity: 0 Pinocchios.** Every number and quote traceable to PPSL in the article matches PPSL's own Sept 24, 2026 press release (fetched directly from ppsl.org) word-for-word or in close paraphrase — the $4.6B/300,000+ figure, the $23.4B/1.5 million group-discharge history (April 2022–January 2025), the "relief was automatic" promise, the two named plaintiffs (Mandy Woods, Ashford University; Jorge Cortes, ITT Technical Institute), and the D.C. federal court filing under the Fair Credit Reporting Act. No exaggeration or dropped hedge found.
 
-## Why AskAmerica's own data couldn't answer this
+**Claims accuracy: 1 Pinocchio.** The headline $4.6B/300,000+ figure is PPSL's own novel, unaudited litigation estimate "based on public data" — PPSL does not show its work, and no Department of Education publication or AskAmerica table confirms it. It is an allegation in unresolved litigation (the case was filed the same day the press release went out), not an established fact. By contrast, the $23.4B/1.5 million-borrower group-discharge figure **checks out**: it's corroborated in scale by a Dec 4, 2024 congressional letter (Sen. Markey et al., fetched from markey.senate.gov) itemizing the Department's own group-discharge press releases (Corinthian $5.8B/560,000; ITT Tech $3.9B/208,000; Art Institutes $6.1B/317,000; Westwood $1.5B/79,000; and others), totaling over 1.2 million borrowers by Oct 2024 — consistent with reaching 1.5M/$23.4B by Jan 2025.
 
-`search_catalog` was run against AskAmerica's warehouse for any table covering Department of Education loan discharges/forgiveness, borrower-defense group-discharge programs, or credit-bureau delinquency reporting. No matching table exists in `edu` or `fiscal` (closest hits: IPEDS institutional aid totals, a college-level 3-year cohort default rate — neither covers loan-portfolio discharges or credit-reporting status). "Forgiveness," "discharge," and "delinquency" all came back as unmatched terms. This is a confirmed, genuine data gap — AskAmerica does not ingest Federal Student Aid loan-servicing data or credit-bureau data. Every claim below was checked against primary sources and independent reporting instead.
+**AskAmerica coverage gap (confirmed, not just unchecked):** search_catalog was queried for student loan forgiveness/borrower-defense/discharge and for federal student-loan balance/delinquency data. No table matched in either case (unmatched terms: forgiveness, discharge, defense, delinquency) — this warehouse carries no table on federal student-loan discharge programs or on post-discharge credit-bureau reporting. Per the engine's own recipe guidance, I then went straight to the primary sources (PPSL's release, the Senate letter) rather than settling for secondary synthesis.
 
-## Claim-by-claim results
+**Materially misleading element flagged:** the article's KEY TAKEAWAYS box states the $4.6B/300,000+ figure as the lede fact with only a trailing "advocates say" — a skimming reader could easily absorb an unaudited plaintiff estimate as a settled fact. This doesn't make the article inaccurate (the attribution is technically present throughout the body text), but it's the one thing worth flagging even though every individual sentence checks out as written.
 
-| Claim | Verdict |
-|---|---|
-| PPSL estimates DOE is falsely reporting $4.6B in canceled debt to credit bureaus, affecting 300,000+ borrowers | **Not checkable here** — the *attribution* is accurate (verified word-for-word against PPSL's release), but the underlying number's accuracy can't be independently confirmed; PPSL discloses no methodology and DOE hasn't verified or disputed it |
-| Lawsuit alleges DOE reports canceled loans as delinquent to Equifax/Experian/TransUnion, harming credit | **True** — matches the complaint and PPSL release verbatim; independently corroborated by CNBC |
-| 1.5 million borrowers, $23.4B forgiven 2022–2025 via group-discharge program; relief said to be automatic, no action needed | **True** — verbatim match to PPSL's press release, corroborated by CNBC |
-| DOE declined to comment | **True** — two independent outlets (CNBC, Benzinga) contacting DOE the same day both report no response |
+### Report
+Published report (local, this-session link, 5 sections, dashboard, 5 sources): http://127.0.0.1:64928/a/0372a06c23aaf1c3f1ae7d9b725b5498.html
+Saved copy: `/Volumes/main/Users/kennethstott/IdeaProjects/calcite/news-check-results/q2/askamerica/2026-09-27/report.html`
 
-## What a professional fact-checker would additionally flag
-- The headline $4.6B/300,000 figure is a single litigant-side estimate, prominently placed with less hedging in the bolded takeaways than in the body text.
-- No disclosed methodology behind PPSL's estimate, and no independent verification possible since DOE hasn't confirmed, disputed, or made its servicing data public.
-- DOE's non-response means none of the article's figures have been checked by the party best positioned to confirm or refute them.
-- Everything else (legal theory under the Fair Credit Reporting Act, case venue, plaintiffs' individual stories, 2022–2025 program history) is accurate and a faithful, if very compressed, summary of solid underlying reporting.
-
-## Sources
-- [PPSL press release: Student Borrowers Sue Education Department for Reporting Cancelled Loans as Debt](https://www.ppsl.org/news/student-borrowers-sue-education-department-for-reporting-cancelled-loans-as-debt)
-- [PPSL complaint PDF: Woods et al. v. United States Department of Education](https://www.ppsl.org/s/Woods-et-al-v-UNITED-STATES-DEPARTMENT-OF-EDUCATION.pdf)
-- [CNBC: Student loan borrowers sue over credit reports listing forgiven debt](https://www.cnbc.com/2026/09/24/student-loan-borrowers-sue-credit-reports-forgiven-loans.html)
-- [Original article under test](https://www.aol.com/articles/canceled-student-loans-still-showing-201914000.html)
-
-## Report artifact
-- Local report (dies when this session ends): http://127.0.0.1:60395/a/65295fd87209749622698ae7d0cb356a.html
-- Saved on disk: `/Volumes/main/Users/kennethstott/IdeaProjects/calcite/news-check-results/q2/askamerica/2026-09-27/report.html`
+Two claims were independently scored via `score_claim` before publishing: the $23.4B/1.5M discharge figure → "true" (0 Pinocchios, confidence 0.67); the $4.6B/300,000+ PPSL estimate → "not checkable here" by design.
