@@ -2393,7 +2393,7 @@ public class McpServer {
             "For an article or claim validation: one object per assertion, as "
             + "[{assertion, verdict, article_value, warehouse_value, independent_value, "
             + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
-            + "score_claim_ref}]. `assertion` "
+            + "score_claim_ref, score_claim_override_reason}]. `assertion` "
             + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
             + "say X' is graded on X). `verdict` is one of: true | mostly true | partially true "
             + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
@@ -2407,11 +2407,19 @@ public class McpServer {
             + "score_claim tool, it's cross-checked against Jev's independent verdict "
             + "automatically -- no field needed. `score_claim_ref` is an optional override: set "
             + "it to a specific score_claim call's returned id when the automatic ordering "
-            + "would pair the wrong claim with the wrong call. Renders as a tallied claim-by-claim "
-            + "table directly under the summary. A publish whose claims rest on your own "
-            + "warehouse analysis (any warehouse_value or sql) MUST also carry a `dashboard` or "
-            + "follow a render_chart/compose_dashboard call; it is refused otherwise. Claims "
-            + "graded purely from publications need no chart."));
+            + "would pair the wrong claim with the wrong call. `score_claim_override_reason` is "
+            + "a separate override for a Jev disagreement or low-confidence result you have "
+            + "concrete grounds to set aside — e.g. the claim concerns an event or figure dated "
+            + "after Jev's own training data could plausibly cover, and you have independently "
+            + "verified it against a primary source Jev cannot be expected to know about. State "
+            + "that primary source in the reason; a bare 'I trust my own evidence more' does not "
+            + "qualify and the claim will still be refused. Without this field, low confidence or "
+            + "disagreement blocks the publish exactly as before. Renders as a tallied "
+            + "claim-by-claim table directly under the summary, with any override reason shown "
+            + "alongside its claim so a reader can judge it themselves. A publish whose claims "
+            + "rest on your own warehouse analysis (any warehouse_value or sql) MUST also carry a "
+            + "`dashboard` or follow a render_chart/compose_dashboard call; it is refused "
+            + "otherwise. Claims graded purely from publications need no chart."));
         pubProps.set("source_url", prop("string",
             "REQUIRED for a validation (any publish whose claims array is non-empty): the "
             + "exact URL of the article or page the claims were extracted from. The browser "
@@ -5981,24 +5989,45 @@ public class McpServer {
         String basis = positional
             ? "score_claim's independent check (matched by call order, not an explicit ref)"
             : "score_claim's independent check";
+        // score_claim_override_reason is the escape hatch this gate previously promised in its
+        // own tool description ("explain... why the independent score is wrong") but never
+        // actually implemented -- both branches below added to `problems` unconditionally,
+        // with no way past either short of matching Jev's verdict outright. Confirmed live
+        // 2026-09-27: four separate news-check runs in one day independently hit the
+        // low-confidence branch on claims about 2026 events they had already verified against
+        // primary sources -- Jev (a separate, externally-hosted model) plausibly predates those
+        // events and is correctly reporting low confidence about something it cannot know, not
+        // wrongly grading a claim it understands. A blank reason does not count -- require an
+        // actual justification, so this cannot become a silent bypass.
+        String override = c.path("score_claim_override_reason").asText("").trim();
         boolean lowConfidence = scored.verdictConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD
             || scored.pinocchiosConfidence < SCORE_CLAIM_CONFIDENCE_THRESHOLD;
         if (lowConfidence) {
+            if (!override.isEmpty()) {
+                return;
+            }
             problems.add(basis + " of \"" + assertion + "\" came back low-confidence (verdict "
                 + scored.verdictConfidence + ", pinocchios " + scored.pinocchiosConfidence
-                + ") -- gather more evidence before grading this claim, or grade it 'not "
-                + "checkable here' with a reason instead. If this pairing looks wrong (a "
-                + "positional match, not an explicit score_claim_ref), say so instead of "
-                + "gathering more evidence for the wrong claim.");
+                + ") -- gather more evidence before grading this claim, grade it 'not checkable "
+                + "here' with a reason instead, or set score_claim_override_reason if you have "
+                + "concrete grounds Jev lacks (e.g. the claim is about an event dated after Jev's "
+                + "own training data could cover, and you've independently verified it against a "
+                + "named primary source). If this pairing looks wrong (a positional match, not an "
+                + "explicit score_claim_ref), say so instead of gathering more evidence for the "
+                + "wrong claim.");
             return;
         }
         if (!submittedVerdict.equals(scored.verdict.toLowerCase(java.util.Locale.ROOT))) {
+            if (!override.isEmpty()) {
+                return;
+            }
             problems.add("the assertion \"" + assertion + "\" is submitted as '"
                 + submittedVerdict + "' but " + basis + " returned '" + scored.verdict
                 + "' (confidence " + scored.verdictConfidence + "). Resolve the disagreement "
-                + "-- recheck the evidence, or explain in the claim's own text why the "
-                + "independent score is wrong -- before resubmitting. If this pairing looks "
-                + "wrong (a positional match, not an explicit score_claim_ref), say so instead.");
+                + "-- recheck the evidence, set score_claim_override_reason with a concrete "
+                + "justification for why the independent score is wrong, or grade it the way "
+                + "score_claim did -- before resubmitting. If this pairing looks wrong (a "
+                + "positional match, not an explicit score_claim_ref), say so instead.");
         }
     }
 
@@ -6813,6 +6842,8 @@ public class McpServer {
                     .append(ReportPage.esc(whVintage)).append("</dd>\n");
             }
             appendDetailRow(details, "Why", c.path("reason").asText(""));
+            appendDetailRow(details, "Overrode Jev's score because",
+                c.path("score_claim_override_reason").asText(""));
             details.append("</dl>\n");
             if (c.hasNonNull("sql") && !c.get("sql").asText().isEmpty()) {
                 details.append("<details class=\"sqltoggle\"><summary>Show SQL</summary><pre><code>")
