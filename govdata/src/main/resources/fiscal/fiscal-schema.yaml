@@ -4722,7 +4722,11 @@ partitionedTables:
       identifier within (state_fips, gov_type_code, county_fips) — not globally
       unique alone. county_fips is the county OR county-type area the unit is
       located in; for state-level rows (gov_type_code=0) this is not a valid
-      geo.counties FIPS. amount_thousands is in THOUSANDS of dollars and may be
+      geo.counties FIPS. county_fips is a FIPS code for every year: the
+      2012-2016 files' own ID county field is a Census county sequence number,
+      not FIPS, so GovtFinanceProvider looks up the real FIPS county per unit
+      from the Fin_GID identifier file bundled in the same ZIP. amount_thousands
+      is in THOUSANDS of dollars and may be
       negative (debt retirements, etc.). This is a stratified sample survey of
       government units (large governments fully enumerated, smaller ones
       sampled) even in Census-of-Governments years (2012/2017/2022) — a raw
@@ -4756,7 +4760,9 @@ partitionedTables:
         nullable: false
         comment: >
           County or county-type area FIPS the unit is located in (source ID
-          positions 4-6). NOT a valid geo.counties key for state-level rows
+          positions 4-6 for 2017+; looked up from the same ZIP's Fin_GID file
+          for 2012-2016, whose ID field carries a Census county sequence
+          number instead). NOT a valid geo.counties key for state-level rows
           (gov_type_code=0); see the FK comment below.
       - name: unit_id
         type: string

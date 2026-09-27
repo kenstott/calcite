@@ -66,7 +66,14 @@ import java.util.zip.ZipInputStream;
  *
  * <p>The first two ID characters are FIPS state codes in the 2017-and-later layout but Census's
  * own alphabetical state numbering (01-51, District of Columbia = 09) in the 2012-2016 layout;
- * the latter are translated to FIPS so {@code state_fips} joins to {@code geo.state_ref}.
+ * the latter are translated to FIPS so {@code state_fips} joins to {@code geo.state_ref}. The same
+ * is true of the ID's county field (positions 4-6): a FIPS county code in 2017+, a Census county
+ * sequence number in 2012-2016. Since a sequence number is only unique within its own state, and
+ * even a (state, sequence) pair maps ambiguously in a few states, 2012-2016 {@code county_fips} is
+ * instead looked up per unit from the {@code Fin_GID_*.txt} identifier file bundled in the same
+ * ZIP, which carries every unit's real FIPS county — confirmed live against the full 2012 and 2016
+ * files: every data record's 12-character unit ID has exactly one matching {@code Fin_GID} entry,
+ * and that entry's state FIPS always agrees with the translated ID state.
  */
 public class GovtFinanceProvider implements CachingDataProvider {
 
@@ -88,6 +95,24 @@ public class GovtFinanceProvider implements CachingDataProvider {
    * 2019 and 2023.
    */
   private static final String DATA_ENTRY_MARKER = "finestdat";
+
+  /**
+   * Names the identifier entry that carries each unit's real FIPS state and county for the
+   * 2012-2016 layout ({@code Fin_GID_2012.txt}, etc.); 2017 and later ship {@code Fin_PID_*}
+   * instead, which this provider never needs to read since those records already carry FIPS
+   * directly in the ID.
+   */
+  private static final String GID_ENTRY_MARKER = "fin_gid";
+
+  /**
+   * Zero-based offsets of the FIPS state (2 chars) and county (3 chars) fields in a
+   * {@code Fin_GID} record, per the technical documentation's 1-based positions 114-115 and
+   * 116-118 — confirmed live against the 2012 and 2016 files (Baldwin County, AL: state 01,
+   * county 003).
+   */
+  private static final int GID_STATE_START = 113;
+  private static final int GID_COUNTY_START = 115;
+  private static final int GID_COUNTY_END = 118;
 
   private static final Map<String, String> GOV_TYPE_NAMES = buildGovTypeNameMap();
 
@@ -115,6 +140,8 @@ public class GovtFinanceProvider implements CachingDataProvider {
     }
     LOGGER.info("govt_finance_by_unit: reading {}", zipUrl);
 
+    final Map<String, String> unitCounties = readUnitCounties(rawCache, zipUrl);
+
     // Left open deliberately: the iterator streams records straight off this entry and closes the
     // stream when the entry is exhausted.
     final ZipInputStream zis = new ZipInputStream(rawCache.openStream(zipUrl));
@@ -138,7 +165,7 @@ public class GovtFinanceProvider implements CachingDataProvider {
         try {
           String line;
           while ((line = reader.readLine()) != null) {
-            Map<String, Object> row = toRow(line, yearStr);
+            Map<String, Object> row = toRow(line, yearStr, unitCounties);
             if (row == null) {
               skipped++;
               continue;
@@ -175,8 +202,14 @@ public class GovtFinanceProvider implements CachingDataProvider {
     };
   }
 
-  /** Returns null for a record whose length matches neither layout. */
-  private static Map<String, Object> toRow(String line, String yearStr) {
+  /**
+   * Returns null for a record whose length matches neither layout. {@code unitCounties} maps a
+   * 12-character unit ID to its real FIPS state+county (5 chars), populated only for the
+   * 2012-2016 layout, where the ID's own county field is a Census sequence number rather than
+   * FIPS.
+   */
+  private static Map<String, Object> toRow(String line, String yearStr,
+      Map<String, String> unitCounties) {
     // Deciding the ID width from the record length rather than the year makes a future layout
     // change a loud skip rather than a silent two-character shift through item code, amount, year
     // and flag.
@@ -200,17 +233,69 @@ public class GovtFinanceProvider implements CachingDataProvider {
     Integer dataYear = dataYearRaw.isEmpty() ? parseIntOrNull(yearStr) : parseIntOrNull(dataYearRaw);
     String govTypeCode = line.substring(2, 3);
 
+    final String countyFips;
+    if (idWidth == 14) {
+      String unitId = line.substring(0, 12);
+      String stateCounty = unitCounties.get(unitId);
+      if (stateCounty == null) {
+        throw new IllegalStateException("govt_finance_by_unit: unit ID " + unitId
+            + " has no matching entry in the Fin_GID identifier file");
+      }
+      if (!stateCounty.startsWith(stateFips)) {
+        throw new IllegalStateException("govt_finance_by_unit: unit ID " + unitId
+            + " translates to state FIPS " + stateFips + " but its Fin_GID entry places it in "
+            + "state FIPS " + stateCounty.substring(0, 2));
+      }
+      countyFips = stateCounty.substring(2);
+    } else {
+      countyFips = line.substring(3, 6);
+    }
+
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     row.put("year", dataYear != null ? dataYear : parseIntOrNull(yearStr));
     row.put("state_fips", stateFips);
     row.put("gov_type_code", govTypeCode);
     row.put("gov_type_name", GOV_TYPE_NAMES.get(govTypeCode));
-    row.put("county_fips", line.substring(3, 6));
+    row.put("county_fips", countyFips);
     row.put("unit_id", line.substring(6, 12));
     row.put("item_code", itemCode);
     row.put("amount_thousands", amountRaw.isEmpty() ? null : parseLongOrNull(amountRaw));
     row.put("imputation_flag", flag);
     return row;
+  }
+
+  /**
+   * Reads the ZIP's {@code Fin_GID_*.txt} identifier entry, if it has one, into a map from
+   * 12-character unit ID to the unit's real FIPS state+county (5 characters). Returns an empty
+   * map for a ZIP with no such entry (2017 and later carry FIPS in the ID itself, so no lookup is
+   * needed). Reads through its own {@link ZipInputStream} rather than sharing the one the caller
+   * uses for the data entry, since the identifier entry always precedes the data entry in these
+   * ZIPs and {@code rawCache} serves the re-read from its own cached copy.
+   */
+  private static Map<String, String> readUnitCounties(RawCache rawCache, String zipUrl)
+      throws IOException {
+    Map<String, String> unitCounties = new HashMap<String, String>();
+    try (ZipInputStream zis = new ZipInputStream(rawCache.openStream(zipUrl))) {
+      ZipEntry entry;
+      while ((entry = zis.getNextEntry()) != null) {
+        String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
+        if (!name.endsWith(".txt") || !name.contains(GID_ENTRY_MARKER)) {
+          continue;
+        }
+        BufferedReader reader =
+            new BufferedReader(new InputStreamReader(zis, StandardCharsets.ISO_8859_1));
+        String line;
+        while ((line = reader.readLine()) != null) {
+          if (line.length() < GID_COUNTY_END) {
+            continue;
+          }
+          unitCounties.put(line.substring(0, 12),
+              line.substring(GID_STATE_START, GID_COUNTY_END));
+        }
+        break;
+      }
+    }
+    return unitCounties;
   }
 
   /** Positions {@code zis} at the fixed-width data entry, or returns false if the ZIP has none. */

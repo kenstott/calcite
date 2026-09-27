@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,10 +43,16 @@ class GovtFinanceProviderTest {
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> toRow(String line, String year) throws Exception {
-    Method m =
-        GovtFinanceProvider.class.getDeclaredMethod("toRow", String.class, String.class);
+    return toRow(line, year, Collections.<String, String>emptyMap());
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> toRow(String line, String year, Map<String, String> unitCounties)
+      throws Exception {
+    Method m = GovtFinanceProvider.class.getDeclaredMethod("toRow", String.class, String.class,
+        Map.class);
     m.setAccessible(true);
-    return (Map<String, Object>) m.invoke(null, line, year);
+    return (Map<String, Object>) m.invoke(null, line, year, unitCounties);
   }
 
   @Test void testMatchesUnderscoreTitleCase2012And2017Plus() throws Exception {
@@ -122,19 +129,37 @@ class GovtFinanceProviderTest {
   /**
    * Real 2013 record: 34 characters, 14-character ID (the 12-character ID plus a literal "00"
    * pad). Reading it with the 32-character offsets yields item code "001" and an unparseable
-   * amount, which is what this case pins down.
+   * amount, which is what this case pins down. {@code county_fips} comes from the Fin_GID lookup,
+   * not the ID's own county field (a Census sequence number for this layout, not FIPS).
    */
   @Test void testParsesOldLayout34Char() throws Exception {
-    Map<String, Object> row = toRow("0610010010000019T      4110002013I", "2013");
+    Map<String, Object> row = toRow("0610010010000019T      4110002013I", "2013",
+        Collections.singletonMap("061001001000", "08001"));
     assertEquals("08", row.get("state_fips"), "Census state code 06 (Colorado) is FIPS 08");
     assertEquals("1", row.get("gov_type_code"));
     assertEquals("County", row.get("gov_type_name"));
-    assertEquals("001", row.get("county_fips"));
+    assertEquals("001", row.get("county_fips"), "from the Fin_GID entry, not the ID's own county field");
     assertEquals("001000", row.get("unit_id"));
     assertEquals("19T", row.get("item_code"));
     assertEquals(411000L, row.get("amount_thousands"));
     assertEquals(2013, row.get("year"));
     assertEquals("I", row.get("imputation_flag"));
+  }
+
+  /** A 2012-2016 unit ID with no matching Fin_GID entry is a loud failure, not a silent skip. */
+  @Test void testOldLayoutThrowsWhenUnitMissingFromGid() throws Exception {
+    InvocationTargetException e = assertThrows(InvocationTargetException.class,
+        () -> toRow("0610010010000019T      4110002013I", "2013",
+            Collections.<String, String>emptyMap()));
+    assertTrue(e.getCause() instanceof IllegalStateException);
+  }
+
+  /** A Fin_GID entry whose own state disagrees with the ID's translated state is a data anomaly. */
+  @Test void testOldLayoutThrowsWhenGidStateDisagreesWithId() throws Exception {
+    InvocationTargetException e = assertThrows(InvocationTargetException.class,
+        () -> toRow("0610010010000019T      4110002013I", "2013",
+            Collections.singletonMap("061001001000", "09001")));
+    assertTrue(e.getCause() instanceof IllegalStateException);
   }
 
   /** Census alphabetical state code to FIPS for the 2012-2016 layout, spot-checked at the edges. */
@@ -144,8 +169,10 @@ class GovtFinanceProviderTest {
         {"33", "36"}, {"40", "44"}, {"44", "48"}, {"48", "53"}, {"49", "54"}, {"50", "55"},
         {"51", "56"}};
     for (String[] pair : censusToFips) {
+      String unitId = pair[0] + "0000000000";
       Map<String, Object> row =
-          toRow(pair[0] + "000000000000" + "19T      4110002013I", "2013");
+          toRow(pair[0] + "000000000000" + "19T      4110002013I", "2013",
+              Collections.singletonMap(unitId, pair[1] + "000"));
       assertEquals(pair[1], row.get("state_fips"), "Census state code " + pair[0]);
     }
   }
