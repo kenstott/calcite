@@ -1494,10 +1494,10 @@ detect_active_schemas() {
   local _pid_dir=$1
   ACTIVE_SCHEMAS=""
   [ -d "$_pid_dir" ] || return 0
-  local _pf _id _wpid _rest _schema
+  local _pf _id _id_base _wpid _rest _schema
   for _pf in "$_pid_dir"/worker-*.pid; do
     [ -e "$_pf" ] || continue
-    _id=$(basename "$_pf" .pid)                        # worker-<schema>-<mode>
+    _id=$(basename "$_pf" .pid)             # worker-<schema>-<mode>[.<run-pool.sh POOL_RUN_ID>]
     [ -f "$_pid_dir/${_id}.exit" ] && continue         # worker already finished
     _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
     { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
@@ -1507,7 +1507,10 @@ detect_active_schemas() {
     # schema "active" and stop it syncing indefinitely. Confirm identity: the launcher wrapper
     # carries its own pid-file path in argv, so require that before believing the pid.
     tr '\0' ' ' < "/proc/$_wpid/cmdline" 2>/dev/null | grep -qF "$_pf" || continue
-    _rest=${_id#worker-}                               # <schema>-<mode>
+    # Strip the POOL_RUN_ID suffix each run-pool.sh instance now appends (#741) before parsing
+    # schema/mode out of the id -- a no-op on schema/mode, which never contain ".".
+    _id_base=${_id%.*}
+    _rest=${_id_base#worker-}                          # <schema>-<mode>
     _schema=${_rest%-*}                                # strip the -<mode> suffix
     case "$_schema" in sec_*|sec) _schema=sec ;; esac  # sec_* all write sec/
     case " $ACTIVE_SCHEMAS " in *" $_schema "*) continue ;; esac      # dedup
@@ -1579,13 +1582,13 @@ _schemas_write_same_tables() {
 check_schema_year_conflict() {
   local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4 _new_mode=${5:-}
   [ -d "$_pid_dir" ] || return 0
-  local _pf _id _wpid _rest _other_schema _other_mode _o_start _o_end
+  local _pf _id _id_base _wpid _rest _other_schema _other_mode _o_start _o_end
   for _pf in "$_pid_dir"/worker-*.pid; do
     [ -e "$_pf" ] || continue
     # Pure parameter expansion, no fork: this loop visits every pid file ever written (hundreds),
     # almost all of them finished workers, on every admission check.
     _id="${_pf##*/}"
-    _id="${_id%.pid}"
+    _id="${_id%.pid}"                                 # worker-<schema>-<mode>[.<run-pool.sh POOL_RUN_ID>]
     [ -f "$_pid_dir/${_id}.exit" ] && continue        # worker already finished
     _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
     { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
@@ -1596,7 +1599,10 @@ check_schema_year_conflict() {
     else
       continue # can't confirm identity and not marked foreground -> stale/reused pid
     fi
-    _rest=${_id#worker-}                              # <schema>-<mode>
+    # Strip the POOL_RUN_ID suffix each run-pool.sh instance now appends (#741) before parsing
+    # schema/mode out of the id -- a no-op on schema/mode, which never contain ".".
+    _id_base=${_id%.*}
+    _rest=${_id_base#worker-}                         # <schema>-<mode>
     _other_schema="${_rest%%-*}"                       # up to first hyphen
     _other_mode="${_rest#*-}"                          # after first hyphen (may itself have hyphens)
     read -r _o_start _o_end <<< "$(_year_range_from_mode "$_other_mode")"

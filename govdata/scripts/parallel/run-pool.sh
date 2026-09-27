@@ -408,6 +408,15 @@ export GOVDATA_JAR="$POOL_JAR"
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
+# Suffixes every pid/exit file this instance writes. Two run-pool.sh instances can compute the
+# identical worker id (same schema+mode) once the first one's HOLDING guard clears, and without
+# this a second instance's launch_worker() would rm -f / overwrite the first instance's own
+# still-unread pid/exit files for that id -- losing a just-written exit code out from under the
+# first instance's own monitor loop and producing a false FAILED report for a worker that had
+# actually already succeeded (#741). check_schema_year_conflict/detect_active_schemas still find
+# every instance's files via the shared "worker-*.pid" glob; they strip this suffix themselves.
+POOL_RUN_ID=$$
+
 # All cleanup output goes to /dev/tty (direct terminal) AND the pool log.
 # This is necessary because Ctrl+C kills tee (which is in the same foreground
 # process group as run-pool.sh). After tee dies, stdout is a broken pipe; any
@@ -488,7 +497,7 @@ cleanup() {
     # but a killed wrapper never reaches that line — so without this its .pid file outlives
     # the run with no .exit beside it, and detect_active_schemas treats every such orphan as
     # a candidate live writer forever. 143 = 128 + SIGTERM.
-    echo 143 > "$PID_DIR/${id}.exit"
+    echo 143 > "${active_exit_files[$_i]}"
   done
   _cleanup_log "=== All workers terminated ==="
   exit 130
@@ -570,6 +579,7 @@ active_heap_mb=()       # Max heap in MB for each active worker
 active_timeout_secs=()  # Per-worker idle timeout in seconds
 active_last_line=()     # Last real (INFO/WARN/ERROR) log line seen per worker — content, not GC noise
 active_last_time=()     # Wall-clock time that content last changed, per worker
+active_exit_files=()    # This instance's own exit-file path per worker (see POOL_RUN_ID above)
 committed_mb=0          # Sum of max heaps of all active workers
 
 # Counters
@@ -626,8 +636,8 @@ launch_worker() {
   local launch_ts
   launch_ts=$(date +%Y%m%d_%H%M%S)
   local log_file="$log_dir/launch_${launch_ts}.log"
-  local pid_file="$PID_DIR/${id}.pid"
-  local exit_file="$PID_DIR/${id}.exit"
+  local pid_file="$PID_DIR/${id}.${POOL_RUN_ID}.pid"
+  local exit_file="$PID_DIR/${id}.${POOL_RUN_ID}.exit"
   mkdir -p "$log_dir"
   rm -f "$pid_file" "$exit_file"
   # Point launch.log at the current run so monitoring tools always read the
@@ -683,6 +693,7 @@ launch_worker() {
   active_timeout_secs+=("$timeout_secs")
   active_last_line+=("")
   active_last_time+=("$(date +%s)")
+  active_exit_files+=("$exit_file")
   committed_mb=$((committed_mb + foot_mb))
 
   log_info "Launched $id (PID $pid, heap ${heap_mb}MB +${WORKER_NATIVE_MB}MB native = ${foot_mb}MB, timeout ${timeout_mins}min) — committed: ${committed_mb}MB / ${budget_mb}MB budget"
@@ -867,7 +878,7 @@ remove_active() {
   if [ "$committed_mb" -lt 0 ]; then committed_mb=0; fi
 
   local new_pids=() new_labels=() new_starts=() new_slots=() new_heaps=() new_timeouts=()
-  local new_lastlines=() new_lasttimes=()
+  local new_lastlines=() new_lasttimes=() new_exitfiles=()
   for i in "${!active_pids[@]}"; do
     if [ "$i" -ne "$idx" ]; then
       new_pids+=("${active_pids[$i]}")
@@ -878,6 +889,7 @@ remove_active() {
       new_timeouts+=("${active_timeout_secs[$i]}")
       new_lastlines+=("${active_last_line[$i]}")
       new_lasttimes+=("${active_last_time[$i]}")
+      new_exitfiles+=("${active_exit_files[$i]}")
     fi
   done
   active_pids=("${new_pids[@]+"${new_pids[@]}"}")
@@ -888,6 +900,7 @@ remove_active() {
   active_timeout_secs=("${new_timeouts[@]+"${new_timeouts[@]}"}")
   active_last_line=("${new_lastlines[@]+"${new_lastlines[@]}"}")
   active_last_time=("${new_lasttimes[@]+"${new_lasttimes[@]}"}")
+  active_exit_files=("${new_exitfiles[@]+"${new_exitfiles[@]}"}")
 }
 
 # Kill a stuck worker and re-queue its slot
@@ -923,6 +936,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     pid="${active_pids[$i]}"
     id="${active_labels[$i]}"
     start="${active_starts[$i]}"
+    exit_file="${active_exit_files[$i]}"
 
     # A worker is finished once its wrapper writes the .exit file (its last action) — that is
     # authoritative. Do NOT rely on `kill -0 $pid` alone: the tracked pid is the wrapper's $$,
@@ -930,13 +944,16 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     # another process. A reused pid keeps `kill -0` succeeding, so the pool would show a long-since
     # finished worker as "running" forever (and never terminate after all schemas complete). The
     # .exit file is removed before each launch, so its presence always reflects the current run.
-    if [ -f "$PID_DIR/${id}.exit" ] || ! kill -0 "$pid" 2>/dev/null; then
+    # exit_file is this instance's own POOL_RUN_ID-suffixed path (see launch_worker) -- never the
+    # bare "$PID_DIR/${id}.exit" name, which a second run-pool.sh instance computing the same
+    # worker id could rm -f/overwrite out from under this loop before it gets read (#741).
+    if [ -f "$exit_file" ] || ! kill -0 "$pid" 2>/dev/null; then
       # The wrapper's last two actions are `echo $? > .exit` then exiting, so a poll that lands
       # between them sees the wrapper gone but its .exit file not yet visible on disk. Give that
       # write a bounded chance to land before treating a clean finish as a crash.
-      if [ ! -f "$PID_DIR/${id}.exit" ] && ! kill -0 "$pid" 2>/dev/null; then
+      if [ ! -f "$exit_file" ] && ! kill -0 "$pid" 2>/dev/null; then
         _exit_grace=0
-        while [ "$_exit_grace" -lt 10 ] && [ ! -f "$PID_DIR/${id}.exit" ]; do
+        while [ "$_exit_grace" -lt 10 ] && [ ! -f "$exit_file" ]; do
           sleep 0.2
           ((_exit_grace++)) || true
         done
@@ -950,7 +967,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       # child of this shell when setsid forked internally.
       # NOTE: no 'local' here — 'local' is invalid outside a function and causes
       # bash to exit under set -e, silently killing the pool.
-      exit_code=$(cat "$PID_DIR/${id}.exit" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
+      exit_code=$(cat "$exit_file" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
       [[ "$exit_code" =~ ^[0-9]+$ ]] || exit_code=1
 
       # No .exit file after the grace period means the session-leader wrapper itself died (e.g.
@@ -960,7 +977,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       # already credits that footprint back via remove_active below. _kill_worker_session is a
       # no-op (logs "no processes found") when the session really is empty, so this is safe to
       # call unconditionally in this branch.
-      if [ ! -f "$PID_DIR/${id}.exit" ]; then
+      if [ ! -f "$exit_file" ]; then
         _cleanup_log "$id: wrapper $pid gone with no .exit file — reaping any orphaned session members"
         _kill_worker_session "$pid"
       fi
