@@ -63,6 +63,21 @@ public class DuckDBJdbcSchemaFactory {
   private static final Map<String, SharedDatabaseInfo> DATABASE_POOL = new ConcurrentHashMap<>();
 
   /**
+   * One lock per catalog path, serializing every {@link #createInternal} call against
+   * {@link #DATABASE_POOL} for that path — both the initial check-and-create and every
+   * subsequent {@link #createSchemaInSharedDatabase} reuse. Without this, two schemas racing
+   * {@code DATABASE_POOL.get(catalogPath)} at connection open (e.g. a multi-schema model whose
+   * custom schemas Calcite's {@code ModelHandler} does not guarantee are visited strictly one
+   * at a time) can both see no entry and each open their own setup {@link Connection} to the
+   * same catalog file, or one thread's schema/view DDL can land on the shared connection while
+   * another thread is still mid-statement on it — DuckDB's JDBC connection is not safe for
+   * concurrent statement execution, and the loser fails with "Invalid Input Error: Attempting
+   * to execute an unsuccessful or closed pending query result", aborting that schema (and, for
+   * a custom schema factory, the whole enclosing connection) non-deterministically.
+   */
+  private static final Map<String, Object> CATALOG_LOCKS = new ConcurrentHashMap<>();
+
+  /**
    * Max {@code {name}_N.duckdb} fallbacks to try when another OS process holds DuckDB's
    * single-writer file lock on a persistent catalog. DuckDB locks a database file to one process,
    * so a second reader process would otherwise fail to open the shared catalog; it instead opens
@@ -391,6 +406,13 @@ public class DuckDBJdbcSchemaFactory {
       // numbered copy, so every schema in THIS process shares the one connection.
       final String baseCatalogPath = catalogPath;
 
+      // Serialize the whole check-create-register sequence per catalog path (see CATALOG_LOCKS'
+      // javadoc): a lock per ephemeral (catalogPath == null) call would never contend with
+      // anything, so give each of those its own throwaway object instead of sharing one.
+      Object catalogLock = catalogPath != null
+          ? CATALOG_LOCKS.computeIfAbsent(catalogPath, k -> new Object())
+          : new Object();
+      synchronized (catalogLock) {
       if (catalogPath != null) {
         // Check if this database is already in the connection pool
         SharedDatabaseInfo sharedInfo = DATABASE_POOL.get(catalogPath);
@@ -776,6 +798,7 @@ public class DuckDBJdbcSchemaFactory {
       }
 
       return schema;
+      }
 
     } catch (Exception e) {
       throw new RuntimeException("Failed to create DuckDB JDBC schema", e);
