@@ -2774,6 +2774,119 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  # ==========================================================================
+  # FSA PSLF DISCHARGE SUMMARY — Federal Student Aid's PSLF Combined Report
+  # Single fixed-URL workbook, replaced wholesale each ETL run; no year dimension.
+  # ==========================================================================
+  - name: fsa_pslf_discharge_summary
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=fsa_pslf_discharge_summary/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Federal Student Aid's own PSLF (Public Service Loan Forgiveness) Combined Report —
+      studentaid.gov/data-center/student/loan-forgiveness/pslf-data, the same file FSA calls
+      "PSLF Combined Report" (pslf-combined-report.xlsx). Sourced to close the gap #721
+      documents: no table in edu or fiscal covered any federal student loan discharge or
+      forgiveness figures, leaving claims like a 2026-09-24 lawsuit's $4.6B disputed-discharge
+      allegation with no DOE-published number to cross-check against. This table carries
+      FSA's own cumulative PSLF/TEPSLF/Limited-Waiver discharge totals (unique borrowers
+      processed, total and average balance discharged per program) plus PSLF application
+      throughput and portfolio-composition counts from the same combined workbook — it does
+      NOT cover other discharge programs (borrower defense, closed school, total-and-permanent-
+      disability) or credit-bureau-side delinquency reporting, neither of which FSA publishes
+      in a comparably structured public file (credit-bureau reporting in particular is very
+      unlikely to ever be publicly available — it lives inside CRA-borrower-servicer channels
+      the government does not operate).
+
+      Long/key-value grain: one row per (section, program, metric_name), not one row per
+      borrower — FSA does not publish borrower-level discharge data. `section` is one of
+      'application_status' (application throughput, forms + borrowers), 'cumulative_portfolio'
+      (PSLF-eligible borrower/balance counts and qualifying-payment-count buckets), or
+      'discharges' (the actual processed-discharge totals, the table's core answer to #721).
+      `program` is 'PSLF' for the first two sections (they don't break out by program) and one
+      of 'Combined' / 'PSLF' / 'TEPSLF' / 'Limited Waiver' for 'discharges'. `metric_name` is a
+      normalized snake_case identifier for FSA's own row label (e.g. "Total Balance Discharged"
+      -> total_balance_discharged); the workbook's original labels are FSA's, not reworded here.
+      `metric_value` is always expressed in the base unit named by `metric_unit` — dollar
+      amounts are converted from the source's "$X billion"-style strings to whole USD, never
+      left as billions.
+
+      dataset_type: snapshot — the whole table is replaced on every successful fetch (no year
+      or period dimension; freshness: etag skips a re-fetch when FSA hasn't republished).
+      `report_as_of_date` (last day of the covering month, parsed from the workbook's own
+      "Cumulative Data as of Mon-end YYYY" label) is the only signal of which period a given
+      row set covers — every row in one Iceberg snapshot shares the same value, and it advances
+      only when FSA republishes with a newer month.
+
+    columns:
+      - name: report_as_of_date
+        type: date
+        nullable: false
+        comment: Last day of the report's covering month, parsed from FSA's own "Cumulative Data as of Mon-end YYYY" label — shared by every row in one snapshot
+      - name: section
+        type: string
+        nullable: false
+        comment: One of 'application_status', 'cumulative_portfolio', 'discharges' — which sheet of the combined report this row came from
+      - name: program
+        type: string
+        nullable: false
+        comment: "'PSLF' for application_status/cumulative_portfolio (not broken out by program); one of 'Combined', 'PSLF', 'TEPSLF', 'Limited Waiver' for discharges"
+      - name: metric_name
+        type: string
+        nullable: false
+        comment: Normalized snake_case identifier for FSA's own row label (see table comment for the section-by-section mapping)
+      - name: metric_value
+        type: double
+        nullable: true
+        comment: Value expressed in metric_unit's base unit (dollars converted from the source's billions-string to whole USD)
+      - name: metric_unit
+        type: string
+        nullable: false
+        comment: One of 'forms', 'borrowers', 'usd'
+
+    source:
+      type: http
+      url: "https://studentaid.gov/sites/default/files/fsawg/datacenter/library/pslf-combined-report.xlsx"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      response:
+        format: TEXT   # FsaPslfDischargeSummaryTransformer re-downloads the XLSX and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.FsaPslfDischargeSummaryTransformer"
+
+    dimensions:
+      type:
+        - fsa_pslf_discharge_summary
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fsa_pslf_discharge_summary/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/edu"
+        tableName: fsa_pslf_discharge_summary
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # Views
 # ============================================================================

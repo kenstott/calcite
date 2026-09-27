@@ -125,7 +125,8 @@ run_ungrouped_edu_tables() {
     "ipeds|ipeds_institutions,ipeds_completions,ipeds_financials,ipeds_tuition" \
     "libraries|library_outlets" \
     "f33|f33_district_finance" \
-    "scorecard|college_scorecard,college_scorecard_programs")" || return 1
+    "scorecard|college_scorecard,college_scorecard_programs" \
+    "fsa|fsa_pslf_discharge_summary")" || return 1
 
   [ -n "$unassigned" ] || return 0
   IFS=',' read -ra _un <<< "$unassigned"
@@ -173,6 +174,12 @@ run_historical_cadence() {
     log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
   fi
 
+  # fsa_pslf_discharge_summary has no year dimension (dataset_type: snapshot, a single
+  # fixed-URL workbook re-fetched wholesale each run) — start/end are unused by this table
+  # but run_edu_model always takes them.
+  run_edu_model "edu-initial-fsa" \
+    '"fsa_pslf_discharge_summary"' "$START" "$END"
+
   run_ungrouped_edu_tables "$START" "$END"
 }
 
@@ -216,6 +223,14 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "f33_district_finance"; then
     run_edu_model "edu-annual-f33" \
       '"f33_district_finance"' "$START"
+  fi
+
+  # fsa_pslf_discharge_summary: no releaseWindow (freshness: etag skips the re-fetch itself
+  # when FSA hasn't republished) — table_in_window returns true unconditionally for a table
+  # with no releaseWindow declared, so this runs every daily cadence, cheaply.
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "fsa_pslf_discharge_summary"; then
+    run_edu_model "edu-annual-fsa" \
+      '"fsa_pslf_discharge_summary"' "$START"
   fi
 }
 

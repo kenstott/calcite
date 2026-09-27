@@ -49,6 +49,7 @@ FROM (
   UNION ALL SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1)
 );
 
 -- ============================================================
@@ -73,7 +74,7 @@ INSERT INTO dq_results
 SELECT 'edu', tbl, 'row_count',
   CASE
     WHEN n >= thresh                     THEN 'pass'
-    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions') THEN 'fail'
+    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions','fsa_pslf_discharge_summary') THEN 'fail'
     ELSE 'warn'
   END,
   CAST(n AS VARCHAR), CAST(thresh AS VARCHAR), NULL
@@ -92,6 +93,7 @@ FROM (
   UNION ALL SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true)  -- dqRowLimit=50000/year
   UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
   UNION ALL SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true)  -- dqRowLimit=2000/(year,grade)
+  UNION ALL SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)  -- ~44 rows verified live 2026-09-27
 );
 
 -- ============================================================
@@ -234,6 +236,14 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/distri
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('type', 'year', 'grade');
 
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_pslf_discharge_summary', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
 -- ============================================================
 -- T5: ALL-SAME-VALUE COLUMNS
 -- approx_unique <= 1 and not already 100% null = every non-null row has same value.
@@ -354,6 +364,16 @@ SELECT 'edu', 'district_assessments', 'all_same_value',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type', 'year', 'grade');
+
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_pslf_discharge_summary', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  -- report_as_of_date is constant by design: every row in one snapshot shares the same
+  -- covering-month date (see table comment in edu-schema.yaml)
+  AND column_name NOT IN ('type', 'report_as_of_date');
 
 -- ============================================================
 -- T6: BUSINESS NON-NULLS
@@ -692,6 +712,43 @@ FROM (
   GROUP BY leaid, year, grade HAVING COUNT(*) > 1
 );
 
+-- fsa_pslf_discharge_summary PK: section, program, metric_name (report_as_of_date and
+-- metric_unit are also declared nullable:false in edu-schema.yaml, folded into this check)
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_pslf_discharge_summary', 'pk_nulls',
+  CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(total AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN n1 > 0 THEN 'report_as_of_date:' || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'section:'           || n2 ELSE NULL END,
+    CASE WHEN n3 > 0 THEN 'program:'           || n3 ELSE NULL END,
+    CASE WHEN n4 > 0 THEN 'metric_name:'       || n4 ELSE NULL END,
+    CASE WHEN n5 > 0 THEN 'metric_unit:'       || n5 ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN report_as_of_date IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN section           IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN program           IS NULL THEN 1 ELSE 0 END) AS n3,
+    SUM(CASE WHEN metric_name       IS NULL THEN 1 ELSE 0 END) AS n4,
+    SUM(CASE WHEN metric_unit       IS NULL THEN 1 ELSE 0 END) AS n5,
+    SUM(CASE WHEN report_as_of_date IS NULL OR section IS NULL OR program IS NULL
+                                  OR metric_name IS NULL OR metric_unit IS NULL
+             THEN 1 ELSE 0 END) AS total
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)
+);
+
+-- fsa_pslf_discharge_summary: (section, program, metric_name) must be unique
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_pslf_discharge_summary', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT section, program, metric_name
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)
+  GROUP BY section, program, metric_name HAVING COUNT(*) > 1
+);
+
 -- ============================================================
 -- T7: EXPECTED VALUE DISTRIBUTIONS
 -- Dimension columns must fall within known enumerated sets.
@@ -981,6 +1038,30 @@ FROM (
     THEN 1 ELSE 0 END
   ) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
+);
+
+-- fsa_pslf_discharge_summary: section must be one of the three combined-report sheets
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_pslf_discharge_summary', 'section_values',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0',
+  'distinct sections: ' || vals
+FROM (
+  SELECT SUM(CASE WHEN section NOT IN ('application_status','cumulative_portfolio','discharges')
+                   THEN 1 ELSE 0 END) AS bad,
+         STRING_AGG(DISTINCT section, ', ' ORDER BY section) AS vals
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)
+);
+
+-- fsa_pslf_discharge_summary: no negative discharge/application counts or dollar amounts
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_pslf_discharge_summary', 'negative_metric_value',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(CASE WHEN metric_value < 0 THEN 1 ELSE 0 END) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)
+  WHERE metric_value IS NOT NULL
 );
 
 -- ============================================================
