@@ -561,19 +561,6 @@ SELECT 'fiscal', 'usaspending_contract_recipients_by_district', 'T8_rank_domain'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contract_recipients_by_district', allow_moved_paths := true)
       WHERE rank < 1 OR rank > 100);
 
--- The contracts-only ranking must never exceed the all-award-types total: for every
--- district-year, the rank-1 contract recipient's obligations are bounded by that
--- district's obligated_amount_contracts in usaspending_by_district.
-INSERT INTO dq_results
-SELECT 'fiscal', 'usaspending_contract_recipients_by_district', 'T9_bounded_by_district_contracts',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
-  'Rank-1 rows exceeding the district''s obligated_amount_contracts'
-FROM (SELECT COUNT(*) AS n
-      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contract_recipients_by_district', allow_moved_paths := true) r
-      JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_district', allow_moved_paths := true) d
-        ON d.cd_fips = r.cd_fips AND d.year = r.year
-      WHERE r.rank = 1 AND r.obligated_amount > d.obligated_amount_contracts * 1.001);
-
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: entitlement_spending_by_state (USAspending, CFDA-filtered; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────

@@ -3284,7 +3284,12 @@ partitionedTables:
       recipient_duns is the endpoint's "code" field (9-digit legacy DUNS-shaped
       identifier); recipient_uei is USAspending's own UEI when known; recipient_id is
       USAspending's internal recipient hash. cd_fips matches
-      geo.congressional_districts.cd_fips exactly. YEAR SCOPE: defaults to
+      geo.congressional_districts.cd_fips exactly. A district's obligated_amount here
+      is not bounded by usaspending_by_district.obligated_amount_contracts for that
+      district/year: the district total nets every recipient's transactions,
+      including large downward de-obligations from recipients outside this table's
+      top 100, while each row here is one recipient's own gross positive sum. YEAR
+      SCOPE: defaults to
       the 2 most recent complete fiscal years (usaspending_recipient_district_year_range);
       one API call per (year, district), so GOVDATA_START_YEAR widens it at ~8 minutes
       per added year. Joins to geo.congressional_districts via cd_fips. Source:
