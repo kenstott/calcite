@@ -931,6 +931,17 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     # finished worker as "running" forever (and never terminate after all schemas complete). The
     # .exit file is removed before each launch, so its presence always reflects the current run.
     if [ -f "$PID_DIR/${id}.exit" ] || ! kill -0 "$pid" 2>/dev/null; then
+      # The wrapper's last two actions are `echo $? > .exit` then exiting, so a poll that lands
+      # between them sees the wrapper gone but its .exit file not yet visible on disk. Give that
+      # write a bounded chance to land before treating a clean finish as a crash.
+      if [ ! -f "$PID_DIR/${id}.exit" ] && ! kill -0 "$pid" 2>/dev/null; then
+        _exit_grace=0
+        while [ "$_exit_grace" -lt 10 ] && [ ! -f "$PID_DIR/${id}.exit" ]; do
+          sleep 0.2
+          ((_exit_grace++)) || true
+        done
+      fi
+
       now=$(date +%s)
       elapsed=$(( now - start ))
       mins=$((elapsed / 60))
@@ -942,9 +953,9 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       exit_code=$(cat "$PID_DIR/${id}.exit" 2>/dev/null | head -1 | tr -d '[:space:]' || true)
       [[ "$exit_code" =~ ^[0-9]+$ ]] || exit_code=1
 
-      # No .exit file means the session-leader wrapper itself died (e.g. OOM-killed) before it
-      # could write one — `kill -0 $pid` failing only proves the leader is gone, not that its
-      # session is empty. setsid's nohup-bash-worker.sh-EtlRunner chain reparents to init and
+      # No .exit file after the grace period means the session-leader wrapper itself died (e.g.
+      # OOM-killed) before it could write one — `kill -0 $pid` failing only proves the leader is
+      # gone, not that its session is empty. setsid's nohup-bash-worker.sh-EtlRunner chain reparents to init and
       # keeps running, unsupervised and still holding its full memory footprint, while this loop
       # already credits that footprint back via remove_active below. _kill_worker_session is a
       # no-op (logs "no processes found") when the session really is empty, so this is safe to
