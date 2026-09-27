@@ -305,9 +305,17 @@ partitionedTables:
       the in-season forecast vintages NASS also publishes for production/yield
       (reference_period_desc 'YEAR - AUG/SEP/OCT/NOV FORECAST') so this table carries only
       each year's final published annual estimate for those measures, not every revision.
-      Joins to geo.counties via the derived county_fips column and to geo.states via
-      state_fips_code; also joinable to disasters drought/storm tables by county+year for
-      yield-impact analysis.
+      agg_level_desc carries COUNTY and STATE rows for the same commodity/year side by
+      side, each independently summing to the true total (COUNTY rows for a state already
+      sum to that state's STATE row, including 'OTHER (COMBINED) COUNTIES' placeholder
+      rows — one per asd_code — for counties NASS suppresses from individual disclosure);
+      filter to a single agg_level_desc before aggregating, since summing across levels
+      multiplies the total. PRODUCTION additionally carries a parallel unit_desc='$' series
+      (crop value) alongside the physical unit_desc='BU' series for the same key; filter
+      unit_desc to one before summing — combining agg_level_desc and unit_desc unfiltered
+      inflates a national PRODUCTION total roughly 5x. Joins to geo.counties via the
+      derived county_fips column and to geo.states via state_fips_code; also joinable to
+      disasters drought/storm tables by county+year for yield-impact analysis.
 
     dimensions:
       type:
