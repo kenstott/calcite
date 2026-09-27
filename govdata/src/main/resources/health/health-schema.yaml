@@ -6936,18 +6936,34 @@ views:
       mortality_brfss_by_state.
     sql: >
       SELECT
-        COALESCE(m.year,  b.year)  AS year,
-        COALESCE(m.state, b.state) AS state,
-        SUM(TRY_CAST(m.deaths AS BIGINT))       AS total_deaths,
-        AVG(TRY_CAST(m.age_adjusted_rate AS DOUBLE)) AS avg_age_adjusted_rate,
-        COUNT(DISTINCT m.cause_name)             AS distinct_causes,
-        COUNT(DISTINCT b.question)               AS brfss_question_count,
-        AVG(TRY_CAST(b.pct AS DOUBLE))           AS avg_risk_factor_pct
-      FROM cdc_mortality m
-      FULL OUTER JOIN cdc_brfss b
-        ON m.state = b.state AND m.year = b.year
-      WHERE (m.source_type = 'annual' OR m.source_type IS NULL)
-      GROUP BY COALESCE(m.year, b.year), COALESCE(m.state, b.state)
+        COALESCE(m.year, b.year)          AS year,
+        COALESCE(gs.state_abbr, b.state)  AS state,
+        m.total_deaths,
+        m.avg_age_adjusted_rate,
+        m.distinct_causes,
+        b.brfss_question_count,
+        b.avg_risk_factor_pct
+      FROM (
+        SELECT
+          state,
+          year,
+          SUM(TRY_CAST(deaths AS BIGINT))              AS total_deaths,
+          AVG(TRY_CAST(age_adjusted_rate AS DOUBLE))   AS avg_age_adjusted_rate,
+          COUNT(DISTINCT cause_name)                   AS distinct_causes
+        FROM cdc_mortality
+        WHERE source_type = 'annual'
+        GROUP BY state, year
+      ) m
+      LEFT JOIN "geo"."state_ref" gs ON m.state = gs.state_name
+      FULL OUTER JOIN (
+        SELECT
+          state,
+          year,
+          COUNT(DISTINCT question)         AS brfss_question_count,
+          AVG(TRY_CAST(pct AS DOUBLE))     AS avg_risk_factor_pct
+        FROM cdc_brfss
+        GROUP BY state, year
+      ) b ON gs.state_abbr = b.state AND m.year = b.year
 
   - name: hospital_quality_by_state
     comment: >
@@ -7061,9 +7077,9 @@ views:
         b.break_out,
         b.break_out_category
       FROM cdc_mortality m
+      LEFT JOIN "geo"."state_ref" gs ON m.state = gs.state_name
       LEFT JOIN cdc_brfss b
-        ON m.state = b.state AND m.year = b.year
-      LEFT JOIN "geo"."states" gs ON m.state = gs.state_abbr
+        ON gs.state_abbr = b.state AND m.year = b.year
       WHERE m.source_type = 'annual'
 
   - name: drug_manufacturer_span
@@ -7159,19 +7175,34 @@ views:
       for a version that also retains BRFSS-only rows see public_health_indicators.
     sql: >
       SELECT
-        m.state                                          AS state_abbr,
+        gs.state_abbr,
         m.year,
         gs.state_name,
         gs.state_fips,
-        SUM(TRY_CAST(m.deaths AS BIGINT))                AS total_deaths,
-        AVG(TRY_CAST(m.age_adjusted_rate AS DOUBLE))     AS avg_mortality_rate,
-        COUNT(DISTINCT b.question)                       AS brfss_questions_tracked,
-        AVG(TRY_CAST(b.pct AS DOUBLE))                   AS avg_risk_factor_pct
-      FROM cdc_mortality m
-      LEFT JOIN "geo"."states" gs ON m.state = gs.state_abbr
-      LEFT JOIN cdc_brfss b       ON m.state = b.state AND m.year = b.year
-      WHERE m.source_type = 'annual'
-      GROUP BY m.state, m.year, gs.state_name, gs.state_fips
+        m.total_deaths,
+        m.avg_mortality_rate,
+        b.brfss_questions_tracked,
+        b.avg_risk_factor_pct
+      FROM (
+        SELECT
+          state,
+          year,
+          SUM(TRY_CAST(deaths AS BIGINT))              AS total_deaths,
+          AVG(TRY_CAST(age_adjusted_rate AS DOUBLE))   AS avg_mortality_rate
+        FROM cdc_mortality
+        WHERE source_type = 'annual'
+        GROUP BY state, year
+      ) m
+      LEFT JOIN "geo"."state_ref" gs ON m.state = gs.state_name
+      LEFT JOIN (
+        SELECT
+          state,
+          year,
+          COUNT(DISTINCT question)         AS brfss_questions_tracked,
+          AVG(TRY_CAST(pct AS DOUBLE))     AS avg_risk_factor_pct
+        FROM cdc_brfss
+        GROUP BY state, year
+      ) b ON gs.state_abbr = b.state AND m.year = b.year
 
   - name: weather_health_correlation
     comment: >
@@ -7180,22 +7211,30 @@ views:
       One row per state+year — enables climate-health correlation analysis.
     sql: >
       SELECT
-        m.state                                                                          AS state_abbr,
+        gs.state_abbr,
         m.year,
         gs.state_name,
         gs.state_fips,
-        SUM(TRY_CAST(m.deaths AS BIGINT))                                                AS total_deaths,
-        AVG(TRY_CAST(m.age_adjusted_rate AS DOUBLE))                                     AS avg_mortality_rate,
+        m.total_deaths,
+        m.avg_mortality_rate,
         AVG(CASE WHEN w.datatype = 'TAVG' THEN TRY_CAST(w.value AS DOUBLE) END)          AS avg_temp_c,
         MIN(CASE WHEN w.datatype = 'TMIN' THEN TRY_CAST(w.value AS DOUBLE) END)          AS min_monthly_temp_c,
         MAX(CASE WHEN w.datatype = 'TMAX' THEN TRY_CAST(w.value AS DOUBLE) END)          AS max_monthly_temp_c,
         SUM(CASE WHEN w.datatype = 'PRCP' THEN TRY_CAST(w.value AS DOUBLE) END)          AS total_precip_mm
-      FROM cdc_mortality m
-      LEFT JOIN "geo"."states" gs ON m.state = gs.state_abbr
+      FROM (
+        SELECT
+          state,
+          year,
+          SUM(TRY_CAST(deaths AS BIGINT))              AS total_deaths,
+          AVG(TRY_CAST(age_adjusted_rate AS DOUBLE))   AS avg_mortality_rate
+        FROM cdc_mortality
+        WHERE source_type = 'annual'
+        GROUP BY state, year
+      ) m
+      LEFT JOIN "geo"."state_ref" gs ON m.state = gs.state_name
       LEFT JOIN "weather"."cdo_monthly_summaries" w
         ON gs.state_fips = w.state_fips AND m.year = w.year
-      WHERE m.source_type = 'annual'
-      GROUP BY m.state, m.year, gs.state_name, gs.state_fips
+      GROUP BY gs.state_abbr, m.year, gs.state_name, gs.state_fips, m.total_deaths, m.avg_mortality_rate
 
 # ============================================================================
 # CONSTRAINTS
