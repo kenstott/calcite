@@ -10737,6 +10737,67 @@ LogicalProject(EXPR$0=[*($0, 2)], SS0=[$1])
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testProjectAggregateMergeSum0WithMultipleGroupKeys">
+    <Resource name="sql">
+      <![CDATA[select s.deptno, s.name, coalesce(sum(e.sal), 0) as total
+from (values (10, 'Sales'), (20, 'Mktg'), (30, 'HR')) as s(deptno, name)
+left join (values (10, cast(100 as integer)), (10, cast(200 as integer)))
+       as e(deptno, sal)
+  on e.deptno = s.deptno
+group by s.deptno, s.name]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], NAME=[$1], TOTAL=[CASE(IS NOT NULL($2), CAST($2):INTEGER NOT NULL, 0)])
+  LogicalAggregate(group=[{0, 1}], agg#0=[SUM($2)])
+    LogicalProject(DEPTNO=[$0], NAME=[$1], SAL=[$3])
+      LogicalJoin(condition=[=($2, $0)], joinType=[left])
+        LogicalValues(tuples=[[{ 10, 'Sales' }, { 20, 'Mktg ' }, { 30, 'HR   ' }]])
+        LogicalValues(tuples=[[{ 10, 100 }, { 10, 200 }]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], NAME=[$1], TOTAL=[$2])
+  LogicalAggregate(group=[{0, 1}], agg#0=[$SUM0($2)])
+    LogicalProject(DEPTNO=[$0], NAME=[$1], SAL=[$3])
+      LogicalJoin(condition=[=($2, $0)], joinType=[left])
+        LogicalValues(tuples=[[{ 10, 'Sales' }, { 20, 'Mktg ' }, { 30, 'HR   ' }]])
+        LogicalValues(tuples=[[{ 10, 100 }, { 10, 200 }]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testProjectAggregateMergeSum0WithMultipleGroupKeysAndOtherAgg">
+    <Resource name="sql">
+      <![CDATA[select s.deptno, s.name, count(*) as cnt,
+    coalesce(sum(e.sal), 0) as total
+from (values (10, 'Sales'), (20, 'Mktg'), (30, 'HR')) as s(deptno, name)
+left join (values (10, cast(100 as integer)), (10, cast(200 as integer)))
+       as e(deptno, sal)
+  on e.deptno = s.deptno
+group by s.deptno, s.name]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], NAME=[$1], CNT=[$2], TOTAL=[CASE(IS NOT NULL($3), CAST($3):INTEGER NOT NULL, 0)])
+  LogicalAggregate(group=[{0, 1}], CNT=[COUNT()], agg#1=[SUM($2)])
+    LogicalProject(DEPTNO=[$0], NAME=[$1], SAL=[$3])
+      LogicalJoin(condition=[=($2, $0)], joinType=[left])
+        LogicalValues(tuples=[[{ 10, 'Sales' }, { 20, 'Mktg ' }, { 30, 'HR   ' }]])
+        LogicalValues(tuples=[[{ 10, 100 }, { 10, 200 }]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], NAME=[$1], CNT=[$2], TOTAL=[$3])
+  LogicalAggregate(group=[{0, 1}], CNT=[COUNT()], agg#1=[$SUM0($2)])
+    LogicalProject(DEPTNO=[$0], NAME=[$1], SAL=[$3])
+      LogicalJoin(condition=[=($2, $0)], joinType=[left])
+        LogicalValues(tuples=[[{ 10, 'Sales' }, { 20, 'Mktg ' }, { 30, 'HR   ' }]])
+        LogicalValues(tuples=[[{ 10, 100 }, { 10, 200 }]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testProjectCalcMergeRule">
     <Resource name="sql">
       <![CDATA[select exists (select deptno from sales.emp)

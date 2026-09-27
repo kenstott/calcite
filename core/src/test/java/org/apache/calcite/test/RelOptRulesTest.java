@@ -7473,6 +7473,38 @@ class RelOptRulesTest extends RelOptTestBase {
         .check();
   }
 
+  /** Test case for
+   * <a href="https://github.com/kenstott/govdata-ops/issues/439">[GOVDATA-OPS-439]
+   * COALESCE(SUM(x), 0) over a nullable (LEFT JOIN) column, grouped by more
+   * than one key, throws "type mismatch" because the replacement
+   * {@code SUM0} reference was not offset by the group count</a>. */
+  @Test void testProjectAggregateMergeSum0WithMultipleGroupKeys() {
+    final String sql = "select s.deptno, s.name, coalesce(sum(e.sal), 0) as total\n"
+        + "from (values (10, 'Sales'), (20, 'Mktg'), (30, 'HR')) as s(deptno, name)\n"
+        + "left join (values (10, cast(100 as integer)), (10, cast(200 as integer)))\n"
+        + "       as e(deptno, sal)\n"
+        + "  on e.deptno = s.deptno\n"
+        + "group by s.deptno, s.name";
+    sql(sql).withRule(CoreRules.PROJECT_AGGREGATE_MERGE)
+        .check();
+  }
+
+  /** As {@link #testProjectAggregateMergeSum0WithMultipleGroupKeys()} but with
+   * a second aggregate call ({@code COUNT(*)}) alongside the reduced
+   * {@code SUM0}, which previously caused the replacement reference to
+   * pick up the other aggregate's type. */
+  @Test void testProjectAggregateMergeSum0WithMultipleGroupKeysAndOtherAgg() {
+    final String sql = "select s.deptno, s.name, count(*) as cnt,\n"
+        + "    coalesce(sum(e.sal), 0) as total\n"
+        + "from (values (10, 'Sales'), (20, 'Mktg'), (30, 'HR')) as s(deptno, name)\n"
+        + "left join (values (10, cast(100 as integer)), (10, cast(200 as integer)))\n"
+        + "       as e(deptno, sal)\n"
+        + "  on e.deptno = s.deptno\n"
+        + "group by s.deptno, s.name";
+    sql(sql).withRule(CoreRules.PROJECT_AGGREGATE_MERGE)
+        .check();
+  }
+
   /** Tests that ProjectAggregateMergeRule does nothing with non-numeric literals
    * and does not throw an exception. */
   @Test void testProjectAggregateMergeNonNumericLiteral() {

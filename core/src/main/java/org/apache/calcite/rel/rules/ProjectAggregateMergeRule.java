@@ -118,7 +118,14 @@ public class ProjectAggregateMergeRule
             final RexLiteral literal = (RexLiteral) operands.get(2);
             if (Objects.equals(literal.getValueAs(BigDecimal.class), BigDecimal.ZERO)) {
               int j = findSum0(cluster.getTypeFactory(), aggCall, aggCallList);
-              return cluster.getRexBuilder().makeInputRef(aggCallList.get(j).getType(), j);
+              // j is an index into aggCallList (aggregate-call space); the
+              // replacement RexInputRef must be expressed in the same
+              // "group keys followed by aggregate calls" numbering used by
+              // ref1 (and by the later RexPermuteInputsShuttle remapping),
+              // so it needs to be offset by the number of group keys.
+              final int fieldIndex = aggregate.getGroupCount() + j;
+              return cluster.getRexBuilder().makeInputRef(
+                  aggCallList.get(j).getType(), fieldIndex);
             }
           }
           break;
