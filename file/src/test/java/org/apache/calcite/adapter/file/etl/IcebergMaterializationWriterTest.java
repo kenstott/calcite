@@ -360,6 +360,58 @@ public class IcebergMaterializationWriterTest {
         "a genuinely missing expected column must still purge prior data (existing behavior)");
   }
 
+  @Test public void testAddingPartitionColumnAlreadyPresentAsDataTriggersDropAndRecreate()
+      throws Exception {
+    // Regression for kenstott/govdata-ops#174: a table first materialized with partition
+    // column(s) [type] only, where "year" already exists as a plain data column. Reconfiguring
+    // to partition.columns=[type, year] must be detected as drift even though "year" is not
+    // literally missing from the schema — it exists, just not as a partition field — otherwise
+    // every subsequent overwritePartitions commit keeps replacing the single old "type" partition
+    // in full instead of adding one partition per year, and every prior year's data disappears
+    // each time a new year is written.
+    File warehouseDir = new File(tempDir, "warehouse_drift_partition");
+    warehouseDir.mkdirs();
+
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    MaterializeConfig configV1 =
+        buildIcebergConfig(warehouseDir, "drift_partition_table", Arrays.asList(
+            createColumnConfig("type", "VARCHAR"),
+            createColumnConfig("year", "INTEGER"),
+            createColumnConfig("name", "VARCHAR")),
+        Collections.singletonList("type"));
+    writer.initialize(configV1);
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("type", "widget");
+    row.put("year", 2024);
+    row.put("name", "first");
+    writer.writeBatch(Collections.singletonList(row).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    // Second writer's config adds "year" to partition.columns; "year" is already present as an
+    // ordinary data column, so the name-only check must not be fooled into thinking nothing changed.
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    MaterializeConfig configV2 =
+        buildIcebergConfig(warehouseDir, "drift_partition_table", Arrays.asList(
+            createColumnConfig("type", "VARCHAR"),
+            createColumnConfig("year", "INTEGER"),
+            createColumnConfig("name", "VARCHAR")),
+        Arrays.asList("type", "year"));
+    writer.initialize(configV2);
+
+    org.apache.iceberg.Table reloaded =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(writer.getTableLocation());
+    Set<String> partitionFieldNames = new HashSet<String>();
+    for (org.apache.iceberg.PartitionField f : reloaded.spec().fields()) {
+      partitionFieldNames.add(reloaded.schema().findColumnName(f.sourceId()));
+    }
+    assertEquals(2, partitionFieldNames.size(),
+        "table must be rebuilt partitioned by both type and year");
+    assertTrue(partitionFieldNames.contains("year"),
+        "adding a partition column that already exists as plain data must still trigger a rebuild");
+  }
+
   @Test public void testStaleConfigWithFewerColumnsDoesNotPurgeExistingData() throws Exception {
     // Regression for kenstott/govdata-ops#226: a writer whose OWN config simply doesn't declare
     // a column the table already has (e.g. a jar built before that column was added elsewhere)
