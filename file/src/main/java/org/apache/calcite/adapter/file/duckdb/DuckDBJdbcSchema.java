@@ -206,9 +206,14 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
    * parquet); Calcite would then bake that stale column list into its plan and every query
    * fails with "Contents of view were altered". On first access per connection, compare the
    * catalog view's column count against the FileSchema's current row type and, on a mismatch,
-   * {@code CREATE OR REPLACE} the view so Calcite introspects the fresh schema. Each view is
-   * checked at most once per connection; only mismatched views are recreated (the healthy path
-   * runs one catalog-local count query — no S3 read).
+   * {@code CREATE OR REPLACE} the view so Calcite introspects the fresh schema. The same recreate
+   * also fires when the persisted view's SQL predates {@code allow_moved_paths=true} (added to
+   * every iceberg_scan call site in commit dc2250b2f, 2026-05-06): a hive-style partition column
+   * with an {@code =} in the path name gets URL-encoded by DuckDB without that flag, and the
+   * encoded key does not exist in the bucket — every query then fails with an S3 404, even though
+   * the column list is unchanged and the column-count check alone would see nothing wrong (#572).
+   * Each view is checked at most once per connection; only flagged views are recreated (the
+   * healthy path runs two catalog-local queries — no S3 read).
    */
   private void refreshStaleIcebergViewIfNeeded(String name) {
     if (fileSchema == null || persistentConnection == null || name == null) {
@@ -249,6 +254,12 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
             + "schema has {} — recreating from iceberg_scan", schemaName, name,
             actual < 0 ? "an unreadable count" : actual, expected);
         recreateIcebergView(name, record.sourceFile);
+        return;
+      }
+      if (viewMissingAllowMovedPaths(name)) {
+        LOGGER.info("Self-heal: catalog view \"{}\".\"{}\" predates allow_moved_paths=true — "
+            + "recreating from iceberg_scan", schemaName, name);
+        recreateIcebergView(name, record.sourceFile);
       }
     } catch (Exception e) {
       LOGGER.debug("Self-heal staleness check skipped for '{}': {}", name, e.getMessage());
@@ -278,6 +289,31 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       return -1;
     }
     return 0;
+  }
+
+  /**
+   * True when a persisted iceberg_scan view exists for {@code name} but its stored SQL lacks
+   * {@code allow_moved_paths}, i.e. it was created before that flag was added to every
+   * iceberg_scan call site (see {@link #refreshStaleIcebergViewIfNeeded}). False both when the
+   * view does not exist and when the probe itself fails — either way there is no known-stale SQL
+   * text to force a recreate over, unlike the column-count probe's -1 sentinel.
+   */
+  private boolean viewMissingAllowMovedPaths(String name) {
+    String sql = "SELECT sql FROM duckdb_views() WHERE schema_name = ? AND view_name = ?";
+    try (java.sql.PreparedStatement ps = persistentConnection.prepareStatement(sql)) {
+      ps.setString(1, schemaName);
+      ps.setString(2, name);
+      try (java.sql.ResultSet rs = ps.executeQuery()) {
+        if (rs.next()) {
+          String viewSql = rs.getString(1);
+          return viewSql != null && viewSql.toLowerCase(java.util.Locale.ROOT).contains("iceberg_scan")
+              && !viewSql.toLowerCase(java.util.Locale.ROOT).contains("allow_moved_paths");
+        }
+      }
+    } catch (java.sql.SQLException e) {
+      LOGGER.debug("View-SQL staleness probe failed for '{}': {}", name, e.getMessage());
+    }
+    return false;
   }
 
 
