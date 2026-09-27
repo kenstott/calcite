@@ -408,6 +408,14 @@ export GOVDATA_JAR="$POOL_JAR"
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
+# Every run-pool.sh instance on the host opens the same lock file. fill_pool holds it (fd 9)
+# across each admission decision and the launch that follows, so two instances (e.g. the
+# historical pool and a separately-launched health-schema pool) can never both decide "there's
+# room for one more worker" against the same headroom at once -- see the 2026-09-27 host OOM
+# (issue #747), where nothing serialized that decision across instances.
+ADMIT_LOCK="$PID_DIR/admit.lock"
+exec 9>"$ADMIT_LOCK"
+
 # Suffixes every pid/exit file this instance writes. Two run-pool.sh instances can compute the
 # identical worker id (same schema+mode) once the first one's HOLDING guard clears, and without
 # this a second instance's launch_worker() would rm -f / overwrite the first instance's own
@@ -638,8 +646,13 @@ launch_worker() {
   local log_file="$log_dir/launch_${launch_ts}.log"
   local pid_file="$PID_DIR/${id}.${POOL_RUN_ID}.pid"
   local exit_file="$PID_DIR/${id}.${POOL_RUN_ID}.exit"
+  local mb_file="$PID_DIR/${id}.${POOL_RUN_ID}.mb"
   mkdir -p "$log_dir"
   rm -f "$pid_file" "$exit_file"
+  # Sibling file read by get_world_committed_mb from every run-pool.sh instance on the host, so
+  # this worker's footprint is visible to sibling instances the instant it's admitted -- not only
+  # once its RSS shows up in /proc/meminfo, which lags admission by however long JVM startup takes.
+  echo "$((heap_mb + WORKER_NATIVE_MB))" > "$mb_file"
   # Point launch.log at the current run so monitoring tools always read the
   # latest invocation only (prevents stale-content-across-runs confusion).
   ln -sfn "launch_${launch_ts}.log" "$log_dir/launch.log"
@@ -710,6 +723,42 @@ get_available_mb() {
   else
     awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo
   fi
+}
+
+# Usage: get_world_committed_mb <pid_dir>
+# Sums the recorded footprint (heap + native, in MB) of every live worker registered under
+# <pid_dir> by ANY run-pool.sh instance on the host, not just this one. budget_mb is derived
+# from TOTAL system memory, so a per-instance-only committed_mb undercounts the instant a
+# sibling instance is also admitting workers -- exactly the gap behind the 2026-09-27 host OOM
+# (issue #747), where a concurrent historical pool and health-schema pool each admitted workers
+# against their own unaware view of the budget. Mirrors check_schema_year_conflict's liveness/
+# identity verification (a pid file is trusted only if the process's own cmdline references it,
+# or it carries a ".foreground" marker) so a stale or PID-reused leftover is never counted.
+get_world_committed_mb() {
+  local _pid_dir=$1
+  [ -d "$_pid_dir" ] || { echo 0; return; }
+  local _total=0 _pf _id _id_base _wpid _mb
+  for _pf in "$_pid_dir"/worker-*.pid; do
+    [ -e "$_pf" ] || continue
+    _id="${_pf##*/}"
+    _id="${_id%.pid}"
+    [ -f "$_pid_dir/${_id}.exit" ] && continue        # worker already finished
+    _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
+    { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue
+    if tr '\0' ' ' < "/proc/$_wpid/cmdline" 2>/dev/null | grep -qF "$_pf"; then
+      :
+    elif [ -f "$_pid_dir/${_id}.foreground" ]; then
+      :
+    else
+      continue
+    fi
+    # No .mb sidecar (a worker launched by a pre-#747 run-pool.sh still active mid-upgrade) is
+    # not double-counted as zero-cost -- fall back to a conservative estimate.
+    _mb=$(cat "$_pid_dir/${_id}.mb" 2>/dev/null)
+    [[ "$_mb" =~ ^[0-9]+$ ]] || _mb=$((3072 + WORKER_NATIVE_MB))
+    _total=$((_total + _mb))
+  done
+  echo "$_total"
 }
 
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
@@ -825,28 +874,38 @@ fill_pool() {
       continue
     fi
 
-    # Check 1: committed budget (full footprint, not -Xmx alone)
-    local projected=$((committed_mb + next_foot_mb))
+    # Serialize the admission decision and the launch that follows across every run-pool.sh
+    # instance on the host (fd 9, opened on $ADMIT_LOCK at startup). Without this, two instances
+    # (e.g. the historical pool and a separately-launched health-schema pool, both true at the
+    # 2026-09-27 host OOM, issue #747) can each read enough headroom for one more worker and admit
+    # at the same moment, together exceeding real memory — reading real MemAvailable (Check 2)
+    # doesn't help if both reads happen before either admission is reflected in RSS. Every `break`
+    # below must release the lock first: fd 9 stays open for the life of this process, so a leaked
+    # lock would hold every future fill_pool call in this instance, and every other instance, shut
+    # out permanently.
+    flock -x 9
+
+    # Check 1: committed budget, world-wide (every live worker any run-pool.sh instance has
+    # registered under PID_DIR, via get_world_committed_mb — not just this instance's own
+    # active_pids). budget_mb is derived from TOTAL system memory, so a purely local view
+    # undercounts the instant a sibling instance is also admitting.
+    local world_committed_mb
+    world_committed_mb=$(get_world_committed_mb "$PID_DIR")
+    local projected=$((world_committed_mb + next_foot_mb))
     if [ "$projected" -gt "$budget_mb" ]; then
-      log_info "Memory budget: ${next_id} needs ${next_foot_mb}MB, committed=${committed_mb}MB, budget=${budget_mb}MB — holding"
+      log_info "Memory budget: ${next_id} needs ${next_foot_mb}MB, world-committed=${world_committed_mb}MB, budget=${budget_mb}MB — holding"
+      flock -u 9
       break
     fi
 
-    # Check 2: actual available memory (belt + suspenders) — the ONLY check that sees true
-    # cross-instance state, since Check 1's committed_mb/budget_mb are this instance's own local
-    # view (budget_mb derives from TOTAL system memory, blind to what sibling run-pool.sh
-    # instances have already committed). Previously skipped when this instance had zero active
-    # workers of its own ("skip when no workers active") — but that's exactly the moment a
-    # freshly-started instance makes its first admission decision, and multiple instances
-    # starting around the same time (e.g. several remediation jobs launching concurrently) each
-    # had their first worker slip through with no cross-instance visibility at all. Confirmed
-    # live 2026-09-15: this let 3 independently-started instances each admit one worker despite
-    # combined real memory pressure. Now unconditional — every admission, first worker included,
-    # checks real MemAvailable.
+    # Check 2: actual available memory (belt + suspenders) for consumers outside the ledger
+    # entirely — MinIO, the dashboard/runner daemons, page-cache pressure, or a worker whose
+    # recorded footprint (or fallback estimate) undershot its real RSS.
     local avail_mb
     avail_mb=$(get_available_mb)
     if [ "$avail_mb" -lt "$((next_foot_mb + OS_RESERVE_MB / 2))" ]; then
       log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_foot_mb}MB — holding"
+      flock -u 9
       break
     fi
 
@@ -866,6 +925,7 @@ fill_pool() {
       ((requeue_count--)) || true
     fi
     launch_worker "${queue[$queue_idx]}" || true
+    flock -u 9
     ((queue_idx++)) || true
     scan_idx=$queue_idx
   done
