@@ -274,7 +274,16 @@ public final class R2CredentialProvider {
    * refresh margin). Credentials with no expiry stamp are treated as non-expiring.
    */
   private static boolean isExpired(Map<String, String> creds) {
-    String at = creds.get("expiresAtMillis");
+    return isExpiryStampExpired(creds.get("expiresAtMillis"));
+  }
+
+  /**
+   * Whether an {@code expiresAtMillis} stamp (as stored in the credential map) is past, with the
+   * same refresh margin the cache uses. A missing stamp is non-expiring; an unparsable one is
+   * treated as expired. Lets a process that captured credentials at one moment (a spawned
+   * server's environment) decide later whether they are still usable.
+   */
+  public static boolean isExpiryStampExpired(String at) {
     if (at == null || at.isEmpty()) {
       return false;
     }

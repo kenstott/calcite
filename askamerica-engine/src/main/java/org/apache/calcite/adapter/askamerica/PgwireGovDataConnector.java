@@ -82,6 +82,9 @@ final class PgwireGovDataConnector {
   /** Per-query timeout passed to the spawned server's --statement-timeout-ms (see spawnIfPossible). */
   private static final String STATEMENT_TIMEOUT_MS = "30000";
 
+  /** How long killAndRespawn waits for a forcibly killed server to release its port. */
+  private static final long KILL_EXIT_WAIT_SECONDS = 10;
+
   private static final Object LOCK = new Object();
   private static volatile Connection sharedConnection;
 
@@ -140,10 +143,16 @@ final class PgwireGovDataConnector {
    */
   static Connection getSharedConnection() throws Exception {
     Connection existing = sharedConnection;
-    if (existing != null && !existing.isClosed() && existing.isValid(5)) {
+    if (existing != null && !existing.isClosed() && existing.isValid(5)
+        && !serverCredentialsExpired()) {
       return existing;
     }
     synchronized (LOCK) {
+      // Re-checked under the lock: another conversation's process may already have replaced the
+      // server, which rewrites the expiry file, so this one must not kill the fresh server.
+      if (serverCredentialsExpired()) {
+        killAndRespawn("R2 credentials baked into the server's environment have expired");
+      }
       existing = sharedConnection;
       if (existing != null && !existing.isClosed() && existing.isValid(5)) {
         return existing;
@@ -342,9 +351,11 @@ final class PgwireGovDataConnector {
       // via the inherited ASKAMERICA_API_KEY/FREE_ASKAMERICA_KEY env var when stale) -- reuse
       // that exact resolution here rather than requiring the end user to configure any of
       // this themselves; the API key is the only credential a user ever provides.
+      String credsExpiresAt = null;
       try {
         Map<String, String> creds =
             R2CredentialProvider.resolveOrFetch(R2CredentialProvider.credentialApiKey());
+        credsExpiresAt = creds.get("expiresAtMillis");
         pb.environment().put("AWS_ACCESS_KEY_ID", creds.getOrDefault("accessKeyId", ""));
         pb.environment().put("AWS_SECRET_ACCESS_KEY", creds.getOrDefault("secretAccessKey", ""));
         pb.environment().put("AWS_ENDPOINT_OVERRIDE", creds.getOrDefault("endpoint", ""));
@@ -401,6 +412,7 @@ final class PgwireGovDataConnector {
       // not touching redirectInput (default PIPE, left unread and unwritten) is correct.
       Process p = pb.start();
       writePidFile(p.pid());
+      writeCredentialExpiryFile(credsExpiresAt);
       log().println("[askamerica-mcp] Spawned pgwire-govdata (pid " + p.pid() + "): "
           + launcher.getAbsolutePath() + " — log: " + logFile);
     } catch (Exception e) {
@@ -438,6 +450,47 @@ final class PgwireGovDataConnector {
       // (killAndRespawn logs that plainly and moves on) — it does not affect this spawn's
       // own success, which is already logged separately above.
       log().println("[askamerica-mcp] Could not record pgwire-govdata's pid: " + e.getMessage());
+    }
+  }
+
+  /** Beside pgwire.pid: the {@code expiresAtMillis} of the R2 credentials the running server was
+   *  spawned with. The server reads them from its environment once and never refreshes them, so
+   *  every process sharing it needs this to know when the server has to be replaced. */
+  private static File credentialExpiryFile() {
+    String home = System.getProperty("user.home", "");
+    return new File(new File(home, ".askamerica"), "pgwire-govdata/pgwire.creds-expiry");
+  }
+
+  /** Always clears the previous server's stamp, so a spawn whose credentials carry no expiry
+   *  is not judged by the last server's. */
+  private static void writeCredentialExpiryFile(String expiresAtMillis) {
+    try {
+      File f = credentialExpiryFile();
+      f.getParentFile().mkdirs();
+      java.nio.file.Files.deleteIfExists(f.toPath());
+      if (expiresAtMillis != null && !expiresAtMillis.isEmpty()) {
+        java.nio.file.Files.writeString(f.toPath(), expiresAtMillis);
+      }
+    } catch (Exception e) {
+      log().println("[askamerica-mcp] Could not record pgwire-govdata's credential expiry: "
+          + e.getMessage() + " — the server will not be replaced automatically when its "
+          + "credentials expire.");
+    }
+  }
+
+  /** True when the running server was spawned with credentials that have since expired. No
+   *  expiry file means the credentials carried no expiry, so there is nothing to compare. */
+  static boolean serverCredentialsExpired() {
+    File f = credentialExpiryFile();
+    if (!f.isFile()) {
+      return false;
+    }
+    try {
+      return R2CredentialProvider.isExpiryStampExpired(
+          java.nio.file.Files.readString(f.toPath()).trim());
+    } catch (java.io.IOException e) {
+      throw new IllegalStateException("Cannot read " + f + " to check pgwire-govdata's "
+          + "credential expiry", e);
     }
   }
 
@@ -494,15 +547,41 @@ final class PgwireGovDataConnector {
               + " from " + pf + " is no longer running — nothing to kill.");
           return;
         }
+        // The pid file outlives the server (it idle-shuts-down after IDLE_SHUTDOWN_SECONDS), and
+        // the OS reuses pids, so a pid that is still running is not necessarily ours to kill.
+        if (!isPgwireGovDataProcess(ph.get())) {
+          log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
+              + " from " + pf + " is running but is not a pgwire-govdata process — not killing it.");
+          return;
+        }
         boolean destroyed = ph.get().destroyForcibly();
+        // The port and the expired credentials are held until the process is really gone; a
+        // spawn that starts before that loses the bind and exits, leaving connect() to time out.
+        boolean exited = false;
+        try {
+          ph.get().onExit().get(KILL_EXIT_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+          exited = true;
+        } catch (java.util.concurrent.TimeoutException e) {
+          log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
+              + " still running " + KILL_EXIT_WAIT_SECONDS + "s after the forced kill.");
+        }
         log().println("[askamerica-mcp] killAndRespawn(" + reason + "): sent a forced kill to "
             + "pgwire-govdata pid " + pid + " (" + (destroyed ? "signal sent" : "failed to send")
+            + (exited ? ", exited" : "")
             + "). The next connection attempt will spawn a fresh server.");
       }
     } catch (Throwable t) {
       log().println("[askamerica-mcp] killAndRespawn(" + reason + ") itself failed: "
           + t.getClass().getName() + ": " + t.getMessage());
     }
+  }
+
+  /** Whether the process's own command line names pgwire-govdata (the launcher, or the
+   *  interpreter/JVM it was started through). An unreadable command line is not a match. */
+  private static boolean isPgwireGovDataProcess(ProcessHandle ph) {
+    ProcessHandle.Info info = ph.info();
+    return info.commandLine().orElse("").contains("pgwire-govdata")
+        || info.command().orElse("").contains("pgwire-govdata");
   }
 
   private static File resolveLauncher() {
