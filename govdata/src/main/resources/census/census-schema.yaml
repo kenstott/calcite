@@ -3509,7 +3509,16 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      # B25034_011E (built_1939_or_earlier) undefined in ACS 5-year before 2015 — the group
+      # only goes up to _010E for 2011-2014 (verified live: 2011/2013/2014 all 400 "unknown
+      # variable B25034_011E"; 2015 is the first vintage with 11 variables). minYear floors
+      # at 2015 accordingly, same dataLag/releaseMonth as the shared anchor.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2015          # B25034 built_1939_or_earlier (var _011E) undefined in ACS 5-year before 2015
+        dataLag: 2
+        releaseMonth: 12
       geography: *all_geographies
 
     columns:
