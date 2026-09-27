@@ -3135,6 +3135,232 @@ partitionedTables:
         overwritePartitions: true
 
   # ==========================================================================
+  # CMS PAYROLL-BASED JOURNAL (PBJ) DAILY NURSE STAFFING — facility x day time series
+  # ==========================================================================
+  - name: cms_pbj_nurse_staffing
+    # Freshness gate: CMS's data.json catalog listing is dynamic JSON with no reliable
+    # Last-Modified; a content-hash probe skips reprocessing when the set of published
+    # quarterly distributions is unchanged since the last successful run.
+    freshness:
+      type: hash
+    pattern: "type=cms_pbj_nurse_staffing/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: year
+          type: integer
+    comment: >
+      CMS Payroll-Based Journal (PBJ) "Daily Nurse Staffing" (data.cms.gov catalog entry
+      "Payroll Based Journal Daily Nurse Staffing"), one row per facility (PROVNUM — joins
+      to cms_nursing_home.ccn) per calendar day (work_date), with hours split by nursing
+      role (RN Director of Nursing, RN admin, staff RN, LPN admin, staff LPN, CNA,
+      nurse-aide-in-training, medication aide) and further split employee vs. contract.
+      Fills the gap cms_nursing_home leaves: that table carries only a current-snapshot
+      hours-per-resident-day ratio with no history, this table is the underlying daily
+      time series a staffing trend needs — divide any hrs_*/resident_census pair for a
+      per-resident-day rate on any day or rolled-up period. Quarterly releases back to
+      2017Q1 (~37 quarters as of 2026Q1); each quarter is a separate, independently-hosted
+      CSV with no derivable URL pattern, so this table is built by catalog discovery
+      rather than a templated URL (see the provider class comment). Verified live
+      2026-09-27: 2017Q1-Q4 name the RN-director and LPN-admin total columns
+      hrs_rn_donadmin/hrs_lpn_admin instead of the hrs_rndon/hrs_lpnadmin used from
+      2018Q1 on — both aliased to the same output column by the provider. The 2017Q2
+      file itself has a malformed header (no hrs_medaide_ctr column; a stray duplicate
+      hrs_rn_donadmin token appears in its place) — medication_aide_hours_contract is
+      null for that one quarter, not a defect in this pipeline. Large: ~237MB per quarter
+      CSV, full history is a multi-GB backfill.
+
+    dimensions:
+      type:
+        - cms_pbj_nurse_staffing
+
+    dqRowLimit: 30000  # DQ mode samples the first ~2 days of the newest quarter (the
+                        # provider discovers newest-quarter-first); full history is
+                        # ~9GB across 37 quarters in production — see govdata-dq-patterns.
+
+    columns:
+      - name: ccn
+        type: string
+        nullable: false
+        comment: CMS Certification Number (source PROVNUM) — PK component, joins to cms_nursing_home.ccn
+      - name: provider_name
+        type: string
+        nullable: true
+        comment: Facility legal/doing-business-as name
+      - name: city
+        type: string
+        nullable: true
+        comment: City or town
+      - name: state
+        type: string
+        nullable: true
+        comment: FK to geo.state_ref.state_abbr
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County or parish
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: County FIPS code as published in the source file
+      - name: report_quarter
+        type: string
+        nullable: true
+        comment: Source file's own CY_Qtr label (e.g. "2017Q1"), kept for audit — the year partition column is derived from work_date, not this field
+      - name: work_date
+        type: date
+        nullable: false
+        comment: Calendar day these hours were reported for — PK component
+      - name: resident_census
+        type: integer
+        nullable: true
+        comment: MDS resident census for the day — denominator for a per-resident-day rate on any hrs_* column
+      - name: rn_don_hours
+        type: double
+        nullable: true
+        comment: RN Director of Nursing hours (employee + contract)
+      - name: rn_don_hours_employee
+        type: double
+        nullable: true
+        comment: RN Director of Nursing hours, employee only
+      - name: rn_don_hours_contract
+        type: double
+        nullable: true
+        comment: RN Director of Nursing hours, contract only
+      - name: rn_admin_hours
+        type: double
+        nullable: true
+        comment: RN administrative (non-DON) hours (employee + contract)
+      - name: rn_admin_hours_employee
+        type: double
+        nullable: true
+        comment: RN administrative hours, employee only
+      - name: rn_admin_hours_contract
+        type: double
+        nullable: true
+        comment: RN administrative hours, contract only
+      - name: rn_hours
+        type: double
+        nullable: true
+        comment: Staff RN direct-care hours (employee + contract)
+      - name: rn_hours_employee
+        type: double
+        nullable: true
+        comment: Staff RN direct-care hours, employee only
+      - name: rn_hours_contract
+        type: double
+        nullable: true
+        comment: Staff RN direct-care hours, contract only
+      - name: lpn_admin_hours
+        type: double
+        nullable: true
+        comment: LPN administrative hours (employee + contract)
+      - name: lpn_admin_hours_employee
+        type: double
+        nullable: true
+        comment: LPN administrative hours, employee only
+      - name: lpn_admin_hours_contract
+        type: double
+        nullable: true
+        comment: LPN administrative hours, contract only
+      - name: lpn_hours
+        type: double
+        nullable: true
+        comment: Staff LPN direct-care hours (employee + contract)
+      - name: lpn_hours_employee
+        type: double
+        nullable: true
+        comment: Staff LPN direct-care hours, employee only
+      - name: lpn_hours_contract
+        type: double
+        nullable: true
+        comment: Staff LPN direct-care hours, contract only
+      - name: cna_hours
+        type: double
+        nullable: true
+        comment: CNA direct-care hours (employee + contract)
+      - name: cna_hours_employee
+        type: double
+        nullable: true
+        comment: CNA direct-care hours, employee only
+      - name: cna_hours_contract
+        type: double
+        nullable: true
+        comment: CNA direct-care hours, contract only
+      - name: nurse_aide_trainee_hours
+        type: double
+        nullable: true
+        comment: Nurse-aide-in-training hours (employee + contract)
+      - name: nurse_aide_trainee_hours_employee
+        type: double
+        nullable: true
+        comment: Nurse-aide-in-training hours, employee only
+      - name: nurse_aide_trainee_hours_contract
+        type: double
+        nullable: true
+        comment: Nurse-aide-in-training hours, contract only
+      - name: medication_aide_hours
+        type: double
+        nullable: true
+        comment: Medication aide hours (employee + contract)
+      - name: medication_aide_hours_employee
+        type: double
+        nullable: true
+        comment: Medication aide hours, employee only
+      - name: medication_aide_hours_contract
+        type: double
+        nullable: true
+        comment: Medication aide hours, contract only — null for 2017Q2, whose source file has a malformed header (see table comment)
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "cms_pbj_nurse_staffing"'
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of work_date (partition column)
+
+    source:
+      type: http
+      # CMS's full open-data catalog. The provider filters to the "Payroll Based Journal
+      # Daily Nurse Staffing" dataset and discovers each quarter's own CSV distribution
+      # from its distribution[].downloadURL/temporal — see the provider class comment.
+      url: "https://data.cms.gov/data.json"
+      method: GET
+      headers:
+        User-Agent: "Apache-Calcite-GovData/1.0"
+      response:
+        format: json  # ignored: CmsPbjNurseStaffingProvider discovers and streams the files itself
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.health.CmsPbjNurseStaffingProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=cms_pbj_nurse_staffing/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ==========================================================================
   # HRSA AREA HEALTH RESOURCES FILE — county-level physician supply (annual snapshot)
   # ==========================================================================
   - name: ahrf_physician_supply
@@ -7759,6 +7985,20 @@ constraints:
         targetTable: cms_nursing_home
         targetColumns: [ccn]
         comment: Links citation to facility provider information
+
+  cms_pbj_nurse_staffing:
+    primaryKey: [ccn, work_date]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links facility state to geographic data
+      - columns: [ccn]
+        targetSchema: "${HEALTH_SCHEMA_NAME:health}"
+        targetTable: cms_nursing_home
+        targetColumns: [ccn]
+        comment: Links daily staffing record to facility provider information
 
   ahrf_physician_supply:
     primaryKey: [county_fips]

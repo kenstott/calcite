@@ -1577,6 +1577,109 @@ FROM (
 );
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cms_pbj_nurse_staffing
+-- (dqRowLimit=30000 caps the DQ sample to the first ~2 days of the newest quarter —
+-- see govdata-dq-patterns "single-fetch bulk caveat"; thresholds below are sized to
+-- that sample, not the full ~9GB/37-quarter production history)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true));
+
+-- T2: row_count (dqRowLimit-capped sample: ~15K facilities/day x up to 2 days)
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END,
+  n, 10000, 'Expected at least 10K rows (dqRowLimit=30000-capped sample)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      -- year/report_quarter are real constants within a dqRowLimit-capped single-quarter sample
+      AND column_name NOT IN ('type', 'year', 'report_quarter')
+  )
+);
+
+-- T6: pk_nulls (ccn, work_date NOT NULL)
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL PK-component rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true)
+      WHERE ccn IS NULL OR work_date IS NULL);
+
+-- T7: state coverage
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T7_state_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'warn' END,
+  n, 50, 'Distinct states with staffing rows in the capped sample'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true)
+      WHERE state IS NOT NULL);
+
+-- T7: resident_census populated
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T7_census_populated',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Rows with a non-null resident_census'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true)
+      WHERE resident_census IS NOT NULL);
+
+-- T7: rn_hours populated (core staffing metric should not be universally null)
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T7_rn_hours_populated',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Rows with a non-null rn_hours'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true)
+      WHERE rn_hours IS NOT NULL);
+
+-- T8: PK duplication guard
+INSERT INTO dq_results
+SELECT 'health', 'cms_pbj_nurse_staffing', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate PK rows (ccn + work_date)'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT ccn, work_date, COUNT(*) AS cnt
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pbj_nurse_staffing', allow_moved_paths := true)
+    GROUP BY ccn, work_date
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: medicaid_drug_utilization
 -- ─────────────────────────────────────────────────────────────
 
