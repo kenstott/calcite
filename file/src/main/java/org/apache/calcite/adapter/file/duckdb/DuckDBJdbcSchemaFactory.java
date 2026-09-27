@@ -500,7 +500,13 @@ public class DuckDBJdbcSchemaFactory {
       // which run standalone rather than sharing a box with production connections) —
       // default unchanged at 4GB so every other caller keeps today's behavior.
       String duckdbMemoryLimit = System.getProperty("calcite.duckdb.memoryLimit", "4GB");
-      setupConn.createStatement().execute("SET threads TO 4");  // Adjust based on workload
+      // Thread count scales with the box instead of a flat literal, the same reasoning as
+      // memory_limit above: a fixed cap picked for a small box under-uses a large one. Floor
+      // keeps small boxes unchanged; ceiling avoids over-threading a per-connection reader on a
+      // very large box. Still overridable per-JVM via -Dcalcite.duckdb.threads.
+      int defaultDuckdbThreads = Math.max(4, Math.min(Runtime.getRuntime().availableProcessors(), 16));
+      String duckdbThreads = System.getProperty("calcite.duckdb.threads", String.valueOf(defaultDuckdbThreads));
+      setupConn.createStatement().execute("SET threads TO " + duckdbThreads);
       setupConn.createStatement().execute("SET memory_limit = '" + duckdbMemoryLimit + "'");  // Prevent OOM
       setupConn.createStatement().execute("SET max_memory = '" + duckdbMemoryLimit + "'");  // Hard limit
       setupConn.createStatement().execute("SET temp_directory = '" + System.getProperty("java.io.tmpdir") + "'");  // Spill location
