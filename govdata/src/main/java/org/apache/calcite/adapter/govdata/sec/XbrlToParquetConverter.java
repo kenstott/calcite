@@ -5719,47 +5719,15 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // 2. Existing earnings extraction (unchanged)
+      // 2. Earnings extraction. The primary 8-K document is a cover letter ("a copy of
+      // management's prepared remarks ... is attached hereto as Exhibit 99.3") -- it is never
+      // itself the earnings content, only a pointer to the real EX-99.x exhibit(s). Extract from
+      // the downloaded exhibit files first; the cover letter's own text is a fallback for the rare
+      // filing that inlines results with no separate exhibit, so it never shadows real exhibit
+      // content with a boilerplate paragraph that happens to contain a heading keyword like
+      // "prepared remarks" purely because it names the exhibit.
       List<Map<String, Object>> earningsRecords = new ArrayList<>();
       java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> earningsColumns = loadEarningsTranscriptColumns();
-
-      // Check if this file contains exhibit content directly
-      if (fileContent.contains("EX-99.1") || fileContent.contains("EX-99.2")) {
-        earningsRecords.addAll(extractEarningsFromExhibit(fileContent, cik, filingType, filingDate, accession));
-      }
-
-      // Also check for earnings-related content patterns
-      if (fileContent.toLowerCase().contains("financial results")
-          || fileContent.toLowerCase().contains("earnings release")
-          || fileContent.toLowerCase().contains("conference call")) {
-
-        List<String> paragraphs = extractEarningsParagraphs(fileContent);
-        String currentSection = null;
-
-        for (int i = 0; i < paragraphs.size(); i++) {
-          String para = paragraphs.get(i);
-          String sectionType = detectSectionTypeWithState(para, currentSection);
-
-          if (!sectionType.equals("other")) {
-            currentSection = sectionType;
-          }
-
-          Map<String, Object> data = new HashMap<>();
-          data.put("accession_number", accession);
-          data.put("cik", cik);
-          data.put("filing_date", filingDate);
-          data.put("year", year);
-          data.put("filing_type", filingType);
-          data.put("exhibit_number", detectExhibitNumber(fileContent));
-          data.put("section_type", sectionType);
-          data.put("paragraph_number", i + 1);
-          data.put("paragraph_text", para);
-          data.put("speaker_name", extractSpeaker(para));
-          data.put("speaker_role", extractSpeakerRole(para));
-
-          earningsRecords.add(data);
-        }
-      }
 
       // Download EX-99.x exhibit files from EDGAR if not already cached
       String accessionDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
@@ -5799,6 +5767,47 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       } catch (Exception e) {
         LOGGER.debug("Failed to list exhibits in {}: {}", accessionDir, e.getMessage());
+      }
+
+      // Fallback: no exhibit file yielded content (genuinely inlined, or the exhibit couldn't be
+      // fetched) -- try the primary document's own text rather than reporting nothing.
+      if (earningsRecords.isEmpty()) {
+        if (fileContent.contains("EX-99.1") || fileContent.contains("EX-99.2")
+            || fileContent.contains("EX-99.3")) {
+          earningsRecords.addAll(extractEarningsFromExhibit(fileContent, cik, filingType, filingDate, accession));
+        }
+
+        if (fileContent.toLowerCase().contains("financial results")
+            || fileContent.toLowerCase().contains("earnings release")
+            || fileContent.toLowerCase().contains("conference call")) {
+
+          List<String> paragraphs = extractEarningsParagraphs(fileContent);
+          String currentSection = null;
+
+          for (int i = 0; i < paragraphs.size(); i++) {
+            String para = paragraphs.get(i);
+            String sectionType = detectSectionTypeWithState(para, currentSection);
+
+            if (!sectionType.equals("other")) {
+              currentSection = sectionType;
+            }
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("accession_number", accession);
+            data.put("cik", cik);
+            data.put("filing_date", filingDate);
+            data.put("year", year);
+            data.put("filing_type", filingType);
+            data.put("exhibit_number", detectExhibitNumber(fileContent));
+            data.put("section_type", sectionType);
+            data.put("paragraph_number", i + 1);
+            data.put("paragraph_text", para);
+            data.put("speaker_name", extractSpeaker(para));
+            data.put("speaker_role", extractSpeakerRole(para));
+
+            earningsRecords.add(data);
+          }
+        }
       }
 
       // 3. Write earnings_transcripts. FORM_8K's per-filing completeness check (FileInventory
@@ -6052,11 +6061,13 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Detect exhibit number from content.
    */
+  private static final Pattern EXHIBIT_99_NUMBER = Pattern.compile(
+      "(?:EX-99\\.|Exhibit\\s+99\\.)(\\d+)", Pattern.CASE_INSENSITIVE);
+
   private String detectExhibitNumber(String content) {
-    if (content.contains("EX-99.1") || content.contains("Exhibit 99.1")) {
-      return "99.1";
-    } else if (content.contains("EX-99.2") || content.contains("Exhibit 99.2")) {
-      return "99.2";
+    Matcher m = EXHIBIT_99_NUMBER.matcher(content);
+    if (m.find()) {
+      return "99." + m.group(1);
     }
     return null;
   }
