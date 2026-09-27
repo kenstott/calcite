@@ -75,10 +75,11 @@ public final class S3FileIOTables {
       // entries kept pointing at old snapshots whose manifest-list avro files were purged in the
       // recreate, and the resulting HeadObject 404 blew up COUNT(*) planning through this rule
       // on every table that had ever been recreated. StaticTableOperations reads
-      // v{N}.metadata.json exactly once per table lifetime (lazily on first schema()/snapshot()
-      // access) so the direct read is one small GET per table, and any warm-JVM reuse comes from
-      // Iceberg's own in-process memo.
+      // v{N}.metadata.json exactly once per table lifetime — forced here rather than left lazy to
+      // whichever caller first calls schema()/currentSnapshot() — so the direct read is one small
+      // GET per table, and any warm-JVM reuse comes from Iceberg's own in-process memo.
       StaticTableOperations ops = new StaticTableOperations(metadataLocation, io);
+      retryMetadataRead(ops, metadataLocation);
       return new BaseTable(ops, tableName(root));
     });
   }
@@ -177,7 +178,7 @@ public final class S3FileIOTables {
   }
 
   /** Bounded retries for {@link #drop}'s post-delete verification — mirrors
-   * {@link #VERSION_HINT_MAX_ATTEMPTS}'s backoff for the same underlying cause (MinIO's S3 LIST
+   * {@link #METADATA_READ_MAX_ATTEMPTS}'s backoff for the same underlying cause (MinIO's S3 LIST
    * can lag behind a write or delete that already completed). */
   private static final int DROP_VERIFY_MAX_ATTEMPTS = 5;
   private static final long DROP_VERIFY_RETRY_DELAY_MS = 200;
@@ -378,15 +379,14 @@ public final class S3FileIOTables {
     return null;
   }
 
-  // A version-hint written moments ago by this same JVM (table just created, or just
-  // dropped-and-recreated via IcebergCatalogManager.createTable()) can read back as absent on
-  // S3-compatible stores with read-after-write lag. exists() and
-  // S3FileIOTableOperations.readVersionHint(String) already treat NotFoundException /
-  // NoSuchKeyException as "not there yet" for exactly this reason; this bounded retry gives the
-  // same transient lag a chance to clear before this method concludes the table is genuinely
-  // absent, matching load()'s contract that the table already exists by the time it is called.
-  private static final int VERSION_HINT_MAX_ATTEMPTS = 5;
-  private static final long VERSION_HINT_RETRY_DELAY_MS = 100;
+  // A version-hint (or v{N}.metadata.json, its immediate follow-on read) written moments ago by
+  // this same JVM (table just created, or just dropped-and-recreated via
+  // IcebergCatalogManager.createTable()) can read back as absent on S3-compatible stores with
+  // read-after-write lag. This bounded retry gives that transient lag a chance to clear before
+  // either read concludes the table is genuinely absent, matching load()'s contract that the
+  // table already exists by the time it is called.
+  private static final int METADATA_READ_MAX_ATTEMPTS = 5;
+  private static final long METADATA_READ_RETRY_DELAY_MS = 100;
 
   private static String readVersionHint(FileIO io, String root) {
     String hintPath = root + "/metadata/version-hint.text";
@@ -403,12 +403,12 @@ public final class S3FileIOTables {
         return line.trim();
       } catch (NotFoundException
           | software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
-        if (attempts >= VERSION_HINT_MAX_ATTEMPTS) {
+        if (attempts >= METADATA_READ_MAX_ATTEMPTS) {
           throw new RuntimeException("Iceberg version-hint.text not found at " + hintPath
               + " after " + attempts + " attempts", notFound);
         }
         try {
-          Thread.sleep(VERSION_HINT_RETRY_DELAY_MS * attempts); // Exponential backoff
+          Thread.sleep(METADATA_READ_RETRY_DELAY_MS * attempts); // Exponential backoff
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
           throw new RuntimeException(
@@ -416,6 +416,37 @@ public final class S3FileIOTables {
         }
       } catch (IOException e) {
         throw new RuntimeException("Failed to read Iceberg version-hint.text at " + hintPath, e);
+      }
+    }
+  }
+
+  /**
+   * Forces {@code ops}'s one-time metadata read now, under the same retry budget as
+   * {@link #readVersionHint}, instead of leaving it to whichever caller first calls
+   * {@code schema()}/{@code currentSnapshot()} on the {@link Table} with no retry at all.
+   * {@link StaticTableOperations#current()} memoizes only on success, so a caller that hits this
+   * after a successful call here reads the already-resolved {@link TableMetadata} for free.
+   */
+  private static void retryMetadataRead(StaticTableOperations ops, String metadataLocation) {
+    int attempts = 0;
+    while (true) {
+      attempts++;
+      try {
+        ops.refresh();
+        return;
+      } catch (NotFoundException
+          | software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
+        if (attempts >= METADATA_READ_MAX_ATTEMPTS) {
+          throw new RuntimeException("Iceberg metadata not found at " + metadataLocation
+              + " after " + attempts + " attempts", notFound);
+        }
+        try {
+          Thread.sleep(METADATA_READ_RETRY_DELAY_MS * attempts); // Exponential backoff
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException(
+              "Interrupted while retrying Iceberg metadata read at " + metadataLocation, ie);
+        }
       }
     }
   }
