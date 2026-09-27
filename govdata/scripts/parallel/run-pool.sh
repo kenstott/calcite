@@ -47,6 +47,11 @@ WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-1024}"
 # queued: SEC's historical slot count (up to 16 years x 3 sub-schemas) would otherwise take every
 # worker slot, and the workers all hit sec.gov.
 SEC_FAMILY_CAP="${SEC_FAMILY_CAP:-3}"
+# Swap-used threshold (percent) above which fill_pool holds new admissions. MemAvailable alone
+# doesn't carry this signal: it only reports free/reclaimable RAM, so it stays "healthy" even once
+# swap has absorbed most of the pressure — right up until swap itself runs out, at which point
+# already-running workers (not just a newly admitted one) can no longer get a page fault satisfied.
+SWAP_PRESSURE_PCT="${SWAP_PRESSURE_PCT:-70}"
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 RESET_BUDGET_FILE=false  # --reset-budget forces this invocation's -j/-r to become the new baseline
 
@@ -767,6 +772,15 @@ get_world_committed_mb() {
   echo "$_total"
 }
 
+# Percent of configured swap currently in use, 0 if no swap or on a platform without /proc/meminfo.
+get_swap_used_pct() {
+  if [ "$(uname)" != "Linux" ]; then
+    echo 0
+    return
+  fi
+  awk '/^SwapTotal:/ {t=$2} /^SwapFree:/ {f=$2} END {if (t>0) print int((t-f)*100/t); else print 0}' /proc/meminfo
+}
+
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
 fill_pool() {
   local scan_idx=$queue_idx
@@ -912,6 +926,19 @@ fill_pool() {
     if [ "$avail_mb" -lt "$((next_foot_mb + OS_RESERVE_MB / 2))" ]; then
       log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_foot_mb}MB — holding"
       flock -u 9
+      break
+    fi
+
+    # Check 3: swap saturation. Distinct from Check 2 above — MemAvailable can still look fine
+    # while swap is already most of the way to full, since a worker's real footprint grows past
+    # its static heap+native estimate over its lifetime and spills into swap rather than showing up
+    # as reduced MemAvailable right away. Hold new admissions once swap crosses the threshold so
+    # already-running workers keep whatever swap headroom is left, instead of packing more workers
+    # in on top of a system that's already run out of the room those static estimates assumed.
+    local swap_pct
+    swap_pct=$(get_swap_used_pct)
+    if [ "$swap_pct" -ge "$SWAP_PRESSURE_PCT" ]; then
+      log_info "Swap pressure: ${swap_pct}% swap used (threshold ${SWAP_PRESSURE_PCT}%), ${next_id} needs ${next_foot_mb}MB — holding"
       break
     fi
 
