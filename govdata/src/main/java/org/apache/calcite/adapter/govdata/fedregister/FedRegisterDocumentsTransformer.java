@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -78,7 +81,7 @@ public class FedRegisterDocumentsTransformer implements ResponseTransformer {
       row.put("doc_type", docType);
       row.put("abstract", getTextOrNull(doc, "abstract"));
       row.put("publication_date", getTextOrNull(doc, "publication_date"));
-      row.put("effective_on", getTextOrNull(doc, "effective_on"));
+      row.put("effective_on", validIsoDateOrNull(getTextOrNull(doc, "effective_on")));
       row.put("action", getTextOrNull(doc, "action"));
 
       // Agencies — denormalize to comma strings and preserve full JSON
@@ -148,6 +151,23 @@ public class FedRegisterDocumentsTransformer implements ResponseTransformer {
 
     row.put("agency_names", names.isEmpty() ? null : join(names, ", "));
     row.put("agency_slugs", slugs.isEmpty() ? null : join(slugs, ","));
+  }
+
+  /**
+   * The federalregister.gov API's {@code effective_on} field is normally an ISO date, but for
+   * some Airworthiness Directive RULE documents it carries the agency's own AD docket number
+   * (e.g. {@code 2026-13-52}) instead — a source-side data-quality defect, not a parse failure.
+   */
+  private static String validIsoDateOrNull(String text) {
+    if (text == null) {
+      return null;
+    }
+    try {
+      LocalDate.parse(text, DateTimeFormatter.ISO_LOCAL_DATE);
+      return text;
+    } catch (DateTimeParseException e) {
+      return null;
+    }
   }
 
   private static String getTextOrNull(JsonNode node, String field) {

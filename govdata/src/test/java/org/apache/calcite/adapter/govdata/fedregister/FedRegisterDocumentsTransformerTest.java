@@ -271,6 +271,40 @@ class FedRegisterDocumentsTransformerTest {
         () -> transformer.transform("not valid json {{{", context));
   }
 
+  @Test void testEffectiveOnAdNumberIsNull() throws Exception {
+    // Some Airworthiness Directive RULE documents carry the AD docket number
+    // (e.g. 2026-13-52) in effective_on instead of a real date.
+    String response = "{"
+        + "\"count\": 1,"
+        + "\"total_pages\": 1,"
+        + "\"results\": [{"
+        + "  \"document_number\": \"2026-13655\","
+        + "  \"effective_on\": \"2026-13-52\""
+        + "}]"
+        + "}";
+
+    String result = transformer.transform(response, context);
+    JsonNode array = MAPPER.readTree(result);
+
+    assertTrue(array.get(0).get("effective_on").isNull());
+  }
+
+  @Test void testEffectiveOnValidDateIsKept() throws Exception {
+    String response = "{"
+        + "\"count\": 1,"
+        + "\"total_pages\": 1,"
+        + "\"results\": [{"
+        + "  \"document_number\": \"2023-00001\","
+        + "  \"effective_on\": \"2023-06-09\""
+        + "}]"
+        + "}";
+
+    String result = transformer.transform(response, context);
+    JsonNode array = MAPPER.readTree(result);
+
+    assertEquals("2023-06-09", array.get(0).get("effective_on").asText());
+  }
+
   @Test void testDocTypeFromContextNotResponse() throws Exception {
     // doc_type should come from context.dimensionValues, not the response "type" field
     String response = "{"
