@@ -89,9 +89,16 @@ should_run "cyber_threat" && register_cyber_schema "cyber_threat"
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 run_cyber_model() {
-  local schema=$1 model_name=$2 enabled_tables=$3
+  local schema=$1 model_name=$2 table_csv=$3
   shift 3
   local extra_operands="${1:-}"
+
+  local enabled_tables
+  enabled_tables="$(filter_enabled_tables "$table_csv")"
+  if [ -z "$enabled_tables" ]; then
+    log_info "$WORKER_ID: skipping $model_name — none of its tables match GOVDATA_TABLES=${GOVDATA_TABLES}"
+    return
+  fi
 
   local model_file="$MODEL_DIR/${model_name}.json"
 
@@ -154,7 +161,7 @@ case "$MODE" in
     # would clobber the version history daily accumulates via `append`. So historical scopes
     # cyber_vuln to just those three tables and skips cyber_threat entirely (it is daily-only).
     if should_run "cyber_vuln"; then
-      run_cyber_model "cyber_vuln" "vuln-$MODE" '"vulnerabilities","vulnerability_cwes","vulnerability_cpes"'
+      run_cyber_model "cyber_vuln" "vuln-$MODE" "vulnerabilities,vulnerability_cwes,vulnerability_cpes"
     fi
     ;;
 
@@ -171,7 +178,7 @@ case "$MODE" in
     # its case below.
     if should_run "cyber_vuln"; then
       run_cyber_model "cyber_vuln" "vuln-$MODE" \
-        '"cwe_catalog","kev_catalog","kev_cwes","osv_vulnerabilities","vuln_cross_refs","advisories"'
+        "cwe_catalog,kev_catalog,kev_cwes,osv_vulnerabilities,vuln_cross_refs,advisories"
     fi
     if should_run "cyber_threat"; then
       run_cyber_model "cyber_threat" "threat-$MODE" ''
