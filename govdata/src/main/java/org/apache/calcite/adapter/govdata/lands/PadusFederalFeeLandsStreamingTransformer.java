@@ -30,6 +30,12 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Streaming transformer for {@code padus_federal_fee_lands} (USGS GAP Analysis Project's
@@ -106,14 +112,42 @@ public class PadusFederalFeeLandsStreamingTransformer implements StreamingRespon
       conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
       conn.setReadTimeout(READ_TIMEOUT_MS);
       conn.setRequestProperty("User-Agent", "GovData/1.0");
+      // setReadTimeout only bounds the gap between individual socket reads, not the fetch as a
+      // whole — a connection that keeps trickling in a few bytes just under that gap on every
+      // read never trips it and can hold the page open indefinitely. Confirmed live 2026-09-27:
+      // worker-lands-daily hung 16+ minutes past the 10-minute READ_TIMEOUT_MS budget, parked in
+      // ObjectMapper.readTree() reading this exact response body. Running the read on its own
+      // thread and bounding it with Future.get() enforces a real end-to-end deadline; disconnect()
+      // from this thread forces the blocked read in that thread to fail on timeout.
+      ExecutorService fetchExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "padus-fee-lands-fetch");
+        t.setDaemon(true);
+        return t;
+      });
       try {
         if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
           throw new IOException("HTTP " + conn.getResponseCode() + " from PAD-US query");
         }
+        Future<JsonNode> future = fetchExecutor.submit(() -> {
+          try (BufferedReader r = new BufferedReader(
+              new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+            return MAPPER.readTree(r);
+          }
+        });
         JsonNode root;
-        try (BufferedReader r = new BufferedReader(
-            new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-          root = MAPPER.readTree(r);
+        try {
+          root = future.get(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+          conn.disconnect();
+          future.cancel(true);
+          throw new IOException("padus_federal_fee_lands: page fetch at offset " + offset
+              + " exceeded the overall " + READ_TIMEOUT_MS + "ms deadline (stalled transfer)", e);
+        } catch (ExecutionException e) {
+          Throwable cause = e.getCause();
+          throw cause instanceof IOException ? (IOException) cause : new IOException(cause);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new IOException("padus_federal_fee_lands: page fetch interrupted", e);
         }
         if (root.path("error").isObject()) {
           throw new IOException("PAD-US query error: " + root.path("error").toString());
@@ -125,6 +159,7 @@ public class PadusFederalFeeLandsStreamingTransformer implements StreamingRespon
         }
       } finally {
         conn.disconnect();
+        fetchExecutor.shutdownNow();
       }
     }
 
