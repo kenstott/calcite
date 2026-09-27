@@ -2,7 +2,8 @@
 -- U.S. Disasters Data Quality Checks
 -- Schema: disasters
 -- Tables: disaster_declarations, public_assistance_projects, hazard_mitigation_projects,
---         nfip_claims, nfip_policies, storm_events, wildfire_perimeters
+--         nfip_claims, nfip_policies, nfip_multiple_loss_properties, storm_events,
+--         wildfire_perimeters
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns 'type' and 'year'.
 -- nfip_policies is capped by dqRowLimit (50k/year) in DQ mode, so its T2 threshold is a
@@ -212,6 +213,51 @@ INSERT INTO dq_results
 SELECT 'disasters', 'nfip_policies', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_policies', allow_moved_paths := true) WHERE id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nfip_multiple_loss_properties (snapshot, no year axis)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'nfip_multiple_loss_properties', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_multiple_loss_properties', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfip_multiple_loss_properties', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END, n, 50, 'Expected >=50 repetitive-loss property rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_multiple_loss_properties', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_multiple_loss_properties', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfip_multiple_loss_properties', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_multiple_loss_properties', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfip_multiple_loss_properties', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_multiple_loss_properties', allow_moved_paths := true))
+    -- boolean flag columns (nfip_rl/nfip_srl/fma_rl/fma_srl/etc.) legitimately have only 2
+    -- distinct values; as_of_date is one value for the whole file (a single wholesale
+    -- snapshot publish, not a per-row field) — exclude these from the single-value check
+    -- rather than the whole table.
+    WHERE approx_unique <= 1 AND column_name NOT IN (
+      'type', 'post_firm_construction_indicator', 'primary_residence_indicator',
+      'nfip_rl', 'nfip_srl', 'fma_rl', 'fma_srl', 'mitigated_indicator', 'insured_indicator',
+      'as_of_date')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfip_multiple_loss_properties', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_multiple_loss_properties', allow_moved_paths := true) WHERE id IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: storm_events

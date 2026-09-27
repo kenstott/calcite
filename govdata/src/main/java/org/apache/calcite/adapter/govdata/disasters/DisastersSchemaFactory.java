@@ -31,7 +31,8 @@ import java.util.Set;
  * <ul>
  *   <li><b>FEMA</b> OpenFEMA API — {@code disaster_declarations},
  *       {@code public_assistance_projects}, {@code hazard_mitigation_projects},
- *       {@code nfip_claims}, {@code nfip_policies} (paginated REST JSON, no key)</li>
+ *       {@code nfip_claims}, {@code nfip_multiple_loss_properties}, {@code nfip_policies}
+ *       (paginated REST JSON, no key)</li>
  *   <li><b>NOAA</b> NCEI Storm Events — {@code storm_events} (per-year bulk gzip CSV, streamed)</li>
  *   <li><b>NIFC</b> WFIGS — {@code wildfire_perimeters} (ArcGIS polygons, streamed with
  *       Esri-ring-to-WKT geometry conversion)</li>
@@ -67,6 +68,7 @@ public class DisastersSchemaFactory implements GovDataSubSchemaFactory {
     m.put("public_assistance_projects", "fema");
     m.put("hazard_mitigation_projects", "fema");
     m.put("nfip_claims", "fema");
+    m.put("nfip_multiple_loss_properties", "fema");
     m.put("nfip_policies", "fema");
     m.put("storm_events", "noaa");
     m.put("wildfire_perimeters", "wfigs");

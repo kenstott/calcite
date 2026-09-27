@@ -870,6 +870,204 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # NFIP MULTIPLE LOSS PROPERTIES — FEMA NfipMultipleLossProperties (v1)
+  # ---------------------------------------------------------------------------
+  - name: nfip_multiple_loss_properties
+    # Latest-snapshot table (no year axis): FEMA republishes this file periodically
+    # (~annually, accrualPeriodicity R/P1Y) as a full replace, not an incremental series;
+    # the hash probe skips the write when the file is unchanged since the last successful
+    # run. dataset_type: snapshot makes a run that writes zero rows fail loudly instead of
+    # silently marking an empty table complete.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=nfip_multiple_loss_properties/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA's own property-level NFIP repetitive-loss aggregation — one row per structure
+      that has ever met a Repetitive Loss (RL) or Severe Repetitive Loss (SRL) threshold
+      (~240k rows), with total_losses (paid-claim count since 1978) and
+      most_recent_date_of_loss per property. Ingested as the authoritative answer to "how
+      concentrated are flood claims in properties that flood repeatedly": nfip_claims has
+      no property/building identifier, and lat/lon (rounded to 1 decimal) or census_tract
+      are both far too coarse to derive a per-property repeat-claim count from claims
+      alone (many distinct properties share one rounded coordinate or tract). This table
+      is FEMA's own property-level rollup, not a proxy. nfip_rl/nfip_srl are the
+      insurance-claims-based categories; fma_rl/fma_srl are the separate Flood Mitigation
+      Assistance grant-eligibility categories (see column comments for the exact
+      thresholds) — a property can qualify under either, both, or neither pair.
+      mitigated_indicator/insured_indicator reflect current status as of as_of_date, so a
+      property already bought out or demolished can still appear (per FEMA's own dataset
+      description). census_block_group is not carried here: FEMA's own file renders it in
+      lossy scientific notation (e.g. "2.2055E+11" for a 12-digit code), destroying the
+      digits after the leading county FIPS — county_fips (from fipsCountyCode, full
+      precision) is the reliable location join instead. Distinct from nfip_claims
+      (realized paid losses, one row per claim, not per property) and nfip_policies
+      (policy-term coverage/premium transactions). Joins to geo.counties via county_fips.
+      Source: fema.gov/api/open/v1/NfipMultipleLossProperties.
+
+    dimensions:
+      type:
+        - nfip_multiple_loss_properties
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-char state abbreviation
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name, as published by FEMA (e.g. "LAFAYETTE PARISH")
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: Reported ZIP code
+      - name: reported_city
+        type: string
+        nullable: true
+        comment: Reported city name
+      - name: community_id_number
+        type: string
+        nullable: true
+        comment: NFIP community identifier (ties to community/CID boundary data)
+      - name: community_name
+        type: string
+        nullable: true
+        comment: NFIP community name
+      - name: flood_zone
+        type: string
+        nullable: true
+        comment: FEMA rated flood zone (AE, VE, X, etc.)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Approximate latitude (to 1 decimal per FEMA privacy rules)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Approximate longitude
+      - name: occupancy_type
+        type: integer
+        nullable: true
+        comment: Occupancy type code (1=single family, etc.)
+      - name: original_construction_date
+        type: date
+        nullable: true
+        comment: Original date of the building's construction
+      - name: original_nb_date
+        type: date
+        nullable: true
+        comment: Date of the property's original (first) NFIP flood policy
+      - name: post_firm_construction_indicator
+        type: boolean
+        nullable: true
+        comment: >
+          True if construction began after the community's Flood Insurance Rate Map (FIRM)
+          took effect (or after 1974-12-31, whichever governs insurance rating)
+      - name: primary_residence_indicator
+        type: boolean
+        nullable: true
+        comment: True if the structure is a primary residence
+      - name: nfip_rl
+        type: boolean
+        nullable: true
+        comment: >
+          NFIP insurance-claims Repetitive Loss: 2+ paid claims (building + contents)
+          each over $1,000, within any 10-year period
+      - name: nfip_srl
+        type: boolean
+        nullable: true
+        comment: >
+          NFIP insurance-claims Severe Repetitive Loss: 4+ paid claims each over $5,000
+          with cumulative payments over $20,000, or 2+ building-only claims with
+          cumulative payments exceeding the building's market value; claims must span
+          10 years
+      - name: fma_rl
+        type: boolean
+        nullable: true
+        comment: >
+          Flood Mitigation Assistance grant-eligibility Repetitive Loss: 2 flood damage
+          events each costing on average 25%+ of the structure's value to repair
+      - name: fma_srl
+        type: boolean
+        nullable: true
+        comment: >
+          Flood Mitigation Assistance grant-eligibility Severe Repetitive Loss: same
+          claim-count/dollar thresholds as nfip_srl, evaluated for FMA grant eligibility
+      - name: mitigated_indicator
+        type: boolean
+        nullable: true
+        comment: True if the property is currently mitigated (elevated, bought out, etc.) as of as_of_date
+      - name: insured_indicator
+        type: boolean
+        nullable: true
+        comment: True if the property currently carries an NFIP policy as of as_of_date
+      - name: total_losses
+        type: integer
+        nullable: true
+        comment: >
+          Total paid NFIP claims over $1,000 since 1978 for this structure — FEMA's own
+          caveat: may be inflated by incorrectly linked structures
+      - name: most_recent_date_of_loss
+        type: date
+        nullable: true
+        comment: Most recent date of loss for a closed NFIP claim on this structure
+      - name: as_of_date
+        type: date
+        nullable: true
+        comment: Effective date of this snapshot, as published by FEMA
+      - name: id
+        type: string
+        nullable: false
+        comment: OpenFEMA row UUID (PK)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v1/NfipMultipleLossProperties"
+      method: GET
+      parameters:
+        $orderby: "id"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "NfipMultipleLossProperties"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaNfipMultipleLossPropertiesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nfip_multiple_loss_properties/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: nfip_multiple_loss_properties
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # STORM EVENTS — NOAA NCEI Storm Events bulk CSV.gz (streaming, per year)
   # ---------------------------------------------------------------------------
   - name: storm_events
@@ -1576,6 +1774,27 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
       - columns: [reported_zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit reported ZIP to the conformed ZCTA dimension
+
+  nfip_multiple_loss_properties:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [zip_code]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: zcta_ref
         targetColumns: [zcta]
