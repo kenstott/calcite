@@ -5855,7 +5855,14 @@ partitionedTables:
       - name: table_name
         type: string
         nullable: true
-        comment: BEA table identifier (e.g., SAINC1, SAINC30)
+        comment: >
+          BEA table identifier (e.g., SAINC1, SAINC30). Several series exist as separate
+          table_name values per industry-classification vintage rather than one continuous
+          series: the *H tables (e.g. SAINC5H, SAINC7H) cover 1929-1957, *S tables (SAINC5S,
+          SAINC6S, SAINC7S) cover the SIC-era 1958-2001, and *N tables (SAINC5N, SAINC6N,
+          SAINC7N) cover the NAICS-era 1998-present. A single table_name stopping short of the
+          table's overall observedCoverage max year is expected for these — it is not a gap;
+          check the sibling H/S/N table_name for the surrounding years.
       - name: line_code
         type: string
         nullable: true
