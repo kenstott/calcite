@@ -111,6 +111,16 @@ class CoverageAndExternalSourcesTest {
               schema + "." + table + " invented a window for a table with no years: " + cov);
           continue;
         }
+        if ("columnOnly".equals(cov.path("form").asText())) {
+          // A year column with deliberately no declared window (a union of sub-series with
+          // different real ranges, or a single-reference-year snapshot table) — same
+          // already-final shape as "none", just time-varying.
+          assertEquals(true, cov.path("time_varying").asBoolean(false),
+              schema + "." + table + " has a year column but claims no time axis: " + cov);
+          assertTrue(!cov.has("first_year") && !cov.has("last_year"),
+              schema + "." + table + " invented a window it declares none of: " + cov);
+          continue;
+        }
         resolved++;
         if (cov.has("first_year") && cov.has("last_year")) {
           assertTrue(cov.path("first_year").asInt() <= cov.path("last_year").asInt(),

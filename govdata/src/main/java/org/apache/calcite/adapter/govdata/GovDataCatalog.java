@@ -219,6 +219,27 @@ public final class GovDataCatalog {
       return;
     }
 
+    // Neither a year dimension nor a year partition column is declared, but the table may
+    // still carry a plain "year" data column — e.g. a table unioning sub-series with
+    // different real ranges (no single window can honestly describe all of them), or a
+    // single-reference-year snapshot table (the "year" it carries changes release to
+    // release). Either way the table plainly varies by year and can be filtered/grouped
+    // by it, so "no time axis" would be a false claim, not an honest omission.
+    if (hasYearColumn(t)) {
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("column", "year");
+      cov.put("form", "columnOnly");
+      cov.put("time_varying", true);
+      putObserved(cov, observed);
+      cov.put("note", "This table has a year column and can be filtered/grouped by it, but "
+          + "declares no single ingestion window — usually because it unions sub-series "
+          + "with different real ranges, or carries one release's reference year rather "
+          + "than a continuous series. Call data_coverage(schema, table) for the actual "
+          + "years present rather than assuming a continuous range.");
+      to.set("coverage", cov);
+      return;
+    }
+
     // No year in any position. Say so outright rather than omitting the node: an absent
     // coverage node is ambiguous — it reads equally as "this table has no time axis", "we
     // could not determine its coverage", and "somebody forgot to declare it". A caller
@@ -231,6 +252,15 @@ public final class GovDataCatalog {
         + "year partition column, so it cannot be filtered or trended over time. Any "
         + "year-over-year question needs a different table.");
     to.set("coverage", cov);
+  }
+
+  private static boolean hasYearColumn(JsonNode t) {
+    for (JsonNode c : t.path("columns")) {
+      if ("year".equalsIgnoreCase(text(c.get("name")))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

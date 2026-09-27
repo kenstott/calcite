@@ -233,7 +233,13 @@ final class Catalog {
 
         // A table with no time axis has no window to resolve; the catalog's own node already
         // says so, and resolving it would invent a ceiling for a table that has no years.
-        if ("none".equals(cov.path("form").asText(null))) {
+        // "columnOnly" is the same shape of already-final node — a year column with
+        // deliberately no declared start/end — and must not fall into the resolution
+        // logic below, which treats a missing "end" as "runs through the current year"
+        // and would fabricate exactly the kind of overstated window this form exists to
+        // avoid.
+        if ("none".equals(cov.path("form").asText(null))
+                || "columnOnly".equals(cov.path("form").asText(null))) {
             return (ObjectNode) cov.deepCopy();
         }
 
