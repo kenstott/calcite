@@ -40,6 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -633,6 +634,9 @@ public class EtlPipeline {
           }
         }
 
+        PartialPartitionGuard.reopenPartitions(config, combinations, standardUnprocessedIndices,
+            reopenableCombos(pipelineName, config));
+
         neededCount = standardUnprocessedIndices.size();
         skippedBatches = totalBatches - neededCount;
         LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
@@ -1057,6 +1061,11 @@ public class EtlPipeline {
                 pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
                 partCombos.size(), pipelineName);
             unprocessedIndices = allIndicesSet(partCombos.size());
+          }
+
+          if (!forceReprocessAll) {
+            PartialPartitionGuard.reopenPartitions(config, partCombos, unprocessedIndices,
+                reopenableCombos(pipelineName, config));
           }
 
           if (unprocessedIndices.isEmpty()) {
@@ -3225,6 +3234,20 @@ public class EtlPipeline {
   private static boolean isPeriodDimensionName(String name) {
     return "year".equals(name) || "quarter".equals(name) || "month".equals(name)
         || "week".equals(name) || "day".equals(name);
+  }
+
+  /**
+   * Which combinations a partition reopen may dispatch again: all of them, except those the
+   * tracker holds as unavailable inside their retry window.
+   */
+  private Predicate<Map<String, String>> reopenableCombos(final String pipelineName,
+      final EtlPipelineConfig config) {
+    if (!(incrementalTracker instanceof PipelineTracker)) {
+      return combo -> true;
+    }
+    final PipelineTracker pipelineTracker = (PipelineTracker) incrementalTracker;
+    final long retryMillis = config.getErrorHandling().getNotFoundRetryDays() * 86400000L;
+    return combo -> !pipelineTracker.isUnavailable(pipelineName, pipelineName, combo, retryMillis);
   }
 
   /**

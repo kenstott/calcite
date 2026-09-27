@@ -696,6 +696,20 @@ public class MaterializeConfig {
     }
 
     /**
+     * Whether this run replaces the partitions it writes: {@link #isOverwritePartitions()}, unless
+     * the {@link #getAppendWhenOperand() append-when operand} selects append for this run. The
+     * writer and the pipeline's dispatch both need the run-mode answer, not the static flag.
+     */
+    public boolean isReplacingPartitionsThisRun() {
+      if (!overwritePartitions) {
+        return false;
+      }
+      return !(appendWhenOperand != null && !appendWhenOperand.isEmpty()
+          && appendWhenValue != null
+          && appendWhenValue.equals(ModelOperand.getString(appendWhenOperand)));
+    }
+
+    /**
      * Dotted {@link ModelOperand} path (e.g. {@code cyber_threat.runMode}) whose value, when it
      * equals {@link #getAppendWhenValue()}, flips this write from replace-partitions to append for
      * that run. Null disables the override (the static {@link #isOverwritePartitions()} applies).

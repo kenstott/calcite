@@ -26,6 +26,8 @@ import java.util.regex.Pattern;
  * wrote only some of a partition's units would drop the rest. That invariant was implicit, which is
  * how it came to be violated when per-unit skipping was extended to non-period fetch dimensions.
  *
+ * <p>{@link PartialPartitionGuard} applies the same invariant to tracker-driven partial dispatch.
+ *
  * <p>When the invariant does not hold, per-unit skipping is disabled and the pipeline falls back to
  * all-or-nothing freshness. That is the behavior these tables had before per-unit skipping was
  * extended to them, so it removes an optimization rather than changing what is written.
@@ -86,6 +88,23 @@ final class PerUnitSkipSafety {
       return none;
     }
 
+    return dimensionsOutsidePartition(config);
+  }
+
+  /**
+   * The multi-valued fetch dimensions that are absent from the partition key — the axes along which
+   * two distinct fetch units can land in one partition. Independent of any freshness gate: it
+   * describes the table's shape, which is what decides whether a partial write can drop a sibling
+   * unit's rows.
+   *
+   * @param config the pipeline config
+   * @return offending dimension names, in declaration order; empty when the key determines the unit
+   */
+  static Set<String> dimensionsOutsidePartition(EtlPipelineConfig config) {
+    Set<String> none = Collections.emptySet();
+    if (config == null) {
+      return none;
+    }
     Map<String, DimensionConfig> dimensions = config.getDimensions();
     if (dimensions == null || dimensions.isEmpty()) {
       return none;
