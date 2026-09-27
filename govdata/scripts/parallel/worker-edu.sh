@@ -44,8 +44,15 @@ mkdir -p "$MODEL_DIR"
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 read -r _self_start_year _self_end_year <<< "$(_year_range_from_mode "$MODE")"
+# Check the suffixed (pool-launched) form first, same fix as worker.sh (#744): a
+# pool-launched invocation always has a freshly-written suffixed pid file, but the plain
+# ${WORKER_ID}.pid path can be a stale leftover from an unrelated earlier invocation and
+# must not be checked first.
 _existing_worker_pid=""
-[ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_worker_pid=$(head -1 "$PID_DIR/${WORKER_ID}.pid" 2>/dev/null | tr -d '[:space:]')
+_existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1)
+[ -n "$_existing_pid_file" ] || { [ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_pid_file="$PID_DIR/${WORKER_ID}.pid"; }
+[ -n "$_existing_pid_file" ] && [ -f "$_existing_pid_file" ] \
+  && _existing_worker_pid=$(head -1 "$_existing_pid_file" 2>/dev/null | tr -d '[:space:]')
 _is_pool_launched=false
 if [ -n "$_existing_worker_pid" ] && kill -0 "$_existing_worker_pid" 2>/dev/null; then
   _is_pool_launched=true
