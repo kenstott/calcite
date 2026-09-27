@@ -386,6 +386,62 @@ SELECT 'ag', 'fsa_commodity_payments', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL program_code rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fsa_commodity_payments', allow_moved_paths := true) WHERE program_code IS NULL);
 
+-- ------------------------------------------------------------
+-- TABLE: fas_export_sales (partition cols: type, year; PK id cols: commodity_code, country_code, week_ending_date)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'fas_export_sales', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'fas_export_sales', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+-- country_iso3/region_id are NOT excluded from T4: FAS's own "EUROPEAN"
+-- code (countryCode=1) is a real, low-volume destination row, so a null
+-- gencCode for it does not make the whole column all-null in a real sample.
+SELECT 'ag', 'fas_export_sales', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+-- unit_id/unit_name are excluded: this table is overwhelmingly Metric Tons
+-- (unitId=1) by USDA ESR design across almost every commodity, not an
+-- ingestion gap -- same idiom as nass_crop_production's sector_desc exclusion.
+SELECT 'ag', 'fas_export_sales', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'unit_id', 'unit_name')));
+INSERT INTO dq_results
+SELECT 'ag', 'fas_export_sales', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL commodity_code/country_code/week_ending_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true)
+  WHERE commodity_code IS NULL OR country_code IS NULL OR week_ending_date IS NULL);
+INSERT INTO dq_results
+SELECT 'ag', 'fas_export_sales', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, commodity_code, country_code, week_ending_date) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+    SELECT year, commodity_code, country_code, week_ending_date, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true)
+    GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1
+  ));
+-- T7: China (5700) soybean (801) rows exist and carry non-null weekly_exports --
+-- the exact slice kenstott/govdata-ops#655 needs. A fail here means the table
+-- is populated but not with the commodity/country combination it exists for.
+INSERT INTO dq_results
+SELECT 'ag', 'fas_export_sales', 'T7_china_soybeans_present',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'China (5700) Soybeans (801) rows with non-null weekly_exports'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/fas_export_sales', allow_moved_paths := true)
+  WHERE country_code = 5700 AND commodity_code = 801 AND weekly_exports IS NOT NULL);
+
 -- ============================================================================
 -- T1/T2 — tables previously absent from this file entirely.
 -- A table with no checks emits no dq rows, which reads as healthy rather than as

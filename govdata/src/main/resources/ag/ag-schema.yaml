@@ -9,6 +9,9 @@
 #   - USGS NAWQA Pesticide National Synthesis Project (bulk tab-delimited txt, one
 #     table per year or per multi-year vintage; discovered by scraping the county-level
 #     usage-maps landing page) — no key
+#   - FAS Export Sales Reporting (ESR) REST API (weekly net sales/outstanding
+#     sales/shipments by commodity x destination country x week) — API_DATA_GOV key
+#     (shared api.data.gov key, already used by edu/energy/officials)
 
 #
 # Design: each ETL table mirrors exactly one upstream source (tall). Wide/pivot
@@ -23,7 +26,9 @@ comment: >
   USDA agricultural economics: crop production and livestock inventory (NASS
   QuickStats), Census of Agriculture farm counts/size and NASS Land Values
   survey (NASS QuickStats), farm income and wealth (ERS), and crop insurance
-  experience (RMA Summary of Business); plus USGS estimated agricultural
+  experience (RMA Summary of Business); USDA FAS weekly Export Sales Reporting
+  (net sales, outstanding sales, and shipments by commodity and destination
+  country, published every Thursday); plus USGS estimated agricultural
   pesticide use by county (NAWQA Pesticide National Synthesis Project). County-
   and state-level, joinable to geo.counties / geo.states via state_fips_code +
   county_code, to disasters (drought/storm) for yield-impact analysis, and to
@@ -250,6 +255,30 @@ dimension_values:
     minYear: 2004
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
+
+  # FAS ESR marketYear, not a calendar-lag data year: the weekly report for the
+  # active marketing year is published live (no dataLag). Confirmed live
+  # 2026-09-27: marketYear back to 1999 returns real weekly rows via
+  # /api/esr/exports; minYear matches that floor. Early-marketing-year
+  # commodities (corn/soybeans start Sept 1) are already reporting under next
+  # calendar year's marketYear before GOVDATA_CURRENT_YEAR rolls over -- set
+  # GOVDATA_END_YEAR one year ahead to pick up that leading edge immediately
+  # rather than waiting for the new calendar year.
+  fas_year_range: &fas_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 1999
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
+  # Full USDA FAS ESR commodity catalog (44 codes as of 2026-09-27), fetched live
+  # from https://api.fas.usda.gov/api/esr/commodities and checked in as
+  # fas-commodities.json -- small, stable list (new commodities are added rarely
+  # and require a code re-fetch, not a per-run catalog call).
+  fas_commodities: &fas_commodities
+    type: json_catalog
+    source: "/ag/fas-commodities.json"
+    path: "commodities[*].commodityCode"
 
   # NASS geographic aggregation levels ingested (county + state; national totals
   # are derivable and out of scope for the county/state fan-out).
@@ -1381,6 +1410,196 @@ partitionedTables:
       iceberg: *nass_iceberg
 
   # ---------------------------------------------------------------------------
+  # FAS_EXPORT_SALES — USDA FAS weekly Export Sales Reporting (ESR)
+  # ---------------------------------------------------------------------------
+  # One HTTP call per commodity x marketYear via the "allCountries" endpoint
+  # returns every destination's full weekly time series for that marketYear in
+  # a single response (no per-country fan-out needed). commodity_code fans out
+  # over the full 44-code catalog (fas_commodities, from fas-commodities.json);
+  # year fans out over marketYear (fas_year_range). Each fetch returns the
+  # marketYear's ENTIRE weekly series to date, so re-running mid-season must
+  # replace the partition, not append (see materialize.iceberg below) --
+  # confirmed live 2026-09-27 against https://api.fas.usda.gov/api/esr.
+  - name: fas_export_sales
+    # Freshness gate: a REST query API has no meaningful Last-Modified for the
+    # underlying data, so this hashes the response body post-fetch to skip the
+    # materialize/commit when nothing changed since the last successful run
+    # (fails open on a missing prior token) -- same idiom as the NASS tables above.
+    freshness:
+      type: hash
+    pattern: "type=fas_export_sales/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA FAS Export Sales Reporting (ESR) — weekly net sales, outstanding
+      sales, shipments, and marketing-year total commitment by commodity and
+      destination country, published every Thursday. year is the FAS marketYear
+      (not calendar year; marketing-year start month varies by commodity — e.g.
+      corn/soybeans start September 1, wheat starts June 1). One row per
+      commodity x country x week_ending_date. weekly_exports is that week's
+      physical shipments; accumulated_exports is the marketing-year-to-date
+      shipment total; outstanding_sales is contracted-but-not-yet-shipped
+      quantity; current_my_net_sales/current_my_total_commitment cover the
+      active marketing year, next_my_outstanding_sales/next_my_net_sales are
+      forward sales already booked against the following marketing year (used
+      for early-signal detection, e.g. a large next_my_net_sales spike ahead of
+      the current marketing year's close). country_code is FAS's own numeric
+      code (China=5700, not an ISO code); country_iso3 carries the ISO
+      3166-1/GENC alpha-3 equivalent where FAS publishes one (null for FAS
+      regional/historical groupings that are not real ISO countries) for a
+      best-effort join to ref.countries.iso_alpha3. Detecting a purchase
+      pause/resume: filter commodity_code + country_code and watch
+      weekly_exports and current_my_net_sales (a net sales row can go negative
+      on a cancellation) week over week; a sudden multi-week run of zero/near-
+      zero weekly_exports and current_my_net_sales after a prior active run is
+      the pause signature, a resumed positive current_my_net_sales week is the
+      resume signature. Joins to econ.fred_indicators (commodity price context)
+      and ag.nass_crop_production (US production side of the same commodity).
+
+    dimensions:
+      type:
+        - fas_export_sales
+      commodity_code: *fas_commodities
+      year: *fas_year_range
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: FAS marketYear (partition column) — not calendar year, see table comment
+      - name: commodity_code
+        type: int
+        source: commodity_code
+        nullable: false
+        comment: FAS commodity code (FK-ish to the bundled fas-commodities.json catalog)
+      - name: commodity_name
+        type: string
+        source: commodity_name
+        nullable: true
+        comment: Commodity name (e.g. Corn, Soybeans, Wheat - HRW), from the bundled commodity catalog
+      - name: unit_id
+        type: int
+        source: unit_id
+        nullable: true
+        comment: FAS unit-of-measure id for the quantity fields (see unit_name)
+      - name: unit_name
+        type: string
+        source: unit_name
+        nullable: true
+        comment: "Unit name for the quantity fields: Metric Tons, Running Bales, Pieces, NUMBER, or Pounds"
+      - name: country_code
+        type: int
+        source: country_code
+        nullable: false
+        comment: FAS numeric country/region code (own code system, not ISO — e.g. China=5700, Canada=1220)
+      - name: country_name
+        type: string
+        source: country_name
+        nullable: true
+        comment: FAS country/region short name, from the bundled country catalog
+      - name: country_iso3
+        type: string
+        source: country_iso3
+        nullable: true
+        comment: >
+          ISO 3166-1 / GENC alpha-3 equivalent where FAS publishes one (its
+          gencCode field) — null for FAS regional/historical groupings (e.g.
+          "EUROPEAN UNION - 27") that are not real ISO countries. Best-effort
+          FK to ref.countries.iso_alpha3.
+      - name: region_id
+        type: int
+        source: region_id
+        nullable: true
+        comment: FAS region grouping id for country_code, from the bundled country catalog
+      - name: week_ending_date
+        type: string
+        source: week_ending_date
+        nullable: false
+        comment: Thursday-published week-ending date for this row (YYYY-MM-DD)
+      - name: weekly_exports
+        type: double
+        source: weekly_exports
+        nullable: true
+        comment: Physical shipments (exports) during this week, in unit_name units
+      - name: accumulated_exports
+        type: double
+        source: accumulated_exports
+        nullable: true
+        comment: Marketing-year-to-date cumulative shipments through this week
+      - name: outstanding_sales
+        type: double
+        source: outstanding_sales
+        nullable: true
+        comment: Quantity sold (contracted) but not yet shipped, as of this week
+      - name: gross_new_sales
+        type: double
+        source: gross_new_sales
+        nullable: true
+        comment: Gross new sales bookings during this week (before cancellations)
+      - name: current_my_net_sales
+        type: double
+        source: current_my_net_sales
+        nullable: true
+        comment: Net sales (new bookings minus cancellations) for the current marketing year during this week; can be negative
+      - name: current_my_total_commitment
+        type: double
+        source: current_my_total_commitment
+        nullable: true
+        comment: Cumulative current-marketing-year total commitment (accumulated exports + outstanding sales) through this week
+      - name: next_my_outstanding_sales
+        type: double
+        source: next_my_outstanding_sales
+        nullable: true
+        comment: Quantity already sold against the NEXT marketing year, as of this week
+      - name: next_my_net_sales
+        type: double
+        source: next_my_net_sales
+        nullable: true
+        comment: Net sales booked against the NEXT marketing year during this week
+
+    source:
+      type: http
+      url: "https://api.fas.usda.gov/api/esr/exports/commodityCode/{commodity_code}/allCountries/marketYear/{effective_year}"
+      method: GET
+      parameters:
+        api_key: "${API_DATA_GOV}"
+      response:
+        format: json
+      rateLimit:
+        # api.data.gov API Umbrella gateway (same shared key/host family as
+        # officials.members/nominations congress.gov calls) — same rate-limit
+        # convention applied there.
+        requestsPerSecond: 5.0
+        retryOn: [429, 503]
+        maxRetries: 5
+        retryBackoffMs: 2000
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.FasExportSalesTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=fas_export_sales/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        # Each fetch returns the marketYear's ENTIRE weekly series to date (not
+        # just new weeks), so re-running mid-season must REPLACE the year
+        # partition, not append -- same reasoning as ers_farm_income above.
+        <<: *nass_iceberg
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # PESTICIDE_USE_BY_COUNTY — USGS NAWQA county-level agricultural pesticide use
   # ---------------------------------------------------------------------------
   # Live-verified 2026-08-02 against water.usgs.gov/nawqa/pnsp/usage/maps/county-level/:
@@ -1852,6 +2071,23 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+  fas_export_sales:
+    # One row per commodity x country x week within a marketYear.
+    primaryKey:
+      - type
+      - year
+      - commodity_code
+      - country_code
+      - week_ending_date
+    foreignKeys:
+      - columns: [country_iso3]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha3]
+        comment: >
+          Best-effort: FAS's gencCode is usually ISO 3166-1 alpha-3, but is null
+          for FAS regional/historical groupings that are not real ISO countries.
 
   pesticide_use_by_county:
     # One row per compound x county x year.

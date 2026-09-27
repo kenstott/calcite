@@ -30,9 +30,11 @@ import java.util.Set;
  * select a subset (mirrors the ENERGY schema pattern):
  * <ul>
  *   <li>{@code nass} — NASS QuickStats REST API (crop production, livestock inventory)</li>
+ *   <li>{@code rma} — RMA Summary of Business (crop insurance)</li>
+ *   <li>{@code ers} — ERS Farm Income and Wealth Statistics</li>
+ *   <li>{@code fsa} — FSA program/conservation payments</li>
+ *   <li>{@code fas} — FAS Export Sales Reporting (weekly export sales)</li>
  * </ul>
- * ERS (farm income) and RMA (crop insurance) source groups are added as those
- * tables land.
  */
 public class AgSchemaFactory implements GovDataSubSchemaFactory {
 
@@ -53,6 +55,10 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
 
   private static final Set<String> FSA_TABLES = new HashSet<>(Arrays.asList(
       "fsa_commodity_payments"
+  ));
+
+  private static final Set<String> FAS_TABLES = new HashSet<>(Arrays.asList(
+      "fas_export_sales"
   ));
 
   @Override
@@ -85,6 +91,10 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
 
     for (final String tableName : FSA_TABLES) {
       builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "fsa", enabledSources));
+    }
+
+    for (final String tableName : FAS_TABLES) {
+      builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "fas", enabledSources));
     }
 
     LOGGER.debug("Configured AG schema hooks: enabledSources={}",

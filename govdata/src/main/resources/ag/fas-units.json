@@ -1,0 +1,25 @@
+{
+  "_comment": "USDA FAS ESR unit-of-measure lookup, fetched live from https://api.fas.usda.gov/api/esr/unitsOfMeasure (2026-09-27). Used by FasExportSalesTransformer to enrich each row unitId with a readable unit_name.",
+  "units": [
+    {
+      "unitId": 1,
+      "unitNames": "Metric Tons"
+    },
+    {
+      "unitId": 2,
+      "unitNames": "Running Bales"
+    },
+    {
+      "unitId": 3,
+      "unitNames": "Pieces"
+    },
+    {
+      "unitId": 4,
+      "unitNames": "NUMBER"
+    },
+    {
+      "unitId": 5,
+      "unitNames": "Pounds"
+    }
+  ]
+}
