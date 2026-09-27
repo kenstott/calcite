@@ -148,7 +148,19 @@ partitionedTables:
     dimensions:
       type:
         - disaster_declarations
-      year: *disasters_year_range
+      # Own floor, not *disasters_year_range (D-688): confirmed live against
+      # fema.gov/api/open/v2/DisasterDeclarationsSummaries that real declaration
+      # rows exist back to 1953 (disasterNumber 1, GA, Tornado, 1953-05-02), the
+      # program's actual start, not just the 2010 default. Do not widen the shared
+      # anchor itself for this - hazard_mitigation_projects/public_assistance's
+      # real program-start floors were not verified here and are likely different
+      # (later) than this table's.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:1953}"
+        minYear: 1953
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
 
     columns:
       - <<: *disaster_number_column
