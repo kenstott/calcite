@@ -31,29 +31,37 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.HashSet;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
 
 /**
  * DataProvider for {@code nsf_award_projects} — award-level NSF grant microdata from the NSF Award
  * Search API ({@code GET /services/v1/awards.json}), one fetch per (fiscal year, award month)
  * dimension combo.
  *
- * <p>The API has no documented sort order, and confirmed live: two identical requests for the same
- * slice return the same {@code totalCount} but a different relative order of results. Walking a
- * slice across multiple {@code offset}-paged requests is therefore unsound — a record that shifts
- * position between two page fetches can fall on both sides of the offset boundary and never appear
- * on any page (silent data loss, not a duplicate). The fix is to never page at all: {@code rpp} (the
- * API's page-size parameter) accepts values far above any single month's volume (confirmed live up
- * to 10,000, one HTTP call, no pagination), so every slice is fetched as one request. A slice whose
- * {@code totalCount} reaches {@link #RESULT_CAP} is rejected rather than silently accepted as a
- * truncated prefix — the busiest month on record (August 2018) is ~3,600, well under the cap, so
- * hitting it means the monthly slice itself needs a finer split, not a paging fix.
+ * <p>Two API behaviors, both confirmed live, rule out ordinary offset pagination:
+ * <ul>
+ *   <li>The API has no documented sort order, and two identical requests for the same date range
+ *       return the same {@code totalCount} but a different relative order of results. A record
+ *       that shifts position between two page fetches for the same range can fall on both sides of
+ *       an offset boundary and never appear on any page — silent data loss, not a duplicate.
+ *   <li>A single response's {@code award} array is silently truncated at {@link #MAX_PAGE_RESULTS}
+ *       regardless of the requested {@code rpp} — confirmed live, {@code rpp=5000} and
+ *       {@code rpp=10000} both returned exactly 3,000 awards for a 3,025-award date range, with no
+ *       error and a {@code totalCount} that (unlike the array) is accurate and uncapped.
+ * </ul>
+ * Since re-requesting the same range is unsound (first bullet) and a single request cannot be
+ * trusted above the cap (second bullet), every date range this provider queries is queried exactly
+ * once: {@link AwardIterator} fetches the whole month in one request, and only when that request's
+ * {@code award} array comes back shorter than its {@code totalCount} (truncated) does it fall back
+ * to bisecting the date range and recursing on each half — never re-fetching the range that was
+ * truncated. Different halves are disjoint date windows, so this never repeats a query. A single
+ * calendar day still reporting a truncated {@code totalCount} (unsplittable) is rejected rather than
+ * accepted as a partial day; not seen in practice (max daily volume checked live: 252).
  *
  * <p>The fiscal year runs October through September, so fiscal year N's October-December slices
  * are calendar year N-1.
@@ -63,9 +71,10 @@ public class NsfAwardsProvider implements CachingDataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(NsfAwardsProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String ENDPOINT = "https://api.nsf.gov/services/v1/awards.json";
-  // The API reports at most this many results for any query, however many match; requesting this
-  // many per page guarantees a single-page fetch for any slice actually seen (see class javadoc).
-  private static final int RESULT_CAP = 10000;
+  // Confirmed live: the API truncates any single response's award array to this many records
+  // regardless of the rpp requested. Requesting exactly this many per request costs nothing extra
+  // (the API never returns more anyway) and makes the truncation check a plain size comparison.
+  private static final int MAX_PAGE_RESULTS = 3000;
   private static final DateTimeFormatter API_DATE = DateTimeFormatter.ofPattern("MM/dd/yyyy");
   private static final int FISCAL_YEAR_START_MONTH = 10;
 
@@ -87,53 +96,45 @@ public class NsfAwardsProvider implements CachingDataProvider {
     return value.trim();
   }
 
-  /** Fetches one slice's entire result set in a single request (see class javadoc). */
+  /** Fetches one slice's entire result set, recursively splitting on truncation (class javadoc). */
   private static final class AwardIterator implements Iterator<Map<String, Object>> {
     private final int fiscalYear;
-    private final String dateStart;
-    private final String dateEnd;
+    private final LocalDate monthStart;
+    private final LocalDate monthEnd;
     private final RawCache rawCache;
-    private final Set<String> seenIds = new HashSet<String>();
-    private Iterator<JsonNode> page;
-    private Map<String, Object> pending;
+    private Iterator<Map<String, Object>> rows;
 
     AwardIterator(int fiscalYear, YearMonth slice, RawCache rawCache) {
       this.fiscalYear = fiscalYear;
-      this.dateStart = slice.atDay(1).format(API_DATE);
-      this.dateEnd = slice.atEndOfMonth().format(API_DATE);
+      this.monthStart = slice.atDay(1);
+      this.monthEnd = slice.atEndOfMonth();
       this.rawCache = rawCache;
     }
 
     @Override public boolean hasNext() {
-      if (page == null) {
-        loadSlice();
-      }
-      while (pending == null && page.hasNext()) {
-        JsonNode award = page.next();
-        String id = text(award, "id");
-        if (id == null) {
-          throw new IllegalStateException("nsf_award_projects: award without an id in "
-              + dateStart + ".." + dateEnd);
-        }
-        if (seenIds.add(id)) {
-          pending = toRow(award);
-        }
-      }
-      return pending != null;
+      ensureLoaded();
+      return rows.hasNext();
     }
 
     @Override public Map<String, Object> next() {
-      if (!hasNext()) {
-        throw new NoSuchElementException();
-      }
-      Map<String, Object> row = pending;
-      pending = null;
-      return row;
+      ensureLoaded();
+      return rows.next();
     }
 
-    private void loadSlice() {
+    private void ensureLoaded() {
+      if (rows == null) {
+        List<Map<String, Object>> collected = new ArrayList<Map<String, Object>>();
+        fetchRange(monthStart, monthEnd, collected);
+        rows = collected.iterator();
+      }
+    }
+
+    /** Fetches [start, end] in one request, recursing on disjoint halves only if truncated. */
+    private void fetchRange(LocalDate start, LocalDate end, List<Map<String, Object>> out) {
+      String dateStart = start.format(API_DATE);
+      String dateEnd = end.format(API_DATE);
       String url = ENDPOINT + "?dateStart=" + dateStart + "&dateEnd=" + dateEnd
-          + "&rpp=" + RESULT_CAP + "&offset=0";
+          + "&rpp=" + MAX_PAGE_RESULTS + "&offset=0";
       JsonNode response;
       try (InputStream in = rawCache.openStream(url, () -> rawGet(url))) {
         response = MAPPER.readTree(in).path("response");
@@ -145,19 +146,28 @@ public class NsfAwardsProvider implements CachingDataProvider {
         throw new IllegalStateException("nsf_award_projects: no totalCount in response for "
             + url + ": " + response);
       }
-      if (totalCount >= RESULT_CAP) {
-        throw new IllegalStateException("nsf_award_projects: slice " + dateStart + ".."
-            + dateEnd + " reports " + totalCount + " awards, the API's result cap; the slice "
-            + "is truncated and needs a finer split");
-      }
       JsonNode awards = response.path("award");
       int size = awards.isArray() ? awards.size() : 0;
-      if (size != totalCount) {
-        throw new IllegalStateException("nsf_award_projects: slice " + dateStart + ".." + dateEnd
-            + " requested rpp=" + RESULT_CAP + " but got " + size + " awards for a reported "
-            + "totalCount of " + totalCount);
+      if (size < totalCount) {
+        if (start.equals(end)) {
+          throw new IllegalStateException("nsf_award_projects: " + dateStart + " alone reports "
+              + totalCount + " awards, over the API's " + MAX_PAGE_RESULTS + "-result response "
+              + "cap; cannot split a single day further");
+        }
+        long days = ChronoUnit.DAYS.between(start, end);
+        LocalDate mid = start.plusDays(days / 2);
+        fetchRange(start, mid, out);
+        fetchRange(mid.plusDays(1), end, out);
+        return;
       }
-      page = size == 0 ? Collections.<JsonNode>emptyIterator() : awards.iterator();
+      for (JsonNode award : awards) {
+        String id = text(award, "id");
+        if (id == null) {
+          throw new IllegalStateException("nsf_award_projects: award without an id in "
+              + dateStart + ".." + dateEnd);
+        }
+        out.add(toRow(award));
+      }
       LOGGER.info("nsf_award_projects: {} awards for fy={} {}..{}", totalCount, fiscalYear,
           dateStart, dateEnd);
     }
