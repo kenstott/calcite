@@ -70,8 +70,17 @@ trap _cyber_cleanup_registrations EXIT
 register_cyber_schema() {
   local _schema=$1
   local _wid="worker-${_schema}-${MODE}"
-  local _existing_pid=""
-  [ -f "$PID_DIR/${_wid}.pid" ] && _existing_pid=$(head -1 "$PID_DIR/${_wid}.pid" 2>/dev/null | tr -d '[:space:]')
+  local _existing_pid="" _existing_pid_file
+  # Check the suffixed (pool-launched) form first, same fix as worker.sh (#744): a
+  # pool-launched invocation always has a freshly-written suffixed pid file recording this
+  # very process's own $$, but the plain ${_wid}.pid path can be a stale leftover from an
+  # unrelated earlier invocation and must not be checked first -- checking it first made
+  # this process fall through to check_schema_year_conflict, which then found the suffixed
+  # pid file run-pool.sh had just written for THIS SAME PID and self-conflicted (#747 investigation).
+  _existing_pid_file=$(ls -t "$PID_DIR/${_wid}".*.pid 2>/dev/null | head -1)
+  [ -n "$_existing_pid_file" ] || { [ -f "$PID_DIR/${_wid}.pid" ] && _existing_pid_file="$PID_DIR/${_wid}.pid"; }
+  [ -n "$_existing_pid_file" ] && [ -f "$_existing_pid_file" ] \
+    && _existing_pid=$(head -1 "$_existing_pid_file" 2>/dev/null | tr -d '[:space:]')
   # A live PID already registered under this exact identity means a pool launch got here
   # first and already passed admission -- trust it, don't re-check or re-register.
   if [ -n "$_existing_pid" ] && kill -0 "$_existing_pid" 2>/dev/null; then
