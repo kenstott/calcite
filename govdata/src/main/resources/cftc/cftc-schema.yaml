@@ -126,7 +126,11 @@ partitionedTables:
       five CFTC asset classes, one per partition: RATES, CREDITS, FOREX, EQUITIES,
       COMMODITIES (the source short code IR/CR/FX/EQ/CO is preserved in asset_class_code).
       Partitioned by asset_class/year/month. Daily EOD files from
-      2024-01-01; weekends and holidays produce no file (skipped cleanly).
+      2024-01-01; weekends and holidays produce no file (skipped cleanly). trade_date is the
+      swap's own original execution/event date, not the dissemination file's date — DTCC
+      occasionally discloses a swap late (a handful of rows carry a pre-2024 trade_date inside
+      a post-2024 daily file; confirmed against event_timestamp, not a parsing defect), so
+      MIN(trade_date) can read slightly earlier than the 2024-01-01 fetch start.
       For new trades only: WHERE action_type = 'NEWT'. For live trades: exclude
       action_type IN ('TERM','CORR','EROR'). Join on dissemination_id /
       original_dissemination_id to reconstruct amendment chains. For a narrower,
