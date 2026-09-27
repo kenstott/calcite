@@ -55,10 +55,13 @@ public final class IcebergPrimaryKeyStatistics {
    *     callers must then measure, never assume the key is unique
    */
   public static PrimaryKeyStatistics read(Table table) {
-    if (table == null || table.currentSnapshot() == null) {
+    if (table == null) {
       return null;
     }
     try {
+      if (table.currentSnapshot() == null) {
+        return null;
+      }
       Map<String, String> props = table.properties();
       String snapshotId = props.get(SNAPSHOT_PROPERTY);
       if (snapshotId == null) {
