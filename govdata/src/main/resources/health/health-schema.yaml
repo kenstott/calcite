@@ -2492,7 +2492,7 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
-  # CMS HOSPITAL COST REPORT (HCRIS) — payer-mix revenue + total margin financials
+  # CMS HOSPITAL COST REPORT (HCRIS) — payer-mix revenue + total margin + liquidity financials
   # ==========================================================================
   - name: hospital_cost_report_financials
     # Freshness gate: CMS data-api dataset has no meaningful Last-Modified; hash the
@@ -2522,7 +2522,18 @@ partitionedTables:
       year spanning parts of two calendar years is assigned to fiscal_year by its
       Fiscal Year End Date). Joins to cms_pos_facilities/cms_pos_termination_history
       via provider_number (CCN) for a real payer-mix-vs-closure-risk analysis —
-      the pairing ops#186 originally asked for.
+      the pairing ops#186 originally asked for. Also carries this same CMS extract's
+      balance-sheet and operating-expense fields (cash_on_hand, current/total
+      assets and liabilities, total_operating_expense, depreciation_cost,
+      cost_to_charge_ratio) — the source for an operating margin
+      (net_income_from_patient_services / total_patient_revenue) or days-cash-
+      on-hand ((cash_on_hand / (total_operating_expense - depreciation_cost)) * 365)
+      ratio; neither ratio is stored precomputed since either can be divide-by-zero
+      for a facility with no reported operating expense. Confirmed live 2026-09-26:
+      this same CMS dataset (44060663-47d8-4ced-a115-b53b4c270acb) has no
+      Medicare-specific, self-pay/uninsured, or private-insurance revenue field —
+      only Medicaid and stand-alone CHIP are broken out; a Medicare/uninsured/
+      private payer-mix split is not available from this extract.
 
     columns:
       - name: report_record_number
@@ -2674,6 +2685,46 @@ partitionedTables:
         type: double
         nullable: true
         expression: 'TRY_CAST(src."Stand-Alone CHIP Charges" AS DOUBLE)'
+      - name: total_operating_expense
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Less Total Operating Expense" AS DOUBLE)'
+        comment: Operating margin denominator component — net_income_from_patient_services / total_patient_revenue is the operating margin ratio
+      - name: depreciation_cost
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Depreciation Cost" AS DOUBLE)'
+        comment: Non-cash portion of total_operating_expense — subtract from it for the days-cash-on-hand denominator
+      - name: cash_on_hand
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Cash on Hand and in Banks" AS DOUBLE)'
+        comment: Days-cash-on-hand numerator — (cash_on_hand / (total_operating_expense - depreciation_cost)) * 365
+      - name: total_current_assets
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Current Assets" AS DOUBLE)'
+      - name: total_current_liabilities
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Current Liabilities" AS DOUBLE)'
+      - name: total_assets
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Assets" AS DOUBLE)'
+      - name: total_liabilities
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Liabilities" AS DOUBLE)'
+      - name: total_fund_balances
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Total Fund Balances" AS DOUBLE)'
+        comment: Net worth/equity — Total Assets less Total Liabilities
+      - name: cost_to_charge_ratio
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Cost To Charge Ratio" AS DOUBLE)'
 
     source:
       type: http
