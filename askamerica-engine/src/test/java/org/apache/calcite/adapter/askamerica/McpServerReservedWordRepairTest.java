@@ -294,6 +294,80 @@ public class McpServerReservedWordRepairTest {
             quote("SELECT date, close FROM sec.stock_prices"));
     }
 
+    // ── D-531: typed and interval literals are syntax, not column references ─────
+
+    @Test void doesNotQuoteIntervalKeywordInsideCastChain() {
+        // The reported shape: an unquoted reserved-word column (close) trips the repair, and a
+        // second CTE subtracts an INTERVAL literal inside a CAST(... AS VARCHAR) chain. INTERVAL
+        // sits after '-', an identifier-position token, and is itself a reserved word.
+        assertEquals(
+            "WITH price_ret AS (SELECT ticker, \"date\" AS pdate, \"close\" AS pclose "
+                + "FROM sec.stock_prices WHERE \"year\"=2023), "
+                + "events AS (SELECT DISTINCT et.cik, "
+                + "CAST(CAST(et.filing_date AS DATE) - INTERVAL '30' DAY AS VARCHAR) "
+                + "AS window_start, fm.ticker FROM sec.earnings_transcripts et) "
+                + "SELECT COUNT(*) FROM events e JOIN price_ret p ON p.ticker = e.ticker",
+            quote("WITH price_ret AS (SELECT ticker, \"date\" AS pdate, close AS pclose "
+                + "FROM sec.stock_prices WHERE year=2023), "
+                + "events AS (SELECT DISTINCT et.cik, "
+                + "CAST(CAST(et.filing_date AS DATE) - INTERVAL '30' DAY AS VARCHAR) "
+                + "AS window_start, fm.ticker FROM sec.earnings_transcripts et) "
+                + "SELECT COUNT(*) FROM events e JOIN price_ret p ON p.ticker = e.ticker"));
+    }
+
+    @Test void doesNotQuoteTypedLiteralKeyword() {
+        // DATE / TIMESTAMP directly before a string literal introduce a typed literal; a column
+        // reference is never followed by a string literal.
+        assertEquals("SELECT \"close\" FROM t WHERE d >= DATE '2023-01-01' "
+                + "AND ts < TIMESTAMP '2023-01-01 00:00:00'",
+            quote("SELECT close FROM t WHERE d >= DATE '2023-01-01' "
+                + "AND ts < TIMESTAMP '2023-01-01 00:00:00'"));
+    }
+
+    @Test void doesNotQuoteExtractField() {
+        // EXTRACT(YEAR FROM d): year is a column in this warehouse, but here it names the field.
+        assertEquals("SELECT \"close\", EXTRACT(YEAR FROM d) FROM t",
+            quote("SELECT close, EXTRACT(YEAR FROM d) FROM t"));
+    }
+
+    @Test void doesNotQuoteNullAfterIsNot() {
+        // The full #531 repro: fixing the INTERVAL mis-quote (above) still left this statement's
+        // WHERE fm.ticker IS NOT NULL broken, because NULL sits right after NOT -- an
+        // identifier-position trigger for the ordinary "NOT geo_name = ..." case -- and NULL is
+        // itself a reserved word, so it was quoted into IS NOT "null": a quoted identifier
+        // reference where the grammar requires the literal keyword NULL, failing to parse a
+        // second time.
+        assertEquals(
+            "WITH price_ret AS (SELECT ticker, \"date\" AS pdate, \"close\" AS pclose "
+                + "FROM sec.stock_prices WHERE \"year\"=2023), "
+                + "events AS (SELECT DISTINCT et.cik, "
+                + "CAST(CAST(et.filing_date AS DATE) - INTERVAL '30' DAY AS VARCHAR) "
+                + "AS window_start, fm.ticker FROM sec.earnings_transcripts et "
+                + "JOIN sec.filing_metadata fm ON et.accession_number=fm.accession_number "
+                + "WHERE fm.ticker IS NOT NULL) "
+                + "SELECT COUNT(*) FROM events e JOIN price_ret p "
+                + "ON p.ticker = e.ticker || '.US' AND p.pdate >= e.filing_date",
+            quote("WITH price_ret AS (SELECT ticker, \"date\" AS pdate, close AS pclose "
+                + "FROM sec.stock_prices WHERE \"year\"=2023), "
+                + "events AS (SELECT DISTINCT et.cik, "
+                + "CAST(CAST(et.filing_date AS DATE) - INTERVAL '30' DAY AS VARCHAR) "
+                + "AS window_start, fm.ticker FROM sec.earnings_transcripts et "
+                + "JOIN sec.filing_metadata fm ON et.accession_number=fm.accession_number "
+                + "WHERE fm.ticker IS NOT NULL) "
+                + "SELECT COUNT(*) FROM events e JOIN price_ret p "
+                + "ON p.ticker = e.ticker || '.US' AND p.pdate >= e.filing_date"));
+    }
+
+    @Test void doesNotQuoteIsNullEitherAndLeavesTrueFalseUnknownAlone() {
+        // Same class of bug for IS NULL (no NOT), and for the other three keywords that can
+        // never be a real catalog column reference: TRUE, FALSE, UNKNOWN.
+        assertEquals(
+            "SELECT \"close\" FROM t WHERE a IS NULL AND b IS NOT TRUE "
+                + "AND c IS FALSE AND d IS UNKNOWN",
+            quote("SELECT close FROM t WHERE a IS NULL AND b IS NOT TRUE "
+                + "AND c IS FALSE AND d IS UNKNOWN"));
+    }
+
     // ── D-206: FROM right after a SELECT * must never be quoted ────────────────
 
     @Test void doesNotQuoteFromAfterStarWhenAnUnrelatedColumnTripsRepair() {

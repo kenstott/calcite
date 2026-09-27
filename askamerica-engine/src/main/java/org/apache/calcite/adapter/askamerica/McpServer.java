@@ -7078,9 +7078,21 @@ public class McpServer {
      * reserved-word column (D-206 repro: bare {@code state} in the select list) to reach the
      * repair path at all, at which point the walk covers the entire original statement text and
      * crosses the unrelated {@code * FROM} later in the same query.
+     *
+     * <p>D-531: {@code NULL}, {@code TRUE}, {@code FALSE} and {@code UNKNOWN} sit right after
+     * {@code IS} / {@code NOT} / {@code AND} / {@code OR} -- all identifier-position triggers,
+     * for the ordinary case of a column reference following them. {@code fm.ticker IS NOT NULL}
+     * elsewhere in a statement that also has a genuine reserved-word column (repro: bare
+     * {@code close} in a sibling CTE) read the trailing {@code NULL} as the identifier
+     * {@code NOT} opened, producing {@code IS NOT "null"} -- a quoted identifier reference where
+     * the grammar requires the literal keyword, so the statement fails to parse a second time.
+     * None of these four is ever a real catalog column (they cannot be written unquoted as one
+     * in standard SQL either), so -- like {@code FROM} -- they are excluded outright rather than
+     * relying on catalog membership.
      */
     private static final java.util.Set<String> NEVER_IDENTIFIER_KEYWORDS =
-        new java.util.HashSet<>(java.util.Arrays.asList("FROM"));
+        new java.util.HashSet<>(java.util.Arrays.asList("FROM", "NULL", "TRUE", "FALSE",
+            "UNKNOWN"));
 
     /**
      * Double-quotes reserved words used as column references, leaving syntax untouched.
@@ -7178,6 +7190,13 @@ public class McpServer {
                 boolean isCall = k < sql.length() && sql.charAt(k) == '(';
                 boolean opensWindowFrame = "(".equals(prev)
                     && ("OVER".equals(prevPrev) || "AS".equals(prevPrev));
+                // A word directly followed by a string literal is a typed or interval literal
+                // keyword (DATE '...', TIMESTAMP '...', INTERVAL '...'); a column reference is
+                // never followed by a literal.
+                boolean introducesLiteral = k < sql.length() && sql.charAt(k) == '\'';
+                // The word directly after EXTRACT( names the field to extract (YEAR, MONTH, ...),
+                // never a column, though "(" is an identifier-position trigger elsewhere.
+                boolean isExtractField = "(".equals(prev) && "EXTRACT".equals(prevPrev);
                 // D-180: a word that is itself one of IDENTIFIER_POSITION_TOKENS is always
                 // syntax, never a column reference, no matter what precedes it -- that set is
                 // exactly the vocabulary of keywords that mark the position AFTER them as an
@@ -7207,6 +7226,7 @@ public class McpServer {
                 // never have caught it, no matter how long a static list was maintained by hand.
                 if ((candidates.contains(lower) || isReservedWord(lower)) && !isCall
                     && !opensWindowFrame && !isPositionMarkerKeyword && !isCastTypePosition
+                    && !introducesLiteral && !isExtractField
                     && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
                     out.append('"').append(lower).append('"');
                     seen.add(lower);
