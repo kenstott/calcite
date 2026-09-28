@@ -210,6 +210,24 @@ dimension_values:
   # and take a while: a new month is a new fetch unit; runs within a month reuse the cached pages.
   lobbying_refresh_month: &lobbying_refresh_month ["${GOVDATA_CURRENT_MONTH:12}"]
 
+  # The Clerk of the House's bulk financial-disclosure index (financial-pdfs/{year}FD.zip) exists
+  # back to 2008, and the "P" (Periodic Transaction Report) filing type first appears in the 2015
+  # index (verified live 2026-09-27: the 2012-2014 indexes carry no "P" entries at all — the STOCK
+  # Act's 2012 electronic-filing mandate took a few years to reach this index's coding). But 2015
+  # is not this table's actual floor: the PTR PDF itself was redesigned somewhere in the 2017/2018
+  # filing cycle (verified live 2026-09-27 by sampling one PTR per year) — 2015-2017 filings have
+  # no `[TYPE]` asset-type-code bracket and no "Cap. Gains > $200?" column, a shape
+  # HousePtrTextParser does not parse; 2018 onward matches the template this parser targets. 2018
+  # is the real floor until a second parser code path for the pre-2018 template is added and
+  # DQ-verified — tracked as a backfill in govdata-ops#745. The end follows GOVDATA_END_YEAR, same
+  # as lobbying_year_range; with no end year it is the current year, whose index gains new PTRs
+  # continuously through the year.
+  member_stock_transactions_year_range: &member_stock_transactions_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -4793,6 +4811,151 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # MEMBER_STOCK_TRANSACTIONS — House members' STOCK Act periodic transaction reports
+  # ---------------------------------------------------------------------------
+  # Source: the Clerk of the House's bulk financial-disclosure system
+  # (disclosures-clerk.house.gov). House only — see the table comment and
+  # HouseStockTransactionsProvider's class comment for why the Senate's eFD system is not
+  # included. One row per transaction (a single PTR PDF can list several); filing_id groups the
+  # rows of one filing, row_seq orders them as the PDF lists them.
+  - name: member_stock_transactions
+    pattern: "type=member_stock_transactions/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      House members' (and their spouses' and dependent children's) STOCK Act Periodic Transaction
+      Reports — stock, option and fund trades disclosed within 30-45 days of the transaction, from
+      the Clerk of the House's own bulk financial-disclosure system. Not annual financial
+      disclosures (outside income, asset/liability ranges, gifts) and not the Senate's parallel
+      eFD filings — see the column-level and class-level comments for why. `filing_id` groups the
+      one or more transaction rows a single PTR lists; `row_seq` (from 1) is their order in the
+      filing. `owner_code` is blank for the member's own holding, SP for a spouse, JT for a joint
+      holding, DC for a dependent child. `asset_type_code` is the source's own abbreviation (ST,
+      OP, OT, ...; see https://fd.house.gov/reference/asset-type-codes.aspx) with `ticker` parsed
+      out of it separately when the source prints one; a private holding, fund or real property
+      has no ticker. `amount_min`/`amount_max` are the disclosed bracket's bounds in dollars
+      (`amount_max` null for the open-ended top bracket); the source never discloses an exact
+      amount. Coverage starts in 2018 (see member_stock_transactions_year_range comment) — the PTR
+      PDF template changed that filing cycle, and 2015-2017 filings use an older shape this
+      table's parser does not yet read (backfill tracked in govdata-ops#745). Filings before 2015
+      exist but the source's own filing-type coding does not distinguish PTRs that far back.
+
+    dimensions:
+      type:
+        - member_stock_transactions
+      year: *member_stock_transactions_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: Always "house" — the Senate's eFD system is not sourced here; see the table comment
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: Filer's last name, as the source index prints it
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: Filer's first (and middle) name, as the source index prints it
+      - name: state
+        type: string
+        nullable: true
+        comment: Two-letter state/territory postal code the filer represents
+      - name: district
+        type: string
+        nullable: true
+        comment: House district number as the source prints it (e.g. "04"; "00" for an at-large seat)
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: The Clerk's own document ID for this PTR; source of pdf_url and the natural key with row_seq
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: Date the PTR was filed (YYYY-MM-DD), from the source index
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: 1-based order of this transaction within its filing, as the PDF lists them
+      - name: owner_code
+        type: string
+        nullable: true
+        comment: SP (spouse), JT (joint) or DC (dependent child); null for the member's own holding
+      - name: asset_name
+        type: string
+        nullable: false
+        comment: Asset name as the filing prints it, with the ticker (if any) and asset-type code removed
+      - name: ticker
+        type: string
+        nullable: true
+        comment: Ticker symbol parsed out of the asset name; null for a holding with none (a private company, fund or real property)
+      - name: asset_type_code
+        type: string
+        nullable: false
+        comment: The source's own asset-type abbreviation (ST, OP, OT, ...); see https://fd.house.gov/reference/asset-type-codes.aspx
+      - name: transaction_type
+        type: string
+        nullable: false
+        comment: "P (purchase), S (sale), \"S (partial)\" or E (exchange), as the filing prints it"
+      - name: transaction_date
+        type: string
+        nullable: false
+        comment: Date of the transaction (YYYY-MM-DD)
+      - name: notification_date
+        type: string
+        nullable: false
+        comment: Date the filer notified the Clerk of the transaction (YYYY-MM-DD)
+      - name: amount_range
+        type: string
+        nullable: false
+        comment: "Disclosed amount as the filing prints it: a bracket (\"$1,001 - $15,000\"), an open-ended top bracket (\"Over $50,000,000\"), or, rarely, one exact figure (e.g. an IRA transaction below the disclosure threshold)"
+      - name: amount_min
+        type: bigint
+        nullable: true
+        comment: Lower bound of amount_range in dollars; equal to amount_max when amount_range is one exact figure rather than a bracket
+      - name: amount_max
+        type: bigint
+        nullable: true
+        comment: Upper bound of amount_range in dollars; null for the open-ended top bracket
+      - name: filing_status
+        type: string
+        nullable: true
+        comment: New or Amended, when the source's per-transaction status is found; null when not found
+      - name: pdf_url
+        type: string
+        nullable: false
+        comment: disclosures-clerk.house.gov URL of the PTR PDF this row was read from
+
+    source:
+      type: http
+      url: "https://disclosures-clerk.house.gov/public_disc/financial-pdfs/{year}FD.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.HouseStockTransactionsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=member_stock_transactions/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: member_stock_transactions
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -5300,3 +5463,9 @@ constraints:
 
   scotus_reports_cases:
     primaryKey: [volume, first_page]
+
+  member_stock_transactions:
+    # No foreign key to officials.members: the source index gives filer_last_name/state/district
+    # as free text, not a bioguide_id, and name-matching across schemas is not done at ingest —
+    # see the table comment.
+    primaryKey: [filing_id, row_seq]

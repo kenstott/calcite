@@ -6,7 +6,7 @@
 --         bill_amendments, bill_amendment_actions, bill_amendment_cosponsors,
 --         bill_action_committees, bill_recorded_votes, bill_titles, bill_summaries,
 --         bill_cbo_cost_estimates, bill_committee_reports, bill_notes, scotus_reports_cases,
---         scotus_slip_opinions, scotus_dockets, scotus_docket_entries
+--         scotus_slip_opinions, scotus_dockets, scotus_docket_entries, member_stock_transactions
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'title'; T5 also excludes 'release_point' (one value per run
 -- by design: the whole table is replaced from a single OLRC release point).
@@ -3890,6 +3890,132 @@ SELECT 'law', 'usc_subsections', 'T7_oversized_units',
   pct, 5.0, 'Percent of units over 2000 characters (unbroken paragraphs and tables)'
 FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE LENGTH(unit_text) > 2000) / COUNT(*) AS pct
       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/usc_subsections', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: member_stock_transactions
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by year. A scoped run may hold one year's PTRs (~500-900 filings, several
+-- transactions each). T4/T5 exclude partition column 'year' and the legitimately-constant
+-- 'chamber' (House only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true));
+
+-- T2: row_count. A full year has several hundred filings, several transactions each.
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Expected at least 100 transaction rows in a full year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filer_last_name, state, district, filing_id, row_seq, owner_code, asset_name,
+       ticker, asset_type_code, transaction_type, transaction_date, amount_range, filing_status
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL chamber, filer_last_name, filing_id, filing_date, row_seq, asset_name, asset_type_code, transaction_type, transaction_date, notification_date, amount_range or pdf_url rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filer_last_name IS NULL OR filing_id IS NULL OR filing_date IS NULL
+         OR row_seq IS NULL OR asset_name IS NULL OR asset_type_code IS NULL
+         OR transaction_type IS NULL OR transaction_date IS NULL OR notification_date IS NULL
+         OR amount_range IS NULL OR pdf_url IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- T7: amount_min/amount_max agree with amount_range (min always set; max null only for "Over $N")
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T7_amount_bounds_present',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with no amount_min, or with amount_max null but amount_range not starting with Over'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
+      WHERE amount_min IS NULL OR (amount_max IS NULL AND amount_range NOT LIKE 'Over%'));
+
+-- T7: transaction_type uses the documented vocabulary
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T7_transaction_type_vocabulary',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'All transaction types in the documented vocabulary' ELSE 'Unexpected: ' || vals END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(transaction_type, '; ') AS vals
+  FROM (
+    SELECT DISTINCT transaction_type
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
+    WHERE transaction_type NOT IN ('P', 'S', 'S (partial)', 'E')
+  )
+);
+
+-- T7: owner_code uses the documented vocabulary when present
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T7_owner_code_vocabulary',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'All owner codes in the documented vocabulary' ELSE 'Unexpected: ' || vals END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(owner_code, '; ') AS vals
+  FROM (
+    SELECT DISTINCT owner_code
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
+    WHERE owner_code IS NOT NULL AND owner_code NOT IN ('SP', 'JT', 'DC')
+  )
+);
+
+-- T7: filing rows fall in the requested year (transaction_date's year should be close to the
+-- partition year; a late-December trade notified in January of the next year is expected)
+INSERT INTO dq_results
+SELECT 'law', 'member_stock_transactions', 'T7_transaction_date_near_year',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Rows whose transaction_date year is more than 1 away from the partition year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
+      WHERE ABS(CAST(SUBSTR(transaction_date, 1, 4) AS INTEGER) - year) > 1);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
