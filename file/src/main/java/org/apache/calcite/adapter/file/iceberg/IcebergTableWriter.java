@@ -1371,11 +1371,36 @@ public class IcebergTableWriter {
       underCommitLock(() -> {
         table.expireSnapshots()
             .expireOlderThan(expireSnapshotsMillis)
+            .deleteWith(this::deleteExpiredFile)
             .commit();
       });
       LOGGER.info("Expired snapshots older than {} days", expireSnapshotsDays);
     } catch (Exception e) {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Deletes a file that {@code expireSnapshots} has determined is unreachable from every
+   * retained snapshot and safe to remove.
+   *
+   * <p>Real AWS S3's DeleteObject is idempotent — silent success when the key is already gone.
+   * This table's backend (MinIO) instead returns a 404 {@code NoSuchKeyException}, and {@link
+   * org.apache.iceberg.aws.s3.S3FileIO#deleteFile} propagates that unmodified, unlike its read
+   * path (see {@link S3FileIOTableOperations#readVersionHint}), which already translates the same
+   * SDK exception to Iceberg's own {@link org.apache.iceberg.exceptions.NotFoundException}. Left
+   * uncaught, Iceberg's cleanup retries each such delete — its retry-stop check matches only its
+   * own {@code NotFoundException}, never the raw SDK type — for every already-gone file an old
+   * snapshot's manifest references, which is exactly the stale-reference case {@code
+   * expireSnapshots} exists to reclaim. Treating an already-missing file as a successful delete
+   * here restores the idempotent-delete semantics Iceberg's cleanup was written against.
+   */
+  private void deleteExpiredFile(String path) {
+    try {
+      table.io().deleteFile(path);
+    } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException
+        | org.apache.iceberg.exceptions.NotFoundException alreadyGone) {
+      LOGGER.debug("Expired file already absent, treating delete as success: {}", path);
     }
   }
 
@@ -1746,6 +1771,7 @@ public class IcebergTableWriter {
             table.expireSnapshots()
                 .expireOlderThan(retentionCutoff)
                 .retainLast(1)
+                .deleteWith(this::deleteExpiredFile)
                 .commit();
           });
           LOGGER.info("Expired {} snapshots older than {} days after compaction",
