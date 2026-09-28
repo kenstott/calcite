@@ -1867,6 +1867,91 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ICE DETENTION POPULATION BY CRIMINALITY - TRAC compiled snapshot series
+  # ---------------------------------------------------------------------------
+  - name: ice_detention_population_by_criminality
+    # Snapshot table, same shape as cde_trends: the source returns its full point-in-time
+    # history (155+ dates, irregular cadence, not fixed-schedule) in one JSON array on every
+    # fetch, so there is no year axis to partition on — the hash freshness gate skips the
+    # Iceberg write when the fetched content is unchanged, and overwritePartitions replaces
+    # the single partition whenever a new snapshot date has been added upstream.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=ice_detention/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      ICE detention population by arresting agency (ICE vs. CBP) crossed with
+      criminal-history category (Convicted Criminal, Pending Criminal Charges,
+      Other Immigration Violator), from TRAC's (Transactional Records Access
+      Clearinghouse, Syracuse University) "ICE Detainees" tracker. TRAC compiles
+      this from ICE's own internal data obtained via FOIA/litigation — it is not
+      ICE's own raw publication. Individually-hosted-but-public-domain source
+      (university-hosted, not a government domain): re-verify if this 404s, same
+      risk pattern as housing.opportunity_zones and housing.hud_subsidized_housing.
+      Point-in-time snapshots, irregular cadence (roughly monthly-ish with gaps),
+      spanning 2019-05-04 onward. One row per snapshot_date + arresting_agency +
+      criminality.
+
+    dimensions:
+      type:
+        - ice_detention
+
+    columns:
+      - name: snapshot_date
+        type: date
+        nullable: false
+        comment: Point-in-time date of the detention population count (source publishes irregularly, not a fixed cadence)
+      - name: arresting_agency
+        type: string
+        nullable: false
+        comment: "Arresting agency: 'ICE', 'CBP', or 'Total' (sum of ICE + CBP)"
+      - name: criminality
+        type: string
+        nullable: false
+        comment: "Criminal-history category: 'Convicted Criminal', 'Pending Criminal Charges', 'Other Immigration Violator', or 'All' (sum of the three)"
+      - name: detained_population
+        type: integer
+        nullable: true
+        comment: Detained population count for this agency + criminality combination
+
+    source:
+      type: http
+      url: "https://tracreports.org/immigration/detentionstats/pop_agen_table.json"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 10.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.IceDetentionPopulationTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ice_detention/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: ice_detention_population_by_criminality
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # CDE SUPPLEMENTAL - Stolen and recovered property values
   # ---------------------------------------------------------------------------
   - name: cde_supplemental
@@ -2665,6 +2750,9 @@ constraints:
 
   cde_trends:
     primaryKey: [offense_name]
+
+  ice_detention_population_by_criminality:
+    primaryKey: [snapshot_date, arresting_agency, criminality]
 
   bjs_nibrs_estimates:
     primaryKey:

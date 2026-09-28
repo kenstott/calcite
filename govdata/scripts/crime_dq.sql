@@ -774,6 +774,94 @@ SELECT 'crime', 'cde_trends', 'T8_worker_coverage',
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_trends', allow_moved_paths := true);
 
 -- ============================================================================
+-- ice_detention_population_by_criminality (TRAC-compiled ICE/CBP detention
+-- snapshots unpivoted by arresting_agency x criminality; partitioned by type only)
+-- No year dimension — T8 checks row count as proxy.
+-- ============================================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true);
+
+-- T2: row_count (155 source snapshots x 12 unpivoted rows each as of 2026-09-28;
+-- >=1800 tolerates the source publishing additional snapshot dates over time)
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 1800 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1800, 'at least 1800 rows (155 snapshots x 12 agency/criminality rows)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- type is a single-value partition column by design. arresting_agency (3 values:
+    -- ICE/CBP/Total) and criminality (4 values: Convicted Criminal/Pending Criminal
+    -- Charges/Other Immigration Violator/All) are real, expected fixed category sets,
+    -- not true single-value constants — excluded here as a design guard even though
+    -- approx_unique would naturally exceed 1 for both.
+    AND column_name NOT IN ('type', 'arresting_agency', 'criminality')
+) t;
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'snapshot_date IS NULL OR arresting_agency IS NULL OR criminality IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true)
+WHERE snapshot_date IS NULL OR arresting_agency IS NULL OR criminality IS NULL;
+
+-- T6: pk_dupes (snapshot_date, arresting_agency, criminality unique)
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T6_pk_dupes',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (snapshot_date, arresting_agency, criminality) rows'
+FROM (
+  SELECT snapshot_date, arresting_agency, criminality
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true)
+  GROUP BY snapshot_date, arresting_agency, criminality HAVING COUNT(*) > 1
+);
+
+-- T7: detained_population non-null
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T7_expected_values',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, 'detained_population IS NULL (count missing for this agency/criminality)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true)
+WHERE detained_population IS NULL;
+
+-- T8: worker coverage — no year dim; daily worker overwrites with fresh snapshot data
+INSERT INTO dq_results
+SELECT 'crime', 'ice_detention_population_by_criminality', 'T8_worker_coverage',
+  CASE WHEN COUNT(*) >= 1800 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 1800,
+  'no year dim; row count >= 1800 confirms at least one worker wrote full snapshot history'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/ice_detention_population_by_criminality', allow_moved_paths := true);
+
+-- ============================================================================
 -- cde_supplemental (stolen/recovered property values; partitioned by type/year)
 -- ============================================================================
 
