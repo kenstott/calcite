@@ -185,6 +185,25 @@ if [ "$MODE" != "daily" ] && [ "$MODE" != "historical" ]; then
   exit 1
 fi
 
+# x-schema (chunk-parsing/embeddings sweep) always runs after daily's own portion of a window
+# concludes, full stop — not conditional on how it ended, and not delayed by however long an
+# early-finish fill_mode then runs for. run-pool.sh has its own internal trigger, but that one
+# only fires on a clean exit 0 for an unscoped run (its tail-end `if $RUN_EMBEDDINGS` block,
+# reached solely on natural completion); exit 2 (some workers failed — routine, see #740/#741),
+# a window timeout, or a crash-cap abandonment all skip it with nothing else to catch the gap.
+# Idempotent via the log grep, so it's safe to call this from more than one place in the same
+# window — see the two call sites in run_window().
+run_x_schema_if_needed() {
+  local window_log="$1"
+  if grep -q "x-schema: sweeping" "$window_log" 2>/dev/null; then
+    echo "[$(ts)] x-schema already ran naturally earlier in this window" >> "$window_log"
+  else
+    echo "[$(ts)] running x-schema.sh explicitly (its own natural-completion trigger didn't fire this window)" | tee -a "$window_log"
+    bash "$SCRIPT_DIR/../x-schema.sh" >> "$window_log" 2>&1 \
+      || log_error "WARNING: explicit x-schema.sh run (end of daily window) failed — see $window_log"
+  fi
+}
+
 # ── Window runner ─────────────────────────────────────────────────────────────
 #
 # Runs the pool in the given mode for up to WINDOW_SECS.
@@ -266,6 +285,11 @@ run_window() {
       fi
       if [ -n "$fill_mode" ] && [ "$current" != "$fill_mode" ]; then
         echo "[$(ts)] $current finished — filling remaining window with $fill_mode" | tee -a "$window_log"
+        # Fire x-schema right now, before switching into the fill mode — otherwise it wouldn't
+        # run until the fill mode ALSO concludes, which can be most of the remaining window
+        # (hours). Only meaningful for "daily" itself; the fill mode's own conclusion is covered
+        # by the end-of-function call below.
+        [ "$current" = "daily" ] && run_x_schema_if_needed "$window_log"
         current="$fill_mode"
         continue
       fi
@@ -311,28 +335,15 @@ run_window() {
     fi
   done
 
-  # x-schema (chunk-parsing/embeddings sweep) always runs after a daily window, full stop —
-  # not conditional on how the window's run-pool.sh attempt(s) ended. run-pool.sh has its own
-  # internal trigger, but that one only fires on a clean exit 0 for an unscoped run (its
-  # tail-end `if $RUN_EMBEDDINGS` block, reached solely on natural completion); exit 2 (some
-  # workers failed — routine, see #740/#741), a window timeout, or a crash-cap abandonment all
-  # skip it with nothing else to catch the gap. Confirmed live 2026-09-27: a daily pool with 2
-  # failed workers exited 2 and silently skipped x-schema, ~19h after its last real run and
-  # climbing — the same trajectory as a 2026-09-15 incident (5+ days stale) that used to be
-  # attributed only to window timeouts. Rather than add another one-off backstop per exit path
-  # (fragile — the next new exit path would reopen the same gap), this is unconditional: check
-  # whether run-pool.sh's own trigger already ran it earlier in this window's log, and if not,
-  # run it explicitly. Guards against running it twice in the same window, not against ever
-  # running it.
-  if [ "$mode" = "daily" ]; then
-    if grep -q "x-schema: sweeping" "$window_log" 2>/dev/null; then
-      echo "[$(ts)] x-schema already ran naturally earlier in this window" >> "$window_log"
-    else
-      echo "[$(ts)] running x-schema.sh explicitly (its own natural-completion trigger didn't fire this window)" | tee -a "$window_log"
-      bash "$SCRIPT_DIR/../x-schema.sh" >> "$window_log" 2>&1 \
-        || log_error "WARNING: explicit x-schema.sh run (end of daily window) failed — see $window_log"
-    fi
-  fi
+  # Backstop for the plain "$mode == daily, no fill_mode" case (the loop broke directly above
+  # without ever reaching the fill-mode transition), and for the exit paths that break out of
+  # the loop while still on daily (window timeout, crash-cap) before any transition could fire
+  # it. Idempotent — a no-op if the transition-point call above (or run-pool.sh's own natural
+  # trigger) already ran it earlier in this window's log. Confirmed live 2026-09-27: a daily
+  # pool with 2 failed workers exited 2 and silently skipped x-schema, ~19h after its last real
+  # run and climbing — the same trajectory as a 2026-09-15 incident (5+ days stale) that used to
+  # be attributed only to window timeouts.
+  [ "$mode" = "daily" ] && run_x_schema_if_needed "$window_log"
 
   echo "[$(ts)] === $mode window complete ===" | tee -a "$window_log"
 }
