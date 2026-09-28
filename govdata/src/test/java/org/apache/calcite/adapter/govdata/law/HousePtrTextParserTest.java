@@ -394,4 +394,40 @@ class HousePtrTextParserTest {
     assertEquals("VOT", vot.ticker);
     assertEquals("Vanguard Mid-Cap Growth ETF - DNQ", vot.assetName);
   }
+
+  /**
+   * Real filing 20011886 (Hon. Mikie Sherrill, fetched and extracted live 2026-09-28): the same
+   * font-substitution quirk documented for the pre-2018 template also hits 2018+ filings — a
+   * ticker with a lower-cased letter ("aSMl", "gOOgl") failed the modern trailing-ticker pattern's
+   * upper-case-only character class, so the whole "(ticker)" span stayed attached to the asset
+   * name and the row's own ticker column came out null. ~30 tickers in that one filing alone were
+   * affected.
+   */
+  @Test void lowerCasedModernTickerLetterStillExtracted() {
+    List<Row> rows = HousePtrTextParser.parse(Arrays.asList(
+        "$200?\nASML Holding N.V. - ADS represents 1 ordinary share (aSMl) [ST] "
+        + "S 05/28/2019 06/18/2019 $1,001 - $15,000\nFIlINg STaTuS: New"));
+    assertEquals(1, rows.size());
+    assertEquals("ASML", rows.get(0).ticker);
+    assertEquals("ASML Holding N.V. - ADS represents 1 ordinary share", rows.get(0).assetName);
+  }
+
+  /**
+   * Real filing 20011886 (Hon. Mikie Sherrill, fetched and extracted live 2026-09-28): the
+   * source reprints the column header ("... Amount Cap. Gains > $200?") at the top of every
+   * continuation page. A row landing right after such a break had that reprinted header as a
+   * literal prefix on its own asset name; only the document's first header occurrence (used to
+   * find where the table body starts) is real, every later one is a repeat to be discarded the
+   * same way a label's colon is discarded.
+   */
+  @Test void repeatedPageHeaderDoesNotBleedIntoAssetName() {
+    List<Row> rows = HousePtrTextParser.parse(Arrays.asList(
+        "$200?\nDiageo plc (DEO) [ST] S 05/28/2019 06/18/2019 $1,001 - $15,000\nFIlINg STaTuS: New\n"
+        + "ID Owner Asset Transaction\nType\nDate Notification\nDate\nAmount Cap.\nGains >\n$200?\n"
+        + "DNB ASA SPONSORED ADR Representing 10 (DNHBY) [ST] "
+        + "S 05/28/2019 06/18/2019 $1,001 - $15,000\nFIlINg STaTuS: New"));
+    assertEquals(2, rows.size());
+    assertEquals("DNB ASA SPONSORED ADR Representing 10", rows.get(1).assetName);
+    assertEquals("DNHBY", rows.get(1).ticker);
+  }
 }

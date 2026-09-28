@@ -106,8 +106,14 @@ final class HousePtrTextParser {
    */
   private static final Pattern OWNER_CODE_TOKEN = Pattern.compile("\\b(?:SP|JT|DC)\\s");
 
+  // The character class allows a lower-cased letter inside the ticker itself, not just upper: the
+  // same font-substitution quirk documented for the pre-2018 template (LEGACY_TRAILING_TICKER,
+  // below) also hits 2018+ filings — confirmed live 2026-09-28, filing 20011886 (Hon. Mikie
+  // Sherrill): "aagIY", "gOOgl", "aSMl", "SaFRY" and ~30 more tickers in that one filing alone
+  // carry a lower-cased letter. The captured group is upper-cased when the row is built, same as
+  // the legacy path.
   private static final Pattern TRAILING_TICKER =
-      Pattern.compile("^(.*)\\(([A-Z0-9.\\-]{1,8})\\)\\s*$", Pattern.DOTALL);
+      Pattern.compile("^(.*)\\(([A-Za-z0-9.\\-]{1,8})\\)\\s*$", Pattern.DOTALL);
 
   private static final Pattern FILING_STATUS = Pattern.compile(":\\s*(New|Amended)\\b");
 
@@ -228,6 +234,17 @@ final class HousePtrTextParser {
       if (labelLineEnd >= 0) {
         afterLabelStart = labelLineEnd + 1;
       }
+      // TABLE_HEADER_END itself repeats verbatim at the top of every continuation page (the
+      // source reprints the column header, "... Amount Cap. Gains > $200?", after each page
+      // break) — confirmed live 2026-09-28, filing 20011886: a row landing right after such a
+      // break carried "Gains > $200?" as a literal prefix on its asset_name. Only the FIRST
+      // occurrence in the whole document is a real header (used to seed spanStart above); every
+      // later one is a repeat, so cutting to just past the last one in this span discards it the
+      // same way a label's colon is discarded, above.
+      int headerRepeat = span.lastIndexOf(TABLE_HEADER_END);
+      if (headerRepeat >= 0 && headerRepeat + TABLE_HEADER_END.length() > afterLabelStart) {
+        afterLabelStart = headerRepeat + TABLE_HEADER_END.length();
+      }
       String afterLabel = span.substring(afterLabelStart).trim();
 
       String ownerCode = null;
@@ -264,7 +281,7 @@ final class HousePtrTextParser {
       Matcher tickerMatch = TRAILING_TICKER.matcher(preTicker);
       if (tickerMatch.matches()) {
         withoutTicker = tickerMatch.group(1);
-        ticker = tickerMatch.group(2);
+        ticker = tickerMatch.group(2).toUpperCase(java.util.Locale.ROOT);
       }
       String assetName = stripFreeText ? stripLeadingFreeText(withoutTicker) : withoutTicker.trim();
 
