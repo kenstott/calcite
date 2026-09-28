@@ -1062,8 +1062,10 @@ public class IcebergMaterializer {
       LOGGER.info("Skipping maintenance for '{}' (0 rows written)", config.getTargetTableId());
     }
 
-    if (result.isFullySuccessful() && totalRowsWritten > 0) {
-      // Always mark table complete (with watermark if available, without otherwise)
+    if (totalRowsWritten > 0) {
+      // Mark table complete on any successful partial progress, same condition as maintenance/
+      // compaction above -- per-accession retry tracking is independent of this table-level
+      // watermark, so a failed batch elsewhere doesn't need to block it.
       incrementalTracker.markTableCompleteWithSourceWatermark(
           config.getTargetTableId(),
           "auto", // config hash - use constant for tracking
