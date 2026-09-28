@@ -78,5 +78,53 @@
     "run_subpath": "q10/askamerica/2026-09-27",
     "pinocchios": 1,
     "source_url": "https://www.capitolexposed.com/news/weekly-roundup-2026-w37"
+  },
+  {
+    "topic_slug": "mckesson-shinyhunters-breach-claims",
+    "headline": "McKesson data breach: ShinyHunters extortion claims vs. confirmed scope",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q1/askamerica/2026-09-28",
+    "pinocchios": 1,
+    "source_url": null
+  },
+  {
+    "topic_slug": "oregon-wildfire-2026-human-caused-share",
+    "headline": "Oregon nears all-time wildfire acreage record as 2026 fires top 2 million acres",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q2/askamerica/2026-09-28",
+    "pinocchios": 1,
+    "source_url": "https://katu.com/news/local/oregon-nears-all-time-wildfire-acreage-record-as-2026-fires-top-2-million-acres"
+  },
+  {
+    "topic_slug": "aic-ice-no-criminal-record-2450-percent",
+    "headline": "American Immigration Council: 2,450% surge in no-criminal-record ICE detentions",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q3/askamerica/2026-09-28",
+    "pinocchios": 1,
+    "source_url": "https://www.americanimmigrationcouncil.org"
+  },
+  {
+    "topic_slug": "usp-2026-drug-shortages-report",
+    "headline": "USP Annual Drug Shortages Report 2026: 75 active shortages, rising discontinuations",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q4/askamerica/2026-09-28",
+    "pinocchios": 0,
+    "source_url": "https://www.biospace.com/press-releases/usp-annual-drug-shortages-report-finds-rising-discontinuations-hidden-upstream-risk"
+  },
+  {
+    "topic_slug": "coalition-homeless-nyc-2026-state-of-homeless",
+    "headline": "Coalition for the Homeless: NYC shelter census hits record 194,531 in 2025",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q5/askamerica/2026-09-28",
+    "pinocchios": 0,
+    "source_url": "https://coalitionforthehomeless.org"
+  },
+  {
+    "topic_slug": "afbf-farm-losses-34-6-billion",
+    "headline": "American Farm Bureau Federation: $34.6 billion in combined farm losses",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q6/askamerica/2026-09-28",
+    "pinocchios": 3,
+    "source_url": "https://www.fb.org/news-release/farmer-losses-projected-to-deepen"
   }
 ]
