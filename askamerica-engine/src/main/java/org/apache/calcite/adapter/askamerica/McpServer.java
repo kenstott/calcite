@@ -4582,6 +4582,56 @@ public class McpServer {
         return getSchemaConnection(String.join(",", allowedSchemas()));
     }
 
+    /** {@code describe_table}/{@code list_schemas} are plain {@code information_schema}
+     *  lookups that must always be near-instant — never a legitimately slow analytical scan
+     *  (see describeTable's own "must stay fast" doc) — so they get a much shorter watchdog
+     *  budget than {@link #queryTimeoutSeconds()}'s data-query default. Killing and
+     *  respawning the shared pgwire-govdata process is safe and cheap on a genuine wedge (it
+     *  respawns against the already-seeded catalog, not a cold mount — see
+     *  PgwireGovDataConnector.killAndRespawn's own doc): the fix for a metadata call wedged
+     *  behind a stuck query (root-caused live 2026-09-28 to a stalled/trickling R2 read
+     *  Calcite's own cancel cannot interrupt — see file/.../S3FileIOTables.java's
+     *  apiCallAttemptTimeout comment) is not to reach in and unstick that read, it's to make
+     *  the existing kill-and-respawn recovery fire fast enough to matter — comfortably under
+     *  Claude Desktop's own ~4-minute client-side tool-call timeout, not the 12 minutes
+     *  {@link #queryTimeoutSeconds()}'s default yields via the watchdog's normal multiples. */
+    private static final int DEFAULT_METADATA_QUERY_TIMEOUT_SECONDS = 15;
+
+    private static int metadataQueryTimeoutSeconds() {
+        String raw = System.getProperty("askamerica.metadata.query.timeout.seconds");
+        if (raw == null || raw.isEmpty()) {
+            raw = System.getenv("ASKAMERICA_METADATA_QUERY_TIMEOUT_SECONDS");
+        }
+        if (raw != null && !raw.isEmpty()) {
+            try {
+                int v = Integer.parseInt(raw.trim());
+                return Math.max(0, v);
+            } catch (NumberFormatException e) {
+                log.println("[askamerica-mcp] bad metadata query timeout '" + raw + "', using "
+                    + DEFAULT_METADATA_QUERY_TIMEOUT_SECONDS + "s");
+            }
+        }
+        return DEFAULT_METADATA_QUERY_TIMEOUT_SECONDS;
+    }
+
+    /**
+     * Runs an {@code information_schema.*} metadata query with a timeout bound and watchdog
+     * visibility — {@code describe_table} and {@code list_schemas} used to run these raw,
+     * with neither, so a wedged pgwire-govdata server (seen live, and already documented in
+     * PgwireGovDataConnector's own javadoc: "information_schema.schemata queries hang
+     * indefinitely against pgwire-calcite, no error, no response") had nothing to recover
+     * it — every caller just waited on Claude Desktop's own ~4-minute client-side timeout
+     * instead of this server's, with no automatic recovery at all. Caller closes {@code st}
+     * and removes it from {@link #ACTIVE_STATEMENTS} in its own {@code finally}, same as
+     * every other guarded query on this connection.
+     */
+    private static ResultSet executeMetaQuery(Statement st, String sql) throws java.sql.SQLException {
+        int timeoutSeconds = metadataQueryTimeoutSeconds();
+        st.setQueryTimeout(timeoutSeconds);
+        ACTIVE_STATEMENTS.put(st, new long[]{System.currentTimeMillis(), timeoutSeconds});
+        return st.executeQuery(sql);
+    }
+
     /** Reduce a caller-supplied identifier to a safe [a-z0-9_] literal for meta queries. */
     private static String safeIdent(String s) {
         return s == null ? "" : s.replaceAll("[^A-Za-z0-9_]", "").toLowerCase();
@@ -4593,10 +4643,10 @@ public class McpServer {
         java.util.Set<String> seen = new java.util.HashSet<>();
         try {
             Connection c = getCatalogConnection();
-            try (Statement st = c.createStatement();
-                 ResultSet rs = st.executeQuery(
-                     "SELECT schema_name, remarks FROM information_schema.schemata "
-                     + "ORDER BY schema_name")) {
+            Statement st = c.createStatement();
+            try (ResultSet rs = executeMetaQuery(st,
+                    "SELECT schema_name, remarks FROM information_schema.schemata "
+                    + "ORDER BY schema_name")) {
                 while (rs.next()) {
                     String name = rs.getString(1);
                     if (name == null) {
@@ -4609,6 +4659,9 @@ public class McpServer {
                     seen.add(lower);
                     arr.add(schemaEntry(lower, rs.getString(2)));
                 }
+            } finally {
+                ACTIVE_STATEMENTS.remove(st);
+                st.close();
             }
         } catch (Exception e) {
             // Do not fall through to the allow-list. Swallowing this reported a healthy
@@ -4785,10 +4838,10 @@ public class McpServer {
         out.put("table", t);
 
         // Table type + description (information_schema resolves both base tables and views).
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
-                 "SELECT table_type, remarks FROM information_schema.tables "
-                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "'")) {
+        Statement typeSt = c.createStatement();
+        try (ResultSet rs = executeMetaQuery(typeSt,
+                "SELECT table_type, remarks FROM information_schema.tables "
+                + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "'")) {
             if (rs.next()) {
                 out.put("type", mcpTableType(rs.getString(1)));
                 String tdesc = Catalog.tableDescription(s, t);
@@ -4799,16 +4852,19 @@ public class McpServer {
                     out.put("description", tdesc);
                 }
             }
+        } finally {
+            ACTIVE_STATEMENTS.remove(typeSt);
+            typeSt.close();
         }
 
         // Columns — resolved by Calcite, so view row types come through correctly.
         ArrayNode cols = MAPPER.createArrayNode();
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
-                 "SELECT column_name, data_type, is_nullable, remarks "
-                 + "FROM information_schema.columns "
-                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "' "
-                 + "ORDER BY ordinal_position")) {
+        Statement colSt = c.createStatement();
+        try (ResultSet rs = executeMetaQuery(colSt,
+                "SELECT column_name, data_type, is_nullable, remarks "
+                + "FROM information_schema.columns "
+                + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "' "
+                + "ORDER BY ordinal_position")) {
             while (rs.next()) {
                 String cname = rs.getString(1);
                 ObjectNode col = MAPPER.createObjectNode();
@@ -4824,6 +4880,9 @@ public class McpServer {
                 }
                 cols.add(col);
             }
+        } finally {
+            ACTIVE_STATEMENTS.remove(colSt);
+            colSt.close();
         }
         out.set("columns", cols);
 
@@ -4834,26 +4893,29 @@ public class McpServer {
         // to notice. The schemas already declare these keys; reporting them here is what makes the
         // grain visible at the point a caller decides how to join.
         ArrayNode pk = MAPPER.createArrayNode();
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
-                 "SELECT k.column_name FROM information_schema.key_column_usage k "
-                 + "JOIN information_schema.table_constraints tc "
-                 + "  ON k.constraint_name = tc.constraint_name "
-                 + " AND k.table_schema = tc.table_schema "
-                 + " AND k.table_name = tc.table_name "
-                 + "WHERE lower(k.table_schema) = '" + s + "' "
-                 + "  AND lower(k.table_name) = '" + t + "' "
-                 // Restated for tc, not redundant: each metadata table prunes from its own
-                 // predicates, and without these the constraints scan walks every table in every
-                 // schema to answer a question about one — the whole-catalog resolution that made
-                 // describe_table both slow and breakable by an unrelated table.
-                 + "  AND lower(tc.table_schema) = '" + s + "' "
-                 + "  AND lower(tc.table_name) = '" + t + "' "
-                 + "  AND tc.constraint_type = 'PRIMARY KEY' "
-                 + "ORDER BY k.ordinal_position")) {
+        Statement pkSt = c.createStatement();
+        try (ResultSet rs = executeMetaQuery(pkSt,
+                "SELECT k.column_name FROM information_schema.key_column_usage k "
+                + "JOIN information_schema.table_constraints tc "
+                + "  ON k.constraint_name = tc.constraint_name "
+                + " AND k.table_schema = tc.table_schema "
+                + " AND k.table_name = tc.table_name "
+                + "WHERE lower(k.table_schema) = '" + s + "' "
+                + "  AND lower(k.table_name) = '" + t + "' "
+                // Restated for tc, not redundant: each metadata table prunes from its own
+                // predicates, and without these the constraints scan walks every table in every
+                // schema to answer a question about one — the whole-catalog resolution that made
+                // describe_table both slow and breakable by an unrelated table.
+                + "  AND lower(tc.table_schema) = '" + s + "' "
+                + "  AND lower(tc.table_name) = '" + t + "' "
+                + "  AND tc.constraint_type = 'PRIMARY KEY' "
+                + "ORDER BY k.ordinal_position")) {
             while (rs.next()) {
                 pk.add(rs.getString(1));
             }
+        } finally {
+            ACTIVE_STATEMENTS.remove(pkSt);
+            pkSt.close();
         }
         if (pk.size() > 0) {
             out.set("primaryKey", pk);
