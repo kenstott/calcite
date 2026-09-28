@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.1](https://github.com/kenstott/calcite/compare/engine-v0.99.0...engine-v0.99.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** give describe_table/list_schemas fast wedge recovery ([c77a5b0](https://github.com/kenstott/calcite/commit/c77a5b0c5b7641a3eb6790c3002706ad22a3a6b9))
+
 ## [0.99.0](https://github.com/kenstott/calcite/compare/engine-v0.98.0...engine-v0.99.0) (2026-09-28)
 
 
