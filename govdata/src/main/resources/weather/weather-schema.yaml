@@ -563,8 +563,8 @@ partitionedTables:
       maxYear: 2025
       distinctYears: 17
       contiguous: true
-      rowCount: 849886
-      checkedAt: "2026-09-26T02:16:10Z"
+      rowCount: 1197824
+      checkedAt: "2026-09-28T03:25:45Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Month (GSOM) data. Includes temperature
@@ -672,8 +672,8 @@ partitionedTables:
       maxYear: 2025
       distinctYears: 17
       contiguous: true
-      rowCount: 788189
-      checkedAt: "2026-09-26T02:16:11Z"
+      rowCount: 981270
+      checkedAt: "2026-09-28T03:25:47Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Year (GSOY) data — annual temperature,
@@ -871,7 +871,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 130416289
-      checkedAt: "2026-09-26T02:16:16Z"
+      checkedAt: "2026-09-28T03:25:54Z"
     partitions: *standard_partitions
     comment: >
       NOAA GHCN-Daily station observations from NCEI annual bulk files
@@ -994,7 +994,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 2744712
-      checkedAt: "2026-09-26T02:16:18Z"
+      checkedAt: "2026-09-28T03:25:57Z"
     partitions: *drought_partitions
     comment: >
       National Drought Monitor weekly county-level drought severity from the USDM API
@@ -1117,7 +1117,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 3759374
-      checkedAt: "2026-09-26T02:16:29Z"
+      checkedAt: "2026-09-28T03:26:09Z"
     partitions: *hms_partitions
     comment: >
       NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
@@ -1222,7 +1222,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 461782
-      checkedAt: "2026-09-26T02:16:36Z"
+      checkedAt: "2026-09-28T03:26:20Z"
     comment: >
       Raw NOAA HMS smoke plume polygon geometries retained for spatial re-analysis.
       One row per smoke polygon per day. Geometry stored as WKT for direct use with
