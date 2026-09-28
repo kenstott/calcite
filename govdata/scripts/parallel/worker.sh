@@ -130,7 +130,7 @@ else
   # meant a genuinely fresh pool launch could find a dead year-old PID instead of its own
   # live registration and still misclassify itself as standalone.
   _existing_worker_pid=""
-  _existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1)
+  _existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1) || true
   [ -n "$_existing_pid_file" ] || { [ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_pid_file="$PID_DIR/${WORKER_ID}.pid"; }
   [ -n "$_existing_pid_file" ] && [ -f "$_existing_pid_file" ] \
     && _existing_worker_pid=$(head -1 "$_existing_pid_file" 2>/dev/null | tr -d '[:space:]')

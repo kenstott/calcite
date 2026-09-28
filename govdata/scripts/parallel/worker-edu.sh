@@ -49,7 +49,7 @@ read -r _self_start_year _self_end_year <<< "$(_year_range_from_mode "$MODE")"
 # ${WORKER_ID}.pid path can be a stale leftover from an unrelated earlier invocation and
 # must not be checked first.
 _existing_worker_pid=""
-_existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1)
+_existing_pid_file=$(ls -t "$PID_DIR/${WORKER_ID}".*.pid 2>/dev/null | head -1) || true
 [ -n "$_existing_pid_file" ] || { [ -f "$PID_DIR/${WORKER_ID}.pid" ] && _existing_pid_file="$PID_DIR/${WORKER_ID}.pid"; }
 [ -n "$_existing_pid_file" ] && [ -f "$_existing_pid_file" ] \
   && _existing_worker_pid=$(head -1 "$_existing_pid_file" 2>/dev/null | tr -d '[:space:]')

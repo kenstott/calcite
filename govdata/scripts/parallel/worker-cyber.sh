@@ -77,7 +77,7 @@ register_cyber_schema() {
   # unrelated earlier invocation and must not be checked first -- checking it first made
   # this process fall through to check_schema_year_conflict, which then found the suffixed
   # pid file run-pool.sh had just written for THIS SAME PID and self-conflicted (#747 investigation).
-  _existing_pid_file=$(ls -t "$PID_DIR/${_wid}".*.pid 2>/dev/null | head -1)
+  _existing_pid_file=$(ls -t "$PID_DIR/${_wid}".*.pid 2>/dev/null | head -1) || true
   [ -n "$_existing_pid_file" ] || { [ -f "$PID_DIR/${_wid}.pid" ] && _existing_pid_file="$PID_DIR/${_wid}.pid"; }
   [ -n "$_existing_pid_file" ] && [ -f "$_existing_pid_file" ] \
     && _existing_pid=$(head -1 "$_existing_pid_file" 2>/dev/null | tr -d '[:space:]')
