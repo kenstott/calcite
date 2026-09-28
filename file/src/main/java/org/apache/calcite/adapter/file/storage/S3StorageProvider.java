@@ -20,8 +20,10 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.retry.RetryPolicy;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
@@ -82,6 +84,17 @@ import java.util.List;
  */
 public class S3StorageProvider implements StorageProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3StorageProvider.class);
+
+  // Control-plane calls (LIST/HEAD) are metadata lookups, not data transfer, so they get their
+  // own request-scoped deadline instead of sharing the client-level socketTimeout sized for
+  // large multipart GET/PUT bodies (15 min — see the httpClient builder below). apiCallTimeout
+  // bounds the whole call, including any client-level retries, so a stuck response can't ride
+  // out the full retry budget before failing.
+  private static final AwsRequestOverrideConfiguration METADATA_CALL_TIMEOUT =
+      AwsRequestOverrideConfiguration.builder()
+          .apiCallAttemptTimeout(Duration.ofSeconds(30))
+          .apiCallTimeout(Duration.ofSeconds(90))
+          .build();
 
   private final S3Client s3Client;
 
@@ -267,7 +280,8 @@ public class S3StorageProvider implements StorageProvider {
 
       // Check if bucket exists via HEAD; create it if absent.
       try {
-        s3Client.headBucket(HeadBucketRequest.builder().bucket(bucketName).build());
+        s3Client.headBucket(HeadBucketRequest.builder().bucket(bucketName)
+            .overrideConfiguration(METADATA_CALL_TIMEOUT).build());
         LOGGER.debug("S3 bucket already exists: {}", bucketName);
       } catch (NoSuchBucketException notFound) {
         LOGGER.info("Creating S3 bucket: {}", bucketName);
@@ -292,7 +306,8 @@ public class S3StorageProvider implements StorageProvider {
 
     ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.builder()
         .bucket(s3Uri.bucket)
-        .prefix(s3Uri.key);
+        .prefix(s3Uri.key)
+        .overrideConfiguration(METADATA_CALL_TIMEOUT);
     if (!recursive) {
       requestBuilder.delimiter("/");
     }
@@ -300,46 +315,53 @@ public class S3StorageProvider implements StorageProvider {
     String continuationToken = null;
     int page = 0;
     ListObjectsV2Response result;
-    do {
-      if (continuationToken != null) {
-        requestBuilder.continuationToken(continuationToken);
-      }
-      result = s3Client.listObjectsV2(requestBuilder.build());
-      page++;
-
-      for (S3Object summary : result.contents()) {
-        if (!summary.key().equals(s3Uri.key)) { // Skip the directory itself
-          entries.add(
-              new FileEntry(
-              "s3://" + s3Uri.bucket + "/" + summary.key(),
-              getFileName(summary.key()),
-              false,
-              summary.size(),
-              summary.lastModified() != null ? summary.lastModified().toEpochMilli() : 0));
+    try {
+      do {
+        if (continuationToken != null) {
+          requestBuilder.continuationToken(continuationToken);
         }
-      }
+        result = s3Client.listObjectsV2(requestBuilder.build());
+        page++;
 
-      // Add directories when not recursive
-      if (!recursive && result.commonPrefixes() != null) {
-        for (CommonPrefix cp : result.commonPrefixes()) {
-          String prefix = cp.prefix();
-          entries.add(
-              new FileEntry(
-              "s3://" + s3Uri.bucket + "/" + prefix,
-              getFileName(prefix.endsWith("/") ?
-                  prefix.substring(0, prefix.length() - 1) : prefix),
-              true,
-              0,
-              0));
+        for (S3Object summary : result.contents()) {
+          if (!summary.key().equals(s3Uri.key)) { // Skip the directory itself
+            entries.add(
+                new FileEntry(
+                "s3://" + s3Uri.bucket + "/" + summary.key(),
+                getFileName(summary.key()),
+                false,
+                summary.size(),
+                summary.lastModified() != null ? summary.lastModified().toEpochMilli() : 0));
+          }
         }
-      }
 
-      if (Boolean.TRUE.equals(result.isTruncated()) && page % 5 == 0) {
-        LOGGER.info("S3 LIST {}: {} entries so far (page {})", s3Uri.key, entries.size(), page);
-      }
+        // Add directories when not recursive
+        if (!recursive && result.commonPrefixes() != null) {
+          for (CommonPrefix cp : result.commonPrefixes()) {
+            String prefix = cp.prefix();
+            entries.add(
+                new FileEntry(
+                "s3://" + s3Uri.bucket + "/" + prefix,
+                getFileName(prefix.endsWith("/") ?
+                    prefix.substring(0, prefix.length() - 1) : prefix),
+                true,
+                0,
+                0));
+          }
+        }
 
-      continuationToken = result.nextContinuationToken();
-    } while (Boolean.TRUE.equals(result.isTruncated()));
+        if (Boolean.TRUE.equals(result.isTruncated()) && page % 5 == 0) {
+          LOGGER.info("S3 LIST {}: {} entries so far (page {})", s3Uri.key, entries.size(), page);
+        }
+
+        continuationToken = result.nextContinuationToken();
+      } while (Boolean.TRUE.equals(result.isTruncated()));
+    } catch (SdkException e) {
+      // Translate to the interface's checked exception so a bounded control-plane timeout (or
+      // any other SDK-level failure) reaches callers the same way a local-filesystem listFiles()
+      // failure would, rather than as a backend-specific unchecked type they don't expect.
+      throw new IOException("S3 LIST failed for " + fullPath, e);
+    }
 
     return entries;
   }
@@ -349,8 +371,14 @@ public class S3StorageProvider implements StorageProvider {
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
 
-    HeadObjectResponse metadata = s3Client.headObject(
-        HeadObjectRequest.builder().bucket(s3Uri.bucket).key(s3Uri.key).build());
+    HeadObjectResponse metadata;
+    try {
+      metadata = s3Client.headObject(
+          HeadObjectRequest.builder().bucket(s3Uri.bucket).key(s3Uri.key)
+              .overrideConfiguration(METADATA_CALL_TIMEOUT).build());
+    } catch (SdkException e) {
+      throw new IOException("S3 HEAD failed for " + fullPath, e);
+    }
 
     return new FileMetadata(
         path,
@@ -473,6 +501,7 @@ public class S3StorageProvider implements StorageProvider {
                   .bucket(s3Uri.bucket)
                   .prefix(yearPrefix)
                   .maxKeys(10)
+                  .overrideConfiguration(METADATA_CALL_TIMEOUT)
                   .build());
           for (S3Object obj : result.contents()) {
             if (obj.key().matches(regex)) {
@@ -502,7 +531,8 @@ public class S3StorageProvider implements StorageProvider {
   /** HEAD-based object existence check (v2 has no doesObjectExist). */
   private boolean objectExists(String bucket, String key) {
     try {
-      s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
+      s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key)
+          .overrideConfiguration(METADATA_CALL_TIMEOUT).build());
       return true;
     // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal; other exceptions still propagate, per exists() above
     } catch (NoSuchKeyException notFound) {
@@ -516,13 +546,18 @@ public class S3StorageProvider implements StorageProvider {
     S3Uri s3Uri = parseS3Uri(fullPath);
 
     // In S3, directories are conceptual. Check if there are objects with this prefix
-    ListObjectsV2Response result = s3Client.listObjectsV2(
-        ListObjectsV2Request.builder()
-            .bucket(s3Uri.bucket)
-            .prefix(s3Uri.key.endsWith("/") ? s3Uri.key : s3Uri.key + "/")
-            .maxKeys(1)
-            .build());
-    return result.keyCount() != null && result.keyCount() > 0;
+    try {
+      ListObjectsV2Response result = s3Client.listObjectsV2(
+          ListObjectsV2Request.builder()
+              .bucket(s3Uri.bucket)
+              .prefix(s3Uri.key.endsWith("/") ? s3Uri.key : s3Uri.key + "/")
+              .maxKeys(1)
+              .overrideConfiguration(METADATA_CALL_TIMEOUT)
+              .build());
+      return result.keyCount() != null && result.keyCount() > 0;
+    } catch (SdkException e) {
+      throw new IOException("S3 LIST failed for " + fullPath, e);
+    }
   }
 
   /**
@@ -866,7 +901,7 @@ public class S3StorageProvider implements StorageProvider {
       s3Client.deleteObject(
           DeleteObjectRequest.builder().bucket(s3Uri.bucket).key(s3Uri.key).build());
       return true;
-    } catch (S3Exception e) {
+    } catch (SdkException e) {
       throw new IOException("Failed to delete S3 object: " + path, e);
     }
   }
@@ -1032,7 +1067,7 @@ public class S3StorageProvider implements StorageProvider {
           .sourceBucket(sourceUri.bucket).sourceKey(sourceUri.key)
           .destinationBucket(destUri.bucket).destinationKey(destUri.key)
           .build());
-    } catch (S3Exception e) {
+    } catch (SdkException e) {
       throw new IOException("Failed to copy S3 object from " + source + " to " + destination, e);
     }
   }
