@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.99.0](https://github.com/kenstott/calcite/compare/engine-v0.98.0...engine-v0.99.0) (2026-09-28)
+
+
+### Features
+
+* **askamerica-engine:** recipe -- compute a concentration share yourself when you have the counts ([37c05cd](https://github.com/kenstott/calcite/commit/37c05cdad926ee9699cb092885d85096c75a3591))
+* **askamerica-engine:** recipe -- test a weighted aggregate against its largest unit ([f9d81cc](https://github.com/kenstott/calcite/commit/f9d81cc8dd04b50267885d5f1e7dc91e7746e885))
+* **askamerica:** daily eval 2026-09-28 — 6 news-check stories, 2 new recipes ([4eea488](https://github.com/kenstott/calcite/commit/4eea4882f0d6b71d720e1427715ef042b7109f2b))
+* **census/observedCoverage:** record acs_housing_year_built_detail coverage after first load ([ff351ba](https://github.com/kenstott/calcite/commit/ff351ba61df25e4b189cb08a228163b8e4363cfd))
+* **govdata/census:** add observedCoverage metadata for acs_veterans_by_period ([df57fb8](https://github.com/kenstott/calcite/commit/df57fb87fbc726216b9e6d400e485a66da63ac88))
+* **govdata/disasters:** wildfire_perimeters loads attr_IncidentSize as incident_size_acres ([b2f07dc](https://github.com/kenstott/calcite/commit/b2f07dc1607120225011c09453a65c1f375780f0))
+* **govdata/edu:** add fsa_pslf_discharge_summary — FSA PSLF discharge/forgiveness data ([328e12d](https://github.com/kenstott/calcite/commit/328e12d1c4f0972bc850ef54235074bce9b77b1f))
+* **govdata/health:** add CMS PBJ nurse staffing time series ([a1847d6](https://github.com/kenstott/calcite/commit/a1847d64f9a293232b336c5542ca6f486f9d73cf))
+* **govdata/law:** add member_stock_transactions — House STOCK Act PTR disclosures ([df03c65](https://github.com/kenstott/calcite/commit/df03c651d6b8bc00b9ada4a85533f6eebd441500))
+* **govdata/law:** parse pre-2018 PTR template for member_stock_transactions ([fad30e6](https://github.com/kenstott/calcite/commit/fad30e66f47bce62a7b6b9d8b2f74b24c09bb74c))
+* **news-check:** 10 stories checked under tightened third-party-claim criteria (2026-09-27) ([a5463c0](https://github.com/kenstott/calcite/commit/a5463c0a39e6177226b01b2841fb172b7fdf721f))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** kill a wedged pgwire-govdata occupant during startup connect ([4e846ad](https://github.com/kenstott/calcite/commit/4e846add4e8041fb5e34f86e31573515fa8b6b6e))
+* **askamerica-engine:** make split fidelity/claims_accuracy rating mandatory ([7966b28](https://github.com/kenstott/calcite/commit/7966b288ad73826d8c010892009f1b4b7e3cf75c))
+* **askamerica-engine:** never spawn pgwire-govdata with a temp-dir catalog path ([f97af24](https://github.com/kenstott/calcite/commit/f97af2451fc2adb0e5ddc4e1e248192b8ca96200))
+* **census:** floor acs_housing_year_built_detail minYear at 2015 ([0f447d3](https://github.com/kenstott/calcite/commit/0f447d3fd6948de1e0c6aeb4ffc196e30a4cd8d1))
+* **file/iceberg:** treat an already-gone file as a successful expireSnapshots delete ([32845ea](https://github.com/kenstott/calcite/commit/32845eac1be9fe211059bd7ebc22ca8f421ee626))
+* **file/storage:** bound S3 LIST/HEAD control-plane calls with a request-scoped deadline ([83077b4](https://github.com/kenstott/calcite/commit/83077b4ea7234e1d1dfb0e239630f8bf0c2961dc))
+* **file:** defer per-table Iceberg registration to first getTable() call ([36ec43e](https://github.com/kenstott/calcite/commit/36ec43e9dfedc3eddc7cb66bdbbfb97e697399a9))
+* **govdata/ag:** drop CENSUS duplicate of SURVEY annual total in nass_crop_production ([88615a6](https://github.com/kenstott/calcite/commit/88615a6ec13a4bc38fcee6f1681c1c51cf8cdfb8))
+* **govdata/cyber:** guard unbound GOVDATA_TABLES reference in worker-cyber.sh ([f1707ee](https://github.com/kenstott/calcite/commit/f1707eeac934229b995215626dbc1ca998e341c8))
+* **govdata/fedregister:** validate effective_on before writing in daily provider ([5aeed6a](https://github.com/kenstott/calcite/commit/5aeed6a14b2009f55703745757ff9823f79831ce))
+* **govdata/parallel:** apply the [#744](https://github.com/kenstott/calcite/issues/744) pid-file fix to the 4 bespoke worker scripts too ([23483fc](https://github.com/kenstott/calcite/commit/23483fc1ddfc973fcb1ff7239b4fb9a53d616676))
+* **govdata/parallel:** bound the .exit-file race in run-pool.sh's monitor loop ([b85e34b](https://github.com/kenstott/calcite/commit/b85e34baec7c72f01f94e955c209c29853ddf5fe))
+* **govdata/parallel:** guard pid-file glob against pipefail on zero matches ([d771fc4](https://github.com/kenstott/calcite/commit/d771fc486ca96181cf507510c349b3c47261fea4))
+* **govdata/parallel:** namespace run-pool.sh pid/exit tracking files per instance ([69509dd](https://github.com/kenstott/calcite/commit/69509ddf449acd4905f3c887a910c8995bffc46a))
+* **govdata/parallel:** pool_status.py can't see x-schema when it runs via the explicit backstop ([fc70e5c](https://github.com/kenstott/calcite/commit/fc70e5cffd1aa036b6e0b7af3b4e0ab9470f805a))
+* **govdata/parallel:** serialize run-pool.sh memory admission across instances ([b0c81f2](https://github.com/kenstott/calcite/commit/b0c81f2197c0d2b7337714f2d1eca8345e8ff666))
+* **govdata/parallel:** worker-cyber.sh self-check must prefer suffixed pid file ([#744](https://github.com/kenstott/calcite/issues/744) gap) ([8b4c7ae](https://github.com/kenstott/calcite/commit/8b4c7aec36cb48f9563aaa482519916936e7d3fd))
+* **govdata/parallel:** worker.sh self-check must prefer the fresh suffixed pid file over a stale unsuffixed one ([063714a](https://github.com/kenstott/calcite/commit/063714a215ae53af9f7d30aa4d148843d683a70f))
+* **govdata/parallel:** worker.sh self-check must recognize the suffixed pid file ([#741](https://github.com/kenstott/calcite/issues/741) follow-up) ([795e5b4](https://github.com/kenstott/calcite/commit/795e5b4d59df887520f12e3b22c1d36d835a8532))
+* **govdata/ref:** enable runMaintenance on entity-bridge tables ([45595fc](https://github.com/kenstott/calcite/commit/45595fc01d86bd161cb4a2247bb27caa0def11a3))
+* **govdata/ref:** isolate each entity-bridge output table's write so one failure doesn't abort the sweep ([10c19ea](https://github.com/kenstott/calcite/commit/10c19ea4d2e650ead2471e381d12849584140077))
+* **govdata/scheduled:** fire x-schema right after daily, not after its fill mode too ([a264b41](https://github.com/kenstott/calcite/commit/a264b41bc5136f91511f1c2a28e91ba85293525c))
+* **govdata/scripts:** x-schema.sh must not skip ChunkOrganizer on a bridge failure ([526f5d7](https://github.com/kenstott/calcite/commit/526f5d7084fce7479385fc8b9fba8da4db1eb380))
+* **govdata:** fail loudly when enabledTables requests an unknown table ([e9516d8](https://github.com/kenstott/calcite/commit/e9516d8b9129ceeba069aca9e61a439a6860e553))
+* **govdata:** run x-schema on a daily window that completed with failures, not just a timeout ([83758e8](https://github.com/kenstott/calcite/commit/83758e82873ef3c6802a73b0ced8c040c184943e))
+* **govdata:** run x-schema unconditionally after every daily window, not per exit path ([b529a00](https://github.com/kenstott/calcite/commit/b529a00edb00ac5d1c06a53b6f3e14948dcaf269))
+* **govdata:** tie pre-daily-release's release step to the build, not a timer ([c8384af](https://github.com/kenstott/calcite/commit/c8384af9cca7427278498d674fcd415fb06bc707))
+* **news-check:** correct 4 stories to mandatory split Pinocchio rating ([4934485](https://github.com/kenstott/calcite/commit/4934485a6ad520e3334f864adfb6c03b5ffa16d0))
+* **worker.sh:** pass currentMonth=12 for historical runs of schemas with month cache-busters ([ab6e21d](https://github.com/kenstott/calcite/commit/ab6e21d00362cfc823c48240fec9fc46aee67bf1))
+
 ## [0.98.0](https://github.com/kenstott/calcite/compare/engine-v0.97.4...engine-v0.98.0) (2026-09-27)
 
 
