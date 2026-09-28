@@ -98,11 +98,19 @@ run_step() {
 # being starved indefinitely. Only ChunkOrganizer must precede vss-local.sh, and it still does.
 # `if !` rather than a trailing `$?` test: under `set -e` a failing java aborts the script before
 # the test is ever reached, so the explicit message was unreachable.
+#
+# A bridge failure records itself and falls through to the chunk sweep instead of exiting here —
+# the two are independent (see above), so one's failure is no reason to skip the other, which
+# would otherwise starve ChunkOrganizer's own opt-in production window every time a single
+# ref-schema table hits a transient issue (confirmed live 2026-09-28, #753: a resource-contention
+# timeout on one table's drop-and-recreate). The script still exits non-zero at the end if either
+# sweep failed, so run-scheduled.sh's own failure handling/errors.log visibility is unchanged.
+_xschema_failed=false
 if ! run_step "building entity bridges across all schemas" \
     "${GOVDATA_XSCHEMA_BRIDGE_TIMEOUT:-}" \
     org.apache.calcite.adapter.govdata.ref.EntityBridgeOrganizer; then
   echo "ERROR: EntityBridgeOrganizer failed" >&2
-  exit 1
+  _xschema_failed=true
 fi
 
 # ChunkOrganizer's chunk/embedding sweep has no resumable checkpoint or row/time cap sized for
@@ -115,8 +123,12 @@ if [ "${GOVDATA_XSCHEMA_RUN_CHUNKS:-false}" = "true" ]; then
       "${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-}" \
       org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then
     echo "ERROR: ChunkOrganizer failed" >&2
-    exit 1
+    _xschema_failed=true
   fi
 else
   echo "[x-schema] skipping ChunkOrganizer sweep (set GOVDATA_XSCHEMA_RUN_CHUNKS=true to enable)"
+fi
+
+if [ "$_xschema_failed" = "true" ]; then
+  exit 1
 fi
