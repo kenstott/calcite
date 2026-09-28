@@ -59,6 +59,15 @@ EMBED_START_RE = re.compile(r"Embeddings \(local CPU\)")
 EMBED_DONE_RE = re.compile(r"Embeddings:\s+complete\s*$")
 # R2 sync daemon banners written into runs/r2-sync.log by run-scheduled.sh.
 R2_DONE_RE = re.compile(r"R2 sync (complete|FAILED)\b")
+# x-schema (entity-bridge sweep) can run two ways: run-pool.sh's own natural-completion
+# trigger (post-ETL, same pool-*.log — already covered by EMBED_START_RE's neighbor,
+# embed_panel), or run-scheduled.sh's explicit backstop (added for #740/#741, timing fixed
+# for #749/x-schema-after-daily) when that natural trigger didn't fire — which runs as its
+# own script invocation and writes into the window's scheduled-*.log instead. Without this,
+# the backstop path is invisible to this tool: it looks like nothing is happening post-ETL.
+XSCHEMA_TRIGGER_RE = re.compile(
+    r"running x-schema\.sh explicitly|x-schema: sweeping every registered source")
+WINDOW_COMPLETE_RE = re.compile(r"===\s+\S+\s+window complete\s+===\s*$")
 
 
 class C:
@@ -247,6 +256,53 @@ def r2_panel(runs_dir):
     return [f"\n{C.GREY}R2 SYNC — {tag} (last activity {_fmt_age(age)} ago) · {lines[-1][:90]}{C.RESET}"]
 
 
+def x_schema_status(runs_dir):
+    """Find the trigger line (if any) in the newest scheduled-*.log and whether the window
+    has completed since. Returns None if x-schema hasn't run in this window's log at all."""
+    logs = glob.glob(os.path.join(runs_dir, "scheduled-*.log"))
+    if not logs:
+        return None
+    p = max(logs, key=os.path.getmtime)
+    started = False
+    tail = []
+    try:
+        with open(p, "r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if XSCHEMA_TRIGGER_RE.search(line):
+                    started = True
+                    tail = []
+                    continue
+                if started:
+                    if WINDOW_COMPLETE_RE.search(line):
+                        return {"path": p, "done": True, "lines": tail[-8:]}
+                    if line.strip():
+                        tail.append(line)
+    except OSError:
+        return None
+    if not started:
+        return None
+    return {"path": p, "done": False, "lines": tail[-8:]}
+
+
+def x_schema_panel(runs_dir):
+    """x-schema status, tailed from the newest scheduled-*.log — see x_schema_status()."""
+    info = x_schema_status(runs_dir)
+    if not info:
+        return []
+    age = time.time() - os.path.getmtime(info["path"])
+    if info["done"]:
+        return [f"\n{C.GREY}X-SCHEMA — complete "
+                f"(from {os.path.basename(info['path'])}, {_fmt_age(age)} ago){C.RESET}"]
+    out = [f"\n{C.BOLD}X-SCHEMA (entity-bridge sweep) — "
+           f"{C.CYAN}running (last output {_fmt_age(age)} ago){C.RESET}"]
+    for ln in info["lines"]:
+        if len(ln) > 116:
+            ln = ln[:113] + "..."
+        out.append(f"  {C.GREY}{ln}{C.RESET}")
+    return out
+
+
 def render(path, color):
     last_status, events, activity, final, post = parse(path)
     out = []
@@ -311,8 +367,10 @@ def render(path, color):
         if nq:
             out.append(f"\n{C.GREY}QUEUED: {nq} schema(s) not yet started{C.RESET}")
 
-    # Post-ETL phases: embeddings (same pool log) and the R2 sync daemon (its own log).
+    # Post-ETL phases: embeddings (same pool log), x-schema (its own scheduled-*.log when
+    # run via the explicit backstop — see x_schema_panel), and the R2 sync daemon (its own log).
     out += embed_panel(path, final, post)
+    out += x_schema_panel(os.path.dirname(os.path.abspath(path)))
     out += r2_panel(os.path.dirname(os.path.abspath(path)))
     return "\n".join(out)
 
