@@ -40,7 +40,9 @@ import java.util.Set;
  *   <li><b>HUD Open Data ArcGIS</b> — {@code opportunity_zones},
  *       {@code hud_subsidized_housing} (paginated FeatureServer JSON; no key)</li>
  *   <li><b>HUD USER files</b> — {@code hud_subsidized_county}
- *       (annual Picture-of-Subsidized-Households {@code .xlsx}; no key)</li>
+ *       (annual Picture-of-Subsidized-Households {@code .xlsx}; no key),
+ *       {@code hud_pit_counts_by_coc} / {@code hud_pit_counts_by_state}
+ *       (annual Point-in-Time homeless count {@code .xlsb}, long format; no key)</li>
  *   <li><b>NYC Open Data</b> — {@code homeless_shelter_census}
  *       (two Socrata DHS Daily Report resources, current + historical, JSON; no key)</li>
  * </ul>
@@ -72,6 +74,8 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     m.put("opportunity_zones", "arcgis");
     m.put("hud_subsidized_housing", "arcgis");
     m.put("hud_subsidized_county", "hud_files");
+    m.put("hud_pit_counts_by_coc", "hud_files");
+    m.put("hud_pit_counts_by_state", "hud_files");
     m.put("homeless_shelter_census", "nyc_dhs");
     TABLE_SOURCE = Collections.unmodifiableMap(m);
   }

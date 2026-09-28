@@ -2020,6 +2020,184 @@ partitionedTables:
         incrementalKeys: [type]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # HUD POINT-IN-TIME (PIT) HOMELESS COUNTS — CoC grain, long format (xlsb, 2007-2024+)
+  # ---------------------------------------------------------------------------
+  - name: hud_pit_counts_by_coc
+    # Freshness gate: one workbook re-published roughly annually with the whole file (not a
+    # per-year fetch), same pattern as homeless_shelter_census - hash-gate the whole fetch
+    # rather than fanning a year dimension.
+    freshness:
+      type: hash
+    pattern: "type=hud_pit_counts_by_coc/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      HUD Point-in-Time (PIT) homeless counts by Continuum of Care (CoC), one row per
+      (year, coc_number, metric_name). Source workbook is wide (HUD adds subpopulation/
+      demographic breakout columns most years - 25 columns in 2007 growing to 1,300+ by
+      2024) so this is melted long-format rather than carrying 1,300+ typed columns;
+      metric_name is the source column header verbatim (e.g. 'Sheltered ES Homeless -
+      Age 18 to 24', 'Overall Homeless Veterans') - see the HUD workbook's own 'field
+      list, all years' sheet for the full taxonomy. A blank/suppressed source cell is
+      omitted rather than written as a null count row. Includes a national total row
+      (coc_number = 'TOTAL', coc_name = 'Total', state_abbr null - HUD leaves CoC Number
+      blank for this row in the source). MO-604 spans Missouri and Kansas and is reported
+      here as one combined CoC row; the companion by-state file splits its counts between
+      MO and KS, so per-state rollups from this table will not exactly match
+      hud_pit_counts_by_state for those two states. Source: huduser.gov/portal/sites/
+      default/files/xls/2007-2024-PIT-Counts-by-CoC.xlsb (annual PIT count cycle).
+
+    dimensions:
+      type:
+        - hud_pit_counts_by_coc
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: PIT count year (source sheet name)
+      - name: coc_number
+        type: string
+        nullable: false
+        comment: HUD Continuum of Care number (e.g. 'AK-500'); 'TOTAL' for the national aggregate row
+      - name: coc_name
+        type: string
+        nullable: true
+        comment: CoC name as published by HUD ('Total' for the national aggregate row)
+      - name: coc_category
+        type: string
+        nullable: true
+        comment: HUD CoC urban/rural category (e.g. 'Largely Rural CoC'); not published before 2024
+      - name: count_types
+        type: string
+        nullable: true
+        comment: Which count(s) this CoC conducted that year (e.g. 'Sheltered and Unsheltered Count')
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: USPS state abbreviation derived from the first 2 characters of coc_number (FK to geo.state_ref.state_abbr); null for the national total row
+      - name: metric_name
+        type: string
+        nullable: false
+        comment: Source column header verbatim, e.g. 'Overall Homeless', 'Sheltered ES Homeless - Age 18 to 24', 'Unsheltered Chronically Homeless Veterans'
+      - name: count
+        type: integer
+        nullable: false
+        comment: The homeless count for this (year, coc_number, metric_name)
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/portal/sites/default/files/xls/2007-2024-PIT-Counts-by-CoC.xlsb"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.HudPitCoCCountsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hud_pit_counts_by_coc/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hud_pit_counts_by_coc
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HUD POINT-IN-TIME (PIT) HOMELESS COUNTS — state grain, long format (xlsb, 2007-2024+)
+  # ---------------------------------------------------------------------------
+  - name: hud_pit_counts_by_state
+    # Freshness gate: same whole-workbook hash gate as hud_pit_counts_by_coc.
+    freshness:
+      type: hash
+    pattern: "type=hud_pit_counts_by_state/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      HUD Point-in-Time (PIT) homeless counts by state/territory, one row per (year,
+      state_abbr, metric_name). Companion file to hud_pit_counts_by_coc at state grain -
+      same wide-to-long melt for the same reason (1,300+ source columns by 2024). Includes
+      a national total row (state_abbr = 'Total'). A blank/suppressed source cell is
+      omitted rather than written as a null count row. Source: huduser.gov/portal/sites/
+      default/files/xls/2007-2024-PIT-Counts-by-State.xlsb (annual PIT count cycle).
+
+    dimensions:
+      type:
+        - hud_pit_counts_by_state
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: PIT count year (source sheet name)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: USPS state/territory abbreviation as published by HUD (FK to geo.state_ref.state_abbr); 'Total' for the national aggregate row
+      - name: number_of_cocs
+        type: integer
+        nullable: true
+        comment: Number of CoCs reporting within this state/territory that year
+      - name: metric_name
+        type: string
+        nullable: false
+        comment: Source column header verbatim, e.g. 'Overall Homeless', 'Sheltered ES Homeless - Age 18 to 24', 'Unsheltered Chronically Homeless Veterans'
+      - name: count
+        type: integer
+        nullable: false
+        comment: The homeless count for this (year, state_abbr, metric_name)
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/portal/sites/default/files/xls/2007-2024-PIT-Counts-by-State.xlsb"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.HudPitStateCountsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hud_pit_counts_by_state/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hud_pit_counts_by_state
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2173,6 +2351,28 @@ constraints:
   # No FK: citywide daily aggregate with no state/county grain, like house_price_index.
   homeless_shelter_census:
     primaryKey: [date_of_census]
+
+  # state_abbr FK is soft: the national total row's synthetic 'TOTAL' value (see
+  # HudPitCoCCountsProvider) does not exist in geo.state_ref, matching this schema's
+  # existing pattern of heterogeneous place_id columns (house_price_index) rather than
+  # dropping the FK declaration for every other row that does resolve.
+  hud_pit_counts_by_coc:
+    primaryKey: [year, coc_number, metric_name]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  # state_abbr FK is soft for the same reason as hud_pit_counts_by_coc: the 'Total'
+  # national aggregate row does not exist in geo.state_ref.
+  hud_pit_counts_by_state:
+    primaryKey: [year, state_abbr, metric_name]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
 # ============================================================================
 # VIEWS

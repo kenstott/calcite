@@ -123,6 +123,123 @@ FROM (SELECT COUNT(*) AS n FROM (
 ));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: hud_pit_counts_by_coc (HUD PIT counts, CoC grain, long format; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_coc', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true));
+
+-- Long-format melt of ~390 CoCs x up to ~1,300 metric columns across 18 years (2007-2024);
+-- 2,000,000 leaves headroom below the ~2.6M full estimate for a dqRowLimit-style partial fetch.
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_coc', 'T2_row_count',
+  CASE WHEN n >= 2000000 THEN 'pass' ELSE 'fail' END, n, 2000000, 'Expected >=2,000,000 melted rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_coc', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    -- coc_category is null pre-2024 by design (not published before 2024), so excluded here
+    -- rather than flagged as a regression.
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'coc_category')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_coc', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_coc', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL year/coc_number/metric_name rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true)
+  WHERE year IS NULL OR coc_number IS NULL OR metric_name IS NULL);
+
+-- National PIT overall-homeless total has run ~550K-650K in recent years; 1,000,000 gives
+-- headroom above the national 'TOTAL' row (the largest single count in the table) without
+-- masking a units mix-up (e.g. a rate mistakenly written as a raw count).
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_coc', 'T7_value_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with count outside [0, 1000000]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true)
+  WHERE count < 0 OR count > 1000000);
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_coc', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, coc_number, metric_name) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, coc_number, metric_name, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true)
+  GROUP BY year, coc_number, metric_name HAVING COUNT(*) > 1
+));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: hud_pit_counts_by_state (HUD PIT counts, state grain, long format; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_state', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true));
+
+-- ~55-60 states/territories (+ the national 'Total' row) x up to ~1,300 metric columns across
+-- 18 years; 300,000 leaves headroom below the ~394K full estimate.
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_state', 'T2_row_count',
+  CASE WHEN n >= 300000 THEN 'pass' ELSE 'fail' END, n, 300000, 'Expected >=300,000 melted rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_state', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_state', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_state', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL year/state_abbr/metric_name rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true)
+  WHERE year IS NULL OR state_abbr IS NULL OR metric_name IS NULL);
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_state', 'T7_value_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with count outside [0, 1000000]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true)
+  WHERE count < 0 OR count > 1000000);
+
+INSERT INTO dq_results
+SELECT 'housing', 'hud_pit_counts_by_state', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, state_abbr, metric_name) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, state_abbr, metric_name, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_state', allow_moved_paths := true)
+  GROUP BY year, state_abbr, metric_name HAVING COUNT(*) > 1
+));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: building_permits (Census BPS; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
