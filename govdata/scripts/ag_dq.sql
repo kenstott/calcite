@@ -354,6 +354,54 @@ SELECT 'ag', 'ers_farm_income', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_farm_income', allow_moved_paths := true) WHERE artificial_key IS NULL);
 
 -- ------------------------------------------------------------
+-- TABLE: ers_commodity_costs_returns (partition cols: type, commodity; PK id col: item)
+-- country and size are excluded from T5: ERS publishes no non-US rows for this
+-- product ('United States' is a genuine constant), and this product carries no
+-- operation-size stratification ('No specific size' is a genuine constant across
+-- every commodity, confirmed live 2026-09-28) -- neither is an ingestion gap.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'ers_commodity_costs_returns', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_commodity_costs_returns', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'ers_commodity_costs_returns', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END, n, 100, 'Expected >=100 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_commodity_costs_returns', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_commodity_costs_returns', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'ers_commodity_costs_returns', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_commodity_costs_returns', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'commodity')));
+INSERT INTO dq_results
+SELECT 'ag', 'ers_commodity_costs_returns', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_commodity_costs_returns', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'commodity', 'country', 'size')));
+INSERT INTO dq_results
+SELECT 'ag', 'ers_commodity_costs_returns', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL item rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_commodity_costs_returns', allow_moved_paths := true) WHERE item IS NULL);
+INSERT INTO dq_results
+SELECT 'ag', 'ers_commodity_costs_returns', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (commodity,year,region,category,item) keys'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT commodity, year, region, category, item, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/ers_commodity_costs_returns', allow_moved_paths := true)
+    GROUP BY commodity, year, region, category, item
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- ------------------------------------------------------------
 -- TABLE: fsa_commodity_payments (partition cols: type, year; PK id col: program_code)
 -- ------------------------------------------------------------
 INSERT INTO dq_results

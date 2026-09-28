@@ -4,6 +4,7 @@
 # Data Sources (USDA):
 #   - NASS QuickStats REST API  (crop production, livestock inventory) — API key
 #   - ERS Farm Income & Wealth  (bulk CSV)                            — no key
+#   - ERS Commodity Costs and Returns (per-commodity bulk CSV)        — no key
 #   - RMA Summary of Business   (bulk pipe-delimited txt)             — no key
 #   - FSA program payments                                            — (follow-on)
 #   - USGS NAWQA Pesticide National Synthesis Project (bulk tab-delimited txt, one
@@ -1631,6 +1632,155 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # ERS_COMMODITY_COSTS_RETURNS — USDA ERS Commodity Costs and Returns
+  # ---------------------------------------------------------------------------
+  # Live-verified 2026-09-28 against ers.usda.gov/data-products/commodity-costs-
+  # and-returns: one CSV per commodity (not one cumulative file), each carrying
+  # that commodity's full 1996-present history by USDA Production Region. The
+  # landing-page link for each commodity is a Drupal media path whose numeric id
+  # and ?v= cache-busting query rotate each twice-yearly release (same shape as
+  # ers_farm_income's release.zip), so ErsCommodityCostsReturnsProvider re-scrapes
+  # the landing page per fetch for the href matching the requested commodity's
+  # filename slug. Per-acre/per-cwt/per-head total cost of production (operating
+  # costs + allocated overhead) vs. gross value of production, by commodity,
+  # region, and year — the series AFBF and similar farm-loss analyses build from.
+  - name: ers_commodity_costs_returns
+    # Freshness gate: same landing-page-scrape shape as ers_farm_income above. A
+    # Last-Modified probe of the landing page skips the re-fetch/re-materialize on
+    # unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
+    pattern: "type=ers_commodity_costs_returns/commodity=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: commodity
+          type: VARCHAR
+    comment: >
+      USDA ERS Commodity Costs and Returns: per-acre (field crops) or per-cwt/
+      per-head (milk, cow-calf, hogs) cost of production vs. gross value of
+      production, by commodity, USDA Farm Production Region (7 regions plus a
+      U.S. total), and year (1996-present). Tall — one row per commodity x
+      region x year x category x item. category groups rows into gross value of
+      production, operating costs, allocated overhead, costs listed (their sum),
+      net value (value less total costs listed), production practices
+      (irrigated/dryland share), and supporting information (price, yield).
+      Covers 9 field crops (corn, cotton, barley, peanuts, rice, sorghum, oats,
+      soybeans, wheat) and 8 livestock categories (milk, cow-calf, and 6 hog
+      production types). Updated twice yearly (preliminary annual estimates in
+      May, final in October). Complements ers_farm_income (farm-SECTOR
+      aggregates) and nass_crop_production (physical production/value, no cost
+      side) with the per-crop cost-vs-revenue breakdown neither provides.
+
+    dimensions:
+      type:
+        - ers_commodity_costs_returns
+      commodity:
+        type: list
+        values: ["corn", "cotton", "barley", "peanuts", "rice", "sorghum", "oats",
+                  "soybeans", "wheat", "milk", "cow-calf", "hogs-all",
+                  "hogs-farrow-finish", "hogs-farrow-feeder", "hogs-feeder-finish",
+                  "hogs-farrow-weanling", "hogs-weanling-feeder"]
+
+    columns:
+      - name: commodity
+        type: string
+        source: commodity
+        nullable: false
+        comment: Commodity slug (partition column), matching the source's per-commodity file
+      - name: commodity_name
+        type: string
+        source: commodity_name
+        nullable: true
+        comment: "ERS commodity label as published in the CSV (e.g. \"Corn\", \"Hogs, farrow-to-finish\")"
+      - name: category
+        type: string
+        source: category
+        nullable: true
+        comment: "Row category: gross value of production, operating costs, allocated overhead, costs listed, net value, production practices, or supporting information"
+      - name: item
+        type: string
+        source: item
+        nullable: true
+        comment: Line item within the category (e.g. "Total, operating costs", "Hired labor", "Price")
+      - name: units
+        type: string
+        source: units
+        nullable: true
+        comment: "Value units, e.g. \"dollars per planted acre\", \"dollars per cwt\", \"percent of acres\""
+      - name: size
+        type: string
+        source: size
+        nullable: true
+        comment: Operation size class (usually "No specific size")
+      - name: region
+        type: string
+        source: region
+        nullable: true
+        comment: "USDA Farm Production Region (7 regions), or \"U.S. total\" for the national estimate"
+      - name: country
+        type: string
+        source: country
+        nullable: true
+        comment: Always "United States" — ERS publishes no non-US rows for this product
+      - name: year
+        type: integer
+        source: year
+        nullable: false
+        comment: Data year; the most recent 1-2 years are ERS forecasts
+      - name: value
+        type: double
+        source: value
+        nullable: true
+        comment: Numeric value in the units named by the units column
+      - name: survey_base_year
+        type: string
+        source: survey_base_year
+        nullable: true
+        comment: "USDA ARMS cost-survey vintage the estimate is rolled forward from, e.g. \"Base survey of 2021\""
+
+    source:
+      type: http
+      url: "https://www.ers.usda.gov/data-products/commodity-costs-and-returns"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+
+      # The provider reads the discovered per-commodity CSV through this cache, keyed on
+      # that file's own URL. The landing page it is discovered from is not cached: freezing
+      # that would pin every commodity to whichever release was current on the first run.
+      rawCache:
+        enabled: true
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ag.ErsCommodityCostsReturnsProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ers_commodity_costs_returns/commodity=*/"
+      partition:
+        columns: [type, commodity]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        # Cumulative full-file-per-commodity source re-fetched every run (like
+        # ers_farm_income): REPLACE each commodity partition rather than append, so
+        # re-runs don't duplicate rows.
+        <<: *nass_iceberg
+        overwritePartitions: true
+        # Fetch/partition unit is the commodity (one CSV = all years); override the
+        # anchor's year-keyed batching/incremental so a batch maps to one whole
+        # commodity partition (year-keyed batching would replace-partition per year
+        # -> clobber), same override as faostat_production's domain fetch above.
+        batchPartitionColumns: [commodity]
+        incrementalKeys: [commodity]
+
+  # ---------------------------------------------------------------------------
   # PESTICIDE_USE_BY_COUNTY — USGS NAWQA county-level agricultural pesticide use
   # ---------------------------------------------------------------------------
   # Live-verified 2026-08-02 against water.usgs.gov/nawqa/pnsp/usage/maps/county-level/:
@@ -2119,6 +2269,17 @@ constraints:
         comment: >
           Best-effort: FAS's gencCode is usually ISO 3166-1 alpha-3, but is null
           for FAS regional/historical groupings that are not real ISO countries.
+
+  ers_commodity_costs_returns:
+    # One row per commodity x region x year x category x item (verified live 2026-09-28,
+    # no duplicates in the source CSV for this key).
+    primaryKey:
+      - type
+      - commodity
+      - year
+      - region
+      - category
+      - item
 
   pesticide_use_by_county:
     # One row per compound x county x year.
