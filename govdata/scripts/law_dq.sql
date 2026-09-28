@@ -3949,14 +3949,15 @@ FROM (
   )
 );
 
--- T6: pk_nulls (every NOT NULL column)
+-- T6: pk_nulls (every NOT NULL column). asset_type_code is excluded: it is legitimately null for
+-- 2015-2017 filings, whose PTR template predates that column (see the column comment).
 INSERT INTO dq_results
 SELECT 'law', 'member_stock_transactions', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'NULL chamber, filer_last_name, filing_id, filing_date, row_seq, asset_name, asset_type_code, transaction_type, transaction_date, notification_date, amount_range or pdf_url rows'
+  n, 0, 'NULL chamber, filer_last_name, filing_id, filing_date, row_seq, asset_name, transaction_type, transaction_date, notification_date, amount_range or pdf_url rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
       WHERE chamber IS NULL OR filer_last_name IS NULL OR filing_id IS NULL OR filing_date IS NULL
-         OR row_seq IS NULL OR asset_name IS NULL OR asset_type_code IS NULL
+         OR row_seq IS NULL OR asset_name IS NULL
          OR transaction_type IS NULL OR transaction_date IS NULL OR notification_date IS NULL
          OR amount_range IS NULL OR pdf_url IS NULL);
 

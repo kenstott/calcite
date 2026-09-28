@@ -213,18 +213,18 @@ dimension_values:
   # The Clerk of the House's bulk financial-disclosure index (financial-pdfs/{year}FD.zip) exists
   # back to 2008, and the "P" (Periodic Transaction Report) filing type first appears in the 2015
   # index (verified live 2026-09-27: the 2012-2014 indexes carry no "P" entries at all — the STOCK
-  # Act's 2012 electronic-filing mandate took a few years to reach this index's coding). But 2015
-  # is not this table's actual floor: the PTR PDF itself was redesigned somewhere in the 2017/2018
-  # filing cycle (verified live 2026-09-27 by sampling one PTR per year) — 2015-2017 filings have
-  # no `[TYPE]` asset-type-code bracket and no "Cap. Gains > $200?" column, a shape
-  # HousePtrTextParser does not parse; 2018 onward matches the template this parser targets. 2018
-  # is the real floor until a second parser code path for the pre-2018 template is added and
-  # DQ-verified — tracked as a backfill in govdata-ops#745. The end follows GOVDATA_END_YEAR, same
-  # as lobbying_year_range; with no end year it is the current year, whose index gains new PTRs
-  # continuously through the year.
+  # Act's 2012 electronic-filing mandate took a few years to reach this index's coding). The PTR
+  # PDF itself was redesigned somewhere in the 2017/2018 filing cycle (verified live 2026-09-27/28
+  # by sampling PTRs across 2015-2023): 2015-2017 filings have no `[TYPE]` asset-type-code bracket
+  # and no "Cap. Gains > $200?" column, a shape HousePtrTextParser's legacy code path parses
+  # without an asset type code (that column did not exist yet); 2018 onward matches the template
+  # its modern code path targets. 2015 is the real floor — DQ-verified for both templates,
+  # closing the pre-2018 backfill tracked in govdata-ops#745. The end follows GOVDATA_END_YEAR,
+  # same as lobbying_year_range; with no end year it is the current year, whose index gains new
+  # PTRs continuously through the year.
   member_stock_transactions_year_range: &member_stock_transactions_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
+    start: "${GOVDATA_START_YEAR:2015}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
@@ -4834,12 +4834,12 @@ partitionedTables:
       holding, DC for a dependent child. `asset_type_code` is the source's own abbreviation (ST,
       OP, OT, ...; see https://fd.house.gov/reference/asset-type-codes.aspx) with `ticker` parsed
       out of it separately when the source prints one; a private holding, fund or real property
-      has no ticker. `amount_min`/`amount_max` are the disclosed bracket's bounds in dollars
-      (`amount_max` null for the open-ended top bracket); the source never discloses an exact
-      amount. Coverage starts in 2018 (see member_stock_transactions_year_range comment) — the PTR
-      PDF template changed that filing cycle, and 2015-2017 filings use an older shape this
-      table's parser does not yet read (backfill tracked in govdata-ops#745). Filings before 2015
-      exist but the source's own filing-type coding does not distinguish PTRs that far back.
+      has no ticker. `asset_type_code` is null for 2015-2017 filings — that PTR template predates
+      the asset-type-code column entirely (see member_stock_transactions_year_range comment).
+      `amount_min`/`amount_max` are the disclosed bracket's bounds in dollars (`amount_max` null
+      for the open-ended top bracket); the source never discloses an exact amount. Coverage starts
+      in 2015, the earliest year the source's own filing-type coding distinguishes PTRs from other
+      disclosure types; filings before 2015 exist but aren't identifiable as PTRs in the index.
 
     dimensions:
       type:
@@ -4894,8 +4894,8 @@ partitionedTables:
         comment: Ticker symbol parsed out of the asset name; null for a holding with none (a private company, fund or real property)
       - name: asset_type_code
         type: string
-        nullable: false
-        comment: The source's own asset-type abbreviation (ST, OP, OT, ...); see https://fd.house.gov/reference/asset-type-codes.aspx
+        nullable: true
+        comment: The source's own asset-type abbreviation (ST, OP, OT, ...); see https://fd.house.gov/reference/asset-type-codes.aspx. Null for 2015-2017 filings, whose PTR template has no such column.
       - name: transaction_type
         type: string
         nullable: false

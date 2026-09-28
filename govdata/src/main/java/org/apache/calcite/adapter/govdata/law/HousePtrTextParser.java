@@ -143,6 +143,48 @@ final class HousePtrTextParser {
    */
   private static final Pattern LABEL_COLON = Pattern.compile("\\b[A-Za-z]{1,2}\\s*:");
 
+  /**
+   * The pre-2018 PTR template has no asset-type-code column at all (no {@code [TYPE]} bracket,
+   * no {@code TABLE_HEADER_END}) — its header row ends in the bare word "Amount" instead of
+   * "Cap. Gains &gt; $200?". Case varies with the same font-substitution quirk seen throughout
+   * this era's filings ("amount", "aMount", ...), so this is matched case-insensitively.
+   */
+  private static final Pattern LEGACY_TABLE_HEADER_END = Pattern.compile("(?i)\\bamount\\b");
+
+  /**
+   * {@code (BRK.B) P 02/27/2015 02/27/2015 $25,000,001 - $50,000,000}: unlike the 2018+ template,
+   * there is no asset-type bracket to anchor on, so this anchors on the transaction-type letter
+   * itself, followed by two dates and an amount. Confirmed live 2026-09-28 against real 2015-2016
+   * filings: unlike the 2018+ template, the two dates are separated by whitespace (never smashed
+   * together) but the month/day may be a single digit with no zero-padding ("12/2/2015"), and the
+   * type letter itself is sometimes lower-cased by the same font substitution that affects owner
+   * codes and tickers in this era.
+   */
+  private static final Pattern LEGACY_ANCHOR = Pattern.compile(
+      "\\b([PESpes])\\s*(\\(partial\\))?\\s+(\\d{1,2}/\\d{1,2}/\\d{4})\\s+"
+      + "(\\d{1,2}/\\d{1,2}/\\d{4})\\s+(Over\\s*\\$[\\d,]+|\\$[\\d,]+\\s*-\\s*\\$[\\d,]+"
+      + "|\\$[\\d,]+(?:\\.\\d{2})?)");
+
+  /**
+   * Case-insensitive counterpart of {@link #OWNER_PREFIX}: confirmed live 2026-09-28, filing
+   * 20006000 (Hon. Raúl M. Grijalva) — "sP First Trust..." lower-cases the owner code itself, not
+   * just the asset name or ticker.
+   */
+  private static final Pattern LEGACY_OWNER_PREFIX =
+      Pattern.compile("(?i)^(SP|JT|DC)\\s+(.*)$", Pattern.DOTALL);
+
+  /** Case-insensitive counterpart of {@link #OWNER_CODE_TOKEN}. */
+  private static final Pattern LEGACY_OWNER_CODE_TOKEN = Pattern.compile("(?i)\\b(?:SP|JT|DC)\\s");
+
+  /**
+   * Case-insensitive counterpart of {@link #TRAILING_TICKER}, allowing a lower-cased letter
+   * inside the ticker itself (confirmed live 2026-09-28: "(MXWl)", "(SEDg)", "(CgNX)", "(aYI)").
+   * A pre-2018 filing may have no ticker at all (e.g. a municipal bond), in which case this simply
+   * fails to match and the whole span is kept as the asset name, exactly like the 2018+ template.
+   */
+  private static final Pattern LEGACY_TRAILING_TICKER =
+      Pattern.compile("^(.*)\\(([A-Za-z0-9.\\-]{1,8})\\)\\s*$", Pattern.DOTALL);
+
   private HousePtrTextParser() {
   }
 
@@ -156,7 +198,10 @@ final class HousePtrTextParser {
       sb.append(page).append(' ');
     }
     String flattened = normalize(sb.toString());
+    return flattened.contains(TABLE_HEADER_END) ? parseModern(flattened) : parseLegacy(flattened);
+  }
 
+  private static List<Row> parseModern(String flattened) {
     int headerEnd = flattened.indexOf(TABLE_HEADER_END);
     int spanStart = headerEnd < 0 ? 0 : headerEnd + TABLE_HEADER_END.length();
 
@@ -261,6 +306,96 @@ final class HousePtrTextParser {
   }
 
   /**
+   * Pre-2018 PTR template (2015-2017): no asset-type-code column, so {@code assetTypeCode} is
+   * always {@code null}. Otherwise mirrors {@link #parseModern}'s row-extraction shape (label
+   * skipping, owner-code clipping, trailing-ticker stripping, filing-status window) with
+   * case-insensitive owner/ticker/type patterns for this era's font substitutions.
+   */
+  private static List<Row> parseLegacy(String flattened) {
+    Matcher headerEndMatch = LEGACY_TABLE_HEADER_END.matcher(flattened);
+    int spanStart = headerEndMatch.find() ? headerEndMatch.end() : 0;
+
+    List<Row> rows = new ArrayList<Row>();
+    Matcher anchor = LEGACY_ANCHOR.matcher(flattened);
+    int searchFrom = spanStart;
+    while (searchFrom <= flattened.length() && anchor.find(searchFrom)) {
+      String span = flattened.substring(spanStart, anchor.start());
+      Matcher labelColon = LABEL_COLON.matcher(span);
+      int afterLabelStart = 0;
+      while (labelColon.find()) {
+        afterLabelStart = labelColon.end();
+      }
+      int labelLineEnd = span.indexOf('\n', afterLabelStart);
+      if (labelLineEnd >= 0) {
+        afterLabelStart = labelLineEnd + 1;
+      }
+      String afterLabel = span.substring(afterLabelStart).trim();
+
+      String ownerCode = null;
+      String preTicker;
+      boolean stripFreeText;
+      Matcher ownerToken = LEGACY_OWNER_CODE_TOKEN.matcher(afterLabel);
+      int lastOwnerStart = -1;
+      while (ownerToken.find()) {
+        lastOwnerStart = ownerToken.start();
+      }
+      if (lastOwnerStart >= 0) {
+        Matcher owner = LEGACY_OWNER_PREFIX.matcher(afterLabel.substring(lastOwnerStart).trim());
+        if (owner.matches()) {
+          ownerCode = owner.group(1).toUpperCase(java.util.Locale.ROOT);
+          preTicker = owner.group(2);
+          stripFreeText = false;
+        } else {
+          preTicker = afterLabel;
+          stripFreeText = true;
+        }
+      } else {
+        preTicker = afterLabel;
+        stripFreeText = true;
+      }
+
+      String ticker = null;
+      String withoutTicker = preTicker;
+      Matcher tickerMatch = LEGACY_TRAILING_TICKER.matcher(preTicker);
+      if (tickerMatch.matches()) {
+        withoutTicker = tickerMatch.group(1);
+        ticker = tickerMatch.group(2).toUpperCase(java.util.Locale.ROOT);
+      }
+      String assetName = stripFreeText ? stripLeadingFreeText(withoutTicker) : withoutTicker.trim();
+
+      String transactionTypeLetter = anchor.group(1).toUpperCase(java.util.Locale.ROOT);
+      String transactionType =
+          anchor.group(2) != null ? transactionTypeLetter + " (partial)" : transactionTypeLetter;
+      String transactionDate = isoDateFlexible(anchor.group(3));
+      String notificationDate = isoDateFlexible(anchor.group(4));
+      String amountRange = anchor.group(5).replaceAll("\\s+", " ").trim();
+
+      Matcher nextAnchorPeek = LEGACY_ANCHOR.matcher(flattened);
+      int windowEnd = Math.min(flattened.length(), anchor.end() + FILING_STATUS_WINDOW);
+      if (nextAnchorPeek.find(anchor.end())) {
+        windowEnd = Math.min(windowEnd, nextAnchorPeek.start());
+      }
+      String filingStatus = null;
+      Matcher status = FILING_STATUS.matcher(flattened.substring(anchor.end(), windowEnd));
+      int filingStatusEnd = anchor.end();
+      if (status.find()) {
+        filingStatus = status.group(1);
+        filingStatusEnd = anchor.end() + status.end();
+      }
+
+      long[] range = parseAmountRange(amountRange);
+      rows.add(new Row(ownerCode, assetName, ticker, null, transactionType,
+          transactionDate, notificationDate, amountRange,
+          range[0] < 0 ? null : Long.valueOf(range[0]),
+          range[1] < 0 ? null : Long.valueOf(range[1]), filingStatus));
+
+      spanStart = filingStatusEnd;
+      searchFrom = anchor.end();
+    }
+    return rows;
+  }
+
+  /**
    * The text between the end of one row's filing status (or the table header, for the first row)
    * and the start of the next row's asset-type bracket holds that next row's owner code and
    * asset name — plus, when the previous row carried a free-text note, that note's tail, ending
@@ -313,6 +448,18 @@ final class HousePtrTextParser {
   /** {@code MM/DD/YYYY} to {@code YYYY-MM-DD}. */
   private static String isoDate(String date) {
     return date.substring(6, 10) + "-" + date.substring(0, 2) + "-" + date.substring(3, 5);
+  }
+
+  /**
+   * {@code MM/DD/YYYY} or {@code M/D/YYYY} to {@code YYYY-MM-DD}: unlike {@link #isoDate}, the
+   * pre-2018 template does not always zero-pad the month/day (confirmed live 2026-09-28,
+   * "12/2/2015"), so fixed character offsets do not apply and the field widths must be split out.
+   */
+  private static String isoDateFlexible(String date) {
+    String[] parts = date.split("/");
+    String month = parts[0].length() == 1 ? "0" + parts[0] : parts[0];
+    String day = parts[1].length() == 1 ? "0" + parts[1] : parts[1];
+    return parts[2] + "-" + month + "-" + day;
   }
 
   /**

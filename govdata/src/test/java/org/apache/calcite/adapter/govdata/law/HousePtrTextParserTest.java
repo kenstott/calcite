@@ -259,4 +259,139 @@ class HousePtrTextParserTest {
     assertEquals(Long.valueOf(2723L), r.amountMin);
     assertEquals(Long.valueOf(2723L), r.amountMax);
   }
+
+  /**
+   * Real filing 20002776 (Hon. Brad Ashford, fetched and PDFBox-extracted live 2026-09-28): the
+   * pre-2018 PTR template has no {@code [TYPE]} bracket and no "Cap. Gains &gt; $200?" header —
+   * the ticker parenthetical sits directly after the asset name, and dates are space-separated
+   * rather than smashed together. "Berkshire hathaway Inc. New" is the issuer's own registered
+   * name (a 1996 reclassification suffix), not a stray "Filing Status: New" value.
+   */
+  @Test void legacyTemplateOwnerCodeAndMultiLineAmountWrap() {
+    List<Row> rows = HousePtrTextParser.parse(Arrays.asList(
+        "PerioDic tranSaction rePort\n"
+        + "filer information\nname: Brad Ashford\nStatus: Member\nState/District: NE02\n"
+        + "tranSactionS\n"
+        + "iD owner asset transaction\ntype\nDate notification\nDate\namount\n"
+        + "DC Berkshire hathaway Inc. New (BRK.B) P 02/27/2015 02/27/2015 $25,000,001 -\n"
+        + "$50,000,000\n"
+        + "FILINg STATUS: New\n"
+        + "SUBhOLDINg OF: Dependent Child Stock Account\n"
+        + "DESCRIPTION: 250 BRK B shares at $148 per share.\n"
+        + "SP Union Pacific Corporation (UNP) S 03/12/2015 03/12/2015 $15,001 - $50,000\n"
+        + "FILINg STATUS: New\n"
+        + "SUBhOLDINg OF: Ann Ashford Stock Account\n"
+        + "DESCRIPTION: 220 Shares of UNP at $114 per share."));
+    assertEquals(2, rows.size());
+
+    Row r1 = rows.get(0);
+    assertEquals("DC", r1.ownerCode);
+    assertEquals("Berkshire hathaway Inc. New", r1.assetName);
+    assertEquals("BRK.B", r1.ticker);
+    assertNull(r1.assetTypeCode);
+    assertEquals("P", r1.transactionType);
+    assertEquals("2015-02-27", r1.transactionDate);
+    assertEquals("2015-02-27", r1.notificationDate);
+    assertEquals(Long.valueOf(25000001L), r1.amountMin);
+    assertEquals(Long.valueOf(50000000L), r1.amountMax);
+    assertEquals("New", r1.filingStatus);
+
+    Row r2 = rows.get(1);
+    assertEquals("SP", r2.ownerCode);
+    assertEquals("Union Pacific Corporation", r2.assetName);
+    assertEquals("UNP", r2.ticker);
+    assertEquals("S", r2.transactionType);
+    assertEquals("2015-03-12", r2.transactionDate);
+  }
+
+  /**
+   * Real filing 20004336 (Hon. Suzan K. DelBene, fetched and PDFBox-extracted live 2026-09-28):
+   * single-digit, non-zero-padded dates ("12/2/2015") and a ticker whose letters are partly
+   * lower-cased by this era's font substitution ("MXWl", "CgNX", "aYI", "SuNE") — confirming the
+   * upper-casing and flexible date width both hold across a real multi-row filing, including an
+   * owner-code switch (JT to SP) mid-filing with no free text between rows.
+   */
+  @Test void legacyTemplateSingleDigitDatesAndLowerCasedTickerLetters() {
+    List<Row> rows = HousePtrTextParser.parse(Arrays.asList(
+        "filer information\nname: Hon. Suzan K. DelBene\nState/District: Wa01\n"
+        + "tranSactionS\niD owner asset transaction\ntype\nDate notification\nDate\namount\n"
+        + "JT acuity Brands Inc (aYI) S 12/22/2015 12/22/2015 $1,001 - $15,000\n"
+        + "FIlINg STaTuS: New\n"
+        + "JT Cognex Corporation (CgNX) P 12/2/2015 12/2/2015 $15,001 - $50,000\n"
+        + "FIlINg STaTuS: New\n"
+        + "JT Maxwell Technologies, Inc. (MXWl) P 12/2/2015 12/2/2015 $1,001 - $15,000\n"
+        + "FIlINg STaTuS: New\n"
+        + "SP Microsoft Corporation (MSFT) P 12/31/2015 12/31/2015 $15,001 - $50,000\n"
+        + "FIlINg STaTuS: New\n"
+        + "JT SunEdison, Inc. (SuNE) P 12/22/2015 12/22/2015 $1,001 - $15,000\n"
+        + "FIlINg STaTuS: New"));
+    assertEquals(5, rows.size());
+
+    assertEquals("AYI", rows.get(0).ticker);
+    assertEquals("acuity Brands Inc", rows.get(0).assetName);
+
+    Row cognex = rows.get(1);
+    assertEquals("CGNX", cognex.ticker);
+    assertEquals("2015-12-02", cognex.transactionDate);
+    assertEquals("2015-12-02", cognex.notificationDate);
+
+    assertEquals("MXWL", rows.get(2).ticker);
+
+    Row msft = rows.get(3);
+    assertEquals("SP", msft.ownerCode);
+    assertEquals("Microsoft Corporation", msft.assetName);
+    assertEquals("MSFT", msft.ticker);
+
+    Row sune = rows.get(4);
+    assertEquals("JT", sune.ownerCode);
+    assertEquals("SUNE", sune.ticker);
+  }
+
+  /**
+   * Real filing 20005764 (Hon. David E. Price, fetched and PDFBox-extracted live 2026-09-28): a
+   * municipal bond has no ticker at all — the same "no bracket, no ticker" case the 2018+
+   * template handles by leaving {@code ticker} null, confirming the pre-2018 anchor (which does
+   * not require a ticker to match) does the same rather than dropping the row.
+   */
+  @Test void legacyTemplateRowWithNoTickerAtAllStillParses() {
+    List<Row> rows = HousePtrTextParser.parse(Arrays.asList(
+        "filer information\nname: Hon. David E. Price\nState/District: NC04\n"
+        + "tranSactionS\niD owner asset transaction\ntype\nDate notification\nDate\namount\n"
+        + "Metlife, Inc. (MET) P 08/3/2016 08/8/2016 $1,001 - $15,000\n"
+        + "FIlINg sTaTus: New\n"
+        + "N.C. Capital Facilities Bonds - Duke\nuniversity\n"
+        + "P 08/3/2016 08/8/2016 $1,001 - $15,000\n"
+        + "FIlINg sTaTus: New\n"
+        + "DEsCRIPTION: 10,000 units\n"
+        + "Thermo Fisher scientific Inc (TMO) P 08/3/2016 08/8/2016 $1,001 - $15,000\n"
+        + "FIlINg sTaTus: New"));
+    assertEquals(3, rows.size());
+    assertNull(rows.get(1).ticker);
+    assertEquals("TMO", rows.get(2).ticker);
+  }
+
+  /**
+   * Real filing 20006000 (Hon. Raúl M. Grijalva, fetched and PDFBox-extracted live 2026-09-28):
+   * the owner code itself is lower-cased ("sP" rather than "SP") by this era's font substitution,
+   * and a ticker sits alone on its own line after the asset name wraps.
+   */
+  @Test void legacyTemplateLowerCasedOwnerCodeAndWrappedTickerLine() {
+    List<Row> rows = HousePtrTextParser.parse(Arrays.asList(
+        "filer information\nname: Hon. Raúl M. Grijalva\nState/District: aZ03\n"
+        + "tranSactionS\niD owner asset transaction\ntype\nDate notification\nDate\namount\n"
+        + "sP First Trust Vl Dividend (FVD) P 09/20/2016 10/5/2016 $1,001 - $15,000\n"
+        + "FIlING sTaTus: New\n"
+        + "sP sPDR s&P 500 (sPY) P 09/20/2016 10/5/2016 $1,001 - $15,000\n"
+        + "FIlING sTaTus: New\n"
+        + "sP Vanguard Mid-Cap Growth ETF - DNQ\n(VOT)\nP 09/20/2016 10/5/2016 $1,001 - $15,000\n"
+        + "FIlING sTaTus: New"));
+    assertEquals(3, rows.size());
+    assertEquals("SP", rows.get(0).ownerCode);
+    assertEquals("FVD", rows.get(0).ticker);
+    assertEquals("SPY", rows.get(1).ticker);
+    Row vot = rows.get(2);
+    assertEquals("SP", vot.ownerCode);
+    assertEquals("VOT", vot.ticker);
+    assertEquals("Vanguard Mid-Cap Growth ETF - DNQ", vot.assetName);
+  }
 }
