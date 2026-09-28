@@ -521,8 +521,28 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "name_raw AS source_name_raw, name_norm AS source_name_normalized, lei, sec_cik, "
         + "gleif_legal_name, match_method, match_confidence, match_score, '" + esc(runId)
         + "' AS match_run_id FROM all_org_mentions WHERE match_method IS NOT NULL");
-    long orgBridgeRowCount = writeTableBridges("entity_org_bridge", orgBridgeIter, writeBase);
-    long canonicalOrgRowCount = writeTableBridges("canonical_org_entity", pivotOrg(conn), writeBase);
+
+    // Each output table's write is isolated: a drop-and-recreate failure on one (e.g. a MinIO
+    // S3FileIO timeout deleting a large prefix) must not prevent the other three, independent
+    // tables from getting their turn. Failures are collected and reported once every table has
+    // been attempted, rather than propagating from the first one hit.
+    List<String> failedTables = new ArrayList<String>();
+
+    long orgBridgeRowCount = 0;
+    try {
+      orgBridgeRowCount = writeTableBridges("entity_org_bridge", orgBridgeIter, writeBase);
+    } catch (Exception e) {
+      LOGGER.error("EntityBridgeListener: write failed for ref.entity_org_bridge", e);
+      failedTables.add("entity_org_bridge");
+    }
+
+    long canonicalOrgRowCount = 0;
+    try {
+      canonicalOrgRowCount = writeTableBridges("canonical_org_entity", pivotOrg(conn), writeBase);
+    } catch (Exception e) {
+      LOGGER.error("EntityBridgeListener: write failed for ref.canonical_org_entity", e);
+      failedTables.add("canonical_org_entity");
+    }
 
     List<Integer> materializedPersonIdx = new ArrayList<Integer>();
     for (int i = 0; i < PERSON_SOURCES.size(); i++) {
@@ -539,15 +559,33 @@ public class EntityBridgeListener implements TableLifecycleListener {
             matchPersonPair(conn, i, j, PERSON_SOURCES.get(i), PERSON_SOURCES.get(j), runId));
       }
     }
-    long canonicalPersonRowCount =
-        writeTableBridges("canonical_person_entity",
-            pivotPerson(conn, personBridgeRows, materializedPersonIdx), writeBase);
 
-    writeTableBridgesSync("entity_person_bridge", personBridgeRows, writeBase);
+    long canonicalPersonRowCount = 0;
+    try {
+      canonicalPersonRowCount = writeTableBridges("canonical_person_entity",
+          pivotPerson(conn, personBridgeRows, materializedPersonIdx), writeBase);
+    } catch (Exception e) {
+      LOGGER.error("EntityBridgeListener: write failed for ref.canonical_person_entity", e);
+      failedTables.add("canonical_person_entity");
+    }
+
+    try {
+      writeTableBridgesSync("entity_person_bridge", personBridgeRows, writeBase);
+    } catch (Exception e) {
+      LOGGER.error("EntityBridgeListener: write failed for ref.entity_person_bridge", e);
+      failedTables.add("entity_person_bridge");
+    }
 
     LOGGER.info("EntityBridgeListener: complete — entity_org_bridge={}, entity_person_bridge={}, "
         + "canonical_org_entity={}, canonical_person_entity={}", orgBridgeRowCount,
         personBridgeRows.size(), canonicalOrgRowCount, canonicalPersonRowCount);
+
+    if (!failedTables.isEmpty()) {
+      throw new IOException("EntityBridgeListener: write failed for ref."
+          + String.join(", ref.", failedTables)
+          + " — see prior errors for cause; every other output table in this sweep was still "
+          + "attempted");
+    }
   }
 
   @Override public void beforeTable(TableContext context) {
