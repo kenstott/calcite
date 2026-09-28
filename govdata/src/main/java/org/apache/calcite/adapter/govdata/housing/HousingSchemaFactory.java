@@ -27,7 +27,7 @@ import java.util.Set;
 /**
  * Factory for the U.S. housing schema.
  *
- * <p>Consolidates housing-market and affordability data from five sources:
+ * <p>Consolidates housing-market and affordability data from six sources:
  * <ul>
  *   <li><b>FHFA</b> House Price Index — {@code house_price_index}
  *       (bulk {@code hpi_master.csv}, streamed; no key)</li>
@@ -41,14 +41,16 @@ import java.util.Set;
  *       {@code hud_subsidized_housing} (paginated FeatureServer JSON; no key)</li>
  *   <li><b>HUD USER files</b> — {@code hud_subsidized_county}
  *       (annual Picture-of-Subsidized-Households {@code .xlsx}; no key)</li>
+ *   <li><b>NYC Open Data</b> — {@code homeless_shelter_census}
+ *       (two Socrata DHS Daily Report resources, current + historical, JSON; no key)</li>
  * </ul>
  *
  * <p>The three HUD USER API tables are token-gated: when {@code ${HUD_TOKEN}}
  * resolves to empty they are disabled via {@link FileSchemaBuilder#isEnabled} so the
- * schema still builds (the FHFA, Census, CFPB, ArcGIS, and HUD-file tables need no
- * secret). The optional {@code enabledSources} operand ({@code fhfa} / {@code census}
- * / {@code hud} / {@code cfpb} / {@code arcgis} / {@code hud_files}) narrows the
- * schema to one source for targeted DQ/backfill runs.
+ * schema still builds (the FHFA, Census, CFPB, ArcGIS, HUD-file, and NYC tables need
+ * no secret). The optional {@code enabledSources} operand ({@code fhfa} / {@code census}
+ * / {@code hud} / {@code cfpb} / {@code arcgis} / {@code hud_files} / {@code nyc_dhs})
+ * narrows the schema to one source for targeted DQ/backfill runs.
  */
 public class HousingSchemaFactory implements GovDataSubSchemaFactory {
 
@@ -70,6 +72,7 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     m.put("opportunity_zones", "arcgis");
     m.put("hud_subsidized_housing", "arcgis");
     m.put("hud_subsidized_county", "hud_files");
+    m.put("homeless_shelter_census", "nyc_dhs");
     TABLE_SOURCE = Collections.unmodifiableMap(m);
   }
 

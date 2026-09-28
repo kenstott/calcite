@@ -6,6 +6,7 @@
 #   - U.S. Census Building Permits Survey, county annual (co{year}a.txt) — free
 #   - HUD USER Fair Market Rents API (fmr/statedata) — Bearer HUD_TOKEN
 #   - HUD USER Income Limits API (il/statedata) — Bearer HUD_TOKEN
+#   - NYC Open Data DHS Daily Shelter Census (Socrata k46n-sa2m + dwrg-kzni) — free, no key
 #
 # Design principles (see govdata-schema-authoring):
 #   - One ETL table = one raw source. No multi-source transformers.
@@ -165,6 +166,17 @@ dimension_values:
     minYear: 2022
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
+
+  # NYC Open Data (Socrata) splits the DHS Daily Report series across two resources
+  # rather than publishing one continuous dataset. Each value IS the Socrata resource
+  # id, substituted directly into the URL (same pattern as building_permits_place's
+  # region_path: a fetch-unit dimension whose values are literal URL fragments, not
+  # partition values — both fetches land in the single 'type=homeless_shelter_census'
+  # partition; NycDhsShelterCensusTransformer tells them apart via this dimension's
+  # own value in the request context, not a partition column).
+  nyc_dhs_census_periods: &nyc_dhs_census_periods
+    type: list
+    values: ["k46n-sa2m", "dwrg-kzni"]
 
 # ============================================================================
 # PARTITIONED TABLES
@@ -1880,6 +1892,135 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # NYC DHS DAILY SHELTER CENSUS — Socrata k46n-sa2m + dwrg-kzni (snapshot, JSON)
+  # ---------------------------------------------------------------------------
+  - name: homeless_shelter_census
+    # Freshness gate: Socrata has no meaningful Last-Modified on either resource, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token). Both resources are small (~2,000-2,700 rows
+    # each) and re-fetched whole each run, same as house_price_index.
+    freshness:
+      type: hash
+    pattern: "type=homeless_shelter_census/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NYC Department of Homeless Services (DHS) Daily Report — the daily number of
+      individuals and families residing in the DHS shelter system, citywide (no
+      borough/facility breakdown; sourced elsewhere on NYC Open Data as a separate
+      dataset, a documented follow-up). One row per calendar date. NYC Open Data splits
+      this series across two Socrata resources: k46n-sa2m ("current", 2021-03-01
+      onward) and dwrg-kzni ("historical", 2013-08-21 through 2021-02-28) — a clean,
+      non-overlapping boundary confirmed live, despite each resource's own metadata
+      description claiming a start/end date that would read as an ~8-week overlap (see
+      NycDhsShelterCensusTransformer). families_with_children_in_shelter /
+      adult_families_in_shelter rows count distinct family units, not individuals;
+      total_individuals_in_shelter is the citywide census total. No FK — this is a
+      citywide daily aggregate with no state/county grain. Source:
+      data.cityofnewyork.us/Social-Services/DHS-Daily-Report/k46n-sa2m (current) and
+      /dwrg-kzni (historical).
+
+    dimensions:
+      type:
+        - homeless_shelter_census
+      census_period: *nyc_dhs_census_periods
+
+    columns:
+      - name: date_of_census
+        type: date
+        nullable: false
+        comment: Calendar date of the census; PK
+      - name: total_adults_in_shelter
+        type: integer
+        nullable: true
+        comment: Total adults (18+) in DHS shelter on this date
+      - name: total_children_in_shelter
+        type: integer
+        nullable: true
+        comment: Total children (under 18) in DHS shelter on this date
+      - name: total_individuals_in_shelter
+        type: integer
+        nullable: true
+        comment: Total individuals (adults + children) in DHS shelter on this date — the citywide census total
+      - name: single_adult_men_in_shelter
+        type: integer
+        nullable: true
+        comment: Single adult men in shelter
+      - name: single_adult_women_in_shelter
+        type: integer
+        nullable: true
+        comment: Single adult women in shelter
+      - name: total_single_adults_in_shelter
+        type: integer
+        nullable: true
+        comment: Total single adults in shelter (men + women)
+      - name: families_with_children_in_shelter
+        type: integer
+        nullable: true
+        comment: Number of distinct family units with children in shelter (not individuals)
+      - name: adults_in_families_with_children_in_shelter
+        type: integer
+        nullable: true
+        comment: Adults who are members of families with children in shelter
+      - name: children_in_families_with_children_in_shelter
+        type: integer
+        nullable: true
+        comment: Children who are members of families with children in shelter
+      - name: total_individuals_in_families_with_children_in_shelter
+        type: integer
+        nullable: true
+        comment: Total individuals in families with children in shelter (adults + children members)
+      - name: adult_families_in_shelter
+        type: integer
+        nullable: true
+        comment: Number of distinct adult-only family units in shelter (not individuals)
+      - name: individuals_in_adult_families_in_shelter
+        type: integer
+        nullable: true
+        comment: Individuals who are members of adult-only families in shelter
+
+    source:
+      type: http
+      url: "https://data.cityofnewyork.us/resource/{census_period}.json?$limit=10000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.NycDhsShelterCensusTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=homeless_shelter_census/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: homeless_shelter_census
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        # Both census_period fetches (current + historical) land in the single
+        # 'type=homeless_shelter_census' partition. Without batching by that constant
+        # key, each fetch's own replacePartitionsDataFiles commit clobbers the other's
+        # rows instead of accumulating them (confirmed live: the historical fetch's
+        # 2,686 rows vanished, leaving only the current fetch's 2,035) — the same
+        # accumulate-before-commit need building_permits_place solves by batching on
+        # year. type has one constant value here, so it plays that role instead.
+        batchPartitionColumns: [type]
+        incrementalKeys: [type]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2029,6 +2170,10 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_abbr]
+
+  # No FK: citywide daily aggregate with no state/county grain, like house_price_index.
+  homeless_shelter_census:
+    primaryKey: [date_of_census]
 
 # ============================================================================
 # VIEWS

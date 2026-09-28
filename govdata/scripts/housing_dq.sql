@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- U.S. Housing Data Quality Checks
 -- Schema: housing
--- Tables: house_price_index, building_permits, fair_market_rents, income_limits
+-- Tables: house_price_index, building_permits, fair_market_rents, income_limits, homeless_shelter_census
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns ('type','year' for all; also 'state' for the HUD tables).
 -- fair_market_rents/income_limits are disabled when HUD_TOKEN is absent, so their
@@ -59,6 +59,68 @@ INSERT INTO dq_results
 SELECT 'housing', 'house_price_index', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL place_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/house_price_index', allow_moved_paths := true) WHERE place_id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: homeless_shelter_census (NYC DHS Daily Report; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'homeless_shelter_census', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true));
+
+-- ~4,721 distinct calendar dates expected across the historical (2013-08-21 to
+-- 2021-02-28) and current (2021-03-01 onward) resources, a clean non-overlapping
+-- boundary; 4,000 leaves headroom for a dqRowLimit-style partial DQ fetch without
+-- false-failing.
+INSERT INTO dq_results
+SELECT 'housing', 'homeless_shelter_census', 'T2_row_count',
+  CASE WHEN n >= 4000 THEN 'pass' ELSE 'fail' END, n, 4000, 'Expected >=4000 daily census rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'housing', 'homeless_shelter_census', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'homeless_shelter_census', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'homeless_shelter_census', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL date_of_census rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true) WHERE date_of_census IS NULL);
+
+-- Citywide DHS census has run in the tens-of-thousands since 2013; a sane sanity
+-- band catches a unit mix-up (e.g. thousands vs individuals) without false-failing
+-- on real long-run growth (2013 ~50K -> 2026 ~84K, both confirmed live).
+INSERT INTO dq_results
+SELECT 'housing', 'homeless_shelter_census', 'T7_value_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with total_individuals_in_shelter outside [10000, 250000]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true)
+  WHERE total_individuals_in_shelter IS NOT NULL
+    AND (total_individuals_in_shelter < 10000 OR total_individuals_in_shelter > 250000));
+
+INSERT INTO dq_results
+SELECT 'housing', 'homeless_shelter_census', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate date_of_census rows (historical/current overlap not dropped)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT date_of_census, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/homeless_shelter_census', allow_moved_paths := true)
+  GROUP BY date_of_census HAVING COUNT(*) > 1
+));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: building_permits (Census BPS; partition cols: type, year)
