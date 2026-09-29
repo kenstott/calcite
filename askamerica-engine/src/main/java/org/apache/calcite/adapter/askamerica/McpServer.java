@@ -2195,6 +2195,105 @@ public class McpServer {
             + "magnitude).",
             schema(sweepProps, new String[]{"sql", "param_values", "value_col"})));
 
+        ObjectNode tsCommon = MAPPER.createObjectNode();
+        tsCommon.set("sql", prop("string",
+            "SQL SELECT returning ONE series, one row per period — filter to a single "
+            + "ticker/entity. Duplicate periods are rejected as evidence of a second series. "
+            + "For equity prices use sec.stock_prices.adjusted_close (split/dividend "
+            + "adjusted), not close."));
+        tsCommon.set("value_col", prop("string", "Column holding the series values."));
+        tsCommon.set("time_col", prop("string",
+            "Column giving the period; rows are sorted ascending by its string form, so use "
+            + "ISO dates/timestamps (yyyy-mm-dd) or another lexicographically ordered key."));
+        tsCommon.set("horizon", prop("integer", "Periods to forecast ahead. Default 1, max "
+            + StatsTimeSeriesEngine.MAX_HORIZON + "."));
+        tsCommon.set("level", prop("number", "Interval coverage, e.g. 0.95 (default)."));
+        ObjectNode arimaProps = tsCommon.deepCopy();
+        arimaProps.set("p", prop("integer", "AR order. Omit p AND/OR q to select the omitted "
+            + "one(s) by approximate AIC."));
+        arimaProps.set("d", prop("integer", "Differencing order 0-2. Default 1 (right for "
+            + "price LEVELS; use 0 for returns or an already-stationary series). Not "
+            + "auto-selected: no unit-root test is run, so justify the choice."));
+        arimaProps.set("q", prop("integer", "MA order."));
+        arimaProps.set("max_order", prop("integer", "Upper bound for AIC search, default 3, "
+            + "max 5."));
+        tools.add(
+            tool("arima_forecast",
+            "Fit ARIMA(p,d,q) to a single time series and forecast it with prediction "
+            + "intervals that widen with the horizon. Reports coefficients, approximate AIC, "
+            + "and a Ljung-Box test on the residuals (a small p-value means the model left "
+            + "autocorrelation behind — do not trust its intervals). Estimation is Smile's "
+            + "conditional least squares, not exact MLE. Forecasting the LEVEL of a price "
+            + "series mostly returns the last price with an ever-wider interval; that is the "
+            + "correct answer for a near random walk, not a defect. For price risk use "
+            + "volatility_forecast or garch_forecast instead.",
+            schema(arimaProps, new String[]{"sql", "value_col", "time_col"})));
+
+        ObjectNode garchProps = tsCommon.deepCopy();
+        garchProps.set("input_type", prop("string", "'price' (default; log returns are "
+            + "computed) or 'return' (the column already holds percent returns)."));
+        garchProps.set("distribution", prop("string", "'normal' (default) or 'student_t' for "
+            + "fat tails."));
+        garchProps.set("periods_per_year", prop("number", "Annualization factor, default "
+            + "252 (daily trading data)."));
+        tools.add(
+            tool("garch_forecast",
+            "Fit GARCH(1,1) by maximum likelihood to returns and forecast the conditional "
+            + "volatility term structure: per-period and cumulative volatility for each "
+            + "horizon step, mean-reverting toward the unconditional level at a rate set by "
+            + "alpha+beta. Reports parameters with standard errors, persistence, volatility "
+            + "half-life, and a Ljung-Box test on squared standardized residuals (small "
+            + "p-value = ARCH effects remain, the model is misspecified). Needs at least "
+            + StatsTimeSeriesEngine.GARCH_MIN_OBS + " returns. Models volatility only — "
+            + "it says nothing about direction.",
+            schema(garchProps, new String[]{"sql", "value_col", "time_col"})));
+
+        ObjectNode btProps = tsCommon.deepCopy();
+        btProps.set("methods", prop("array", "Subset of ['garch','ewma','historical']; "
+            + "default all three."));
+        btProps.set("min_train", prop("integer", "Prices in the first training window, "
+            + "default 500."));
+        btProps.set("step", prop("integer", "Periods between evaluation origins, default 20 "
+            + "(each origin refits the model). At most "
+            + StatsTimeSeriesEngine.BACKTEST_MAX_EVALS + " origins per method."));
+        btProps.set("ewma_lambda", prop("number", "EWMA decay, default 0.94."));
+        btProps.set("window", prop("integer", "Historical-vol window, default 60."));
+        btProps.set("distribution", prop("string", "GARCH innovations: 'normal' (default) or "
+            + "'student_t'."));
+        tools.add(
+            tool("backtest_volatility",
+            "Walk-forward test of the volatility_forecast price band on a historical price "
+            + "series: at each origin the model sees only earlier prices, forecasts the "
+            + "horizon-period band, and the realized move is checked against it. Reports, per "
+            + "method, the share of realized moves inside the band vs the nominal level, a "
+            + "Kupiec test of that share, violations split above/below, mean band width and "
+            + "an interval score (lower is better; a method can win on coverage by being "
+            + "uselessly wide, so read both). Stale data is fine for this: it measures how "
+            + "well-calibrated each method has been, not what happens next. Run it before "
+            + "presenting a volatility_forecast band as trustworthy.",
+            schema(btProps, new String[]{"sql", "value_col", "time_col"})));
+
+        ObjectNode volProps = tsCommon.deepCopy();
+        volProps.set("method", prop("string", "Volatility used for the price band: 'garch' "
+            + "(default), 'ewma' (RiskMetrics) or 'historical' (trailing window). All three "
+            + "are always reported for comparison."));
+        volProps.set("ewma_lambda", prop("number", "EWMA decay, default 0.94."));
+        volProps.set("window", prop("integer", "Trailing window for historical vol, default "
+            + "60."));
+        volProps.set("distribution", prop("string", "GARCH innovations: 'normal' (default) "
+            + "or 'student_t'."));
+        volProps.set("periods_per_year", prop("number", "Annualization factor, default 252."));
+        tools.add(
+            tool("volatility_forecast",
+            "Forecast a price series' volatility three ways (GARCH(1,1), EWMA, trailing "
+            + "historical) and convert the chosen one into a band for the price `horizon` "
+            + "periods ahead, reported both in price and NORMALIZED to the last price "
+            + "(1.0 = unchanged). This is a volatility band, not a directional forecast: the "
+            + "center is the last price grown at the sample mean return. Use it for 'how far "
+            + "could this move by the next close', and disclose that. Input is a price "
+            + "series.",
+            schema(volProps, new String[]{"sql", "value_col", "time_col"})));
+
         ObjectNode chartProps = MAPPER.createObjectNode();
         chartProps.set(
             "chart_type", prop("string",
@@ -3576,6 +3675,75 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=partial_correlation x=" + x + " y=" + y
                         + " controls=" + controls);
                     StatsOutput r = partialCorrelationTool(sql, x, y, controls);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "arima_forecast": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=arima_forecast value_col=" + valueCol);
+                    StatsOutput r = arimaTool(sql, valueCol, timeCol,
+                        optInt(args, "p"), args.has("d") && !args.get("d").isNull()
+                        ? args.get("d").asInt() : 1, optInt(args, "q"),
+                        args.has("max_order") && !args.get("max_order").isNull()
+                        ? args.get("max_order").asInt() : 3, tsHorizon(args), tsLevel(args));
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "garch_forecast": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=garch_forecast value_col=" + valueCol);
+                    StatsOutput r = garchTool(sql, valueCol, timeCol, tsHorizon(args),
+                        tsLevel(args), tsText(args, "input_type", "price"),
+                        tsStudentT(args), tsPeriods(args));
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "backtest_volatility": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=backtest_volatility value_col="
+                        + valueCol);
+                    List<String> methods = textArray(args.path("methods"));
+                    if (methods.isEmpty()) {
+                        methods = java.util.Arrays.asList("garch", "ewma", "historical");
+                    }
+                    Series series = extractSeries(sql, valueCol, timeCol);
+                    ObjectNode bt = StatsTimeSeriesEngine.backtestVolatility(series.values,
+                        series.labels, tsHorizon(args), tsLevel(args),
+                        methods.toArray(new String[0]),
+                        args.has("min_train") && !args.get("min_train").isNull()
+                        ? args.get("min_train").asInt() : 500,
+                        args.has("step") && !args.get("step").isNull()
+                        ? args.get("step").asInt() : 20,
+                        args.has("ewma_lambda") && !args.get("ewma_lambda").isNull()
+                        ? args.get("ewma_lambda").asDouble() : 0.94,
+                        args.has("window") && !args.get("window").isNull()
+                        ? args.get("window").asInt() : 60, tsStudentT(args));
+                    StatsOutput r = tsResult(bt, sql, series);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "volatility_forecast": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=volatility_forecast value_col="
+                        + valueCol);
+                    StatsOutput r = volatilityTool(sql, valueCol, timeCol, tsHorizon(args),
+                        tsLevel(args), tsText(args, "method", "garch"),
+                        args.has("ewma_lambda") && !args.get("ewma_lambda").isNull()
+                        ? args.get("ewma_lambda").asDouble() : 0.94,
+                        args.has("window") && !args.get("window").isNull()
+                        ? args.get("window").asInt() : 60, tsStudentT(args), tsPeriods(args));
                     text = r.text;
                     diagnostics = r.diagnostics;
                     break;
@@ -6618,6 +6786,13 @@ public class McpServer {
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
             "(?i)Welch'?s t[- ]test|\\bt[- ]test\\b|hypothesis test"),
             new String[]{"hypothesis_test"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)\\bARIMA\\b"),
+            new String[]{"arima_forecast"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)\\bGARCH\\b"),
+            new String[]{"garch_forecast", "volatility_forecast"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)volatility forecast|\\bEWMA\\b"),
+            new String[]{"volatility_forecast", "garch_forecast"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)Gini coefficient"),
             new String[]{"gini_coefficient"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
@@ -10131,6 +10306,118 @@ public class McpServer {
         return new StatsOutput(out.toString(), diagnoseStats(sql,
             java.util.Collections.<String>emptyList(), null, ys.size(), totalRows,
             droppedForNull));
+    }
+
+    private static Integer optInt(JsonNode args, String name) {
+        return args.has(name) && !args.get(name).isNull() ? args.get(name).asInt() : null;
+    }
+
+    private static int tsHorizon(JsonNode args) {
+        return args.has("horizon") && !args.get("horizon").isNull()
+            ? args.get("horizon").asInt() : 1;
+    }
+
+    private static double tsLevel(JsonNode args) {
+        return args.has("level") && !args.get("level").isNull()
+            ? args.get("level").asDouble() : 0.95;
+    }
+
+    private static double tsPeriods(JsonNode args) {
+        return args.has("periods_per_year") && !args.get("periods_per_year").isNull()
+            ? args.get("periods_per_year").asDouble() : 252.0;
+    }
+
+    private static String tsText(JsonNode args, String name, String dflt) {
+        return args.has(name) && !args.get(name).isNull() ? args.get(name).asText() : dflt;
+    }
+
+    private static boolean tsStudentT(JsonNode args) {
+        String d = tsText(args, "distribution", "normal");
+        if ("student_t".equals(d)) {
+            return true;
+        }
+        if ("normal".equals(d)) {
+            return false;
+        }
+        throw new IllegalArgumentException("distribution must be 'normal' or 'student_t', "
+            + "got '" + d + "'");
+    }
+
+    /** A single series extracted from SQL, sorted chronologically. */
+    private static final class Series {
+        final double[] values;
+        final String[] labels;
+        final int totalRows;
+        final int dropped;
+
+        Series(double[] values, String[] labels, int totalRows, int dropped) {
+            this.values = values;
+            this.labels = labels;
+            this.totalRows = totalRows;
+            this.dropped = dropped;
+        }
+    }
+
+    private static Series extractSeries(String sql, String valueCol, String timeCol)
+            throws Exception {
+        StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(
+            getCatalogConnection(), sql, new String[]{valueCol}, new String[]{timeCol});
+        double[] v = ex.column(valueCol);
+        String[] labels = ex.labelColumn(timeCol);
+        if (v.length == 0) {
+            throw new IllegalArgumentException("the SQL returned no usable rows — every row "
+                + "was missing the value or the time column");
+        }
+        return new Series(StatsTimeSeriesEngine.sortByLabel(v, labels),
+            StatsTimeSeriesEngine.sortedLabels(labels), ex.totalRows, ex.droppedForNull);
+    }
+
+    private static StatsOutput tsResult(ObjectNode out, String sql, Series s) {
+        out.put("first_period", s.labels[0]);
+        out.put("last_period", s.labels[s.labels.length - 1]);
+        out.put("rows_returned_by_sql", s.totalRows);
+        out.put("rows_dropped_for_null", s.dropped);
+        return new StatsOutput(out.toString(), diagnoseStats(sql,
+            java.util.Collections.<String>emptyList(), null, s.values.length, s.totalRows,
+            s.dropped));
+    }
+
+    private static StatsOutput arimaTool(String sql, String valueCol, String timeCol,
+            Integer p, int d, Integer q, int maxOrder, int horizon, double level)
+            throws Exception {
+        Series s = extractSeries(sql, valueCol, timeCol);
+        StatsTimeSeriesEngine.ArimaResult r =
+            StatsTimeSeriesEngine.arima(s.values, p, d, q, maxOrder, horizon, level);
+        return tsResult(r.toJson(MAPPER), sql, s);
+    }
+
+    private static double[] returnsFor(Series s, String inputType) {
+        if ("price".equals(inputType)) {
+            return StatsTimeSeriesEngine.logReturnsPercent(s.values);
+        }
+        if ("return".equals(inputType)) {
+            return s.values;
+        }
+        throw new IllegalArgumentException("input_type must be 'price' or 'return', got '"
+            + inputType + "'");
+    }
+
+    private static StatsOutput garchTool(String sql, String valueCol, String timeCol,
+            int horizon, double level, String inputType, boolean studentT,
+            double periodsPerYear) throws Exception {
+        Series s = extractSeries(sql, valueCol, timeCol);
+        StatsTimeSeriesEngine.GarchResult g =
+            StatsTimeSeriesEngine.garch(returnsFor(s, inputType), studentT);
+        return tsResult(StatsTimeSeriesEngine.garchForecastJson(g, horizon, periodsPerYear,
+            level), sql, s);
+    }
+
+    private static StatsOutput volatilityTool(String sql, String valueCol, String timeCol,
+            int horizon, double level, String method, double ewmaLambda, int window,
+            boolean studentT, double periodsPerYear) throws Exception {
+        Series s = extractSeries(sql, valueCol, timeCol);
+        return tsResult(StatsTimeSeriesEngine.volatilityForecast(s.values, s.labels, horizon,
+            level, periodsPerYear, method, ewmaLambda, window, studentT), sql, s);
     }
 
     /**
