@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.99.2](https://github.com/kenstott/calcite/compare/engine-v0.99.1...engine-v0.99.2) (2026-09-29)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** fix negative-value bars overlapping the title, uncap rotated label margin ([82d9530](https://github.com/kenstott/calcite/commit/82d953050f9e2c7e2f72769fa29abdc7a20f7b61))
+
 ## [0.99.1](https://github.com/kenstott/calcite/compare/engine-v0.99.0...engine-v0.99.1) (2026-09-28)
 
 
