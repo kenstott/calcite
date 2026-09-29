@@ -1,0 +1,57 @@
+{
+  "_comment": "Overlay on the general base for the 'technology' domain. Polarity is from a product/company view; \"disruption\" is neutral because it is praise for a startup and a complaint about an outage. 'positive'/'negative' entries re-file a term (removing it from the opposite list); 'neutral' drops a base term because its polarity is not stable here. STARTER lexicon, unvalidated against labelled data; extend before relying on it.",
+  "neutral": [
+    "disrupt",
+    "disruption",
+    "cut",
+    "volatile",
+    "volatility"
+  ],
+  "positive": [
+    "launch",
+    "release",
+    "adoption",
+    "faster",
+    "efficient",
+    "open-source",
+    "patent granted",
+    "integration",
+    "scalable",
+    "state-of-the-art:2",
+    "funding round:2",
+    "raised funding:2",
+    "ipo",
+    "upgrade"
+  ],
+  "negative": [
+    "outage:2",
+    "breach:2",
+    "data breach:2",
+    "vulnerability:2",
+    "exploit",
+    "ransomware:2",
+    "malware:2",
+    "zero-day:2",
+    "data leak:2",
+    "bug",
+    "crash",
+    "downtime",
+    "deprecate",
+    "antitrust:2",
+    "banned",
+    "ban",
+    "regulatory scrutiny:2",
+    "phishing",
+    "denial of service:2",
+    "recall",
+    "glitch",
+    "lawsuit",
+    "obsolete"
+  ],
+  "uncertainty": [
+    "beta",
+    "preview",
+    "rumored",
+    "reportedly"
+  ]
+}

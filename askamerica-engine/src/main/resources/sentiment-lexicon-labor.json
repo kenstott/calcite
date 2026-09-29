@@ -1,0 +1,56 @@
+{
+  "_comment": "Overlay on the general base for the 'labor' domain. Polarity is from a worker view. Unemployment terms are neutral because direction (\"unemployment fell\") decides the polarity and a word-level lexicon cannot see it. 'positive'/'negative' entries re-file a term (removing it from the opposite list); 'neutral' drops a base term because its polarity is not stable here. STARTER lexicon, unvalidated against labelled data; extend before relying on it.",
+  "neutral": [
+    "unemployment",
+    "jobless",
+    "cut",
+    "reduce",
+    "automation"
+  ],
+  "positive": [
+    "hire",
+    "hiring:2",
+    "job creation:2",
+    "jobs added:2",
+    "wage increase:2",
+    "pay raise:2",
+    "union win",
+    "collective bargaining agreement",
+    "apprenticeship",
+    "training",
+    "promotion",
+    "low unemployment:2",
+    "employment growth:2",
+    "benefits",
+    "paid leave"
+  ],
+  "negative": [
+    "layoff:2",
+    "layoffs:2",
+    "lay off:2",
+    "furlough",
+    "strike",
+    "walkout",
+    "lockout:2",
+    "job loss:2",
+    "job cut:2",
+    "job cuts:2",
+    "wage theft:2",
+    "discrimination",
+    "harassment",
+    "injury",
+    "fatality:2",
+    "unsafe",
+    "understaffed",
+    "attrition",
+    "hiring freeze:2",
+    "downsizing:2",
+    "redundancy",
+    "unpaid"
+  ],
+  "uncertainty": [
+    "forecast",
+    "projected",
+    "seasonal"
+  ]
+}

@@ -2195,6 +2195,63 @@ public class McpServer {
             + "magnitude).",
             schema(sweepProps, new String[]{"sql", "param_values", "value_col"})));
 
+        ObjectNode textsProp = MAPPER.createObjectNode();
+        textsProp.put("type", "array");
+        textsProp.put("description", "Up to " + TextScoringEngine.MAX_TEXTS + " items, each "
+            + "either a string or an object {id, title, text}. A title is prepended to the "
+            + "text, so relevance's lead bonus sees it first. Each item at most "
+            + TextScoringEngine.MAX_TEXT_CHARS + " characters. Use this for headlines, "
+            + "snippets, article bodies, filing passages — anything you fetched or were given.");
+        ObjectNode domainProp = prop("string", "Vocabulary whose polarity to apply: one of "
+            + TextScoringEngine.DOMAINS + ". Default '" + TextScoringEngine.DEFAULT_DOMAIN
+            + "'. Polarity is domain-dependent ('positive' is bad news in a lab result, 'cut' "
+            + "is bad for guidance and neutral for a tax bill): pick the domain the TEXT is "
+            + "about. Health/politics/manufacturing are thin starter lexicons — weigh their "
+            + "scores accordingly.");
+        ObjectNode sentProps = MAPPER.createObjectNode();
+        sentProps.set("texts", textsProp);
+        sentProps.set("domain", domainProp);
+        tools.add(
+            tool("score_sentiment",
+            "Score the sentiment of arbitrary text with a deterministic in-house finance "
+            + "lexicon: per text a score in [-1,1], a label, a confidence, and the matched "
+            + "terms behind it, plus the batch mean. Handles negation ('not good') and "
+            + "intensifiers ('sharply lower'). It is a transparent heuristic, NOT a trained "
+            + "model: it cannot see sarcasm or who the sentiment is about, and a text with no "
+            + "lexicon terms returns label 'no_signal' with a null score — report that, do not "
+            + "call it neutral. Read matched_terms before relying on a score, and treat low "
+            + "confidence as 'little evidence'. Works on any text, including results from "
+            + "web search or web_fetch.",
+            schema(sentProps, new String[]{"texts"})));
+
+        ObjectNode textRelProps = MAPPER.createObjectNode();
+        textRelProps.set("texts", textsProp);
+        textRelProps.set("domain", domainProp);
+        textRelProps.set("query", prop("string", "What the texts should be about — a ticker, a "
+            + "company, a topic phrase."));
+        textRelProps.set("aliases", prop("array", "Optional extra surface forms of the subject "
+            + "(e.g. the ticker 'AAPL' for query 'Apple'); any one appearing verbatim counts "
+            + "as a match."));
+        tools.add(
+            tool("score_relevance",
+            "Score how relevant arbitrary text is to a query, 0 to 1: 0.5 * share of the "
+            + "query's content words present + 0.3 for the whole query or any alias appearing "
+            + "verbatim + 0.2 for a query word in the first quarter of the text. Measures "
+            + "textual overlap and prominence, not whether the text is truly about the "
+            + "subject — a passing mention of a common word can score. Returns matched and "
+            + "missing terms per text so the score is checkable.",
+            schema(textRelProps, new String[]{"texts", "query"})));
+
+        ObjectNode scoreTextProps = textRelProps.deepCopy();
+        tools.add(
+            tool("score_text",
+            "score_sentiment and score_relevance in one call, plus "
+            + "relevance_weighted_sentiment: the mean sentiment weighted by each text's "
+            + "relevance, so an off-topic article cannot move the aggregate. Use on a batch "
+            + "of search results or headlines about one subject. Same caveats as "
+            + "score_sentiment: a lexicon heuristic, 'no_signal' is not neutral.",
+            schema(scoreTextProps, new String[]{"texts", "query"})));
+
         ObjectNode tsCommon = MAPPER.createObjectNode();
         tsCommon.set("sql", prop("string",
             "SQL SELECT returning ONE series, one row per period — filter to a single "
@@ -2846,6 +2903,15 @@ public class McpServer {
             + "habit from other fetch-tool conventions) doesn't error. Use start_page/"
             + "sheet_names/start_char/slide_numbers instead once you've seen the document's "
             + "structure — that is precise navigation, not a best-effort guess."));
+        webFetchProps.set("score_query", prop("string", "Optional. When set, the returned "
+            + "text is also scored for relevance to this query and for sentiment (see "
+            + "score_text) and the scores are appended after the content under a "
+            + "'--- scores ---' line. Scores the text of THIS response only (one page/part)."));
+        webFetchProps.set("score_domain", prop("string", "Optional lexicon domain for "
+            + "score_query's sentiment: one of " + TextScoringEngine.DOMAINS + ". Default '"
+            + TextScoringEngine.DEFAULT_DOMAIN + "'."));
+        webFetchProps.set("score_aliases", prop("array", "Optional extra surface forms of the "
+            + "score_query subject (ticker, former name)."));
         tools.add(
             tool("web_fetch",
             "If you are here to check a claim rather than to look something up you already "
@@ -2876,6 +2942,7 @@ public class McpServer {
             + "habit from other fetch-tool conventions) but does NOTHING — there is no "
             + "extraction/summarization mode here; use the structural navigation above instead.",
             schema(webFetchProps, new String[]{"url"})));
+        // (score_query / score_aliases are declared on webFetchProps above the tool.)
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
         telemetryProps.set(
@@ -3310,6 +3377,22 @@ public class McpServer {
                 case "web_fetch": {
                     log.println("[askamerica-mcp] tool=web_fetch url=" + args.path("url").asText());
                     text = webFetch(args);
+                    if (args.hasNonNull("score_query")
+                        && text.length() > TextScoringEngine.MAX_TEXT_CHARS) {
+                        text = text + "\n\n--- scores ---\n{\"error\":\"response is "
+                            + text.length() + " characters, over the "
+                            + TextScoringEngine.MAX_TEXT_CHARS + " scoring limit; fetch a "
+                            + "smaller part (start_char/max_chars) and score that\"}";
+                    } else if (args.hasNonNull("score_query")) {
+                        ArrayNode one = MAPPER.createArrayNode();
+                        one.add(text);
+                        text = text + "\n\n--- scores ---\n" + TextScoringEngine.scoreText(
+                            TextScoringEngine.parseItems(one),
+                            args.get("score_query").asText(),
+                            textArray(args.path("score_aliases")),
+                            tsText(args, "score_domain",
+                                TextScoringEngine.DEFAULT_DOMAIN)).toString();
+                    }
                     break;
                 }
                 case "set_memory_limit": {
@@ -3677,6 +3760,32 @@ public class McpServer {
                     StatsOutput r = partialCorrelationTool(sql, x, y, controls);
                     text = r.text;
                     diagnostics = r.diagnostics;
+                    break;
+                }
+                case "score_sentiment": {
+                    log.println("[askamerica-mcp] tool=score_sentiment n="
+                        + args.path("texts").size());
+                    text = TextScoringEngine.scoreSentiment(
+                        TextScoringEngine.parseItems(args.path("texts")),
+                        tsText(args, "domain", TextScoringEngine.DEFAULT_DOMAIN)).toString();
+                    break;
+                }
+                case "score_relevance": {
+                    log.println("[askamerica-mcp] tool=score_relevance n="
+                        + args.path("texts").size());
+                    text = TextScoringEngine.scoreRelevance(
+                        TextScoringEngine.parseItems(args.path("texts")),
+                        args.path("query").asText(), textArray(args.path("aliases")))
+                        .toString();
+                    break;
+                }
+                case "score_text": {
+                    log.println("[askamerica-mcp] tool=score_text n="
+                        + args.path("texts").size());
+                    text = TextScoringEngine.scoreText(
+                        TextScoringEngine.parseItems(args.path("texts")),
+                        args.path("query").asText(), textArray(args.path("aliases")),
+                        tsText(args, "domain", TextScoringEngine.DEFAULT_DOMAIN)).toString();
                     break;
                 }
                 case "arima_forecast": {
