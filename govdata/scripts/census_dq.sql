@@ -71,6 +71,7 @@ FROM (
   UNION ALL SELECT 'acs_nativity_by_education', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_income_by_nativity',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity',    allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'cps_voting_supplement',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement',     allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_nativity',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true) LIMIT 1) t)
@@ -139,6 +140,7 @@ FROM (
   UNION ALL SELECT 'acs_nativity_by_education', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_income_by_nativity',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity',    allow_moved_paths := true)), 10000
   UNION ALL SELECT 'cps_voting_supplement',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement',     allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true)), 500
   UNION ALL SELECT 'acs_nativity',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true)), 10000
@@ -195,6 +197,7 @@ SELECT 'acs_earnings_by_education' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_D
 SELECT 'acs_nativity_by_education' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_income_by_nativity' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity', allow_moved_paths := true) LIMIT 1;
 SELECT 'cps_voting_supplement' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement', allow_moved_paths := true) LIMIT 1;
+SELECT 'uscis_i765_employment_authorization' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_nativity'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',           allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_marital_status'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_household_type'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',     allow_moved_paths := true) LIMIT 1;
@@ -245,6 +248,7 @@ INSERT INTO dq_results SELECT 'census', 'acs_earnings_by_education', 'all_null_c
 INSERT INTO dq_results SELECT 'census', 'acs_nativity_by_education', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_income_by_nativity', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'cps_voting_supplement', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'uscis_i765_employment_authorization', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_nativity', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE null_percentage = 100.0;
@@ -305,6 +309,7 @@ INSERT INTO dq_results SELECT 'census', 'acs_earnings_by_education', 'all_same_v
 INSERT INTO dq_results SELECT 'census', 'acs_nativity_by_education', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_income_by_nativity', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'cps_voting_supplement', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+INSERT INTO dq_results SELECT 'census', 'uscis_i765_employment_authorization', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_nativity', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
@@ -592,6 +597,37 @@ FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)
   WHERE state IS NOT NULL AND LENGTH(state) != 2
+);
+
+-- uscis_i765_employment_authorization: filing_type is one of the four USCIS groups, counts are
+-- non-negative, and the fiscal quarter is 1-4
+INSERT INTO dq_results
+SELECT
+  'census', 'uscis_i765_employment_authorization', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with an unknown filing_type, fiscal_quarter outside 1-4, or a negative count'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true)
+  WHERE filing_type NOT IN ('Initial', 'Renewal', 'Replacement', 'Not Requested')
+     OR fiscal_quarter NOT BETWEEN 1 AND 4
+     OR receipts < 0 OR approvals < 0 OR denials < 0 OR pending < 0
+);
+
+-- uscis_i765_employment_authorization: PK (year, quarter, category, filing_type) must be unique
+INSERT INTO dq_results
+SELECT
+  'census', 'uscis_i765_employment_authorization', 'pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(dups AS VARCHAR), '0',
+  'duplicate (year, fiscal_quarter, ead_category, filing_type) keys'
+FROM (
+  SELECT COUNT(*) AS dups FROM (
+    SELECT year, fiscal_quarter, ead_category, filing_type
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true)
+    GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1
+  )
 );
 
 -- ============================================================================

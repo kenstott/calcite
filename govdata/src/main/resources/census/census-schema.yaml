@@ -6019,6 +6019,119 @@ partitionedTables:
         compactionMinFiles: 5
 
 
+  # ---------------------------------------------------------------------------
+  # USCIS FORM I-765 - work-permit (EAD) application flows by eligibility category
+  # ---------------------------------------------------------------------------
+  - name: uscis_i765_employment_authorization
+    lookbackPeriods: 1
+    freshness:
+      type: hash
+    pattern: "type=uscis_i765/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    comment: >
+      Work-permit (Employment Authorization Document, EAD) applications processed by USCIS,
+      from the quarterly Form I-765 report of the Department of Homeland Security / USCIS Chief
+      Data and Analytics Office. One row per fiscal year x fiscal quarter x EAD eligibility
+      category x filing type. The category is the immigration basis for the permit (ead_category
+      codes such as A03 refugee, A055 granted asylum, A124/C19 TPS, C08 pending asylum
+      application, C09 pending adjustment of status, C26 H-4 spouse of H-1B worker, C33 DACA;
+      ead_category_description gives the USCIS wording). filing_type is Initial, Renewal,
+      Replacement or Not Requested. Counts are receipts (applications received in the quarter),
+      approvals and denials (decisions made in the quarter, which may relate to applications
+      received earlier), and pending (applications awaiting a decision at quarter end).
+      fiscal_year is the U.S. federal fiscal year (Oct 1 - Sep 30): fiscal_quarter 1 is
+      October-December of the previous calendar year.
+
+      CAUTION: these are application FLOWS and a pending backlog, NOT counts of people currently
+      holding a valid work permit, and one person can file more than once. There is no industry
+      or occupation breakdown in any USCIS release; do not use this table for employment by
+      industry. Counts are restated by USCIS in later releases. Pending cannot be reconstructed
+      by summing quarters. Coverage starts at FY2025 (the earliest quarterly workbooks USCIS
+      still publishes as xlsx); FY2026 Q1 is not published by USCIS and is absent.
+      Source: https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data
+
+    dimensions:
+      type:
+        - uscis_i765
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2025}"
+        minYear: 2025
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+
+    columns:
+      - name: fiscal_quarter
+        type: integer
+        nullable: false
+        comment: Federal fiscal quarter (1 = Oct-Dec of the previous calendar year, 4 = Jul-Sep)
+      - name: ead_category
+        type: string
+        nullable: false
+        comment: USCIS EAD eligibility category code (e.g. A03, A055, C08, C26); codes can be re-lettered by USCIS between releases
+      - name: ead_category_description
+        type: string
+        nullable: true
+        comment: USCIS wording for the eligibility category
+      - name: filing_type
+        type: string
+        nullable: false
+        comment: Initial, Renewal, Replacement or Not Requested
+      - name: receipts
+        type: long
+        nullable: true
+        comment: Applications received during the quarter
+      - name: approvals
+        type: long
+        nullable: true
+        comment: Applications approved during the quarter (may have been received earlier)
+      - name: denials
+        type: long
+        nullable: true
+        comment: Applications denied during the quarter (may have been received earlier)
+      - name: pending
+        type: long
+        nullable: true
+        comment: Applications awaiting a decision at the end of the quarter (a point-in-time backlog, not additive across quarters)
+
+    source:
+      type: http
+      # The URL only anchors freshness and the raw cache: the transformer locates and downloads
+      # each quarter's workbook itself (file suffixes are irregular and only the current quarter
+      # is linked here). uscis.gov requires a browser User-Agent.
+      url: "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data?fy={year}"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+      response:
+        format: TEXT
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.UscisI765Transformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=uscis_i765/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: uscis_i765_employment_authorization
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+
 # ============================================================================
 # SQL VIEWS
 # ============================================================================
