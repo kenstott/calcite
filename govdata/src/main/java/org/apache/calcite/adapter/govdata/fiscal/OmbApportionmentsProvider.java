@@ -87,9 +87,11 @@ public class OmbApportionmentsProvider implements CachingDataProvider {
   /**
    * Streams the index page and collects every {@code href} under {@code prefix} that is a
    * JSON rendition. The page is tens of MB, so it is scanned character by character rather
-   * than held as a string.
+   * than held as a string. The index lists some files under more than one heading, so each
+   * href is kept once.
    */
   static void scanLinks(InputStream in, String prefix, List<String> out) throws IOException {
+    Set<String> seen = new HashSet<String>();
     BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8), 1 << 16);
     StringBuilder value = new StringBuilder();
     int matched = 0;
@@ -100,7 +102,8 @@ public class OmbApportionmentsProvider implements CachingDataProvider {
         if (c == '"') {
           inValue = false;
           String href = value.toString();
-          if (href.startsWith(prefix) && href.endsWith(".json") && href.contains("/JSON/")) {
+          if (href.startsWith(prefix) && href.endsWith(".json") && href.contains("/JSON/")
+              && seen.add(href)) {
             out.add(href);
           }
           value.setLength(0);
@@ -196,8 +199,20 @@ public class OmbApportionmentsProvider implements CachingDataProvider {
         String fn = text(line, "FootnoteNumber");
         row.put("footnote_number", fn);
         if (fn != null) {
-          referenced.add(fn);
-          row.put("footnote_text", footnotes.get(fn));
+          // A line may cite several footnotes, separated by commas or slashes ("A1, A2", "B1/B2").
+          StringBuilder texts = new StringBuilder();
+          for (String ref : fn.split("[,/;]")) {
+            String key = ref.trim();
+            referenced.add(key);
+            String t = footnotes.get(key);
+            if (t != null) {
+              if (texts.length() > 0) {
+                texts.append("\n");
+              }
+              texts.append(t);
+            }
+          }
+          row.put("footnote_text", texts.length() == 0 ? null : texts.toString());
         }
         pending.add(row);
       }

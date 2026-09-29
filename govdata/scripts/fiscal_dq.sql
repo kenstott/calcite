@@ -1266,7 +1266,9 @@ SELECT 'fiscal', 'omb_apportionments', 'T5_all_same_value',
 FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
   FROM (SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+    -- availability_type_code: the source's only non-null value is 'X' (no-year funds); annual and
+    -- multi-year accounts carry it as blank, so it is single-valued by design.
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'availability_type_code')));
 
 INSERT INTO dq_results
 SELECT 'fiscal', 'omb_apportionments', 'T6_pk_nulls',
