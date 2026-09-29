@@ -157,9 +157,12 @@ class CancelScope:
         session_key: Optional[str],
         timeout_ms: int,
         client_gone: Optional[Callable[[], bool]] = None,
+        max_queue_wait_ms: Optional[int] = None,
     ) -> None:
         self._session_key = session_key
         self._client_gone = client_gone
+        if max_queue_wait_ms is not None:
+            self.max_queue_wait_ms = max(0, int(max_queue_wait_ms))
         self._timeout_ms = max(0, int(timeout_ms))
         self._handle: Optional[InFlightStatement] = None
         self._timer: Optional[threading.Timer] = None

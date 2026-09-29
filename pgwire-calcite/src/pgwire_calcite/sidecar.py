@@ -32,7 +32,8 @@ with NUL, which SQL never does) from a plain SQL execution request:
     CATALOG_REQUEST                      ship the catalog model
     CANCEL_REQUEST + JSON                cancel another connection's statement:
                                          {"session_key": ..., "reason": ...}
-    EXEC_REQUEST + JSON                  execute: {"sql", "session_key", "timeout_ms"}
+    EXEC_REQUEST + JSON                  execute: {"sql", "session_key", "timeout_ms",
+                                         "lane", "max_queue_wait_ms"}
 
   response
     1 status byte (0 ok / 1 err), then
@@ -54,6 +55,7 @@ from __future__ import annotations
 
 import json
 import logging
+import select
 import socket
 import socketserver
 import struct
@@ -61,7 +63,12 @@ import time
 from typing import Callable, List, Optional
 
 from pgwire_calcite import arrow_bridge
-from pgwire_calcite.backend import LANE_USER, PgProtocolError, QueryCanceled
+from pgwire_calcite.backend import (
+    CANCELED_CLIENT_GONE,
+    LANE_USER,
+    PgProtocolError,
+    QueryCanceled,
+)
 from pgwire_calcite.dialect import transpile_pg_to_calcite
 from pgwire_calcite.types import QueryResult
 
@@ -81,6 +88,10 @@ EXEC_REQUEST = "\x00__PGWIRE_EXEC__"
 #: statement_timeout: the child enforces the timeout itself and then still has to
 #: send the trailer, so the reader must outlive the cancel it asked for.
 _TIMEOUT_GRACE_S = 30.0
+
+#: How often the pgwire side, while the child queues its statement, re-checks that
+#: the requesting client is still connected.
+_LIVENESS_POLL_S = 0.5
 
 
 def _read_exact(reader, n: int) -> Optional[bytes]:
@@ -187,8 +198,16 @@ class _ChildHandler(socketserver.StreamRequestHandler):
 
     def _execute(self, backend, body: dict) -> None:
         from pgwire_calcite.calcite_backend import CancelScope
+        from pgwire_calcite.server import _peer_closed
 
-        scope = CancelScope(body["session_key"], body["timeout_ms"])
+        # The pgwire side closes this connection when its client disconnects, so the
+        # bridge socket going away is the child's client-gone signal while queued.
+        scope = CancelScope(
+            body["session_key"],
+            body["timeout_ms"],
+            lambda: _peer_closed(self.request),
+            body["max_queue_wait_ms"],
+        )
         conn, lock = backend.lane(body["lane"])
         names, labels, ipc = arrow_bridge.stream_ipc_batches(
             conn, lock, body["sql"], cancel_scope=scope
@@ -353,8 +372,9 @@ class BridgeBackend:
         lane: str = LANE_USER,
         client_gone: Optional[Callable[[], bool]] = None,
     ) -> QueryResult:
-        # The child queues on the lock, so the liveness check cannot run on this side.
-        del role_id, params, stream, client_gone  # params substituted upstream; always streams
+        from pgwire_calcite.calcite_backend import CancelScope
+
+        del role_id, params, stream  # params substituted upstream; always streams
         # PG-only rejects happen here (PGW-018); JSON/vector surfaces honored.
         calcite_sql = transpile_pg_to_calcite(
             sql,
@@ -373,11 +393,20 @@ class BridgeBackend:
                 "session_key": session_key,
                 "timeout_ms": int(timeout_ms),
                 "lane": lane,
+                "max_queue_wait_ms": CancelScope.max_queue_wait_ms,
             }
         )
         write_frame(w, request.encode("utf-8"))
         w.flush()
 
+        # The child sends nothing until its statement leaves the queue, so this is the
+        # only place the requesting client's liveness can be observed; closing the
+        # bridge socket is what tells the child to drop the queued statement.
+        if client_gone is not None:
+            while not select.select([sock], [], [], _LIVENESS_POLL_S)[0]:
+                if client_gone():
+                    sock.close()
+                    raise QueryCanceled(CANCELED_CLIENT_GONE)
         status = _read_exact(r, 1)
         if status is None:
             sock.close()

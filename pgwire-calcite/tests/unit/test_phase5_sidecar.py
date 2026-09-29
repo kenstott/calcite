@@ -326,3 +326,72 @@ def test_cancel_request_over_the_wire_reaches_the_child(child):
             conn.close()
     finally:
         srv.shutdown()
+
+
+# --- queue liveness and bound over the bridge (#787) -------------------------
+
+
+def _hold_user_lane(backend):
+    """Hold the user lane's connection lock from a thread; returns (release, join)."""
+    from pgwire_calcite.backend import LANE_USER
+
+    _, lock = backend.lane(LANE_USER)
+    held, release = threading.Event(), threading.Event()
+
+    def hold():
+        with lock:
+            held.set()
+            release.wait(10)
+
+    t = threading.Thread(target=hold, daemon=True)
+    t.start()
+    assert held.wait(2)
+    return release, t
+
+
+def test_bridge_queue_wait_is_bounded_by_the_server_setting(child, calcite_backend, monkeypatch):
+    """The child honours --max-queue-wait-ms: a statement queued behind a held lock
+    fails with 'server busy' instead of waiting for the class default."""
+    from pgwire_calcite.backend import CANCELED_SERVER_BUSY, QueryCanceled
+    from pgwire_calcite.calcite_backend import CancelScope
+
+    monkeypatch.setattr(CancelScope, "max_queue_wait_ms", 300)
+    port, _ = child
+    release, t = _hold_user_lane(calcite_backend)
+    try:
+        started = time.monotonic()
+        with pytest.raises(QueryCanceled) as excinfo:
+            BridgeBackend(port=port).execute_sql("SELECT count(*) AS n FROM EMPS", "u")
+        assert str(excinfo.value) == CANCELED_SERVER_BUSY
+        assert time.monotonic() - started < 5
+    finally:
+        release.set()
+        t.join(2)
+
+
+def test_bridge_queued_statement_is_dropped_when_client_disconnects(child, calcite_backend):
+    """A queued statement whose client is gone is dropped, not run for nobody."""
+    from pgwire_calcite.backend import CANCELED_CLIENT_GONE, QueryCanceled
+
+    port, _ = child
+    gone = threading.Event()
+    threading.Timer(0.6, gone.set).start()
+    release, t = _hold_user_lane(calcite_backend)
+    try:
+        started = time.monotonic()
+        with pytest.raises(QueryCanceled) as excinfo:
+            BridgeBackend(port=port).execute_sql(
+                "SELECT count(*) AS n FROM EMPS", "u", client_gone=gone.is_set
+            )
+        assert str(excinfo.value) == CANCELED_CLIENT_GONE
+        assert time.monotonic() - started < 5
+        # The child noticed the bridge socket close and abandoned the queued statement.
+        deadline = time.monotonic() + 5
+        from pgwire_calcite.calcite_backend import IN_FLIGHT
+
+        while IN_FLIGHT.active_sessions() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not IN_FLIGHT.active_sessions()
+    finally:
+        release.set()
+        t.join(2)
