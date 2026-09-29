@@ -32,6 +32,14 @@ from typing import Optional, Protocol, runtime_checkable
 from pgwire_calcite.types import QueryResult
 
 
+#: Execution lanes. ``probe`` is a reserved connection for health/metadata
+#: statements so they never queue behind a user scan; clients opt in by
+#: connecting with ``application_name`` = ``PROBE_APPLICATION_NAME``.
+LANE_USER = "user"
+LANE_PROBE = "probe"
+PROBE_APPLICATION_NAME = "pgwire-healthcheck"
+
+
 @runtime_checkable
 class Backend(Protocol):
     """Contract the wire server executes non-catalog statements against."""
@@ -44,6 +52,7 @@ class Backend(Protocol):
         stream: bool = False,
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
+        lane: str = LANE_USER,
     ) -> QueryResult:
         """Execute one statement.
 
@@ -51,7 +60,8 @@ class Backend(Protocol):
         in-flight engine statement for out-of-band cancellation (PGW-050); ``None``
         means "not cancellable from another connection" (direct/programmatic use).
         ``timeout_ms`` is the session's ``statement_timeout`` in milliseconds, 0 =
-        no timeout (PG semantics, PGW-051).
+        no timeout (PG semantics, PGW-051). ``lane`` selects the connection: ``probe``
+        is reserved for health/metadata statements, ``user`` for everything else.
         """
         ...
 
@@ -104,6 +114,7 @@ class PgProtocolError(RuntimeError):
 #: PG's wording for both cancellation causes, byte for byte (SQLSTATE 57014).
 CANCELED_BY_USER = "canceling statement due to user request"
 CANCELED_BY_TIMEOUT = "canceling statement due to statement timeout"
+
 
 
 class QueryCanceled(PgProtocolError):
@@ -162,9 +173,10 @@ class StubBackend:
         stream: bool = False,
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
+        lane: str = LANE_USER,
     ) -> QueryResult:
         # stub is always materialized and answers instantly: nothing to cancel or time out
-        del role_id, params, stream, session_key, timeout_ms
+        del role_id, params, stream, session_key, timeout_ms, lane
         stripped = sql.strip().rstrip(";").strip()
         if _SELECT_ONE_RE.match(sql):
             return QueryResult(rows=[(1,)], column_names=["?column?"], column_types=["INTEGER"])

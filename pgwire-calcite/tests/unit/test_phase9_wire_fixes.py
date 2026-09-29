@@ -62,9 +62,10 @@ class EchoParamsBackend:
         del session_key
 
     def execute_sql(
-        self, sql: str, role_id=None, params=None, stream: bool = False, session_key=None, timeout_ms=0
+        self, sql: str, role_id=None, params=None, stream: bool = False, session_key=None, timeout_ms=0,
+        lane="user",
     ):
-        del session_key, timeout_ms
+        del session_key, timeout_ms, lane
         params = list(params or [])
         self.calls.append((sql, params))
         return QueryResult(

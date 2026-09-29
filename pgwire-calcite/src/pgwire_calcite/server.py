@@ -440,6 +440,15 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         """The connection's BVContext while it is alive, else None."""
         return self._ctx_ref() if self._ctx_ref is not None else None
 
+    def _lane(self) -> str:
+        """``probe`` for a client that identified itself as the health probe."""
+        from pgwire_calcite.backend import LANE_PROBE, LANE_USER, PROBE_APPLICATION_NAME
+
+        ctx = self.ctx
+        if ctx is not None and ctx.params.get("application_name") == PROBE_APPLICATION_NAME:
+            return LANE_PROBE
+        return LANE_USER
+
     def bind_context(self, ctx) -> None:
         self._ctx_ref = weakref.ref(ctx)
 
@@ -597,6 +606,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
                 stream=True,
                 session_key=self.key,
                 timeout_ms=self.statement_timeout_ms,
+                lane=self._lane(),
             )
         except PermissionError as exc:
             raise PermissionError(str(exc)) from exc

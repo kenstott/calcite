@@ -30,7 +30,7 @@ import threading
 from typing import List, Optional
 
 from pgwire_calcite import normalize
-from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, QueryCanceled
+from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, LANE_PROBE, LANE_USER, QueryCanceled
 from pgwire_calcite.classpath import resolve_classpath
 from pgwire_calcite.dialect import transpile_pg_to_calcite
 from pgwire_calcite.types import QueryResult
@@ -216,6 +216,10 @@ class CalciteBackend:
         self._batch_size = int(batch_size)
         self._conn = None
         self._lock = threading.RLock()
+        # Reserved lane for health/metadata probes: its own JDBC connection and lock,
+        # so a probe never queues behind a user scan on the main connection.
+        self._probe_conn = None
+        self._probe_lock = threading.RLock()
         self._Types = None
         self._start_jvm()
         self._connect()
@@ -270,6 +274,8 @@ class CalciteBackend:
             props.setProperty(str(key), str(value))
 
         self._conn = DriverManager.getConnection("jdbc:calcite:", props)
+        # The model's schema is shared across connections, so this open is cheap.
+        self._probe_conn = DriverManager.getConnection("jdbc:calcite:", props)
         log.info("[CALCITE] connected (model=%s, lex=%s)", self._model_path, self._lex)
 
     @property
@@ -310,6 +316,14 @@ class CalciteBackend:
         with self._lock:
             return self._conn is not None and not bool(self._conn.isClosed())
 
+    def lane(self, name: str):
+        """Return the (connection, lock) pair serving ``name`` (``user`` or ``probe``)."""
+        if name == LANE_PROBE:
+            return self._probe_conn, self._probe_lock
+        if name == LANE_USER:
+            return self._conn, self._lock
+        raise ValueError(f"unknown execution lane {name!r}")
+
     def cancel_session(self, session_key: str, reason: str) -> bool:
         """Cancel the statement this session is running in-process (PGW-050)."""
         return IN_FLIGHT.cancel(session_key, reason)
@@ -323,6 +337,10 @@ class CalciteBackend:
             if self._conn is not None:
                 self._conn.close()
                 self._conn = None
+        with self._probe_lock:
+            if self._probe_conn is not None:
+                self._probe_conn.close()
+                self._probe_conn = None
 
     # --- execution ------------------------------------------------------------
 
@@ -334,6 +352,7 @@ class CalciteBackend:
         stream: bool = False,
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
+        lane: str = LANE_USER,
     ) -> QueryResult:
         del role_id, params  # params already substituted upstream (server._substitute_params)
         calcite_sql = transpile_pg_to_calcite(
@@ -342,7 +361,8 @@ class CalciteBackend:
             vector_enabled=("vector" in self._extensions),
         )
         log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
-        if self._conn is None:
+        conn, lock = self.lane(lane)
+        if conn is None:
             raise RuntimeError("Calcite connection is not open")
         scope = CancelScope(session_key, timeout_ms)
         if stream:
@@ -352,13 +372,13 @@ class CalciteBackend:
             from pgwire_calcite import arrow_bridge
 
             names, labels, batches = arrow_bridge.stream_query_batches(
-                self._conn, self._lock, calcite_sql, self._batch_size, cancel_scope=scope
+                conn, lock, calcite_sql, self._batch_size, cancel_scope=scope
             )
             return QueryResult(column_names=names, column_types=labels, row_batches=batches)
         # Materialized path (direct/programmatic use, tests): typed JDBC row reads.
-        scope.acquire(self._lock)
+        scope.acquire(lock)
         try:
-            stmt = self._conn.createStatement()
+            stmt = conn.createStatement()
             scope.arm(stmt)
             try:
                 has_rs = bool(stmt.execute(calcite_sql))
@@ -373,7 +393,7 @@ class CalciteBackend:
                 scope.disarm()
                 stmt.close()
         finally:
-            self._lock.release()
+            lock.release()
 
     def _read_result(self, rs) -> QueryResult:
         md = rs.getMetaData()

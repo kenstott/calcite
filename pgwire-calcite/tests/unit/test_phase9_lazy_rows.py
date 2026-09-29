@@ -82,9 +82,10 @@ class GeneratorBackend:
         del session_key
 
     def execute_sql(
-        self, sql, role_id, params=None, stream=False, session_key=None, timeout_ms=0
+        self, sql, role_id, params=None, stream=False, session_key=None, timeout_ms=0,
+        lane="user",
     ) -> QueryResult:
-        del sql, role_id, params, stream, session_key, timeout_ms
+        del sql, role_id, params, stream, session_key, timeout_ms, lane
         return QueryResult(
             column_names=["id", "name"],
             column_types=self._column_types,

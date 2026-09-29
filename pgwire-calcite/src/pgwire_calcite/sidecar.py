@@ -61,7 +61,7 @@ import time
 from typing import List, Optional
 
 from pgwire_calcite import arrow_bridge
-from pgwire_calcite.backend import PgProtocolError, QueryCanceled
+from pgwire_calcite.backend import LANE_USER, PgProtocolError, QueryCanceled
 from pgwire_calcite.dialect import transpile_pg_to_calcite
 from pgwire_calcite.types import QueryResult
 
@@ -189,8 +189,9 @@ class _ChildHandler(socketserver.StreamRequestHandler):
         from pgwire_calcite.calcite_backend import CancelScope
 
         scope = CancelScope(body["session_key"], body["timeout_ms"])
+        conn, lock = backend.lane(body["lane"])
         names, labels, ipc = arrow_bridge.stream_ipc_batches(
-            backend.connection, backend._lock, body["sql"], cancel_scope=scope
+            conn, lock, body["sql"], cancel_scope=scope
         )
         self.wfile.write(_STATUS_OK)
         write_frame(self.wfile, json.dumps({"names": names, "labels": labels}).encode("utf-8"))
@@ -349,6 +350,7 @@ class BridgeBackend:
         stream: bool = False,
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
+        lane: str = LANE_USER,
     ) -> QueryResult:
         del role_id, params, stream  # params substituted upstream; always streams
         # PG-only rejects happen here (PGW-018); JSON/vector surfaces honored.
@@ -364,7 +366,12 @@ class BridgeBackend:
         sock.settimeout(timeout_ms / 1000.0 + _TIMEOUT_GRACE_S if timeout_ms else None)
         w, r = sock.makefile("wb"), sock.makefile("rb")
         request = EXEC_REQUEST + json.dumps(
-            {"sql": calcite_sql, "session_key": session_key, "timeout_ms": int(timeout_ms)}
+            {
+                "sql": calcite_sql,
+                "session_key": session_key,
+                "timeout_ms": int(timeout_ms),
+                "lane": lane,
+            }
         )
         write_frame(w, request.encode("utf-8"))
         w.flush()

@@ -363,3 +363,54 @@ def test_zero_statement_timeout_still_waits_for_the_lock_and_acquires_it():
     lock = threading.RLock()
     CancelScope(None, 0).acquire(lock)
     lock.release()
+
+
+def test_probe_lane_is_a_separate_connection_and_lock(calcite_backend):
+    user_conn, user_lock = calcite_backend.lane("user")
+    probe_conn, probe_lock = calcite_backend.lane("probe")
+    assert probe_conn is not user_conn
+    assert probe_lock is not user_lock
+    with pytest.raises(ValueError):
+        calcite_backend.lane("nope")
+
+
+def test_probe_lane_answers_while_the_user_lane_is_held(calcite_backend):
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with calcite_backend._lock:
+            held.set()
+            release.wait(10)
+
+    t = threading.Thread(target=hold)
+    t.start()
+    held.wait(5)
+    try:
+        started = time.monotonic()
+        result = calcite_backend.execute_sql("SELECT 1", "", timeout_ms=1000, lane="probe")
+        assert time.monotonic() - started < 1
+        assert result is not None
+        with pytest.raises(QueryCanceled):
+            calcite_backend.execute_sql("SELECT 1", "", timeout_ms=200, lane="user")
+    finally:
+        release.set()
+        t.join()
+
+
+class _Ctx:
+    def __init__(self, application_name):
+        self.params = {"application_name": application_name}
+
+
+def test_session_routes_only_the_named_probe_client_to_the_probe_lane():
+    from pgwire_calcite.backend import PROBE_APPLICATION_NAME
+    from pgwire_calcite.server import CalciteSession
+
+    session = CalciteSession()
+    probe = _Ctx(PROBE_APPLICATION_NAME)
+    session.bind_context(probe)
+    assert session._lane() == "probe"
+    other = _Ctx("psql")
+    session.bind_context(other)
+    assert session._lane() == "user"

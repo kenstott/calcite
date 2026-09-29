@@ -240,6 +240,10 @@ final class PgwireGovDataConnector {
       // indefinitely against pgwire-calcite, no error, no response) must not silently freeze
       // whatever MCP tool call is waiting on it forever.
       props.setProperty("socketTimeout", "30");
+      // Routes the identity check to pgwire-calcite's reserved probe connection, so it
+      // reports "busy" only when the server truly is, never because a user scan holds the
+      // main connection. Must equal pgwire_calcite.backend.PROBE_APPLICATION_NAME.
+      props.setProperty("ApplicationName", "pgwire-healthcheck");
       Connection c = DriverManager.getConnection(
           "jdbc:postgresql://" + host() + ":" + port() + "/govdata", props);
       if (!verifyIsGovData(c)) {
