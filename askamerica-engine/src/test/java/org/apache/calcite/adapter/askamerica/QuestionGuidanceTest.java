@@ -151,4 +151,46 @@ class QuestionGuidanceTest {
     assertTrue(QuestionGuidance.EXEMPLAR_POINTER.contains("get_usage_guide_section_6 and _7"),
         "the short form only works if it says where the long form is");
   }
+
+    @Test
+    void everyUsageGuideSectionStaysUnderTheClientTruncationCeiling() {
+        // Claude Code silently truncates a tool description at 2048 characters.
+        for (int i = 0; i < QuestionGuidance.USAGE_GUIDE.size(); i++) {
+            int len = QuestionGuidance.USAGE_GUIDE.get(i).length();
+            assertTrue(len <= 2048, "usage guide section " + (i + 1) + " is " + len
+                + " characters");
+        }
+    }
+
+    @Test
+    void usageGuideSectionsAreNumberedAgainstTheirTrueCount() {
+        int n = QuestionGuidance.USAGE_GUIDE.size();
+        for (int i = 0; i < n; i++) {
+            assertTrue(QuestionGuidance.USAGE_GUIDE.get(i).startsWith(
+                "AskAmerica usage guide " + (i + 1) + "/" + n), "section " + (i + 1));
+        }
+    }
+
+    @Test
+    void textAndTimeSeriesToolsAreDocumentedAndReallyRegistered() {
+        String guide = QuestionGuidance.USAGE_GUIDE.get(8);
+        java.util.Set<String> registered = new java.util.HashSet<>();
+        for (com.fasterxml.jackson.databind.JsonNode t : McpServer.toolDefs()) {
+            registered.add(t.path("name").asText());
+            String name = t.path("name").asText();
+            if (java.util.Arrays.asList("extract_entities", "score_sentiment",
+                    "score_relevance", "score_text", "arima_forecast", "garch_forecast",
+                    "volatility_forecast", "backtest_volatility").contains(name)) {
+                assertTrue(t.path("description").asText().length() <= 2048,
+                    name + " description is " + t.path("description").asText().length()
+                    + " characters");
+            }
+        }
+        for (String tool : new String[]{"extract_entities", "score_sentiment",
+                "score_relevance", "score_text", "arima_forecast", "garch_forecast",
+                "volatility_forecast", "backtest_volatility"}) {
+            assertTrue(guide.contains(tool), "section 9 must mention " + tool);
+            assertTrue(registered.contains(tool), tool + " is not a registered tool");
+        }
+    }
 }

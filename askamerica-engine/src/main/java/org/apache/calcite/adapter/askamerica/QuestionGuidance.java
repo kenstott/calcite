@@ -226,7 +226,7 @@ final class QuestionGuidance {
 
     /**
      * An 8-part usage guide, exposed as its own zero-argument tools ({@code get_usage_guide_
-     * section_1} through {@code _8}) rather than folded into any single tool's description or
+     * section_1} through {@code _9}) rather than folded into any single tool's description or
      * the server's {@code initialize.instructions} banner.
      *
      * <p>Two real, independently confirmed client bugs motivate this design, not a stylistic
@@ -253,11 +253,11 @@ final class QuestionGuidance {
      * model intact via the one channel proven to work. Content already covered by another
      * tool's own description (e.g. {@code data_coverage}'s own explanation of declared-vs-
      * actual coverage windows, or each statistics tool's own explanation of itself) is
-     * deliberately NOT repeated here — seven sections cover only what no other tool
+     * deliberately NOT repeated here — nine sections cover only what no other tool
      * description states.
      */
     static final List<String> USAGE_GUIDE = Collections.unmodifiableList(Arrays.asList(
-        "AskAmerica usage guide 1/8 — research-first workflow, part 1. This is guidance no "
+        "AskAmerica usage guide 1/9 — research-first workflow, part 1. This is guidance no "
         + "individual tool's own description carries.\n\n"
         + "Measured, most recently in a 25-run reaudit: the average answer cites only ~3.5 "
         + "distinct external sources against a ~10 target, and connector callers as a group "
@@ -278,7 +278,7 @@ final class QuestionGuidance {
         + "pass, not lighter — a schema defect should never be the reason a delivered "
         + "report ends up thin on sources. (Continued in get_usage_guide_section_2.)",
 
-        "AskAmerica usage guide 2/8 — research-first workflow, part 2 (steps after the "
+        "AskAmerica usage guide 2/9 — research-first workflow, part 2 (steps after the "
         + "literature pass in section 1).\n\n"
         + "Bring in the warehouse ADDITIVELY — never just relay what you read. ARBITRATE: "
         + "where studies disagree, let the data settle it. PROVE: recompute a published "
@@ -302,7 +302,7 @@ final class QuestionGuidance {
         + "when the literature already answers it and this corpus adds nothing — that is "
         + "a finding, not a failure.",
 
-        "AskAmerica usage guide 3/8 — query mechanics this warehouse needs that no single "
+        "AskAmerica usage guide 3/9 — query mechanics this warehouse needs that no single "
         + "table's own description covers.\n\n"
         + "VIEW JOIN PUSHDOWN. A normalized VIEW over a much larger base table (e.g. "
         + "sec.financial_facts = financial_line_items LEFT JOIN filing_contexts) may not "
@@ -325,7 +325,7 @@ final class QuestionGuidance {
         + "ref.gleif_cik_mapping bridges LEI↔CIK. Check whether ref already carries the "
         + "key BEFORE matching by name.",
 
-        "AskAmerica usage guide 4/8 — question quality rubric (not carried by any single "
+        "AskAmerica usage guide 4/9 — question quality rubric (not carried by any single "
         + "tool). A question is answerable here when it is: (1) BOUNDED — a specific "
         + "comparison or quantity, not a sweeping verdict; (2) MARGINAL — framed at the "
         + "margin, not the absolute total; (3) OPERATIONALIZED — names a measurable outcome "
@@ -347,7 +347,7 @@ final class QuestionGuidance {
         + "corrects for TIME only, not PLACE — comparing states, not just years, needs "
         + "per_capita too.",
 
-        "AskAmerica usage guide 5/8 — rules no single tool's description states.\n\n"
+        "AskAmerica usage guide 5/9 — rules no single tool's description states.\n\n"
         + "A 'premium'/'gap' claim (group X gets N-times group Y) computed as a raw ratio "
         + "of two group means is confounded by everything else that differs between the "
         + "groups — run ols_regression with the grouping as an indicator, or diff_in_diff "
@@ -370,7 +370,7 @@ final class QuestionGuidance {
         + "Any URL you would otherwise fetch with WebFetch MUST instead be fetched with "
         + "web_fetch. Never call WebFetch or Fetch.",
 
-        "AskAmerica usage guide 6/8 — ASKING WELL, worked rewrites (vague question -> "
+        "AskAmerica usage guide 6/9 — ASKING WELL, worked rewrites (vague question -> "
         + "sharpened question -> why), part 1/2. Apply the same move to the user's "
         + "question before querying; when a rewrite is not possible, say so as in the "
         + "honest-refusal examples (section 7) rather than answering the vague form.\n\n"
@@ -397,7 +397,7 @@ final class QuestionGuidance {
         + "2023 (BEA, chained 2017 dollars), returning the growth value alongside the "
         + "rank.\" -> WHY: 'Best' is a verdict; growth in a stated series is a quantity.",
 
-        "AskAmerica usage guide 7/8 — ASKING WELL, worked rewrites, part 2/2 (continued "
+        "AskAmerica usage guide 7/9 — ASKING WELL, worked rewrites, part 2/2 (continued "
         + "from section 6).\n\n"
         + "(5) [premise-check] VAGUE: \"Why did housing permits collapse in 2023?\" -> "
         + "SHARPENED: \"First, did they? Compare Census new-residential permits nationally "
@@ -424,7 +424,7 @@ final class QuestionGuidance {
         + "offer the most recent published year instead.\" -> WHY: This snapshot is "
         + "versioned, not live.",
 
-        "AskAmerica usage guide 8/8 — the methodology checklist: verifying the SPECIFIC "
+        "AskAmerica usage guide 8/9 — the methodology checklist: verifying the SPECIFIC "
         + "method a question names, not just that every clause was touched.\n\n"
         + "BEFORE CALLING publish_report, beyond question_coverage (which checks every "
         + "CLAUSE was addressed) and beyond what publish_report's own description says: "
@@ -451,8 +451,32 @@ final class QuestionGuidance {
         + "source's narrative/preface text when the fetch never returned its table. If a "
         + "primary-source fetch failed or returned no usable table and the number came from "
         + "elsewhere, say exactly that in the answer — never describe it as read from the "
-        + "primary document."
-    ));
+        + "primary document.",
+        "AskAmerica usage guide 9/9 — text, entity and time-series tools. Use them when the "
+        + "input is a story, a blob of text, or a price series rather than a table "
+        + "question.\n\n"
+        + "- extract_entities(text): organizations, people and places named in an article, "
+        + "resolved to registry entities, with linked_sources naming the tables to query next. "
+        + "include_facts adds a fact card (party/state for a member of Congress, court for a "
+        + "judge, parent company for a firm); score_sentiment=true adds per-entity sentiment. "
+        + "Matching is exact: a miss is not absence. 'ambiguous': true means pick by context "
+        + "and identifiers, never the first candidate.\n"
+        + "- score_sentiment / score_relevance / score_text: score any text (headlines, "
+        + "search results, web_fetch pages). Set domain to the subject of the text "
+        + "(general is the default; finance, health, politics, manufacturing, energy, "
+        + "agriculture, environment, legal, housing, labor, public_safety, technology). It is "
+        + "a lexicon heuristic: read matched_terms; 'no_signal' is NOT neutral. score_text "
+        + "weights sentiment by relevance. This server has no web search: pass your own "
+        + "search results in as {title, text}.\n"
+        + "- arima_forecast, garch_forecast, volatility_forecast: ONE series only (filter to a "
+        + "single ticker; sec.stock_prices.adjusted_close, ISO dates). volatility_forecast "
+        + "returns a price band normalized to the last price, a range and not a direction; "
+        + "ARIMA on a price level returns roughly the last price. State the result's "
+        + "last_period: the warehouse lags.\n"
+        + "- backtest_volatility: run it before presenting any band as reliable. Stale data "
+        + "is fine; it measures past calibration.\n"
+        + "- None of these replaces querying the warehouse for facts. Use them to find what "
+        + "to query and how far to trust it."));
 
     // ── MCP prompts (opt-in question templates) ───────────────────────────────
     //

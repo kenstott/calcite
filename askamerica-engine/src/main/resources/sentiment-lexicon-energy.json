@@ -1,0 +1,51 @@
+{
+  "_comment": "Overlay on the general base for the 'energy' domain. Polarity is from an operational-reliability view; price-direction words are left as the base has them. 'positive'/'negative' entries re-file a term (removing it from the opposite list); 'neutral' drops a base term because its polarity is not stable here. STARTER lexicon, unvalidated against labelled data; extend before relying on it.",
+  "neutral": [
+    "cut",
+    "tariff",
+    "reduce",
+    "volatile",
+    "volatility"
+  ],
+  "positive": [
+    "restart",
+    "reopen",
+    "commissioning",
+    "capacity addition:2",
+    "grid upgrade",
+    "record production:2",
+    "renewable",
+    "energy security",
+    "efficient",
+    "new discovery:2",
+    "reserve addition",
+    "online"
+  ],
+  "negative": [
+    "outage:2",
+    "blackout:2",
+    "brownout:2",
+    "spill:2",
+    "oil spill:2",
+    "leak",
+    "explosion:2",
+    "pipeline rupture:2",
+    "curtail",
+    "curtailment",
+    "shortage",
+    "rationing",
+    "cyberattack:2",
+    "refinery fire:2",
+    "shut-in",
+    "force majeure:2",
+    "load shedding:2",
+    "sanction",
+    "meltdown:2"
+  ],
+  "uncertainty": [
+    "forecast",
+    "projected",
+    "pending",
+    "tentative"
+  ]
+}

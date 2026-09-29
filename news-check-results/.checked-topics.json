@@ -78,5 +78,117 @@
     "run_subpath": "q10/askamerica/2026-09-27",
     "pinocchios": 1,
     "source_url": "https://www.capitolexposed.com/news/weekly-roundup-2026-w37"
+  },
+  {
+    "topic_slug": "mckesson-shinyhunters-breach-claims",
+    "headline": "McKesson data breach: ShinyHunters extortion claims vs. confirmed scope",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q1/askamerica/2026-09-28",
+    "pinocchios": 1,
+    "source_url": null
+  },
+  {
+    "topic_slug": "oregon-wildfire-2026-human-caused-share",
+    "headline": "Oregon nears all-time wildfire acreage record as 2026 fires top 2 million acres",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q2/askamerica/2026-09-28",
+    "pinocchios": 1,
+    "source_url": "https://katu.com/news/local/oregon-nears-all-time-wildfire-acreage-record-as-2026-fires-top-2-million-acres"
+  },
+  {
+    "topic_slug": "aic-ice-no-criminal-record-2450-percent",
+    "headline": "American Immigration Council: 2,450% surge in no-criminal-record ICE detentions",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q3/askamerica/2026-09-28",
+    "pinocchios": 1,
+    "source_url": "https://www.americanimmigrationcouncil.org"
+  },
+  {
+    "topic_slug": "usp-2026-drug-shortages-report",
+    "headline": "USP Annual Drug Shortages Report 2026: 75 active shortages, rising discontinuations",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q4/askamerica/2026-09-28",
+    "pinocchios": 0,
+    "source_url": "https://www.biospace.com/press-releases/usp-annual-drug-shortages-report-finds-rising-discontinuations-hidden-upstream-risk"
+  },
+  {
+    "topic_slug": "coalition-homeless-nyc-2026-state-of-homeless",
+    "headline": "Coalition for the Homeless: NYC shelter census hits record 194,531 in 2025",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q5/askamerica/2026-09-28",
+    "pinocchios": 0,
+    "source_url": "https://coalitionforthehomeless.org"
+  },
+  {
+    "topic_slug": "afbf-farm-losses-34-6-billion",
+    "headline": "American Farm Bureau Federation: $34.6 billion in combined farm losses",
+    "checked_date": "2026-09-28",
+    "run_subpath": "q6/askamerica/2026-09-28",
+    "pinocchios": 3,
+    "source_url": "https://www.fb.org/news-release/farmer-losses-projected-to-deepen"
+  },
+  {
+    "topic_slug": "trump-admin-810m-pocket-rescission",
+    "headline": "White House cancels $810M in health/education funds via pocket rescission",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q1/askamerica/2026-09-29",
+    "pinocchios": 2,
+    "source_url": "https://rollcall.com/2026/09/28/white-house-cancels-health-education-funds-approved-by-congress/"
+  },
+  {
+    "topic_slug": "nyt-1billion-dark-money-2026-midterms",
+    "headline": "NYT: about $1 billion in dark money moving through 2026 midterms",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q2/askamerica/2026-09-29",
+    "pinocchios": 0,
+    "source_url": "https://www.brennancenter.org/our-work/analysis-opinion/1-billion-secret-cash-reshaping-midterms"
+  },
+  {
+    "topic_slug": "rosen-ead-work-permit-3-5-million-claim",
+    "headline": "Sen. Rosen: 3.5M+ workers affected by EAD renewal rule change",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q3/askamerica/2026-09-29",
+    "pinocchios": 0,
+    "source_url": "https://www.rosen.senate.gov/2026/04/29/video-rosen-forces-bipartisan-senate-vote-to-reverse-trump-regulation-ending-automatic-extension-of-work-permits/"
+  },
+  {
+    "topic_slug": "epa-power-plant-repeal-lawsuit-2026",
+    "headline": "Environmental/health groups sue EPA over power plant carbon rule repeal",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q4/askamerica/2026-09-29",
+    "pinocchios": 0,
+    "source_url": "https://insideclimatenews.org/news/18092026/environmental-and-public-health-groups-sue-trump-epa-over-power-plant-fossil-fuels/"
+  },
+  {
+    "topic_slug": "fema-dcmp-eaton-palisades-funding-letter",
+    "headline": "Lawmakers press FEMA to save wildfire case-management program from Sept 30 shutdown",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q5/askamerica/2026-09-29",
+    "pinocchios": 2,
+    "source_url": "https://chu.house.gov/media-center/press-releases/reps-chu-sherman-sens-schiff-padilla-press-fema-again-prevent-shutdown"
+  },
+  {
+    "topic_slug": "nahb-immigration-enforcement-construction-housing-shortage",
+    "headline": "NAHB: immigration enforcement straining construction labor amid 1.2M-unit housing shortage",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q6/askamerica/2026-09-29",
+    "pinocchios": 2,
+    "source_url": "https://www.nahb.org/blog/2026/09/immigration-enforcement"
+  },
+  {
+    "topic_slug": "ccj-homicide-decline-18pct-h1-2026",
+    "headline": "Council on Criminal Justice: homicide rate down 18% in H1 2026, approaching historic low",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q7/askamerica/2026-09-29",
+    "pinocchios": 0,
+    "source_url": "https://counciloncj.org/crime-trends-in-u-s-cities-mid-year-2026-update/"
+  },
+  {
+    "topic_slug": "independent-institute-fy2026-deficit-2-1-trillion",
+    "headline": "Independent Institute: FY2026 deficit ~$2.1T, spending growth actually slowing",
+    "checked_date": "2026-09-29",
+    "run_subpath": "q8/askamerica/2026-09-29",
+    "pinocchios": 3,
+    "source_url": "https://www.independent.org/article/2026/09/23/governments-worsening-deficit/"
   }
 ]

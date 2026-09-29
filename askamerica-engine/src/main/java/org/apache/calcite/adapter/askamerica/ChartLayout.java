@@ -114,6 +114,16 @@ final class ChartLayout {
         if (max == Double.NEGATIVE_INFINITY) {
             max = 1;
         }
+        // A bar is drawn from the zero line to its value (see the bar loop below): min already
+        // forces the domain to include zero so a positive-only series' bars start at the axis
+        // floor, but an all-negative series needs the SAME guarantee on the top end, or the
+        // rounded domain's max stays negative, zero's pixel-y lands above the plot's top edge,
+        // and every bar is drawn straight through the title. Confirmed live: a bar chart of
+        // month-over-month declines (every value negative) rendered its bars overlapping the
+        // chart title. Lines have no such rectangle to mis-draw, so this is bar-only.
+        if ("bar".equals(type) && max < 0) {
+            max = 0;
+        }
         Ticks ticks = forcedDomain == null
             ? niceTicks(min, max)
             : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]));
@@ -142,7 +152,15 @@ final class ChartLayout {
         double provisionalSlot = (width - provisionalLeft - right)
             / Math.max(1, categories.size());
         boolean rotate = widest > provisionalSlot - 6;
-        double bottom = (rotate ? Math.min(96, widest * 0.72 + 22) : 30)
+        // A rotated label's full depth is widest*0.72+22, but a fixed 96px cap clipped that
+        // depth for genuinely long labels — the reserved band stayed 96px while the label
+        // itself still needed more, so its tail rendered past the reserved margin, off the
+        // bottom of the canvas or into the legend below it. The cap now scales with the
+        // chart's own height instead of a constant, and any label that still overflows it gets
+        // shortened (see rotatedLabelMaxWidth below) rather than silently clipped.
+        double maxRotatedDepth = Math.max(60, height * 0.32);
+        double rotatedDepth = rotate ? Math.min(maxRotatedDepth, widest * 0.72 + 22) : 30;
+        double bottom = rotatedDepth
             + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight + FOOTNOTE_BAND;
         double plotH = height - top - bottom;
 
@@ -154,12 +172,20 @@ final class ChartLayout {
             legendHeight);
         scene.bounds(left, top, plotW, plotH, titleBottom + 4, top - 4, height - 4);
 
-        // Category ticks. Every category gets a label, rotated when they would collide.
+        // The text pixel-width a rotated label may actually use before it needs shortening —
+        // inverse of the widest*0.72+22 depth formula above, so a label is only ever ellipsised
+        // when the height-relative cap genuinely can't fit it, not whenever any label rotates.
+        int rotatedLabelMaxWidth = (int) Math.max(20, (maxRotatedDepth - 22) / 0.72);
+
+        // Category ticks. Every category gets a label — never thinned/dropped, only rotated
+        // and, as a last resort past the margin's own cap, shortened to fit.
         Group xTicks = new Group().at("x-axis-labels");
         for (int i = 0; i < categories.size(); i++) {
             double cx = left + slotWidth * (i + 0.5);
             String text = categories.get(i);
-            String shown = rotate ? text : fitTo(text, (int) slotWidth - 6);
+            String shown = rotate
+                ? fitTo(text, rotatedLabelMaxWidth)
+                : fitTo(text, (int) slotWidth - 6);
             Label lab = rotate
                 ? new Label(cx, top + plotH + 14, shown, INK, TICK_SIZE, Anchor.END, -45, false)
                 : new Label(cx, top + plotH + 18, shown, INK, TICK_SIZE, Anchor.MIDDLE, 0, false);

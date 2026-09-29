@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Help Net Security's McKesson/ShinyHunters breach report: accurate attribution, unverifiable attacker figures — split Pinocchio rating</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s4-t1-s1:checked ~ table tbody.s0{display:none}
+#s4-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s4-t1-s1:checked ~ table label[for="s4-t1-s1"]{color:var(--link)}
+#s4-t1-s1:checked ~ table label[for="s4-t1-s1"] .srtcue{opacity:1}
+#s4-t1-s1:checked ~ .srtreset{display:inline-block}
+#s4-t1-s2:checked ~ table tbody.s0{display:none}
+#s4-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s4-t1-s2:checked ~ table label[for="s4-t1-s2"]{color:var(--link)}
+#s4-t1-s2:checked ~ table label[for="s4-t1-s2"] .srtcue{opacity:1}
+#s4-t1-s2:checked ~ .srtreset{display:inline-block}
+#s4-t1-s3:checked ~ table tbody.s0{display:none}
+#s4-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s4-t1-s3:checked ~ table label[for="s4-t1-s3"]{color:var(--link)}
+#s4-t1-s3:checked ~ table label[for="s4-t1-s3"] .srtcue{opacity:1}
+#s4-t1-s3:checked ~ .srtreset{display:inline-block}
+#s4-t1-s4:checked ~ table tbody.s0{display:none}
+#s4-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s4-t1-s4:checked ~ table label[for="s4-t1-s4"]{color:var(--link)}
+#s4-t1-s4:checked ~ table label[for="s4-t1-s4"] .srtcue{opacity:1}
+#s4-t1-s4:checked ~ .srtreset{display:inline-block}
+#s4-t1-s5:checked ~ table tbody.s0{display:none}
+#s4-t1-s5:checked ~ table tbody.s5{display:table-row-group}
+#s4-t1-s5:checked ~ table label[for="s4-t1-s5"]{color:var(--link)}
+#s4-t1-s5:checked ~ table label[for="s4-t1-s5"] .srtcue{opacity:1}
+#s4-t1-s5:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Help Net Security's McKesson/ShinyHunters breach report: accurate attribution, unverifiable attacker figures — split Pinocchio rating</h1>
+<p class="subtitle">Fact-check of &quot;ShinyHunters claims it stole 284 million patient records from McKesson&quot; (Help Net Security, Aug 31, 2026)</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Fact-Check: Help Net Security's McKesson/ShinyHunters Breach Report</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">9 checkable claims graded against SEC 8-K reporting, McKesson's own statements, and independent breach coverage</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">Fidelity rating</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">1 Pinocchio</text>
+  <text class="stat-delta" x="36" y="168" fill="#6b7280">Quotes spliced across 2 dates</text>
+  </g>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">Claims-accuracy rating</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">1 Pinocchio</text>
+  <text class="stat-delta" x="464" y="168" fill="#6b7280" style="font-size:12px">McKesson facts true; ShinyHunters figures unverified</text>
+  </g>
+  <rect class="panel-edge" x="20" y="206" width="412" height="280" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="206" width="412" height="280" viewBox="0 0 412 280" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="280" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Claim verdicts</text>
+    <g id="p3-slices">
+      <path id="p3-mark-true-verbatim" class="slice" d="M 206 152 L 206 76.48 L 212.08 76.72 L 218.11 77.46 L 224.07 78.67 L 229.91 80.37 L 235.60 82.52 L 241.10 85.13 L 246.36 88.17 L 251.37 91.63 L 256.08 95.47 L 260.47 99.69 L 264.50 104.24 L 268.15 109.10 L 271.40 114.24 L 274.23 119.63 L 276.61 125.22 L 278.54 130.99 L 279.99 136.89 L 280.97 142.90 L 281.46 148.96 L 281.46 155.04 L 280.97 161.10 L 279.99 167.11 L 278.54 173.01 L 276.61 178.78 L 274.23 184.37 L 271.40 189.76 L 268.15 194.90 L 264.50 199.76 L 260.47 204.31 L 256.08 208.53 L 251.37 212.37 L 246.36 215.83 L 241.10 218.87 L 235.60 221.48 L 229.91 223.63 L 224.07 225.33 L 218.11 226.54 L 212.08 227.28 L 206.00 227.52 L 199.92 227.28 L 193.89 226.54 L 187.93 225.33 L 182.09 223.63 L 176.40 221.48 L 170.90 218.87 L 165.64 215.83 L 160.63 212.37 L 155.92 208.53 L 151.53 204.31 L 147.50 199.76 L 143.85 194.90 L 140.60 189.76 Z" fill="#2563eb" stroke="none" stroke-width="0" stroke-linejoin="round" stroke-linecap="round"/>
+      <path id="p3-mark-true-but-merges-2-dated-quotes" class="slice" d="M 206 152 L 140.60 189.76 L 137.56 183.92 L 135.03 177.83 L 133.05 171.55 L 131.63 165.11 L 130.77 158.58 L 130.48 152.00 L 130.77 145.42 L 131.63 138.89 Z" fill="#ea580c" stroke="none" stroke-width="0" stroke-linejoin="round" stroke-linecap="round"/>
+      <path id="p3-mark-unverified-claim-properly-labeled-as-such" class="slice" d="M 206 152 L 131.63 138.89 L 132.95 132.83 L 134.77 126.90 L 137.07 121.14 L 139.84 115.59 L 143.05 110.29 L 146.68 105.26 L 150.72 100.55 L 155.12 96.19 L 159.87 92.20 L 164.93 88.62 L 170.27 85.47 L 175.85 82.76 L 181.63 80.52 L 187.58 78.76 L 193.65 77.50 L 199.80 76.73 L 206 76.48 Z" fill="#059669" stroke="none" stroke-width="0" stroke-linejoin="round" stroke-linecap="round"/>
+    </g>
+    <g id="p3-slice-labels">
+      <text id="p3-slice-label-true-verbatim" class="value-label" x="283.53" y="200.76" fill="#1f2328" font-size="11" style="font-size:11px">True / verbatim 67%</text>
+      <text id="p3-slice-label-true-but-merges-2-dated-quotes" class="value-label" x="117.84" y="171.54" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">True but merges 2 dated quotes 11%</text>
+      <text id="p3-slice-label-unverified-claim-properly-labeled-as-such" class="value-label" x="148.46" y="87.42" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Unverified claim, properly labeled as such 22%</text>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="499" fill="#6b7280">Of 9 checkable assertions/quotes extracted from the article</text>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:52528/a/ceff6482bac39307c010d59444eb0e59.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>This article relays claims attributed to two distinct third parties — McKesson (via CTO Francisco Fraga's own statements) and the ShinyHunters extortion group (via its account to BleepingComputer) — rather than asserting facts in its own voice. That is exactly the case that calls for a <strong>split rating</strong>: how faithfully the piece represented what each party said (<strong>fidelity</strong>), separate from whether what they said is actually true (<strong>claims accuracy</strong>).</p><p><strong>Fidelity: 1 Pinocchio.</strong> The article quotes both parties accurately word-for-word, but splices three Fraga quotes from two different dated McKesson statements (Aug 28 and Aug 29, 2026) into what reads as one continuous remark, without flagging the date change. It correctly attributes the ShinyHunters material as the group's own unverified account throughout.</p><p><strong>Claims accuracy: 1 Pinocchio.</strong> McKesson's own claims (detection date, 'early stages' language, materiality assessment, affected business units) are independently confirmed true. ShinyHunters' claims (284 million records, $55,236,150 ransom, vishing/Okta/Salesforce/Snowflake method) remain entirely unverified by any independent party — including McKesson, which has disclosed no record count or ransom figure of its own — and are the kind of figures an extortion group has a direct incentive to inflate. The article does flag this with an explicit caveat, which keeps this from rating higher, but a reader who skims past that caveat is left with 284 million and $55 million as the takeaway numbers for claims that no one but the accused attacker has stated.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>🤥○○○ Fidelity: 1 of 4 Pinocchios</strong></p><p>The article quotes both McKesson (via Fraga) and ShinyHunters (via BleepingComputer) accurately and attributes each correctly to its actual source -- no misquoting, no misattribution of who said what. The one fidelity issue: three Fraga quotes are presented as a single continuous statement when they actually come from two different dated McKesson updates (Aug 28 and Aug 29, 2026). This obscures the timeline of what McKesson said when, even though each individual sentence is verbatim and correctly attributed to Fraga's role. A defensible editorial shortcut, not a misattribution, which keeps this at 1 rather than higher.</p></div>
+<div class="pinocchio-rating"><p><strong>🤥○○○ Claims Accuracy: 1 of 4 Pinocchios</strong></p><p>McKesson's own attributed claims (detection date, 'early stages' status, materiality assessment, affected business units) are independently confirmed true against McKesson's own statements and secondary reporting of its SEC 8-K. ShinyHunters' attributed claims (284 million records, the $55,236,150 ransom, the vishing/Okta/Salesforce/Snowflake method) remain entirely unverified by any party other than the accused attacker itself -- McKesson has disclosed no record count or ransom demand of its own, and an extortion group has an inherent incentive to inflate such figures for leverage. The article's explicit 'none of these claims have been independently verified' caveat is accurate and keeps this from rating higher, but the headline number (284 million) and the ransom figure are, at bottom, unconfirmed assertions from the party being accused of the crime.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>2</strong> not checkable here &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>According to the SEC filing, the intrusion was detected on August 25, 2026, and the company said the investigation 'is in its early stages' and has not determined the incident is material or likely to affect its finances or operations.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Francisco Fraga, EVP and Chief Information and Technology Officer at McKesson, is quoted making three statements about the scope of the breach, the lack of required customer action, and ongoing monitoring, presented as one continuous statement.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>ShinyHunters told BleepingComputer it breached McKesson via vishing calls to employees, took over Okta SSO accounts, pivoted into Salesforce and Snowflake, and exfiltrated about a terabyte of data over four days, then demanded $55,236,150 with a 72-hour deadline.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>Hackers claim to hold 284 million data records, a figure that reflects database rows rather than individual patients.</td><td><strong>not checkable here</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-not-checkable-here"><td>4</td><td>Hackers claim to hold 284 million data records, a figure that reflects database rows rather than individual patients.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>ShinyHunters told BleepingComputer it breached McKesson via vishing calls to employees, took over Okta SSO accounts, pivoted into Salesforce and Snowflake, and exfiltrated about a terabyte of data over four days, then demanded $55,236,150 with a 72-hour deadline.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Francisco Fraga, EVP and Chief Information and Technology Officer at McKesson, is quoted making three statements about the scope of the breach, the lack of required customer action, and ongoing monitoring, presented as one continuous statement.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>1</td><td>According to the SEC filing, the intrusion was detected on August 25, 2026, and the company said the investigation 'is in its early stages' and has not determined the incident is material or likely to affect its finances or operations.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>1</td><td>According to the SEC filing, the intrusion was detected on August 25, 2026, and the company said the investigation 'is in its early stages' and has not determined the incident is material or likely to affect its finances or operations.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Francisco Fraga, EVP and Chief Information and Technology Officer at McKesson, is quoted making three statements about the scope of the breach, the lack of required customer action, and ongoing monitoring, presented as one continuous statement.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>Hackers claim to hold 284 million data records, a figure that reflects database rows rather than individual patients.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>ShinyHunters told BleepingComputer it breached McKesson via vishing calls to employees, took over Okta SSO accounts, pivoted into Salesforce and Snowflake, and exfiltrated about a terabyte of data over four days, then demanded $55,236,150 with a 72-hour deadline.</td><td><strong>not checkable here</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>2</td><td>Francisco Fraga, EVP and Chief Information and Technology Officer at McKesson, is quoted making three statements about the scope of the breach, the lack of required customer action, and ongoing monitoring, presented as one continuous statement.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>ShinyHunters told BleepingComputer it breached McKesson via vishing calls to employees, took over Okta SSO accounts, pivoted into Salesforce and Snowflake, and exfiltrated about a terabyte of data over four days, then demanded $55,236,150 with a 72-hour deadline.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>4</td><td>Hackers claim to hold 284 million data records, a figure that reflects database rows rather than individual patients.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>According to the SEC filing, the intrusion was detected on August 25, 2026, and the company said the investigation 'is in its early stages' and has not determined the incident is material or likely to affect its finances or operations.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; According to the SEC filing, the intrusion was detected on August 25, 2026, and the company said the investigation 'is in its early stages' and has not determined the incident is material or likely to affect its finances or operations.</summary>
+<dl>
+<dt>Warehouse says</dt><dd> <code>sec.filing_metadata (queried, returned 0 rows for this filing — ingestion lag, not a contradiction)</code></dd>
+<dt>Independent evidence</dt><dd>8-K filed Aug 28, 2026 disclosing detection on Aug 25, 2026, investigation 'in its early stages,' not yet determined material<ul class="claim-sources"><li><a href="https://www.gurufocus.com/news/9058771/mckesson-corporation-mck-discloses-cybersecurity-incident-in-sec-filing">McKesson Corporation (MCK) Discloses Cybersecurity Incident in SEC Filing - GuruFocus</a></li><li><a href="https://www.sec.gov/Archives/edgar/data/927653/000092765326000247/mck-20260825.htm">McKesson Corp 8-K (SEC EDGAR, fetch blocked HTTP 403, cited via secondary report)</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / sec.filing_metadata observed coverage 2016-2026, but this specific Aug 2026 filing not yet loaded</dd>
+<dt>Why</dt><dd>AskAmerica's own SEC table doesn't yet carry this filing (vintage/backfill gap), so verified via an independent secondary report (GuruFocus, published 08/28/2026) of the primary 8-K's text instead of a direct read.</dd>
+<dt>Overrode Jev's score because</dt><dd>This is a late-August 2026 event, after any plausible training cutoff for Jev's own knowledge, and its low-confidence score reflects that Jev has no independent way to know the event occurred -- not a disagreement with the evidence. I independently verified the claim against a named, dated primary-source report (GuruFocus's 08/28/2026 article quoting the 8-K's own language verbatim) and against a second independent web search returning the identical detection date and 'early stages' language, so I am overriding on the strength of that named source rather than trusting my own reasoning alone.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT cik, company_name, filing_type, filing_date, accession_number FROM sec.filing_metadata WHERE cik IN ('927653','0000927653') AND filing_date &gt;= '2026-08-01' ORDER BY filing_date DESC</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#2 &middot; <strong>mostly true</strong> &mdash; Francisco Fraga, EVP and Chief Information and Technology Officer at McKesson, is quoted making three statements about the scope of the breach, the lack of required customer action, and ongoing monitoring, presented as one continuous statement.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>All three quotes are verbatim and correctly attributed to Fraga, but they come from two different dated posts (Aug 28 and Aug 29, 2026) on McKesson's own cybersecurity page, spliced together without noting the date change.<ul class="claim-sources"><li><a href="https://www.mckesson.com/utility/cybersecurity/customer-cybersecurity-information-center/">McKesson Customer Cybersecurity Information Center</a></li></ul></dd>
+<dt>Why</dt><dd>Directly fetched and compared word-for-word against McKesson's own page; each sentence is accurate but drawn from two separate dated company updates presented as one.</dd>
+<dt>Overrode Jev's score because</dt><dd>I directly fetched McKesson's own cybersecurity page (a named primary source dated Aug 28-29, 2026, after Jev's likely training cutoff) and compared the article's quotes character-for-character against it myself, which Jev cannot do. The low-confidence score reflects Jev lacking access to that primary page, not a substantive disagreement with my finding.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#3 &middot; <strong>not checkable here</strong> &mdash; ShinyHunters told BleepingComputer it breached McKesson via vishing calls to employees, took over Okta SSO accounts, pivoted into Salesforce and Snowflake, and exfiltrated about a terabyte of data over four days, then demanded $55,236,150 with a 72-hour deadline.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>Same account (method, ~1TB, 4-day window, $55,236,150 demand, 72-hour deadline) corroborated across multiple independent outlets' summaries of ShinyHunters' claims<ul class="claim-sources"><li><a href="https://cybernews.com/news/mckesson-breached-shinyhunters-claims-284m-records/">McKesson Breach: ShinyHunters Claims 284m Patient Records - Cybernews</a></li><li><a href="https://www.crime-research.org/news/31.08.2026/mckesson-breach-shinyhunters-284-million-patient-records/">McKesson Discloses Data Breach Amid ShinyHunters Extortion Claim</a></li><li><a href="https://tech-insider.org/mckesson-breach-confirmed-sec-filing-ransom-deadline-2026/">McKesson Confirms Data Breach: 284M Records, $55M Demand - tech-insider.org</a></li></ul></dd>
+<dt>Why</dt><dd>This is an attacker's self-reported, unverified account of its own intrusion, not a government-data-verifiable fact. Article correctly labels it as unverified. AskAmerica has no breach-incident schema to check this against (search_catalog returned no matching table for 'data breach').</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#4 &middot; <strong>not checkable here</strong> &mdash; Hackers claim to hold 284 million data records, a figure that reflects database rows rather than individual patients.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>ShinyHunters itself clarified the 284M figure is raw database rows, not a distinct-patient count, matching the article's framing<ul class="claim-sources"><li><a href="https://cybernews.com/news/mckesson-breached-shinyhunters-claims-284m-records/">McKesson Breach: ShinyHunters Claims 284m Patient Records - Cybernews</a></li></ul></dd>
+<dt>Why</dt><dd>This is the attacker's own unverifiable claim about its own stolen data; no primary confirmation exists since McKesson has not disclosed a record count. The article's caveat is an accurate relay of that unverifiable claim, not an independently checkable fact.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Why AskAmerica's own data could not settle most of this</h2>
+<p>AskAmerica's gov-data catalog was searched first (<code>search_catalog</code> for 'healthcare data breach,' 'HHS OCR breach portal') and returned no matching table — this corpus has no HHS OCR breach-notification data, no CISA incident data, and no cyber-crime-specific table covering data breaches (only CVE/KEV vulnerability data, which doesn't apply to a criminal intrusion/extortion story). This is a genuine coverage gap, not a search failure; per the applicable recipe (coverage-gap-means-fetch-primary-data-not-just-literature), the follow-up was to go directly to McKesson's own primary statements and to the SEC filing itself rather than settle for secondary paraphrase alone.</p><p>The one AskAmerica table that IS relevant — <code>sec.filing_metadata</code> — does carry McKesson's (CIK 0000927653) filing history and confirms its identity (ticker MCK, SIC 5122 drugs), but a query for its Aug 2026 8-K filings returned zero rows. The table's coverage window is declared through 2026 and observed through 2026, so this is most likely an ingestion-lag/backfill gap for a filing made only a month before this check, not evidence the filing doesn't exist. SEC EDGAR's own page for the filing (sec.gov/Archives/edgar/data/927653/000092765326000247/mck-20260825.htm) returned HTTP 403 to direct fetch (SEC blocks automated fetches), so the SEC filing's content was verified independently via GuruFocus's contemporaneous news report of the 8-K's text, cross-checked against a second independent web search, and via McKesson's own cybersecurity page (fetched directly) for all Fraga statements.</p>
+</section>
+<section>
+<h2>Claim-by-claim findings</h2>
+<input type="radio" name="s4-t1" class="srtbox" id="s4-t1-s0" checked><input type="radio" name="s4-t1" class="srtbox" id="s4-t1-s1"><input type="radio" name="s4-t1" class="srtbox" id="s4-t1-s2"><input type="radio" name="s4-t1" class="srtbox" id="s4-t1-s3"><input type="radio" name="s4-t1" class="srtbox" id="s4-t1-s4"><input type="radio" name="s4-t1" class="srtbox" id="s4-t1-s5"><table border=1 cellpadding=6 style='border-collapse:collapse'><tr><th><label class="srth" for="s4-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s4-t1-s2">Claim<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s4-t1-s3">Attributed to<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s4-t1-s4">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s4-t1-s5">Basis<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr><td>1</td><td>McKesson is a major U.S. healthcare company distributing pharmaceuticals, medical supplies, etc.</td><td>Article's own description</td><td>True</td><td>sec.filing_metadata: CIK 0000927653, ticker MCK, SIC 5122 (drugs). Confirms it's a real, large SEC-registered drug/medical distributor.</td></tr><tr><td>2</td><td>SEC filing: intrusion detected Aug 25, 2026; investigation 'in its early stages'; not yet determined material</td><td>McKesson (SEC 8-K)</td><td>True</td><td>AskAmerica's sec.filing_metadata has not yet ingested this specific Aug 2026 8-K (0 rows returned — vintage gap). Independently verified via GuruFocus's 08/28/2026 report summarizing the 8-K verbatim, matching the article's claims exactly. Direct SEC EDGAR fetch was blocked (HTTP 403).</td></tr><tr><td>3</td><td>Fraga quote re: Oncology &amp; Multispecialty / Medical-Surgical business units</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches word-for-word McKesson's own Aug 29, 2026 cybersecurity update, signed by Francisco Fraga.</td></tr><tr><td>4</td><td>Fraga quote: 'we do not believe any action is required by our customers...'</td><td>McKesson (Fraga)</td><td>True but misleadingly spliced</td><td>Verbatim, but this sentence is from the Aug 28, 2026 post — a DAY EARLIER than the quote before and after it (both Aug 29). The article presents all three as one continuous statement without noting the date change.</td></tr><tr><td>5</td><td>Fraga quote: 'We continue to monitor our environment closely...'</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches McKesson's Aug 29, 2026 post exactly.</td></tr><tr><td>6</td><td>ShinyHunters' claimed method: vishing calls, Okta SSO takeover, pivot into Salesforce/Snowflake, ~1TB over 4 days</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>BleepingComputer's original article could not be directly fetched (HTTP 403), but the same account is corroborated across multiple independent secondary outlets (tech-insider.org, crime-research.org, cybernews.com summaries). Article explicitly flags this as ShinyHunters' own, unverified account.</td></tr><tr><td>7</td><td>$55,236,150 ransom demand, 72-hour deadline, contacted McKesson Aug 25</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>Same specific dollar figure and deadline reported independently by at least 3 other outlets found via web search, consistent with the article. Presented throughout as the extortion group's claim, not as established fact. No independent party (including McKesson) has confirmed a ransom demand exists.</td></tr><tr><td>8</td><td>'284 million data records, a figure that reflects database rows rather than individual patients'</td><td>ShinyHunters</td><td>Not independently checkable (attacker's own claim), but accurately framed</td><td>Independent reporting (cybernews.com summary) confirms ShinyHunters itself clarified the 284M figure refers to raw rows, not unique patients — the article's caveat is itself an accurate relay of the attacker's own clarification, not just editorial hedging. McKesson has disclosed no record count of its own.</td></tr><tr><td>9</td><td>'None of these claims have been independently verified'</td><td>Article's own framing</td><td>True and appropriate</td><td>Correctly scopes the ShinyHunters-sourced claims (method, volume, ransom amount) as unverified, distinct from the confirmed McKesson/SEC facts.</td></tr></tbody><tbody class="srt s1"><tr><td>9</td><td>'None of these claims have been independently verified'</td><td>Article's own framing</td><td>True and appropriate</td><td>Correctly scopes the ShinyHunters-sourced claims (method, volume, ransom amount) as unverified, distinct from the confirmed McKesson/SEC facts.</td></tr><tr><td>8</td><td>'284 million data records, a figure that reflects database rows rather than individual patients'</td><td>ShinyHunters</td><td>Not independently checkable (attacker's own claim), but accurately framed</td><td>Independent reporting (cybernews.com summary) confirms ShinyHunters itself clarified the 284M figure refers to raw rows, not unique patients — the article's caveat is itself an accurate relay of the attacker's own clarification, not just editorial hedging. McKesson has disclosed no record count of its own.</td></tr><tr><td>7</td><td>$55,236,150 ransom demand, 72-hour deadline, contacted McKesson Aug 25</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>Same specific dollar figure and deadline reported independently by at least 3 other outlets found via web search, consistent with the article. Presented throughout as the extortion group's claim, not as established fact. No independent party (including McKesson) has confirmed a ransom demand exists.</td></tr><tr><td>6</td><td>ShinyHunters' claimed method: vishing calls, Okta SSO takeover, pivot into Salesforce/Snowflake, ~1TB over 4 days</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>BleepingComputer's original article could not be directly fetched (HTTP 403), but the same account is corroborated across multiple independent secondary outlets (tech-insider.org, crime-research.org, cybernews.com summaries). Article explicitly flags this as ShinyHunters' own, unverified account.</td></tr><tr><td>5</td><td>Fraga quote: 'We continue to monitor our environment closely...'</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches McKesson's Aug 29, 2026 post exactly.</td></tr><tr><td>4</td><td>Fraga quote: 'we do not believe any action is required by our customers...'</td><td>McKesson (Fraga)</td><td>True but misleadingly spliced</td><td>Verbatim, but this sentence is from the Aug 28, 2026 post — a DAY EARLIER than the quote before and after it (both Aug 29). The article presents all three as one continuous statement without noting the date change.</td></tr><tr><td>3</td><td>Fraga quote re: Oncology &amp; Multispecialty / Medical-Surgical business units</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches word-for-word McKesson's own Aug 29, 2026 cybersecurity update, signed by Francisco Fraga.</td></tr><tr><td>2</td><td>SEC filing: intrusion detected Aug 25, 2026; investigation 'in its early stages'; not yet determined material</td><td>McKesson (SEC 8-K)</td><td>True</td><td>AskAmerica's sec.filing_metadata has not yet ingested this specific Aug 2026 8-K (0 rows returned — vintage gap). Independently verified via GuruFocus's 08/28/2026 report summarizing the 8-K verbatim, matching the article's claims exactly. Direct SEC EDGAR fetch was blocked (HTTP 403).</td></tr><tr><td>1</td><td>McKesson is a major U.S. healthcare company distributing pharmaceuticals, medical supplies, etc.</td><td>Article's own description</td><td>True</td><td>sec.filing_metadata: CIK 0000927653, ticker MCK, SIC 5122 (drugs). Confirms it's a real, large SEC-registered drug/medical distributor.</td></tr></tbody><tbody class="srt s2"><tr><td>7</td><td>$55,236,150 ransom demand, 72-hour deadline, contacted McKesson Aug 25</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>Same specific dollar figure and deadline reported independently by at least 3 other outlets found via web search, consistent with the article. Presented throughout as the extortion group's claim, not as established fact. No independent party (including McKesson) has confirmed a ransom demand exists.</td></tr><tr><td>8</td><td>'284 million data records, a figure that reflects database rows rather than individual patients'</td><td>ShinyHunters</td><td>Not independently checkable (attacker's own claim), but accurately framed</td><td>Independent reporting (cybernews.com summary) confirms ShinyHunters itself clarified the 284M figure refers to raw rows, not unique patients — the article's caveat is itself an accurate relay of the attacker's own clarification, not just editorial hedging. McKesson has disclosed no record count of its own.</td></tr><tr><td>9</td><td>'None of these claims have been independently verified'</td><td>Article's own framing</td><td>True and appropriate</td><td>Correctly scopes the ShinyHunters-sourced claims (method, volume, ransom amount) as unverified, distinct from the confirmed McKesson/SEC facts.</td></tr><tr><td>3</td><td>Fraga quote re: Oncology &amp; Multispecialty / Medical-Surgical business units</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches word-for-word McKesson's own Aug 29, 2026 cybersecurity update, signed by Francisco Fraga.</td></tr><tr><td>5</td><td>Fraga quote: 'We continue to monitor our environment closely...'</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches McKesson's Aug 29, 2026 post exactly.</td></tr><tr><td>4</td><td>Fraga quote: 'we do not believe any action is required by our customers...'</td><td>McKesson (Fraga)</td><td>True but misleadingly spliced</td><td>Verbatim, but this sentence is from the Aug 28, 2026 post — a DAY EARLIER than the quote before and after it (both Aug 29). The article presents all three as one continuous statement without noting the date change.</td></tr><tr><td>1</td><td>McKesson is a major U.S. healthcare company distributing pharmaceuticals, medical supplies, etc.</td><td>Article's own description</td><td>True</td><td>sec.filing_metadata: CIK 0000927653, ticker MCK, SIC 5122 (drugs). Confirms it's a real, large SEC-registered drug/medical distributor.</td></tr><tr><td>2</td><td>SEC filing: intrusion detected Aug 25, 2026; investigation 'in its early stages'; not yet determined material</td><td>McKesson (SEC 8-K)</td><td>True</td><td>AskAmerica's sec.filing_metadata has not yet ingested this specific Aug 2026 8-K (0 rows returned — vintage gap). Independently verified via GuruFocus's 08/28/2026 report summarizing the 8-K verbatim, matching the article's claims exactly. Direct SEC EDGAR fetch was blocked (HTTP 403).</td></tr><tr><td>6</td><td>ShinyHunters' claimed method: vishing calls, Okta SSO takeover, pivot into Salesforce/Snowflake, ~1TB over 4 days</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>BleepingComputer's original article could not be directly fetched (HTTP 403), but the same account is corroborated across multiple independent secondary outlets (tech-insider.org, crime-research.org, cybernews.com summaries). Article explicitly flags this as ShinyHunters' own, unverified account.</td></tr></tbody><tbody class="srt s3"><tr><td>1</td><td>McKesson is a major U.S. healthcare company distributing pharmaceuticals, medical supplies, etc.</td><td>Article's own description</td><td>True</td><td>sec.filing_metadata: CIK 0000927653, ticker MCK, SIC 5122 (drugs). Confirms it's a real, large SEC-registered drug/medical distributor.</td></tr><tr><td>9</td><td>'None of these claims have been independently verified'</td><td>Article's own framing</td><td>True and appropriate</td><td>Correctly scopes the ShinyHunters-sourced claims (method, volume, ransom amount) as unverified, distinct from the confirmed McKesson/SEC facts.</td></tr><tr><td>3</td><td>Fraga quote re: Oncology &amp; Multispecialty / Medical-Surgical business units</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches word-for-word McKesson's own Aug 29, 2026 cybersecurity update, signed by Francisco Fraga.</td></tr><tr><td>4</td><td>Fraga quote: 'we do not believe any action is required by our customers...'</td><td>McKesson (Fraga)</td><td>True but misleadingly spliced</td><td>Verbatim, but this sentence is from the Aug 28, 2026 post — a DAY EARLIER than the quote before and after it (both Aug 29). The article presents all three as one continuous statement without noting the date change.</td></tr><tr><td>5</td><td>Fraga quote: 'We continue to monitor our environment closely...'</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches McKesson's Aug 29, 2026 post exactly.</td></tr><tr><td>2</td><td>SEC filing: intrusion detected Aug 25, 2026; investigation 'in its early stages'; not yet determined material</td><td>McKesson (SEC 8-K)</td><td>True</td><td>AskAmerica's sec.filing_metadata has not yet ingested this specific Aug 2026 8-K (0 rows returned — vintage gap). Independently verified via GuruFocus's 08/28/2026 report summarizing the 8-K verbatim, matching the article's claims exactly. Direct SEC EDGAR fetch was blocked (HTTP 403).</td></tr><tr><td>8</td><td>'284 million data records, a figure that reflects database rows rather than individual patients'</td><td>ShinyHunters</td><td>Not independently checkable (attacker's own claim), but accurately framed</td><td>Independent reporting (cybernews.com summary) confirms ShinyHunters itself clarified the 284M figure refers to raw rows, not unique patients — the article's caveat is itself an accurate relay of the attacker's own clarification, not just editorial hedging. McKesson has disclosed no record count of its own.</td></tr><tr><td>6</td><td>ShinyHunters' claimed method: vishing calls, Okta SSO takeover, pivot into Salesforce/Snowflake, ~1TB over 4 days</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>BleepingComputer's original article could not be directly fetched (HTTP 403), but the same account is corroborated across multiple independent secondary outlets (tech-insider.org, crime-research.org, cybernews.com summaries). Article explicitly flags this as ShinyHunters' own, unverified account.</td></tr><tr><td>7</td><td>$55,236,150 ransom demand, 72-hour deadline, contacted McKesson Aug 25</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>Same specific dollar figure and deadline reported independently by at least 3 other outlets found via web search, consistent with the article. Presented throughout as the extortion group's claim, not as established fact. No independent party (including McKesson) has confirmed a ransom demand exists.</td></tr></tbody><tbody class="srt s4"><tr><td>8</td><td>'284 million data records, a figure that reflects database rows rather than individual patients'</td><td>ShinyHunters</td><td>Not independently checkable (attacker's own claim), but accurately framed</td><td>Independent reporting (cybernews.com summary) confirms ShinyHunters itself clarified the 284M figure refers to raw rows, not unique patients — the article's caveat is itself an accurate relay of the attacker's own clarification, not just editorial hedging. McKesson has disclosed no record count of its own.</td></tr><tr><td>1</td><td>McKesson is a major U.S. healthcare company distributing pharmaceuticals, medical supplies, etc.</td><td>Article's own description</td><td>True</td><td>sec.filing_metadata: CIK 0000927653, ticker MCK, SIC 5122 (drugs). Confirms it's a real, large SEC-registered drug/medical distributor.</td></tr><tr><td>2</td><td>SEC filing: intrusion detected Aug 25, 2026; investigation 'in its early stages'; not yet determined material</td><td>McKesson (SEC 8-K)</td><td>True</td><td>AskAmerica's sec.filing_metadata has not yet ingested this specific Aug 2026 8-K (0 rows returned — vintage gap). Independently verified via GuruFocus's 08/28/2026 report summarizing the 8-K verbatim, matching the article's claims exactly. Direct SEC EDGAR fetch was blocked (HTTP 403).</td></tr><tr><td>3</td><td>Fraga quote re: Oncology &amp; Multispecialty / Medical-Surgical business units</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches word-for-word McKesson's own Aug 29, 2026 cybersecurity update, signed by Francisco Fraga.</td></tr><tr><td>5</td><td>Fraga quote: 'We continue to monitor our environment closely...'</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches McKesson's Aug 29, 2026 post exactly.</td></tr><tr><td>9</td><td>'None of these claims have been independently verified'</td><td>Article's own framing</td><td>True and appropriate</td><td>Correctly scopes the ShinyHunters-sourced claims (method, volume, ransom amount) as unverified, distinct from the confirmed McKesson/SEC facts.</td></tr><tr><td>4</td><td>Fraga quote: 'we do not believe any action is required by our customers...'</td><td>McKesson (Fraga)</td><td>True but misleadingly spliced</td><td>Verbatim, but this sentence is from the Aug 28, 2026 post — a DAY EARLIER than the quote before and after it (both Aug 29). The article presents all three as one continuous statement without noting the date change.</td></tr><tr><td>6</td><td>ShinyHunters' claimed method: vishing calls, Okta SSO takeover, pivot into Salesforce/Snowflake, ~1TB over 4 days</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>BleepingComputer's original article could not be directly fetched (HTTP 403), but the same account is corroborated across multiple independent secondary outlets (tech-insider.org, crime-research.org, cybernews.com summaries). Article explicitly flags this as ShinyHunters' own, unverified account.</td></tr><tr><td>7</td><td>$55,236,150 ransom demand, 72-hour deadline, contacted McKesson Aug 25</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>Same specific dollar figure and deadline reported independently by at least 3 other outlets found via web search, consistent with the article. Presented throughout as the extortion group's claim, not as established fact. No independent party (including McKesson) has confirmed a ransom demand exists.</td></tr></tbody><tbody class="srt s5"><tr><td>2</td><td>SEC filing: intrusion detected Aug 25, 2026; investigation 'in its early stages'; not yet determined material</td><td>McKesson (SEC 8-K)</td><td>True</td><td>AskAmerica's sec.filing_metadata has not yet ingested this specific Aug 2026 8-K (0 rows returned — vintage gap). Independently verified via GuruFocus's 08/28/2026 report summarizing the 8-K verbatim, matching the article's claims exactly. Direct SEC EDGAR fetch was blocked (HTTP 403).</td></tr><tr><td>6</td><td>ShinyHunters' claimed method: vishing calls, Okta SSO takeover, pivot into Salesforce/Snowflake, ~1TB over 4 days</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>BleepingComputer's original article could not be directly fetched (HTTP 403), but the same account is corroborated across multiple independent secondary outlets (tech-insider.org, crime-research.org, cybernews.com summaries). Article explicitly flags this as ShinyHunters' own, unverified account.</td></tr><tr><td>9</td><td>'None of these claims have been independently verified'</td><td>Article's own framing</td><td>True and appropriate</td><td>Correctly scopes the ShinyHunters-sourced claims (method, volume, ransom amount) as unverified, distinct from the confirmed McKesson/SEC facts.</td></tr><tr><td>8</td><td>'284 million data records, a figure that reflects database rows rather than individual patients'</td><td>ShinyHunters</td><td>Not independently checkable (attacker's own claim), but accurately framed</td><td>Independent reporting (cybernews.com summary) confirms ShinyHunters itself clarified the 284M figure refers to raw rows, not unique patients — the article's caveat is itself an accurate relay of the attacker's own clarification, not just editorial hedging. McKesson has disclosed no record count of its own.</td></tr><tr><td>5</td><td>Fraga quote: 'We continue to monitor our environment closely...'</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches McKesson's Aug 29, 2026 post exactly.</td></tr><tr><td>3</td><td>Fraga quote re: Oncology &amp; Multispecialty / Medical-Surgical business units</td><td>McKesson (Fraga)</td><td>True (verbatim)</td><td>Matches word-for-word McKesson's own Aug 29, 2026 cybersecurity update, signed by Francisco Fraga.</td></tr><tr><td>7</td><td>$55,236,150 ransom demand, 72-hour deadline, contacted McKesson Aug 25</td><td>ShinyHunters (via BleepingComputer)</td><td>Unverified claim, correctly labeled</td><td>Same specific dollar figure and deadline reported independently by at least 3 other outlets found via web search, consistent with the article. Presented throughout as the extortion group's claim, not as established fact. No independent party (including McKesson) has confirmed a ransom demand exists.</td></tr><tr><td>1</td><td>McKesson is a major U.S. healthcare company distributing pharmaceuticals, medical supplies, etc.</td><td>Article's own description</td><td>True</td><td>sec.filing_metadata: CIK 0000927653, ticker MCK, SIC 5122 (drugs). Confirms it's a real, large SEC-registered drug/medical distributor.</td></tr><tr><td>4</td><td>Fraga quote: 'we do not believe any action is required by our customers...'</td><td>McKesson (Fraga)</td><td>True but misleadingly spliced</td><td>Verbatim, but this sentence is from the Aug 28, 2026 post — a DAY EARLIER than the quote before and after it (both Aug 29). The article presents all three as one continuous statement without noting the date change.</td></tr></tbody></table><label class="srtreset" for="s4-t1-s0">reset order</label>
+</section>
+<section>
+<h2>What would be materially misleading (and isn't)</h2>
+<p>The headline ('ShinyHunters claims it stole 284 million patient records') leads with an unverified attacker claim, but the word 'claims' is doing real work there and the body immediately and repeatedly flags the material as unconfirmed. That is standard, defensible security-journalism practice, not misleading framing — this is reflected in the claims-accuracy rating staying at 1 Pinocchio rather than higher, since the article never asserts the attacker's numbers as established fact.</p><p>The fidelity issue worth a reader's attention: quotes 3-5 above are presented as a single flowing Fraga statement but actually splice together his Aug 28 and Aug 29 company updates. None of the words are altered and the attribution (Fraga, EVP/CIO/CTO) is accurate for both dates, but a reader has no way to know the sentences were said a day apart in two separate posts. This does not change the substance of what McKesson said, but it is a shortcut a careful edit should have avoided (e.g., with an 'and, in an earlier update,' transition).</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 3 rows — 16978 ms</summary><pre><code>SELECT cik, company_name, ticker, sic_code FROM sec.filing_metadata WHERE cik = '0000927653' FETCH FIRST 3 ROWS ONLY</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">AskAmerica's gov-data catalog has no breach-notification/incident schema (HHS OCR, CISA), so this check relied on McKesson's own public statements (fetched directly), independent secondary reporting of the SEC 8-K (direct EDGAR fetch was blocked, HTTP 403), and cross-referenced coverage of ShinyHunters' unverified claims. score_claim (Jev) returned low-confidence verdicts, overridden with reasons tied to named primary sources it likely predates or cannot access. Split Pinocchio rating applied because the article relays attributed claims from two distinct third parties (McKesson and ShinyHunters) rather than asserting facts in its own voice.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-28</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

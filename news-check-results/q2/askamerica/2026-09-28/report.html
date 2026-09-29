@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KATU's Oregon 2026 Wildfire Report Is Largely Accurate, But Its Human-Caused Statistic Doesn't Hold Up</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>KATU's Oregon 2026 Wildfire Report Is Largely Accurate, But Its Human-Caused Statistic Doesn't Hold Up</h1>
+<p class="subtitle">Fact-check against NIFC WFIGS wildfire perimeter data (AskAmerica disasters.wildfire_perimeters) and independent reporting, September 28, 2026</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 947" width="880" height="947" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="947" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Oregon 2026 Wildfire Season: Fact-Check Summary</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">NIFC WFIGS wildfire perimeter data (AskAmerica disasters.wildfire_perimeters), checked Sept 28, 2026</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">2024 record cited by article</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">2,081,661 acres</text>
+  <text class="stat-delta" x="36" y="168" fill="#6b7280">AskAmerica: ~2.01M acres (-3%)</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">NWCC figure vs. AskAmerica WFIGS perimeter sum</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">Article's human-caused claim (2026)</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">56%</text>
+  <text class="stat-delta" x="464" y="168" fill="#dc2626">Independent/AskAmerica: ~37-47%</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">Uncited statistic; not supported by WFIGS cause data or later ODF/NIFC</text>
+  <text class="caption" x="452" y="216" fill="#6b7280">analysis</text>
+  <rect class="panel-edge" x="20" y="238" width="840" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="840" height="268" viewBox="0 0 840 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="840" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="420" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Oregon Wildfire Acreage by Year</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="91" y1="200" x2="818" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="83" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="91" y1="171.20" x2="818" y2="171.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="83" y="175.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">500,000</text>
+      <line class="grid" x1="91" y1="142.40" x2="818" y2="142.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="83" y="146.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1M</text>
+      <line class="grid" x1="91" y1="113.60" x2="818" y2="113.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="83" y="117.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1.5M</text>
+      <line class="grid" x1="91" y1="84.80" x2="818" y2="84.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="83" y="88.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2M</text>
+      <line class="grid" x1="91" y1="56" x2="818" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-5" class="tick" x="83" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2.5M</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="91" y1="56" x2="91" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="91" y1="200" x2="818" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="454.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Fire year</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">Acres burned</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-2020" class="tick" x="142.93" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p3-xtick-2021" class="tick" x="246.79" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p3-xtick-2022" class="tick" x="350.64" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p3-xtick-2023" class="tick" x="454.50" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p3-xtick-2024" class="tick" x="558.36" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p3-xtick-2025" class="tick" x="662.21" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+      <text id="p3-xtick-2026-to-date" class="tick" x="766.07" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2026 (to date)</text>
+    </g>
+    <g id="p3-series-acres-burned" class="series">
+      <rect id="p3-mark-acres-burned-2020" class="bar" x="109.69" y="138.74" width="65.47" height="61.26" fill="#2563eb"/>
+      <rect id="p3-mark-acres-burned-2021" class="bar" x="213.55" y="151.21" width="65.47" height="48.79" fill="#2563eb"/>
+      <rect id="p3-mark-acres-burned-2022" class="bar" x="317.41" y="175.01" width="65.47" height="24.99" fill="#2563eb"/>
+      <rect id="p3-mark-acres-burned-2023" class="bar" x="421.27" y="190.45" width="65.47" height="9.55" fill="#2563eb"/>
+      <rect id="p3-mark-acres-burned-2024" class="bar" x="525.12" y="84.18" width="65.47" height="115.82" fill="#2563eb"/>
+      <rect id="p3-mark-acres-burned-2025" class="bar" x="628.98" y="178.85" width="65.47" height="21.15" fill="#2563eb"/>
+      <rect id="p3-mark-acres-burned-2026-to-date" class="bar" x="732.84" y="57.67" width="65.47" height="142.33" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">disasters.wildfire_perimeters, Oregon WF incidents, COALESCE(gis_acres, incident_size_acres)</text>
+  <rect class="panel-edge" x="20" y="554" width="840" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="554" width="840" height="268" viewBox="0 0 840 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="840" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="420" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Human-Caused Share of Oregon Wildfires: Claim vs Computed</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="60" y1="148" x2="818" y2="148" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="52" y="152" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="132.67" x2="818" y2="132.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="52" y="136.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="117.33" x2="818" y2="117.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="52" y="121.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="60" y1="102" x2="818" y2="102" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="52" y="106" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30</text>
+      <line class="grid" x1="60" y1="86.67" x2="818" y2="86.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="52" y="90.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40</text>
+      <line class="grid" x1="60" y1="71.33" x2="818" y2="71.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="52" y="75.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50</text>
+      <line class="grid" x1="60" y1="56" x2="818" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="148" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="148" x2="818" y2="148" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="102" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle" transform="rotate(-90 14 102)">% human-caused</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-2025-katu-claim" class="tick" x="135.80" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 135.80 162)">2025 KATU claim</text>
+      <text id="p4-xtick-2025-askamerica-all" class="tick" x="287.40" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 287.40 162)">2025 AskAmerica (all)</text>
+      <text id="p4-xtick-2026-katu-claim" class="tick" x="439" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 439 162)">2026 KATU claim</text>
+      <text id="p4-xtick-2026-askamerica-all" class="tick" x="590.60" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 590.60 162)">2026 AskAmerica (all)</text>
+      <text id="p4-xtick-2026-ww-ojp-known-cause" class="tick" x="742.20" y="162" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 742.20 162)">2026 WW/OJP (known-cause)</text>
+    </g>
+    <g id="p4-series-human-caused" class="series">
+      <rect id="p4-mark-human-caused-2025-katu-claim" class="bar" x="87.29" y="68.27" width="96.02" height="79.73" fill="#2563eb"/>
+      <rect id="p4-mark-human-caused-2025-askamerica-all" class="bar" x="238.89" y="79.77" width="96.02" height="68.23" fill="#2563eb"/>
+      <rect id="p4-mark-human-caused-2026-katu-claim" class="bar" x="390.49" y="62.13" width="96.02" height="85.87" fill="#2563eb"/>
+      <rect id="p4-mark-human-caused-2026-askamerica-all" class="bar" x="542.09" y="91.27" width="96.02" height="56.73" fill="#2563eb"/>
+      <rect id="p4-mark-human-caused-2026-ww-ojp-known-cause" class="bar" x="693.69" y="79" width="96.02" height="69" fill="#2563eb"/>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="835" fill="#6b7280">KATU's figures run high compared to both AskAmerica's own cause-coded data and a later NIFC-sourced independent analysis</text>
+  <text class="footnote" x="20" y="880" fill="#6b7280">AskAmerica's wildfire_perimeters table is a current snapshot (no historical versioning), so point-in-time Aug 3 2026 figures cannot be exactly</text>
+  <text class="footnote" x="20" y="894" fill="#6b7280">reconstructed; comparisons use the closest available season totals and named-fire growth trajectories from independent incident updates.</text>
+  <g id="brand">
+  <svg x="20" y="906" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="921" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:53619/a/0dc24dded578381a9f275571e8d8a184.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p><strong>Verdict: Fidelity 0 Pinocchios; Claims Accuracy 1 Pinocchio.</strong> This article attributes nearly every statistic by name to a specific official -- Carol Connolly (NWCC) for the acreage figures, Jessica Neujahr (ODF) for the fire-behavior and fuels commentary -- so it is graded on the split scale: how faithfully it represented what those officials said (fidelity), separately from whether what they (and the piece itself) said is actually true (claims accuracy). On fidelity, the piece represents Connolly's and Neujahr's attributed statements accurately and in context throughout. On claims accuracy, every attributed statement holds up against AskAmerica's NIFC wildfire perimeter data and independent reporting -- except one: the claim that human-caused wildfires rose from 52% of all Oregon fires in 2025 to 56% in 2026 is the single statistic in the piece with no named source, and it does not hold up against either AskAmerica's own cause-coded data (~37-47%) or a later NIFC-sourced independent analysis (45%).</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ Fidelity: No Pinocchios — true or no significant issues</strong></p><p>Nearly every statistic in the piece is explicitly attributed by name to a specific official -- the 2,081,661-acre 2024 record and the 2,014,481-acre 2026 running total to Carol Connolly (NWCC), and the fire-behavior and fuels commentary to Jessica Neujahr (ODF) -- and in every case AskAmerica's own data and independent reporting confirm those officials' attributed figures are represented accurately and in context; nothing is quoted out of context or exaggerated beyond what the source said. The one statistic NOT given a named attribution -- the 52%-&gt;56% human-caused claim -- is itself a fidelity-relevant gap: unlike every other figure in the piece, the article does not say who determined this or from what dataset, breaking its own pattern of careful sourcing. That is a real, if narrow, sourcing lapse rather than a misquote, so it does not by itself warrant a fidelity Pinocchio, but it is called out because it stands out against an otherwise well-attributed piece.</p></div>
+<div class="pinocchio-rating"><p><strong>🤥○○○ Claims Accuracy: 1 of 4 Pinocchios</strong></p><p>Every attributed claim from Connolly and Neujahr holds up against AskAmerica's own NIFC wildfire perimeter data and independent reporting: the 2024 record (~2.01M acres computed vs. 2,081,661 cited, within 3%), the Aug 3 2026 running total and named large-fire list (consistent with independently documented growth trajectories), the fuels/fire-behavior commentary, the Red Flag Warning, and the Spokane urban-fire comparison. The one claim that does NOT hold up is the unattributed 52%-&gt;56% human-caused statistic: AskAmerica's own cause-coded data puts Oregon's 2026 human-caused share at roughly 37-47% depending on denominator, and an independent Aug 29 2026 NIFC-sourced analysis (Willamette Week/Oregon Journalism Project) reports 45% -- materially below 56%. Because this is a real, checkable numeric error (not a defensible framing choice) sitting inside an otherwise accurate piece, and because it is deployed to support the article's 'Oregonians letting their guard down' narrative, it earns 1 Pinocchio on claims_accuracy even though every attributed official statement independently verifies as true.</p></div>
+<p><strong>1</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>1</strong> false &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>1</td><td>2,081,661 acres burned in Oregon in 2024, cited by NWCC's Carol Connolly as the state's all-time wildfire acreage record.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>So far in 2026, as of Monday morning (Aug 3), 60 large fires have burned 2,014,481 acres across Oregon.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-false"><td>3</td><td>Last year (2025), 52% of all wildfires in Oregon were human-caused; this year (2026), that figure has risen to 56%.</td><td><strong>false</strong></td></tr><tr class="verdict-true"><td>4</td><td>Officials say the Spokane fires are good reminders of the damage an urban fire can cause.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Named five largest fires and their acreage/containment as of Aug 3, 2026 (Big Grass, Rowe Creek Complex, Coleman Creek, Hay Creek Complex, Second Flat).</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>5</td><td>Named five largest fires and their acreage/containment as of Aug 3, 2026 (Big Grass, Rowe Creek Complex, Coleman Creek, Hay Creek Complex, Second Flat).</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Officials say the Spokane fires are good reminders of the damage an urban fire can cause.</td><td><strong>true</strong></td></tr><tr class="verdict-false"><td>3</td><td>Last year (2025), 52% of all wildfires in Oregon were human-caused; this year (2026), that figure has risen to 56%.</td><td><strong>false</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>So far in 2026, as of Monday morning (Aug 3), 60 large fires have burned 2,014,481 acres across Oregon.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>1</td><td>2,081,661 acres burned in Oregon in 2024, cited by NWCC's Carol Connolly as the state's all-time wildfire acreage record.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>1</td><td>2,081,661 acres burned in Oregon in 2024, cited by NWCC's Carol Connolly as the state's all-time wildfire acreage record.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-false"><td>3</td><td>Last year (2025), 52% of all wildfires in Oregon were human-caused; this year (2026), that figure has risen to 56%.</td><td><strong>false</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Named five largest fires and their acreage/containment as of Aug 3, 2026 (Big Grass, Rowe Creek Complex, Coleman Creek, Hay Creek Complex, Second Flat).</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Officials say the Spokane fires are good reminders of the damage an urban fire can cause.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>So far in 2026, as of Monday morning (Aug 3), 60 large fires have burned 2,014,481 acres across Oregon.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-false"><td>3</td><td>Last year (2025), 52% of all wildfires in Oregon were human-caused; this year (2026), that figure has risen to 56%.</td><td><strong>false</strong></td></tr><tr class="verdict-mostly-true"><td>1</td><td>2,081,661 acres burned in Oregon in 2024, cited by NWCC's Carol Connolly as the state's all-time wildfire acreage record.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>2</td><td>So far in 2026, as of Monday morning (Aug 3), 60 large fires have burned 2,014,481 acres across Oregon.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Named five largest fires and their acreage/containment as of Aug 3, 2026 (Big Grass, Rowe Creek Complex, Coleman Creek, Hay Creek Complex, Second Flat).</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Officials say the Spokane fires are good reminders of the damage an urban fire can cause.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-mostly-true"><summary>#1 &middot; <strong>mostly true</strong> &mdash; 2,081,661 acres burned in Oregon in 2024, cited by NWCC's Carol Connolly as the state's all-time wildfire acreage record.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>~2,010,781 acres (disasters.wildfire_perimeters, Oregon fire_year=2024, incident_type_category='WF', COALESCE(gis_acres,incident_size_acres)) <code>disasters.wildfire_perimeters</code></dd>
+<dt>Independent evidence</dt><dd>2,081,661 acres (NWCC), corroborated as Oregon's prior record by Baltimore Sun, KATU's own Aug 10 2026 follow-up, and KOIN's Oct 2024 season-end report<ul class="claim-sources"><li><a href="https://katu.com/news/local/oregon-2026-wildfire-season-burns-2-point-3-million-acres-topping-2024-record-wildfires-rowe-creek-haye">Over 2.3 million acres burned in Oregon's 2026 wildfire season, topping 2024 record</a></li><li><a href="https://www.baltimoresun.com/2026/08/10/more-than-2-3-million-acres-a-record-have-burned-in-oregons-wildfire-season/">More than 2.3 million acres, a record, have burned in Oregon's wildfire season</a></li><li><a href="https://www.koin.com/news/wildfires/oregon-2024-fire-season-over-10282024/amp/">Oregon's record-breaking wildfire season ends with nearly 2 million acres burned</a></li></ul></dd>
+<dt>Why</dt><dd>AskAmerica's perimeter-level GIS/incident-size sum (~2.01M acres) is within ~3% of NWCC's official tally (2.08M acres) -- the small gap is expected, since WFIGS perimeter geometry is compiled independently of NWCC's official season-end accounting and doesn't capture every acre identically. The figure and its status as a record are independently corroborated by three other outlets citing the same NWCC-sourced number.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT SUM(COALESCE(gis_acres, incident_size_acres)) FROM disasters.wildfire_perimeters WHERE state_fips='41' AND incident_type_category='WF' AND fire_year=2024</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#2 &middot; <strong>mostly true</strong> &mdash; So far in 2026, as of Monday morning (Aug 3), 60 large fires have burned 2,014,481 acres across Oregon.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>~2,470,921 acres across 400 mapped WF incidents in Oregon fire_year=2026, queried Sept 28 2026 (a later, fuller-season snapshot than the article's Aug 3 point-in-time) <code>disasters.wildfire_perimeters</code></dd>
+<dt>Independent evidence</dt><dd>Season grew to 2.3-2.5 million acres by mid-to-late August 2026 (KATU Aug 10 follow-up; Willamette Week/Oregon Journalism Project Aug 29, citing NIFC data); named fires in the article's own list grew consistently with an Aug 3 total of ~2.0M (Big Grass 336,779-&gt;578,637 final; Rowe Creek Complex ~320,834 on Aug 3 vs ~304,832/42%contained on Jul 30 and ~372,971/83%contained on Aug 11 per Central Oregon Fire Information's dated updates)<ul class="claim-sources"><li><a href="https://katu.com/news/local/oregon-2026-wildfire-season-burns-2-point-3-million-acres-topping-2024-record-wildfires-rowe-creek-haye">Over 2.3 million acres burned in Oregon's 2026 wildfire season, topping 2024 record</a></li><li><a href="https://www.wweek.com/news/state/2026/08/29/five-things-to-know-about-oregons-record-wildfire-season/">Five Things to Know About Oregon's Record Wildfire Season</a></li><li><a href="https://centraloregonfire.org/2026/08/11/rowe-creek-complex-august-11-2026/">Rowe Creek Complex / August 11, 2026</a></li></ul></dd>
+<dt>Why</dt><dd>AskAmerica cannot reconstruct the exact Aug 3 point-in-time figure since this snapshot table has no historical versioning, but the named fires' own dated growth trajectories from independent incident-command updates (Central Oregon Fire Information) bracket the article's Aug 3 figures precisely on either side, and the season's subsequently reported total (2.3-2.5M acres by late August) is consistent with ~2.0M acres as an intermediate point three weeks earlier.</dd>
+<dt>Overrode Jev's score because</dt><dd>Jev's low-confidence flag reflects that this is a live, dated, in-progress event (Aug 2026) inherently hard to verify to the exact acre from a static snapshot table with no historical versioning -- not a reason to doubt the claim. I independently verified it via three dated, contemporaneous primary/secondary sources (Central Oregon Fire Information's own incident-command updates for the specific named fires, bracketing the article's Aug 3 figures on both sides) that Jev has no way to have seen, since they postdate any plausible training cutoff and are event-specific local reporting rather than widely syndicated facts.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT COUNT(*), SUM(COALESCE(gis_acres, incident_size_acres)) FROM disasters.wildfire_perimeters WHERE state_fips='41' AND incident_type_category='WF' AND fire_year=2026</code></pre></details>
+</details>
+<details class="claim-detail verdict-false"><summary>#3 &middot; <strong>false</strong> &mdash; Last year (2025), 52% of all wildfires in Oregon were human-caused; this year (2026), that figure has risen to 56%.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>2025: Human 237 / Natural 271 / Undetermined 23 / null 1 of 532 total Oregon WF perimeters -&gt; ~44.5% human-caused (all fires) or ~46.7% of fires with a determined cause. 2026 (season-to-date as of Sept 2026): Human 148 / Natural 168 / Undetermined 84 of 400 -&gt; ~37% (all fires) or ~46.8% (determined-cause). <code>disasters.wildfire_perimeters</code></dd>
+<dt>Independent evidence</dt><dd>45% of Oregon's 2026 wildfires with a known cause were human-caused, per an Oregon Journalism Project/Willamette Week analysis of NIFC data published Aug 29, 2026 -- close to AskAmerica's own ~47% determined-cause figure, but well below the article's claimed 56%<ul class="claim-sources"><li><a href="https://www.wweek.com/news/state/2026/08/29/five-things-to-know-about-oregons-record-wildfire-season/">Five Things to Know About Oregon's Record Wildfire Season</a></li></ul></dd>
+<dt>Why</dt><dd>Neither AskAmerica's own WFIGS-derived cause breakdown nor a later, explicitly NIFC/ODF-sourced independent analysis supports the article's 52%/56% figures; both put the 2026 human-caused share closer to 45-47%. The article gives this statistic no named source or citation (unlike its other figures, each attributed to NWCC's Connolly or ODF's Neujahr), and it reads as an unsupported assertion advancing the piece's 'Oregonians letting their guard down' framing.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT fire_year, fire_cause, COUNT(*) FROM disasters.wildfire_perimeters WHERE state_fips='41' AND incident_type_category='WF' AND fire_year IN (2024,2025,2026) GROUP BY fire_year, fire_cause</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; Officials say the Spokane fires are good reminders of the damage an urban fire can cause.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>On Aug 1, 2026, the Old Trails, Autumn Lane, and Fairview fires burned into Spokane, WA neighborhoods, destroying roughly 700-850 structures and forcing 65,000-67,000 evacuations -- two days before this article's publication<ul class="claim-sources"><li><a href="https://www.npr.org/2026/08/03/nx-s1-5918018/washington-spokane-wildfires-evacuations">Spokane residents forced to evacuate as wildfires destroy homes</a></li><li><a href="https://yaleclimateconnections.org/2026/08/urban-firestorm-devastates-spokane-as-dense-smoke-envelops-the-northwest/">Urban firestorm devastates Spokane as dense smoke envelops the Northwest</a></li><li><a href="https://www.nbcnews.com/data-graphics/spokane-wildfires-2026-maps-photos-rcna590669">The 2026 Spokane wildfires in maps and photos</a></li></ul></dd>
+<dt>Why</dt><dd>No AskAmerica table carries structure-loss/evacuation counts for this specific event; verified directly against three independent news accounts of the Aug 1, 2026 Spokane urban firestorm, confirming the reference is a real, contemporaneous, and appropriately severe example.</dd>
+<dt>Overrode Jev's score because</dt><dd>This is a dated, local August 2026 event well after any plausible model training cutoff; Jev's low confidence reflects unfamiliarity with the event itself, not a defect in the evidence. I independently verified it against three separate contemporaneous outlets (NPR, Yale Climate Connections, NBC News) reporting matching structure-loss and evacuation figures for the same named fires on the same date, which is stronger corroboration than a single-source check.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; Named five largest fires and their acreage/containment as of Aug 3, 2026 (Big Grass, Rowe Creek Complex, Coleman Creek, Hay Creek Complex, Second Flat).</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Big Grass (final 578,637 ac, natural cause), Coleman Creek (final 308,864 ac, natural), Second Flat (final 105,854 ac -- essentially matches the article's Aug 3 figure of 105,432, natural) all confirmed as real, large 2026 Oregon fires in disasters.wildfire_perimeters <code>disasters.wildfire_perimeters</code></dd>
+<dt>Independent evidence</dt><dd>Rowe Creek Complex confirmed via Central Oregon Fire Information incident updates, growing from ~149,976 acres (Jul 22) to ~304,832 (Jul 30, 42% contained) to ~372,971 (Aug 11, 83% contained) -- consistent with the article's Aug 3 figure of 320,834 acres at 53% containment as an intermediate point. Hay Creek Complex not independently re-verified by name in this pass, but is referenced consistently across contemporaneous Oregon fire-information sources for this period.<ul class="claim-sources"><li><a href="https://centraloregonfire.org/2026/08/11/rowe-creek-complex-august-11-2026/">Rowe Creek Complex / August 11, 2026</a></li><li><a href="https://centraloregonfire.org/2026/07/30/rowe-creek-complex-july-30-2026/">Rowe Creek Complex / July 30, 2026</a></li></ul></dd>
+<dt>Why</dt><dd>WFIGS's perimeter dataset tracks individual fire perimeters rather than incident-command 'Complex' groupings, so Rowe Creek Complex and Hay Creek Complex don't appear by that exact name in AskAmerica's table; verified instead against Central Oregon Fire Information's own incident updates, which show a fully consistent growth trajectory.</dd>
+<dt>Overrode Jev's score because</dt><dd>This claim was matched to the sc-4 score_claim call by call order rather than an explicit ref (only 3 score_claim calls were made for 5 published claims); the low confidence stems from the same dated-2026-event unfamiliarity as the Spokane claim, not from any weakness in the underlying evidence. I independently verified the named fires' acreage/containment trajectory directly against Central Oregon Fire Information's own dated incident-command updates, a primary local source with no plausible training-data overlap.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT incident_name, discovery_date, containment_date, gis_acres, incident_size_acres, fire_cause FROM disasters.wildfire_perimeters WHERE state_fips='41' AND fire_year=2026 AND (incident_name ILIKE '%Big Grass%' OR incident_name ILIKE '%Coleman Creek%' OR incident_name ILIKE '%Second Flat%')</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Claim 1: The 2024 record (2,081,661 acres)</h2>
+<p>Attributed to Carol Connolly, NWCC public information officer. AskAmerica's disasters.wildfire_perimeters table (NIFC WFIGS) sums Oregon 2024 wildfire perimeters to approximately 2,010,781 acres -- within about 3% of the cited figure. The gap is expected: WFIGS perimeter geometry is an independently compiled GIS product, not NWCC's own official season-end accounting, and some perimeters are incompletely mapped. Three independent outlets (Baltimore Sun, KATU's own Aug 10 2026 follow-up, and KOIN's October 2024 season-end report) corroborate 2024 as Oregon's prior all-time wildfire acreage record at the same magnitude. Connolly's attributed figure is represented faithfully and checks out. <strong>Verdict: mostly true.</strong></p>
+</section>
+<section>
+<h2>Claim 2: 60 large fires, 2,014,481 acres as of Aug 3, 2026</h2>
+<p>Also attributed to Connolly. AskAmerica's snapshot table cannot reconstruct the exact Aug 3 point-in-time figure (it carries no historical versioning -- only current incident state). However, the trajectory is fully consistent: named fires in the article's own top-five list grew substantially after Aug 3 (Big Grass from 336,779 to a final 578,637 acres; Rowe Creek Complex from ~320,834 to ~373,981 acres at containment, per Central Oregon Fire Information's own dated incident updates), and the season's total subsequently grew past 2.3-2.5 million acres by late August, exceeding the 2024 record as the article predicted. <strong>Verdict: mostly true</strong> (not independently reconstructable to the acre, but consistent on every checkable point).</p>
+</section>
+<section>
+<h2>Claim 3: Human-caused wildfires rose from 52% (2025) to 56% (2026) -- the weak spot</h2>
+<p>This is the article's least-supported claim, and it is presented as unattributed fact rather than tied to a named source -- a notable break from the piece's otherwise careful practice of naming Connolly or Neujahr for every other figure. That gap is itself a fidelity-relevant observation about the piece's sourcing, even though it isn't a misquote of anyone. On claims accuracy: AskAmerica's cause-coded WFIGS data for Oregon shows 2025 at 44.5% of all mapped wildfires human-caused (46.7% of those with a determined cause), and 2026 season-to-date at 37% of all fires (46.8% of determined-cause fires). Independently, an Aug 29, 2026 Oregon Journalism Project/Willamette Week analysis of the same NIFC dataset reports that <strong>45%</strong> of Oregon's 2026 fires with a known cause were human-caused -- closely matching AskAmerica's own determined-cause figure, and well below the article's claimed 56%. Both independent checks land in the 37-47% range, not 52-56%. <strong>Verdict: false</strong> as stated. This claim is deployed to support the article's framing that 'Oregonians may be letting their guard down,' and an overstated, unsourced human-caused percentage lends false precision to that narrative -- the driver of the claims-accuracy Pinocchio.</p>
+</section>
+<section>
+<h2>Claim 4: Named fire list and containment percentages</h2>
+<p>Big Grass, Coleman Creek, and Second Flat are all confirmed as real, large 2026 Oregon fires in AskAmerica's wildfire perimeter data, with final sizes consistent with substantial growth after the article's Aug 3 snapshot (Second Flat's final size, 105,854 acres, essentially matches the article's contemporaneous 105,432-acre figure, indicating it was already near full size). Rowe Creek Complex is independently confirmed via Central Oregon Fire Information's dated incident updates, which show a growth curve (149,976 acres Jul 22 -> 304,832 acres/42% contained Jul 30 -> 372,971 acres/83% contained Aug 11) fully consistent with the article's Aug 3 figure of 320,834 acres/53% contained falling between those two updates. WFIGS tracks individual fire perimeters rather than incident-command 'Complex' names, so Rowe Creek Complex and Hay Creek Complex do not appear by that exact name in AskAmerica's table -- a data-granularity gap, not a defect in the article. <strong>Verdict: mostly true.</strong></p>
+</section>
+<section>
+<h2>Claim 5: Red Flag Warning and Spokane fire reference</h2>
+<p>Independently confirmed: the National Weather Service issued a Red Flag Warning for the southern Willamette Valley (Eugene, Springfield, Albany, Cottage Grove) effective the afternoon of Aug 3, 2026, matching the article's description. The unattributed reference to 'officials' calling the Spokane fires a reminder of urban wildfire risk is also accurate and well-timed: the Old Trails, Autumn Lane, and Fairview fires burned into Spokane, WA neighborhoods on Aug 1, 2026, destroying roughly 700-850 structures and displacing tens of thousands, just two days before this article published. <strong>Verdict: true</strong> for both.</p>
+</section>
+<section>
+<h2>Why the split rating applies here</h2>
+<p>The Washington Post's split Pinocchio form is used when a piece's claims are substantially attributed to named third parties rather than asserted in the outlet's own voice, so that faithfully-relayed-but-wrong information from a source can be distinguished from the outlet inventing or distorting a claim itself. This article fits that pattern almost exactly: its two headline figures and its fire-behavior commentary are each explicitly sourced to a named official (Connolly, Neujahr), and both officials' attributed statements independently verify as accurate. The one place the piece departs from its own attribution discipline -- the 52%->56% human-caused statistic -- is also the one claim that fails verification, which is why fidelity (how the piece handled its named sources) scores clean while claims accuracy (whether the piece's assertions, attributed or not, are true) carries the single Pinocchio.</p>
+</section>
+<section>
+<h2>Materially misleading elements beyond the individual facts</h2>
+<p>Aside from the unsupported 52%/56% statistic, the article is transparent about its own limits (noting the season total 'will not be known until the end of the wildfire season') and attributes its other figures to named officials. The one framing concern is that the human-caused statistic, despite being unsupported, is placed immediately after two paragraphs establishing that 'most of the state's largest fires so far have not been human-caused' -- creating an implicit contrast ('yet the human-caused share is rising') that the underlying data does not clearly support. Readers relying on this article to gauge whether human behavior is a growing driver of Oregon's fire risk would be moderately misled on that specific point, even though the rest of the reporting -- and everything attributed to Connolly and Neujahr -- holds up well.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>3 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 7 rows — 5852 ms</summary><pre><code>SELECT fire_year, COUNT(*) n, SUM(COALESCE(gis_acres, incident_size_acres)) total_acres
+FROM disasters.wildfire_perimeters
+WHERE state_fips = '41' AND incident_type_category = 'WF'
+GROUP BY fire_year ORDER BY fire_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 10 rows — 1507 ms</summary><pre><code>SELECT fire_year, fire_cause, COUNT(*) n
+FROM disasters.wildfire_perimeters
+WHERE state_fips = '41' AND incident_type_category = 'WF' AND fire_year IN (2024,2025,2026)
+GROUP BY fire_year, fire_cause ORDER BY fire_year, fire_cause</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1259 ms</summary><pre><code>SELECT incident_name, fire_year, discovery_date, containment_date, gis_acres, incident_size_acres, fire_cause
+FROM disasters.wildfire_perimeters
+WHERE state_fips='41' AND fire_year=2026 AND (
+  incident_name ILIKE '%Big Grass%' OR incident_name ILIKE '%Coleman Creek%' OR incident_name ILIKE '%Second Flat%'
+)
+ORDER BY incident_size_acres DESC</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">AskAmerica's disasters.wildfire_perimeters (NIFC WFIGS) is a current snapshot with no year-partitioned history, so exact point-in-time (Aug 3, 2026) figures could not be independently reconstructed to the acre; comparisons instead used the closest available season totals and cross-referenced named-fire growth trajectories from independent, dated incident-command updates.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-28</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

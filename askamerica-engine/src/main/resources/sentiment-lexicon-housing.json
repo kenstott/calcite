@@ -1,0 +1,55 @@
+{
+  "_comment": "Overlay on the general base for the 'housing' domain. Polarity is from a household/housing-stability view; price-direction words are neutral because rising prices help owners and hurt buyers. 'positive'/'negative' entries re-file a term (removing it from the opposite list); 'neutral' drops a base term because its polarity is not stable here. STARTER lexicon, unvalidated against labelled data; extend before relying on it.",
+  "neutral": [
+    "rise",
+    "surge",
+    "soar",
+    "climb",
+    "jump",
+    "fall",
+    "drop",
+    "decline",
+    "cut",
+    "reduce"
+  ],
+  "positive": [
+    "affordable",
+    "new construction",
+    "groundbreaking",
+    "permit",
+    "permits",
+    "homeownership",
+    "occupancy",
+    "rental assistance",
+    "zoning reform",
+    "housing starts:2",
+    "supply increase",
+    "homebuyer"
+  ],
+  "negative": [
+    "foreclosure:2",
+    "eviction:2",
+    "evict",
+    "homeless",
+    "homelessness:2",
+    "blight",
+    "vacancy",
+    "delinquency",
+    "default:2",
+    "mortgage default:2",
+    "affordability crisis:2",
+    "shortage",
+    "unaffordable:2",
+    "rent burden:2",
+    "condemn",
+    "mold",
+    "lead paint",
+    "displacement",
+    "bubble",
+    "crash"
+  ],
+  "uncertainty": [
+    "forecast",
+    "projected"
+  ]
+}

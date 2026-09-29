@@ -1,0 +1,51 @@
+{
+  "_comment": "Overlay on the general base for the 'agriculture' domain. Polarity is from a producer/crop-outcome view. 'positive'/'negative' entries re-file a term (removing it from the opposite list); 'neutral' drops a base term because its polarity is not stable here. STARTER lexicon, unvalidated against labelled data; extend before relying on it.",
+  "neutral": [
+    "cut",
+    "contract",
+    "burn"
+  ],
+  "positive": [
+    "bumper:2",
+    "bumper crop:2",
+    "record harvest:2",
+    "harvest",
+    "yield",
+    "abundant",
+    "rainfall",
+    "irrigation",
+    "subsidy",
+    "export deal",
+    "fertile",
+    "good weather"
+  ],
+  "negative": [
+    "drought:2",
+    "blight:2",
+    "frost",
+    "flood",
+    "flooding",
+    "locust:2",
+    "pest",
+    "infestation",
+    "crop failure:2",
+    "famine:2",
+    "wildfire",
+    "avian flu:2",
+    "swine fever:2",
+    "tariff",
+    "embargo",
+    "shortage",
+    "spoilage",
+    "crop loss:2",
+    "heatwave",
+    "hail",
+    "outbreak",
+    "quarantine"
+  ],
+  "uncertainty": [
+    "forecast",
+    "projected",
+    "estimated"
+  ]
+}

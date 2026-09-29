@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coalition for the Homeless's 2026 NYC shelter-census claims cannot be checked against this government-data corpus — no matching table exists</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Coalition for the Homeless's 2026 NYC shelter-census claims cannot be checked against this government-data corpus — no matching table exists</h1>
+<p class="subtitle">State of the Homeless 2026 (published June 2026), coalitionforthehomeless.org — checked against AskAmerica's housing schema, 2026-09-28</p>
+</header>
+<section>
+<h2>Summary</h2>
+<p>The Coalition for the Homeless's <em>State of the Homeless 2026: A Crisis Inherited, A Choice Ahead</em> (published June 2026) makes two central headline claims about NYC homelessness, both sourced to NYC Department of Homeless Services (DHS) shelter-census administrative data: (1) <strong>194,531 unique individuals used the NYC DHS shelter system in 2025</strong> — the most in the system's 40+ year history, and (2) the nightly shelter census of <strong>longer-term New Yorkers (excluding new arrivals) grew 27 percent, or by 12,443 people, from January 2022 through December 2025</strong> under Mayor Adams. <strong>Neither figure can be independently checked against this government-data corpus</strong> — there is no table anywhere in the warehouse (housing schema or otherwise) that carries NYC DHS shelter-census data, HUD Point-in-Time (PIT) counts, or any other homelessness/shelter-population measure. This is a genuine sourcing gap, confirmed live via a full catalog search and a full listing of every table in the housing schema, and has been filed as a new issue (<a href='https://github.com/kenstott/govdata-ops/issues/755'>kenstott/govdata-ops#755</a>). Independent government data (HUD's own 2024 AHAR Point-in-Time report, fetched directly) corroborates the general direction — a large, rapid rise in NYC sheltered homelessness — but uses a different methodology and cannot verify the exact figures.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>🤥○○○ Fidelity: 1 of 4 Pinocchios</strong></p><p>The core figures (194,531 unique shelter users in 2025; the 27% nightly-census increase for longer-term New Yorkers) are quoted and attributed consistently and accurately to NYC DHS's own administrative shelter-census data across the report's Executive Summary, body text, and figure captions when read directly from the PDF. The count=1 (rather than 0) reflects one small internal inconsistency worth flagging: the Coalition's own website introduction states the 27% increase equals '12,442 people,' while the PDF report itself (Executive Summary, Section II, and the Figure 2.2 caption) consistently gives '12,443 people' — a minor, likely typographical, self-contradiction between the org's own web copy and its own report, not a misrepresentation of a third party's data.</p></div>
+<div class="pinocchio-rating"><p><strong>○○○○ Claims Accuracy: No Pinocchios — true or no significant issues</strong></p><p>Neither figure could be independently verified against this government-data corpus, because no table here covers NYC DHS shelter census, HUD PIT counts, or homelessness of any kind — a confirmed sourcing gap (kenstott/govdata-ops#755), not a contradiction. HUD's own 2024 AHAR Point-in-Time report, fetched and read directly as an independent government cross-check, corroborates the general DIRECTION of the claim (New York State's sheltered PIT count rose 53% between 2023 and 2024, with New York City driving nearly 88% of that increase) even though it uses a different methodology and cannot verify the exact 194,531 or 27%/12,443 figures. Given a consistent primary source and directionally-corroborating independent government data, and no evidence of magnitude inflation or cherry-picked framing, this is rated 0 (no identified accuracy issue) while explicitly flagging that this reflects an inability to fully independently check the precise figures, not a confirmed exact match.</p></div>
+<p><strong>2</strong> not checkable here &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>1</td><td>In 2025, 194,531 unique individuals utilized the NYC Department of Homeless Services (DHS) shelter system over the course of that year — the most in the history of the shelter system.</td><td><strong>not checkable here</strong></td></tr>
+<tr class="verdict-not-checkable-here"><td>2</td><td>The number of longer-term New Yorkers (excluding new arrivals) sleeping each night in NYC DHS shelters increased by 27 percent — or by 12,442 people — during the four years of the Adams administration (January 2022 through December 2025).</td><td><strong>not checkable here</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-not-checkable-here"><summary>#1 &middot; <strong>not checkable here</strong> &mdash; In 2025, 194,531 unique individuals utilized the NYC Department of Homeless Services (DHS) shelter system over the course of that year — the most in the history of the shelter system.</summary>
+<dl>
+<dt>Article says</dt><dd>194,531 unique individuals in FY2025 (record high in the shelter system's history)</dd>
+<dt>Warehouse says</dt><dd> <code>No table in this corpus carries this data. list_tables(schema='housing') was called to enumerate every table in the schema (no SQL query run against any of them, since none are topically relevant): building_permits, building_permits_place, fair_market_rents, hmda_applicant_demographics, hmda_lar, hmda_lending_by_tract, hmda_loans, house_price_index, housing_affordability_by_state, housing_hmda_denial_rate_by_race, housing_hpi_state_annual, housing_mortgage_originations, housing_opportunity_zone_counts, housing_permits_by_county, housing_subsidized_by_county, housing_subsidized_profile_by_county, hud_subsidized_county, hud_subsidized_housing, income_limits, income_limits_county, opportunity_zones — none measure shelter population, PIT counts, or homelessness.</code></dd>
+<dt>Independent evidence</dt><dd>194,531 (confirmed by directly parsing the full report PDF text, not just the webpage: appears identically in the Executive Summary, Section I body text, and Figure 1.1's caption)<ul class="claim-sources"><li><a href="https://www.coalitionforthehomeless.org/state-of-the-homeless-2026/">State of the Homeless 2026 — Coalition for the Homeless (landing page)</a></li><li><a href="https://coalitionforthehomeless.org/wp-content/uploads/2026/06/State_of_the_Homeless_2026_.pdf">State of the Homeless 2026 — full PDF report (primary source, parsed directly)</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>Published June 2026 (report PDF path dated 2026/06) / </dd>
+<dt>Why</dt><dd>search_catalog returned zero matches for 'homelessness' and no relevant hits for 'homeless'/'shelter'/'sheltered'/'unsheltered'; list_tables(schema='housing') confirms none of the schema's 20 tables measure shelter population, PIT counts, or homelessness — no city-level (NYC DHS) or national (HUD AHAR/PIT) homelessness table exists anywhere in this corpus. Genuine sourcing gap, filed as kenstott/govdata-ops#755.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#2 &middot; <strong>not checkable here</strong> &mdash; The number of longer-term New Yorkers (excluding new arrivals) sleeping each night in NYC DHS shelters increased by 27 percent — or by 12,442 people — during the four years of the Adams administration (January 2022 through December 2025).</summary>
+<dl>
+<dt>Article says</dt><dd>+27% / +12,442 people (as stated once, in the webpage's introduction), Jan 2022–Dec 2025</dd>
+<dt>Warehouse says</dt><dd> <code>No table in this corpus carries this data (same list_tables(schema='housing') enumeration as above; no nightly/monthly shelter-census time series exists anywhere in this corpus, and no SQL was run since no relevant table exists).</code></dd>
+<dt>Independent evidence</dt><dd>27% / 12,443 people — the report PDF's own Executive Summary, Section II body text, and Figure 2.2 caption all consistently state 12,443, not 12,442; the 12,442 figure appears only once, in the webpage's introductory paragraph, and is very likely a transcription inconsistency within the Coalition's own materials rather than a data disagreement. Independently corroborated in DIRECTION (not magnitude, and not the same measure) by HUD's 2024 Annual Homeless Assessment Report (AHAR) Part 1, fetched directly: 'Between 2023 and 2024, New York saw a 53 percent increase [in PIT sheltered homelessness]... New York City... accounted for almost 88 percent of the increase in sheltered homelessness in New York City' — a single-night January PIT count, a different methodology and window than the Coalition's DHS annual/nightly-census figure, so it corroborates the general trend (rapid NYC shelter growth) but cannot verify the specific 27%/12,443 figure.<ul class="claim-sources"><li><a href="https://coalitionforthehomeless.org/wp-content/uploads/2026/06/State_of_the_Homeless_2026_.pdf">State of the Homeless 2026 — full PDF report (primary source, parsed directly)</a></li><li><a href="https://www.huduser.gov/portal/sites/default/files/pdf/2024-AHAR-Part-1.pdf">HUD 2024 AHAR Part 1 (Point-in-Time count), fetched and parsed directly</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>Published June 2026 / </dd>
+<dt>Why</dt><dd>No table exists in this corpus (confirmed via list_tables and search_catalog, not via a SQL query, since none is topically relevant) to independently compute or cross-check a year-over-year or administration-over-administration shelter-census trend for NYC. HUD's own AHAR PIT report was fetched externally as a second, independent government cross-check of direction only — it uses a different methodology (one-night PIT count vs. DHS annual/nightly census) and cannot verify the Coalition's specific percentage or headcount.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What the report actually says (parsed directly from the PDF)</h2>
+<p>Read directly from the report's own downloadable PDF, not a secondary summary or the webpage alone — both were fetched and text-searched directly. Key figures verbatim:</p><ul><li>'In 2025, 194,531 unique individuals utilized the NYC DHS shelter system over the course of the year — the most in the history of the shelter system.' (appears identically in the Executive Summary, Section I body text, and Figure 1.1's caption)</li><li>'The number of longer-term New Yorkers sleeping each night in the NYC DHS shelter system increased by 27 percent — or by 12,443 people — during the four years of the Adams administration' (Jan 2022–Dec 2025). Note: the report's own website introduction states '12,442,' a minor inconsistency with the PDF's consistent '12,443' — likely a typo, not a data disagreement.</li><li>Within that 27% increase: single adults +35% (5,753 people), members of families with children +21% (5,395), members of adult families +43% (1,295).</li><li>As of January 1, 2026, 'more than 350,000 people in New York City were without homes' (a broader figure including sheltered, unsheltered, and doubled-up populations, not the DHS shelter census alone).</li></ul><p>The report's data source is explicitly NYC DHS's own shelter-census administrative records — an annual unique-user count and a nightly/monthly census — not HUD's national Point-in-Time (PIT) count or Annual Homeless Assessment Report (AHAR), which use a single night in January each year as their measurement window. This distinction matters: it is the reason no federal dataset carries the exact same measure the Coalition report cites.</p>
+</section>
+<section>
+<h2>Why this corpus cannot check it</h2>
+<p>Investigated as an open question, not an assumption in either direction:</p><ol><li><strong>search_catalog('homeless shelter census New York City')</strong> — matched only unrelated Census/ACS/housing tables (acs_population, building_permits, etc.); the tool's own unmatched_terms flag confirmed 'homeless', 'shelter', and 'york' appear in no table or column description in the corpus.</li><li><strong>search_catalog('point in time count HUD sheltered unsheltered persons')</strong> — no match for HUD PIT/CoC data; unmatched_terms flagged 'sheltered' and 'unsheltered'.</li><li><strong>search_catalog('homelessness')</strong> (bare noun) — zero matches.</li><li><strong>list_tables(schema='housing')</strong> — full listing of all 20 tables/views reviewed (no SQL run against any, since none are topically relevant): building_permits, building_permits_place, fair_market_rents, hmda_applicant_demographics, hmda_lar, hmda_lending_by_tract, hmda_loans, house_price_index, housing_affordability_by_state, housing_hmda_denial_rate_by_race, housing_hpi_state_annual, housing_mortgage_originations, housing_opportunity_zone_counts, housing_permits_by_county, housing_subsidized_by_county, housing_subsidized_profile_by_county, hud_subsidized_county, hud_subsidized_housing, income_limits, income_limits_county, opportunity_zones. The closest tables (hud_subsidized_county / hud_subsidized_housing) measure <em>occupied, subsidized housing units</em> (Section 8, public housing, vouchers) — a materially different population from people in homeless shelters or unsheltered — and would not answer this claim even as a proxy.</li></ol><p>No other schema in the corpus (census, health, fiscal, etc.) carries homelessness or shelter-census data either. This is a confirmed, permanent gap as of this session, not a matter of the wrong search terms.</p>
+</section>
+<section>
+<h2>Independent corroboration attempted</h2>
+<p>Since the corpus has nothing to offer, external primary sources were fetched directly (not just search-result summaries) to check the claim's plausibility against independent government data: NYC Open Data's DHS Daily Report dataset page (confirmed to exist, as the exact live series the report's figures are drawn from, though its raw data table itself was not extractable via this session's fetch tool), and HUD's own 2024 Annual Homeless Assessment Report (AHAR) Part 1 PDF, fetched and text-searched directly. The AHAR states: 'Between 2023 and 2024, New York saw a 53 percent increase [in sheltered PIT homelessness]... New York City... accounted for almost 88 percent of the increase in sheltered homelessness in New York City.' This corroborates the DIRECTION of the Coalition's claim — a large, NYC-driven surge in sheltered homelessness — from an independent federal source, but it measures a single January night's PIT count across a different one-year window (2023→2024) than the Coalition's DHS annual/nightly-census figure (Jan 2022–Dec 2025), so it cannot verify the specific 194,531 or 27%/12,443 figures.</p>
+</section>
+<section>
+<h2>Verdict</h2>
+<p>Both graded claims are rated <strong>not checkable here</strong> against the AskAmerica corpus — the reason is a confirmed absence of any matching table (no NYC DHS shelter-census data, no HUD PIT/AHAR data, no city-level homelessness breakdown of any kind), not a contradiction or confirmation of the reported figures. Directly parsing the report's own PDF confirms the figures are quoted faithfully and consistently (fidelity count 1, for one minor internal 12,442-vs-12,443 inconsistency between the Coalition's own webpage and PDF). Independent government data (HUD's 2024 AHAR) corroborates the general direction but not the precise magnitude, since it uses a different methodology and window (claims_accuracy count 0, with that caveat stated explicitly). A sourcing-gap issue (<a href='https://github.com/kenstott/govdata-ops/issues/755'>kenstott/govdata-ops#755</a>) has been filed naming HUD PIT/AHAR data and NYC Open Data's DHS Daily Shelter Census as candidate sources for a follow-on ingest.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Query the data directly and compute the actual current figure for NYC homelessness/shelter population</strong>: No table exists to query — this is a genuine corpus coverage gap, not a computation that was skipped. Filed as kenstott/govdata-ops#755.</li></ul>
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.coalitionforthehomeless.org/state-of-the-homeless-2026/">State of the Homeless 2026 — Coalition for the Homeless (report landing page)</a> <span class="note">— Published June 2026; fetched directly 2026-09-28</span></li>
+<li><a href="https://coalitionforthehomeless.org/wp-content/uploads/2026/06/State_of_the_Homeless_2026_.pdf">State of the Homeless 2026 — full PDF report (primary source, parsed directly)</a> <span class="note">— Fetched and text-searched directly for key figures 2026-09-28</span></li>
+<li><a href="https://data.cityofnewyork.us/Social-Services/DHS-Daily-Report/k46n-sa2m">NYC Open Data — DHS Daily Report dataset (the live series the Coalition report's figures derive from)</a> <span class="note">— Confirmed to exist; raw data table not extractable via this session's fetch tool</span></li>
+<li><a href="https://www.huduser.gov/portal/sites/default/files/pdf/2024-AHAR-Part-1.pdf">HUD 2024 Annual Homeless Assessment Report (AHAR) Part 1</a> <span class="note">— Fetched and text-searched directly for the New York State/NYC Point-in-Time figures</span></li>
+<li>AskAmerica housing schema — full table listing<details class="sqltoggle"><summary>Show tool call</summary><pre><code>list_tables(schema=&quot;housing&quot;)</code></pre></details></li>
+<li>AskAmerica catalog search — 'homeless shelter census New York City'<details class="sqltoggle"><summary>Show tool call</summary><pre><code>search_catalog(query=&quot;homeless shelter census New York City&quot;)</code></pre></details></li>
+<li>AskAmerica catalog search — 'point in time count HUD sheltered unsheltered persons'<details class="sqltoggle"><summary>Show tool call</summary><pre><code>search_catalog(query=&quot;point in time count HUD sheltered unsheltered persons&quot;)</code></pre></details></li>
+<li>AskAmerica catalog search — 'homelessness'<details class="sqltoggle"><summary>Show tool call</summary><pre><code>search_catalog(query=&quot;homelessness&quot;)</code></pre></details></li>
+<li><a href="https://github.com/kenstott/govdata-ops/issues/755">Sourcing-gap issue filed for this session</a> <span class="note">— type:sourcing, kind:gap, schema:housing, status:open</span></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">Verdict is a data-availability finding (no matching table in this corpus for NYC/federal homelessness measures), not a finding that the Coalition for the Homeless's figures are wrong — those figures were read directly from the report's own primary-source PDF and corroborated in direction by an independently fetched federal PIT report.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-28</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

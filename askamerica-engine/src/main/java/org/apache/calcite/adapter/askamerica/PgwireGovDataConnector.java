@@ -170,13 +170,47 @@ final class PgwireGovDataConnector {
     }
     log().println("[askamerica-mcp] No pgwire-govdata server listening on " + host() + ":" + port()
         + " — attempting to spawn one.");
-    spawnIfPossible();
+    // Captured BEFORE spawning — spawnIfPossible() unconditionally overwrites the pid file
+    // with its own new pid, so this is the only chance to learn who held the port going into
+    // this attempt (see the isAlive() check below).
+    Long priorOccupantPid = readPidFile();
+    Process spawned = spawnIfPossible();
+    boolean killedStaleOccupant = false;
     long deadline = System.currentTimeMillis() + SPAWN_TIMEOUT_MILLIS;
     while (System.currentTimeMillis() < deadline) {
       c = tryDirectConnect();
       if (c != null) {
         log().println("[askamerica-mcp] Connected to pgwire-govdata after spawn.");
         return c;
+      }
+      // A legitimate cold mount binds the port in milliseconds (pgwire-calcite's
+      // claim_listen_socket()) and then stays alive for minutes while it mounts all 26
+      // govdata schemas — spawned.isAlive() stays true the whole time. If OUR spawn has
+      // already exited, it lost that bind race: something else was already listening on
+      // port() when we tried, and every probe above is hitting THAT process, not ours.
+      // Retrying the identical probe against it for the rest of this ten-minute budget can
+      // never succeed if that occupant is wedged rather than merely slow — confirmed live
+      // 2026-09-28: a five-hour-old smoke-test process squatting the port stalled every
+      // later launch this way, silently, for the full timeout. Kill the pre-spawn occupant
+      // once and let a fresh spawn win the now-free port — the same recovery
+      // killAndRespawn() already gives an in-flight wedge on an established connection (see
+      // McpServer's watchdog thread), applied here to the startup path it was missing from.
+      if (!killedStaleOccupant && spawned != null && !spawned.isAlive()) {
+        killedStaleOccupant = true;
+        if (priorOccupantPid != null) {
+          log().println("[askamerica-mcp] Our own pgwire-govdata spawn (pid " + spawned.pid()
+              + ") exited immediately without ever becoming reachable — pid " + priorOccupantPid
+              + " already held " + host() + ":" + port() + " when we tried to bind. Killing it "
+              + "and retrying.");
+          killPid(priorOccupantPid,
+              "startup spawn lost the bind race to an unreachable occupant");
+          spawned = spawnIfPossible();
+        } else {
+          log().println("[askamerica-mcp] Our own pgwire-govdata spawn (pid " + spawned.pid()
+              + ") exited immediately without ever becoming reachable, and no prior pid was on "
+              + "record to kill — something is holding " + host() + ":" + port()
+              + " that this connector cannot identify. Will keep retrying until the timeout.");
+        }
       }
       Thread.sleep(SPAWN_POLL_INTERVAL_MILLIS);
     }
@@ -268,7 +302,7 @@ final class PgwireGovDataConnector {
    * fallback to the embedded engine: see getSchemaConnection()'s doc for why a silent
    * second data-access path is exactly the problem this design exists to eliminate.
    */
-  private static void spawnIfPossible() {
+  private static Process spawnIfPossible() {
     File launcher = resolveLauncher();
     if (launcher == null) {
       // Not bundled with the installer for an older build, or a local dev run — lazily
@@ -284,7 +318,7 @@ final class PgwireGovDataConnector {
       log().println("[askamerica-mcp] No pgwire-govdata launcher available "
           + "(not bundled, and no matching release asset exists for this OS) — the "
           + "connection attempt will time out and fail.");
-      return;
+      return null;
     }
     try {
       java.util.List<String> command = new java.util.ArrayList<>();
@@ -420,9 +454,11 @@ final class PgwireGovDataConnector {
       writeCredentialExpiryFile(credsExpiresAt);
       log().println("[askamerica-mcp] Spawned pgwire-govdata (pid " + p.pid() + "): "
           + launcher.getAbsolutePath() + " — log: " + logFile);
+      return p;
     } catch (Exception e) {
       log().println("[askamerica-mcp] Failed to spawn pgwire-govdata: "
           + e.getClass().getSimpleName() + ": " + e.getMessage());
+      return null;
     }
   }
 
@@ -558,51 +594,76 @@ final class PgwireGovDataConnector {
         if (stale != null) {
           closeQuietly(stale);
         }
-        File pf = pidFile();
-        long pid;
-        try {
-          pid = Long.parseLong(java.nio.file.Files.readString(pf.toPath()).trim());
-        } catch (Exception e) {
+        Long pid = readPidFile();
+        if (pid == null) {
           log().println("[askamerica-mcp] killAndRespawn(" + reason + "): no readable pid "
-              + "file at " + pf + " (" + e.getMessage() + ") — cannot kill the wedged process "
-              + "directly. The cached connection was discarded regardless; the next caller "
-              + "will attempt to reconnect, which will hang again if the old process is still "
-              + "holding the port.");
+              + "file at " + pidFile() + " — cannot kill the wedged process directly. The "
+              + "cached connection was discarded regardless; the next caller will attempt to "
+              + "reconnect, which will hang again if the old process is still holding the "
+              + "port.");
           return;
         }
-        java.util.Optional<ProcessHandle> ph = ProcessHandle.of(pid);
-        if (!ph.isPresent()) {
-          log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
-              + " from " + pf + " is no longer running — nothing to kill.");
-          return;
-        }
-        // The pid file outlives the server (it idle-shuts-down after IDLE_SHUTDOWN_SECONDS), and
-        // the OS reuses pids, so a pid that is still running is not necessarily ours to kill.
-        if (!isPgwireGovDataProcess(ph.get())) {
-          log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
-              + " from " + pf + " is running but is not a pgwire-govdata process — not killing it.");
-          return;
-        }
-        boolean destroyed = ph.get().destroyForcibly();
-        // The port and the expired credentials are held until the process is really gone; a
-        // spawn that starts before that loses the bind and exits, leaving connect() to time out.
-        boolean exited = false;
-        try {
-          ph.get().onExit().get(KILL_EXIT_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
-          exited = true;
-        } catch (java.util.concurrent.TimeoutException e) {
-          log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
-              + " still running " + KILL_EXIT_WAIT_SECONDS + "s after the forced kill.");
-        }
-        log().println("[askamerica-mcp] killAndRespawn(" + reason + "): sent a forced kill to "
-            + "pgwire-govdata pid " + pid + " (" + (destroyed ? "signal sent" : "failed to send")
-            + (exited ? ", exited" : "")
-            + "). The next connection attempt will spawn a fresh server.");
+        killPid(pid, reason);
       }
     } catch (Throwable t) {
       log().println("[askamerica-mcp] killAndRespawn(" + reason + ") itself failed: "
           + t.getClass().getName() + ": " + t.getMessage());
     }
+  }
+
+  /** {@code pidFile()}'s current contents, or {@code null} if unreadable/absent. */
+  private static Long readPidFile() {
+    try {
+      return Long.parseLong(java.nio.file.Files.readString(pidFile().toPath()).trim());
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /**
+   * Force-kills {@code pid} if — and only if — it is still running and is genuinely a
+   * pgwire-govdata process (see {@link #isPgwireGovDataProcess}); a stale or since-reused pid
+   * is left alone. Shared by {@link #killAndRespawn} (which reads the CURRENT pid file) and
+   * connect()'s startup path (which passes a pid read BEFORE this connector's own spawn
+   * attempt overwrote that file — see connect()'s own comment for why that distinction
+   * matters there).
+   */
+  private static void killPid(long pid, String reason) {
+    java.util.Optional<ProcessHandle> ph = ProcessHandle.of(pid);
+    if (!ph.isPresent()) {
+      log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
+          + " is no longer running — nothing to kill.");
+      return;
+    }
+    // The pid file outlives the server (it idle-shuts-down after IDLE_SHUTDOWN_SECONDS), and
+    // the OS reuses pids, so a pid that is still running is not necessarily ours to kill.
+    if (!isPgwireGovDataProcess(ph.get())) {
+      log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
+          + " is running but is not a pgwire-govdata process — not killing it.");
+      return;
+    }
+    boolean destroyed = ph.get().destroyForcibly();
+    // The port and the expired credentials are held until the process is really gone; a
+    // spawn that starts before that loses the bind and exits, leaving connect() to time out.
+    boolean exited = false;
+    try {
+      ph.get().onExit().get(KILL_EXIT_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+      exited = true;
+    } catch (java.util.concurrent.TimeoutException e) {
+      log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
+          + " still running " + KILL_EXIT_WAIT_SECONDS + "s after the forced kill.");
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log().println("[askamerica-mcp] killAndRespawn(" + reason + "): interrupted waiting for "
+          + "pid " + pid + " to exit after the forced kill.");
+    } catch (java.util.concurrent.ExecutionException e) {
+      log().println("[askamerica-mcp] killAndRespawn(" + reason + "): error waiting for pid "
+          + pid + " to exit after the forced kill: " + e.getMessage());
+    }
+    log().println("[askamerica-mcp] killAndRespawn(" + reason + "): sent a forced kill to "
+        + "pgwire-govdata pid " + pid + " (" + (destroyed ? "signal sent" : "failed to send")
+        + (exited ? ", exited" : "")
+        + "). The next connection attempt will spawn a fresh server.");
   }
 
   /** Whether the process's own command line names pgwire-govdata (the launcher, or the

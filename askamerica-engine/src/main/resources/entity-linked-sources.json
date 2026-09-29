@@ -1,0 +1,130 @@
+{
+  "_comment": "Identifier column -> consumer table(s) that carry it, transcribed from the schema comments of ref.canonical_org_entity ('org') and ref.canonical_person_entity ('person') in govdata/src/main/resources/ref/ref-schema.yaml. Keep in step with them.",
+  "org": {
+    "sec_cik": [
+      "sec.filing_metadata"
+    ],
+    "fec_committee_id": [
+      "fec.committees"
+    ],
+    "sec_reporting_person_cik": [
+      "sec.insider_transactions"
+    ],
+    "sec_manager_cik": [
+      "sec.institutional_holdings"
+    ],
+    "patents_assignee_id": [
+      "patents.patent_assignees"
+    ],
+    "patents_trademark_owner_id": [
+      "patents.trademark_owner"
+    ],
+    "fda_sponsor_name": [
+      "health.fda_drug_approvals"
+    ],
+    "fda_drug_recalling_firm": [
+      "health.fda_drug_recalls"
+    ],
+    "fda_device_recalling_firm": [
+      "health.fda_device_recalls"
+    ],
+    "fda_labeler_name": [
+      "health.fda_ndc_products"
+    ],
+    "cms_paying_entity_name": [
+      "health.cms_open_payments"
+    ],
+    "clinical_trials_nct_id": [
+      "health.clinical_trials"
+    ],
+    "ghg_parent_company_name": [
+      "environment.ghg_facilities"
+    ],
+    "eia_utility_id": [
+      "energy.eia_utility_annual"
+    ],
+    "eia_coal_controller_name": [
+      "energy.eia_coal_mines"
+    ],
+    "eia_coal_operator_name": [
+      "energy.eia_coal_mines"
+    ],
+    "fmcsa_dot_number": [
+      "transport.fmcsa_carriers"
+    ],
+    "faa_registrant_name": [
+      "transport.faa_aircraft_registry"
+    ],
+    "exempt_org_ein": [
+      "fiscal.exempt_org_master"
+    ],
+    "sba_borrower_name": [
+      "fiscal.sba_loan_approvals"
+    ],
+    "sba_lender_name": [
+      "fiscal.sba_loan_approvals"
+    ],
+    "nsf_herd_inst_id": [
+      "research.nsf_herd_by_institution"
+    ],
+    "ipeds_unitid": [
+      "edu.ipeds_institutions"
+    ],
+    "lobbying_registrant_id": [
+      "law.lobbying_registrants"
+    ],
+    "lobbying_client_id": [
+      "law.lobbying_clients"
+    ],
+    "lobbying_foreign_entity_name": [
+      "law.lobbying_foreign_entities"
+    ],
+    "lobbying_affiliated_org_name": [
+      "law.lobbying_affiliated_organizations"
+    ],
+    "lobbying_pac_name": [
+      "law.lobbying_contribution_pacs"
+    ],
+    "lobbying_contributor_name": [
+      "law.lobbying_contribution_items"
+    ],
+    "lobbying_payee_name": [
+      "law.lobbying_contribution_items"
+    ],
+    "lobbying_honoree_org_name": [
+      "law.lobbying_contribution_items"
+    ]
+  },
+  "person": {
+    "fec_candidate_id": [
+      "fec.candidates"
+    ],
+    "sec_reporting_person_cik": [
+      "sec.insider_transactions"
+    ],
+    "cms_physician_profile_id": [
+      "health.cms_open_payments"
+    ],
+    "faa_registrant_name": [
+      "transport.faa_aircraft_registry"
+    ],
+    "patents_individual_assignee_id": [
+      "patents.patent_assignees"
+    ],
+    "officials_member_bioguide_id": [
+      "officials.members"
+    ],
+    "officials_judge_jid": [
+      "officials.federal_judges"
+    ],
+    "lobbying_lobbyist_id": [
+      "law.lobbyists"
+    ],
+    "lobbying_honoree_name": [
+      "law.lobbying_contribution_items"
+    ],
+    "scotus_opinion_writer_name": [
+      "law.scotus_reports_cases"
+    ]
+  }
+}

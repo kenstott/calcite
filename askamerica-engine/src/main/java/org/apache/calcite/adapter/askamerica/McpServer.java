@@ -1259,7 +1259,7 @@ public class McpServer {
      * each argument list is how a tool ends up accepting a name it never advertised: the copy
      * drifts, and the drift is invisible until a caller pays for it.
      */
-    private static ArrayNode toolDefs() {
+    static ArrayNode toolDefs() {
         ArrayNode cached = TOOL_DEFS;
         if (cached != null) {
             return cached;
@@ -2195,6 +2195,205 @@ public class McpServer {
             + "magnitude).",
             schema(sweepProps, new String[]{"sql", "param_values", "value_col"})));
 
+        ObjectNode textsProp = MAPPER.createObjectNode();
+        textsProp.put("type", "array");
+        textsProp.put("description", "Up to " + TextScoringEngine.MAX_TEXTS + " items, each "
+            + "either a string or an object {id, title, text}. A title is prepended to the "
+            + "text, so relevance's lead bonus sees it first. Each item at most "
+            + TextScoringEngine.MAX_TEXT_CHARS + " characters. Use this for headlines, "
+            + "snippets, article bodies, filing passages — anything you fetched or were given.");
+        ObjectNode domainProp = prop("string", "Vocabulary whose polarity to apply: one of "
+            + TextScoringEngine.DOMAINS + ". Default '" + TextScoringEngine.DEFAULT_DOMAIN
+            + "'. Polarity is domain-dependent ('positive' is bad news in a lab result, 'cut' "
+            + "is bad for guidance and neutral for a tax bill): pick the domain the TEXT is "
+            + "about. Health/politics/manufacturing are thin starter lexicons — weigh their "
+            + "scores accordingly.");
+        ObjectNode sentProps = MAPPER.createObjectNode();
+        sentProps.set("texts", textsProp);
+        sentProps.set("domain", domainProp);
+        tools.add(
+            tool("score_sentiment",
+            "Score the sentiment of arbitrary text with a deterministic in-house finance "
+            + "lexicon: per text a score in [-1,1], a label, a confidence, and the matched "
+            + "terms behind it, plus the batch mean. Handles negation ('not good') and "
+            + "intensifiers ('sharply lower'). It is a transparent heuristic, NOT a trained "
+            + "model: it cannot see sarcasm or who the sentiment is about, and a text with no "
+            + "lexicon terms returns label 'no_signal' with a null score — report that, do not "
+            + "call it neutral. Read matched_terms before relying on a score, and treat low "
+            + "confidence as 'little evidence'. Works on any text, including results from "
+            + "web search or web_fetch.",
+            schema(sentProps, new String[]{"texts"})));
+
+        ObjectNode textRelProps = MAPPER.createObjectNode();
+        textRelProps.set("texts", textsProp);
+        textRelProps.set("domain", domainProp);
+        textRelProps.set("query", prop("string", "What the texts should be about — a ticker, a "
+            + "company, a topic phrase."));
+        textRelProps.set("aliases", prop("array", "Optional extra surface forms of the subject "
+            + "(e.g. the ticker 'AAPL' for query 'Apple'); any one appearing verbatim counts "
+            + "as a match."));
+        tools.add(
+            tool("score_relevance",
+            "Score how relevant arbitrary text is to a query, 0 to 1: 0.5 * share of the "
+            + "query's content words present + 0.3 for the whole query or any alias appearing "
+            + "verbatim + 0.2 for a query word in the first quarter of the text. Measures "
+            + "textual overlap and prominence, not whether the text is truly about the "
+            + "subject — a passing mention of a common word can score. Returns matched and "
+            + "missing terms per text so the score is checkable.",
+            schema(textRelProps, new String[]{"texts", "query"})));
+
+        ObjectNode scoreTextProps = textRelProps.deepCopy();
+        tools.add(
+            tool("score_text",
+            "score_sentiment and score_relevance in one call, plus "
+            + "relevance_weighted_sentiment: the mean sentiment weighted by each text's "
+            + "relevance, so an off-topic article cannot move the aggregate. Use on a batch "
+            + "of search results or headlines about one subject. Same caveats as "
+            + "score_sentiment: a lexicon heuristic, 'no_signal' is not neutral.",
+            schema(scoreTextProps, new String[]{"texts", "query"})));
+
+        ObjectNode tsCommon = MAPPER.createObjectNode();
+        tsCommon.set("sql", prop("string",
+            "SQL SELECT returning ONE series, one row per period — filter to a single "
+            + "ticker/entity. Duplicate periods are rejected as evidence of a second series. "
+            + "For equity prices use sec.stock_prices.adjusted_close (split/dividend "
+            + "adjusted), not close."));
+        tsCommon.set("value_col", prop("string", "Column holding the series values."));
+        tsCommon.set("time_col", prop("string",
+            "Column giving the period; rows are sorted ascending by its string form, so use "
+            + "ISO dates/timestamps (yyyy-mm-dd) or another lexicographically ordered key."));
+        tsCommon.set("horizon", prop("integer", "Periods to forecast ahead. Default 1, max "
+            + StatsTimeSeriesEngine.MAX_HORIZON + "."));
+        tsCommon.set("level", prop("number", "Interval coverage, e.g. 0.95 (default)."));
+        ObjectNode arimaProps = tsCommon.deepCopy();
+        arimaProps.set("p", prop("integer", "AR order. Omit p AND/OR q to select the omitted "
+            + "one(s) by approximate AIC."));
+        arimaProps.set("d", prop("integer", "Differencing order 0-2. Default 1 (right for "
+            + "price LEVELS; use 0 for returns or an already-stationary series). Not "
+            + "auto-selected: no unit-root test is run, so justify the choice."));
+        arimaProps.set("q", prop("integer", "MA order."));
+        arimaProps.set("max_order", prop("integer", "Upper bound for AIC search, default 3, "
+            + "max 5."));
+        tools.add(
+            tool("arima_forecast",
+            "Fit ARIMA(p,d,q) to a single time series and forecast it with prediction "
+            + "intervals that widen with the horizon. Reports coefficients, approximate AIC, "
+            + "and a Ljung-Box test on the residuals (a small p-value means the model left "
+            + "autocorrelation behind — do not trust its intervals). Estimation is Smile's "
+            + "conditional least squares, not exact MLE. Forecasting the LEVEL of a price "
+            + "series mostly returns the last price with an ever-wider interval; that is the "
+            + "correct answer for a near random walk, not a defect. For price risk use "
+            + "volatility_forecast or garch_forecast instead.",
+            schema(arimaProps, new String[]{"sql", "value_col", "time_col"})));
+
+        ObjectNode garchProps = tsCommon.deepCopy();
+        garchProps.set("input_type", prop("string", "'price' (default; log returns are "
+            + "computed) or 'return' (the column already holds percent returns)."));
+        garchProps.set("distribution", prop("string", "'normal' (default) or 'student_t' for "
+            + "fat tails."));
+        garchProps.set("periods_per_year", prop("number", "Annualization factor, default "
+            + "252 (daily trading data)."));
+        tools.add(
+            tool("garch_forecast",
+            "Fit GARCH(1,1) by maximum likelihood to returns and forecast the conditional "
+            + "volatility term structure: per-period and cumulative volatility for each "
+            + "horizon step, mean-reverting toward the unconditional level at a rate set by "
+            + "alpha+beta. Reports parameters with standard errors, persistence, volatility "
+            + "half-life, and a Ljung-Box test on squared standardized residuals (small "
+            + "p-value = ARCH effects remain, the model is misspecified). Needs at least "
+            + StatsTimeSeriesEngine.GARCH_MIN_OBS + " returns. Models volatility only — "
+            + "it says nothing about direction.",
+            schema(garchProps, new String[]{"sql", "value_col", "time_col"})));
+
+        ObjectNode btProps = tsCommon.deepCopy();
+        btProps.set("methods", prop("array", "Subset of ['garch','ewma','historical']; "
+            + "default all three."));
+        btProps.set("min_train", prop("integer", "Prices in the first training window, "
+            + "default 500."));
+        btProps.set("step", prop("integer", "Periods between evaluation origins, default 20 "
+            + "(each origin refits the model). At most "
+            + StatsTimeSeriesEngine.BACKTEST_MAX_EVALS + " origins per method."));
+        btProps.set("ewma_lambda", prop("number", "EWMA decay, default 0.94."));
+        btProps.set("window", prop("integer", "Historical-vol window, default 60."));
+        btProps.set("distribution", prop("string", "GARCH innovations: 'normal' (default) or "
+            + "'student_t'."));
+        tools.add(
+            tool("backtest_volatility",
+            "Walk-forward test of the volatility_forecast price band on a historical price "
+            + "series: at each origin the model sees only earlier prices, forecasts the "
+            + "horizon-period band, and the realized move is checked against it. Reports, per "
+            + "method, the share of realized moves inside the band vs the nominal level, a "
+            + "Kupiec test of that share, violations split above/below, mean band width and "
+            + "an interval score (lower is better; a method can win on coverage by being "
+            + "uselessly wide, so read both). Stale data is fine for this: it measures how "
+            + "well-calibrated each method has been, not what happens next. Run it before "
+            + "presenting a volatility_forecast band as trustworthy.",
+            schema(btProps, new String[]{"sql", "value_col", "time_col"})));
+
+        ObjectNode entProps = MAPPER.createObjectNode();
+        entProps.set("text", prop("string", "An article or any blob of text, up to "
+            + "200000 characters."));
+        entProps.set("max_candidates", prop("integer", "Registry candidates returned per "
+            + "mention, default 5, max 20."));
+        entProps.set("min_single_token_identifiers", prop("integer", "A one-word name "
+            + "(e.g. 'Apple') is kept only if its best registry entity is known to at least "
+            + "this many independent registries. Default 2; 0 keeps them all. Dropped ones "
+            + "are listed in the result."));
+        entProps.set("types", prop("array", "Subset of ['org','person','geo'] to look for; "
+            + "default all three."));
+        entProps.set("include_facts", prop("boolean", "Also attach a fact card for each top "
+            + "match: GLEIF parent/ultimate parent for organizations with an LEI; party, "
+            + "state and district for members of Congress; court and appointing president "
+            + "for federal judges."));
+        entProps.set("score_sentiment", prop("boolean", "Also score the sentiment of the "
+            + "sentences that mention each entity (see score_sentiment)."));
+        entProps.set("domain", prop("string", "Lexicon domain for score_sentiment, one of "
+            + TextScoringEngine.DOMAINS + ". Default '" + TextScoringEngine.DEFAULT_DOMAIN
+            + "'."));
+        tools.add(
+            tool("extract_entities",
+            "Find the organizations, people and places named in an article or blob of text "
+            + "and resolve each to what AskAmerica knows. Works on any subject: a political "
+            + "story yields members of Congress, judges, candidates, lobbyists, companies and "
+            + "states/counties; a business story yields companies. Candidate names (runs of "
+            + "capitalized words, plus tickers like '(NASDAQ: AAPL)') are matched by EXACT "
+            + "equality against the registries — organizations via the name-variant registry "
+            + "mapped to a canonical entity, people via the canonical person registry on first "
+            + "and last name, places via state and county names. Per entity: surface forms, "
+            + "mention count and offsets, ranked candidates (canonical name, identifiers, "
+            + "jurisdiction/headquarters for organizations) and linked_sources — for each "
+            + "identifier the entity holds, the AskAmerica tables that carry it, so you can go "
+            + "straight to the facts with query(). include_facts adds a fact card (party/state "
+            + "for a member of Congress, court for a judge, parent company for a firm). A bare "
+            + "surname ('Pelosi said') is attached to the one person named in full earlier. "
+            + "'ambiguous': true means several registered entities share the name — pick using "
+            + "the text's context and each candidate's identifiers, never the first by "
+            + "default. Longest match wins ('Bank of America' is not also 'America'). No fuzzy "
+            + "matching: nicknames, misspellings and bare titles ('the Speaker') are missed. "
+            + "Pair with score_sentiment=true for per-entity sentiment.",
+            schema(entProps, new String[]{"text"})));
+
+        ObjectNode volProps = tsCommon.deepCopy();
+        volProps.set("method", prop("string", "Volatility used for the price band: 'garch' "
+            + "(default), 'ewma' (RiskMetrics) or 'historical' (trailing window). All three "
+            + "are always reported for comparison."));
+        volProps.set("ewma_lambda", prop("number", "EWMA decay, default 0.94."));
+        volProps.set("window", prop("integer", "Trailing window for historical vol, default "
+            + "60."));
+        volProps.set("distribution", prop("string", "GARCH innovations: 'normal' (default) "
+            + "or 'student_t'."));
+        volProps.set("periods_per_year", prop("number", "Annualization factor, default 252."));
+        tools.add(
+            tool("volatility_forecast",
+            "Forecast a price series' volatility three ways (GARCH(1,1), EWMA, trailing "
+            + "historical) and convert the chosen one into a band for the price `horizon` "
+            + "periods ahead, reported both in price and NORMALIZED to the last price "
+            + "(1.0 = unchanged). This is a volatility band, not a directional forecast: the "
+            + "center is the last price grown at the sample mean return. Use it for 'how far "
+            + "could this move by the next close', and disclose that. Input is a price "
+            + "series.",
+            schema(volProps, new String[]{"sql", "value_col", "time_col"})));
+
         ObjectNode chartProps = MAPPER.createObjectNode();
         chartProps.set(
             "chart_type", prop("string",
@@ -2747,6 +2946,15 @@ public class McpServer {
             + "habit from other fetch-tool conventions) doesn't error. Use start_page/"
             + "sheet_names/start_char/slide_numbers instead once you've seen the document's "
             + "structure — that is precise navigation, not a best-effort guess."));
+        webFetchProps.set("score_query", prop("string", "Optional. When set, the returned "
+            + "text is also scored for relevance to this query and for sentiment (see "
+            + "score_text) and the scores are appended after the content under a "
+            + "'--- scores ---' line. Scores the text of THIS response only (one page/part)."));
+        webFetchProps.set("score_domain", prop("string", "Optional lexicon domain for "
+            + "score_query's sentiment: one of " + TextScoringEngine.DOMAINS + ". Default '"
+            + TextScoringEngine.DEFAULT_DOMAIN + "'."));
+        webFetchProps.set("score_aliases", prop("array", "Optional extra surface forms of the "
+            + "score_query subject (ticker, former name)."));
         tools.add(
             tool("web_fetch",
             "If you are here to check a claim rather than to look something up you already "
@@ -2777,6 +2985,7 @@ public class McpServer {
             + "habit from other fetch-tool conventions) but does NOTHING — there is no "
             + "extraction/summarization mode here; use the structural navigation above instead.",
             schema(webFetchProps, new String[]{"url"})));
+        // (score_query / score_aliases are declared on webFetchProps above the tool.)
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
         telemetryProps.set(
@@ -3074,7 +3283,8 @@ public class McpServer {
                 case "get_usage_guide_section_5":
                 case "get_usage_guide_section_6":
                 case "get_usage_guide_section_7":
-                case "get_usage_guide_section_8": {
+                case "get_usage_guide_section_8":
+                case "get_usage_guide_section_9": {
                     int sectionNum = Integer.parseInt(
                         name.substring("get_usage_guide_section_".length()));
                     log.println("[askamerica-mcp] tool=" + name);
@@ -3211,6 +3421,22 @@ public class McpServer {
                 case "web_fetch": {
                     log.println("[askamerica-mcp] tool=web_fetch url=" + args.path("url").asText());
                     text = webFetch(args);
+                    if (args.hasNonNull("score_query")
+                        && text.length() > TextScoringEngine.MAX_TEXT_CHARS) {
+                        text = text + "\n\n--- scores ---\n{\"error\":\"response is "
+                            + text.length() + " characters, over the "
+                            + TextScoringEngine.MAX_TEXT_CHARS + " scoring limit; fetch a "
+                            + "smaller part (start_char/max_chars) and score that\"}";
+                    } else if (args.hasNonNull("score_query")) {
+                        ArrayNode one = MAPPER.createArrayNode();
+                        one.add(text);
+                        text = text + "\n\n--- scores ---\n" + TextScoringEngine.scoreText(
+                            TextScoringEngine.parseItems(one),
+                            args.get("score_query").asText(),
+                            textArray(args.path("score_aliases")),
+                            tsText(args, "score_domain",
+                                TextScoringEngine.DEFAULT_DOMAIN)).toString();
+                    }
                     break;
                 }
                 case "set_memory_limit": {
@@ -3576,6 +3802,107 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=partial_correlation x=" + x + " y=" + y
                         + " controls=" + controls);
                     StatsOutput r = partialCorrelationTool(sql, x, y, controls);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "extract_entities": {
+                    log.println("[askamerica-mcp] tool=extract_entities chars="
+                        + args.path("text").asText("").length());
+                    text = extractEntitiesTool(args);
+                    break;
+                }
+                case "score_sentiment": {
+                    log.println("[askamerica-mcp] tool=score_sentiment n="
+                        + args.path("texts").size());
+                    text = TextScoringEngine.scoreSentiment(
+                        TextScoringEngine.parseItems(args.path("texts")),
+                        tsText(args, "domain", TextScoringEngine.DEFAULT_DOMAIN)).toString();
+                    break;
+                }
+                case "score_relevance": {
+                    log.println("[askamerica-mcp] tool=score_relevance n="
+                        + args.path("texts").size());
+                    text = TextScoringEngine.scoreRelevance(
+                        TextScoringEngine.parseItems(args.path("texts")),
+                        args.path("query").asText(), textArray(args.path("aliases")))
+                        .toString();
+                    break;
+                }
+                case "score_text": {
+                    log.println("[askamerica-mcp] tool=score_text n="
+                        + args.path("texts").size());
+                    text = TextScoringEngine.scoreText(
+                        TextScoringEngine.parseItems(args.path("texts")),
+                        args.path("query").asText(), textArray(args.path("aliases")),
+                        tsText(args, "domain", TextScoringEngine.DEFAULT_DOMAIN)).toString();
+                    break;
+                }
+                case "arima_forecast": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=arima_forecast value_col=" + valueCol);
+                    StatsOutput r = arimaTool(sql, valueCol, timeCol,
+                        optInt(args, "p"), args.has("d") && !args.get("d").isNull()
+                        ? args.get("d").asInt() : 1, optInt(args, "q"),
+                        args.has("max_order") && !args.get("max_order").isNull()
+                        ? args.get("max_order").asInt() : 3, tsHorizon(args), tsLevel(args));
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "garch_forecast": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=garch_forecast value_col=" + valueCol);
+                    StatsOutput r = garchTool(sql, valueCol, timeCol, tsHorizon(args),
+                        tsLevel(args), tsText(args, "input_type", "price"),
+                        tsStudentT(args), tsPeriods(args));
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "backtest_volatility": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=backtest_volatility value_col="
+                        + valueCol);
+                    List<String> methods = textArray(args.path("methods"));
+                    if (methods.isEmpty()) {
+                        methods = java.util.Arrays.asList("garch", "ewma", "historical");
+                    }
+                    Series series = extractSeries(sql, valueCol, timeCol);
+                    ObjectNode bt = StatsTimeSeriesEngine.backtestVolatility(series.values,
+                        series.labels, tsHorizon(args), tsLevel(args),
+                        methods.toArray(new String[0]),
+                        args.has("min_train") && !args.get("min_train").isNull()
+                        ? args.get("min_train").asInt() : 500,
+                        args.has("step") && !args.get("step").isNull()
+                        ? args.get("step").asInt() : 20,
+                        args.has("ewma_lambda") && !args.get("ewma_lambda").isNull()
+                        ? args.get("ewma_lambda").asDouble() : 0.94,
+                        args.has("window") && !args.get("window").isNull()
+                        ? args.get("window").asInt() : 60, tsStudentT(args));
+                    StatsOutput r = tsResult(bt, sql, series);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "volatility_forecast": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=volatility_forecast value_col="
+                        + valueCol);
+                    StatsOutput r = volatilityTool(sql, valueCol, timeCol, tsHorizon(args),
+                        tsLevel(args), tsText(args, "method", "garch"),
+                        args.has("ewma_lambda") && !args.get("ewma_lambda").isNull()
+                        ? args.get("ewma_lambda").asDouble() : 0.94,
+                        args.has("window") && !args.get("window").isNull()
+                        ? args.get("window").asInt() : 60, tsStudentT(args), tsPeriods(args));
                     text = r.text;
                     diagnostics = r.diagnostics;
                     break;
@@ -4582,6 +4909,56 @@ public class McpServer {
         return getSchemaConnection(String.join(",", allowedSchemas()));
     }
 
+    /** {@code describe_table}/{@code list_schemas} are plain {@code information_schema}
+     *  lookups that must always be near-instant — never a legitimately slow analytical scan
+     *  (see describeTable's own "must stay fast" doc) — so they get a much shorter watchdog
+     *  budget than {@link #queryTimeoutSeconds()}'s data-query default. Killing and
+     *  respawning the shared pgwire-govdata process is safe and cheap on a genuine wedge (it
+     *  respawns against the already-seeded catalog, not a cold mount — see
+     *  PgwireGovDataConnector.killAndRespawn's own doc): the fix for a metadata call wedged
+     *  behind a stuck query (root-caused live 2026-09-28 to a stalled/trickling R2 read
+     *  Calcite's own cancel cannot interrupt — see file/.../S3FileIOTables.java's
+     *  apiCallAttemptTimeout comment) is not to reach in and unstick that read, it's to make
+     *  the existing kill-and-respawn recovery fire fast enough to matter — comfortably under
+     *  Claude Desktop's own ~4-minute client-side tool-call timeout, not the 12 minutes
+     *  {@link #queryTimeoutSeconds()}'s default yields via the watchdog's normal multiples. */
+    private static final int DEFAULT_METADATA_QUERY_TIMEOUT_SECONDS = 15;
+
+    private static int metadataQueryTimeoutSeconds() {
+        String raw = System.getProperty("askamerica.metadata.query.timeout.seconds");
+        if (raw == null || raw.isEmpty()) {
+            raw = System.getenv("ASKAMERICA_METADATA_QUERY_TIMEOUT_SECONDS");
+        }
+        if (raw != null && !raw.isEmpty()) {
+            try {
+                int v = Integer.parseInt(raw.trim());
+                return Math.max(0, v);
+            } catch (NumberFormatException e) {
+                log.println("[askamerica-mcp] bad metadata query timeout '" + raw + "', using "
+                    + DEFAULT_METADATA_QUERY_TIMEOUT_SECONDS + "s");
+            }
+        }
+        return DEFAULT_METADATA_QUERY_TIMEOUT_SECONDS;
+    }
+
+    /**
+     * Runs an {@code information_schema.*} metadata query with a timeout bound and watchdog
+     * visibility — {@code describe_table} and {@code list_schemas} used to run these raw,
+     * with neither, so a wedged pgwire-govdata server (seen live, and already documented in
+     * PgwireGovDataConnector's own javadoc: "information_schema.schemata queries hang
+     * indefinitely against pgwire-calcite, no error, no response") had nothing to recover
+     * it — every caller just waited on Claude Desktop's own ~4-minute client-side timeout
+     * instead of this server's, with no automatic recovery at all. Caller closes {@code st}
+     * and removes it from {@link #ACTIVE_STATEMENTS} in its own {@code finally}, same as
+     * every other guarded query on this connection.
+     */
+    private static ResultSet executeMetaQuery(Statement st, String sql) throws java.sql.SQLException {
+        int timeoutSeconds = metadataQueryTimeoutSeconds();
+        st.setQueryTimeout(timeoutSeconds);
+        ACTIVE_STATEMENTS.put(st, new long[]{System.currentTimeMillis(), timeoutSeconds});
+        return st.executeQuery(sql);
+    }
+
     /** Reduce a caller-supplied identifier to a safe [a-z0-9_] literal for meta queries. */
     private static String safeIdent(String s) {
         return s == null ? "" : s.replaceAll("[^A-Za-z0-9_]", "").toLowerCase();
@@ -4593,10 +4970,10 @@ public class McpServer {
         java.util.Set<String> seen = new java.util.HashSet<>();
         try {
             Connection c = getCatalogConnection();
-            try (Statement st = c.createStatement();
-                 ResultSet rs = st.executeQuery(
-                     "SELECT schema_name, remarks FROM information_schema.schemata "
-                     + "ORDER BY schema_name")) {
+            Statement st = c.createStatement();
+            try (ResultSet rs = executeMetaQuery(st,
+                    "SELECT schema_name, remarks FROM information_schema.schemata "
+                    + "ORDER BY schema_name")) {
                 while (rs.next()) {
                     String name = rs.getString(1);
                     if (name == null) {
@@ -4609,6 +4986,9 @@ public class McpServer {
                     seen.add(lower);
                     arr.add(schemaEntry(lower, rs.getString(2)));
                 }
+            } finally {
+                ACTIVE_STATEMENTS.remove(st);
+                st.close();
             }
         } catch (Exception e) {
             // Do not fall through to the allow-list. Swallowing this reported a healthy
@@ -4785,10 +5165,10 @@ public class McpServer {
         out.put("table", t);
 
         // Table type + description (information_schema resolves both base tables and views).
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
-                 "SELECT table_type, remarks FROM information_schema.tables "
-                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "'")) {
+        Statement typeSt = c.createStatement();
+        try (ResultSet rs = executeMetaQuery(typeSt,
+                "SELECT table_type, remarks FROM information_schema.tables "
+                + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "'")) {
             if (rs.next()) {
                 out.put("type", mcpTableType(rs.getString(1)));
                 String tdesc = Catalog.tableDescription(s, t);
@@ -4799,16 +5179,19 @@ public class McpServer {
                     out.put("description", tdesc);
                 }
             }
+        } finally {
+            ACTIVE_STATEMENTS.remove(typeSt);
+            typeSt.close();
         }
 
         // Columns — resolved by Calcite, so view row types come through correctly.
         ArrayNode cols = MAPPER.createArrayNode();
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
-                 "SELECT column_name, data_type, is_nullable, remarks "
-                 + "FROM information_schema.columns "
-                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "' "
-                 + "ORDER BY ordinal_position")) {
+        Statement colSt = c.createStatement();
+        try (ResultSet rs = executeMetaQuery(colSt,
+                "SELECT column_name, data_type, is_nullable, remarks "
+                + "FROM information_schema.columns "
+                + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "' "
+                + "ORDER BY ordinal_position")) {
             while (rs.next()) {
                 String cname = rs.getString(1);
                 ObjectNode col = MAPPER.createObjectNode();
@@ -4824,6 +5207,9 @@ public class McpServer {
                 }
                 cols.add(col);
             }
+        } finally {
+            ACTIVE_STATEMENTS.remove(colSt);
+            colSt.close();
         }
         out.set("columns", cols);
 
@@ -4834,26 +5220,29 @@ public class McpServer {
         // to notice. The schemas already declare these keys; reporting them here is what makes the
         // grain visible at the point a caller decides how to join.
         ArrayNode pk = MAPPER.createArrayNode();
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
-                 "SELECT k.column_name FROM information_schema.key_column_usage k "
-                 + "JOIN information_schema.table_constraints tc "
-                 + "  ON k.constraint_name = tc.constraint_name "
-                 + " AND k.table_schema = tc.table_schema "
-                 + " AND k.table_name = tc.table_name "
-                 + "WHERE lower(k.table_schema) = '" + s + "' "
-                 + "  AND lower(k.table_name) = '" + t + "' "
-                 // Restated for tc, not redundant: each metadata table prunes from its own
-                 // predicates, and without these the constraints scan walks every table in every
-                 // schema to answer a question about one — the whole-catalog resolution that made
-                 // describe_table both slow and breakable by an unrelated table.
-                 + "  AND lower(tc.table_schema) = '" + s + "' "
-                 + "  AND lower(tc.table_name) = '" + t + "' "
-                 + "  AND tc.constraint_type = 'PRIMARY KEY' "
-                 + "ORDER BY k.ordinal_position")) {
+        Statement pkSt = c.createStatement();
+        try (ResultSet rs = executeMetaQuery(pkSt,
+                "SELECT k.column_name FROM information_schema.key_column_usage k "
+                + "JOIN information_schema.table_constraints tc "
+                + "  ON k.constraint_name = tc.constraint_name "
+                + " AND k.table_schema = tc.table_schema "
+                + " AND k.table_name = tc.table_name "
+                + "WHERE lower(k.table_schema) = '" + s + "' "
+                + "  AND lower(k.table_name) = '" + t + "' "
+                // Restated for tc, not redundant: each metadata table prunes from its own
+                // predicates, and without these the constraints scan walks every table in every
+                // schema to answer a question about one — the whole-catalog resolution that made
+                // describe_table both slow and breakable by an unrelated table.
+                + "  AND lower(tc.table_schema) = '" + s + "' "
+                + "  AND lower(tc.table_name) = '" + t + "' "
+                + "  AND tc.constraint_type = 'PRIMARY KEY' "
+                + "ORDER BY k.ordinal_position")) {
             while (rs.next()) {
                 pk.add(rs.getString(1));
             }
+        } finally {
+            ACTIVE_STATEMENTS.remove(pkSt);
+            pkSt.close();
         }
         if (pk.size() > 0) {
             out.set("primaryKey", pk);
@@ -6556,6 +6945,13 @@ public class McpServer {
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
             "(?i)Welch'?s t[- ]test|\\bt[- ]test\\b|hypothesis test"),
             new String[]{"hypothesis_test"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)\\bARIMA\\b"),
+            new String[]{"arima_forecast"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)\\bGARCH\\b"),
+            new String[]{"garch_forecast", "volatility_forecast"});
+        STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
+            "(?i)volatility forecast|\\bEWMA\\b"),
+            new String[]{"volatility_forecast", "garch_forecast"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile("(?i)Gini coefficient"),
             new String[]{"gini_coefficient"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
@@ -8450,7 +8846,7 @@ public class McpServer {
      * <p>A term normalized differently from the column simply fails to match, silently, so this
      * deliberately stays conservative: it strips only what the bridge's own comment names.
      */
-    private static String normalizeOrgName(String term) {
+    static String normalizeOrgName(String term) {
         String s = term.toLowerCase(java.util.Locale.ROOT)
             .replaceAll("[^a-z0-9 ]", " ")
             .replaceAll("\\b(inc|incorporated|corp|corporation|co|company|llc|llp|lp|ltd|"
@@ -8520,6 +8916,661 @@ public class McpServer {
         } catch (Exception e) {
             log.println("[askamerica-mcp] ticker lookup for " + t + " failed: " + e.getMessage());
             return null;
+        }
+    }
+
+    // ── extract_entities ─────────────────────────────────────────────────────
+
+    /** entity-linked-sources.json: for "org" and "person", the identifier column on the
+     *  canonical table mapped to the consumer tables that carry it. */
+    private static final java.util.Map<String, java.util.Map<String, java.util.List<String>>>
+        ENTITY_LINKED = loadEntityLinkedSources();
+    private static final java.util.Map<String, java.util.List<String>> ORG_LINKED =
+        ENTITY_LINKED.get("org");
+    private static final java.util.Map<String, java.util.List<String>> PERSON_LINKED =
+        ENTITY_LINKED.get("person");
+
+    private static java.util.Map<String, java.util.Map<String, java.util.List<String>>>
+            loadEntityLinkedSources() {
+        try (java.io.InputStream in = McpServer.class.getResourceAsStream(
+                "/entity-linked-sources.json")) {
+            if (in == null) {
+                throw new IllegalStateException("entity-linked-sources.json is missing from "
+                    + "the engine resources");
+            }
+            JsonNode root = MAPPER.readTree(in);
+            java.util.Map<String, java.util.Map<String, java.util.List<String>>> all =
+                new java.util.LinkedHashMap<>();
+            for (String kind : new String[]{"org", "person"}) {
+                java.util.Map<String, java.util.List<String>> m = new java.util.LinkedHashMap<>();
+                java.util.Iterator<java.util.Map.Entry<String, JsonNode>> it =
+                    root.path(kind).fields();
+                while (it.hasNext()) {
+                    java.util.Map.Entry<String, JsonNode> e = it.next();
+                    m.put(e.getKey(), textArray(e.getValue()));
+                }
+                if (m.isEmpty()) {
+                    throw new IllegalStateException("entity-linked-sources.json has no '"
+                        + kind + "' section");
+                }
+                all.put(kind, m);
+            }
+            return all;
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("could not read entity-linked-sources.json", e);
+        }
+    }
+
+    private static final int ENTITY_PROBE_CHUNK = 500;
+    private static final java.util.List<String> ENTITY_TYPES =
+        java.util.Arrays.asList("org", "person", "geo");
+
+    private static String inList(java.util.Collection<String> values) {
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("no candidate names to look up");
+        }
+        StringBuilder in = new StringBuilder();
+        for (String n : values) {
+            if (in.length() > 0) {
+                in.append(", ");
+            }
+            in.append(sqlStr(n));
+        }
+        return in.toString();
+    }
+
+    /**
+     * Exact-equality probe of candidate names against the variant registry.
+     *
+     * <p>Equality on {@code source_name_normalized} only — never LIKE. The bridge has no index
+     * on the name, so a prefix or fuzzy predicate is a full scan per statement; an IN list of
+     * equalities is the one shape that stays cheap however many candidates a text produces.
+     * Every variant row points at its entity through
+     * {@code COALESCE(lei, sec_cik, source_name_normalized) = canonical_entity_id}; the
+     * canonical table has one row per source mention, so it is collapsed per entity before
+     * joining.
+     */
+    static String buildExtractEntitiesSql(java.util.Collection<String> norms) {
+        String in = inList(norms);
+        StringBuilder fk = new StringBuilder();
+        StringBuilder outFk = new StringBuilder();
+        for (String col : ORG_LINKED.keySet()) {
+            if ("sec_cik".equals(col)) {
+                continue;
+            }
+            fk.append(", MAX(").append(col).append(") AS ").append(col);
+            outFk.append(", cagg.").append(col);
+        }
+        return "WITH raw AS (SELECT source_name_normalized AS matched_norm, "
+            + "COALESCE(lei, sec_cik, source_name_normalized) AS entity_key, lei, sec_cik, "
+            + "gleif_legal_name, source_schema FROM ref.entity_org_bridge "
+            + "WHERE source_name_normalized IN (" + in + ")), "
+            + "sch AS (SELECT DISTINCT matched_norm, entity_key, source_schema FROM raw), "
+            + "agg_sch AS (SELECT matched_norm, entity_key, string_agg(source_schema) "
+            + "AS matched_in FROM sch GROUP BY matched_norm, entity_key), "
+            + "m AS (SELECT matched_norm, entity_key, MAX(lei) AS lei, MAX(sec_cik) AS sec_cik, "
+            + "MAX(gleif_legal_name) AS gleif_legal_name, COUNT(*) AS variant_rows "
+            + "FROM raw GROUP BY matched_norm, entity_key), "
+            + "cagg AS (SELECT canonical_entity_id, MAX(canonical_name) AS canonical_name" + fk
+            + " FROM ref.canonical_org_entity WHERE canonical_entity_id IN "
+            + "(SELECT entity_key FROM m) GROUP BY canonical_entity_id) "
+            + "SELECT m.matched_norm, m.entity_key AS canonical_entity_id, "
+            + "COALESCE(cagg.canonical_name, m.gleif_legal_name, m.entity_key) AS canonical_name, "
+            + "m.lei, m.sec_cik, m.variant_rows, agg_sch.matched_in, "
+            + "ge.jurisdiction, ge.headquarters_city, ge.entity_status" + outFk + " "
+            + "FROM m LEFT JOIN agg_sch ON agg_sch.matched_norm = m.matched_norm "
+            + "AND agg_sch.entity_key = m.entity_key "
+            + "LEFT JOIN cagg ON cagg.canonical_entity_id = m.entity_key "
+            + "LEFT JOIN ref.gleif_entities ge ON ge.lei = m.lei";
+    }
+
+    /**
+     * People, by exact match on the parsed canonical name. The person registry keeps no
+     * normalized-variant column (entity_person_bridge is a pairwise match log, not a search
+     * surface), and its canonical_name is documented only as a "parsed (first, last) name", so
+     * both "first last" and "last, first" are probed. It is one IN-list scan of one column per
+     * call, not one scan per candidate.
+     */
+    static String buildExtractPersonsSql(java.util.Collection<String> personKeys) {
+        java.util.Set<String> forms = new java.util.LinkedHashSet<>();
+        for (String k : personKeys) {
+            forms.add(k);
+            int sp = k.indexOf(' ');
+            forms.add(k.substring(sp + 1) + ", " + k.substring(0, sp));
+        }
+        StringBuilder cols = new StringBuilder();
+        for (String col : PERSON_LINKED.keySet()) {
+            cols.append(", ").append(col);
+        }
+        return "SELECT canonical_entity_id, canonical_name" + cols + " "
+            + "FROM ref.canonical_person_entity WHERE lower(canonical_name) IN ("
+            + inList(forms) + ")";
+    }
+
+    static String buildExtractStatesSql(java.util.Collection<String> norms) {
+        return "SELECT DISTINCT state_fips, state_abbr, state_name FROM geo.state_ref "
+            + "WHERE lower(state_name) IN (" + inList(norms) + ")";
+    }
+
+    static String buildExtractCountiesSql(java.util.Collection<String> norms) {
+        // county_code carries the full "Mecklenburg County" form. The bare county_name is not
+        // probed: it would turn every capitalized "Orange" or "Washington" into a county.
+        return "SELECT DISTINCT county_fips, state_fips, county_name, county_code "
+            + "FROM geo.counties WHERE lower(county_code) IN (" + inList(norms) + ")";
+    }
+
+    private static String rowText(JsonNode r, String col) {
+        JsonNode v = r.has(col) ? r.get(col) : r.get(col.toUpperCase(java.util.Locale.ROOT));
+        return v == null || v.isNull() ? null : v.asText();
+    }
+
+    /** Copies plain columns and the linked identifiers of {@code r} into {@code e}; returns
+     *  how many independent identifiers the entity holds. */
+    private static int addIdentifiers(ObjectNode e, JsonNode r,
+            java.util.Map<String, java.util.List<String>> linked, String[] plain) {
+        int count = 0;
+        for (String c : plain) {
+            String v = rowText(r, c);
+            if (v != null) {
+                e.put(c, v);
+                if ("lei".equals(c) || "sec_cik".equals(c)) {
+                    count++;
+                }
+            }
+        }
+        ArrayNode ls = e.putArray("linked_sources");
+        for (java.util.Map.Entry<String, java.util.List<String>> fkCol : linked.entrySet()) {
+            String v = rowText(r, fkCol.getKey());
+            if (v == null) {
+                continue;
+            }
+            if (!"sec_cik".equals(fkCol.getKey())) {
+                count++;
+            }
+            ObjectNode l = ls.addObject();
+            l.put("identifier", fkCol.getKey());
+            l.put("value", v);
+            ArrayNode tables = l.putArray("tables");
+            for (String t : fkCol.getValue()) {
+                tables.add(t);
+            }
+        }
+        e.put("identifier_count", count);
+        return count;
+    }
+
+    private static void rankByIdentifiers(java.util.Map<String, java.util.List<ObjectNode>> m) {
+        for (java.util.List<ObjectNode> list : m.values()) {
+            list.sort((x, y) -> {
+                int c = Integer.compare(y.get("identifier_count").asInt(),
+                    x.get("identifier_count").asInt());
+                return c != 0 ? c : x.get("canonical_name").asText()
+                    .compareTo(y.get("canonical_name").asText());
+            });
+        }
+    }
+
+    /** "first last" from a registry canonical name in either "First Last" or "Last, First". */
+    static String personKeyOfCanonicalName(String canonical) {
+        String n = canonical.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L} ,'\\-]", " ")
+            .replaceAll("\\s+", " ").trim();
+        int comma = n.indexOf(',');
+        String first;
+        String last;
+        if (comma > 0) {
+            last = n.substring(0, comma).trim();
+            first = n.substring(comma + 1).trim();
+            int sp = first.indexOf(' ');
+            if (sp > 0) {
+                first = first.substring(0, sp);
+            }
+            int lsp = last.lastIndexOf(' ');
+            if (lsp > 0) {
+                last = last.substring(lsp + 1);
+            }
+        } else {
+            String[] parts = n.split(" ");
+            if (parts.length < 2) {
+                return n;
+            }
+            first = parts[0];
+            last = parts[parts.length - 1];
+        }
+        return first + " " + last;
+    }
+
+    private static final int ENTITY_MAX_TEXT_CHARS = 200_000;
+
+    private static String extractEntitiesTool(JsonNode args) throws Exception {
+        String text = args.path("text").asText("");
+        if (text.trim().isEmpty()) {
+            throw new IllegalArgumentException("text is required");
+        }
+        if (text.length() > ENTITY_MAX_TEXT_CHARS) {
+            throw new IllegalArgumentException("text is " + text.length() + " characters; the "
+                + "limit is " + ENTITY_MAX_TEXT_CHARS + " — split it and call again");
+        }
+        java.util.List<String> types = textArray(args.path("types"));
+        if (types.isEmpty()) {
+            types = ENTITY_TYPES;
+        }
+        for (String t : types) {
+            if (!ENTITY_TYPES.contains(t)) {
+                throw new IllegalArgumentException("types must be drawn from " + ENTITY_TYPES
+                    + ", got '" + t + "'");
+            }
+        }
+        boolean wantOrg = types.contains("org");
+        boolean wantPerson = types.contains("person");
+        boolean wantGeo = types.contains("geo");
+        int maxCandidates = args.has("max_candidates") && !args.get("max_candidates").isNull()
+            ? Math.min(Math.max(1, args.get("max_candidates").asInt()), 20) : 5;
+        int minSingle = args.has("min_single_token_identifiers")
+            && !args.get("min_single_token_identifiers").isNull()
+            ? Math.max(0, args.get("min_single_token_identifiers").asInt()) : 2;
+        boolean includeFacts = args.path("include_facts").asBoolean(false);
+        boolean withSentiment = args.path("score_sentiment").asBoolean(false);
+        String domain = tsText(args, "domain", TextScoringEngine.DEFAULT_DOMAIN);
+
+        java.util.List<EntityMentionExtractor.Candidate> cands =
+            EntityMentionExtractor.candidates(text);
+        java.util.Set<String> normProbe = new java.util.LinkedHashSet<>(
+            EntityMentionExtractor.distinctNorms(cands));
+        java.util.Set<String> personProbe = new java.util.LinkedHashSet<>();
+        for (EntityMentionExtractor.Candidate c : cands) {
+            if (c.personKey != null) {
+                personProbe.add(c.personKey);
+            }
+        }
+
+        // Tickers written the way news copy writes them resolve to a registered name, which
+        // then joins the same equality probe.
+        java.util.Map<String, String[]> tickerNames = new java.util.LinkedHashMap<>();
+        if (wantOrg) {
+            java.util.Set<String> tickers = EntityMentionExtractor.tickers(text);
+            if (!tickers.isEmpty()) {
+                java.util.List<String> up = new java.util.ArrayList<>();
+                for (String t : tickers) {
+                    up.add(t.toUpperCase(java.util.Locale.ROOT));
+                }
+                for (JsonNode r : runSqlRows("SELECT ticker, title FROM ref.sec_company_tickers "
+                        + "WHERE upper(ticker) IN (" + inList(up) + ")", MAX_LIMIT)) {
+                    String tk = rowText(r, "ticker");
+                    String title = rowText(r, "title");
+                    if (tk != null && title != null) {
+                        String norm = normalizeOrgName(title);
+                        tickerNames.put(tk.toUpperCase(java.util.Locale.ROOT),
+                            new String[]{title, norm});
+                        normProbe.add(norm);
+                    }
+                }
+            }
+        }
+        if (normProbe.isEmpty()) {
+            ObjectNode empty = MAPPER.createObjectNode();
+            empty.putArray("entities");
+            empty.put("candidates_probed", 0);
+            empty.put("note", "no capitalized name-like spans or ticker symbols found");
+            return MAPPER.writeValueAsString(empty);
+        }
+        java.util.List<String> probeList = new java.util.ArrayList<>(normProbe);
+        java.util.List<String> personList = new java.util.ArrayList<>(personProbe);
+
+        java.util.Map<String, java.util.List<ObjectNode>> byNorm = new java.util.HashMap<>();
+        if (wantOrg) {
+            for (int i = 0; i < probeList.size(); i += ENTITY_PROBE_CHUNK) {
+                for (JsonNode r : runSqlRows(buildExtractEntitiesSql(probeList.subList(i,
+                        Math.min(probeList.size(), i + ENTITY_PROBE_CHUNK))), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "org");
+                    e.put("canonical_entity_id", rowText(r, "canonical_entity_id"));
+                    e.put("canonical_name", rowText(r, "canonical_name"));
+                    addIdentifiers(e, r, ORG_LINKED, new String[]{"lei", "sec_cik",
+                        "jurisdiction", "headquarters_city", "entity_status", "matched_in"});
+                    byNorm.computeIfAbsent(rowText(r, "matched_norm"),
+                        k -> new java.util.ArrayList<>()).add(e);
+                }
+            }
+            rankByIdentifiers(byNorm);
+        }
+        java.util.Map<String, java.util.List<ObjectNode>> byPerson = new java.util.HashMap<>();
+        if (wantPerson && !personList.isEmpty()) {
+            for (int i = 0; i < personList.size(); i += ENTITY_PROBE_CHUNK) {
+                for (JsonNode r : runSqlRows(buildExtractPersonsSql(personList.subList(i,
+                        Math.min(personList.size(), i + ENTITY_PROBE_CHUNK))), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "person");
+                    e.put("canonical_entity_id", rowText(r, "canonical_entity_id"));
+                    e.put("canonical_name", rowText(r, "canonical_name"));
+                    addIdentifiers(e, r, PERSON_LINKED, new String[0]);
+                    byPerson.computeIfAbsent(personKeyOfCanonicalName(
+                        rowText(r, "canonical_name")), k -> new java.util.ArrayList<>())
+                        .add(e);
+                }
+            }
+            rankByIdentifiers(byPerson);
+        }
+        java.util.Map<String, java.util.List<ObjectNode>> byGeo = new java.util.HashMap<>();
+        if (wantGeo) {
+            for (int i = 0; i < probeList.size(); i += ENTITY_PROBE_CHUNK) {
+                java.util.List<String> chunk = probeList.subList(i,
+                    Math.min(probeList.size(), i + ENTITY_PROBE_CHUNK));
+                for (JsonNode r : runSqlRows(buildExtractStatesSql(chunk), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "geo");
+                    e.put("geo_level", "state");
+                    e.put("canonical_entity_id", "state:" + rowText(r, "state_fips"));
+                    e.put("canonical_name", rowText(r, "state_name"));
+                    e.put("state_fips", rowText(r, "state_fips"));
+                    e.put("state_abbr", rowText(r, "state_abbr"));
+                    e.put("identifier_count", 1);
+                    byGeo.computeIfAbsent(normalizeOrgName(rowText(r, "state_name")),
+                        k -> new java.util.ArrayList<>()).add(e);
+                }
+                for (JsonNode r : runSqlRows(buildExtractCountiesSql(chunk), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "geo");
+                    e.put("geo_level", "county");
+                    e.put("canonical_entity_id", "county:" + rowText(r, "county_fips"));
+                    e.put("canonical_name", rowText(r, "county_code"));
+                    e.put("county_fips", rowText(r, "county_fips"));
+                    e.put("state_fips", rowText(r, "state_fips"));
+                    e.put("identifier_count", 1);
+                    byGeo.computeIfAbsent(normalizeOrgName(rowText(r, "county_code")),
+                        k -> new java.util.ArrayList<>()).add(e);
+                }
+            }
+        }
+
+        java.util.List<EntityMentionExtractor.Candidate> accepted =
+            EntityMentionExtractor.resolve(cands, c -> byNorm.containsKey(c.norm)
+                || byGeo.containsKey(c.norm)
+                || (c.personKey != null && byPerson.containsKey(c.personKey)));
+
+        // Group mentions: a person is keyed by "first last" so "Nancy P. Pelosi" and
+        // "Nancy Pelosi" are one entity; everything else by normalized name.
+        java.util.Map<String, java.util.List<EntityMentionExtractor.Candidate>> grouped =
+            new java.util.LinkedHashMap<>();
+        for (EntityMentionExtractor.Candidate c : accepted) {
+            String key = c.personKey != null && byPerson.containsKey(c.personKey)
+                ? "p:" + c.personKey : c.norm;
+            grouped.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(c);
+        }
+        // Bare surnames ("Pelosi said") join the one person already named in full.
+        java.util.Map<String, String> lastToGroup = new java.util.HashMap<>();
+        java.util.Set<String> ambiguousLast = new java.util.HashSet<>();
+        for (String key : grouped.keySet()) {
+            if (key.startsWith("p:")) {
+                String personKey = key.substring(2);
+                String last = personKey.substring(personKey.lastIndexOf(' ') + 1);
+                if (lastToGroup.containsKey(last)) {
+                    ambiguousLast.add(last);
+                }
+                lastToGroup.put(last, key);
+            }
+        }
+        for (String amb : ambiguousLast) {
+            lastToGroup.remove(amb);
+        }
+        java.util.Map<String, Integer> surnameCount = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, java.util.List<EntityMentionExtractor.Candidate>> sm
+                : EntityMentionExtractor.surnameMentions(cands, accepted, lastToGroup)
+                    .entrySet()) {
+            grouped.get(sm.getKey()).addAll(sm.getValue());
+            surnameCount.put(sm.getKey(), sm.getValue().size());
+        }
+        java.util.List<int[]> sentences = EntityMentionExtractor.sentenceSpans(text);
+
+        ObjectNode out = MAPPER.createObjectNode();
+        ArrayNode entities = out.putArray("entities");
+        ArrayNode droppedNames = MAPPER.createArrayNode();
+        int dropped = 0;
+        java.util.List<ObjectNode> topOrgs = new java.util.ArrayList<>();
+        java.util.List<ObjectNode> topPeople = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, java.util.List<EntityMentionExtractor.Candidate>> g
+                : grouped.entrySet()) {
+            java.util.List<EntityMentionExtractor.Candidate> ms = g.getValue();
+            ms.sort(java.util.Comparator.comparingInt(c -> c.start));
+            EntityMentionExtractor.Candidate first = ms.get(0);
+            String key = g.getKey();
+            java.util.List<ObjectNode> orgs = byNorm.getOrDefault(first.norm,
+                java.util.Collections.<ObjectNode>emptyList());
+            java.util.List<ObjectNode> people = key.startsWith("p:")
+                ? byPerson.get(key.substring(2)) : java.util.Collections.<ObjectNode>emptyList();
+            java.util.List<ObjectNode> geos = byGeo.getOrDefault(first.norm,
+                java.util.Collections.<ObjectNode>emptyList());
+            boolean single = first.tokens == 1;
+            // A lone capitalized word matching only an obscure organisation is the commonest
+            // false positive; it is reported below, not silently discarded.
+            if (single && people.isEmpty() && geos.isEmpty() && !orgs.isEmpty()
+                && orgs.get(0).get("identifier_count").asInt() < minSingle) {
+                dropped++;
+                if (droppedNames.size() < 20) {
+                    droppedNames.add(first.surface);
+                }
+                continue;
+            }
+            java.util.List<ObjectNode> all = new java.util.ArrayList<>();
+            java.util.List<String> typesMatched = new java.util.ArrayList<>();
+            if (!orgs.isEmpty()) {
+                all.addAll(orgs);
+                typesMatched.add("org");
+            }
+            if (!people.isEmpty()) {
+                all.addAll(people);
+                typesMatched.add("person");
+            }
+            if (!geos.isEmpty()) {
+                all.addAll(geos);
+                typesMatched.add("geo");
+            }
+            ObjectNode ent = entities.addObject();
+            ent.put("matched_name", key.startsWith("p:") ? key.substring(2) : first.norm);
+            ArrayNode forms = ent.putArray("surface_forms");
+            java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+            for (EntityMentionExtractor.Candidate c : ms) {
+                seen.add(c.surface);
+            }
+            for (String f : seen) {
+                forms.add(f);
+            }
+            ent.put("mentions", ms.size());
+            if (surnameCount.containsKey(key)) {
+                ent.put("mentions_by_surname_only", surnameCount.get(key));
+            }
+            ArrayNode offs = ent.putArray("first_offsets");
+            for (int k = 0; k < Math.min(5, ms.size()); k++) {
+                offs.add(ms.get(k).start);
+            }
+            ent.put("single_token", single);
+            ent.put("ambiguous", all.size() > 1);
+            ArrayNode tm = ent.putArray("types_matched");
+            for (String t : typesMatched) {
+                tm.add(t);
+            }
+            ArrayNode cs = ent.putArray("candidates");
+            for (int k = 0; k < Math.min(maxCandidates, all.size()); k++) {
+                cs.add(all.get(k));
+            }
+            if (all.size() > maxCandidates) {
+                ent.put("candidates_omitted", all.size() - maxCandidates);
+            }
+            if (!orgs.isEmpty()) {
+                topOrgs.add(orgs.get(0));
+            }
+            if (!people.isEmpty()) {
+                topPeople.add(people.get(0));
+            }
+            if (withSentiment) {
+                double sum = 0;
+                int scored = 0;
+                int nSent = 0;
+                for (int[] sp : sentences) {
+                    boolean has = false;
+                    for (EntityMentionExtractor.Candidate c : ms) {
+                        if (c.start >= sp[0] && c.start < sp[1]) {
+                            has = true;
+                            break;
+                        }
+                    }
+                    if (!has) {
+                        continue;
+                    }
+                    nSent++;
+                    TextScoringEngine.Sentiment sn =
+                        TextScoringEngine.sentiment(text.substring(sp[0], sp[1]), domain);
+                    if (sn.score != null) {
+                        sum += sn.score;
+                        scored++;
+                    }
+                }
+                ObjectNode sj = ent.putObject("sentiment");
+                sj.put("domain", domain);
+                sj.put("sentences_mentioning", nSent);
+                sj.put("sentences_scored", scored);
+                if (scored == 0) {
+                    sj.putNull("mean_score");
+                } else {
+                    sj.put("mean_score", sum / scored);
+                }
+            }
+        }
+        if (includeFacts) {
+            attachOrgParents(topOrgs);
+            attachPersonProfiles(topPeople);
+        }
+        if (!tickerNames.isEmpty()) {
+            ArrayNode tk = out.putArray("tickers");
+            for (java.util.Map.Entry<String, String[]> t : tickerNames.entrySet()) {
+                ObjectNode tj = tk.addObject();
+                tj.put("ticker", t.getKey());
+                tj.put("registered_name", t.getValue()[0]);
+                java.util.List<ObjectNode> ranked = byNorm.get(t.getValue()[1]);
+                tj.put("resolved", ranked != null);
+                if (ranked != null) {
+                    tj.set("entity", ranked.get(0));
+                }
+            }
+        }
+        out.set("types_searched", MAPPER.valueToTree(types));
+        out.put("candidates_probed", probeList.size());
+        out.put("dropped_weak_single_token", dropped);
+        if (dropped > 0) {
+            out.set("dropped_weak_single_token_names", droppedNames);
+        }
+        out.put("note", "Names are matched by exact equality against the registries, so an "
+            + "entity written in a form they do not hold (a nickname, a misspelling, a title "
+            + "instead of a name) is not found: a miss, not evidence of absence. A match means "
+            + "the string is a registered name, not that the text means that entity — check "
+            + "'ambiguous', 'types_matched' and each candidate's identifiers, and use the "
+            + "text's context. People are matched on first and last name only, so common names "
+            + "are ambiguous by nature. A bare surname is attached to a person only when "
+            + "exactly one person with that surname was named in full. Lone-word organisation "
+            + "names need " + minSingle + "+ registry identifiers to be kept (dropped ones "
+            + "are listed). Agencies and places below state/county level are not resolved.");
+        return MAPPER.writeValueAsString(out);
+    }
+
+    /** GLEIF parent and ultimate parent for each top organisation match that has an LEI. */
+    private static void attachOrgParents(java.util.List<ObjectNode> tops) throws Exception {
+        java.util.Set<String> leis = new java.util.LinkedHashSet<>();
+        for (ObjectNode t : tops) {
+            if (t.has("lei")) {
+                leis.add(t.get("lei").asText().toUpperCase(java.util.Locale.ROOT));
+            }
+        }
+        if (leis.isEmpty()) {
+            return;
+        }
+        java.util.Map<String, ArrayNode> parents = new java.util.HashMap<>();
+        for (JsonNode r : runSqlRows("SELECT child_lei, parent_legal_name, parent_lei, "
+                + "relationship_type FROM ref.current_gleif_parents WHERE upper(child_lei) IN ("
+                + inList(leis) + ")", MAX_LIMIT)) {
+            ObjectNode p = MAPPER.createObjectNode();
+            p.put("relationship", rowText(r, "relationship_type"));
+            p.put("parent_name", rowText(r, "parent_legal_name"));
+            p.put("parent_lei", rowText(r, "parent_lei"));
+            parents.computeIfAbsent(rowText(r, "child_lei").toUpperCase(java.util.Locale.ROOT),
+                k -> MAPPER.createArrayNode()).add(p);
+        }
+        for (ObjectNode t : tops) {
+            if (t.has("lei")) {
+                ArrayNode p = parents.get(t.get("lei").asText().toUpperCase(
+                    java.util.Locale.ROOT));
+                if (p != null) {
+                    t.set("parents", p);
+                }
+            }
+        }
+    }
+
+    /**
+     * A small fact card for people the registry links to an official record: party, state and
+     * district for a member of Congress; court and appointing president for a federal judge.
+     * Anything else is left to the caller's follow-up query via linked_sources.
+     */
+    private static void attachPersonProfiles(java.util.List<ObjectNode> tops) throws Exception {
+        java.util.Set<String> bioguide = new java.util.LinkedHashSet<>();
+        java.util.Set<String> judges = new java.util.LinkedHashSet<>();
+        for (ObjectNode t : tops) {
+            for (JsonNode l : t.path("linked_sources")) {
+                if ("officials_member_bioguide_id".equals(l.path("identifier").asText())) {
+                    bioguide.add(l.get("value").asText());
+                } else if ("officials_judge_jid".equals(l.path("identifier").asText())) {
+                    judges.add(l.get("value").asText());
+                }
+            }
+        }
+        java.util.Map<String, ObjectNode> member = new java.util.HashMap<>();
+        if (!bioguide.isEmpty()) {
+            // One row per member per congress; newest first so the first seen wins.
+            for (JsonNode r : runSqlRows("SELECT bioguide_id, name_last_first, state_name, "
+                    + "party_name, district, current_member, congress FROM officials.members "
+                    + "WHERE bioguide_id IN (" + inList(bioguide) + ") "
+                    + "ORDER BY congress DESC", MAX_LIMIT)) {
+                String id = rowText(r, "bioguide_id");
+                if (member.containsKey(id)) {
+                    continue;
+                }
+                ObjectNode m = MAPPER.createObjectNode();
+                m.put("record", "officials.members");
+                for (String c : new String[]{"name_last_first", "state_name", "party_name",
+                        "district", "current_member", "congress"}) {
+                    if (rowText(r, c) != null) {
+                        m.put(c, rowText(r, c));
+                    }
+                }
+                member.put(id, m);
+            }
+        }
+        java.util.Map<String, ObjectNode> judge = new java.util.HashMap<>();
+        if (!judges.isEmpty()) {
+            for (JsonNode r : runSqlRows("SELECT jid, first_name, last_name, court_name_1, "
+                    + "appointing_president_1, party_of_appointing_president_1 "
+                    + "FROM officials.federal_judges WHERE jid IN (" + inList(judges) + ")",
+                    MAX_LIMIT)) {
+                ObjectNode j = MAPPER.createObjectNode();
+                j.put("record", "officials.federal_judges");
+                for (String c : new String[]{"first_name", "last_name", "court_name_1",
+                        "appointing_president_1", "party_of_appointing_president_1"}) {
+                    if (rowText(r, c) != null) {
+                        j.put(c, rowText(r, c));
+                    }
+                }
+                judge.put(rowText(r, "jid"), j);
+            }
+        }
+        for (ObjectNode t : tops) {
+            for (JsonNode l : t.path("linked_sources")) {
+                String id = l.path("identifier").asText();
+                ObjectNode prof = "officials_member_bioguide_id".equals(id)
+                    ? member.get(l.get("value").asText())
+                    : "officials_judge_jid".equals(id) ? judge.get(l.get("value").asText())
+                    : null;
+                if (prof != null) {
+                    t.set("profile", prof);
+                }
+            }
         }
     }
 
@@ -10069,6 +11120,118 @@ public class McpServer {
         return new StatsOutput(out.toString(), diagnoseStats(sql,
             java.util.Collections.<String>emptyList(), null, ys.size(), totalRows,
             droppedForNull));
+    }
+
+    private static Integer optInt(JsonNode args, String name) {
+        return args.has(name) && !args.get(name).isNull() ? args.get(name).asInt() : null;
+    }
+
+    private static int tsHorizon(JsonNode args) {
+        return args.has("horizon") && !args.get("horizon").isNull()
+            ? args.get("horizon").asInt() : 1;
+    }
+
+    private static double tsLevel(JsonNode args) {
+        return args.has("level") && !args.get("level").isNull()
+            ? args.get("level").asDouble() : 0.95;
+    }
+
+    private static double tsPeriods(JsonNode args) {
+        return args.has("periods_per_year") && !args.get("periods_per_year").isNull()
+            ? args.get("periods_per_year").asDouble() : 252.0;
+    }
+
+    private static String tsText(JsonNode args, String name, String dflt) {
+        return args.has(name) && !args.get(name).isNull() ? args.get(name).asText() : dflt;
+    }
+
+    private static boolean tsStudentT(JsonNode args) {
+        String d = tsText(args, "distribution", "normal");
+        if ("student_t".equals(d)) {
+            return true;
+        }
+        if ("normal".equals(d)) {
+            return false;
+        }
+        throw new IllegalArgumentException("distribution must be 'normal' or 'student_t', "
+            + "got '" + d + "'");
+    }
+
+    /** A single series extracted from SQL, sorted chronologically. */
+    private static final class Series {
+        final double[] values;
+        final String[] labels;
+        final int totalRows;
+        final int dropped;
+
+        Series(double[] values, String[] labels, int totalRows, int dropped) {
+            this.values = values;
+            this.labels = labels;
+            this.totalRows = totalRows;
+            this.dropped = dropped;
+        }
+    }
+
+    private static Series extractSeries(String sql, String valueCol, String timeCol)
+            throws Exception {
+        StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(
+            getCatalogConnection(), sql, new String[]{valueCol}, new String[]{timeCol});
+        double[] v = ex.column(valueCol);
+        String[] labels = ex.labelColumn(timeCol);
+        if (v.length == 0) {
+            throw new IllegalArgumentException("the SQL returned no usable rows — every row "
+                + "was missing the value or the time column");
+        }
+        return new Series(StatsTimeSeriesEngine.sortByLabel(v, labels),
+            StatsTimeSeriesEngine.sortedLabels(labels), ex.totalRows, ex.droppedForNull);
+    }
+
+    private static StatsOutput tsResult(ObjectNode out, String sql, Series s) {
+        out.put("first_period", s.labels[0]);
+        out.put("last_period", s.labels[s.labels.length - 1]);
+        out.put("rows_returned_by_sql", s.totalRows);
+        out.put("rows_dropped_for_null", s.dropped);
+        return new StatsOutput(out.toString(), diagnoseStats(sql,
+            java.util.Collections.<String>emptyList(), null, s.values.length, s.totalRows,
+            s.dropped));
+    }
+
+    private static StatsOutput arimaTool(String sql, String valueCol, String timeCol,
+            Integer p, int d, Integer q, int maxOrder, int horizon, double level)
+            throws Exception {
+        Series s = extractSeries(sql, valueCol, timeCol);
+        StatsTimeSeriesEngine.ArimaResult r =
+            StatsTimeSeriesEngine.arima(s.values, p, d, q, maxOrder, horizon, level);
+        return tsResult(r.toJson(MAPPER), sql, s);
+    }
+
+    private static double[] returnsFor(Series s, String inputType) {
+        if ("price".equals(inputType)) {
+            return StatsTimeSeriesEngine.logReturnsPercent(s.values);
+        }
+        if ("return".equals(inputType)) {
+            return s.values;
+        }
+        throw new IllegalArgumentException("input_type must be 'price' or 'return', got '"
+            + inputType + "'");
+    }
+
+    private static StatsOutput garchTool(String sql, String valueCol, String timeCol,
+            int horizon, double level, String inputType, boolean studentT,
+            double periodsPerYear) throws Exception {
+        Series s = extractSeries(sql, valueCol, timeCol);
+        StatsTimeSeriesEngine.GarchResult g =
+            StatsTimeSeriesEngine.garch(returnsFor(s, inputType), studentT);
+        return tsResult(StatsTimeSeriesEngine.garchForecastJson(g, horizon, periodsPerYear,
+            level), sql, s);
+    }
+
+    private static StatsOutput volatilityTool(String sql, String valueCol, String timeCol,
+            int horizon, double level, String method, double ewmaLambda, int window,
+            boolean studentT, double periodsPerYear) throws Exception {
+        Series s = extractSeries(sql, valueCol, timeCol);
+        return tsResult(StatsTimeSeriesEngine.volatilityForecast(s.values, s.labels, horizon,
+            level, periodsPerYear, method, ewmaLambda, window, studentT), sql, s);
     }
 
     /**

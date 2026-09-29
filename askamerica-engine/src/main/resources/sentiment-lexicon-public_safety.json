@@ -1,0 +1,62 @@
+{
+  "_comment": "Overlay on the general base for the 'public_safety' domain. Polarity is from a community-safety view. 'positive'/'negative' entries re-file a term (removing it from the opposite list); 'neutral' drops a base term because its polarity is not stable here. STARTER lexicon, unvalidated against labelled data; extend before relying on it.",
+  "neutral": [
+    "cut",
+    "reduce",
+    "fine"
+  ],
+  "positive": [
+    "rescued:2",
+    "rescue",
+    "saved",
+    "contained",
+    "extinguished",
+    "safe",
+    "safer",
+    "crime down:2",
+    "decline in crime:2",
+    "recovered",
+    "survivor"
+  ],
+  "negative": [
+    "shooting:2",
+    "homicide:2",
+    "murder:2",
+    "killed:2",
+    "death",
+    "dead:2",
+    "injured",
+    "wounded:2",
+    "assault",
+    "robbery",
+    "burglary",
+    "theft",
+    "carjacking",
+    "kidnap:2",
+    "abduct:2",
+    "explosion:2",
+    "fire",
+    "crash",
+    "collision",
+    "fatal:2",
+    "stabbing:2",
+    "overdose:2",
+    "riot:2",
+    "hostage:2",
+    "evacuate",
+    "evacuation",
+    "manhunt",
+    "threat",
+    "terror:2",
+    "attack:2",
+    "victim",
+    "missing"
+  ],
+  "uncertainty": [
+    "suspect",
+    "suspected",
+    "alleged",
+    "reportedly",
+    "unconfirmed"
+  ]
+}

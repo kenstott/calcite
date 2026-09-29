@@ -1,0 +1,57 @@
+{
+  "_comment": "Overlay on the general base for the 'legal' domain. Polarity is from the view of the subject of the story (defendant/respondent), not the plaintiff; the same ruling can be good news for one side. 'positive'/'negative' entries re-file a term (removing it from the opposite list); 'neutral' drops a base term because its polarity is not stable here. STARTER lexicon, unvalidated against labelled data; extend before relying on it.",
+  "neutral": [
+    "cut",
+    "risk",
+    "default",
+    "settle",
+    "settlement",
+    "fine"
+  ],
+  "positive": [
+    "acquitted:2",
+    "acquit:2",
+    "dismissed",
+    "dismiss",
+    "exonerated:2",
+    "cleared",
+    "upheld",
+    "affirmed",
+    "granted",
+    "vindicated:2",
+    "injunction denied"
+  ],
+  "negative": [
+    "convicted:2",
+    "convict:2",
+    "indicted:2",
+    "indict:2",
+    "sued",
+    "lawsuit",
+    "liable:2",
+    "violation",
+    "fined",
+    "penalty",
+    "sanction",
+    "guilty:2",
+    "perjury:2",
+    "fraud:2",
+    "breach",
+    "contempt",
+    "overturned",
+    "reversed",
+    "injunction",
+    "subpoena",
+    "arrested:2",
+    "charged",
+    "allegation",
+    "misconduct"
+  ],
+  "uncertainty": [
+    "alleged",
+    "allegedly",
+    "pending",
+    "appeal",
+    "tentative"
+  ]
+}

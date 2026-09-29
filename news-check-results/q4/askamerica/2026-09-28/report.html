@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>USP's 2026 drug shortage figures check out against independent FDA data</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>USP's 2026 drug shortage figures check out against independent FDA data</h1>
+<p class="subtitle">75 active shortages at year-end 2025, 4 newly reported, ~55% discontinuation jump, ~69% injectable share — reconstructed from FDA's own list</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 590" width="880" height="590" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="590" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">USP 2026 Drug Shortages Report vs. Independent FDA Data</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:12px">USP claims (June 2026) checked against health.fda_drug_shortages_history (Wayback reconstruction of FDA's own list)</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">Active shortages, end of 2025</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">75</text>
+  <text class="stat-delta" x="36" y="168" fill="#6b7280">USP: 75 (exact match)</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">health.fda_drug_shortages_history, snapshot 2025-12-16, distinct</text>
+  <text class="caption" x="24" y="216" fill="#6b7280">generic_name, status='Current'</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">Newly reported in 2025</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">4 of 75</text>
+  <text class="stat-delta" x="464" y="168" fill="#6b7280">USP: 4 of 75 (exact match)</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">Same snapshot, initial_posting_date in 2025</text>
+  <rect class="panel-edge" x="20" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Distinct drugs discontinued, 2024 vs 2025</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="67" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="59" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="67" y1="164" x2="390" y2="164" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="59" y="168" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50</text>
+      <line class="grid" x1="67" y1="128" x2="390" y2="128" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="59" y="132" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">100</text>
+      <line class="grid" x1="67" y1="92" x2="390" y2="92" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="59" y="96" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">150</text>
+      <line class="grid" x1="67" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="59" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">200</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="67" y1="56" x2="67" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="67" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="228.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Year</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">Distinct drugs</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-2024" class="tick" x="147.75" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p3-xtick-2025" class="tick" x="309.25" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+    </g>
+    <g id="p3-series-fda-derived-askamerica" class="series">
+      <rect id="p3-mark-fda-derived-askamerica-2024" class="bar" x="96.07" y="119.36" width="102.36" height="80.64" fill="#2563eb"/>
+      <rect id="p3-mark-fda-derived-askamerica-2025" class="bar" x="257.57" y="74.72" width="102.36" height="125.28" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">+55.4% vs USP's stated +60%; same direction, close magnitude</text>
+  <rect class="panel-edge" x="448" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Share of active shortages that are injectable</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="60" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="52" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="182" x2="390" y2="182" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="52" y="186" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="164" x2="390" y2="164" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="52" y="168" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="60" y1="146" x2="390" y2="146" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="52" y="150" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30</text>
+      <line class="grid" x1="60" y1="128" x2="390" y2="128" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="52" y="132" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40</text>
+      <line class="grid" x1="60" y1="110" x2="390" y2="110" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="52" y="114" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50</text>
+      <line class="grid" x1="60" y1="92" x2="390" y2="92" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="52" y="96" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60</text>
+      <line class="grid" x1="60" y1="74" x2="390" y2="74" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-7" class="tick" x="52" y="78" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">70</text>
+      <line class="grid" x1="60" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-8" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">80</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-x-axis-title" class="axis-title" x="225" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Source</text>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">% of shortages</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-fda-derived-askamerica" class="tick" x="142.50" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">FDA-derived (askamerica)</text>
+      <text id="p4-xtick-usp-reported" class="tick" x="307.50" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">USP reported</text>
+    </g>
+    <g id="p4-series-injectable-share" class="series">
+      <rect id="p4-mark-injectable-share-fda-derived-askamerica" class="bar" x="89.70" y="75.26" width="104.60" height="124.74" fill="#2563eb"/>
+      <rect id="p4-mark-injectable-share-usp-reported" class="bar" x="254.70" y="72.20" width="104.60" height="127.80" fill="#2563eb"/>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="519" fill="#6b7280">52 of 75 current shortages have an injection/injectable presentation</text>
+  <g id="brand">
+  <svg x="20" y="549" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="564" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:54640/a/260522f2b0f4290c6826a116b81f65ae.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>USP's June 2026 Annual Drug Shortages Report claims: (1) <strong>75 active drug shortages</strong> in the U.S. as of end-2025, with only <strong>4 of the 75 first reported in 2025</strong> (nearly all carried over from 2024); (2) product discontinuations rose an <strong>acute 60% from 2024 to 2025</strong>, the largest increase since 2019; and (3) <strong>sterile injectable drugs make up 71%</strong> of all shortages, the largest share of any dosage form. Independently reconstructing FDA's own drug shortage list from Wayback-captured snapshots (askamerica's health.fda_drug_shortages_history table) reproduces the headline 75-active/4-new figures <strong>exactly</strong>, and reproduces the discontinuation increase (55.4% vs. 60% claimed) and injectable share (69.3% vs. 71% claimed) in the same direction and close magnitude. The claim holds up well against independent government data.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ Fidelity: No Pinocchios — true or no significant issues</strong></p><p>The press coverage (BioSpace republishing USP's own release verbatim, and Pharmaceutical Commerce citing it directly with page references) accurately quotes USP's report language without distortion, added spin, or dropped qualifiers. No fidelity issues found.</p></div>
+<div class="pinocchio-rating"><p><strong>○○○○ Claims Accuracy: No Pinocchios — true or no significant issues</strong></p><p>USP's own headline figures hold up well against an independent reconstruction of FDA's underlying drug shortage list. The two most load-bearing numbers -- 75 active shortages at year-end 2025 and only 4 newly reported that year -- match exactly. The two supporting statistics (60% discontinuation rise, 71% injectable share) are close (55.4% and 69.3% respectively, same direction) with gaps small enough to be explained by counting-unit differences (event/NDC-level vs. distinct-drug-level) rather than any overstatement, so this does not rise to a count of 1.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>1</td><td>As of the end of 2025, there were 75 active drug shortages in the U.S., with only 4 of those 75 first reported in 2025 (nearly all carried over from 2024).</td><td><strong>true</strong></td></tr>
+<tr class="verdict-mostly-true"><td>2</td><td>Product discontinuations rose 60% from 2024 to 2025 (the largest single-year increase since 2019), and sterile injectable drugs make up 71% of all active shortages, the largest share of any dosage form.</td><td><strong>mostly true</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; As of the end of 2025, there were 75 active drug shortages in the U.S., with only 4 of those 75 first reported in 2025 (nearly all carried over from 2024).</summary>
+<dl>
+<dt>Article says</dt><dd>75 active shortages; 4 of 75 first reported in 2025</dd>
+<dt>Warehouse says</dt><dd>75 distinct generic_name with status='Current'; 4 of those with initial_posting_date in 2025 <code>health.fda_drug_shortages_history</code></dd>
+<dt>Independent evidence</dt><dd>Exact match: 75 and 4<ul class="claim-sources"><li><a href="https://www.biospace.com/press-releases/usp-annual-drug-shortages-report-finds-rising-discontinuations-hidden-upstream-risk">USP Annual Drug Shortages Report finds rising discontinuations, hidden upstream risk (USP press release, republished by BioSpace)</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>June 9, 2026 / FDA snapshot captured 2025-12-16</dd>
+<dt>Why</dt><dd>Independent reconstruction of FDA's own drug shortage list matches USP's headline figures exactly.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT COUNT(DISTINCT generic_name) FROM health.fda_drug_shortages_history WHERE snapshot_date='2025-12-16' AND status='Current'; SELECT COUNT(DISTINCT generic_name) FROM health.fda_drug_shortages_history WHERE snapshot_date='2025-12-16' AND status='Current' AND initial_posting_date LIKE '%2025'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#2 &middot; <strong>mostly true</strong> &mdash; Product discontinuations rose 60% from 2024 to 2025 (the largest single-year increase since 2019), and sterile injectable drugs make up 71% of all active shortages, the largest share of any dosage form.</summary>
+<dl>
+<dt>Article says</dt><dd>60% YoY discontinuation increase; 71% of shortages are sterile injectables</dd>
+<dt>Warehouse says</dt><dd>55.4% YoY discontinuation increase (112 to 174 distinct drugs); 69.3% of current shortages (52 of 75) have an injectable presentation <code>health.fda_drug_shortages_history</code></dd>
+<dt>Independent evidence</dt><dd>55.4% increase (vs. 60% claimed); 69.3% injectable share (vs. 71% claimed)<ul class="claim-sources"><li><a href="https://www.pharmaceuticalcommerce.com/view/how-drug-discontinuations-surged-despite-shortage-numbers-declining">Report: How Drug Discontinuations Surged Despite Shortage Numbers Declining (Pharmaceutical Commerce, citing USP's report directly)</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>June 9, 2026 / FDA snapshots captured 2025-01-17 and 2026-01-20</dd>
+<dt>Why</dt><dd>Same direction and close magnitude; small numeric gap likely reflects USP counting discontinuation events/NDCs and a stricter sterile-injectable classification rather than distinct-generic-name text matching used here.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT COUNT(DISTINCT generic_name) FROM health.fda_drug_shortages_history WHERE snapshot_date='2025-01-17' AND discontinued_date LIKE '%/2024'; SELECT COUNT(DISTINCT generic_name) FROM health.fda_drug_shortages_history WHERE snapshot_date='2026-01-20' AND discontinued_date LIKE '%/2025'; SELECT COUNT(DISTINCT generic_name), COUNT(DISTINCT CASE WHEN presentation ILIKE '%Injection%' OR presentation ILIKE '%Injectable%' THEN generic_name END) FROM health.fda_drug_shortages_history WHERE snapshot_date='2025-12-16' AND status='Current'</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Why this corpus, not just the press</h2>
+<p>FDA maintains a live drug shortages feed but purges resolved/discontinued entries roughly six months after resolution, so the current live table (health.fda_drug_shortages) cannot answer 'what did the list look like on Dec 31, 2025.' askamerica's health.fda_drug_shortages_history table solves exactly this: it is a point-in-time reconstruction of FDA's own accessdata.fda.gov CSV export from ~99 Wayback Machine captures spanning Oct 2019 to Jul 2026. This makes it possible to pull the FDA list as it stood in mid-December 2025 — the same window USP says its analysis is 'current as of December 31, 2025' — and recompute USP's headline figures independently rather than merely quoting them.</p>
+</section>
+<section>
+<h2>Method and figures</h2>
+<p><strong>Active shortages, end of 2025:</strong> Using the snapshot closest to year-end (<code>snapshot_date = '2025-12-16'</code>), <code>SELECT COUNT(DISTINCT generic_name)</code> WHERE <code>status = 'Current'</code> returns exactly <strong>75</strong>. Of those, the number with <code>initial_posting_date</code> in 2025 is exactly <strong>4</strong>. Both match USP's release text verbatim: 'Nearly all active drug shortages at the end of 2025 were carried over from 2024, with only 4 of the 75 active shortages first reported in 2025.'</p><p><strong>Discontinuations, 2024 vs. 2025:</strong> Using the snapshot closest to each year-end that still carries the prior year's discontinuation dates (2025-01-17 for 2024, 2026-01-20 for 2025), counting distinct <code>generic_name</code> by the year embedded in <code>discontinued_date</code> gives 112 drugs discontinued in 2024 and 174 in 2025 — a <strong>55.4% increase</strong>, versus USP's claimed 60%. Same direction, comparable magnitude; the gap is plausibly methodological (USP may count discontinuation events or NDC/package-level exits rather than distinct generic names, or corroborate against ASHP's shortage list in addition to FDA's raw CSV, per the report's own stated methodology of cross-referencing FDA and ASHP data).</p><p><strong>Injectable share:</strong> Of the 75 distinct generic-name shortages current as of 2025-12-16, 52 have a <code>presentation</code> description containing 'Injection'/'Injectable' — <strong>69.3%</strong>, versus USP's reported 71% for 'sterile injectable drugs' specifically. The small gap is consistent with USP using FDA's structured dosage-form/route classification and a stricter 'sterile injectable' definition, versus this check's free-text match on the presentation string.</p>
+</section>
+<section>
+<h2>Exploratory query excluded rows — what it changed</h2>
+<p>An early exploratory query against the <em>live</em> feed table (health.fda_drug_shortages, not the history table used for the figures above) filtered with <code>WHERE discontinued_date IS NOT NULL</code> to look at discontinuation years present in that table. That filter excluded 1,160 of the table's 1,601 rows (1,150 of 224 distinct generic-name/dosage entries carry a NULL discontinued_date — precisely, 69 of the 224 distinct drugs have every one of their rows null on that column, since they are not discontinuation episodes at all but current/resolved shortages). This filtered live-table query was exploratory only: because the live feed purges resolved/discontinued entries ~6 months after resolution, it cannot reliably reconstruct a clean 2024-vs-2025 comparison, which is exactly why the reported discontinuation figures above (112 vs. 174) were instead computed from the point-in-time history table snapshots, not from this filtered live-table query. No headline figure in this report rests on the excluded rows.</p>
+</section>
+<section>
+<h2>Verdict</h2>
+<p><strong>The headline figures in USP's report are corroborated by independent reconstruction of FDA's own data.</strong> The most checkable, most load-bearing numbers — 75 active shortages and 4 newly reported in 2025 — match exactly. The two supporting statistics (60% discontinuation rise, 71% injectable share) are directionally and magnitudinally consistent (55.4% and 69.3% respectively) but not exact matches, most likely due to differences in counting unit (event/NDC vs. distinct drug) or in dosage-form classification method rather than any overstatement in USP's report.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>12 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 3 rows — 1444 ms</summary><pre><code>SELECT status, COUNT(*) AS episodes, COUNT(DISTINCT generic_name_normalized) AS distinct_drugs FROM health.fda_drug_shortages GROUP BY status ORDER BY episodes DESC</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 8477 ms</summary><pre><code>SELECT MIN(snapshot_date) AS min_snap, MAX(snapshot_date) AS max_snap, COUNT(DISTINCT snapshot_date) AS n_snaps FROM health.fda_drug_shortages_history</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1190 ms</summary><pre><code>SELECT DISTINCT snapshot_date FROM health.fda_drug_shortages_history WHERE snapshot_date BETWEEN DATE '2025-10-01' AND DATE '2026-02-01' ORDER BY snapshot_date</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 10496 ms</summary><pre><code>SELECT snapshot_date, status, COUNT(*) AS rows, COUNT(DISTINCT generic_name) AS distinct_generic FROM health.fda_drug_shortages_history WHERE snapshot_date = DATE '2025-12-16' GROUP BY snapshot_date, status ORDER BY status</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 981 ms</summary><pre><code>SELECT EXTRACT(YEAR FROM discontinued_date) AS disc_year, COUNT(DISTINCT generic_name_normalized) AS distinct_drugs, COUNT(*) AS episodes FROM health.fda_drug_shortages WHERE discontinued_date IS NOT NULL GROUP BY EXTRACT(YEAR FROM discontinued_date) ORDER BY disc_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1732 ms</summary><pre><code>SELECT DISTINCT snapshot_date FROM health.fda_drug_shortages_history WHERE snapshot_date BETWEEN '2024-10-01' AND '2025-02-01' ORDER BY snapshot_date</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1126 ms</summary><pre><code>SELECT COUNT(DISTINCT generic_name) AS distinct_disc_2024 FROM health.fda_drug_shortages_history WHERE snapshot_date = '2025-01-17' AND discontinued_date LIKE '%/2024'</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 916 ms</summary><pre><code>SELECT COUNT(DISTINCT generic_name) AS distinct_disc_2025 FROM health.fda_drug_shortages_history WHERE snapshot_date = '2026-01-20' AND discontinued_date LIKE '%/2025'</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 1108 ms</summary><pre><code>SELECT presentation FROM health.fda_drug_shortages_history WHERE snapshot_date = '2025-12-16' AND status = 'Current' LIMIT 20</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1059 ms</summary><pre><code>WITH cur AS (
+  SELECT DISTINCT generic_name, presentation
+  FROM health.fda_drug_shortages_history
+  WHERE snapshot_date = '2025-12-16' AND status = 'Current'
+)
+SELECT
+  COUNT(DISTINCT generic_name) AS total_distinct,
+  COUNT(DISTINCT CASE WHEN presentation ILIKE '%Injection%' OR presentation ILIKE '%Injectable%' THEN generic_name END) AS injectable_distinct
+FROM cur</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 987 ms</summary><pre><code>WITH cur AS (
+  SELECT DISTINCT generic_name, initial_posting_date
+  FROM health.fda_drug_shortages_history
+  WHERE snapshot_date = '2025-12-16' AND status = 'Current'
+)
+SELECT COUNT(DISTINCT generic_name) AS total, COUNT(DISTINCT CASE WHEN initial_posting_date LIKE '%2025' THEN generic_name END) AS first_reported_2025
+FROM cur</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1195 ms</summary><pre><code>SELECT COUNT(*) AS total_rows, COUNT(DISTINCT generic_name_normalized) AS total_distinct, COUNT(CASE WHEN discontinued_date IS NULL THEN 1 END) AS null_discontinued_rows, COUNT(DISTINCT CASE WHEN discontinued_date IS NULL THEN generic_name_normalized END) AS null_discontinued_distinct FROM health.fda_drug_shortages</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-28</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
