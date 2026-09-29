@@ -645,6 +645,42 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transp
       WHERE teu IS NOT NULL AND (teu < 1000 OR teu > 2000000));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: bts_tsi_monthly (BTS Transportation Services Index; one row per month, Jan 2000-present)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'bts_tsi_monthly', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_tsi_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_tsi_monthly', 'T2_row_count',
+  CASE WHEN n >= 300 THEN 'pass' ELSE 'fail' END, n, 300,
+  'Expected >=300 monthly rows (319 confirmed live 29 Sep 2026, Jan 2000-Jul 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_tsi_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_tsi_monthly', 'T6_pk_duplicates',
+  CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate obs_date rows'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT obs_date) AS d FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_tsi_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_tsi_monthly', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL obs_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_tsi_monthly', allow_moved_paths := true) WHERE obs_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_tsi_monthly', 'T7_date_range',
+  CASE WHEN miny = '2000-01-01' AND maxy >= '2026-01-01' THEN 'pass' ELSE 'fail' END,
+  0, 0, 'Expected 2000-01-01 through a 2026 month: got ' || miny || ' to ' || maxy
+FROM (SELECT MIN(obs_date)::VARCHAR AS miny, MAX(obs_date)::VARCHAR AS maxy FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_tsi_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bts_tsi_monthly', 'T7_truck_tonnage_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
+  'truck_d11 (Truck Tonnage Index) outside plausible [50, 200] range; NULL truck_d11 rows also counted'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_tsi_monthly', allow_moved_paths := true) WHERE truck_d11 IS NULL OR truck_d11 < 50 OR truck_d11 > 200);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: phmsa_hazardous_liquid_incidents (PHMSA F 7000-1 accident reports, 2010-present, snapshot)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

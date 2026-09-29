@@ -2935,6 +2935,109 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
 
+  - name: bts_tsi_monthly
+    freshness:
+      type: etag
+    pattern: "type=bts_tsi_monthly/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Monthly national freight and passenger activity from BTS's Transportation Services Index
+      dataset (Socrata bw6n-ddqk), Jan 2000 to the latest release (about a 2-month lag), one row
+      per month. truck_d11 is the seasonally-adjusted Truck Tonnage Index (the American
+      Trucking Associations for-hire tonnage series, the monthly national truck freight volume
+      measure); alongside it are the Freight/Passenger/Combined TSI, seasonally-adjusted rail
+      carloads and intermodal, waterborne tonnage, pipeline barrels, air freight ton-miles and
+      VMT, plus Federal Reserve industrial production and manufacturing output for direct
+      freight-vs-output comparison. Index values are 2000=100 (truck_d11 and TSI); other
+      columns carry their own units in the column comment. Values are revised in later
+      releases, and the ETag gate refetches the whole ~320-row series each time it changes.
+      Source: data.bts.gov/resource/bw6n-ddqk.json.
+
+    dimensions:
+      type:
+        - bts_tsi_monthly
+
+    columns:
+      - name: obs_date
+        type: date
+        nullable: false
+        comment: Observation month (first of month)
+      - name: truck_d11
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted Truck Tonnage Index (American Trucking Associations For-Hire Truck Tonnage, rebased 2000=100 by BTS); the monthly national truck freight volume series
+      - name: tsi_freight
+        type: double
+        nullable: true
+        comment: Transportation Services Freight Index (weighted trucking, rail carloads+intermodal, waterborne, pipeline, air freight; 2000=100)
+      - name: tsi_freight_c
+        type: double
+        nullable: true
+        comment: Monthly change in the freight index
+      - name: tsi_passenger
+        type: double
+        nullable: true
+        comment: Transportation Services Passenger Index (2000=100)
+      - name: tsi_total
+        type: double
+        nullable: true
+        comment: Transportation Services Combined (freight + passenger) Index (2000=100)
+      - name: rail_frt_carloads_d11
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted rail freight carloads (AAR)
+      - name: rail_frt_intermodal_d11
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted rail freight intermodal units (AAR)
+      - name: waterborne_d11
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted internal U.S. waterways tonnage (millions of short tons)
+      - name: petroleum_d11
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted petroleum pipeline movement (thousands of barrels)
+      - name: air_rtmfm_d11
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted air revenue ton-miles of freight and mail
+      - name: vmt_d11
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted vehicle miles traveled (millions)
+      - name: ind_pro
+        type: double
+        nullable: true
+        comment: Federal Reserve industrial production index carried alongside the TSI, for freight-vs-output comparison
+      - name: manuf
+        type: double
+        nullable: true
+        comment: Federal Reserve manufacturing output index carried alongside the TSI
+
+    source:
+      type: http
+      url: "https://data.bts.gov/resource/bw6n-ddqk.json?$limit=5000&$order=obs_date"
+      method: GET
+      response:
+        format: json
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bts_tsi_monthly/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: bts_tsi_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
   # ---------------------------------------------------------------------------
   # NBI BRIDGES — FHWA National Bridge Inventory (delta by year, delimited zip)
   # ---------------------------------------------------------------------------
