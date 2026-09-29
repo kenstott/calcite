@@ -334,6 +334,14 @@ def main(argv: list | None = None) -> int:
         help="server-wide default statement_timeout in milliseconds; 0 = no timeout "
         "(PG default). Sessions override it with SET statement_timeout.",
     )
+    parser.add_argument(
+        "--max-queue-wait-ms",
+        type=int,
+        default=120000,
+        help="server-wide bound on how long a statement waits for the query engine "
+        "behind other statements before failing with a 'server busy' error "
+        "(SQLSTATE 57014); 0 = unbounded. Applies even when statement_timeout is 0.",
+    )
     parser.add_argument("--tls-cert", default=None)
     parser.add_argument("--tls-key", default=None)
     parser.add_argument(
@@ -415,6 +423,9 @@ def main(argv: list | None = None) -> int:
                 parser.error(f"--auth {args.auth} requires --auth-store")
             store = AccountStore(args.auth_store)
             auth_provider = LocalAccountsProvider(store, scram_wire=(args.auth == "scram"))
+    from pgwire_calcite.calcite_backend import CancelScope
+
+    CancelScope.max_queue_wait_ms = max(0, args.max_queue_wait_ms)
     try:
         srv = serve(
             host=args.host,

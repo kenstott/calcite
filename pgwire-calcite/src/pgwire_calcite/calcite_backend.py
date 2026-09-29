@@ -34,6 +34,7 @@ from pgwire_calcite import normalize
 from pgwire_calcite.backend import (
     CANCELED_BY_TIMEOUT,
     CANCELED_CLIENT_GONE,
+    CANCELED_SERVER_BUSY,
     LANE_PROBE,
     LANE_USER,
     QueryCanceled,
@@ -145,6 +146,12 @@ class CancelScope:
     #: How often a queued statement re-checks that its client is still connected.
     _LIVENESS_POLL_S = 0.5
 
+    #: Server-wide bound on the wait for the connection lock, in milliseconds; 0 =
+    #: unbounded. Applies to sessions with no statement_timeout too, so a queue of
+    #: abandoned or slow scans cannot starve every later statement indefinitely.
+    #: Set once at startup by the launcher (--max-queue-wait-ms).
+    max_queue_wait_ms: int = 120000
+
     def __init__(
         self,
         session_key: Optional[str],
@@ -175,7 +182,7 @@ class CancelScope:
             self._timer.start()
 
     def acquire(self, lock) -> None:
-        """Take the shared connection lock, charging the wait to statement_timeout.
+        """Take the shared connection lock, charging the wait to statement_timeout and the server-wide queue bound.
 
         The watchdog only starts once a statement is running, so without this a
         statement queued behind slow ones waits unboundedly and can starve
@@ -183,7 +190,13 @@ class CancelScope:
         statement whose client has disconnected is dropped rather than run to
         completion for nobody.
         """
-        deadline = time.monotonic() + self._timeout_ms / 1000.0 if self._timeout_ms else None
+        now = time.monotonic()
+        timeout_deadline = now + self._timeout_ms / 1000.0 if self._timeout_ms else None
+        busy_deadline = (
+            now + self.max_queue_wait_ms / 1000.0 if self.max_queue_wait_ms > 0 else None
+        )
+        deadlines = [d for d in (timeout_deadline, busy_deadline) if d is not None]
+        deadline = min(deadlines) if deadlines else None
         while True:
             wait = self._LIVENESS_POLL_S if self._client_gone is not None else None
             if deadline is not None:
@@ -195,7 +208,9 @@ class CancelScope:
             if self._client_gone is not None and self._client_gone():
                 raise QueryCanceled(CANCELED_CLIENT_GONE)
             if deadline is not None and time.monotonic() >= deadline:
-                raise QueryCanceled(CANCELED_BY_TIMEOUT)
+                if timeout_deadline is not None and deadline == timeout_deadline:
+                    raise QueryCanceled(CANCELED_BY_TIMEOUT)
+                raise QueryCanceled(CANCELED_SERVER_BUSY)
 
     def disarm(self) -> None:
         if self._timer is not None:

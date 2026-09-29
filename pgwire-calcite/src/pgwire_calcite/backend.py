@@ -118,6 +118,11 @@ class PgProtocolError(RuntimeError):
 CANCELED_BY_USER = "canceling statement due to user request"
 CANCELED_BY_TIMEOUT = "canceling statement due to statement timeout"
 CANCELED_CLIENT_GONE = "canceling statement because the client disconnected"
+#: Queue wait for the engine connection exceeded the server-wide bound (SQLSTATE 57014).
+CANCELED_SERVER_BUSY = (
+    "canceling statement because the server is busy: it waited too long for the query "
+    "engine behind other statements; retry later or narrow the query"
+)
 
 
 
