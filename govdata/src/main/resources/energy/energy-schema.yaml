@@ -154,6 +154,15 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
 
+  # EIA-861 Reliability workbook year range. The Reliability_YYYY file first appears in the
+  # 2013 archive (f8612012.zip has none), so the range starts at 2013. Same dataLag as the rest
+  # of the EIA-861 archive (see eia_utility_years).
+  eia_reliability_years: &eia_reliability_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2013}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 3
+
   # EIA-860 power plant annual year range.
   # dataLag: 3 — the eia860{effective_year}.zip archive only publishes through
   # current-3 (e.g. in 2026 the newest real archive is eia8602023.zip; 2024+ 301-redirect
@@ -803,6 +812,161 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: eia_service_territory
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA UTILITY RELIABILITY - EIA-861 Reliability workbook (SAIDI/SAIFI/CAIDI by utility+state,
+  # bundled in the same annual ZIP archive as eia_utility_annual)
+  # ---------------------------------------------------------------------------
+  - name: eia_utility_reliability
+    # Same archive as eia_utility_annual; re-posted corrections after the October final
+    # (see eia_utility_annual above). https://www.eia.gov/electricity/data/eia861/
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=eia_utility_reliability/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Power-outage frequency and duration by electric utility: EIA-861 reliability indices
+      SAIDI (average minutes of interruption per customer per year), SAIFI (average
+      interruptions per customer per year) and CAIDI (average minutes to restore per
+      interruption, = SAIDI/SAIFI). One row per utility + state + year, annual, data years
+      2013 onward (published with a ~3-year lag; the newest year is current-3). Sourced from
+      the "Reliability_States" sheet of the Reliability workbook in the same annual EIA-861 ZIP
+      archive that eia_utility_annual downloads (the Reliability_Territories sheet, covering
+      only Puerto Rico/Guam/American Samoa, is out of scope). Each metric is reported under
+      up to three bases: with Major Event Days (storms and other extreme events included),
+      without Major Event Days (normal-conditions reliability), and — IEEE basis only — with
+      loss-of-supply outages removed. Utilities report under either the IEEE 1366 standard
+      (ieee_* columns) or their own non-IEEE standard (other_* columns); the two bases are not
+      comparable, so they are kept in separate column groups and a utility usually fills only
+      one group (the other is null). Reporting is voluntary for many small utilities, so
+      coverage is partial and varies by year. Use the *_without_med columns to compare
+      underlying grid reliability across regions and the *_with_med columns to see storm and
+      extreme-event exposure. There is no statewide roll-up in this table; average across
+      utilities weighting by ieee_customers/other_customers.
+      Cross-references geo.state_ref via state_abbr; joins eia_utility_annual via
+      (utility_id, report_year).
+
+    dimensions:
+      type:
+        - eia_utility_reliability
+      year: *eia_reliability_years
+
+    columns:
+      - name: utility_id
+        type: integer
+        nullable: false
+        comment: EIA utility identifier (links to eia_utility_annual)
+      - name: report_year
+        type: integer
+        nullable: false
+        comment: Report year
+      - name: utility_name
+        type: string
+        nullable: true
+        comment: Utility company name
+      - <<: *state_abbr_column
+        nullable: false
+      - name: ownership_type
+        type: string
+        nullable: true
+        comment: Utility ownership class as reported by EIA (e.g. 'Investor Owned', 'Cooperative', 'Municipal')
+      - name: ieee_saidi_with_med
+        type: double
+        nullable: true
+        comment: SAIDI, minutes of interruption per customer per year, measured under IEEE 1366 standard, all events including Major Event Days (MED)
+      - name: ieee_saifi_with_med
+        type: double
+        nullable: true
+        comment: SAIFI, interruptions per customer per year, measured under IEEE 1366 standard, all events including Major Event Days (MED)
+      - name: ieee_caidi_with_med
+        type: double
+        nullable: true
+        comment: CAIDI, average minutes to restore per interruption (SAIDI/SAIFI), measured under IEEE 1366 standard, all events including Major Event Days (MED)
+      - name: ieee_saidi_without_med
+        type: double
+        nullable: true
+        comment: SAIDI, minutes of interruption per customer per year, measured under IEEE 1366 standard, excluding Major Event Days
+      - name: ieee_saifi_without_med
+        type: double
+        nullable: true
+        comment: SAIFI, interruptions per customer per year, measured under IEEE 1366 standard, excluding Major Event Days
+      - name: ieee_caidi_without_med
+        type: double
+        nullable: true
+        comment: CAIDI, average minutes to restore per interruption (SAIDI/SAIFI), measured under IEEE 1366 standard, excluding Major Event Days
+      - name: ieee_saidi_loss_of_supply_removed
+        type: double
+        nullable: true
+        comment: SAIDI, minutes of interruption per customer per year, measured under IEEE 1366 standard, all events including MED, minus loss-of-supply outages
+      - name: ieee_saifi_loss_of_supply_removed
+        type: double
+        nullable: true
+        comment: SAIFI, interruptions per customer per year, measured under IEEE 1366 standard, all events including MED, minus loss-of-supply outages
+      - name: ieee_caidi_loss_of_supply_removed
+        type: double
+        nullable: true
+        comment: CAIDI, average minutes to restore per interruption (SAIDI/SAIFI), measured under IEEE 1366 standard, all events including MED, minus loss-of-supply outages
+      - name: ieee_customers
+        type: double
+        nullable: true
+        comment: Number of customers covered by the IEEE-basis figures
+      - name: other_saidi_with_med
+        type: double
+        nullable: true
+        comment: SAIDI, minutes of interruption per customer per year, measured under a non-IEEE (utility-defined) standard, all events including Major Event Days (MED)
+      - name: other_saifi_with_med
+        type: double
+        nullable: true
+        comment: SAIFI, interruptions per customer per year, measured under a non-IEEE (utility-defined) standard, all events including Major Event Days (MED)
+      - name: other_caidi_with_med
+        type: double
+        nullable: true
+        comment: CAIDI, average minutes to restore per interruption (SAIDI/SAIFI), measured under a non-IEEE (utility-defined) standard, all events including Major Event Days (MED)
+      - name: other_saidi_without_med
+        type: double
+        nullable: true
+        comment: SAIDI, minutes of interruption per customer per year, measured under a non-IEEE (utility-defined) standard, excluding Major Event Days
+      - name: other_saifi_without_med
+        type: double
+        nullable: true
+        comment: SAIFI, interruptions per customer per year, measured under a non-IEEE (utility-defined) standard, excluding Major Event Days
+      - name: other_caidi_without_med
+        type: double
+        nullable: true
+        comment: CAIDI, average minutes to restore per interruption (SAIDI/SAIFI), measured under a non-IEEE (utility-defined) standard, excluding Major Event Days
+      - name: other_customers
+        type: double
+        nullable: true
+        comment: Number of customers covered by the non-IEEE-basis figures
+
+    source:
+      type: http
+      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{effective_year}.zip"
+      method: GET
+      parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia861ReliabilityTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_utility_reliability/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_utility_reliability
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]

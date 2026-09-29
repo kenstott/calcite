@@ -4,7 +4,7 @@
 -- Run: source .env.prod && envsubst < scripts/energy_dq.sql | duckdb
 --
 -- Tables: eia_electricity_generation, eia_electricity_prices,
---         eia_utility_annual, eia_service_territory, eia_power_plants, gas_pipelines,
+--         eia_utility_annual, eia_utility_reliability, eia_service_territory, eia_power_plants, gas_pipelines,
 --         interconnection_queue, eia_capacity_changes, eia_fossil_fuel_production,
 --         eia_state_energy_consumption, eia_natural_gas_storage,
 --         eia_petroleum_stocks, eia_crude_oil_imports, eia_refinery_operations,
@@ -344,6 +344,91 @@ SELECT
   COUNT(DISTINCT state_abbr), 45,
   'expected utility service territories in >= 45 states'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_service_territory', allow_moved_paths := true);
+
+-- ============================================================
+-- eia_utility_reliability
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_utility_reliability', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true);
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_utility_reliability', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 500 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 500, 'expected >= 500 utility-state-year rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_utility_reliability', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_utility_reliability', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'year', 'report_year')
+) t;
+
+-- T6: pk_nulls (utility_id, report_year, state_abbr NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_utility_reliability', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'utility_id IS NULL OR report_year IS NULL OR state_abbr IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true)
+WHERE utility_id IS NULL OR report_year IS NULL OR state_abbr IS NULL;
+
+-- T7: expected_values — indices are non-negative, SAIFI is per-year interruptions (a value
+-- above 100 would be a unit/column shift), and reporting spans >= 40 states
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_utility_reliability', 'T7_expected_values',
+  CASE WHEN COUNT(DISTINCT state_abbr) >= 40
+        AND SUM(CASE WHEN LEAST(COALESCE(ieee_saidi_with_med, 0), COALESCE(ieee_saidi_without_med, 0),
+                                COALESCE(other_saidi_with_med, 0), COALESCE(other_saidi_without_med, 0)) < 0
+                       OR GREATEST(COALESCE(ieee_saifi_with_med, 0), COALESCE(other_saifi_with_med, 0)) > 100
+                     THEN 1 ELSE 0 END) = 0
+       THEN 'pass' ELSE 'warn' END,
+  COUNT(DISTINCT state_abbr), 40,
+  'expected reporting utilities in >= 40 states, SAIDI >= 0, SAIFI <= 100'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true);
+
+-- T8: worker_coverage (annual, same EIA-861 archive/lag as eia_utility_annual → MAX >= 2023;
+-- first Reliability workbook is the 2013 archive)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_utility_reliability', 'T8_worker_coverage',
+  CASE WHEN MIN(report_year) <= 2024 AND MAX(report_year) >= 2023 THEN 'pass' ELSE 'fail' END,
+  MAX(report_year), 2023,
+  printf('MIN=%d MAX=%d | historical: MIN<=2024, daily: MAX>=2023', MIN(report_year), MAX(report_year))
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_utility_reliability', allow_moved_paths := true);
 
 -- ============================================================
 -- eia_power_plants

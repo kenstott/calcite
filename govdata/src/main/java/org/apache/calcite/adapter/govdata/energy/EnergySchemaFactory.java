@@ -42,6 +42,7 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
 
   private static final Set<String> EIA_BULK_TABLES = new HashSet<>(Arrays.asList(
       "eia_utility_annual",
+      "eia_utility_reliability",
       "eia_power_plants",
       "eia_capacity_changes",
       "eia_crude_oil_imports"
