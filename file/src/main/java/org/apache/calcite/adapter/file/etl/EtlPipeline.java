@@ -2360,7 +2360,12 @@ public class EtlPipeline {
       // Only skip when committed data exists to preserve. Under forceReprocessAll (no Iceberg data /
       // purged / cleared marker) we still capture+persist the hash below, but must WRITE this run —
       // otherwise an unchanged source after a purge would skip forever and leave the table empty.
-      if (freshnessSkipAllowed && !FreshnessCheck.changed(previousHash, currentHash)) {
+      // A batch-level skip is only safe when the partition key is a function of the fetch unit:
+      // otherwise the batches that do write replace the (year, month) partition with just their
+      // own series, dropping every series whose batch was skipped. Such pipelines still hash and
+      // persist the token, but always write.
+      if (freshnessSkipAllowed && PerUnitSkipSafety.isSafe(config)
+          && !FreshnessCheck.changed(previousHash, currentHash)) {
         LOGGER.info("Pipeline '{}' batch {}: hash freshness UNCHANGED (hash={}) — skipping write",
             pipelineName, processedCount, currentHash);
         // No write, no snapshot — return 0 rows for this batch
