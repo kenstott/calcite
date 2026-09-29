@@ -1080,7 +1080,12 @@ partitionedTables:
     comment: >
       Insider trading transactions from Form 3 (initial ownership), Form 4 (changes in
       ownership within 2 days), and Form 5 (annual summary). Required filings by company
-      officers, directors, and 10%+ shareholders showing their buy/sell activity.
+      officers, directors, and 10%+ shareholders showing their buy/sell activity. Form 3
+      itself reports an insider's INITIAL beneficial ownership stake (not just later
+      transactions), and shares_owned_after on each subsequent Form 4/5 row tracks their
+      running stake — an executive's ownership position is available here without needing
+      beneficial_ownership, which is a different Exchange Act reporting regime (Section
+      13(d)/(g), not Section 16) for >5% holders generally, not specifically insiders.
       Use for: tracking insider sentiment, identifying unusual trading patterns, corporate
       governance analysis, and generating buy/sell signals based on insider activity.
 
@@ -1090,6 +1095,15 @@ partitionedTables:
       — that table carries one foreign key per source, so the org's LEI and its
       reporting_person_cik sit in the same row and the join is exact. Matching
       reporting_person_name as text finds the wrong entities.
+
+      NOT YET INGESTED (currently 0 rows in production): the ETL pipeline is fully
+      configured, but its worker slot (sec_secondary, which also covers
+      beneficial_ownership and earnings_transcripts) is deliberately excluded from the
+      scheduled daily/historical rotation — see govdata/scripts/parallel/run-pool.sh's
+      "sec_secondary is deliberately absent" comments — and must be queued explicitly
+      (`run-pool.sh sec_secondary:<year>`), which has not yet happened in production. A
+      consumer seeing 0 rows here should read this as "not yet ingested," not "no insider
+      activity occurred."
 
     columns:
       - *cik_column
@@ -1346,8 +1360,21 @@ partitionedTables:
       Schedule 13G (passive >5% holders). Discloses who owns large stakes, how many
       shares, percent of class, source of funds, and critically — the purpose of the
       transaction (Item 4). 13D filers may push for M&A, board changes, or restructuring.
+      Distinct from insider_transactions (Section 16, Forms 3/4/5): this is Section
+      13(d)/(g), filed by ANY person/group crossing 5% ownership of a class, not just
+      officers/directors/10%-owners — an activist fund or index manager with no insider
+      role files here, not there.
       Use for: tracking activist campaigns, monitoring ownership concentration, detecting
       accumulation patterns, and governance risk analysis.
+
+      NOT YET INGESTED (currently 0 rows in production): the ETL pipeline is fully
+      configured, but its worker slot (sec_secondary, which also covers
+      insider_transactions and earnings_transcripts) is deliberately excluded from the
+      scheduled daily/historical rotation — see govdata/scripts/parallel/run-pool.sh's
+      "sec_secondary is deliberately absent" comments — and must be queued explicitly
+      (`run-pool.sh sec_secondary:<year>`), which has not yet happened in production. A
+      consumer seeing 0 rows here should read this as "not yet ingested," not "no >5%
+      holders exist."
 
     columns:
       - *cik_column
@@ -1478,6 +1505,16 @@ partitionedTables:
       ref.vectorized_chunks (source_table='earnings_transcripts') — populated by
       ChunkOrganizer's cross-schema sweep, not by this schema's own ETL; source_type there
       is 'row_concat' like every other ChunkOrganizer contributor, not a per-content label.
+
+      NOT YET INGESTED (currently 0 rows in production): the ETL pipeline is fully
+      configured, but its worker slot (sec_secondary, which also covers
+      insider_transactions and beneficial_ownership) is deliberately excluded from the
+      scheduled daily/historical rotation — see govdata/scripts/parallel/run-pool.sh's
+      "sec_secondary is deliberately absent" comments — and must be queued explicitly
+      (`run-pool.sh sec_secondary:<year>`), which has not yet happened in production.
+      This is also why #761's ChunkOrganizer skip is permanent for now: that sweep only
+      writes table_completion once this base table has a fully-successful batch, which
+      needs sec_secondary to have run at least once.
 
     columns:
       - *cik_column
