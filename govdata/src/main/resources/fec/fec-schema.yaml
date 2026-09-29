@@ -942,7 +942,13 @@ partitionedTables:
       name, employer, occupation, amount, date, and memo text (vectorized for inferred
       relationship discovery). Distinct from committee_contributions (committee-to-candidate
       money) and intercommittee_transactions (committee-to-committee transfers).
-      Source: indiv{YY}.zip (pipe-delimited, no header).
+      Source: indiv{YY}.zip (pipe-delimited, no header). DIRECTION: committee_id is the
+      RECIPIENT committee (join fec.committees on committee_id + year for its details) and
+      contributor_name is genuinely the donor (individual) here — unlike
+      committee_contributions/intercommittee_transactions, this table's column names match
+      their roles. PERFORMANCE: always filter on the year partition first — this is the
+      largest FEC table by row count and an unfiltered or non-partition-filtered aggregate
+      can exceed a 30s query timeout.
 
     columns:
       - *committee_id_column
@@ -1134,6 +1140,17 @@ partitionedTables:
       for, 24A=independent against, 24F=communication cost for). Each row carries a
       candidate_id, distinguishing it from intercommittee_transactions (committee-to-committee
       transfers with no candidate link). Source: pas2{YY}.zip (pipe-delimited, no header).
+      DIRECTION: committee_id is the DONOR/filing committee (the PAC or party committee
+      that made this expenditure — join fec.committees on committee_id + year for its
+      name/type/connected organization); contributor_name and other_id both identify the
+      RECIPIENT (candidate's authorized committee) — contributor_name is its name despite
+      the field's name, other_id is its FEC committee ID (join fec.committees on other_id
+      + year for the recipient's own details), and candidate_id is the recipient candidate.
+      amount is signed per transaction_type — a negative value is a refund/adjustment
+      against a prior contribution, not new money moving; net (don't just sum) amount when
+      computing a total given/received. PERFORMANCE: always filter on the year partition —
+      an aggregate filtered only by candidate_id (or any other non-partition column) across
+      all years can exceed a 30s query timeout.
 
     columns:
       - *committee_id_column
@@ -1161,12 +1178,12 @@ partitionedTables:
       - name: entity_type
         type: string
         nullable: true
-        comment: Entity type
+        comment: Entity type of the DONOR named by committee_id (CAN=candidate, CCM=candidate committee, COM=committee, IND=individual, ORG=organization, PAC=political action committee, PTY=party organization)
         source: ENTITY_TP
       - name: contributor_name
         type: string
         nullable: true
-        comment: Contributing committee/entity name
+        comment: RECIPIENT committee name (the candidate's authorized committee receiving this transaction, e.g. "MCCONNELL SENATE COMMITTEE" — despite the field name, this is not the donor; see table comment for the full direction mapping)
         source: NAME
       - name: city
         type: string
@@ -1198,7 +1215,7 @@ partitionedTables:
       - name: other_id
         type: string
         nullable: true
-        comment: Candidate ID or other committee ID
+        comment: RECIPIENT committee's FEC committee ID (the candidate's authorized committee named in contributor_name — join fec.committees on other_id + year for its details)
         source: OTHER_ID
       - *candidate_id_column
       - name: transaction_id
@@ -1312,6 +1329,15 @@ partitionedTables:
       column, unlike committee_contributions (which links each row to a specific
       candidate). Shows the flow of money between PACs, party committees, and campaign
       committees. Source: oth{YY}.zip (pipe-delimited, no header).
+      DIRECTION: committee_id is the FILING committee (whose oth-schedule report this row
+      came from) and is constant across every row for one filer; entity_type,
+      contributor_name, and other_id together describe the COUNTERPARTY committee/entity
+      for that one transaction (entity_type/contributor_name vary row to row even though
+      committee_id doesn't — join fec.committees on other_id + year for the counterparty's
+      details). Unlike committee_contributions, whether money moved INTO or OUT OF the
+      filing committee is NOT fixed by column position — it depends on transaction_type
+      (see FEC Schedule L code descriptions); amount is signed (negative = refund/reversal)
+      regardless. PERFORMANCE: always filter on the year partition first.
 
     columns:
       - *committee_id_column
@@ -1339,12 +1365,12 @@ partitionedTables:
       - name: entity_type
         type: string
         nullable: true
-        comment: Entity type
+        comment: Entity type of the COUNTERPARTY committee named by other_id/contributor_name, not of committee_id (CAN=candidate, CCM=candidate committee, COM=committee, IND=individual, ORG=organization, PAC=political action committee, PTY=party organization)
         source: ENTITY_TP
       - name: contributor_name
         type: string
         nullable: true
-        comment: Contributing entity name
+        comment: COUNTERPARTY committee/entity name for this transaction (not necessarily the payer — see table comment; committee_id is the filing committee, this is the other party)
         source: NAME
       - name: city
         type: string
@@ -1376,7 +1402,7 @@ partitionedTables:
       - name: other_id
         type: string
         nullable: true
-        comment: Other committee ID (receiving/sending)
+        comment: Counterparty committee's FEC committee ID (join fec.committees on other_id + year for its details); direction (sender vs. receiver relative to committee_id) is governed by transaction_type, not by this column
         source: OTHER_ID
       - name: transaction_id
         type: string
