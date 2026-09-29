@@ -176,6 +176,16 @@ dimension_values:
     dataLag: 1
     descending: true
 
+  # OMB's public apportionment site starts at FY2022; a fiscal year's apportionments are
+  # posted before it opens (FY2027 files existed by Aug 2026) and keep gaining iterations
+  # through the year, so there is no publication lag and the current year stays live.
+  omb_apportionment_year_range: &omb_apportionment_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2022}"
+    minYear: 2022
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    descending: true
+
   # usaspending_recipients_by_district makes one API call per (year, district) --
   # 442x heavier per year than usaspending_by_district's 3-calls/year. Default
   # scope is deliberately narrow (2 recent fiscal years) rather than reusing
@@ -4805,6 +4815,175 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: snap_benefits_by_geography
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # OMB APPORTIONMENTS — apportionment-public.max.gov (one JSON per account iteration)
+  # ---------------------------------------------------------------------------
+  - name: omb_apportionments
+    # Freshness gate: the landing page lists every file and is rewritten as OMB approves new
+    # iterations, so its Last-Modified changes exactly when there is something new to read.
+    freshness:
+      type: last_modified
+    pattern: "type=omb_apportionments/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      OMB-approved apportionments (SF-132 schedules) for every federal budget account, one
+      row per schedule line of each approval iteration, by fiscal year FY2022-present.
+      Apportionment is the step where OMB releases appropriated budget authority to an
+      agency by quarter or by project, so this is where withheld, deferred or
+      footnoted-away funds show up: the free-text footnote_text column carries OMB's
+      conditions on the money, including language withholding funds pending review and
+      proposed-rescission or deferral notices. It is the account-level counterpart to
+      mts_outlays_by_function and federal_outlays_by_function, which stop at function
+      totals. Key by (tafs_iteration_id, line_number, line_split); a later iteration of the
+      same account (iteration) restates the whole schedule, so compare iterations rather
+      than summing them. line_number is the SF-132 line (1000 = unobligated balance
+      brought forward, 1100/1200 = appropriations, 1920 = total budgetary resources,
+      6001-6004 = category A apportioned by quarter, 6190 = total budgetary resources
+      available); approved_amount is in dollars as published. begin_poa/end_poa are the
+      period of availability years and availability_type_code is 'X' for no-year money.
+      A footnote no line references is kept as a row with null line_number. Covers OMB
+      apportionment actions only: GAO Impoundment Control Act decisions and the rescission
+      packages transmitted to Congress are separate publications and are not in this table.
+      Source: apportionment-public.max.gov, the JSON rendition of each posted apportionment.
+
+    dimensions:
+      type:
+        - omb_apportionments
+      year: *omb_apportionment_year_range
+
+    columns:
+      - name: file_id
+        type: long
+        nullable: false
+        comment: OMB file id of the apportionment document; several accounts can share one file
+      - name: file_name
+        type: string
+        nullable: true
+        comment: Source file name, which embeds agency, bureau, TAFS, iteration and approval time
+      - name: folder
+        type: string
+        nullable: true
+        comment: Agency folder the document is filed under on the site
+      - name: approval_timestamp
+        type: string
+        nullable: true
+        comment: OMB approval time as published (YYYY-MM-DD-HH.MM.SS.micros)
+      - name: approver_title
+        type: string
+        nullable: true
+        comment: Title of the OMB official who approved the apportionment
+      - name: funds_provided_by
+        type: string
+        nullable: true
+        comment: The appropriation act or authority providing the funds, as published
+      - name: budget_agency_title
+        type: string
+        nullable: true
+      - name: budget_bureau_title
+        type: string
+        nullable: true
+      - name: account_title
+        type: string
+        nullable: true
+        comment: Treasury account title
+      - name: cgac_agency
+        type: string
+        nullable: true
+        comment: 3-digit CGAC agency code of the Treasury account
+      - name: cgac_account
+        type: string
+        nullable: true
+        comment: 4-digit main account code of the Treasury account
+      - name: allocation_agency_code
+        type: string
+        nullable: true
+        comment: Agency code of the receiving agency when the account is an allocation
+      - name: allocation_subaccount
+        type: string
+        nullable: true
+      - name: begin_poa
+        type: string
+        nullable: true
+        comment: First year of availability (beginning period of availability)
+      - name: end_poa
+        type: string
+        nullable: true
+        comment: Last year of availability (ending period of availability)
+      - name: availability_type_code
+        type: string
+        nullable: true
+        comment: "'X' for no-year (unlimited) availability; null when begin_poa/end_poa carry the period"
+      - name: iteration
+        type: string
+        nullable: true
+        comment: Apportionment iteration number for the account this fiscal year
+      - name: tafs_iteration_id
+        type: long
+        nullable: true
+        comment: OMB id of the account-iteration; groups all lines of one schedule
+      - name: line_number
+        type: string
+        nullable: true
+        comment: SF-132 line number, or a marker such as IterNo/RptCat/AdjAut; null on an unreferenced-footnote row
+      - name: line_split
+        type: string
+        nullable: true
+        comment: Line qualifier (for example ME for mandatory-exempt, YES/NO flags)
+      - name: line_description
+        type: string
+        nullable: true
+      - name: approved_amount
+        type: double
+        nullable: true
+        comment: Amount on the line in dollars as published; null on an unreferenced-footnote row
+      - name: footnote_number
+        type: string
+        nullable: true
+        comment: Footnote reference on the line, or the footnote's own number on an unreferenced-footnote row
+      - name: footnote_text
+        type: string
+        nullable: true
+        comment: OMB's full footnote text, including conditions on or withholding of the funds
+
+    source:
+      type: http
+      # Nominal source: the dataProvider reads the landing page for the JSON links of the
+      # fiscal year and fetches each file itself; no generic response.format covers a crawl.
+      url: "https://apportionment-public.max.gov/"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.OmbApportionmentsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=omb_apportionments/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: omb_apportionments
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop

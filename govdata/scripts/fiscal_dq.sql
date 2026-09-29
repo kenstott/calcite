@@ -9,7 +9,7 @@
 --         entitlement_spending_by_state, sba_loan_approvals,
 --         ssa_benefits_by_geography, ssa_benefits_by_geography_acs,
 --         govt_finance_by_unit, state_minimum_wage_history,
---         state_corporate_income_tax_collections
+--         state_corporate_income_tax_collections, omb_apportionments
 -- All tables are Iceberg; reads via iceberg_scan (single-nested path).
 -- T4/T5 exclude partition columns ('type' for all; also 'year' or 'program' where present).
 -- Large tables carry dqRowLimit and sample in DQ mode; T2 thresholds reflect the sample.
@@ -1233,6 +1233,65 @@ SELECT 'fiscal', 'broadband_high_cost_disbursements', 'T7_month_range',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with disbursement_month outside 1-12'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/broadband_high_cost_disbursements', allow_moved_paths := true)
   WHERE disbursement_month IS NULL OR disbursement_month < 1 OR disbursement_month > 12);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: omb_apportionments (OMB apportionment-public.max.gov; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true));
+
+-- One fiscal year is ~6,000 files at ~20+ lines each
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T2_row_count',
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END, n, 50000, 'Expected >=50000 schedule-line rows per fiscal year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL file_id or tafs_iteration_id on a schedule-line row'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true) WHERE file_id IS NULL OR (line_number IS NOT NULL AND tafs_iteration_id IS NULL));
+
+-- Every schedule line must carry a dollar amount; only unreferenced-footnote rows have none
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T7_amount_present',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Schedule-line rows with NULL approved_amount'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true) WHERE line_number IS NOT NULL AND approved_amount IS NULL);
+
+-- A referenced footnote must resolve to text
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T7_footnote_resolves',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with footnote_number but NULL footnote_text'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true) WHERE footnote_number IS NOT NULL AND footnote_text IS NULL);
+
+-- PK-duplication guard: one row per (file, account-iteration, line, split, footnote) key
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_apportionments', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (file_id, tafs_iteration_id, line_number, line_split, footnote_number) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT file_id, tafs_iteration_id, line_number, line_split, footnote_number, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
