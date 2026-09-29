@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.100.0](https://github.com/kenstott/calcite/compare/engine-v0.99.2...engine-v0.100.0) (2026-09-29)
+
+
+### Features
+
+* **askamerica-engine:** add ARIMA, GARCH, volatility forecast and backtest tools ([2e865eb](https://github.com/kenstott/calcite/commit/2e865eb2434c6843a56c267f9e73df55c171b3f1))
+* **askamerica-engine:** add domain-aware text sentiment and relevance tools ([debad93](https://github.com/kenstott/calcite/commit/debad93257b35cbf6effa85882e8c456997c484f))
+* **askamerica-engine:** add extract_entities for organizations, people and places ([ba69591](https://github.com/kenstott/calcite/commit/ba6959131fe87f4fc03c5c3c5d36d382297c87f0))
+* **askamerica:** daily eval 2026-09-29 — 8 news-check stories, 5 reference questions ([5e3d70f](https://github.com/kenstott/calcite/commit/5e3d70f1b615bdb3ceca4f001d320a254443bf7a))
+* **govdata/census:** add acs_industry_by_nativity (S0501 industry mix of employed population by nativity, state grain) ([767840c](https://github.com/kenstott/calcite/commit/767840c8dbf9fff2c9017208a736456f7c57abb3))
+* **govdata/census:** add uscis_i765_employment_authorization (USCIS Form I-765 work-permit application flows by EAD category) ([25ed16b](https://github.com/kenstott/calcite/commit/25ed16bcdf4777ff0d5b9b354c3860bd16f25457))
+* **govdata/energy:** add eia_utility_reliability (EIA-861 SAIDI/SAIFI/CAIDI by utility and state) ([ba7131c](https://github.com/kenstott/calcite/commit/ba7131c10186ca445d51a24db252a7ec2b5f6f85))
+* **govdata/fiscal:** add omb_apportionments (OMB SF-132 apportionment schedule lines + footnotes) ([64b9673](https://github.com/kenstott/calcite/commit/64b96731689a4af2a35494c2e62be3487f6e1073))
+* **govdata/health:** add cdc_places_county (CDC PLACES county-grain asthma and chronic-disease prevalence) ([cebef13](https://github.com/kenstott/calcite/commit/cebef133d23ab5977735b403711c3f85c6445770))
+* **govdata:** add transport.bts_tsi_monthly (BTS Truck Tonnage Index / TSI) ([43e32cc](https://github.com/kenstott/calcite/commit/43e32cc22e8586fab2f84bbb6a5bc1e1187d8365))
+
+
+### Bug Fixes
+
+* **file,pgwire:** omit not-yet-materialized Iceberg tables/views instead of aborting schema mount ([d9771f4](https://github.com/kenstott/calcite/commit/d9771f449fda205c9774c7caf4df255fb534e69c))
+* **file,pgwire:** require readable Iceberg metadata, not just version-hint existence ([b4bd3e6](https://github.com/kenstott/calcite/commit/b4bd3e62f7f68617dc5eedbb5c64c3c4f56f0de9))
+
 ## [0.99.2](https://github.com/kenstott/calcite/compare/engine-v0.99.1...engine-v0.99.2) (2026-09-29)
 
 
