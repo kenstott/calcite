@@ -81,6 +81,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1656,6 +1657,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   // Superseded the moment tableCache itself is populated (getDeclaredTable checks that first).
   private final Map<String, Table> lazyTableCache = new ConcurrentHashMap<>();
 
+  // Declared tables omitted from the most recent getTableMap() pass because their backing
+  // Iceberg table was not yet materialized (ETL has not run for it). Guarded by `this` — every
+  // reader/writer runs from a synchronized method (getTableMap, getDeclaredTable). Surfaced as a
+  // single summary line so a partially-ETL'd schema mounts with every other table intact instead
+  // of aborting the whole schema (see processPartitionedTables).
+  private final Set<String> omittedTables = new LinkedHashSet<>();
+
   /**
    * Finds the original source file for a converted JSON file using metadata.
    * Returns null if this JSON file is not a conversion result.
@@ -1756,6 +1764,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       LOGGER.info("Schema name: {}, CSV type inference enabled: {}", name,
                   csvTypeInferenceConfig != null ? csvTypeInferenceConfig.isEnabled() : false);
 
+    omittedTables.clear();
     final ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
     // Track table names to handle duplicates
     final Map<String, Integer> tableNameCounts = new HashMap<>();
@@ -2379,11 +2388,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
     }
 
-    LOGGER.info("[FileSchema.getTableMap] COMPLETED - Computed {} tables for schema '{}': {}{}",
+    LOGGER.info("[FileSchema.getTableMap] COMPLETED - Computed {} tables for schema '{}': {}{}{}",
                 tableCache.size(), name, tableCache.keySet(),
                 icebergTableCount > 0
                     ? " (plus " + icebergTableCount + " Iceberg tables via conversionMetadata)"
-                    : "");
+                    : "",
+                omittedTables.isEmpty()
+                    ? ""
+                    : " (omitted " + omittedTables.size()
+                        + " not-yet-materialized table(s): " + omittedTables + ")");
     if (tableCache.isEmpty() && icebergTableCount == 0) {
       LOGGER.warn("[FileSchema.getTableMap] WARNING: No tables were registered for schema '{}'!", name);
     }
@@ -4464,6 +4477,20 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               ? warehousePath + icebergTableName
               : warehousePath + "/" + icebergTableName;
 
+          // A declared Iceberg table with no backing data yet (ETL hasn't materialized it) must
+          // not be registered: IcebergTable loads lazily, so a phantom entry here would sail
+          // through schema mount and only blow up the first time something actually reads it
+          // (e.g. a catalog walk), taking the caller down instead of just this one table. Check
+          // existence up front — same check as the self-healing re-discovery below — and omit the
+          // table from this mount with one clear log line, rather than registering it at all.
+          if (!icebergTableMaterializedAt(tablePath)) {
+            LOGGER.warn("Omitting table '{}' from schema '{}' — Iceberg table not yet "
+                + "materialized at '{}'; run ETL to materialize it", config.getName(), name,
+                tablePath);
+            omittedTables.add(config.getName());
+            continue;
+          }
+
           Map<String, Object> tableConfig = new HashMap<>();
           if (storageProvider != null) {
             Map<String, String> s3Creds = storageProvider.getS3Config();
@@ -4638,6 +4665,26 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
+   * True when a materialized Iceberg table already exists at {@code tablePath} — via {@link
+   * #storageProvider} for an object-store-backed warehouse, or directly on the local filesystem
+   * when none is configured. Mirrors the local-vs-object-store branch {@link
+   * org.apache.calcite.adapter.file.iceberg.IcebergTable#loadIcebergTable} itself takes to read
+   * the table, so a table this reports as materialized is one that path can actually load — and
+   * one it reports as not materialized (ETL has not run for it yet) can be omitted from this
+   * schema mount instead of registering a {@link org.apache.calcite.adapter.file.iceberg.IcebergTable}
+   * that is guaranteed to throw the first time something reads it.
+   */
+  private boolean icebergTableMaterializedAt(String tablePath) throws IOException {
+    // No storageProvider configured on this schema (no explicit storageType) means a purely
+    // local warehouse path — resolve one from the path itself (StorageProviderFactory caches a
+    // single LocalFileStorageProvider for that case) rather than touching java.io.File directly,
+    // so existence checking always goes through the StorageProvider abstraction.
+    StorageProvider provider =
+        storageProvider != null ? storageProvider : StorageProviderFactory.createFromUrl(tablePath);
+    return provider.exists(tablePath + "/metadata/version-hint.text");
+  }
+
+  /**
    * Discovers existing Iceberg tables in S3 and updates conversion metadata.
    * This enables self-healing when the local .conversions.json cache is deleted
    * but the materialized Iceberg data still exists in S3.
@@ -4704,8 +4751,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       // Check the Iceberg table exists via its metadata pointer using the StorageProvider
       // (AWS SDK v2 for S3, or local FS) rather than a HadoopCatalog — this keeps the
       // read/discovery path off hadoop's S3AFileSystem (AWS SDK v1).
-      boolean icebergTableExists = storageProvider != null
-          && storageProvider.exists(tableLocation + "/metadata/version-hint.text");
+      boolean icebergTableExists = icebergTableMaterializedAt(tableLocation);
 
       if (icebergTableExists) {
         LOGGER.info("Discovered existing Iceberg table '{}' at: {}", tableName, tableLocation);
