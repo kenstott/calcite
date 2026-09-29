@@ -155,6 +155,14 @@ public final class DuckDBPendingViews {
    * Names still pending for one DuckDB schema — no catalog access, no creation, just what's
    * queued in memory. Lets {@code getTableNames()} report a deferred view's name without paying
    * for (or risking hanging on) its creation.
+   *
+   * <p>Excludes a view whose most recent {@link #createOnDemand} attempt already failed
+   * ({@code pv.lastError != null}): the lazy per-query path never retries such a view on its own
+   * (see the {@code lastError != null} short-circuit in {@link #createOnDemand}), so once one
+   * fails it would otherwise sit in every subsequent listing forever while {@code getTable} keeps
+   * returning null for it — a dangling name a caller can enumerate but never resolve. The view
+   * stays in {@link #PENDING} (an operator-triggered {@link #buildAll} can still retry and, on
+   * final failure, drops and logs it), it is simply not offered as a name until that happens.
    */
   static Set<String> pendingViewNames(String dbPath, String duckdbSchema) {
     CopyOnWriteArrayList<PendingView> pendingList = PENDING.get(dbPath);
@@ -163,7 +171,7 @@ public final class DuckDBPendingViews {
     }
     Set<String> names = new java.util.LinkedHashSet<>();
     for (PendingView pv : pendingList) {
-      if (pv.duckdbSchema.equalsIgnoreCase(duckdbSchema)) {
+      if (pv.duckdbSchema.equalsIgnoreCase(duckdbSchema) && pv.lastError == null) {
         names.add(pv.viewName);
       }
     }

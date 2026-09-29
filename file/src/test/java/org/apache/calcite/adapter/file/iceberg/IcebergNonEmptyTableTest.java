@@ -42,6 +42,7 @@ import java.util.Properties;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -221,6 +222,86 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
       }
       assertEquals(2, largeOrderCount, "Should have 2 orders with amount > 100");
       rs.close();
+    }
+  }
+
+  /**
+   * A declared {@code partitionedTables} entry backed by an Iceberg table that ETL has not
+   * materialized yet (no metadata directory at all under the warehouse) must be OMITTED from the
+   * mounted schema — not crash the whole mount — while every other declared table, including a
+   * real Iceberg table under the same warehouse, still mounts and is queryable. Reproduces the
+   * production failure where one not-yet-materialized declared table (e.g.
+   * {@code environment.water_withdrawals}) took an entire schema mount down.
+   */
+  @Test public void testMissingBackingIcebergTableOmittedNotCrashed() throws Exception {
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          },\n"
+        + "          {\n"
+        + "            \"name\": \"never_materialized\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"does_not_exist\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    // Connecting (which mounts the schema) must NOT throw, even though one declared table has
+    // no backing Iceberg data at all.
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+         Statement statement = connection.createStatement()) {
+
+      // The other declared table, backed by real data, still mounts and is queryable.
+      ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM orders");
+      assertTrue(rs.next(), "Should have a result row");
+      assertEquals(3, rs.getInt(1), "Real table's rows are unaffected by the missing sibling");
+      rs.close();
+
+      // The not-yet-materialized table is omitted, not exposed as a broken/empty entry.
+      boolean found = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          if ("never_materialized".equalsIgnoreCase(tables.getString("TABLE_NAME"))) {
+            found = true;
+          }
+        }
+      }
+      assertFalse(found,
+          "Not-yet-materialized table must be omitted from the mounted schema's table listing");
     }
   }
 }
