@@ -27,10 +27,17 @@ import datetime
 import decimal
 import logging
 import threading
-from typing import List, Optional
+import time
+from typing import Callable, List, Optional
 
 from pgwire_calcite import normalize
-from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, LANE_PROBE, LANE_USER, QueryCanceled
+from pgwire_calcite.backend import (
+    CANCELED_BY_TIMEOUT,
+    CANCELED_CLIENT_GONE,
+    LANE_PROBE,
+    LANE_USER,
+    QueryCanceled,
+)
 from pgwire_calcite.classpath import resolve_classpath
 from pgwire_calcite.dialect import transpile_pg_to_calcite
 from pgwire_calcite.types import QueryResult
@@ -135,8 +142,17 @@ class CancelScope:
     set so a future driver that honors it agrees with us.
     """
 
-    def __init__(self, session_key: Optional[str], timeout_ms: int) -> None:
+    #: How often a queued statement re-checks that its client is still connected.
+    _LIVENESS_POLL_S = 0.5
+
+    def __init__(
+        self,
+        session_key: Optional[str],
+        timeout_ms: int,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> None:
         self._session_key = session_key
+        self._client_gone = client_gone
         self._timeout_ms = max(0, int(timeout_ms))
         self._handle: Optional[InFlightStatement] = None
         self._timer: Optional[threading.Timer] = None
@@ -163,13 +179,23 @@ class CancelScope:
 
         The watchdog only starts once a statement is running, so without this a
         statement queued behind slow ones waits unboundedly and can starve
-        every other session on the single shared connection.
+        every other session on the single shared connection. While queued, a
+        statement whose client has disconnected is dropped rather than run to
+        completion for nobody.
         """
-        if not self._timeout_ms:
-            lock.acquire()
-            return
-        if not lock.acquire(timeout=self._timeout_ms / 1000.0):
-            raise QueryCanceled(CANCELED_BY_TIMEOUT)
+        deadline = time.monotonic() + self._timeout_ms / 1000.0 if self._timeout_ms else None
+        while True:
+            wait = self._LIVENESS_POLL_S if self._client_gone is not None else None
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                wait = max(0.0, remaining) if wait is None else min(wait, max(0.0, remaining))
+            got = lock.acquire() if wait is None else lock.acquire(timeout=wait)
+            if got:
+                return
+            if self._client_gone is not None and self._client_gone():
+                raise QueryCanceled(CANCELED_CLIENT_GONE)
+            if deadline is not None and time.monotonic() >= deadline:
+                raise QueryCanceled(CANCELED_BY_TIMEOUT)
 
     def disarm(self) -> None:
         if self._timer is not None:
@@ -353,6 +379,7 @@ class CalciteBackend:
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
         lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
     ) -> QueryResult:
         del role_id, params  # params already substituted upstream (server._substitute_params)
         calcite_sql = transpile_pg_to_calcite(
@@ -364,7 +391,7 @@ class CalciteBackend:
         conn, lock = self.lane(lane)
         if conn is None:
             raise RuntimeError("Calcite connection is not open")
-        scope = CancelScope(session_key, timeout_ms)
+        scope = CancelScope(session_key, timeout_ms, client_gone)
         if stream:
             # Arrow batch-streaming path (PGW-019/020/022): the generator holds
             # the lock + JVM/Arrow resources and releases them when exhausted or

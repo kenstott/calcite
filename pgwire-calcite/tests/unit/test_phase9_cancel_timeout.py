@@ -27,10 +27,10 @@ import psycopg
 import pytest
 
 from pgwire_calcite import launcher
-from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, CANCELED_BY_USER
+from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, CANCELED_BY_USER, CANCELED_CLIENT_GONE
 from pgwire_calcite.backend import QueryCanceled
 from pgwire_calcite.calcite_backend import IN_FLIGHT, CancelScope, InFlightRegistry
-from pgwire_calcite.server import _format_statement_timeout, _parse_statement_timeout
+from pgwire_calcite.server import _format_statement_timeout, _parse_statement_timeout, _peer_closed
 
 from test_phase0_wire import _free_port
 
@@ -414,3 +414,59 @@ def test_session_routes_only_the_named_probe_client_to_the_probe_lane():
     other = _Ctx("psql")
     session.bind_context(other)
     assert session._lane() == "user"
+
+
+def _hold_lock(lock):
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with lock:
+            held.set()
+            release.wait(10)
+
+    t = threading.Thread(target=hold)
+    t.start()
+    held.wait(5)
+    return release, t
+
+
+def test_queued_statement_is_dropped_once_its_client_disconnects_without_a_timeout():
+    lock = threading.RLock()
+    release, t = _hold_lock(lock)
+    try:
+        started = time.monotonic()
+        with pytest.raises(QueryCanceled) as exc:
+            CancelScope(None, 0, client_gone=lambda: True).acquire(lock)
+        assert CANCELED_CLIENT_GONE in str(exc.value)
+        assert time.monotonic() - started < 2
+    finally:
+        release.set()
+        t.join()
+
+
+def test_queued_statement_of_a_live_client_still_acquires_when_the_lock_frees():
+    lock = threading.RLock()
+    release, t = _hold_lock(lock)
+    threading.Timer(0.7, release.set).start()
+    try:
+        CancelScope(None, 0, client_gone=lambda: False).acquire(lock)
+        lock.release()
+    finally:
+        release.set()
+        t.join()
+
+
+def test_peer_closed_reads_a_live_and_a_closed_client():
+    import socket
+
+    server, client = socket.socketpair()
+    try:
+        assert _peer_closed(server) is False
+        client.sendall(b"x")
+        assert _peer_closed(server) is False  # pending data is alive, and stays unread
+        assert server.recv(1) == b"x"
+        client.close()
+        assert _peer_closed(server) is True
+    finally:
+        server.close()

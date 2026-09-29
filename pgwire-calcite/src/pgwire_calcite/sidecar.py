@@ -58,7 +58,7 @@ import socket
 import socketserver
 import struct
 import time
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from pgwire_calcite import arrow_bridge
 from pgwire_calcite.backend import LANE_USER, PgProtocolError, QueryCanceled
@@ -351,8 +351,10 @@ class BridgeBackend:
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
         lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
     ) -> QueryResult:
-        del role_id, params, stream  # params substituted upstream; always streams
+        # The child queues on the lock, so the liveness check cannot run on this side.
+        del role_id, params, stream, client_gone  # params substituted upstream; always streams
         # PG-only rejects happen here (PGW-018); JSON/vector surfaces honored.
         calcite_sql = transpile_pg_to_calcite(
             sql,

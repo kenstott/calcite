@@ -27,7 +27,7 @@ implementations is a one-line change in the launcher.
 from __future__ import annotations
 
 import re
-from typing import Optional, Protocol, runtime_checkable
+from typing import Callable, Optional, Protocol, runtime_checkable
 
 from pgwire_calcite.types import QueryResult
 
@@ -53,6 +53,7 @@ class Backend(Protocol):
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
         lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
     ) -> QueryResult:
         """Execute one statement.
 
@@ -62,6 +63,8 @@ class Backend(Protocol):
         ``timeout_ms`` is the session's ``statement_timeout`` in milliseconds, 0 =
         no timeout (PG semantics, PGW-051). ``lane`` selects the connection: ``probe``
         is reserved for health/metadata statements, ``user`` for everything else.
+        ``client_gone`` reports whether the requesting client has disconnected; a
+        statement still queued for the connection lock is dropped when it is true.
         """
         ...
 
@@ -114,6 +117,7 @@ class PgProtocolError(RuntimeError):
 #: PG's wording for both cancellation causes, byte for byte (SQLSTATE 57014).
 CANCELED_BY_USER = "canceling statement due to user request"
 CANCELED_BY_TIMEOUT = "canceling statement due to statement timeout"
+CANCELED_CLIENT_GONE = "canceling statement because the client disconnected"
 
 
 
@@ -174,9 +178,10 @@ class StubBackend:
         session_key: Optional[str] = None,
         timeout_ms: int = 0,
         lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
     ) -> QueryResult:
         # stub is always materialized and answers instantly: nothing to cancel or time out
-        del role_id, params, stream, session_key, timeout_ms, lane
+        del role_id, params, stream, session_key, timeout_ms, lane, client_gone
         stripped = sql.strip().rstrip(";").strip()
         if _SELECT_ONE_RE.match(sql):
             return QueryResult(rows=[(1,)], column_names=["?column?"], column_types=["INTEGER"])

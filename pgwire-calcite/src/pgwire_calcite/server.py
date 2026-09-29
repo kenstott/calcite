@@ -381,6 +381,21 @@ class CalciteQueryResult(BVQueryResult):
         return self._status or "OK"
 
 
+def _peer_closed(sock) -> bool:
+    """True once the client has closed its end of ``sock``.
+
+    Peeks through the plain socket layer, so it neither consumes bytes nor needs
+    the TLS layer (which cannot peek): a pending pipelined message reads as alive,
+    an orderly FIN reads as EOF, and a reset raises.
+    """
+    try:
+        return socket.socket.recv(sock, 1, socket.MSG_PEEK | socket.MSG_DONTWAIT) == b""
+    except BlockingIOError:
+        return False
+    except OSError:
+        return True
+
+
 class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def __init__(self) -> None:
         super().__init__()
@@ -400,6 +415,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         #: backend's connection lock) alive until the cycle collector happens to
         #: run.
         self._ctx_ref = None
+        #: Reports whether the requesting client has disconnected; bound by the wire
+        #: handler, absent for sessions created outside a socket (tests, tools).
+        self.client_gone = None
         #: GUC name -> value as SHOW reports it, for the settings this session SET.
         self.settings: dict[str, str] = {}
         self.statement_timeout_ms: int = self._default_statement_timeout_ms()
@@ -607,6 +625,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
                 session_key=self.key,
                 timeout_ms=self.statement_timeout_ms,
                 lane=self._lane(),
+                client_gone=self.client_gone,
             )
         except PermissionError as exc:
             raise PermissionError(str(exc)) from exc
@@ -852,6 +871,8 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             # JDBC statement, Arrow allocator and backend lock (PGW-022).
             self._ctx = ctx
             ctx.session.bind_context(ctx)  # type: ignore[attr-defined]
+            sock = self.request
+            ctx.session.client_gone = lambda: _peer_closed(sock)  # type: ignore[attr-defined]
             # Trust mode: authenticate immediately with no password challenge, so a
             # plain `psql host=… user=… dbname=…` connects like any client. A
             # pluggable provider (Phase 5b) decides via requires_password; else the
