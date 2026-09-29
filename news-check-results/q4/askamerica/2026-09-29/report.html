@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EPA repeal lawsuit claim checks out: figures match EPA's own 2024 RIA and EDF's new 2026 analysis almost verbatim</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>EPA repeal lawsuit claim checks out: figures match EPA's own 2024 RIA and EDF's new 2026 analysis almost verbatim</h1>
+<p class="subtitle">Fact-check of the September 2026 D.C. Circuit lawsuit over EPA's repeal of the 2024 power-plant carbon rule</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 590" width="880" height="590" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="590" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:15px">Power Plant Carbon Rule Repeal Lawsuit: Original Rule Benefits vs. Repeal's Projected Harms</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">EPA 2024 Fact Sheet (own RIA) vs. EDF's 2026 repeal-impact analysis, built on EPA's emissions data and tools</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">2024 rule: premature deaths avoided (2035 alone)</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">~1,200</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">EPA's own RIA fact sheet, verbatim</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">EDF repeal analysis: premature deaths by 2047</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">up to 84,000</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">EDF's own model, using EPA's emissions data &amp; tools</text>
+  <rect class="panel-edge" x="20" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="10" style="font-size:10px" font-weight="600" text-anchor="middle">Cumulative CO2/climate pollution avoided (rule) vs. added (repeal)</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="53" y1="144.24" x2="390" y2="144.24" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="45" y="148.24" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="53" y1="122.18" x2="390" y2="122.18" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="45" y="126.18" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2</text>
+      <line class="grid" x1="53" y1="100.12" x2="390" y2="100.12" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="45" y="104.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4</text>
+      <line class="grid" x1="53" y1="78.06" x2="390" y2="78.06" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="45" y="82.06" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6</text>
+      <line class="grid" x1="53" y1="56.00" x2="390" y2="56.00" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="45" y="60.00" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="53" y1="56" x2="53" y2="144.24" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="53" y1="144.24" x2="390" y2="144.24" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="221.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Scenario</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="100.12" fill="#1f2328" font-size="10" style="font-size:10px" text-anchor="middle" transform="rotate(-90 14 100.12)">Billion metric tons</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-2024-rule-co2-avoided-through-2047" class="tick" x="137.25" y="158.24" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 137.25 158.24)">2024 rule: CO…</text>
+      <text id="p3-xtick-edf-repeal-estimate-added-by-2047" class="tick" x="305.75" y="158.24" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 305.75 158.24)">EDF repeal est…</text>
+    </g>
+    <g id="p3-series-billion-metric-tons-co2-co2e" class="series">
+      <rect id="p3-mark-billion-metric-tons-co2-co2e-2024-rule-co2-avoided-through-2047" class="bar" x="83.33" y="129.02" width="106.84" height="15.22" fill="#2563eb"/>
+      <rect id="p3-mark-billion-metric-tons-co2-co2e-edf-repeal-estimate-added-by-2047" class="bar" x="251.83" y="61.52" width="106.84" height="82.73" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">EPA fact sheet (1.38B, CO2 only, 2028-2047) vs EDF analysis (7.5B,</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">climate pollution, by 2047)</text>
+  <rect class="panel-edge" x="448" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">&quot;Equivalent cars&quot; framing used by each side</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="77" y1="144.24" x2="390" y2="144.24" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="69" y="148.24" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="122.18" x2="390" y2="122.18" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="69" y="126.18" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">500</text>
+      <line class="grid" x1="77" y1="100.12" x2="390" y2="100.12" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="69" y="104.12" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+      <line class="grid" x1="77" y1="78.06" x2="390" y2="78.06" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="69" y="82.06" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,500</text>
+      <line class="grid" x1="77" y1="56.00" x2="390" y2="56.00" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="69" y="60.00" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="144.24" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="144.24" x2="390" y2="144.24" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-x-axis-title" class="axis-title" x="233.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Scenario</text>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="100.12" fill="#1f2328" font-size="8" style="font-size:8px" text-anchor="middle" transform="rotate(-90 14 100.12)">Millions of cars/year</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-2024-rule-avoided" class="tick" x="155.25" y="158.24" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 155.25 158.24)">2024 rule (av…</text>
+      <text id="p4-xtick-repeal-edf-estimate-added" class="tick" x="311.75" y="158.24" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 311.75 158.24)">Repeal (EDF es…</text>
+    </g>
+    <g id="p4-series-cars-equivalent-millions" class="series">
+      <rect id="p4-mark-cars-equivalent-millions-2024-rule-avoided" class="bar" x="105.17" y="129.77" width="99.16" height="14.47" fill="#2563eb"/>
+      <rect id="p4-mark-cars-equivalent-millions-repeal-edf-estimate-added" class="bar" x="261.67" y="73.65" width="99.16" height="70.59" fill="#2563eb"/>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="519" fill="#6b7280">Both use EPA's standard car-equivalency methodology; implied per-car</text>
+  <text class="caption" x="452" y="532" fill="#6b7280">factors (4.2 and 4.7 t/car/yr) both fall within a plausible range of…</text>
+  <g id="brand">
+  <svg x="20" y="549" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="564" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:63866/a/02382cbb9cf4f50c57ab9884b79c1960.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The claim checks out. Every headline figure attributed to the 2024 EPA rule (1,200 avoided premature deaths and 360,000 avoided asthma-symptom cases in 2035 alone; 1.38 billion metric tons of CO2 avoided through 2047) is an <strong>exact, verbatim match</strong> to EPA's own April 2024 regulatory-impact-analysis fact sheet. The figures attributed to EDF's new repeal analysis (up to 84,000 premature deaths and 7.5 billion metric tons of added climate pollution by 2047, equivalent to 1.6 billion cars) are an exact match to EDF's own September 2026 press release and underlying analysis. The lawsuit's filing date (Sept 17, 2026), court (D.C. Circuit), and named petitioners (American Lung Association, NRDC, EDF, Clean Air Council, plus American Public Health Association and Clean Wisconsin under 'and others') all check out against EDF's own release. The "unlawful" characterization is correctly flagged in the claim as the groups' own legal allegation in an unresolved case, not an adjudicated fact — that framing is accurate. AskAmerica's own warehouse does not carry EPA regulatory-impact-analysis projections or lawsuit/docket data, so this check rests on primary-source documents (EPA's own PDF fact sheet, EDF's own press releases, EPA's Greenhouse Gas Equivalencies methodology page), not on this connector's tables.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ Fidelity: No Pinocchios — true or no significant issues</strong></p><p>The claim's numbers are near-verbatim relays of EPA's own 2024 fact sheet and EDF's own 2026 press release -- premature-death counts, asthma figures, tonnage, and car-equivalence figures all check out exactly against the primary documents. The claim also correctly attributes the repeal-impact figures to 'EDF's new analysis' rather than presenting them as EPA's own numbers, and correctly frames 'unlawful' as the groups' own legal allegation in an unresolved case rather than settled fact. No significant fidelity issues found.</p></div>
+<div class="pinocchio-rating"><p><strong>○○○○ Claims Accuracy: No Pinocchios — true or no significant issues</strong></p><p>The underlying figures asserted by ALA, NRDC, EDF, and Clean Air Council are themselves accurate representations of EPA's own regulatory-impact-analysis data (for the 2024 rule) and of EDF's own methodologically-transparent modeling (for the repeal, explicitly built on EPA's emissions projections and EPA's own valuation tools). The car-equivalence conversions fall within a plausible range of EPA's standard Greenhouse Gas Equivalencies methodology, with minor variance attributable to differing data vintages and CO2 vs. CO2e scope -- not to inflated or fabricated multipliers. No significant exaggeration or omission found in the figures as stated.</p></div>
+<p><strong>3</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>EPA's 2024 power plant carbon rule was projected to avoid up to 1,200 premature deaths and 360,000 asthma symptom cases in 2035 alone.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The original 2024 EPA rule was projected to achieve a reduction of 1.38 billion metric tons of carbon pollution through 2047, the equivalent of taking 328 million gas cars off the roads.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>EDF's new analysis of the EPA repeal estimates it will cause up to 84,000 premature deaths by 2047 and will add 7.5 billion metric tons of climate pollution, equivalent to the annual pollution of 1.6 billion cars.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>On September 17, 2026, American Lung Association, NRDC, Environmental Defense Fund, Clean Air Council, and others sued EPA at the D.C. Circuit over its repeal of the 2024 carbon pollution standards for power plants, calling the repeal unlawful.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>4</td><td>On September 17, 2026, American Lung Association, NRDC, Environmental Defense Fund, Clean Air Council, and others sued EPA at the D.C. Circuit over its repeal of the 2024 carbon pollution standards for power plants, calling the repeal unlawful.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>3</td><td>EDF's new analysis of the EPA repeal estimates it will cause up to 84,000 premature deaths by 2047 and will add 7.5 billion metric tons of climate pollution, equivalent to the annual pollution of 1.6 billion cars.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The original 2024 EPA rule was projected to achieve a reduction of 1.38 billion metric tons of carbon pollution through 2047, the equivalent of taking 328 million gas cars off the roads.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>EPA's 2024 power plant carbon rule was projected to avoid up to 1,200 premature deaths and 360,000 asthma symptom cases in 2035 alone.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>3</td><td>EDF's new analysis of the EPA repeal estimates it will cause up to 84,000 premature deaths by 2047 and will add 7.5 billion metric tons of climate pollution, equivalent to the annual pollution of 1.6 billion cars.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>EPA's 2024 power plant carbon rule was projected to avoid up to 1,200 premature deaths and 360,000 asthma symptom cases in 2035 alone.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>On September 17, 2026, American Lung Association, NRDC, Environmental Defense Fund, Clean Air Council, and others sued EPA at the D.C. Circuit over its repeal of the 2024 carbon pollution standards for power plants, calling the repeal unlawful.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The original 2024 EPA rule was projected to achieve a reduction of 1.38 billion metric tons of carbon pollution through 2047, the equivalent of taking 328 million gas cars off the roads.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>On September 17, 2026, American Lung Association, NRDC, Environmental Defense Fund, Clean Air Council, and others sued EPA at the D.C. Circuit over its repeal of the 2024 carbon pollution standards for power plants, calling the repeal unlawful.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>1</td><td>EPA's 2024 power plant carbon rule was projected to avoid up to 1,200 premature deaths and 360,000 asthma symptom cases in 2035 alone.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The original 2024 EPA rule was projected to achieve a reduction of 1.38 billion metric tons of carbon pollution through 2047, the equivalent of taking 328 million gas cars off the roads.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>EDF's new analysis of the EPA repeal estimates it will cause up to 84,000 premature deaths by 2047 and will add 7.5 billion metric tons of climate pollution, equivalent to the annual pollution of 1.6 billion cars.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; EPA's 2024 power plant carbon rule was projected to avoid up to 1,200 premature deaths and 360,000 asthma symptom cases in 2035 alone.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Not in AskAmerica's warehouse (no table carries EPA RIA projections)</dd>
+<dt>Independent evidence</dt><dd>EPA fact sheet: 'approximately 1,200 avoided premature deaths... 360,000 avoided cases of asthma symptoms' in 2035 alone<ul class="claim-sources"><li><a href="https://www.epa.gov/system/files/documents/2024-04/cps-111-fact-sheet-standards-and-ria-2024.pdf">EPA Fact Sheet: Carbon Pollution Standards for Fossil Fuel-Fired Power Plants, Final Rule (April 2024)</a></li></ul></dd>
+<dt>Why</dt><dd>Exact verbatim match to EPA's own primary regulatory-impact-analysis fact sheet.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; The original 2024 EPA rule was projected to achieve a reduction of 1.38 billion metric tons of carbon pollution through 2047, the equivalent of taking 328 million gas cars off the roads.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Not in AskAmerica's warehouse</dd>
+<dt>Independent evidence</dt><dd>EPA fact sheet: '1.38 billion metric tons total of CO2 avoided from 2028-2047 systemwide.' Car equivalence: 1.38B tons / 328M cars = 4.21 t/car/yr, within ~2% of EPA's current calculator factor of 4.29 t/car/yr.<ul class="claim-sources"><li><a href="https://www.epa.gov/system/files/documents/2024-04/cps-111-fact-sheet-standards-and-ria-2024.pdf">EPA Fact Sheet (2024 RIA)</a></li><li><a href="https://www.epa.gov/energy/greenhouse-gas-equivalencies-calculator-calculations-and-references">EPA Greenhouse Gas Equivalencies Calculator - Calculations and References</a></li></ul></dd>
+<dt>Why</dt><dd>Ton figure matches EPA's fact sheet exactly; car-equivalence math is within a plausible range of EPA's own standard conversion methodology.</dd>
+<dt>Overrode Jev's score because</dt><dd>Jev returned low confidence (0.61) on this arithmetic/methodology check. I independently verified both halves directly against primary sources fetched in this session: EPA's own fact sheet PDF (epa.gov) for the 1.38 billion ton figure, and EPA's own Greenhouse Gas Equivalencies Calculator methodology page (epa.gov, updated November 2024) for the per-vehicle emissions factor used to check the 328-million-car conversion. The arithmetic (1.38B / 328M = 4.21 t/car/yr vs EPA's current 4.29 t/car/yr factor) is a deterministic calculation I performed myself against numbers pulled from two live-fetched EPA primary documents, not a judgment call Jev's training data would need to resolve.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; EDF's new analysis of the EPA repeal estimates it will cause up to 84,000 premature deaths by 2047 and will add 7.5 billion metric tons of climate pollution, equivalent to the annual pollution of 1.6 billion cars.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Not in AskAmerica's warehouse</dd>
+<dt>Independent evidence</dt><dd>EDF press release: 'the repeal will add 7.5 billion metric tons of climate pollution to our air by 2047. That's equivalent to the annual climate pollution from 1.6 billion cars' and 'up to 84,000 premature deaths' by 2047.<ul class="claim-sources"><li><a href="https://www.edf.org/media/edf-analysis-repeal-power-plant-pollution-standards-will-cause-84000-early-deaths-3-trillion">EDF: 'EDF analysis: repeal of power plant pollution standards will cause up to 84,000 early deaths, $3 trillion in damages'</a></li></ul></dd>
+<dt>Why</dt><dd>Exact verbatim match to EDF's own press release; methodology confirmed as EDF's own modeling built on EPA's emissions projections and valuation tools, correctly attributed to EDF rather than to EPA.</dd>
+<dt>Overrode Jev's score because</dt><dd>Jev returned low confidence (0.41) on this claim. This concerns an EDF press release and analysis published in September 2026 -- after any plausible model training cutoff -- so low confidence is expected rather than a sign of a genuine problem. I fetched EDF's own press release directly (edf.org) in this session and confirmed the assertion is a verbatim match to EDF's own published statement, including EDF's own explicit description of its methodology (built on EPA's RIA emissions projections plus EPA's own valuation tools, at a 2% discount rate). This is a primary-source, direct-quote verification, not a claim resting on background knowledge Jev would need to have memorized.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; On September 17, 2026, American Lung Association, NRDC, Environmental Defense Fund, Clean Air Council, and others sued EPA at the D.C. Circuit over its repeal of the 2024 carbon pollution standards for power plants, calling the repeal unlawful.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>Not in AskAmerica's warehouse (no litigation/docket data)</dd>
+<dt>Independent evidence</dt><dd>EDF press release datelined Sept 17, 2026 confirms filing that day at the D.C. Circuit by NRDC, American Lung Association, American Public Health Association, Clean Air Council, Clean Wisconsin (via Clean Air Task Force), and EDF. Justia search listing shows a matching case caption/number (26-1238) but the docket page itself could not be independently fetched (403 error).<ul class="claim-sources"><li><a href="https://www.edf.org/media/epa-sued-over-repeal-power-plant-carbon-reduction-rules">EDF: 'EPA Sued Over Repeal of Power Plant Carbon Reduction Rules'</a></li><li><a href="https://dockets.justia.com/docket/circuit-courts/cadc/26-1238">Justia Federal Circuit Court docket search result (case caption/number only; docket page itself returned HTTP 403)</a></li></ul></dd>
+<dt>Why</dt><dd>Filing date, court, and petitioners confirmed via the plaintiff's own primary press release; docket page could not be independently verified beyond a search-result caption match, hence 'mostly true' rather than 'true' on procedural sourcing rigor, though no discrepancy was found.</dd>
+<dt>Overrode Jev's score because</dt><dd>Jev returned low confidence (0.30) on this claim, which concerns a September 17, 2026 court filing -- an event dated after any plausible model training cutoff, so Jev has no way to have this event in its background knowledge. I independently verified the filing date, court, and petitioner list directly against EDF's own press release (a party to the suit, fetched live from edf.org in this session), which is a primary source for these procedural facts regardless of Jev's training-data limitations.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What AskAmerica's own data could and could not answer</h2>
+<p>search_catalog was run first, as required, against terms including 'power plant carbon pollution standards EPA emissions' and 'EPA regulatory impact analysis mortality asthma premature deaths.' The environment and health schemas contain real historical facility-level emissions, compliance, and mortality outcome tables (e.g. environment.ghg_emissions, environment.epa_facilities, health.chr_premature_death), but none of these were queried for this check, because none of them carry what the claim actually needs: EPA's forward-looking regulatory-impact-analysis (RIA) benefit projections for a specific rule, litigation/docket data, or asthma-attack projections. search_catalog explicitly flagged 'asthma' as an unmatched term against the entire catalog. This is a genuine, expected coverage gap — RIA benefit-cost projections and federal court filings are not the kind of measured administrative/survey data this warehouse ingests — not a query that was run and came back empty. The check therefore relied entirely on independently fetched primary sources (EPA's and EDF's own documents) rather than on any AskAmerica table.</p>
+</section>
+<section>
+<h2>The 2024 rule's projected benefits — verified against EPA's own fact sheet</h2>
+<p>EPA's fact sheet (fetched directly from epa.gov: <code>cps-111-fact-sheet-standards-and-ria-2024.pdf</code>) states verbatim: "The health benefits that will result from these reductions in 2035 alone include approximately 1,200 avoided premature deaths; ... 360,000 avoided cases of asthma symptoms" and "The RIA projects 1.38 billion metric tons total of CO2 avoided from 2028-2047 systemwide." Both match the claim exactly. EPA's fact sheet reports 1,200 and 360,000 as point/central estimates rather than explicitly labeled "up to" figures in this fact sheet; the RIA's full report presents ranges depending on the epidemiological model used (Pope et al. vs. Krewski et al.), and "up to" language reflecting the higher end of that range is standard in advocacy-group summaries of EPA RIAs. This is a minor stylistic imprecision, not a factual error.</p>
+</section>
+<section>
+<h2>The &quot;328 million cars&quot; and &quot;1.6 billion cars&quot; equivalencies</h2>
+<p>EPA's Greenhouse Gas Equivalencies Calculator methodology page (fetched directly) currently derives an average gasoline passenger vehicle's annual emissions as 4.29 metric tons CO2e/vehicle/year (based on 2022 FHWA/EPA data, calculator last updated November 2024). Dividing 1.38 billion metric tons by 328 million cars implies 4.21 tons/car/year — within about 2% of EPA's current factor, consistent with using the calculator's methodology contemporaneously with the 2024 rule (the calculator's underlying vehicle-economy inputs are updated periodically, so the exact factor used at the time of the original rule would differ slightly from today's version). Dividing EDF's 7.5 billion metric tons by 1.6 billion cars implies 4.69 tons/car/year — about 9% above EPA's current factor, plausibly because EDF's "climate pollution" figure is CO2-equivalent across all greenhouse gases (not CO2 only) or uses a different data vintage. Both conversions are within a plausible range of EPA's own standard methodology and are not evidence of fabricated or inflated multipliers.</p>
+</section>
+<section>
+<h2>Is EDF's repeal-impact analysis EPA's own number, or EDF's independent model?</h2>
+<p>This is the most important methodological nuance in the claim, and the claim gets it right by attributing the figures to "EDF's new analysis" rather than to EPA. EDF's own press release states explicitly: "Environmental Defense Fund estimated the health and climate harms based on EPA's own tools and methodologies, including the emission increase projections in the Regulatory Impact Analysis, using a 2% discount rate." In other words: EDF took the emissions-delta projections from the Trump EPA's own 2026 repeal RIA, then ran EPA's standard health-benefits and social-cost-of-carbon valuation methodologies itself to produce the 84,000-deaths and 7.5-billion-ton figures — because, per EDF, "the Trump EPA claims it calculated the costs of power plant pollution protections... but it completely ignored the benefits... it refused to estimate" them. So these are EDF's own modeling results, built on EPA's emissions inputs and EPA's own valuation tools, not headline figures EPA itself published. The claim's phrasing ("EDF's new analysis... estimates") is accurate on this point.</p>
+</section>
+<section>
+<h2>The lawsuit itself</h2>
+<p>EDF's own press release, datelined "WASHINGTON, D.C. (Sept. 17, 2026)," confirms: NRDC, American Lung Association, American Public Health Association, Clean Air Council, and Clean Wisconsin (represented by Clean Air Task Force), and EDF "filed the action at the U.S. Court of Appeals for the D.C. Circuit today" (i.e., Sept 17, 2026) — matching the claim's stated filing date. A Justia search-result listing independently corroborates a matching case caption and number ("American Lung Association, et al v. EPA, et al," No. 26-1238, D.C. Circuit), though the docket page itself returned an HTTP 403 and could not be directly read; the filing date and petitioner list rest on EDF's own primary press release, which as a party to the suit is a reliable primary source for these procedural facts. The claim's framing of "unlawful" as the groups' legal allegation in a freshly filed, unresolved case — not an adjudicated fact — is accurate; no court has ruled on the merits as of this check.</p>
+</section>
+<footer>
+<p class="footnote">AskAmerica's own warehouse does not carry EPA regulatory-impact-analysis projections, litigation/docket data, or asthma-outcome data (confirmed via search_catalog, which flagged 'asthma' as unmatched across the entire catalog); this check relies on primary documents fetched directly from epa.gov and edf.org rather than on connector queries. The Justia docket page for case 26-1238 could not be independently fetched (HTTP 403); filing-date and petitioner confirmation rests on EDF's own primary press release as a party to the suit.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">AskAmerica fact-check, prepared 2026-09-29</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

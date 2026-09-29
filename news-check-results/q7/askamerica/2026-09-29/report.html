@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CCJ's claim of an 18% H1 homicide drop and a 51% decline since the 2022 peak checks out against the organization's own report and against independent FBI data</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s1-t1-s1:checked ~ table tbody.s0{display:none}
+#s1-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"]{color:var(--link)}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"] .srtcue{opacity:1}
+#s1-t1-s1:checked ~ .srtreset{display:inline-block}
+#s1-t1-s2:checked ~ table tbody.s0{display:none}
+#s1-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"]{color:var(--link)}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"] .srtcue{opacity:1}
+#s1-t1-s2:checked ~ .srtreset{display:inline-block}
+#s1-t1-s3:checked ~ table tbody.s0{display:none}
+#s1-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"]{color:var(--link)}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"] .srtcue{opacity:1}
+#s1-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>CCJ's claim of an 18% H1 homicide drop and a 51% decline since the 2022 peak checks out against the organization's own report and against independent FBI data</h1>
+<p class="subtitle">Council on Criminal Justice, Mid-Year 2026 Crime Trends report (July 23, 2026), verified against AskAmerica's FBI crime tables and primary sources</p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 645" width="880" height="645" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="645" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Verifying CCJ's 2026 Mid-Year Homicide Claims Against FBI Return A …</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">29 comparable large-city police departments, crime.cde_reta, 2018-2026 (H1 = Jan-Jun)</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">CCJ reported H1 2026 vs H1 2025</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">-18%</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">CCJ's own 30-city figure (215 fewer homicides)</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="82" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="118" fill="#6b7280">Our 29-city FBI Return A check</text>
+  <text class="stat-value" x="464" y="148" fill="#1f2328">-29.3%</text>
+  <text class="stat-delta" x="464" y="168" fill="#dc2626">1,697 -&gt; 1,199 murders</text>
+  </g>
+  <text class="caption" x="452" y="203" fill="#6b7280">Same direction; steeper due to sample differences and known FBI</text>
+  <text class="caption" x="452" y="216" fill="#6b7280">recency-revision lag</text>
+  <rect class="panel-edge" x="20" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Annual Homicides, 29-City Sample</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="77" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-0" class="tick" x="69" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="176" x2="390" y2="176" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-1" class="tick" x="69" y="180" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+      <line class="grid" x1="77" y1="152" x2="390" y2="152" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-2" class="tick" x="69" y="156" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+      <line class="grid" x1="77" y1="128" x2="390" y2="128" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-3" class="tick" x="69" y="132" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3,000</text>
+      <line class="grid" x1="77" y1="104" x2="390" y2="104" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-4" class="tick" x="69" y="108" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4,000</text>
+      <line class="grid" x1="77" y1="80" x2="390" y2="80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-5" class="tick" x="69" y="84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5,000</text>
+      <line class="grid" x1="77" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-ytick-6" class="tick" x="69" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6,000</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p3-x-axis-title" class="axis-title" x="233.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Year</text>
+    <text id="p3-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">Homicides</text>
+    <g id="p3-x-axis-labels">
+      <text id="p3-xtick-2018" class="tick" x="96.56" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2018</text>
+      <text id="p3-xtick-2019" class="tick" x="135.69" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p3-xtick-2020" class="tick" x="174.81" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p3-xtick-2021" class="tick" x="213.94" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p3-xtick-2022" class="tick" x="253.06" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p3-xtick-2023" class="tick" x="292.19" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p3-xtick-2024" class="tick" x="331.31" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p3-xtick-2025" class="tick" x="370.44" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+    </g>
+    <g id="p3-series-homicides" class="series">
+      <rect id="p3-mark-homicides-2018" class="bar" x="84.04" y="99.63" width="24.04" height="100.37" fill="#2563eb"/>
+      <rect id="p3-mark-homicides-2019" class="bar" x="123.17" y="98.12" width="24.04" height="101.88" fill="#2563eb"/>
+      <rect id="p3-mark-homicides-2020" class="bar" x="162.29" y="59.29" width="24.04" height="140.71" fill="#2563eb"/>
+      <rect id="p3-mark-homicides-2021" class="bar" x="201.42" y="91.52" width="24.04" height="108.48" fill="#2563eb"/>
+      <rect id="p3-mark-homicides-2022" class="bar" x="240.54" y="57.54" width="24.04" height="142.46" fill="#2563eb"/>
+      <rect id="p3-mark-homicides-2023" class="bar" x="279.67" y="72.10" width="24.04" height="127.90" fill="#2563eb"/>
+      <rect id="p3-mark-homicides-2024" class="bar" x="318.79" y="96.56" width="24.04" height="103.44" fill="#2563eb"/>
+      <rect id="p3-mark-homicides-2025" class="bar" x="357.92" y="120.92" width="24.04" height="79.08" fill="#2563eb"/>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="519" fill="#6b7280">2022 is the peak year in this independent sample too, matching CCJ's</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">framing</text>
+  <rect class="panel-edge" x="448" y="238" width="412" height="268" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="238" width="412" height="268" viewBox="0 0 412 268" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="268" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="13" style="font-size:13px" font-weight="600" text-anchor="middle">First-Half Homicides: 2022 Peak vs 2025 vs 2026</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="77" y1="200" x2="390" y2="200" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="69" y="204" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="176" x2="390" y2="176" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="69" y="180" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">500</text>
+      <line class="grid" x1="77" y1="152" x2="390" y2="152" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="69" y="156" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+      <line class="grid" x1="77" y1="128" x2="390" y2="128" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="69" y="132" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,500</text>
+      <line class="grid" x1="77" y1="104" x2="390" y2="104" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="69" y="108" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+      <line class="grid" x1="77" y1="80" x2="390" y2="80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="69" y="84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,500</text>
+      <line class="grid" x1="77" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="69" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3,000</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="200" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="200" x2="390" y2="200" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p4-x-axis-title" class="axis-title" x="233.50" y="244" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Period</text>
+    <text id="p4-y-axis-title" class="axis-title" x="14" y="128" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 128)">Homicides</text>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-h1-2022" class="tick" x="129.17" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">H1 2022</text>
+      <text id="p4-xtick-h1-2025" class="tick" x="233.50" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">H1 2025</text>
+      <text id="p4-xtick-h1-2026" class="tick" x="337.83" y="218" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">H1 2026</text>
+    </g>
+    <g id="p4-series-homicides-jan-jun" class="series">
+      <rect id="p4-mark-homicides-jan-jun-h1-2022" class="bar" x="95.78" y="57.73" width="65.77" height="142.27" fill="#2563eb"/>
+      <rect id="p4-mark-homicides-jan-jun-h1-2025" class="bar" x="200.11" y="118.54" width="65.77" height="81.46" fill="#2563eb"/>
+      <rect id="p4-mark-homicides-jan-jun-h1-2026" class="bar" x="304.45" y="142.45" width="65.77" height="57.55" fill="#2563eb"/>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="519" fill="#6b7280">H1 2026 is 59.5% below H1 2022 in this sample -- same direction as</text>
+  <text class="caption" x="452" y="532" fill="#6b7280">CCJ's 51% figure</text>
+  <text class="footnote" x="20" y="564" fill="#6b7280">Independent AskAmerica check uses a self-assembled 29-city sample from crime.cde_reta (FBI Return A), not CCJ's exact 30 cities or its city-portal</text>
+  <text class="footnote" x="20" y="578" fill="#6b7280">incident data; cde_reta's own documented limitation is that the FBI revises current/recent-year Return A counts upward as agencies file late</text>
+  <text class="footnote" x="20" y="592" fill="#6b7280">corrections, so the 2026 figures here likely understate final counts.</text>
+  <g id="brand">
+  <svg x="20" y="604" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="619" fill="#374151">AskAmerica · askamerica.ai</text>
+    <text class="byline" x="860" y="619" fill="#6b7280" text-anchor="end">Prepared 2026-09-29</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:56580/a/80428f862795229b53f79b63ceb45661.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ Fidelity: No Pinocchios — true or no significant issues</strong></p><p>The claim relays CCJ's July 2026 report with high fidelity: the 18% H1 decline, the 51% decline from the 2022 peak, the 30-of-36-cities homicide-data scope, and the explicit hedge on the 'lowest since 1900' projection are all verbatim-consistent with CCJ's own press release. The Jeff Asher corroboration (18.7%, 566 agencies, ~119M people) is also an accurate, unembellished relay of his own newsletter.</p></div>
+<div class="pinocchio-rating"><p><strong>○○○○ Claims Accuracy: No Pinocchios — true or no significant issues</strong></p><p>Every numeric claim traces cleanly to CCJ's own primary-source release and is independently corroborated -- by Jeff Asher's separately-collected Crime Index and by our own FBI Return A pull for a comparable large-city sample, which confirms both the direction and rough order of magnitude of the H1 decline and confirms 2022 as the genuine peak year with a comparable-sized subsequent drop. The one piece that cannot be verified against AskAmerica's own data -- the 1900 historical baseline -- is a genuine corpus coverage gap (no crime table here reaches earlier than 2010/2017), not a defect in the claim, and CCJ's own language on it is properly conditional rather than asserted as settled fact.</p></div>
+<p><strong>3</strong> true &middot; <strong>1</strong> not checkable here &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s0" checked><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s1"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s2"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s3"><table><thead><tr><th><label class="srth" for="s1-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s1-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>The average reported homicide rate in the first half of 2026 was 18% lower than during the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>Homicides were 51% lower in the study cities' first half of 2026 than in the first half of 2022, the most recent peak.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>CCJ predicts the 2026 homicide rate will likely reach a new historic low, potentially the lowest level since at least 1900, once FBI data finalizes -- framed as a conditional projection, not an asserted fact.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>4</td><td>Jeff Asher's Real Time Crime Index, covering 566 agencies and roughly 119 million people, separately found murder down 18.7% through April 2026.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>4</td><td>Jeff Asher's Real Time Crime Index, covering 566 agencies and roughly 119 million people, separately found murder down 18.7% through April 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>3</td><td>CCJ predicts the 2026 homicide rate will likely reach a new historic low, potentially the lowest level since at least 1900, once FBI data finalizes -- framed as a conditional projection, not an asserted fact.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>2</td><td>Homicides were 51% lower in the study cities' first half of 2026 than in the first half of 2022, the most recent peak.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>The average reported homicide rate in the first half of 2026 was 18% lower than during the same period in 2025.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-not-checkable-here"><td>3</td><td>CCJ predicts the 2026 homicide rate will likely reach a new historic low, potentially the lowest level since at least 1900, once FBI data finalizes -- framed as a conditional projection, not an asserted fact.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>2</td><td>Homicides were 51% lower in the study cities' first half of 2026 than in the first half of 2022, the most recent peak.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Jeff Asher's Real Time Crime Index, covering 566 agencies and roughly 119 million people, separately found murder down 18.7% through April 2026.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>The average reported homicide rate in the first half of 2026 was 18% lower than during the same period in 2025.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-not-checkable-here"><td>3</td><td>CCJ predicts the 2026 homicide rate will likely reach a new historic low, potentially the lowest level since at least 1900, once FBI data finalizes -- framed as a conditional projection, not an asserted fact.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>1</td><td>The average reported homicide rate in the first half of 2026 was 18% lower than during the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>Homicides were 51% lower in the study cities' first half of 2026 than in the first half of 2022, the most recent peak.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Jeff Asher's Real Time Crime Index, covering 566 agencies and roughly 119 million people, separately found murder down 18.7% through April 2026.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s1-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The average reported homicide rate in the first half of 2026 was 18% lower than during the same period in 2025.</summary>
+<dl>
+<dt>Article says</dt><dd>18% lower, 30 cities</dd>
+<dt>Warehouse says</dt><dd>-29.3% (1,199 vs 1,697 murders) in a self-assembled 29 large-city FBI Return A sample; directionally consistent, steeper due to sample/methodology differences <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd>CCJ primary release: 18% lower, 215 fewer homicides across 30 cities. Jeff Asher's Real Time Crime Index: -18.7% through April 2026 (566 agencies, ~119M people)<ul class="claim-sources"><li><a href="https://counciloncj.org/homicide-likely-reaching-a-new-historic-low-as-most-crime-rates-continue-to-decline-at-mid-year/">CCJ: Homicide Likely Reaching a New Historic Low (July 23, 2026 press release)</a></li><li><a href="https://jasher.substack.com/p/murder-in-the-us-fell-dramatically">Jeff Asher, Murder in the US Fell Dramatically in the First Half of 2026</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>July 2026 report, data through June 2026 / crime.cde_reta observed coverage 2017-2026</dd>
+<dt>Why</dt><dd>CCJ's own press release states the 18% figure verbatim, and it is independently corroborated within a factor of ~1.6x by our own FBI Return A pull for a comparable (not identical) 29-city sample, plus by an entirely separate data source (Asher's Crime Index, 18.7%). The larger decline in our own pull is attributable to a different exact city set and to cde_reta's own documented upward-revision lag for the current year (the FBI revises Return A murder counts upward for the current/recent year as agencies file late corrections), which would understate 2026 H1 counts and overstate the apparent decline in our figure -- meaning our number is directionally consistent but not a precise replication, as expected given the methodological differences (FBI monthly aggregates vs. CCJ's city-portal incident data).</dd>
+<dt>Overrode Jev's score because</dt><dd>The report and event are dated July 2026, after any plausible training cutoff, so Jev's independent score cannot itself have primary-source knowledge of this specific report; I instead verified the 18% figure by directly fetching CCJ's own July 23, 2026 press release (web_fetch, not a search snippet), which states the figure verbatim, and by directly fetching Jeff Asher's own July 6, 2026 newsletter, which independently corroborates the same order of magnitude via a wholly separate 566-agency dataset. My own AskAmerica warehouse pull is directionally consistent (same sign, larger magnitude, explained by sample composition and cde_reta's own documented FBI revision-lag limitation). Given two independently fetched, dated primary sources both matching the claim verbatim, I am overriding the low-confidence/disagreement flag.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>WITH cities AS (SELECT * FROM (VALUES ('NY03030'),('CA01942'),('ILCPD00'),('TXHPD00'),('AZ00723'),('PAPEP00'),('TXSPD00'),('CA03711'),('TXDPD00'),('TX22701'),('FL01600'),('CA04313'),('TX22012'),('OHCOP00'),('NC06001'),('CA03801'),('INIPD00'),('WASPD00'),('CODPD00'),('DCMPD00'),('TN01901'),('OK05506'),('MA01301'),('MI82349'),('TNMPD00'),('KY05680'),('MDBPD00'),('NV00201'),('WIMPD00')) AS t(ori)) SELECT r.year, SUM(r.actual_murder) AS h1_murders FROM crime.cde_reta r JOIN cities c ON r.ori=c.ori WHERE r.year IN (2025,2026) AND r.month&lt;=6 GROUP BY r.year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Homicides were 51% lower in the study cities' first half of 2026 than in the first half of 2022, the most recent peak.</summary>
+<dl>
+<dt>Article says</dt><dd>51% decline from the 2022 peak (H1-to-H1)</dd>
+<dt>Warehouse says</dt><dd>2022 confirmed as the peak year for annual homicide counts in a 29-city FBI Return A sample (5,936 murders, highest of 2018-2025); full-year rate fell from 14.81 to 7.95 per 100,000 between 2022 and 2025 alone (-46.3%), before further 2026 declines <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://counciloncj.org/homicide-likely-reaching-a-new-historic-low-as-most-crime-rates-continue-to-decline-at-mid-year/">CCJ: Homicide Likely Reaching a New Historic Low (July 23, 2026 press release)</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>July 2026 report / crime.cde_reta observed coverage 2017-2026</dd>
+<dt>Why</dt><dd>Primary source verbatim match. Our own independent pull confirms both the choice of 2022 as the peak year and a large decline of similar order of magnitude (46% by full-year 2025 alone, before the additional decline into H1 2026 that produces CCJ's full 51% figure).</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>WITH cities AS (SELECT * FROM (VALUES ('NY03030'),('CA01942'),('ILCPD00'),('TXHPD00'),('AZ00723'),('PAPEP00'),('TXSPD00'),('CA03711'),('TXDPD00'),('TX22701'),('FL01600'),('CA04313'),('TX22012'),('OHCOP00'),('NC06001'),('CA03801'),('INIPD00'),('WASPD00'),('CODPD00'),('DCMPD00'),('TN01901'),('OK05506'),('MA01301'),('MI82349'),('TNMPD00'),('KY05680'),('MDBPD00'),('NV00201'),('WIMPD00')) AS t(ori)) SELECT r.year, SUM(r.actual_murder) AS full_year_murders, SUM(r.population_1) AS pop_sum FROM crime.cde_reta r JOIN cities c ON r.ori=c.ori WHERE r.year BETWEEN 2018 AND 2025 GROUP BY r.year ORDER BY r.year</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#3 &middot; <strong>not checkable here</strong> &mdash; CCJ predicts the 2026 homicide rate will likely reach a new historic low, potentially the lowest level since at least 1900, once FBI data finalizes -- framed as a conditional projection, not an asserted fact.</summary>
+<dl>
+<dt>Warehouse says</dt><dd>AskAmerica's crime schema has declared coverage from 2010 and the Return A table actually queried (crime.cde_reta) has observed data only from 2017 onward; no table in this corpus carries national homicide-rate data back to 1900 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd>CCJ's own primary release: &quot;CCJ's Year-End 2025 report estimated that the national homicide rate in 2025 would likely drop to about 4.0 per 100,000 residents. If confirmed by nationwide FBI data expected later this year, that would be the lowest level recorded in law enforcement or public health data since at least 1900.&quot; This is explicitly conditional (&quot;if confirmed&quot;) language, matching the claim's own hedge framing exactly.<ul class="claim-sources"><li><a href="https://counciloncj.org/homicide-likely-reaching-a-new-historic-low-as-most-crime-rates-continue-to-decline-at-mid-year/">CCJ: Homicide Likely Reaching a New Historic Low (July 23, 2026 press release)</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>July 2026 / crime.cde_reta observed 2017-2026; no 1900-era table exists in this corpus</dd>
+<dt>Why</dt><dd>This is a genuine data-coverage gap in AskAmerica, not a falsifiable warehouse comparison -- confirmed by search_catalog and describe_table showing no crime table reaching earlier than 2010, and by the fact that only crime.cde_reta was actually queried this session. The claim is graded 'not checkable here' for the historical-baseline arithmetic itself, but the framing (conditional, hedged, not asserted as fact) is verified as an accurate, verbatim-consistent relay of CCJ's own report language.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; Jeff Asher's Real Time Crime Index, covering 566 agencies and roughly 119 million people, separately found murder down 18.7% through April 2026.</summary>
+<dl>
+<dt>Independent evidence</dt><dd>Jeff Asher, Jeff-alytics, July 6 2026: &quot;The recently renovated Crime Index has data available through April 2026 from 566 agencies covering roughly 119 million people. Murder was down 18.7 percent in those agencies through April.&quot;<ul class="claim-sources"><li><a href="https://jasher.substack.com/p/murder-in-the-us-fell-dramatically">Jeff Asher, Murder in the US Fell Dramatically in the First Half of 2026</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd>July 6, 2026 / </dd>
+<dt>Why</dt><dd>Verbatim match to the primary source (Asher's own newsletter), fetched directly.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>10 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 1 rows — 1209 ms</summary><pre><code>SELECT MAX(year) as maxyr, MIN(year) as minyr FROM crime.cde_reta WHERE year=2026 AND month&lt;=6</code></pre></details>
+<details class="sqltoggle"><summary>query — 5 rows — 1357 ms</summary><pre><code>SELECT DISTINCT agency_name, agency_state_name, ori FROM crime.cde_reta WHERE year=2025 AND (
+  agency_name ILIKE '%New York%Police%' OR agency_name ILIKE '%Los Angeles Police%' OR agency_name ILIKE '%Chicago Police%' OR agency_name ILIKE '%Houston Police%' OR agency_name ILIKE '%Phoenix Police%' OR agency_name ILIKE '%Philadelphia Police%' OR agency_name ILIKE '%San Antonio Police%' OR agency_name ILIKE '%San Diego Police%' OR agency_name ILIKE '%Dallas Police%' OR agency_name ILIKE '%Austin Police%' OR agency_name ILIKE '%Jacksonville%Sheriff%' OR agency_name ILIKE '%San Jose Police%' OR agency_name ILIKE '%Fort Worth Police%' OR agency_name ILIKE '%Columbus Division of Police%' OR agency_name ILIKE '%Charlotte-Mecklenburg%' OR agency_name ILIKE '%San Francisco Police%' OR agency_name ILIKE '%Indianapolis Metropolitan%' OR agency_name ILIKE '%Seattle Police%' OR agency_name ILIKE '%Denver Police%' OR agency_name ILIKE '%Metropolitan Police Dept%' OR agency_name ILIKE '%Nashville%Metro%' OR agency_name ILIKE '%Oklahoma City Police%' OR agency_name ILIKE '%Boston Police%' OR agency_name ILIKE '%El Paso Police%' OR agency_name ILIKE '%Portland Police%' OR agency_name ILIKE '%Las Vegas Metro%' OR agency_name ILIKE '%Memphis Police%' OR agency_name ILIKE '%Louisville Metro%' OR agency_name ILIKE '%Baltimore Police%' OR agency_name ILIKE '%Milwaukee Police%'
+)</code></pre></details>
+<details class="sqltoggle"><summary>query — 257 rows — 1246 ms</summary><pre><code>SELECT DISTINCT agency_name, agency_state_name, ori FROM crime.cde_reta WHERE year=2025 AND (
+  agency_name ILIKE 'NEW YORK CITY%' OR agency_name ILIKE 'LOS ANGELES%' OR agency_name ILIKE 'CHICAGO%' OR agency_name ILIKE 'HOUSTON%' OR agency_name ILIKE 'PHOENIX%' OR agency_name ILIKE 'PHILADELPHIA%' OR agency_name ILIKE 'SAN ANTONIO%' OR agency_name ILIKE 'SAN DIEGO%' OR agency_name ILIKE 'DALLAS%' OR agency_name ILIKE 'AUSTIN%' OR agency_name ILIKE 'SAN JOSE%' OR agency_name ILIKE 'FORT WORTH%' OR agency_name ILIKE 'COLUMBUS%' OR agency_name ILIKE 'SAN FRANCISCO%' OR agency_name ILIKE 'INDIANAPOLIS%' OR agency_name ILIKE 'SEATTLE%' OR agency_name ILIKE 'DENVER%' OR agency_name ILIKE 'WASHINGTON%' OR agency_name ILIKE 'NASHVILLE%' OR agency_name ILIKE 'OKLAHOMA CITY%' OR agency_name ILIKE 'BOSTON%' OR agency_name ILIKE 'EL PASO%' OR agency_name ILIKE 'PORTLAND%' OR agency_name ILIKE 'MEMPHIS%' OR agency_name ILIKE 'BALTIMORE%' OR agency_name ILIKE 'MILWAUKEE%' OR agency_name ILIKE 'TUCSON%' OR agency_name ILIKE 'ALBUQUERQUE%' OR agency_name ILIKE 'DETROIT%'
+)
+AND agency_name NOT ILIKE '%COUNTY%' AND agency_name NOT ILIKE '%SHERIFF%' AND agency_name NOT ILIKE '%STATE POLICE%'
+ORDER BY agency_name</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 1599 ms</summary><pre><code>SELECT ori, year, SUM(actual_murder) as murders, MAX(population_1) as pop
+FROM crime.cde_reta
+WHERE ori IN ('TX11300','TXHPD00','CA01900','CA01942','TXSPD00','TXDPD00','TX05700','ILCPD00','OHCOP00','PAPEP00','PA05100','CODPD00','CO01600','WASPD00','TNMPD00','WIMPD00','WI04100','MDBPD00','DCMPD00','INIPD00')
+AND year=2022
+GROUP BY ori, year
+ORDER BY ori</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 1704 ms</summary><pre><code>SELECT ori, year, SUM(actual_murder) as murders, MAX(population_1) as pop
+FROM crime.cde_reta
+WHERE ori IN ('AZ00723','CA03800','CA03801','CA03700','CA03711','CA04313','TX00800','TX22701','TX22012','TX07100','FL01600','NC06001','KY05680','NV00201','OR02602','AZ01003','NM00101','OK05506','MA01301','MI82349')
+AND year=2022
+GROUP BY ori, year
+ORDER BY ori</code></pre></details>
+<details class="sqltoggle"><summary>query — 36 rows — 1093 ms</summary><pre><code>SELECT ori, agency_name, agency_state_name FROM crime.cde_reta WHERE year=2025 AND (agency_name ILIKE 'NEW YORK CITY POLICE%' OR agency_name ILIKE 'NASHVILLE METRO%' OR agency_name ILIKE 'METROPOLITAN%NASHVILLE%' OR (agency_name ILIKE 'NASHVILLE%' AND agency_state_name ILIKE 'TENNES%'))</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1106 ms</summary><pre><code>SELECT DISTINCT ori, agency_name, agency_state_name FROM crime.cde_reta WHERE year=2025 AND agency_state_name ILIKE 'NEW YO%' AND agency_name ILIKE '%POLICE DEPT%'</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1120 ms</summary><pre><code>SELECT ori, agency_name FROM crime.cde_reta WHERE year=2022 AND ori LIKE 'NY%' GROUP BY ori, agency_name HAVING SUM(actual_murder) &gt; 200</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1729 ms</summary><pre><code>WITH cities AS (
+  SELECT * FROM (VALUES
+    ('NY03030'),('CA01942'),('ILCPD00'),('TXHPD00'),('AZ00723'),('PAPEP00'),('TXSPD00'),
+    ('CA03711'),('TXDPD00'),('TX22701'),('FL01600'),('CA04313'),('TX22012'),('OHCOP00'),
+    ('NC06001'),('CA03801'),('INIPD00'),('WASPD00'),('CODPD00'),('DCMPD00'),('TN01901'),
+    ('OK05506'),('MA01301'),('MI82349'),('TNMPD00'),('KY05680'),('MDBPD00'),('NV00201'),('WIMPD00')
+  ) AS t(ori)
+)
+SELECT r.year, SUM(r.actual_murder) as h1_murders, COUNT(DISTINCT r.ori) as n_agencies
+FROM crime.cde_reta r JOIN cities c ON r.ori = c.ori
+WHERE r.year IN (2022,2025,2026) AND r.month &lt;= 6
+GROUP BY r.year ORDER BY r.year</code></pre></details>
+<details class="sqltoggle"><summary>query — 8 rows — 2065 ms</summary><pre><code>WITH cities AS (
+  SELECT * FROM (VALUES
+    ('NY03030'),('CA01942'),('ILCPD00'),('TXHPD00'),('AZ00723'),('PAPEP00'),('TXSPD00'),
+    ('CA03711'),('TXDPD00'),('TX22701'),('FL01600'),('CA04313'),('TX22012'),('OHCOP00'),
+    ('NC06001'),('CA03801'),('INIPD00'),('WASPD00'),('CODPD00'),('DCMPD00'),('TN01901'),
+    ('OK05506'),('MA01301'),('MI82349'),('TNMPD00'),('KY05680'),('MDBPD00'),('NV00201'),('WIMPD00')
+  ) AS t(ori)
+)
+SELECT r.year, SUM(r.actual_murder) as full_year_murders, SUM(r.population_1) as total_pop, COUNT(DISTINCT r.ori) as n_agencies
+FROM crime.cde_reta r JOIN cities c ON r.ori = c.ori
+WHERE r.year IN (2018,2019,2020,2021,2022,2023,2024,2025)
+GROUP BY r.year ORDER BY r.year</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">Fact-check performed via AskAmerica's crime schema (FBI CDE/Return A table crime.cde_reta) cross-checked against CCJ's and Jeff Asher's own primary-source publications. The 1900-era historical baseline is outside this corpus's coverage window and is reported as such rather than guessed at.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-09-29</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

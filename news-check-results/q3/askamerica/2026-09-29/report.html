@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosen's EAD-rule warning checks out — and actually understates FWD.us's own figures</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Rosen's EAD-rule warning checks out — and actually understates FWD.us's own figures</h1>
+<p class="subtitle">Fact-check of Sen. Jacky Rosen's April 29, 2026 Senate floor claims against the DHS/USCIS Oct. 30, 2025 Interim Final Rule, FWD.us's primary analysis, and AskAmerica/BLS employment data</p>
+</header>
+<section>
+<h2>Summary</h2>
+<p><strong>Rosen's numbers hold up, and if anything are conservative.</strong> Her April 29, 2026 Senate floor remarks state, verbatim: 'More than three and a half million legally authorized workers nationwide could be impacted,' 'roughly six hundred thousand' in construction, and 'more than half a million' in hospitality. FWD.us's primary analysis (published April 9, 2026, using 2024 ACS data matched to FY2025 EAD-approval administrative data) puts the real figures at approximately 3.8 million total (3,765,000 in its published state-by-state table), 613,000 in construction, and 514,000 in leisure/hospitality — all consistent with, and in the case of the topline figure modestly higher than, what Rosen said. AskAmerica's own BLS employment data (econ.national_wages, 2025) shows these affected-worker counts are a small, plausible share of each industry's total workforce: about 7.1% of the 8.44 million U.S. construction workers and about 3.0% of the 17.25 million U.S. leisure/hospitality workers. The DHS/USCIS Interim Final Rule (Federal Register, Oct. 30, 2025) remains in effect: Rosen's Congressional Review Act resolution to overturn it failed on a party-line-leaning vote on April 29, 2026, and a pending federal lawsuit (Central District of California) has so far produced only a narrow protective order for the named plaintiffs, not a nationwide injunction.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<div class="pinocchio-rating"><p><strong>○○○○ Fidelity: No Pinocchios — true or no significant issues</strong></p><p>Every number the user's claim attributes to Sen. Rosen matches her Senate floor transcript verbatim, and every number attributed to FWD.us matches FWD.us's own published report verbatim, including the detailed industry/state tables and the immigration-category breakdown. The attribution is faithful in every particular checked.</p></div>
+<div class="pinocchio-rating"><p><strong>○○○○ Claims Accuracy: No Pinocchios — true or no significant issues</strong></p><p>Rosen's underlying figures are accurate and, if anything, conservative relative to the more precise FWD.us estimate she was almost certainly drawing on: her topline '3.5 million+' understates FWD.us's 3.8 million by about 8%, while her construction and hospitality figures ('roughly 600,000' and 'more than half a million') are accurate, appropriately-hedged characterizations of FWD.us's 613,000 and 514,000. AskAmerica's own BLS employment data confirms these affected-worker counts are a small, plausible share (7.1% and 3.0% respectively) of each industry's total workforce, not an implausible or inflated fraction. The rule remains in effect as of today, as the claim states. No factual errors were found.</p></div>
+<p><strong>4</strong> true &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>More than 3.5 million legally authorized workers nationwide could be impacted by the Trump administration's rule ending automatic EAD extensions.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>In construction alone, roughly 600,000 workers could be forced off the job because of the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>In hospitality, more than half a million workers nationwide could be affected by the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>FWD.us's analysis (2024 ACS data projected to FY2025, matched against FY2025 EAD-approval data) estimates 3.8 million total EAD holders affected, including 613,000 in construction, 514,000 in leisure/hospitality, roughly 2.3 million asylum applicants, roughly 1.1 million TPS holders/applicants, roughly 200,000 refugees/asylees/green-card applicants, and roughly 100,000 H-4/nonimmigrant-visa spouses.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>4</td><td>FWD.us's analysis (2024 ACS data projected to FY2025, matched against FY2025 EAD-approval data) estimates 3.8 million total EAD holders affected, including 613,000 in construction, 514,000 in leisure/hospitality, roughly 2.3 million asylum applicants, roughly 1.1 million TPS holders/applicants, roughly 200,000 refugees/asylees/green-card applicants, and roughly 100,000 H-4/nonimmigrant-visa spouses.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>In hospitality, more than half a million workers nationwide could be affected by the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>In construction alone, roughly 600,000 workers could be forced off the job because of the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>More than 3.5 million legally authorized workers nationwide could be impacted by the Trump administration's rule ending automatic EAD extensions.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>4</td><td>FWD.us's analysis (2024 ACS data projected to FY2025, matched against FY2025 EAD-approval data) estimates 3.8 million total EAD holders affected, including 613,000 in construction, 514,000 in leisure/hospitality, roughly 2.3 million asylum applicants, roughly 1.1 million TPS holders/applicants, roughly 200,000 refugees/asylees/green-card applicants, and roughly 100,000 H-4/nonimmigrant-visa spouses.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>In construction alone, roughly 600,000 workers could be forced off the job because of the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>In hospitality, more than half a million workers nationwide could be affected by the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>More than 3.5 million legally authorized workers nationwide could be impacted by the Trump administration's rule ending automatic EAD extensions.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-true"><td>1</td><td>More than 3.5 million legally authorized workers nationwide could be impacted by the Trump administration's rule ending automatic EAD extensions.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>In construction alone, roughly 600,000 workers could be forced off the job because of the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>In hospitality, more than half a million workers nationwide could be affected by the EAD rule.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>FWD.us's analysis (2024 ACS data projected to FY2025, matched against FY2025 EAD-approval data) estimates 3.8 million total EAD holders affected, including 613,000 in construction, 514,000 in leisure/hospitality, roughly 2.3 million asylum applicants, roughly 1.1 million TPS holders/applicants, roughly 200,000 refugees/asylees/green-card applicants, and roughly 100,000 H-4/nonimmigrant-visa spouses.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially true, mostly false, false, not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood).</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; More than 3.5 million legally authorized workers nationwide could be impacted by the Trump administration's rule ending automatic EAD extensions.</summary>
+<dl>
+<dt>Article says</dt><dd>more than 3.5 million</dd>
+<dt>Warehouse says</dt><dd>n/a — no direct EAD-holder table in AskAmerica; verified against primary sources</dd>
+<dt>Independent evidence</dt><dd>3.8 million (3,765,000 in FWD.us's published state table)<ul class="claim-sources"><li><a href="https://www.rosen.senate.gov/2026/04/29/video-rosen-forces-bipartisan-senate-vote-to-reverse-trump-regulation-ending-automatic-extension-of-work-permits/">Rosen Senate floor remarks transcript, April 29, 2026</a></li><li><a href="https://www.fwd.us/news/ending-automatic-work-authorization-will-cost-billions/">FWD.us — Ending Automatic Work Authorization Extensions Will Cost Billions</a></li></ul></dd>
+<dt>Why</dt><dd>Rosen's floor transcript matches the claim verbatim; her figure is a true but conservative characterization of FWD.us's 3.8M estimate.</dd>
+<dt>Overrode Jev's score because</dt><dd>Jev flagged low confidence on a topline-number nuance (true vs. slightly conservative), but this was independently verified via direct primary-source fetch of both Rosen's Senate floor transcript and FWD.us's own report page, not inferred — the verdict rests on documents read directly, not estimation.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; In construction alone, roughly 600,000 workers could be forced off the job because of the EAD rule.</summary>
+<dl>
+<dt>Article says</dt><dd>roughly 600,000</dd>
+<dt>Warehouse says</dt><dd>Total US construction employment (2025): ~8,435,067 (econ.national_wages, industry_code=23, all ownerships) <code>econ.national_wages</code></dd>
+<dt>Independent evidence</dt><dd>613,000 (FWD.us)<ul class="claim-sources"><li><a href="https://www.rosen.senate.gov/2026/04/29/video-rosen-forces-bipartisan-senate-vote-to-reverse-trump-regulation-ending-automatic-extension-of-work-permits/">Rosen Senate floor remarks transcript, April 29, 2026</a></li><li><a href="https://www.fwd.us/news/ending-automatic-work-authorization-will-cost-billions/">FWD.us — Ending Automatic Work Authorization Extensions Will Cost Billions</a></li></ul></dd>
+<dt>Why</dt><dd>613,000 rounds naturally to 'roughly 600,000'; this is 7.1% of total US construction employment, a plausible share.</dd>
+<dt>Overrode Jev's score because</dt><dd>Jev's 1-Pinocchio flag reflects general rounding caution; independently confirmed via direct fetch of FWD.us's detailed table (613,000 exact) and BLS QCEW total (8.44M), a ratio-based sanity check that supports the claim as stated.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT industry_code, own_code, year, annual_avg_emplvl FROM econ.national_wages WHERE industry_code IN ('23','71','72') AND agglvl_code='14' ORDER BY industry_code, year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; In hospitality, more than half a million workers nationwide could be affected by the EAD rule.</summary>
+<dl>
+<dt>Article says</dt><dd>more than half a million</dd>
+<dt>Warehouse says</dt><dd>Total US leisure/hospitality employment (2025): ~17,252,863 (econ.national_wages, industry_code 71+72, all ownerships) <code>econ.national_wages</code></dd>
+<dt>Independent evidence</dt><dd>514,000 (FWD.us)<ul class="claim-sources"><li><a href="https://www.rosen.senate.gov/2026/04/29/video-rosen-forces-bipartisan-senate-vote-to-reverse-trump-regulation-ending-automatic-extension-of-work-permits/">Rosen Senate floor remarks transcript, April 29, 2026</a></li><li><a href="https://www.fwd.us/news/ending-automatic-work-authorization-will-cost-billions/">FWD.us — Ending Automatic Work Authorization Extensions Will Cost Billions</a></li></ul></dd>
+<dt>Why</dt><dd>514,000 genuinely is 'more than half a million'; this is about 3.0% of total US leisure/hospitality employment, a plausible share.</dd>
+<dt>Overrode Jev's score because</dt><dd>Independently confirmed via direct primary-source fetch of FWD.us's exact figure (514,000) against BLS QCEW total (17.25M); Jev's flag was a general confidence caveat, not a factual disagreement.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT industry_code, own_code, year, annual_avg_emplvl FROM econ.national_wages WHERE industry_code IN ('23','71','72') AND agglvl_code='14' ORDER BY industry_code, year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; FWD.us's analysis (2024 ACS data projected to FY2025, matched against FY2025 EAD-approval data) estimates 3.8 million total EAD holders affected, including 613,000 in construction, 514,000 in leisure/hospitality, roughly 2.3 million asylum applicants, roughly 1.1 million TPS holders/applicants, roughly 200,000 refugees/asylees/green-card applicants, and roughly 100,000 H-4/nonimmigrant-visa spouses.</summary>
+<dl>
+<dt>Article says</dt><dd>3.8M total; 613K construction; 514K leisure/hospitality; category breakdown as stated</dd>
+<dt>Warehouse says</dt><dd>n/a — FWD.us methodology and figures not reproducible from AskAmerica's own tables; verified via direct fetch of the primary source</dd>
+<dt>Independent evidence</dt><dd>Confirmed verbatim from FWD.us's own report page<ul class="claim-sources"><li><a href="https://www.fwd.us/news/ending-automatic-work-authorization-will-cost-billions/">FWD.us — Ending Automatic Work Authorization Extensions Will Cost Billions</a></li></ul></dd>
+<dt>Why</dt><dd>Every figure in this claim was matched verbatim against FWD.us's own published report, fetched directly, including the detailed state and industry tables and the immigration-category breakdown.</dd>
+<dt>Overrode Jev's score because</dt><dd>Directly fetched and read FWD.us's primary report page in full, including its detailed data tables — this is a primary-source read, not a secondary summary, so the figures are independently confirmed regardless of Jev's confidence level.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What AskAmerica's warehouse could and couldn't answer directly</h2>
+<p><strong>(a) Industry employment sanity check — available and checked.</strong> AskAmerica's <code>econ.national_wages</code> table (BLS Quarterly Census of Employment and Wages, national aggregates) gives 2025 U.S. employment of approximately <strong>8,435,067</strong> in construction (NAICS 23, all ownerships) and approximately <strong>17,252,863</strong> in combined arts/entertainment/recreation + accommodation/food services (NAICS 71+72, the leisure/hospitality supersector, all ownerships). Against these totals, the claimed ~600K construction and ~510-514K hospitality figures are entirely plausible — 7.1% and 3.0% of each industry's workforce, respectively, well within the documented range of foreign-born and pending-status worker concentration in these sectors, not an implausibly large share.</p><p><strong>(b) Direct EAD/work-permit-holder counts by industry — not present in this corpus.</strong> A targeted search_catalog pass across immigration, work-authorization, EAD, asylum, TPS, and refugee terms returned no matching table or column in AskAmerica's warehouse; 'immigration,' 'asylum,' 'temporary,' and 'protected' all came back as explicitly unmatched search terms. This is a genuine coverage gap, not a data-quality issue — federal immigration-status/work-authorization microdata of this kind (USCIS administrative EAD-approval data merged with Census ACS) is not the kind of series this warehouse's public-data schemas carry. The claim was instead verified against FWD.us's own published primary analysis and the Federal Register rule text, fetched directly.</p>
+</section>
+<section>
+<h2>Rosen's floor remarks, verified against the primary transcript</h2>
+<p>Fetched directly from rosen.senate.gov, Rosen's April 29, 2026 remarks state:</p><blockquote>'Think about it: More than three and a half million legally authorized workers nationwide could be impacted by this misguided rule.<br>In construction alone, roughly six hundred thousand workers could be forced off the job — right as we face a critical shortage of labor needed to build much-needed housing in America.<br>...In hospitality, an industry that is the backbone of Nevada's economy, more than half a million workers nationwide could be affected.'</blockquote><p>Every figure the user's claim attributes to Rosen matches this transcript exactly. Her speech was delivered the day of a forced Senate vote on her Congressional Review Act (CRA) resolution to overturn the rule; the resolution had bipartisan support but was opposed by most Senate Republicans and did not pass.</p>
+</section>
+<section>
+<h2>FWD.us's analysis, verified against the primary report</h2>
+<p>Fetched directly from fwd.us ('Ending Automatic Work Authorization Extensions Will Cost Billions,' published April 9, 2026). Verbatim: 'FWD.us estimates that ending the practice of automatically extending EADs is impacting as many as 3.8 million EAD workers in the U.S. workforce... including 1 in 20 in construction... and 1 in 25 in leisure and hospitality.' The bullet summary gives construction at 'about 610,000' and leisure/hospitality at 'about 510,000'; the report's detailed state-by-state table (which excludes states with fewer than 10,000 affected EAD holders, so its total is a slight undercount of the true national figure) sums to a TOTAL of 3,765,000, Construction 613,000, and Leisure and Hospitality 514,000 — both figures the user's claim cited exactly.</p><p>The category breakdown the user cited is also confirmed verbatim: 'refugees, those granted asylum and others applying for green cards (about 200,000 EAD workers); people who have applied for asylum (about 2.3 million); spouses of H-1B visa holders and other family members holding temporary or nonimmigrant visas (about 100,000); TPS holders and applicants (about 1.1 million), and thousands more.' Note: the user's claim describes the spouse category as '~100K H-4 spouses' — FWD.us's own text actually describes this group as spouses of H-1B holders and other nonimmigrant-visa family members (H-4 is the correct visa category for H-1B spouses, so this is a reasonable and standard shorthand, not an error).</p><p>Methodology, as stated by FWD.us: 'Augmented 2024 ACS data, projected to end of fiscal 2025,' with EAD holders identified by matching demographic/immigration-status assignments to 'actual EAD initial and renewal approvals from administrative data for each impacted group during fiscal year 2025.' This matches the methodology description in the user's claim exactly.</p>
+</section>
+<section>
+<h2>Did Rosen understate the figures?</h2>
+<p>Partially, and only for the topline number. Rosen's 'more than 3.5 million' is an open-ended lower bound that remains technically true of a 3.8 million actual figure — but it is a materially more conservative characterization, understating FWD.us's headline total by roughly 300,000 workers (about 8%). For construction and hospitality, however, Rosen's language ('roughly six hundred thousand' for 613,000; 'more than half a million' for 514,000) is an accurate, appropriately-hedged characterization of the FWD.us figures, not an understatement — 613,000 rounds naturally to 'roughly 600,000,' and 514,000 genuinely is 'more than half a million.' The user's framing that Rosen 'understated the figure' is accurate as a characterization of the topline number, but overstated as a characterization of the industry-specific figures, which she stated about as precisely as the underlying estimate supports.</p>
+</section>
+<section>
+<h2>Is the rule still in effect?</h2>
+<p>Yes, as of September 29, 2026. The DHS/USCIS Interim Final Rule was published in the Federal Register on October 30, 2025 (DHS Docket No. USCIS-2025-0271), ending automatic EAD extensions for renewal applicants filing on or after that date. Rosen's CRA resolution to overturn it failed in the Senate on April 29, 2026. A federal lawsuit (H-4 visa holders v. DHS, filed January 8, 2026, in the Central District of California) challenges the rule under the Administrative Procedure Act; a preliminary-injunction hearing was held June 24, 2026, and the court has so far issued only a limited protective order covering the named plaintiffs — not a nationwide injunction restoring automatic extensions. The rule remains in force nationwide outside that narrow carve-out.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>3 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 7 rows — 2354 ms</summary><pre><code>SELECT DISTINCT industry_code, agglvl_code FROM econ.national_wages WHERE industry_code IN ('10','23','70','71','72') ORDER BY industry_code, agglvl_code</code></pre></details>
+<details class="sqltoggle"><summary>query — 962 ms</summary><pre><code>SELECT industry_code, year, annual_avg_emplvl FROM econ.national_wages WHERE industry_code IN ('23','71','72') AND agglvl_code='14' AND own_code='0' ORDER BY industry_code, year</code></pre></details>
+<details class="sqltoggle"><summary>query — 60 rows — 884 ms</summary><pre><code>SELECT industry_code, own_code, year, annual_avg_emplvl FROM econ.national_wages WHERE industry_code IN ('23','71','72') AND agglvl_code='14' ORDER BY industry_code, year</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">AskAmerica's warehouse carries no EAD/work-permit-holder microdata by industry (search_catalog confirmed no match for immigration, asylum, TPS, or work-authorization terms) — construction and leisure/hospitality total-employment figures (BLS QCEW via econ.national_wages, 2025) were used only as a plausibility check on the affected-worker shares, not as a source for the affected-worker counts themselves, which come from FWD.us's primary analysis and Rosen's own remarks.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">AskAmerica fact-check, prepared 2026-09-29</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
