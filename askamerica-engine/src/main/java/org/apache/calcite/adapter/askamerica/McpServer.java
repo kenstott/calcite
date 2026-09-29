@@ -1259,7 +1259,7 @@ public class McpServer {
      * each argument list is how a tool ends up accepting a name it never advertised: the copy
      * drifts, and the drift is invisible until a caller pays for it.
      */
-    private static ArrayNode toolDefs() {
+    static ArrayNode toolDefs() {
         ArrayNode cached = TOOL_DEFS;
         if (cached != null) {
             return cached;
@@ -3283,7 +3283,8 @@ public class McpServer {
                 case "get_usage_guide_section_5":
                 case "get_usage_guide_section_6":
                 case "get_usage_guide_section_7":
-                case "get_usage_guide_section_8": {
+                case "get_usage_guide_section_8":
+                case "get_usage_guide_section_9": {
                     int sectionNum = Integer.parseInt(
                         name.substring("get_usage_guide_section_".length()));
                     log.println("[askamerica-mcp] tool=" + name);
