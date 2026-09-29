@@ -39,3 +39,16 @@ uv pip install --python .venv -e ./vendor/buenavista -e . pytest
 .venv/bin/python -m pgwire_calcite.launcher --host 127.0.0.1 --port 5455
 psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -c "SELECT 1;"
 ```
+
+## Client timeouts and cancellation
+
+`statement_timeout` (per session via `SET`, server default via launcher state) bounds a
+statement's total time on the server, including any wait for the shared query engine. A
+statement that cannot get the engine within `--max-queue-wait-ms` fails fast with a
+`server busy` error instead of queueing indefinitely.
+
+Cancelling a running statement (a timeout expiring, or a client `CancelRequest`) interrupts
+the underlying DuckDB query, which does not stop instantly: observed cancel latency is 5-11
+seconds. A client budgeting its own deadline around `statement_timeout` needs at least that
+much slack on top — otherwise the client's socket deadline fires before the server has
+finished cancelling and the connection is dropped with the statement still winding down.
