@@ -1108,6 +1108,7 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
+        sortOrder: [contributor_name, employer]
 
     vectorize:
       enabled: true
