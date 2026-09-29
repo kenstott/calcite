@@ -28,7 +28,8 @@ import pytest
 
 from pgwire_calcite import launcher
 from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, CANCELED_BY_USER
-from pgwire_calcite.calcite_backend import IN_FLIGHT, InFlightRegistry
+from pgwire_calcite.backend import QueryCanceled
+from pgwire_calcite.calcite_backend import IN_FLIGHT, CancelScope, InFlightRegistry
 from pgwire_calcite.server import _format_statement_timeout, _parse_statement_timeout
 
 from test_phase0_wire import _free_port
@@ -332,3 +333,33 @@ def test_a_new_session_starts_at_the_server_default(monkeypatch):
 
     assert session.statement_timeout_ms == 1500
     assert session.settings["statement_timeout"] == "1500ms"
+
+
+def test_statement_timeout_bounds_the_wait_for_the_shared_lock():
+    lock = threading.RLock()
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with lock:
+            held.set()
+            release.wait(5)
+
+    t = threading.Thread(target=hold)
+    t.start()
+    held.wait(5)
+    try:
+        started = time.monotonic()
+        with pytest.raises(QueryCanceled) as exc:
+            CancelScope(None, 200).acquire(lock)
+        assert CANCELED_BY_TIMEOUT in str(exc.value)
+        assert time.monotonic() - started < 2
+    finally:
+        release.set()
+        t.join()
+
+
+def test_zero_statement_timeout_still_waits_for_the_lock_and_acquires_it():
+    lock = threading.RLock()
+    CancelScope(None, 0).acquire(lock)
+    lock.release()

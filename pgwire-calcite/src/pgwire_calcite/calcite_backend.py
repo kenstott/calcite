@@ -158,6 +158,19 @@ class CancelScope:
             self._timer.daemon = True
             self._timer.start()
 
+    def acquire(self, lock) -> None:
+        """Take the shared connection lock, charging the wait to statement_timeout.
+
+        The watchdog only starts once a statement is running, so without this a
+        statement queued behind slow ones waits unboundedly and can starve
+        every other session on the single shared connection.
+        """
+        if not self._timeout_ms:
+            lock.acquire()
+            return
+        if not lock.acquire(timeout=self._timeout_ms / 1000.0):
+            raise QueryCanceled(CANCELED_BY_TIMEOUT)
+
     def disarm(self) -> None:
         if self._timer is not None:
             self._timer.cancel()
@@ -343,7 +356,8 @@ class CalciteBackend:
             )
             return QueryResult(column_names=names, column_types=labels, row_batches=batches)
         # Materialized path (direct/programmatic use, tests): typed JDBC row reads.
-        with self._lock:
+        scope.acquire(self._lock)
+        try:
             stmt = self._conn.createStatement()
             scope.arm(stmt)
             try:
@@ -358,6 +372,8 @@ class CalciteBackend:
             finally:
                 scope.disarm()
                 stmt.close()
+        finally:
+            self._lock.release()
 
     def _read_result(self, rs) -> QueryResult:
         md = rs.getMetaData()

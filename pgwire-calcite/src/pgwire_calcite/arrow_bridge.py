@@ -157,7 +157,10 @@ def stream_ipc_batches(
     cancel can land while rows are still streaming.
     """
     C = _ArrowClasses.get()
-    lock.acquire()
+    if cancel_scope is not None:
+        cancel_scope.acquire(lock)
+    else:
+        lock.acquire()
     acquired = True
     stmt = None
     allocator = None
