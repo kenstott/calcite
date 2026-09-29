@@ -638,6 +638,76 @@ SELECT 'health', 'cdc_county_overdose_deaths', 'T7_county_coverage',
 FROM (SELECT COUNT(DISTINCT fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_places_county (data.cdc.gov Socrata swc5-untb; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_places_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true));
+
+-- T2: row_count (229,298 upstream at 2026-09-29)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_places_county', 'T2_row_count',
+  CASE WHEN n >= 200000 THEN 'pass' ELSE 'fail' END,
+  n, 200000, 'Expected ~229,000 rows (county x measure x value type x year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_places_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_places_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL locationid, year, measureid or data_value_type'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true)
+      WHERE locationid IS NULL OR year IS NULL OR measureid IS NULL OR data_value_type IS NULL);
+
+-- T7: county coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_places_county', 'T7_county_coverage',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END,
+  n, 3000, 'Distinct county FIPS values'
+FROM (SELECT COUNT(DISTINCT locationid) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true));
+
+-- T7: asthma measure present with plausible prevalence (percent of adults)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_places_county', 'T7_asthma_range',
+  CASE WHEN n >= 2900 AND lo >= 0 AND hi <= 30 THEN 'pass' ELSE 'fail' END,
+  n, 2900, 'CASTHMA crude-prevalence counties per year; values 0-30 percent'
+FROM (SELECT COUNT(*) AS n, MIN(CAST(data_value AS DOUBLE)) AS lo, MAX(CAST(data_value AS DOUBLE)) AS hi
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true)
+      WHERE measureid = 'CASTHMA' AND data_value_type = 'Crude prevalence' AND year = '2023');
+
+-- T8: PK duplication guard
+INSERT INTO dq_results
+SELECT 'health', 'cdc_places_county', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (year, locationid, measureid, datavaluetypeid) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, locationid, measureid, datavaluetypeid FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_places_county', allow_moved_paths := true)
+  GROUP BY 1,2,3,4 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: cdc_county_injury_mortality (data.cdc.gov Socrata; one paginated JSON artifact)
 -- ─────────────────────────────────────────────────────────────
 

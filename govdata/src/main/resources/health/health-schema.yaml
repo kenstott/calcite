@@ -5087,6 +5087,144 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: cdc_places_county
+    freshness:
+      type: etag
+    comment: >
+      CDC PLACES model-based county estimates of adult chronic disease, health-risk-behavior,
+      prevention, disability and social-need prevalence (Socrata swc5-untb, 2025 release; data
+      years 2022 and 2023), ~3,000 counties x ~40 measures x crude/age-adjusted. This is the
+      county-grain source for asthma (measureid CASTHMA, 'Current asthma among adults'), COPD,
+      coronary heart disease, diabetes, etc.; cdc_brfss carries the same topics only at state
+      grain. Estimates are small-area model outputs from BRFSS (or ACS) with 95% confidence
+      limits, not counts of cases; data_value is a percent of adults. Each county-measure
+      appears twice (Crude and Age-adjusted prevalence) — filter data_value_type to avoid double
+      counting. Covers disease prevalence only; EPA regulatory-impact-analysis projections
+      (avoided deaths/illnesses per rule) are per-rule PDF documents with no structured
+      feed and are not in this table. CDC republishes PLACES under a new Socrata dataset id each
+      annual release, so the source url here is a re-verify-on-new-release item.
+    columns:
+      - name: year
+        comment: "Data year the model-based estimates describe (the 2025 PLACES release carries 2022 and 2023)"
+        type: VARCHAR
+        nullable: true
+      - name: stateabbr
+        comment: "State postal abbreviation"
+        type: VARCHAR
+        nullable: true
+      - name: statedesc
+        comment: "State name"
+        type: VARCHAR
+        nullable: true
+      - name: locationname
+        comment: "County name"
+        type: VARCHAR
+        nullable: true
+      - name: locationid
+        comment: "5-digit county FIPS code (state+county)"
+        type: VARCHAR
+        nullable: true
+      - name: datasource
+        comment: "Underlying survey the estimate is modeled from (BRFSS or ACS)"
+        type: VARCHAR
+        nullable: true
+      - name: category
+        comment: "PLACES measure category (Health Outcomes, Prevention, Health Risk Behaviors, Health Status, Disability, Health-Related Social Needs)"
+        type: VARCHAR
+        nullable: true
+      - name: categoryid
+        comment: "Short code for category (e.g. HLTHOUT)"
+        type: VARCHAR
+        nullable: true
+      - name: measure
+        comment: "Full measure text (e.g. 'Current asthma among adults')"
+        type: VARCHAR
+        nullable: true
+      - name: measureid
+        comment: "Short measure code (e.g. CASTHMA = current asthma, COPD, CHD, DIABETES)"
+        type: VARCHAR
+        nullable: true
+      - name: short_question_text
+        comment: "Short measure label (e.g. 'Current Asthma')"
+        type: VARCHAR
+        nullable: true
+      - name: data_value_type
+        comment: "Crude prevalence or Age-adjusted prevalence — filter to one, the two are separate rows"
+        type: VARCHAR
+        nullable: true
+      - name: datavaluetypeid
+        comment: "Short code for data_value_type (CrdPrv, AgeAdjPrv)"
+        type: VARCHAR
+        nullable: true
+      - name: data_value_unit
+        comment: "Unit of data_value (percent)"
+        type: VARCHAR
+        nullable: true
+      - name: data_value
+        comment: "Model-based prevalence estimate, percent of adults"
+        type: VARCHAR
+        nullable: true
+      - name: low_confidence_limit
+        comment: "Lower bound of the 95% confidence interval"
+        type: VARCHAR
+        nullable: true
+      - name: high_confidence_limit
+        comment: "Upper bound of the 95% confidence interval"
+        type: VARCHAR
+        nullable: true
+      - name: totalpopulation
+        comment: "County total population used for the estimate"
+        type: VARCHAR
+        nullable: true
+      - name: totalpop18plus
+        comment: "County adult (18+) population used for the estimate"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_places_county"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/swc5-untb.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_places_county
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: cdc_county_injury_mortality
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
