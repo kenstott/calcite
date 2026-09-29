@@ -1684,7 +1684,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 44881
-      checkedAt: "2026-09-28T03:17:42Z"
+      checkedAt: "2026-09-29T03:33:58Z"
     partitions:
       style: hive
       columnDefinitions:
