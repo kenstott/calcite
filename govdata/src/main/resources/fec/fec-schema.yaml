@@ -2437,6 +2437,8 @@ partitionedTables:
       the nonfederal (non-election-account) share of transfers and expenditures.
       Rolls up the transaction-level committee_contributions and
       intercommittee_transactions tables rather than replacing them.
+      Party affiliation and connected organization are not in this file; join to
+      committees on committee_id for them.
       Source: committee_summary_{YYYY}.csv (CSV with headers).
 
     columns:
@@ -2464,133 +2466,123 @@ partitionedTables:
         type: string
         nullable: true
         comment: Filing frequency
-        source: Cmte_Filing_Freq
+        source: CMTE_FILING_FREQ
       - name: total_receipts
         type: double
         nullable: true
         comment: Total receipts
-        source: Ttl_Receipts
+        source: TTL_RECEIPTS
       - name: transfers_from_affiliates
         type: double
         nullable: true
         comment: Transfers from affiliates
-        source: Trans_From_Aff
+        source: TRANF_FROM_OTHER_AUTH_CMTE
       - name: individual_contributions
         type: double
         nullable: true
         comment: Total individual contributions
-        source: Indv_Contrib
+        source: INDV_CONTB
       - name: other_political_contributions
         type: double
         nullable: true
         comment: Contributions from other political committees
-        source: Other_Pol_Cmte_Contrib
+        source: OTH_CMTE_CONTB
       - name: candidate_contributions
         type: double
         nullable: true
         comment: Candidate contributions
-        source: Cand_Contrib
+        source: CAND_CNTB
       - name: candidate_loans
         type: double
         nullable: true
         comment: Candidate loans
-        source: Cand_Loans
+        source: CAND_LOAN
       - name: total_loans_received
         type: double
         nullable: true
-        comment: Total loans received
-        source: Ttl_Loans_Received
+        comment: Total loans
+        source: TTL_LOANS
       - name: total_disbursements
         type: double
         nullable: true
         comment: Total disbursements
-        source: Ttl_Disb
+        source: TTL_DISB
       - name: transfers_to_affiliates
         type: double
         nullable: true
         comment: Transfers to affiliates
-        source: Trans_to_Aff
+        source: TRANF_TO_OTHER_AUTH_CMTE
       - name: refunds_individual
         type: double
         nullable: true
         comment: Refunds to individuals
-        source: Indv_Refunds
+        source: INDV_REF
       - name: refunds_committee
         type: double
         nullable: true
         comment: Refunds to committees
-        source: Other_Pol_Cmte_Refunds
+        source: OTH_CMTE_REF
       - name: candidate_loan_repayments
         type: double
         nullable: true
         comment: Candidate loan repayments
-        source: Cand_Loan_Repay
+        source: CAND_LOAN_REPYMNT
       - name: total_loan_repayments
         type: double
         nullable: true
         comment: Total loan repayments
-        source: Ttl_Loan_Repay
+        source: TTL_LOAN_REPYMTS
       - name: cash_begin
         type: double
         nullable: true
         comment: Cash on hand beginning of period
-        source: Cash_On_Hand_Beg
+        source: COH_BOP
       - name: cash_end
         type: double
         nullable: true
         comment: Cash on hand end of period
-        source: Cash_On_Hand_Close
+        source: COH_COP
       - name: debts_owed_by
         type: double
         nullable: true
         comment: Debts owed by committee
-        source: Debts_Owed_By
+        source: DEBTS_OWED_BY_CMTE
       - name: nonfederal_transfers_received
         type: double
         nullable: true
         comment: Nonfederal transfers received
-        source: Non_Fed_Trans_Received
+        source: TTL_NONFED_TRANF
       - name: contributions_to_committees
         type: double
         nullable: true
-        comment: Contributions to other committees
-        source: Contrib_To_Other_Cmte
+        comment: Contributions to federal candidates and other committees
+        source: FED_CAND_CMTE_CONTB
       - name: independent_expenditures
         type: double
         nullable: true
         comment: Independent expenditures
-        source: Ind_Exp
+        source: INDT_EXP
       - name: party_coordinated_expenditures
         type: double
         nullable: true
         comment: Party coordinated expenditures
-        source: Par_Cmte_Contrib
+        source: COORD_EXP_BY_PTY_CMTE
       - name: nonfederal_expenditure_share
         type: double
         nullable: true
-        comment: Nonfederal share of expenditures
-        source: Non_Fed_Share_Exp
+        comment: Shared non-federal operating expenditures
+        source: SHARED_NONFED_OP_EXP
       - name: coverage_end_date
         type: date
         nullable: true
         comment: Coverage end date
-        source: Cvg_End_Dt
+        source: CVG_END_DT
         dateFormat: YYYYMMDD
-      - name: connected_org_name
-        type: string
-        nullable: true
-        comment: Connected organization name (for corporate/labor PACs)
-        source: Connected_Org_Nm
-      - name: party
-        type: string
-        nullable: true
-        comment: Party affiliation
-        source: Cmte_Pty_Affiliation
       - name: state
         type: string
         nullable: true
         comment: Committee state
-        source: Cmte_St
+        source: CMTE_ST
 
     source:
       type: http
