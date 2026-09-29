@@ -2330,6 +2330,49 @@ public class McpServer {
             + "presenting a volatility_forecast band as trustworthy.",
             schema(btProps, new String[]{"sql", "value_col", "time_col"})));
 
+        ObjectNode entProps = MAPPER.createObjectNode();
+        entProps.set("text", prop("string", "An article or any blob of text, up to "
+            + "200000 characters."));
+        entProps.set("max_candidates", prop("integer", "Registry candidates returned per "
+            + "mention, default 5, max 20."));
+        entProps.set("min_single_token_identifiers", prop("integer", "A one-word name "
+            + "(e.g. 'Apple') is kept only if its best registry entity is known to at least "
+            + "this many independent registries. Default 2; 0 keeps them all. Dropped ones "
+            + "are listed in the result."));
+        entProps.set("types", prop("array", "Subset of ['org','person','geo'] to look for; "
+            + "default all three."));
+        entProps.set("include_facts", prop("boolean", "Also attach a fact card for each top "
+            + "match: GLEIF parent/ultimate parent for organizations with an LEI; party, "
+            + "state and district for members of Congress; court and appointing president "
+            + "for federal judges."));
+        entProps.set("score_sentiment", prop("boolean", "Also score the sentiment of the "
+            + "sentences that mention each entity (see score_sentiment)."));
+        entProps.set("domain", prop("string", "Lexicon domain for score_sentiment, one of "
+            + TextScoringEngine.DOMAINS + ". Default '" + TextScoringEngine.DEFAULT_DOMAIN
+            + "'."));
+        tools.add(
+            tool("extract_entities",
+            "Find the organizations, people and places named in an article or blob of text "
+            + "and resolve each to what AskAmerica knows. Works on any subject: a political "
+            + "story yields members of Congress, judges, candidates, lobbyists, companies and "
+            + "states/counties; a business story yields companies. Candidate names (runs of "
+            + "capitalized words, plus tickers like '(NASDAQ: AAPL)') are matched by EXACT "
+            + "equality against the registries — organizations via the name-variant registry "
+            + "mapped to a canonical entity, people via the canonical person registry on first "
+            + "and last name, places via state and county names. Per entity: surface forms, "
+            + "mention count and offsets, ranked candidates (canonical name, identifiers, "
+            + "jurisdiction/headquarters for organizations) and linked_sources — for each "
+            + "identifier the entity holds, the AskAmerica tables that carry it, so you can go "
+            + "straight to the facts with query(). include_facts adds a fact card (party/state "
+            + "for a member of Congress, court for a judge, parent company for a firm). A bare "
+            + "surname ('Pelosi said') is attached to the one person named in full earlier. "
+            + "'ambiguous': true means several registered entities share the name — pick using "
+            + "the text's context and each candidate's identifiers, never the first by "
+            + "default. Longest match wins ('Bank of America' is not also 'America'). No fuzzy "
+            + "matching: nicknames, misspellings and bare titles ('the Speaker') are missed. "
+            + "Pair with score_sentiment=true for per-entity sentiment.",
+            schema(entProps, new String[]{"text"})));
+
         ObjectNode volProps = tsCommon.deepCopy();
         volProps.set("method", prop("string", "Volatility used for the price band: 'garch' "
             + "(default), 'ewma' (RiskMetrics) or 'historical' (trailing window). All three "
@@ -3760,6 +3803,12 @@ public class McpServer {
                     StatsOutput r = partialCorrelationTool(sql, x, y, controls);
                     text = r.text;
                     diagnostics = r.diagnostics;
+                    break;
+                }
+                case "extract_entities": {
+                    log.println("[askamerica-mcp] tool=extract_entities chars="
+                        + args.path("text").asText("").length());
+                    text = extractEntitiesTool(args);
                     break;
                 }
                 case "score_sentiment": {
@@ -8796,7 +8845,7 @@ public class McpServer {
      * <p>A term normalized differently from the column simply fails to match, silently, so this
      * deliberately stays conservative: it strips only what the bridge's own comment names.
      */
-    private static String normalizeOrgName(String term) {
+    static String normalizeOrgName(String term) {
         String s = term.toLowerCase(java.util.Locale.ROOT)
             .replaceAll("[^a-z0-9 ]", " ")
             .replaceAll("\\b(inc|incorporated|corp|corporation|co|company|llc|llp|lp|ltd|"
@@ -8866,6 +8915,661 @@ public class McpServer {
         } catch (Exception e) {
             log.println("[askamerica-mcp] ticker lookup for " + t + " failed: " + e.getMessage());
             return null;
+        }
+    }
+
+    // ── extract_entities ─────────────────────────────────────────────────────
+
+    /** entity-linked-sources.json: for "org" and "person", the identifier column on the
+     *  canonical table mapped to the consumer tables that carry it. */
+    private static final java.util.Map<String, java.util.Map<String, java.util.List<String>>>
+        ENTITY_LINKED = loadEntityLinkedSources();
+    private static final java.util.Map<String, java.util.List<String>> ORG_LINKED =
+        ENTITY_LINKED.get("org");
+    private static final java.util.Map<String, java.util.List<String>> PERSON_LINKED =
+        ENTITY_LINKED.get("person");
+
+    private static java.util.Map<String, java.util.Map<String, java.util.List<String>>>
+            loadEntityLinkedSources() {
+        try (java.io.InputStream in = McpServer.class.getResourceAsStream(
+                "/entity-linked-sources.json")) {
+            if (in == null) {
+                throw new IllegalStateException("entity-linked-sources.json is missing from "
+                    + "the engine resources");
+            }
+            JsonNode root = MAPPER.readTree(in);
+            java.util.Map<String, java.util.Map<String, java.util.List<String>>> all =
+                new java.util.LinkedHashMap<>();
+            for (String kind : new String[]{"org", "person"}) {
+                java.util.Map<String, java.util.List<String>> m = new java.util.LinkedHashMap<>();
+                java.util.Iterator<java.util.Map.Entry<String, JsonNode>> it =
+                    root.path(kind).fields();
+                while (it.hasNext()) {
+                    java.util.Map.Entry<String, JsonNode> e = it.next();
+                    m.put(e.getKey(), textArray(e.getValue()));
+                }
+                if (m.isEmpty()) {
+                    throw new IllegalStateException("entity-linked-sources.json has no '"
+                        + kind + "' section");
+                }
+                all.put(kind, m);
+            }
+            return all;
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("could not read entity-linked-sources.json", e);
+        }
+    }
+
+    private static final int ENTITY_PROBE_CHUNK = 500;
+    private static final java.util.List<String> ENTITY_TYPES =
+        java.util.Arrays.asList("org", "person", "geo");
+
+    private static String inList(java.util.Collection<String> values) {
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("no candidate names to look up");
+        }
+        StringBuilder in = new StringBuilder();
+        for (String n : values) {
+            if (in.length() > 0) {
+                in.append(", ");
+            }
+            in.append(sqlStr(n));
+        }
+        return in.toString();
+    }
+
+    /**
+     * Exact-equality probe of candidate names against the variant registry.
+     *
+     * <p>Equality on {@code source_name_normalized} only — never LIKE. The bridge has no index
+     * on the name, so a prefix or fuzzy predicate is a full scan per statement; an IN list of
+     * equalities is the one shape that stays cheap however many candidates a text produces.
+     * Every variant row points at its entity through
+     * {@code COALESCE(lei, sec_cik, source_name_normalized) = canonical_entity_id}; the
+     * canonical table has one row per source mention, so it is collapsed per entity before
+     * joining.
+     */
+    static String buildExtractEntitiesSql(java.util.Collection<String> norms) {
+        String in = inList(norms);
+        StringBuilder fk = new StringBuilder();
+        StringBuilder outFk = new StringBuilder();
+        for (String col : ORG_LINKED.keySet()) {
+            if ("sec_cik".equals(col)) {
+                continue;
+            }
+            fk.append(", MAX(").append(col).append(") AS ").append(col);
+            outFk.append(", cagg.").append(col);
+        }
+        return "WITH raw AS (SELECT source_name_normalized AS matched_norm, "
+            + "COALESCE(lei, sec_cik, source_name_normalized) AS entity_key, lei, sec_cik, "
+            + "gleif_legal_name, source_schema FROM ref.entity_org_bridge "
+            + "WHERE source_name_normalized IN (" + in + ")), "
+            + "sch AS (SELECT DISTINCT matched_norm, entity_key, source_schema FROM raw), "
+            + "agg_sch AS (SELECT matched_norm, entity_key, string_agg(source_schema) "
+            + "AS matched_in FROM sch GROUP BY matched_norm, entity_key), "
+            + "m AS (SELECT matched_norm, entity_key, MAX(lei) AS lei, MAX(sec_cik) AS sec_cik, "
+            + "MAX(gleif_legal_name) AS gleif_legal_name, COUNT(*) AS variant_rows "
+            + "FROM raw GROUP BY matched_norm, entity_key), "
+            + "cagg AS (SELECT canonical_entity_id, MAX(canonical_name) AS canonical_name" + fk
+            + " FROM ref.canonical_org_entity WHERE canonical_entity_id IN "
+            + "(SELECT entity_key FROM m) GROUP BY canonical_entity_id) "
+            + "SELECT m.matched_norm, m.entity_key AS canonical_entity_id, "
+            + "COALESCE(cagg.canonical_name, m.gleif_legal_name, m.entity_key) AS canonical_name, "
+            + "m.lei, m.sec_cik, m.variant_rows, agg_sch.matched_in, "
+            + "ge.jurisdiction, ge.headquarters_city, ge.entity_status" + outFk + " "
+            + "FROM m LEFT JOIN agg_sch ON agg_sch.matched_norm = m.matched_norm "
+            + "AND agg_sch.entity_key = m.entity_key "
+            + "LEFT JOIN cagg ON cagg.canonical_entity_id = m.entity_key "
+            + "LEFT JOIN ref.gleif_entities ge ON ge.lei = m.lei";
+    }
+
+    /**
+     * People, by exact match on the parsed canonical name. The person registry keeps no
+     * normalized-variant column (entity_person_bridge is a pairwise match log, not a search
+     * surface), and its canonical_name is documented only as a "parsed (first, last) name", so
+     * both "first last" and "last, first" are probed. It is one IN-list scan of one column per
+     * call, not one scan per candidate.
+     */
+    static String buildExtractPersonsSql(java.util.Collection<String> personKeys) {
+        java.util.Set<String> forms = new java.util.LinkedHashSet<>();
+        for (String k : personKeys) {
+            forms.add(k);
+            int sp = k.indexOf(' ');
+            forms.add(k.substring(sp + 1) + ", " + k.substring(0, sp));
+        }
+        StringBuilder cols = new StringBuilder();
+        for (String col : PERSON_LINKED.keySet()) {
+            cols.append(", ").append(col);
+        }
+        return "SELECT canonical_entity_id, canonical_name" + cols + " "
+            + "FROM ref.canonical_person_entity WHERE lower(canonical_name) IN ("
+            + inList(forms) + ")";
+    }
+
+    static String buildExtractStatesSql(java.util.Collection<String> norms) {
+        return "SELECT DISTINCT state_fips, state_abbr, state_name FROM geo.state_ref "
+            + "WHERE lower(state_name) IN (" + inList(norms) + ")";
+    }
+
+    static String buildExtractCountiesSql(java.util.Collection<String> norms) {
+        // county_code carries the full "Mecklenburg County" form. The bare county_name is not
+        // probed: it would turn every capitalized "Orange" or "Washington" into a county.
+        return "SELECT DISTINCT county_fips, state_fips, county_name, county_code "
+            + "FROM geo.counties WHERE lower(county_code) IN (" + inList(norms) + ")";
+    }
+
+    private static String rowText(JsonNode r, String col) {
+        JsonNode v = r.has(col) ? r.get(col) : r.get(col.toUpperCase(java.util.Locale.ROOT));
+        return v == null || v.isNull() ? null : v.asText();
+    }
+
+    /** Copies plain columns and the linked identifiers of {@code r} into {@code e}; returns
+     *  how many independent identifiers the entity holds. */
+    private static int addIdentifiers(ObjectNode e, JsonNode r,
+            java.util.Map<String, java.util.List<String>> linked, String[] plain) {
+        int count = 0;
+        for (String c : plain) {
+            String v = rowText(r, c);
+            if (v != null) {
+                e.put(c, v);
+                if ("lei".equals(c) || "sec_cik".equals(c)) {
+                    count++;
+                }
+            }
+        }
+        ArrayNode ls = e.putArray("linked_sources");
+        for (java.util.Map.Entry<String, java.util.List<String>> fkCol : linked.entrySet()) {
+            String v = rowText(r, fkCol.getKey());
+            if (v == null) {
+                continue;
+            }
+            if (!"sec_cik".equals(fkCol.getKey())) {
+                count++;
+            }
+            ObjectNode l = ls.addObject();
+            l.put("identifier", fkCol.getKey());
+            l.put("value", v);
+            ArrayNode tables = l.putArray("tables");
+            for (String t : fkCol.getValue()) {
+                tables.add(t);
+            }
+        }
+        e.put("identifier_count", count);
+        return count;
+    }
+
+    private static void rankByIdentifiers(java.util.Map<String, java.util.List<ObjectNode>> m) {
+        for (java.util.List<ObjectNode> list : m.values()) {
+            list.sort((x, y) -> {
+                int c = Integer.compare(y.get("identifier_count").asInt(),
+                    x.get("identifier_count").asInt());
+                return c != 0 ? c : x.get("canonical_name").asText()
+                    .compareTo(y.get("canonical_name").asText());
+            });
+        }
+    }
+
+    /** "first last" from a registry canonical name in either "First Last" or "Last, First". */
+    static String personKeyOfCanonicalName(String canonical) {
+        String n = canonical.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L} ,'\\-]", " ")
+            .replaceAll("\\s+", " ").trim();
+        int comma = n.indexOf(',');
+        String first;
+        String last;
+        if (comma > 0) {
+            last = n.substring(0, comma).trim();
+            first = n.substring(comma + 1).trim();
+            int sp = first.indexOf(' ');
+            if (sp > 0) {
+                first = first.substring(0, sp);
+            }
+            int lsp = last.lastIndexOf(' ');
+            if (lsp > 0) {
+                last = last.substring(lsp + 1);
+            }
+        } else {
+            String[] parts = n.split(" ");
+            if (parts.length < 2) {
+                return n;
+            }
+            first = parts[0];
+            last = parts[parts.length - 1];
+        }
+        return first + " " + last;
+    }
+
+    private static final int ENTITY_MAX_TEXT_CHARS = 200_000;
+
+    private static String extractEntitiesTool(JsonNode args) throws Exception {
+        String text = args.path("text").asText("");
+        if (text.trim().isEmpty()) {
+            throw new IllegalArgumentException("text is required");
+        }
+        if (text.length() > ENTITY_MAX_TEXT_CHARS) {
+            throw new IllegalArgumentException("text is " + text.length() + " characters; the "
+                + "limit is " + ENTITY_MAX_TEXT_CHARS + " — split it and call again");
+        }
+        java.util.List<String> types = textArray(args.path("types"));
+        if (types.isEmpty()) {
+            types = ENTITY_TYPES;
+        }
+        for (String t : types) {
+            if (!ENTITY_TYPES.contains(t)) {
+                throw new IllegalArgumentException("types must be drawn from " + ENTITY_TYPES
+                    + ", got '" + t + "'");
+            }
+        }
+        boolean wantOrg = types.contains("org");
+        boolean wantPerson = types.contains("person");
+        boolean wantGeo = types.contains("geo");
+        int maxCandidates = args.has("max_candidates") && !args.get("max_candidates").isNull()
+            ? Math.min(Math.max(1, args.get("max_candidates").asInt()), 20) : 5;
+        int minSingle = args.has("min_single_token_identifiers")
+            && !args.get("min_single_token_identifiers").isNull()
+            ? Math.max(0, args.get("min_single_token_identifiers").asInt()) : 2;
+        boolean includeFacts = args.path("include_facts").asBoolean(false);
+        boolean withSentiment = args.path("score_sentiment").asBoolean(false);
+        String domain = tsText(args, "domain", TextScoringEngine.DEFAULT_DOMAIN);
+
+        java.util.List<EntityMentionExtractor.Candidate> cands =
+            EntityMentionExtractor.candidates(text);
+        java.util.Set<String> normProbe = new java.util.LinkedHashSet<>(
+            EntityMentionExtractor.distinctNorms(cands));
+        java.util.Set<String> personProbe = new java.util.LinkedHashSet<>();
+        for (EntityMentionExtractor.Candidate c : cands) {
+            if (c.personKey != null) {
+                personProbe.add(c.personKey);
+            }
+        }
+
+        // Tickers written the way news copy writes them resolve to a registered name, which
+        // then joins the same equality probe.
+        java.util.Map<String, String[]> tickerNames = new java.util.LinkedHashMap<>();
+        if (wantOrg) {
+            java.util.Set<String> tickers = EntityMentionExtractor.tickers(text);
+            if (!tickers.isEmpty()) {
+                java.util.List<String> up = new java.util.ArrayList<>();
+                for (String t : tickers) {
+                    up.add(t.toUpperCase(java.util.Locale.ROOT));
+                }
+                for (JsonNode r : runSqlRows("SELECT ticker, title FROM ref.sec_company_tickers "
+                        + "WHERE upper(ticker) IN (" + inList(up) + ")", MAX_LIMIT)) {
+                    String tk = rowText(r, "ticker");
+                    String title = rowText(r, "title");
+                    if (tk != null && title != null) {
+                        String norm = normalizeOrgName(title);
+                        tickerNames.put(tk.toUpperCase(java.util.Locale.ROOT),
+                            new String[]{title, norm});
+                        normProbe.add(norm);
+                    }
+                }
+            }
+        }
+        if (normProbe.isEmpty()) {
+            ObjectNode empty = MAPPER.createObjectNode();
+            empty.putArray("entities");
+            empty.put("candidates_probed", 0);
+            empty.put("note", "no capitalized name-like spans or ticker symbols found");
+            return MAPPER.writeValueAsString(empty);
+        }
+        java.util.List<String> probeList = new java.util.ArrayList<>(normProbe);
+        java.util.List<String> personList = new java.util.ArrayList<>(personProbe);
+
+        java.util.Map<String, java.util.List<ObjectNode>> byNorm = new java.util.HashMap<>();
+        if (wantOrg) {
+            for (int i = 0; i < probeList.size(); i += ENTITY_PROBE_CHUNK) {
+                for (JsonNode r : runSqlRows(buildExtractEntitiesSql(probeList.subList(i,
+                        Math.min(probeList.size(), i + ENTITY_PROBE_CHUNK))), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "org");
+                    e.put("canonical_entity_id", rowText(r, "canonical_entity_id"));
+                    e.put("canonical_name", rowText(r, "canonical_name"));
+                    addIdentifiers(e, r, ORG_LINKED, new String[]{"lei", "sec_cik",
+                        "jurisdiction", "headquarters_city", "entity_status", "matched_in"});
+                    byNorm.computeIfAbsent(rowText(r, "matched_norm"),
+                        k -> new java.util.ArrayList<>()).add(e);
+                }
+            }
+            rankByIdentifiers(byNorm);
+        }
+        java.util.Map<String, java.util.List<ObjectNode>> byPerson = new java.util.HashMap<>();
+        if (wantPerson && !personList.isEmpty()) {
+            for (int i = 0; i < personList.size(); i += ENTITY_PROBE_CHUNK) {
+                for (JsonNode r : runSqlRows(buildExtractPersonsSql(personList.subList(i,
+                        Math.min(personList.size(), i + ENTITY_PROBE_CHUNK))), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "person");
+                    e.put("canonical_entity_id", rowText(r, "canonical_entity_id"));
+                    e.put("canonical_name", rowText(r, "canonical_name"));
+                    addIdentifiers(e, r, PERSON_LINKED, new String[0]);
+                    byPerson.computeIfAbsent(personKeyOfCanonicalName(
+                        rowText(r, "canonical_name")), k -> new java.util.ArrayList<>())
+                        .add(e);
+                }
+            }
+            rankByIdentifiers(byPerson);
+        }
+        java.util.Map<String, java.util.List<ObjectNode>> byGeo = new java.util.HashMap<>();
+        if (wantGeo) {
+            for (int i = 0; i < probeList.size(); i += ENTITY_PROBE_CHUNK) {
+                java.util.List<String> chunk = probeList.subList(i,
+                    Math.min(probeList.size(), i + ENTITY_PROBE_CHUNK));
+                for (JsonNode r : runSqlRows(buildExtractStatesSql(chunk), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "geo");
+                    e.put("geo_level", "state");
+                    e.put("canonical_entity_id", "state:" + rowText(r, "state_fips"));
+                    e.put("canonical_name", rowText(r, "state_name"));
+                    e.put("state_fips", rowText(r, "state_fips"));
+                    e.put("state_abbr", rowText(r, "state_abbr"));
+                    e.put("identifier_count", 1);
+                    byGeo.computeIfAbsent(normalizeOrgName(rowText(r, "state_name")),
+                        k -> new java.util.ArrayList<>()).add(e);
+                }
+                for (JsonNode r : runSqlRows(buildExtractCountiesSql(chunk), MAX_LIMIT)) {
+                    ObjectNode e = MAPPER.createObjectNode();
+                    e.put("entity_type", "geo");
+                    e.put("geo_level", "county");
+                    e.put("canonical_entity_id", "county:" + rowText(r, "county_fips"));
+                    e.put("canonical_name", rowText(r, "county_code"));
+                    e.put("county_fips", rowText(r, "county_fips"));
+                    e.put("state_fips", rowText(r, "state_fips"));
+                    e.put("identifier_count", 1);
+                    byGeo.computeIfAbsent(normalizeOrgName(rowText(r, "county_code")),
+                        k -> new java.util.ArrayList<>()).add(e);
+                }
+            }
+        }
+
+        java.util.List<EntityMentionExtractor.Candidate> accepted =
+            EntityMentionExtractor.resolve(cands, c -> byNorm.containsKey(c.norm)
+                || byGeo.containsKey(c.norm)
+                || (c.personKey != null && byPerson.containsKey(c.personKey)));
+
+        // Group mentions: a person is keyed by "first last" so "Nancy P. Pelosi" and
+        // "Nancy Pelosi" are one entity; everything else by normalized name.
+        java.util.Map<String, java.util.List<EntityMentionExtractor.Candidate>> grouped =
+            new java.util.LinkedHashMap<>();
+        for (EntityMentionExtractor.Candidate c : accepted) {
+            String key = c.personKey != null && byPerson.containsKey(c.personKey)
+                ? "p:" + c.personKey : c.norm;
+            grouped.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(c);
+        }
+        // Bare surnames ("Pelosi said") join the one person already named in full.
+        java.util.Map<String, String> lastToGroup = new java.util.HashMap<>();
+        java.util.Set<String> ambiguousLast = new java.util.HashSet<>();
+        for (String key : grouped.keySet()) {
+            if (key.startsWith("p:")) {
+                String personKey = key.substring(2);
+                String last = personKey.substring(personKey.lastIndexOf(' ') + 1);
+                if (lastToGroup.containsKey(last)) {
+                    ambiguousLast.add(last);
+                }
+                lastToGroup.put(last, key);
+            }
+        }
+        for (String amb : ambiguousLast) {
+            lastToGroup.remove(amb);
+        }
+        java.util.Map<String, Integer> surnameCount = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, java.util.List<EntityMentionExtractor.Candidate>> sm
+                : EntityMentionExtractor.surnameMentions(cands, accepted, lastToGroup)
+                    .entrySet()) {
+            grouped.get(sm.getKey()).addAll(sm.getValue());
+            surnameCount.put(sm.getKey(), sm.getValue().size());
+        }
+        java.util.List<int[]> sentences = EntityMentionExtractor.sentenceSpans(text);
+
+        ObjectNode out = MAPPER.createObjectNode();
+        ArrayNode entities = out.putArray("entities");
+        ArrayNode droppedNames = MAPPER.createArrayNode();
+        int dropped = 0;
+        java.util.List<ObjectNode> topOrgs = new java.util.ArrayList<>();
+        java.util.List<ObjectNode> topPeople = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, java.util.List<EntityMentionExtractor.Candidate>> g
+                : grouped.entrySet()) {
+            java.util.List<EntityMentionExtractor.Candidate> ms = g.getValue();
+            ms.sort(java.util.Comparator.comparingInt(c -> c.start));
+            EntityMentionExtractor.Candidate first = ms.get(0);
+            String key = g.getKey();
+            java.util.List<ObjectNode> orgs = byNorm.getOrDefault(first.norm,
+                java.util.Collections.<ObjectNode>emptyList());
+            java.util.List<ObjectNode> people = key.startsWith("p:")
+                ? byPerson.get(key.substring(2)) : java.util.Collections.<ObjectNode>emptyList();
+            java.util.List<ObjectNode> geos = byGeo.getOrDefault(first.norm,
+                java.util.Collections.<ObjectNode>emptyList());
+            boolean single = first.tokens == 1;
+            // A lone capitalized word matching only an obscure organisation is the commonest
+            // false positive; it is reported below, not silently discarded.
+            if (single && people.isEmpty() && geos.isEmpty() && !orgs.isEmpty()
+                && orgs.get(0).get("identifier_count").asInt() < minSingle) {
+                dropped++;
+                if (droppedNames.size() < 20) {
+                    droppedNames.add(first.surface);
+                }
+                continue;
+            }
+            java.util.List<ObjectNode> all = new java.util.ArrayList<>();
+            java.util.List<String> typesMatched = new java.util.ArrayList<>();
+            if (!orgs.isEmpty()) {
+                all.addAll(orgs);
+                typesMatched.add("org");
+            }
+            if (!people.isEmpty()) {
+                all.addAll(people);
+                typesMatched.add("person");
+            }
+            if (!geos.isEmpty()) {
+                all.addAll(geos);
+                typesMatched.add("geo");
+            }
+            ObjectNode ent = entities.addObject();
+            ent.put("matched_name", key.startsWith("p:") ? key.substring(2) : first.norm);
+            ArrayNode forms = ent.putArray("surface_forms");
+            java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+            for (EntityMentionExtractor.Candidate c : ms) {
+                seen.add(c.surface);
+            }
+            for (String f : seen) {
+                forms.add(f);
+            }
+            ent.put("mentions", ms.size());
+            if (surnameCount.containsKey(key)) {
+                ent.put("mentions_by_surname_only", surnameCount.get(key));
+            }
+            ArrayNode offs = ent.putArray("first_offsets");
+            for (int k = 0; k < Math.min(5, ms.size()); k++) {
+                offs.add(ms.get(k).start);
+            }
+            ent.put("single_token", single);
+            ent.put("ambiguous", all.size() > 1);
+            ArrayNode tm = ent.putArray("types_matched");
+            for (String t : typesMatched) {
+                tm.add(t);
+            }
+            ArrayNode cs = ent.putArray("candidates");
+            for (int k = 0; k < Math.min(maxCandidates, all.size()); k++) {
+                cs.add(all.get(k));
+            }
+            if (all.size() > maxCandidates) {
+                ent.put("candidates_omitted", all.size() - maxCandidates);
+            }
+            if (!orgs.isEmpty()) {
+                topOrgs.add(orgs.get(0));
+            }
+            if (!people.isEmpty()) {
+                topPeople.add(people.get(0));
+            }
+            if (withSentiment) {
+                double sum = 0;
+                int scored = 0;
+                int nSent = 0;
+                for (int[] sp : sentences) {
+                    boolean has = false;
+                    for (EntityMentionExtractor.Candidate c : ms) {
+                        if (c.start >= sp[0] && c.start < sp[1]) {
+                            has = true;
+                            break;
+                        }
+                    }
+                    if (!has) {
+                        continue;
+                    }
+                    nSent++;
+                    TextScoringEngine.Sentiment sn =
+                        TextScoringEngine.sentiment(text.substring(sp[0], sp[1]), domain);
+                    if (sn.score != null) {
+                        sum += sn.score;
+                        scored++;
+                    }
+                }
+                ObjectNode sj = ent.putObject("sentiment");
+                sj.put("domain", domain);
+                sj.put("sentences_mentioning", nSent);
+                sj.put("sentences_scored", scored);
+                if (scored == 0) {
+                    sj.putNull("mean_score");
+                } else {
+                    sj.put("mean_score", sum / scored);
+                }
+            }
+        }
+        if (includeFacts) {
+            attachOrgParents(topOrgs);
+            attachPersonProfiles(topPeople);
+        }
+        if (!tickerNames.isEmpty()) {
+            ArrayNode tk = out.putArray("tickers");
+            for (java.util.Map.Entry<String, String[]> t : tickerNames.entrySet()) {
+                ObjectNode tj = tk.addObject();
+                tj.put("ticker", t.getKey());
+                tj.put("registered_name", t.getValue()[0]);
+                java.util.List<ObjectNode> ranked = byNorm.get(t.getValue()[1]);
+                tj.put("resolved", ranked != null);
+                if (ranked != null) {
+                    tj.set("entity", ranked.get(0));
+                }
+            }
+        }
+        out.set("types_searched", MAPPER.valueToTree(types));
+        out.put("candidates_probed", probeList.size());
+        out.put("dropped_weak_single_token", dropped);
+        if (dropped > 0) {
+            out.set("dropped_weak_single_token_names", droppedNames);
+        }
+        out.put("note", "Names are matched by exact equality against the registries, so an "
+            + "entity written in a form they do not hold (a nickname, a misspelling, a title "
+            + "instead of a name) is not found: a miss, not evidence of absence. A match means "
+            + "the string is a registered name, not that the text means that entity — check "
+            + "'ambiguous', 'types_matched' and each candidate's identifiers, and use the "
+            + "text's context. People are matched on first and last name only, so common names "
+            + "are ambiguous by nature. A bare surname is attached to a person only when "
+            + "exactly one person with that surname was named in full. Lone-word organisation "
+            + "names need " + minSingle + "+ registry identifiers to be kept (dropped ones "
+            + "are listed). Agencies and places below state/county level are not resolved.");
+        return MAPPER.writeValueAsString(out);
+    }
+
+    /** GLEIF parent and ultimate parent for each top organisation match that has an LEI. */
+    private static void attachOrgParents(java.util.List<ObjectNode> tops) throws Exception {
+        java.util.Set<String> leis = new java.util.LinkedHashSet<>();
+        for (ObjectNode t : tops) {
+            if (t.has("lei")) {
+                leis.add(t.get("lei").asText().toUpperCase(java.util.Locale.ROOT));
+            }
+        }
+        if (leis.isEmpty()) {
+            return;
+        }
+        java.util.Map<String, ArrayNode> parents = new java.util.HashMap<>();
+        for (JsonNode r : runSqlRows("SELECT child_lei, parent_legal_name, parent_lei, "
+                + "relationship_type FROM ref.current_gleif_parents WHERE upper(child_lei) IN ("
+                + inList(leis) + ")", MAX_LIMIT)) {
+            ObjectNode p = MAPPER.createObjectNode();
+            p.put("relationship", rowText(r, "relationship_type"));
+            p.put("parent_name", rowText(r, "parent_legal_name"));
+            p.put("parent_lei", rowText(r, "parent_lei"));
+            parents.computeIfAbsent(rowText(r, "child_lei").toUpperCase(java.util.Locale.ROOT),
+                k -> MAPPER.createArrayNode()).add(p);
+        }
+        for (ObjectNode t : tops) {
+            if (t.has("lei")) {
+                ArrayNode p = parents.get(t.get("lei").asText().toUpperCase(
+                    java.util.Locale.ROOT));
+                if (p != null) {
+                    t.set("parents", p);
+                }
+            }
+        }
+    }
+
+    /**
+     * A small fact card for people the registry links to an official record: party, state and
+     * district for a member of Congress; court and appointing president for a federal judge.
+     * Anything else is left to the caller's follow-up query via linked_sources.
+     */
+    private static void attachPersonProfiles(java.util.List<ObjectNode> tops) throws Exception {
+        java.util.Set<String> bioguide = new java.util.LinkedHashSet<>();
+        java.util.Set<String> judges = new java.util.LinkedHashSet<>();
+        for (ObjectNode t : tops) {
+            for (JsonNode l : t.path("linked_sources")) {
+                if ("officials_member_bioguide_id".equals(l.path("identifier").asText())) {
+                    bioguide.add(l.get("value").asText());
+                } else if ("officials_judge_jid".equals(l.path("identifier").asText())) {
+                    judges.add(l.get("value").asText());
+                }
+            }
+        }
+        java.util.Map<String, ObjectNode> member = new java.util.HashMap<>();
+        if (!bioguide.isEmpty()) {
+            // One row per member per congress; newest first so the first seen wins.
+            for (JsonNode r : runSqlRows("SELECT bioguide_id, name_last_first, state_name, "
+                    + "party_name, district, current_member, congress FROM officials.members "
+                    + "WHERE bioguide_id IN (" + inList(bioguide) + ") "
+                    + "ORDER BY congress DESC", MAX_LIMIT)) {
+                String id = rowText(r, "bioguide_id");
+                if (member.containsKey(id)) {
+                    continue;
+                }
+                ObjectNode m = MAPPER.createObjectNode();
+                m.put("record", "officials.members");
+                for (String c : new String[]{"name_last_first", "state_name", "party_name",
+                        "district", "current_member", "congress"}) {
+                    if (rowText(r, c) != null) {
+                        m.put(c, rowText(r, c));
+                    }
+                }
+                member.put(id, m);
+            }
+        }
+        java.util.Map<String, ObjectNode> judge = new java.util.HashMap<>();
+        if (!judges.isEmpty()) {
+            for (JsonNode r : runSqlRows("SELECT jid, first_name, last_name, court_name_1, "
+                    + "appointing_president_1, party_of_appointing_president_1 "
+                    + "FROM officials.federal_judges WHERE jid IN (" + inList(judges) + ")",
+                    MAX_LIMIT)) {
+                ObjectNode j = MAPPER.createObjectNode();
+                j.put("record", "officials.federal_judges");
+                for (String c : new String[]{"first_name", "last_name", "court_name_1",
+                        "appointing_president_1", "party_of_appointing_president_1"}) {
+                    if (rowText(r, c) != null) {
+                        j.put(c, rowText(r, c));
+                    }
+                }
+                judge.put(rowText(r, "jid"), j);
+            }
+        }
+        for (ObjectNode t : tops) {
+            for (JsonNode l : t.path("linked_sources")) {
+                String id = l.path("identifier").asText();
+                ObjectNode prof = "officials_member_bioguide_id".equals(id)
+                    ? member.get(l.get("value").asText())
+                    : "officials_judge_jid".equals(id) ? judge.get(l.get("value").asText())
+                    : null;
+                if (prof != null) {
+                    t.set("profile", prof);
+                }
+            }
         }
     }
 
