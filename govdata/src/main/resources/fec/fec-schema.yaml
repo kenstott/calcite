@@ -948,7 +948,13 @@ partitionedTables:
       committee_contributions/intercommittee_transactions, this table's column names match
       their roles. PERFORMANCE: always filter on the year partition first — this is the
       largest FEC table by row count and an unfiltered or non-partition-filtered aggregate
-      can exceed a 30s query timeout.
+      can exceed a 30s query timeout. Donor-name lookup ("what has this person given")
+      is NOT currently supported even with a year filter: contributor_name has no sort
+      order/clustering, so a name-filtered scan of one year's partition (tens of millions
+      of rows) still exceeds the 30s statement timeout in production — confirmed
+      2026-09-29 (see kenstott/govdata-ops#780). Do not attempt a name-filtered query
+      against this table until #780's remediation (a donor-summary table or sortOrder+
+      reprocess) lands.
 
     columns:
       - *committee_id_column
