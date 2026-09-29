@@ -27,10 +27,13 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * DataProvider for {@code nih_publications} — long-format (appl_id, pmid) publication links from
@@ -52,10 +55,11 @@ import java.util.Map;
  * so every emitted row's {@code fiscal_year}/slice is guaranteed accurate; the cross-linked
  * appl_id is captured correctly when its own (year, agency_ic) slice is walked instead.
  *
- * <p>The publications response carries no publication year (confirmed live) — only {@code
- * (coreproject, pmid, applid)} triples plus {@code meta.total} for pagination. This table
- * therefore does not attempt to derive a publication year; {@code fiscal_year} here is the
- * *funding* fiscal year of the (year, agency_ic) slice being walked, not when the paper appeared.
+ * <p>The publications response carries no publication year — only {@code (coreproject, pmid,
+ * applid)} triples plus {@code meta.total} for pagination. {@code fiscal_year} here is the
+ * *funding* fiscal year of the (year, agency_ic) slice being walked, not when the paper appeared;
+ * the real publication year comes from NIH iCite ({@code /api/pubs?pmids=...&fl=pmid,year}) and is
+ * emitted as {@code pub_year}. A pmid iCite does not index has a null {@code pub_year}.
  */
 public class NihReporterPublicationsProvider implements CachingDataProvider {
 
@@ -63,7 +67,11 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String PROJECTS_ENDPOINT = "https://api.reporter.nih.gov/v2/projects/search";
   private static final String PUBLICATIONS_ENDPOINT = "https://api.reporter.nih.gov/v2/publications/search";
+  private static final String ICITE_ENDPOINT = "https://icite.od.nih.gov/api/pubs";
   private static final int PAGE_SIZE = 500;
+  // iCite is a GET with pmids in the query string; 400 ids stays well under its URL-size limit
+  // (1000 ids returns HTTP 413).
+  private static final int ICITE_BATCH = 400;
   // Projects endpoint: offset + limit must not exceed 14999.
   private static final int MAX_OFFSET = 14999;
   // Publications endpoint: offset + limit must not exceed 10000 (stricter than projects).
@@ -85,9 +93,44 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       List<Long> batch = applIds.subList(i, Math.min(i + PAGE_SIZE, applIds.size()));
       rows.addAll(fetchPublicationsForBatch(batch, year, ic, rawCache, i / PAGE_SIZE));
     }
+    attachPublicationYears(rows, rawCache);
     LOGGER.info("nih_publications: {} publication links for fy={} ic={} ({} appl_ids)",
         rows.size(), year, ic, applIds.size());
     return rows.iterator();
+  }
+
+  /** Sets {@code pub_year} on every row from iCite, one batched lookup per {@link #ICITE_BATCH} pmids. */
+  private void attachPublicationYears(List<Map<String, Object>> rows, RawCache rawCache)
+      throws IOException {
+    Set<Long> pmidSet = new LinkedHashSet<Long>();
+    for (Map<String, Object> row : rows) {
+      pmidSet.add((Long) row.get("pmid"));
+    }
+    List<Long> pmids = new ArrayList<Long>(pmidSet);
+    Map<Long, Integer> years = new HashMap<Long, Integer>();
+    for (int i = 0; i < pmids.size(); i += ICITE_BATCH) {
+      List<Long> batch = pmids.subList(i, Math.min(i + ICITE_BATCH, pmids.size()));
+      StringBuilder ids = new StringBuilder();
+      for (Long pmid : batch) {
+        if (ids.length() > 0) {
+          ids.append(',');
+        }
+        ids.append(pmid);
+      }
+      String url = ICITE_ENDPOINT + "?fl=pmid,year&pmids=" + ids;
+      try (InputStream in = rawCache.openStream(url, () -> rawGet(url))) {
+        for (JsonNode d : MAPPER.readTree(in).path("data")) {
+          Long pmid = longOrNull(d, "pmid");
+          JsonNode y = d.get("year");
+          if (pmid != null && y != null && !y.isNull()) {
+            years.put(pmid, y.asInt());
+          }
+        }
+      }
+    }
+    for (Map<String, Object> row : rows) {
+      row.put("pub_year", years.get((Long) row.get("pmid")));
+    }
   }
 
   /** Walks /v2/projects/search for this (year, ic) slice, collecting only appl_id. */
@@ -215,6 +258,19 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
         }
       }
       throw new IOException("NIH RePORTER HTTP " + status + ": " + err);
+    }
+    return conn.getInputStream();
+  }
+
+  /** Issues the GET, failing on a non-2xx rather than returning the error body as content. */
+  private InputStream rawGet(String url) throws IOException {
+    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+    conn.setRequestProperty("User-Agent", "GovData/1.0");
+    conn.setConnectTimeout(30000);
+    conn.setReadTimeout(60000);
+    int status = conn.getResponseCode();
+    if (status < 200 || status >= 300) {
+      throw new IOException("NIH iCite HTTP " + status + " for " + url);
     }
     return conn.getInputStream();
   }

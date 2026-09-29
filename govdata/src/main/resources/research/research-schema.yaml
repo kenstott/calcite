@@ -939,14 +939,15 @@ partitionedTables:
       is guaranteed accurate; the cross-linked appl_id is captured correctly when its own (year,
       agency_ic) slice is walked instead.
 
-      **No publication year**: the /v2/publications/search response carries no year field
-      (confirmed live) — fiscal_year here is the *funding* fiscal year of the (year, agency_ic)
-      slice being walked, i.e. when the underlying grant was active, not when the paper was
-      published. A paper can appear against several fiscal_year rows if its funding project
-      spanned multiple years; dedupe on (pmid) rather than (appl_id, pmid) for a
-      publication-count analysis that should not double-count a still-appearing paper across
-      the grant's renewal years. Enriching with a real publication year (e.g. via NIH's iCite
-      /api/pubs?pmids= side-fetch) is a separate follow-up, not blocking this table.
+      **Two different years**: the /v2/publications/search response carries no year field, so
+      fiscal_year is the *funding* fiscal year of the (year, agency_ic) slice being walked, i.e.
+      when the underlying grant was active. The paper's own year is pub_year, looked up from NIH
+      iCite (/api/pubs?pmids=, field year); it is null for a pmid iCite does not index. A paper
+      appears against every fiscal_year its funding project spanned, and RePORTER credits a
+      renewed project's whole publication history to each of its appl_ids — so counting links by
+      fiscal_year measures accumulated portfolio output, not output produced that year. For a
+      publication-output series count DISTINCT pmid grouped by pub_year (and by agency_ic via
+      nih_award_projects.appl_id when institute attribution is needed).
 
       **Scope**: NIH only. NSF's publication linkage is an inline field
       (`publicationResearch`) on its own Award API record rather than a separate paginated
@@ -1001,7 +1002,7 @@ partitionedTables:
       - name: fiscal_year
         type: integer
         nullable: false
-        comment: Funding fiscal year of the (year, agency_ic) slice this link was collected under — NOT the publication's own year (RePORTER exposes none)
+        comment: Funding fiscal year of the (year, agency_ic) slice this link was collected under — NOT the publication's own year (see pub_year)
       - name: core_project_num
         type: string
         nullable: true
@@ -1010,6 +1011,10 @@ partitionedTables:
         type: long
         nullable: false
         comment: PubMed ID of the linked publication
+      - name: pub_year
+        type: integer
+        nullable: true
+        comment: Calendar year the paper was published, from NIH iCite; null when iCite does not index the pmid
 
     source:
       type: http
