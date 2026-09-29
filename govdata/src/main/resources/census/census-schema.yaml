@@ -5861,6 +5861,284 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # ACS INDUSTRY BY NATIVITY - Industry mix of employed people by nativity (S0501)
+  # ---------------------------------------------------------------------------
+  - name: acs_industry_by_nativity
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Industry mix of the civilian employed population 16 years and over by
+      nativity, from the ACS 5-Year subject table S0501 (Selected
+      Characteristics of the Native and Foreign-Born Populations), state level
+      only. Answers "what share of industry X's workforce is foreign-born":
+      for each of 3 nativity groups (total, native, foreign born) S0501
+      reports the PERCENT of that group's employed people working in each of
+      13 broad industries (columns <industry>_pct_<nativity>), plus the
+      group's employed headcount (employed_<nativity>). Workers in an
+      industry for a group = employed_<nativity> * <industry>_pct_<nativity>
+      / 100; the foreign-born share of an industry's workforce =
+      employed_foreign_born * <industry>_pct_foreign_born /
+      (employed_total * <industry>_pct_total). Percentages are published
+      rounded to 0.1, so derived counts carry that rounding on top of the ACS
+      sampling error. Industries are the 13 broad groups S0501 publishes (no
+      finer NAICS detail; finer industry by nativity exists only in ACS PUMS
+      microdata). The naturalized-citizen / non-citizen split S0501 also
+      publishes is not carried (the Census API caps a request at 50
+      variables). Values are null where the Census suppresses an estimate.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: employed_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_056E" AS BIGINT)'
+        comment: Civilian employed population 16 years and over, all employed people
+      - name: employed_native
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_056E" AS BIGINT)'
+        comment: Civilian employed population 16 years and over, native-born
+      - name: employed_foreign_born
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_056E" AS BIGINT)'
+        comment: Civilian employed population 16 years and over, foreign-born
+      - name: agriculture_mining_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_066E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Agriculture, forestry, fishing and hunting, and mining
+      - name: agriculture_mining_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_066E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Agriculture, forestry, fishing and hunting, and mining
+      - name: agriculture_mining_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_066E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Agriculture, forestry, fishing and hunting, and mining
+      - name: construction_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_067E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Construction
+      - name: construction_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_067E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Construction
+      - name: construction_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_067E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Construction
+      - name: manufacturing_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_068E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Manufacturing
+      - name: manufacturing_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_068E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Manufacturing
+      - name: manufacturing_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_068E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Manufacturing
+      - name: wholesale_trade_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_069E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Wholesale trade
+      - name: wholesale_trade_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_069E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Wholesale trade
+      - name: wholesale_trade_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_069E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Wholesale trade
+      - name: retail_trade_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_070E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Retail trade
+      - name: retail_trade_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_070E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Retail trade
+      - name: retail_trade_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_070E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Retail trade
+      - name: transportation_utilities_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_071E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Transportation and warehousing, and utilities
+      - name: transportation_utilities_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_071E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Transportation and warehousing, and utilities
+      - name: transportation_utilities_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_071E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Transportation and warehousing, and utilities
+      - name: information_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_072E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Information
+      - name: information_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_072E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Information
+      - name: information_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_072E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Information
+      - name: finance_real_estate_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_073E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Finance and insurance, and real estate and rental and leasing
+      - name: finance_real_estate_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_073E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Finance and insurance, and real estate and rental and leasing
+      - name: finance_real_estate_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_073E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Finance and insurance, and real estate and rental and leasing
+      - name: professional_admin_services_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_074E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Professional, scientific, and management, and administrative and waste management services
+      - name: professional_admin_services_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_074E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Professional, scientific, and management, and administrative and waste management services
+      - name: professional_admin_services_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_074E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Professional, scientific, and management, and administrative and waste management services
+      - name: education_health_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_075E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Educational services, and health care and social assistance
+      - name: education_health_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_075E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Educational services, and health care and social assistance
+      - name: education_health_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_075E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Educational services, and health care and social assistance
+      - name: arts_food_services_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_076E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Arts, entertainment, and recreation, and accommodation and food services
+      - name: arts_food_services_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_076E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Arts, entertainment, and recreation, and accommodation and food services
+      - name: arts_food_services_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_076E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Arts, entertainment, and recreation, and accommodation and food services
+      - name: other_services_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_077E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Other services (except public administration)
+      - name: other_services_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_077E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Other services (except public administration)
+      - name: other_services_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_077E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Other services (except public administration)
+      - name: public_administration_pct_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_078E" AS DOUBLE)'
+        comment: Percent of employed all employed people working in Public administration
+      - name: public_administration_pct_native
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_078E" AS DOUBLE)'
+        comment: Percent of employed native-born working in Public administration
+      - name: public_administration_pct_foreign_born
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_078E" AS DOUBLE)'
+        comment: Percent of employed foreign-born working in Public administration
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5/subject?get=NAME,S0501_C01_056E,S0501_C02_056E,S0501_C03_056E,S0501_C01_066E,S0501_C02_066E,S0501_C03_066E,S0501_C01_067E,S0501_C02_067E,S0501_C03_067E,S0501_C01_068E,S0501_C02_068E,S0501_C03_068E,S0501_C01_069E,S0501_C02_069E,S0501_C03_069E,S0501_C01_070E,S0501_C02_070E,S0501_C03_070E,S0501_C01_071E,S0501_C02_071E,S0501_C03_071E,S0501_C01_072E,S0501_C02_072E,S0501_C03_072E,S0501_C01_073E,S0501_C02_073E,S0501_C03_073E,S0501_C01_074E,S0501_C02_074E,S0501_C03_074E,S0501_C01_075E,S0501_C02_075E,S0501_C03_075E,S0501_C01_076E,S0501_C02_076E,S0501_C03_076E,S0501_C01_077E,S0501_C02_077E,S0501_C03_077E,S0501_C01_078E,S0501_C02_078E,S0501_C03_078E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_industry_by_nativity
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CPS VOTING AND REGISTRATION SUPPLEMENT
 # Census Bureau Current Population Survey biennial voting supplement — a
