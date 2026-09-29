@@ -101,7 +101,26 @@ import java.util.regex.Pattern;
  * Unlike modes 1/2, this carries no cache-consistency implication — nothing needs evicting — so
  * recovery is a brief backoff ({@link #NETWORK_RETRY_BACKOFF_MS}) followed by a plain retry.
  *
- * <p>None of the three failures mean the table is broken or the writer is misbehaving. On any
+ * <h3>4. Pointer-ahead-of-metadata race (mirror read-after-write lag)</h3>
+ * {@code version-hint.text} names a version whose {@code v{N}.metadata.json} the reader's own
+ * object-store endpoint does not (yet) serve, surfacing as:
+ * <pre>
+ *   Invalid Configuration Error: Iceberg metadata file not found for table version '{N}' using
+ *   'none' compression and format(s): 'v%s%s.metadata.json,%s%s.metadata.json'
+ * </pre>
+ * Both this repo's writer ({@code S3FileIOTableOperations#commit}) and the R2 mirror sync
+ * ({@code sync-to-r2.sh}'s pointer-last closure copy) already order writes so the pointer is
+ * never advanced ahead of the metadata it names on the SAME endpoint that wrote it — but a
+ * different endpoint's own read-after-write consistency window (observed live against R2,
+ * 2026-09-29, reported by peer session entity-resolution: a query against {@code fec.candidates}
+ * failed this way once, then succeeded on the next attempt with no retry logic involved) is a
+ * separate, unaddressed gap — an object that a PUT already reports as durably written is not
+ * guaranteed instantly GET-visible everywhere. Like mode 3, nothing is stale here (the pointer
+ * and the metadata it names are BOTH already correct) — a plain retry after
+ * {@link #NETWORK_RETRY_BACKOFF_MS} resolves it once the window closes, no cache_httpfs purge
+ * needed.
+ *
+ * <p>None of the four failures mean the table is broken or the writer is misbehaving. On any
  * signature, clear the relevant {@code cache_httpfs} state (modes 1/2 only) and retry the
  * statement once against a FRESH {@link Statement}/{@link PreparedStatement} &mdash; DuckDB's JDBC
  * driver leaves the original unusable after any of these errors ("Statement was closed" on
@@ -130,6 +149,15 @@ final class EtagRetryConnection {
   private static final Pattern NETWORK_TRANSIENT = Pattern.compile(
       "Could not establish connection|Connection (reset|timed out)|Connection refused"
           + "|SSL connection failed|SSL_ERROR|Broken pipe");
+
+  /**
+   * Matches DuckDB's "pointer names a version whose metadata.json isn't visible yet" message
+   * (see class javadoc, mode 4) — a mirror read-after-write consistency gap, not a stale cache
+   * or a broken table. Recovery is the same as {@link #NETWORK_TRANSIENT}: backoff and retry,
+   * no cache_httpfs purge (there is nothing stale to evict).
+   */
+  private static final Pattern METADATA_NOT_YET_VISIBLE = Pattern.compile(
+      "Iceberg metadata file not found for table version");
 
   /** Sentinel {@code transientRaceTarget()} return value for {@link #NETWORK_TRANSIENT}: retry, but skip the cache_httpfs purge that ETAG_DRIFT/VIEW_TYPE_DRIFT need. */
   private static final String NETWORK_RETRY = " network";
@@ -186,6 +214,9 @@ final class EtagRetryConnection {
         return "";
       }
       if (NETWORK_TRANSIENT.matcher(msg).find()) {
+        return NETWORK_RETRY;
+      }
+      if (METADATA_NOT_YET_VISIBLE.matcher(msg).find()) {
         return NETWORK_RETRY;
       }
     }

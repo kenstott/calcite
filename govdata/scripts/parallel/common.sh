@@ -336,6 +336,29 @@ sync_iceberg_table_closure() {
   fi
   rm -f "$files_list"
 
+  # Read-back verification gate, mirroring the writer's own gate (S3FileIOTableOperations#commit,
+  # "a write returning without an exception is not proof the object is durably present and
+  # readable"): rclone reporting the copy succeeded confirms the PUTs were accepted, not that R2
+  # is already serving them back on a GET — S3-compatible stores can have a brief read-after-write
+  # gap. Confirmed live against R2 (2026-09-29, reported by peer session entity-resolution): a
+  # reader saw "Iceberg metadata file not found for table version" for a version whose pointer had
+  # just been published this way. Retry a short, bounded number of times rather than either
+  # trusting the copy blindly or failing outright on what is normally a sub-second window closing.
+  local metadata_rel="metadata/v${version}.metadata.json"
+  local verified=false
+  local _try
+  for _try in 1 2 3 4 5; do
+    if rclone cat "${r2_remote}:${bucket}/${schema}/${table}/${metadata_rel}" >/dev/null 2>&1; then
+      verified=true
+      break
+    fi
+    sleep 2
+  done
+  if ! $verified; then
+    log_error "sync-to-r2: [$schema/$table] closure copied but ${metadata_rel} still not readable on R2 after 5 retries — version-hint.text NOT advanced, retry next pass"
+    return 1
+  fi
+
   if ! printf '%s' "$version" | rclone rcat "${r2_remote}:${bucket}/${schema}/${table}/metadata/version-hint.text"; then
     log_error "sync-to-r2: [$schema/$table] closure copied but version-hint.text write FAILED — R2 still on its prior version, retry next pass"
     return 1
