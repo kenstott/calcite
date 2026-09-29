@@ -144,7 +144,7 @@ final class PgwireGovDataConnector {
   static Connection getSharedConnection() throws Exception {
     Connection existing = sharedConnection;
     if (existing != null && !existing.isClosed() && existing.isValid(5)
-        && !serverCredentialsExpired()) {
+        && !serverCredentialsExpired() && serverBundleSuperseded() == null) {
       return existing;
     }
     synchronized (LOCK) {
@@ -152,6 +152,10 @@ final class PgwireGovDataConnector {
       // server, which rewrites the expiry file, so this one must not kill the fresh server.
       if (serverCredentialsExpired()) {
         killAndRespawn("R2 credentials baked into the server's environment have expired");
+      }
+      String superseded = serverBundleSuperseded();
+      if (superseded != null) {
+        killAndRespawn(superseded);
       }
       existing = sharedConnection;
       if (existing != null && !existing.isClosed() && existing.isValid(5)) {
@@ -305,8 +309,8 @@ final class PgwireGovDataConnector {
   private static Process spawnIfPossible() {
     File launcher = resolveLauncher();
     if (launcher == null) {
-      // Not bundled with the installer for an older build, or a local dev run — lazily
-      // download+extract the airgapped bundle on this first use of pgwire mode instead.
+      // No operator override and no installer-bundled copy: use the lazy-download cache, which
+      // ensureLauncher installs on first use and keeps at this engine's release thereafter.
       // Returns null ONLY when there's genuinely nothing published for this OS; any real
       // failure (bad download, bad sha256, bad extraction) throws InstallFailedException
       // deliberately uncaught here, so it propagates straight through connect() instead of
@@ -441,7 +445,9 @@ final class PgwireGovDataConnector {
       // — completely undiagnosable without re-running the launcher by hand. A rotating-by-size
       // convention isn't needed: PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS means this process's
       // lifetime, and therefore its log, is naturally bounded.
+      configureHttpfsCache(pb);
       File logFile = new File(cacheDirLogPath());
+      logFile.getParentFile().mkdirs();
       pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
       pb.redirectError(ProcessBuilder.Redirect.appendTo(logFile));
       // NOT Redirect.DISCARD here — that's a WRITE-only redirect (valid for output/error,
@@ -452,6 +458,7 @@ final class PgwireGovDataConnector {
       Process p = pb.start();
       writePidFile(p.pid());
       writeCredentialExpiryFile(credsExpiresAt);
+      writeServerBundleVersionFile(launcherBundleVersion(launcher));
       log().println("[askamerica-mcp] Spawned pgwire-govdata (pid " + p.pid() + "): "
           + launcher.getAbsolutePath() + " — log: " + logFile);
       return p;
@@ -460,6 +467,137 @@ final class PgwireGovDataConnector {
           + e.getClass().getSimpleName() + ": " + e.getMessage());
       return null;
     }
+  }
+
+  // ── bundle version of the running server ─────────────────────────────────
+
+  /** Beside pgwire.pid: the bundle release the running server was spawned from. Carried across
+   *  a bundle swap (PgwireGovDataInstaller.CARRY_OVER) so a replaced bundle's still-running
+   *  server can be recognised as out of date. */
+  private static File serverBundleVersionFile() {
+    String home = System.getProperty("user.home", "");
+    return new File(new File(home, ".askamerica"), "pgwire-govdata/pgwire.server-bundle-version");
+  }
+
+  /** The release stamped in the bundle {@code launcher} belongs to ({@code <root>/bin/<launcher>}),
+   *  or null for an unstamped bundle (an override or an installer-bundled copy). */
+  static String launcherBundleVersion(File launcher) {
+    File bin = launcher.getAbsoluteFile().getParentFile();
+    File root = bin == null ? null : bin.getParentFile();
+    return root == null ? null : PgwireGovDataInstaller.readMarker(root.toPath());
+  }
+
+  /** Always clears the previous server's stamp, so an unstamped spawn is never judged by the
+   *  last server's release. */
+  private static void writeServerBundleVersionFile(String version) {
+    try {
+      File f = serverBundleVersionFile();
+      f.getParentFile().mkdirs();
+      java.nio.file.Files.deleteIfExists(f.toPath());
+      if (version != null) {
+        java.nio.file.Files.writeString(f.toPath(), version);
+      }
+    } catch (Exception e) {
+      log().println("[askamerica-mcp] Could not record pgwire-govdata's bundle release: "
+          + e.getMessage() + " — an out-of-date server will not be replaced automatically.");
+    }
+  }
+
+  /** Reason the running server must be replaced because it runs an older bundle than this
+   *  engine, or null when it need not be (same or newer release, or either side unstamped). */
+  static String serverBundleSuperseded() {
+    File f = serverBundleVersionFile();
+    if (!f.isFile()) {
+      return null;
+    }
+    String server;
+    try {
+      server = java.nio.file.Files.readString(f.toPath()).trim();
+    } catch (java.io.IOException e) {
+      throw new IllegalStateException("Cannot read " + f + " to check pgwire-govdata's bundle "
+          + "release", e);
+    }
+    return bundleSupersededReason(server, PgwireGovDataInstaller.ownEngineVersion());
+  }
+
+  /** Pure form of {@link #serverBundleSuperseded()}: only a server strictly OLDER than this
+   *  engine is replaced, so engines of different releases sharing one machine cannot keep
+   *  killing each other's server. */
+  static String bundleSupersededReason(String serverVersion, String engineVersion) {
+    if (serverVersion == null || serverVersion.isEmpty() || engineVersion == null) {
+      return null;
+    }
+    if (PgwireGovDataInstaller.compareVersions(serverVersion, engineVersion) >= 0) {
+      return null;
+    }
+    return "the running pgwire-govdata server was spawned from bundle " + serverVersion
+        + ", older than this engine's " + engineVersion;
+  }
+
+  // ── cache_httpfs directory for the spawned server ────────────────────────
+
+  static final String HTTPFS_CACHE_PROPERTY = "duckdb.cache_httpfs.directory";
+
+  /** Fraction of a volume cache_httpfs keeps free by default (its
+   *  cache_httpfs_min_disk_bytes_for_cache: "5% of disk space will be reserved"). */
+  static final double HTTPFS_RESERVED_FRACTION = 0.05;
+
+  /** The data-block cache directory for the spawned server: ASKAMERICA_HTTPFS_CACHE_DIR when
+   *  set, else {@code ~/.askamerica/.duckdb_httpfs_cache}, this host's own cache. */
+  static File httpfsCacheDir() {
+    String override = System.getenv("ASKAMERICA_HTTPFS_CACHE_DIR");
+    if (override != null && !override.isEmpty()) {
+      return new File(override);
+    }
+    return new File(new File(System.getProperty("user.home", ""), ".askamerica"),
+        ".duckdb_httpfs_cache");
+  }
+
+  /**
+   * Points the spawned server's cache_httpfs at {@link #httpfsCacheDir()} and warns when that
+   * volume is too full for the extension to write to it. The server's JVM is started by JPype
+   * inside the pgwire Python process, whose launcher exposes no JVM-argument option, so the
+   * property travels in JAVA_TOOL_OPTIONS (read by every JVM at start-up). Without it the server
+   * falls back to file/'s own default, ~/.aperio, shared with unrelated hosts.
+   */
+  private static void configureHttpfsCache(ProcessBuilder pb) {
+    File dir = httpfsCacheDir();
+    dir.mkdirs();
+    pb.environment().put("JAVA_TOOL_OPTIONS",
+        withHttpfsCacheOption(pb.environment().get("JAVA_TOOL_OPTIONS"), dir.getAbsolutePath()));
+    String warning = lowDiskWarning(dir, dir.getUsableSpace(), dir.getTotalSpace());
+    if (warning != null) {
+      log().println("[askamerica-mcp] " + warning);
+    }
+  }
+
+  /** {@code existing} JAVA_TOOL_OPTIONS with the cache-directory property appended, quoted so a
+   *  path with spaces survives; an operator's own setting of the property is left alone. */
+  static String withHttpfsCacheOption(String existing, String dir) {
+    String base = existing == null ? "" : existing.trim();
+    if (base.contains("-D" + HTTPFS_CACHE_PROPERTY + "=")) {
+      return base;
+    }
+    String opt = "\"-D" + HTTPFS_CACHE_PROPERTY + "=" + dir + "\"";
+    return base.isEmpty() ? opt : base + " " + opt;
+  }
+
+  /** A warning when the cache volume's free space is at or below the extension's reserve, in
+   *  which case it silently stops caching data blocks; null when there is room. Seen live: a
+   *  home volume at 98% full left the cache directory empty after hours of reads. */
+  static String lowDiskWarning(File dir, long usableBytes, long totalBytes) {
+    if (totalBytes <= 0) {
+      return null;
+    }
+    long reserve = (long) (totalBytes * HTTPFS_RESERVED_FRACTION);
+    if (usableBytes > reserve) {
+      return null;
+    }
+    return String.format(java.util.Locale.ROOT, "Data-block cache is effectively OFF: the "
+        + "volume holding %s has %.1f GB free, at or below the %.1f GB (5%%) cache_httpfs keeps "
+        + "in reserve, so every query re-reads remote data. Free space there, or set "
+        + "ASKAMERICA_HTTPFS_CACHE_DIR to a directory on a volume with room.",
+        dir.getAbsolutePath(), usableBytes / 1e9, reserve / 1e9);
   }
 
   /** True when {@code path} resolves under the JVM's own OS temp directory ({@code
@@ -692,12 +830,11 @@ final class PgwireGovDataConnector {
         return f;
       }
     }
-    String home = System.getProperty("user.home");
-    if (home == null || home.isEmpty()) {
-      return null;
-    }
-    File f = launcherPathUnder(new File(new File(home, ".askamerica"), "pgwire-govdata"));
-    return f.isFile() ? f : null;
+    // The lazy-download cache under ~/.askamerica/pgwire-govdata is deliberately NOT returned
+    // here: returning an existing cached launcher directly is how a bundle installed once stayed
+    // in service, never updated, under every later engine. PgwireGovDataInstaller.ensureLauncher
+    // owns that directory and returns its launcher only once it matches this engine's release.
+    return null;
   }
 
   /** {@code base/bin/pgwire-govdata} (or {@code .bat} on Windows — no compiled Windows
