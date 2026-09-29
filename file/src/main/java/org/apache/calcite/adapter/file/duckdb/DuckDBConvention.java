@@ -85,11 +85,12 @@ public class DuckDBConvention extends JdbcConvention {
       planner.addRule(org.apache.calcite.adapter.file.rules.SimpleFileColumnPruningRule.INSTANCE);
     }
 
-    // 4. COUNT(*) optimization using table statistics for instant row count
-    // This avoids expensive S3 file listing for hive-partitioned tables
+    // 4. COUNT(*) optimization answered from Iceberg metadata for instant row count.
+    // Only the snapshot-validating rule is registered: CountStarStatisticsRule substitutes a
+    // cached statistic that is never compared against the current snapshot, so with both rules
+    // matching the same whole-table COUNT(*) the planner could return the stale value. A scan the
+    // Iceberg rule declines executes as a normal DuckDB count.
     if (!"false".equals(System.getProperty("calcite.file.statistics.count.star.enabled"))) {
-      planner.addRule(org.apache.calcite.adapter.file.rules.CountStarStatisticsRule.INSTANCE);
-      // Also add DuckDB-specific Iceberg COUNT(*) rule that works with JDBC convention
       planner.addRule(DuckDBIcebergCountStarRule.INSTANCE);
     }
 
