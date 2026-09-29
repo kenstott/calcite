@@ -304,4 +304,95 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
           "Not-yet-materialized table must be omitted from the mounted schema's table listing");
     }
   }
+
+  /**
+   * A declared {@code partitionedTables} entry whose Iceberg location EXISTS with a {@code
+   * metadata/} directory and a {@code version-hint.text} naming a version, but no readable {@code
+   * v{N}.metadata.json} behind it (an interrupted first write, or a hint left dangling by a
+   * since-reverted commit), must also be OMITTED — existence of {@code version-hint.text} alone is
+   * not enough to call a table materialized. Reproduces the production failure reported for {@code
+   * ag.ers_commodity_costs_returns} against R2 (govdata/src/main/resources/ag/ag-schema.yaml):
+   * existence-only checking let the table register, and it only failed later, with DuckDB's
+   * "Could not guess Iceberg table version".
+   */
+  @Test public void testDanglingVersionHintOmittedNotCrashed() throws Exception {
+    java.nio.file.Path brokenMetadataDir =
+        java.nio.file.Paths.get(warehousePath, "broken_table", "metadata");
+    java.nio.file.Files.createDirectories(brokenMetadataDir);
+    java.nio.file.Files.write(brokenMetadataDir.resolve("version-hint.text"),
+        "1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    // Deliberately no v1.metadata.json written: the location and its metadata directory exist,
+    // but there is no valid metadata file for the version the hint names.
+
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base2") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          },\n"
+        + "          {\n"
+        + "            \"name\": \"broken_table\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"broken_table\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    // Connecting (which mounts the schema) must NOT throw, even though one declared table's
+    // location has a metadata directory with no readable metadata file behind its version hint.
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+         Statement statement = connection.createStatement()) {
+
+      // The other declared table, backed by real data, still mounts and is queryable.
+      ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM orders");
+      assertTrue(rs.next(), "Should have a result row");
+      assertEquals(3, rs.getInt(1), "Real table's rows are unaffected by the broken sibling");
+      rs.close();
+
+      // The table with a dangling version hint is omitted, not exposed as a broken entry.
+      boolean found = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          if ("broken_table".equalsIgnoreCase(tables.getString("TABLE_NAME"))) {
+            found = true;
+          }
+        }
+      }
+      assertFalse(found,
+          "A table with a dangling version-hint.text (no matching metadata.json) must be "
+              + "omitted from the mounted schema's table listing");
+    }
+  }
 }

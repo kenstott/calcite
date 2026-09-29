@@ -69,6 +69,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Reader;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -4670,9 +4671,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * when none is configured. Mirrors the local-vs-object-store branch {@link
    * org.apache.calcite.adapter.file.iceberg.IcebergTable#loadIcebergTable} itself takes to read
    * the table, so a table this reports as materialized is one that path can actually load — and
-   * one it reports as not materialized (ETL has not run for it yet) can be omitted from this
-   * schema mount instead of registering a {@link org.apache.calcite.adapter.file.iceberg.IcebergTable}
-   * that is guaranteed to throw the first time something reads it.
+   * one it reports as not materialized (ETL has not run for it yet, or left an incomplete
+   * location behind) can be omitted from this schema mount instead of registering a {@link
+   * org.apache.calcite.adapter.file.iceberg.IcebergTable} that is guaranteed to throw the first
+   * time something reads it.
+   *
+   * <p>Checking only {@code version-hint.text}'s existence is not enough: a table whose location
+   * exists with a metadata directory but no valid {@code v{N}.metadata.json} behind it (an
+   * interrupted first write, or a hint left dangling by a since-reverted commit) passes an
+   * existence-only check and is registered anyway — the failure then surfaces much later, e.g. as
+   * DuckDB's "Could not guess Iceberg table version" when something finally tries to read it
+   * (reported live for ag.ers_commodity_costs_returns — govdata/src/main/resources/ag/ag-schema.yaml,
+   * commit 080f661a8 — against R2 by peer session entity-resolution following d6089c7ce). So this
+   * also reads the hint's content and confirms the metadata file it names actually exists.
    */
   private boolean icebergTableMaterializedAt(String tablePath) throws IOException {
     // No storageProvider configured on this schema (no explicit storageType) means a purely
@@ -4681,7 +4692,34 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // so existence checking always goes through the StorageProvider abstraction.
     StorageProvider provider =
         storageProvider != null ? storageProvider : StorageProviderFactory.createFromUrl(tablePath);
-    return provider.exists(tablePath + "/metadata/version-hint.text");
+    String versionHintPath = tablePath + "/metadata/version-hint.text";
+    if (!provider.exists(versionHintPath)) {
+      return false;
+    }
+    String versionText;
+    try (Reader reader = provider.openReader(versionHintPath)) {
+      StringBuilder sb = new StringBuilder();
+      char[] buf = new char[32];
+      int n;
+      while ((n = reader.read(buf)) >= 0) {
+        sb.append(buf, 0, n);
+      }
+      versionText = sb.toString().trim();
+    }
+    long version;
+    try {
+      version = Long.parseLong(versionText);
+    } catch (NumberFormatException e) {
+      LOGGER.warn("Iceberg version-hint.text at '{}' is not a valid integer (was '{}') -- "
+          + "treating table as not materialized", versionHintPath, versionText);
+      return false;
+    }
+    String metadataJsonPath = tablePath + "/metadata/v" + version + ".metadata.json";
+    if (provider.exists(metadataJsonPath)) {
+      return true;
+    }
+    // Iceberg also accepts a gzip-compressed metadata file under the same version number.
+    return provider.exists(tablePath + "/metadata/v" + version + ".gz.metadata.json");
   }
 
   /**

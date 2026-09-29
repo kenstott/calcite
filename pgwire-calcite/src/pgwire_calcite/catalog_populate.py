@@ -77,18 +77,24 @@ def build_context(conn) -> tuple:
     by_qualified: Dict[tuple, TableMeta] = {}
     next_id = 1
 
-    # Tables + views.
-    JClass_types = None
-    rs = md.getTables(None, None, "%", None)
+    # Tables + views. A single "%"-scoped getTables() call spans every schema in one JDBC/Avatica
+    # round trip; if that ResultSet throws lazily partway through (a table whose backing Iceberg
+    # location exists but has no valid metadata — reported live for ag.ers_commodity_costs_returns
+    # against R2 by peer session entity-resolution, following the FileSchema/DuckDBPendingViews
+    # fix in d6089c7ce), an uncaught exception here aborts catalog population for the WHOLE
+    # database, not just the offending schema. Fall back to enumerating one schema at a time so a
+    # single broken schema costs only its own tables.
     table_keys: List[tuple] = []
-    for r in _rows(rs):
+
+    def _add_table_row(r) -> None:
+        nonlocal next_id
         schema = r.get("TABLE_SCHEM") or ""
         name = r.get("TABLE_NAME") or ""
         ttype = (r.get("TABLE_TYPE") or "").upper()
         if schema.lower() in _SYSTEM_SCHEMAS:
-            continue
+            return
         if ttype not in ("TABLE", "VIEW", "BASE TABLE", ""):
-            continue
+            return
         tm = TableMeta(
             table_id=next_id,
             catalog_name=catalog._DATABASE_NAME,
@@ -102,6 +108,29 @@ def build_context(conn) -> tuple:
         column_types[next_id] = []
         table_keys.append((schema, name, tm))
         next_id += 1
+
+    try:
+        for r in _rows(md.getTables(None, None, "%", None)):
+            _add_table_row(r)
+    except Exception as e:
+        log.warning("getTables('%%', all schemas) failed partway through (%s: %s) — "
+                     "falling back to per-schema enumeration", type(e).__name__, e)
+        table_keys.clear()
+        ctx.tables.clear()
+        by_qualified.clear()
+        column_types.clear()
+        next_id = 1
+        for sr in _rows(md.getSchemas(None, "%")):
+            schema_name = sr.get("TABLE_SCHEM") or ""
+            if schema_name.lower() in _SYSTEM_SCHEMAS:
+                continue
+            try:
+                for r in _rows(md.getTables(None, schema_name, "%", None)):
+                    _add_table_row(r)
+            except Exception as e2:
+                log.warning("getTables(schema=%s) failed (%s: %s) — omitting this schema "
+                            "from the catalog", schema_name, type(e2).__name__, e2)
+                continue
 
     # Columns per table.
     for schema, name, tm in table_keys:
