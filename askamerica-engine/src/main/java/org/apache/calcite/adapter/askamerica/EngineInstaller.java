@@ -32,6 +32,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -108,6 +109,23 @@ final class EngineInstaller {
      */
     static Path ensure(File launcherDir, boolean serverMode)
         throws IOException, InterruptedException {
+        return ensure(launcherDir, serverMode, EngineInstaller::startDaemon);
+    }
+
+    /**
+     * {@link #ensure(File, boolean)} with the executor that runs a server-mode update, so a
+     * test can observe that one was scheduled without it reaching the network.
+     *
+     * <p>In server mode an existing cached jar is always returned at once and any update runs
+     * on {@code background}. Claude Desktop cancels an MCP {@code initialize} that takes longer
+     * than 60 seconds and kills the process; a 415 MB update fetched before the server starts
+     * never finishes inside that, so every relaunch restarted it from zero and left another
+     * orphaned {@code .part} behind — the connector stayed down until the jar was installed by
+     * hand (observed 2026-09-30, 0.100.0 superseded by 0.100.2). The downloaded update takes
+     * effect on the next launch.
+     */
+    static Path ensure(File launcherDir, boolean serverMode, Executor background)
+        throws IOException, InterruptedException {
         Path dest = cacheJar();
         Path existing = resolveExisting(launcherDir);
         if (existing != null && !existing.equals(dest)) {
@@ -116,12 +134,65 @@ final class EngineInstaller {
             report("Using pinned engine jar " + existing + " (" + describe(existing) + ").");
             return existing;
         }
+        String url = System.getenv().getOrDefault("ASKAMERICA_ENGINE_URL", DEFAULT_URL);
+        if (existing != null && serverMode) {
+            background.execute(() -> updateInBackground(dest, url));
+            return existing;
+        }
         if (existing != null && !isStale(existing)) {
             return existing;
         }
         Files.createDirectories(dest.getParent());
-        String url = System.getenv().getOrDefault("ASKAMERICA_ENGINE_URL", DEFAULT_URL);
         return lockAndDownload(dest, url, serverMode);
+    }
+
+    private static void startDaemon(Runnable task) {
+        Thread t = new Thread(task, "askamerica-engine-update");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Replaces a stale cached jar while the server runs on it. Uses {@code tryLock}, not
+     * {@code lock}: another process holding the lock is already downloading the same release,
+     * and waiting on it would only duplicate that work. Holding the lock also makes this
+     * process the only writer of {@code engine-*.part} files, so any present are orphans of a
+     * download whose process was killed and are removed before a new one starts.
+     */
+    static void updateInBackground(Path dest, String url) {
+        Path lockFile = dest.resolveSibling(dest.getFileName() + ".lock");
+        try (FileChannel channel = FileChannel.open(lockFile,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = channel.tryLock()) {
+            if (lock == null) {
+                report("Another AskAmerica process is updating the engine — skipping.");
+                return;
+            }
+            if (!isStale(dest)) {
+                return;
+            }
+            deleteOrphanedParts(dest.getParent());
+            download(url, dest, true, true);
+            report("Engine updated to " + jarVersion(dest)
+                + " — it takes effect the next time Claude Desktop starts the connector.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            report("Background engine update interrupted — the cached jar stays in service.");
+        } catch (IOException e) {
+            report("Background engine update failed (" + e.getMessage()
+                + ") — the cached jar stays in service; the next launch retries.");
+        }
+    }
+
+    /** Deletes {@code engine-*.part} files in {@code dir}; the caller must hold the lock. */
+    static void deleteOrphanedParts(Path dir) throws IOException {
+        try (java.nio.file.DirectoryStream<Path> parts =
+                 Files.newDirectoryStream(dir, "engine-*.part")) {
+            for (Path part : parts) {
+                Files.deleteIfExists(part);
+                report("Removed orphaned partial download " + part.getFileName() + ".");
+            }
+        }
     }
 
     /**
@@ -147,7 +218,7 @@ final class EngineInstaller {
                 if (Files.exists(dest) && !isStale(dest)) {
                     return dest;
                 }
-                download(url, dest, serverMode);
+                download(url, dest, serverMode, false);
                 return dest;
             }
         }
@@ -347,7 +418,12 @@ final class EngineInstaller {
         return icons;
     }
 
-    private static void download(String url, Path dest, boolean serverMode)
+    /**
+     * @param background true when the server is already running on the cached jar; progress
+     *                   then goes to stderr only, since a window popping up mid-conversation
+     *                   for a download nobody is waiting on is noise
+     */
+    private static void download(String url, Path dest, boolean serverMode, boolean background)
         throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -365,7 +441,7 @@ final class EngineInstaller {
         }
         long total = resp.headers().firstValueAsLong("content-length").orElse(-1L);
 
-        Progress progress = progressFor(serverMode, total);
+        Progress progress = background ? new ConsoleProgress() : progressFor(serverMode, total);
         progress.start(total);
 
         // Download to a sibling temp file, then atomically move into place so a
