@@ -2432,6 +2432,22 @@ public class McpServer {
                 + "past that, which on a short panel leaves a stub like '% change ...'. Put "
                 + "the qualification in the panel caption instead, where there is room. "
                 + "Ignored for 'pie'."));
+        chartProps.set("orientation", prop("string",
+            "'bar' only: 'auto' (default), 'vertical' or 'horizontal'. 'auto' draws horizontal "
+            + "bars when there are more than 8 categories or a category label is wider than "
+            + "its column, so long names (states, industries, model descriptions) stay "
+            + "readable. Horizontal bars grow from one zero line — a negative value extends "
+            + "left — and take x_label as the category-axis title and y_label as the value-axis "
+            + "title. Category labels wrap onto up to two lines before any is shortened."));
+        chartProps.set("sort", prop("string",
+            "'bar' only: 'none' (default), 'asc' or 'desc'. Orders categories by the FIRST "
+            + "series' value; further series follow their categories. In horizontal bars 'desc' "
+            + "puts the largest at the top, so a ranking needs no caller-side pre-sorting."));
+        chartProps.set("value_labels", prop("boolean",
+            "'bar' only: print each value at the end of its bar. Default false."));
+        chartProps.set("value_format", prop("string",
+            "'bar' only: a Java DecimalFormat pattern for value_labels, e.g. \"$#,##0\" or "
+            + "\"0.0'%'\". Default groups thousands and keeps up to two decimals."));
         ObjectNode categoriesProp = MAPPER.createObjectNode();
         categoriesProp.put("type", "array");
         categoriesProp.put(
@@ -2511,7 +2527,8 @@ public class McpServer {
         panelsProp.put("description",
             "The panels, in reading order. Each is either a chart or a stat tile.\n"
             + "CHART panel: {\"type\":\"chart\", plus the same arguments render_chart takes "
-            + "— chart_type, title, x_label, y_label, and categories+series (line/bar/pie) or "
+            + "— chart_type, title, x_label, y_label, the bar-only orientation/sort/value_labels/"
+            + "value_format, and categories+series (line/bar/pie) or "
             + "points (scatter/bubble)}.\n"
             + "STAT panel: {\"type\":\"stat\", \"label\":\"Real 10-year rise\", "
             + "\"value\":\"+$19,029\", \"delta\":\"+22.0%\", \"delta_direction\":"
@@ -4425,6 +4442,11 @@ public class McpServer {
                         ? Math.min(Math.max(100, args.get("height").asInt()), 2000) : 500;
 
                     if ("scatter".equals(chartType) || "bubble".equals(chartType)) {
+                        if (!readBarOptions(args, false).isDefault()) {
+                            throw new IllegalArgumentException("orientation, sort, value_labels "
+                                + "and value_format apply to chart_type 'bar' only, not '"
+                                + chartType + "'.");
+                        }
                         java.util.List<ChartRenderer.PointSeriesSpec> points =
                             new java.util.ArrayList<>();
                         for (JsonNode s : args.path("points")) {
@@ -4487,7 +4509,8 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
                         + " categories=" + categories.size() + " series=" + series.size());
                     ChartScene scene = ChartRenderer.layout(
-                        chartType, title, xLabel, yLabel, categories, series, width, height);
+                        chartType, title, xLabel, yLabel, categories, series, width, height,
+                        readBarOptions(args, true));
                     chartPng = scene.toPng();
                     chartSvg = scene.toSvg();
                     text = chartSummary(chartType, title,
@@ -7777,6 +7800,19 @@ public class McpServer {
     private static final java.util.Set<String> CHART_TYPE_VALUES = new java.util.HashSet<>(
         java.util.Arrays.asList("line", "bar", "pie", "scatter", "bubble"));
 
+    /** The bar-chart arguments shared by render_chart and a dashboard chart panel. */
+    private static ChartRenderer.BarOptions readBarOptions(JsonNode n, boolean growHeight) {
+        String orientation = n.hasNonNull("orientation") ? n.get("orientation").asText() : null;
+        String sort = n.hasNonNull("sort") ? n.get("sort").asText() : null;
+        Boolean valueLabels = n.hasNonNull("value_labels") ? n.get("value_labels").asBoolean()
+            : null;
+        String valueFormat = n.hasNonNull("value_format") ? n.get("value_format").asText()
+            : null;
+        ChartRenderer.BarOptions o = ChartRenderer.BarOptions.parse(orientation, sort,
+            valueLabels, valueFormat, false);
+        return growHeight ? o.growing() : o;
+    }
+
     private static DashboardLayout.Panel readPanel(JsonNode pn) {
         DashboardLayout.Panel p = new DashboardLayout.Panel();
         p.kind = pn.path("type").asText("chart");
@@ -7809,6 +7845,7 @@ public class McpServer {
             ? pn.get("x_label").asText() : null;
         p.yLabel = pn.has("y_label") && !pn.get("y_label").isNull()
             ? pn.get("y_label").asText() : null;
+        p.bar = readBarOptions(pn, false);
         if (pn.has("points") && pn.get("points").isArray() && pn.get("points").size() > 0) {
             p.points = new java.util.ArrayList<>();
             for (JsonNode sNode : pn.path("points")) {

@@ -71,8 +71,12 @@ public class ChartSvgTest {
     }
 
     @Test void keepsCrowdedLabelsHorizontalWhileTheyStillFit() {
-        // Eight state names in 800px do fit side by side, so nothing should be rotated or cut.
-        String svg = barSvg();
+        // Eight state names side by side fit once the chart is wide enough for the widest one
+        // in the machine's own font, so nothing should be rotated or cut.
+        String svg = ChartRenderer.layout("bar", "t", "State", "Rise (US$)", EIGHT,
+            Arrays.asList(series("Nominal rise",
+                38216, 38059, 38023, 35810, 35736, 35668, 34145, 33305)),
+            1000, 500).toSvg();
         assertFalse(svg.contains("rotate(-45"), "no need to rotate when the names fit");
         assertFalse(svg.contains("…"), "no need to truncate when the names fit");
     }
@@ -110,11 +114,13 @@ public class ChartSvgTest {
 
     @Test void rotatesRatherThanDroppingWhenLabelsGenuinelyCollide() {
         // The same eight names in half the width. The old renderer answered this by printing
-        // every other label; every bar must still be identifiable.
+        // every other label; every bar must still be identifiable. Vertical is asked for
+        // explicitly: under the default "auto" these names would go horizontal instead.
         String svg = ChartRenderer.layout("bar", "t", "State", "US$", EIGHT,
             Arrays.asList(series("Nominal rise",
                 38216, 38059, 38023, 35810, 35736, 35668, 34145, 33305)),
-            400, 500).toSvg();
+            400, 500, ChartRenderer.BarOptions.parse("vertical", null, null, null, false))
+            .toSvg();
 
         assertTrue(svg.contains("rotate(-45"),
             "eight names in 400px cannot sit horizontally — rotate them, do not drop them");

@@ -247,6 +247,7 @@ final class DashboardLayout {
         String title;
         String xLabel;
         String yLabel;
+        ChartRenderer.BarOptions bar = ChartRenderer.BarOptions.DEFAULT;
         List<String> categories;
         List<ChartRenderer.SeriesSpec> series;
         List<ChartRenderer.PointSeriesSpec> points;
@@ -699,9 +700,15 @@ final class DashboardLayout {
                 p.scene = ChartLayout.pieChart(p.title, p.categories, p.series.get(0).values,
                     w, h);
             } else {
-                p.scene = ChartLayout.categoryChart(
-                    p.chartType == null ? "line" : p.chartType, p.title, p.xLabel, p.yLabel,
-                    p.categories, p.series, w, h, forced);
+                String chartType = p.chartType == null ? "line" : p.chartType;
+                if (!"bar".equals(chartType) && !p.bar.isDefault()) {
+                    throw new IllegalArgumentException(
+                        "chart panel '" + (p.title == null ? "untitled" : p.title)
+                        + "': orientation, sort, value_labels and value_format apply to "
+                        + "chart_type 'bar' only, not '" + chartType + "'.");
+                }
+                p.scene = ChartLayout.categoryChart(chartType, p.title, p.xLabel, p.yLabel,
+                    p.categories, p.series, w, h, forced, p.bar);
             }
             }
         }

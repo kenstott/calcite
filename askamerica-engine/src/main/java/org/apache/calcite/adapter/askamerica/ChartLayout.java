@@ -72,6 +72,10 @@ final class ChartLayout {
 
     private static final int TITLE_SIZE = 15;
     private static final int TICK_SIZE = 11;
+    /** Bar charts with more categories than this default to horizontal bars. */
+    private static final int AUTO_HORIZONTAL_CATEGORIES = 8;
+    /** Pixels per category row in a horizontal bar chart of single-line labels. */
+    private static final int HBAR_ROW = 17;
     private static final int AXIS_TITLE_SIZE = 12;
     private static final int AXIS_TITLE_MIN = 8;
 
@@ -99,6 +103,33 @@ final class ChartLayout {
     static ChartScene categoryChart(String type, String title, String xLabel, String yLabel,
             List<String> categories, List<ChartRenderer.SeriesSpec> series, int width,
             int height, double[] forcedDomain) {
+        return categoryChart(type, title, xLabel, yLabel, categories, series, width, height,
+            forcedDomain, ChartRenderer.BarOptions.DEFAULT);
+    }
+
+    /**
+     * As above, with a bar chart's orientation, ordering and value labels.
+     *
+     * <p>{@code sort} orders by the first series; the other series follow their categories.
+     * Horizontal bars take {@code x_label} as the category-axis title and {@code y_label} as the
+     * value-axis title, so each names what its own axis carries whichever way the bars run.
+     */
+    static ChartScene categoryChart(String type, String title, String xLabel, String yLabel,
+            List<String> categories, List<ChartRenderer.SeriesSpec> series, int width,
+            int height, double[] forcedDomain, ChartRenderer.BarOptions opts) {
+        boolean bar = "bar".equals(type);
+        if (bar && !"none".equals(opts.sort)) {
+            List<String> sortedCats = new ArrayList<>();
+            List<ChartRenderer.SeriesSpec> sortedSeries = new ArrayList<>();
+            sortByFirstSeries(categories, series, "desc".equals(opts.sort), sortedCats,
+                sortedSeries);
+            categories = sortedCats;
+            series = sortedSeries;
+        }
+        if (bar && isHorizontal(opts, categories, width)) {
+            return horizontalBarChart(title, xLabel, yLabel, categories, series, width, height,
+                forcedDomain, opts);
+        }
         ChartScene scene = new ChartScene(width, height, BACKGROUND);
 
         double min = 0;
@@ -151,7 +182,12 @@ final class ChartLayout {
             + tickLabelWidth + 10;
         double provisionalSlot = (width - provisionalLeft - right)
             / Math.max(1, categories.size());
-        boolean rotate = widest > provisionalSlot - 6;
+        // Two lines cost 14px more than one; rotation costs up to a third of the chart's height.
+        // Wrap first, so a label only tilts when even two lines cannot hold it.
+        int wrapWidth = (int) provisionalSlot - 6;
+        boolean wraps = widest > provisionalSlot - 6 && wrapWidth > 8
+            && wrapsWithoutLoss(categories, wrapWidth, 2);
+        boolean rotate = widest > provisionalSlot - 6 && !wraps;
         // A rotated label's full depth is widest*0.72+22, but a fixed 96px cap clipped that
         // depth for genuinely long labels — the reserved band stayed 96px while the label
         // itself still needed more, so its tail rendered past the reserved margin, off the
@@ -159,7 +195,8 @@ final class ChartLayout {
         // chart's own height instead of a constant, and any label that still overflows it gets
         // shortened (see rotatedLabelMaxWidth below) rather than silently clipped.
         double maxRotatedDepth = Math.max(60, height * 0.32);
-        double rotatedDepth = rotate ? Math.min(maxRotatedDepth, widest * 0.72 + 22) : 30;
+        double rotatedDepth = rotate ? Math.min(maxRotatedDepth, widest * 0.72 + 22)
+            : wraps ? 44 : 30;
         double bottom = rotatedDepth
             + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight + FOOTNOTE_BAND;
         double plotH = height - top - bottom;
@@ -183,6 +220,17 @@ final class ChartLayout {
         for (int i = 0; i < categories.size(); i++) {
             double cx = left + slotWidth * (i + 0.5);
             String text = categories.get(i);
+            if (wraps) {
+                List<String> lines = wrapLabel(text, (int) slotWidth - 6, 2);
+                for (int li = 0; li < lines.size(); li++) {
+                    Label wl = new Label(cx, top + plotH + 18 + li * 14, lines.get(li), INK,
+                        TICK_SIZE, Anchor.MIDDLE, 0, false);
+                    wl.styled("tick").at(li == 0 ? "xtick-" + ChartScene.slug(text)
+                        : "xtick-" + ChartScene.slug(text) + "-" + (li + 1));
+                    xTicks.add(wl);
+                }
+                continue;
+            }
             String shown = rotate
                 ? fitTo(text, rotatedLabelMaxWidth)
                 : fitTo(text, (int) slotWidth - 6);
@@ -194,7 +242,6 @@ final class ChartLayout {
         }
         scene.add(xTicks);
 
-        boolean bar = "bar".equals(type);
         for (int si = 0; si < series.size(); si++) {
             ChartRenderer.SeriesSpec s = series.get(si);
             Color c = color(si);
@@ -215,6 +262,14 @@ final class ChartLayout {
                         .at("mark-" + ChartScene.slug(s.name) + "-"
                             + ChartScene.slug(categories.get(i)))
                         .styled("bar"));
+                    if (opts.valueLabels) {
+                        String vt = opts.format(v);
+                        double ly = v >= 0 ? y - 4 : y + 14;
+                        g.add(new Label(x + (barW - 1) / 2, ly, vt, INK, TICK_SIZE,
+                            Anchor.MIDDLE, 0, true).styled("value-label")
+                            .at("value-" + ChartScene.slug(s.name) + "-"
+                                + ChartScene.slug(categories.get(i))));
+                    }
                 }
             } else {
                 Path p = new Path(c, null, 2);
@@ -245,6 +300,182 @@ final class ChartLayout {
             addLegend(scene, seriesNames(series), height - 10 - FOOTNOTE_BAND, width);
         }
         return scene;
+    }
+
+    /**
+     * Horizontal bars: categories down the left, values along the bottom, every bar growing from
+     * one shared zero line so a negative value extends left of it.
+     *
+     * <p>A category label wraps onto a second line before anything is shortened. When the caller
+     * allows it ({@link ChartRenderer.BarOptions#growHeight}) the chart grows to give every
+     * category its own row rather than squeezing rows below a readable height; a dashboard panel
+     * has a fixed cell, so there the rows share the cell and the label falls back to one line
+     * when a row is too short for two.
+     */
+    private static ChartScene horizontalBarChart(String title, String categoryTitle,
+            String valueTitle, List<String> categories, List<ChartRenderer.SeriesSpec> series,
+            int width, int height, double[] forcedDomain, ChartRenderer.BarOptions opts) {
+        int n = categories.size();
+        int k = series.size();
+        double min = 0;
+        double max = 0;
+        boolean any = false;
+        for (ChartRenderer.SeriesSpec s : series) {
+            for (Double v : s.values) {
+                if (v != null) {
+                    any = true;
+                    max = Math.max(max, v);
+                    min = Math.min(min, v);
+                }
+            }
+        }
+        if (!any) {
+            max = 1;
+        }
+        Ticks ticks = forcedDomain == null
+            ? niceTicks(min, max)
+            : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]));
+
+        int legendHeight = legendBand(seriesNames(series), width);
+        double titleBottom = title == null || title.isEmpty() ? 12 : 36;
+        double top = titleBottom + ANNOTATION_BAND;
+        double bottom = 30 + (valueTitle == null || valueTitle.isEmpty() ? 8 : 22)
+            + legendHeight + FOOTNOTE_BAND;
+
+        // A value label sits just past its bar's end, outside the plot's own rectangle when the
+        // bar reaches the domain edge, so the margin on that side has to hold it.
+        int posLabelW = 0;
+        int negLabelW = 0;
+        if (opts.valueLabels) {
+            for (ChartRenderer.SeriesSpec s : series) {
+                for (Double v : s.values) {
+                    if (v != null) {
+                        int w = ChartScene.textWidth(opts.format(v), TICK_SIZE, true) + 6;
+                        if (v >= 0) {
+                            posLabelW = Math.max(posLabelW, w);
+                        } else {
+                            negLabelW = Math.max(negLabelW, w);
+                        }
+                    }
+                }
+            }
+        }
+
+        int widest = 0;
+        for (String c : categories) {
+            widest = Math.max(widest, ChartScene.textWidth(c, TICK_SIZE, false));
+        }
+        int labelMax = Math.max(20, Math.min(widest, (int) (width * 0.38)));
+        double availH = height - top - bottom;
+        int maxLines = opts.growHeight || availH / n >= 2 * TICK_SIZE + 8 ? 2 : 1;
+        List<List<String>> wrapped = new ArrayList<>();
+        int labelW = 0;
+        int lineCount = 1;
+        for (String c : categories) {
+            List<String> lines = wrapLabel(c, labelMax, maxLines);
+            wrapped.add(lines);
+            lineCount = Math.max(lineCount, lines.size());
+            for (String l : lines) {
+                labelW = Math.max(labelW, ChartScene.textWidth(l, TICK_SIZE, false));
+            }
+        }
+
+        if (opts.growHeight) {
+            double rowMin = Math.max(lineCount > 1 ? 2 * TICK_SIZE + 8 : HBAR_ROW,
+                k == 1 ? HBAR_ROW : k * 10 + 8);
+            double needed = rowMin * n;
+            if (availH < needed) {
+                height += (int) Math.ceil(needed - availH);
+            }
+        }
+        ChartScene scene = new ChartScene(width, height, BACKGROUND);
+        double plotH = height - top - bottom;
+        double labelRight = (categoryTitle == null || categoryTitle.isEmpty() ? 8 : 26) + labelW;
+        double left = labelRight + 8 + negLabelW;
+        double right = 22 + posLabelW;
+        double plotW = width - left - right;
+        double slotH = plotH / n;
+
+        if (title != null && !title.isEmpty()) {
+            int titleSize = fittedTitleSize(title, width);
+            scene.add(new Label(width / 2.0, 26, fittedTitleText(title, width, titleSize), INK,
+                titleSize, Anchor.MIDDLE, 0, true).at("chart-title").styled("title"));
+        }
+        Group grid = new Group().at("gridlines");
+        for (int i = 0; i < ticks.values.size(); i++) {
+            double x = valueToX(ticks.values.get(i), ticks, left, plotW);
+            grid.add(new Line(x, top, x, top + plotH, GRID, 1, true).styled("grid"));
+            grid.add(new Label(x, top + plotH + 16, ticks.labels.get(i), INK, TICK_SIZE,
+                Anchor.MIDDLE, 0, false).styled("tick").at("value-tick-" + i));
+        }
+        scene.add(grid);
+        double zeroX = valueToX(0, ticks, left, plotW);
+        scene.add(new Group().at("axes")
+            .add(new Line(zeroX, top, zeroX, top + plotH, AXIS, 1, false).styled("axis"))
+            .add(new Line(left, top + plotH, left + plotW, top + plotH, AXIS, 1, false)
+                .styled("axis")));
+        if (valueTitle != null && !valueTitle.isEmpty()) {
+            int vSize = fittedAxisTitleSize(valueTitle, plotW);
+            scene.add(new Label(left + plotW / 2, height - 8 - legendHeight - FOOTNOTE_BAND,
+                fittedAxisTitle(valueTitle, plotW, vSize), INK, vSize, Anchor.MIDDLE, 0, false)
+                .at("value-axis-title").styled("axis-title"));
+        }
+        if (categoryTitle != null && !categoryTitle.isEmpty()) {
+            int cSize = fittedAxisTitleSize(categoryTitle, plotH);
+            scene.add(new Label(14, top + plotH / 2,
+                fittedAxisTitle(categoryTitle, plotH, cSize), INK, cSize, Anchor.MIDDLE, -90,
+                false).at("category-axis-title").styled("axis-title"));
+        }
+        scene.bounds(left, top, plotW, plotH, titleBottom + 4, top - 4, height - 4);
+
+        Group cats = new Group().at("category-axis-labels");
+        for (int i = 0; i < n; i++) {
+            List<String> lines = wrapped.get(i);
+            double cy = top + slotH * (i + 0.5);
+            double first = cy - (lines.size() - 1) * (TICK_SIZE + 2) / 2.0 + 4;
+            for (int li = 0; li < lines.size(); li++) {
+                String slug = ChartScene.slug(categories.get(i));
+                cats.add(new Label(labelRight, first + li * (TICK_SIZE + 2), lines.get(li), INK,
+                    TICK_SIZE, Anchor.END, 0, false).styled("tick")
+                    .at(li == 0 ? "xtick-" + slug : "xtick-" + slug + "-" + (li + 1)));
+            }
+        }
+        scene.add(cats);
+
+        double groupPad = slotH * 0.18;
+        double barH = (slotH - groupPad * 2) / k;
+        for (int si = 0; si < k; si++) {
+            ChartRenderer.SeriesSpec s = series.get(si);
+            Color c = color(si);
+            Group g = new Group().at("series-" + ChartScene.slug(s.name)).styled("series");
+            for (int i = 0; i < n; i++) {
+                Double v = i < s.values.size() ? s.values.get(i) : null;
+                if (v == null) {
+                    continue;
+                }
+                double vx = valueToX(v, ticks, left, plotW);
+                double y = top + slotH * i + groupPad + barH * si;
+                String slug = ChartScene.slug(s.name) + "-" + ChartScene.slug(categories.get(i));
+                g.add(new Rect(Math.min(vx, zeroX), y, Math.abs(vx - zeroX), barH - 1, c)
+                    .at("mark-" + slug).styled("bar"));
+                if (opts.valueLabels) {
+                    boolean negative = v < 0;
+                    g.add(new Label(negative ? vx - 4 : vx + 4, y + barH / 2 + 4,
+                        opts.format(v), INK, TICK_SIZE, negative ? Anchor.END : Anchor.START, 0,
+                        true).styled("value-label").at("value-" + slug));
+                }
+            }
+            scene.add(g);
+        }
+
+        if (k > 1) {
+            addLegend(scene, seriesNames(series), height - 10 - FOOTNOTE_BAND, width);
+        }
+        return scene;
+    }
+
+    private static double valueToX(double v, Ticks t, double left, double plotW) {
+        return left + (v - t.min) / (t.max - t.min) * plotW;
     }
 
     /** Layout of a pie chart: one series, one slice per category. */
@@ -768,6 +999,109 @@ final class ChartLayout {
             out.add(s.name);
         }
         return out;
+    }
+
+
+    /** Horizontal when asked, or under "auto" when there are many categories or wide labels. */
+    private static boolean isHorizontal(ChartRenderer.BarOptions opts, List<String> categories,
+            int width) {
+        if ("horizontal".equals(opts.orientation)) {
+            return true;
+        }
+        if ("vertical".equals(opts.orientation)) {
+            return false;
+        }
+        if (categories.size() > AUTO_HORIZONTAL_CATEGORIES) {
+            return true;
+        }
+        int widest = 0;
+        for (String c : categories) {
+            widest = Math.max(widest, ChartScene.textWidth(c, TICK_SIZE, false));
+        }
+        // The slot a vertical layout would give each label, before any y-axis title or tick
+        // labels take their share — so this errs toward horizontal only when a label is
+        // genuinely wider than its column.
+        double slot = (width - 60.0) / Math.max(1, categories.size());
+        return widest > slot - 6;
+    }
+
+    /** Categories ordered by the first series' value, missing values last. */
+    private static void sortByFirstSeries(List<String> categories,
+            List<ChartRenderer.SeriesSpec> series, boolean descending, List<String> outCats,
+            List<ChartRenderer.SeriesSpec> outSeries) {
+        final List<Double> key = series.get(0).values;
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < categories.size(); i++) {
+            order.add(i);
+        }
+        final int sign = descending ? -1 : 1;
+        java.util.Collections.sort(order, (a, b) -> {
+            Double va = key.get(a);
+            Double vb = key.get(b);
+            if (va == null || vb == null) {
+                return va == null ? (vb == null ? 0 : 1) : -1;
+            }
+            return sign * Double.compare(va, vb);
+        });
+        for (int i : order) {
+            outCats.add(categories.get(i));
+        }
+        for (ChartRenderer.SeriesSpec s : series) {
+            List<Double> vals = new ArrayList<>();
+            for (int i : order) {
+                vals.add(i < s.values.size() ? s.values.get(i) : null);
+            }
+            outSeries.add(new ChartRenderer.SeriesSpec(s.name, vals));
+        }
+    }
+
+    /** Whether every label fits within {@code maxLines} lines of {@code maxWidth} unshortened. */
+    private static boolean wrapsWithoutLoss(List<String> labels, int maxWidth, int maxLines) {
+        for (String l : labels) {
+            List<String> lines = wrapLabel(l, maxWidth, maxLines);
+            StringBuilder joined = new StringBuilder();
+            for (String line : lines) {
+                if (line.endsWith("…") || ChartScene.textWidth(line, TICK_SIZE, false) > maxWidth) {
+                    return false;
+                }
+                joined.append(joined.length() == 0 ? "" : " ").append(line);
+            }
+            if (!joined.toString().equals(l.trim().replaceAll("\\s+", " "))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Breaks a label into at most {@code maxLines} lines that fit {@code maxWidth}, shortening
+     * with an ellipsis only what still will not fit. Words are never split across lines.
+     */
+    static List<String> wrapLabel(String text, int maxWidth, int maxLines) {
+        List<String> lines = new ArrayList<>();
+        if (ChartScene.textWidth(text, TICK_SIZE, false) <= maxWidth) {
+            lines.add(text);
+            return lines;
+        }
+        String cur = "";
+        for (String w : text.trim().split("\\s+")) {
+            String cand = cur.isEmpty() ? w : cur + " " + w;
+            if (cur.isEmpty() || ChartScene.textWidth(cand, TICK_SIZE, false) <= maxWidth) {
+                cur = cand;
+            } else {
+                lines.add(cur);
+                cur = w;
+            }
+        }
+        lines.add(cur);
+        while (lines.size() > maxLines) {
+            String last = lines.remove(lines.size() - 1);
+            lines.set(lines.size() - 1, lines.get(lines.size() - 1) + " " + last);
+        }
+        for (int i = 0; i < lines.size(); i++) {
+            lines.set(i, fitTo(lines.get(i), maxWidth));
+        }
+        return lines;
     }
 
     private static double valueToY(double v, Ticks t, double top, double plotH) {

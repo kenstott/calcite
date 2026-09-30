@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.askamerica;
 
 import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.List;
 import java.util.Locale;
 
@@ -60,9 +62,89 @@ final class ChartRenderer {
         }
     }
 
+
+    /**
+     * How a bar chart is oriented, ordered and annotated. Meaningless for every other chart
+     * type, which {@link #layout} rejects rather than ignoring so a caller is never told a
+     * line chart was sorted.
+     */
+    static final class BarOptions {
+        static final BarOptions DEFAULT = new BarOptions("auto", "none", false, null, false);
+
+        final String orientation;
+        final String sort;
+        final boolean valueLabels;
+        final DecimalFormat valueFormat;
+        /** Whether a horizontal chart may grow taller than requested to fit every row. */
+        final boolean growHeight;
+
+        private BarOptions(String orientation, String sort, boolean valueLabels,
+                DecimalFormat valueFormat, boolean growHeight) {
+            this.orientation = orientation;
+            this.sort = sort;
+            this.valueLabels = valueLabels;
+            this.valueFormat = valueFormat;
+            this.growHeight = growHeight;
+        }
+
+        /** Validates the caller's arguments; null means the argument was not supplied. */
+        static BarOptions parse(String orientation, String sort, Boolean valueLabels,
+                String valueFormat, boolean growHeight) {
+            String o = orientation == null ? "auto" : orientation.toLowerCase(Locale.ROOT);
+            if (!"auto".equals(o) && !"vertical".equals(o) && !"horizontal".equals(o)) {
+                throw new IllegalArgumentException("orientation '" + orientation
+                    + "' is not recognized — use auto, vertical, or horizontal.");
+            }
+            String so = sort == null ? "none" : sort.toLowerCase(Locale.ROOT);
+            if (!"none".equals(so) && !"asc".equals(so) && !"desc".equals(so)) {
+                throw new IllegalArgumentException(
+                    "sort '" + sort + "' is not recognized — use none, asc, or desc.");
+            }
+            DecimalFormat fmt = null;
+            if (valueFormat != null) {
+                try {
+                    fmt = new DecimalFormat(valueFormat,
+                        DecimalFormatSymbols.getInstance(Locale.US));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("value_format '" + valueFormat
+                        + "' is not a valid number pattern (e.g. \"$#,##0\", \"0.0'%'\"): "
+                        + e.getMessage(), e);
+                }
+            }
+            return new BarOptions(o, so, valueLabels != null && valueLabels, fmt, growHeight);
+        }
+
+        boolean isDefault() {
+            return "auto".equals(orientation) && "none".equals(sort) && !valueLabels
+                && valueFormat == null;
+        }
+
+        /** A copy that may grow a horizontal chart's height to fit its rows. */
+        BarOptions growing() {
+            return new BarOptions(orientation, sort, valueLabels, valueFormat, true);
+        }
+
+        String format(double v) {
+            if (valueFormat != null) {
+                return valueFormat.format(v);
+            }
+            DecimalFormat d = new DecimalFormat(Math.abs(v) < 1 && v != 0 ? "0.###" : "#,##0.##",
+                DecimalFormatSymbols.getInstance(Locale.US));
+            return d.format(v);
+        }
+    }
+
     /** Lays out a line, bar, or pie chart over a shared category axis. */
     static ChartScene layout(String chartType, String title, String xLabel, String yLabel,
             List<String> categories, List<SeriesSpec> series, int width, int height) {
+        return layout(chartType, title, xLabel, yLabel, categories, series, width, height,
+            BarOptions.DEFAULT);
+    }
+
+    /** As above, with bar orientation, ordering and value labels. */
+    static ChartScene layout(String chartType, String title, String xLabel, String yLabel,
+            List<String> categories, List<SeriesSpec> series, int width, int height,
+            BarOptions bar) {
         if (categories.isEmpty()) {
             throw new IllegalArgumentException("categories must not be empty");
         }
@@ -78,6 +160,11 @@ final class ChartRenderer {
         }
 
         String type = normalizeType(chartType);
+        if (!"bar".equals(type) && !bar.isDefault()) {
+            throw new IllegalArgumentException(
+                "orientation, sort, value_labels and value_format apply to chart_type 'bar' only, "
+                + "not '" + type + "'.");
+        }
         if ("pie".equals(type)) {
             return ChartLayout.pieChart(title, categories, series.get(0).values, width, height);
         }
@@ -86,7 +173,7 @@ final class ChartRenderer {
                 "Unknown chart_type: " + type + " — use line, bar, pie, scatter, or bubble.");
         }
         return ChartLayout.categoryChart(type, title, xLabel, yLabel, categories, series,
-            width, height);
+            width, height, null, bar);
     }
 
     /** Lays out a true numeric-axis scatter or bubble chart from (x, y[, size]) points. */
