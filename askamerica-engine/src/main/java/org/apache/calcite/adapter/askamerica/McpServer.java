@@ -2772,6 +2772,27 @@ public class McpServer {
             + "naming a table or document you never opened.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
 
+        ObjectNode artifactProps = MAPPER.createObjectNode();
+        for (String shared : new String[]{"title", "subtitle", "sections", "dashboard",
+            "footnote", "byline"}) {
+            artifactProps.set(shared, pubProps.get(shared));
+        }
+        tools.add(
+            tool("create_report_artifact",
+            "Hand back a report's data and layout hints so YOU render it with your own "
+            + "artifact/charting capability (for a Claude client: a published Claude Artifact "
+            + "inside the caller's own workspace), instead of AskAmerica's renderer. A second "
+            + "destination for the same report object publish_report takes — same title, "
+            + "subtitle, sections, dashboard, footnote and byline, no reshaping — for when the "
+            + "report should live where the caller already works rather than on AskAmerica's "
+            + "cloud. Returns JSON: the narrative sections, and each dashboard panel as data "
+            + "(categories/series or points) with a `hints` object — orientation_hint "
+            + "(bar charts) and suppressed_cells (values with no data: draw them as a gap or "
+            + "an explicit 'no data' mark, never as zero). Follow the hints instead of "
+            + "re-deriving presentation from the numbers. Charts are not rendered here; "
+            + "nothing is uploaded or hosted.",
+            schema(artifactProps, new String[]{"title"})));
+
         ObjectNode registerProps = MAPPER.createObjectNode();
         registerProps.set("name", prop("string",
             "Display name to publish reports under, e.g. 'Jane Ortiz' or 'Ortiz Policy Lab'."));
@@ -4252,6 +4273,34 @@ public class McpServer {
                     String summaryText = secs.isEmpty()
                         ? "" : ReportPage.sectionPlainText(secs.get(0).html);
                     text = summaryText.isEmpty() ? linkLine : summaryText + "\n\n" + linkLine;
+                    break;
+                }
+                case "create_report_artifact": {
+                    java.util.List<ReportPage.Section> artSecs = new java.util.ArrayList<>();
+                    for (JsonNode sec : args.path("sections")) {
+                        artSecs.add(new ReportPage.Section(
+                            sec.path("heading").asText(null), sec.path("html").asText("")));
+                    }
+                    JsonNode artDash = args.path("dashboard");
+                    java.util.List<DashboardLayout.Panel> artPanels = new java.util.ArrayList<>();
+                    for (JsonNode pn : artDash.path("panels")) {
+                        artPanels.add(readPanel(pn));
+                    }
+                    int artCols = artDash.has("columns")
+                        ? Math.min(Math.max(1, artDash.get("columns").asInt()), 4) : 2;
+                    log.println("[askamerica-mcp] tool=create_report_artifact sections="
+                        + artSecs.size() + " panels=" + artPanels.size());
+                    text = "Render this report with your own artifact/charting capability. "
+                        + "Follow each panel's `hints`: orientation_hint sets bar orientation, "
+                        + "and every suppressed_cells entry is a value with no data — show a gap "
+                        + "or a 'no data' mark there, never zero. `sections` html is the "
+                        + "narrative, in order. Draw only what is in this payload.\n\n"
+                        + MAPPER.writeValueAsString(ReportArtifact.build(
+                            args.path("title").asText(null),
+                            args.path("subtitle").asText(null),
+                            args.path("footnote").asText(null),
+                            args.path("byline").asText(null),
+                            artSecs, artPanels, artCols));
                     break;
                 }
                 case "register": {
