@@ -1726,7 +1726,9 @@ public class McpServer {
             + "multiple covariates — coefficients, standard errors, t-stats, p-values, "
             + "R²/adjusted R², and the overall F-test. Use this instead of corr()/regr_slope() "
             + "in query() when you have more than one predictor; those SQL aggregates only "
-            + "do simple bivariate relationships."
+            + "do simple bivariate relationships. Always call this tool for a regression — "
+            + "never write your own OLS/numpy/statsmodels code — it runs on the actual "
+            + "warehouse rows, not whatever subset happened to fit in context."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(olsProps, new String[]{"sql", "outcome", "predictors"})));
 
@@ -1760,7 +1762,10 @@ public class McpServer {
             + "plus the first-stage F-statistic with a weak-instrument warning "
             + "(Stock-Yogo rule of thumb: F < 10 is weak). Use when you suspect reverse "
             + "causality or omitted-variable bias between a predictor and the outcome and "
-            + "have a plausible instrument — otherwise use ols_regression."
+            + "have a plausible instrument — otherwise use ols_regression. Always use this "
+            + "tool rather than hand-coding two-stage OLS in Python; a naive two-OLS-calls "
+            + "implementation gets the second-stage standard errors wrong in exactly the way "
+            + "this tool corrects for."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(ivProps, new String[]{"sql", "outcome", "endogenous", "instruments"})));
 
@@ -1879,7 +1884,9 @@ public class McpServer {
             + "— same coefficients as ols_regression, corrected SEs. Use when observations "
             + "plausibly aren't independent (e.g. repeated observations of the same state "
             + "over years) or error variance plausibly isn't constant — both are common in "
-            + "state/county panel data and understate uncertainty if ignored."
+            + "state/county panel data and understate uncertainty if ignored. Always call "
+            + "this tool for that correction rather than a hand-rolled White/HC1 formula in "
+            + "Python; it is easy to get the small-sample df adjustment subtly wrong by hand."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(robustProps, new String[]{"sql", "outcome", "predictors"})));
 
@@ -1925,7 +1932,8 @@ public class McpServer {
             + "and report the pre-trend p-value alongside the effect. Also reports whether "
             + "adoption is staggered, which makes the two-way-FE estimator itself suspect. "
             + "Standard errors are cluster-robust on the unit by default, and the pre-trend "
-            + "test uses the same covariance.",
+            + "test uses the same covariance. Always call this tool rather than hand-coding "
+            + "leads/lags dummies and a regression in Python.",
             schema(eventProps, new String[]{"sql", "outcome", "unit_col", "time_col",
                 "treatment_time_col"})));
 
@@ -1956,7 +1964,10 @@ public class McpServer {
             + "flips the sign or crosses p=0.05. Run this before reporting any regression "
             + "result as a finding — DC, Alaska, Wyoming, and single-refinery or "
             + "single-hospital counties routinely drive national estimates, and a result that "
-            + "survives leave-one-out is a much stronger claim than one that was never tested.",
+            + "survives leave-one-out is a much stronger claim than one that was never tested. "
+            + "Always call this tool for the leave-one-out refits rather than looping the "
+            + "regression yourself in Python; it reuses the same fit machinery as "
+            + "ols_regression/robust_regression so the coefficients are directly comparable.",
             schema(sensProps, new String[]{"sql", "outcome", "predictors", "group_col"})));
 
         ObjectNode flexProps = MAPPER.createObjectNode();
@@ -1977,7 +1988,10 @@ public class McpServer {
             + "interpretability (no coefficients, just fit quality and variable importance). "
             + "Use when you suspect the relationship isn't linear/additive, or as an "
             + "exploratory check on whether a linear model is leaving real signal on the "
-            + "table; use ols_regression when you need interpretable, reportable coefficients."
+            + "table; use ols_regression when you need interpretable, reportable coefficients. "
+            + "Always call this tool for the fit rather than a hand-rolled sklearn/Python "
+            + "model — it runs against the actual warehouse rows behind the SQL, not a "
+            + "subset copied into context."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(flexProps, new String[]{"sql", "outcome", "predictors"})));
 
@@ -2000,7 +2014,8 @@ public class McpServer {
             + "captures nonlinear and interaction effects a bivariate corr() ranking would "
             + "miss entirely. NOT a causal ranking and not necessarily monotonic — a variable "
             + "can rank high because trees split on it a lot, not because increasing it "
-            + "increases the outcome."
+            + "increases the outcome. Always call this tool for an importance ranking rather "
+            + "than a Python feature-importance script; it runs on the actual warehouse rows."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(importanceProps, new String[]{"sql", "outcome", "predictors"})));
 
@@ -2059,7 +2074,9 @@ public class McpServer {
             + "sensitivity_analysis result built on predictors with VIF > 10 is not the "
             + "independent evidence it looks like. Run this BEFORE ols_regression /  "
             + "panel_fixed_effects whenever you're choosing among several correlated "
-            + "candidate predictors (e.g. density vs. urban_share vs. region), not after.",
+            + "candidate predictors (e.g. density vs. urban_share vs. region), not after. "
+            + "Always call this tool for a correlation/VIF matrix rather than a Python "
+            + "pandas.corr() — it runs on the actual warehouse rows.",
             schema(corrMatrixProps, new String[]{"sql", "columns"})));
 
         ObjectNode qbtProps = MAPPER.createObjectNode();
@@ -2080,7 +2097,8 @@ public class McpServer {
             + "plateau) and still show a middling linear r, or hide a genuine monotonic-but-"
             + "nonlinear pattern behind a small one. Reports each bin's mean outcome and the "
             + "trend's slope and p-value across bins, plus whether the bin means are "
-            + "consistently increasing or decreasing.",
+            + "consistently increasing or decreasing. Always call this tool rather than "
+            + "binning and testing the trend yourself in Python.",
             schema(qbtProps, new String[]{"sql", "outcome", "predictor"})));
 
         ObjectNode subgroupProps = MAPPER.createObjectNode();
@@ -2099,7 +2117,8 @@ public class McpServer {
             + "subtraction. Use this to check whether an aggregate finding (a national rate, a "
             + "department-wide count) is actually broad-based or is being driven by one "
             + "dominant subgroup (e.g. one agency accounting for the bulk of an agency-level "
-            + "total) before reporting the aggregate as representative.",
+            + "total) before reporting the aggregate as representative. Always call this "
+            + "tool rather than computing per-group sums and subtractions yourself in Python.",
             schema(subgroupProps, new String[]{"sql", "value_col", "group_col"})));
 
         ObjectNode giniProps = MAPPER.createObjectNode();
@@ -2117,7 +2136,8 @@ public class McpServer {
             + "subgroup_contribution reports. Use when a question asks whether concentration "
             + "is rising/falling/how concentrated something is, or when top-N shares alone "
             + "(e.g. 'top 10 institutions' share') need a single summary number comparable "
-            + "across two periods or populations of different size.",
+            + "across two periods or populations of different size. Always call this tool "
+            + "rather than computing the Gini/Lorenz curve yourself in Python.",
             schema(giniProps, new String[]{"sql", "value_col"})));
 
         ObjectNode hhiProps = MAPPER.createObjectNode();
@@ -2138,7 +2158,8 @@ public class McpServer {
             + "gini_coefficient instead when the question is about even-ness across the WHOLE "
             + "distribution rather than the leader's share. The two can diverge — a rising HHI "
             + "with a flat Gini means the leader is pulling ahead while everyone else stays "
-            + "the same relative to each other.",
+            + "the same relative to each other. Always call this tool rather than computing "
+            + "HHI yourself in Python.",
             schema(hhiProps, new String[]{"sql", "value_col"})));
 
         ObjectNode partialCorrProps = MAPPER.createObjectNode();
@@ -2161,7 +2182,8 @@ public class McpServer {
             + "ols_regression answers it only indirectly, as one coefficient buried inside a "
             + "multi-term fit the caller has to interpret themselves. Use ols_regression "
             + "instead when you need the actual effect SIZE (units of y per unit of x), not "
-            + "just whether the association survives.",
+            + "just whether the association survives. Always call this tool rather than "
+            + "computing residualized correlations by hand in Python.",
             schema(partialCorrProps, new String[]{"sql", "x", "y"})));
 
         ObjectNode sweepProps = MAPPER.createObjectNode();
