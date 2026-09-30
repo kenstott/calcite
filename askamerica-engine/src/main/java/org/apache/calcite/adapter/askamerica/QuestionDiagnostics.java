@@ -1195,6 +1195,21 @@ final class QuestionDiagnostics {
             + "or robust_regression with cluster_col."));
     }
 
+    /** Name tokens marking a percentage that is a signed change, not a bounded proportion. */
+    private static final String[] SIGNED_CHANGE_TOKENS = {
+        "change", "growth", "delta", "diff", "chg", "trend", "yoy", "qoq", "mom", "gain", "loss",
+        "swing", "shift", "net", "rise", "decline"
+    };
+
+    private static boolean isSignedChange(String lowerName) {
+        for (String token : SIGNED_CHANGE_TOKENS) {
+            if (lowerName.contains(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void brokenFields(ArrayNode rows, List<String> columns, ArrayNode warnings) {
         if (rows == null || rows.size() == 0) {
             return;
@@ -1206,17 +1221,7 @@ final class QuestionDiagnostics {
             int outOfDomain = 0;
             Double example = null;
             boolean proportion = (lower.contains("pct") || lower.contains("percent")
-                || lower.contains("share"))
-                // A percent *change* is legitimately negative and legitimately over 100.
-                // "chg" is included alongside the spelled-out forms since it is the common
-                // warehouse abbreviation (e.g. PCT_CHG_1718 for "percent change, 2017-2018")
-                // -- confirmed live (2026-09-18): pct_chg_1718/pct_chg_1819 were flagged
-                // broken_field:out_of_domain purely because a real change value happened
-                // to be negative or exceed 100, then blocked publish_report over a caveat
-                // for a "defect" that was never actually one.
-                && !lower.contains("change") && !lower.contains("growth")
-                && !lower.contains("delta") && !lower.contains("diff")
-                && !lower.contains("chg") && !lower.contains("trend");
+                || lower.contains("share")) && !isSignedChange(lower);
             boolean count = lower.equals("population") || lower.endsWith("_count")
                 || lower.startsWith("count_") || lower.endsWith("_total")
                 || lower.startsWith("total_");

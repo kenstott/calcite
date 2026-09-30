@@ -355,6 +355,14 @@ class QuestionDiagnosticsTest {
         "a year-over-year trend percentage is signed by definition");
   }
 
+  @Test void aYearOverYearPercentIsLegitimatelyNegative() {
+    ArrayNode arr = rows("[{\"yoy_pct\":-0.4},{\"yoy_pct\":-1.2}]");
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT yoy_pct FROM econ.series", arr, 500);
+    assertFalse(hasType(env, "broken_field"),
+        "a signed year-over-year percentage is not a bounded proportion");
+  }
+
   @Test void anAlmostEntirelyNullColumnIsFlaggedAsUnusable() {
     ArrayNode arr = MAPPER.createArrayNode();
     for (int i = 0; i < 30; i++) {
