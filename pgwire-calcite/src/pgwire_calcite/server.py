@@ -1160,11 +1160,21 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             except Exception as e:
                 self.send_error(e, ctx)
                 return
-            self.send_paramter_description(param_oids)
-            if query_result.has_results():
-                self.send_row_description(query_result)
-            else:
-                self.send_no_data()
+            try:
+                self.send_paramter_description(param_oids)
+                if query_result.has_results():
+                    self.send_row_description(query_result)
+                else:
+                    self.send_no_data()
+            finally:
+                # This result is never drained (only column metadata is used), so
+                # without an explicit close() the Calcite lock arrow_bridge holds
+                # for the underlying batch iterator's whole lifetime is never
+                # released, wedging every later statement on this connection
+                # (kenstott/govdata-ops#782).
+                close = getattr(query_result, "close", None)
+                if close is not None:
+                    close()
             return
         super().handle_describe(ctx, payload)
 

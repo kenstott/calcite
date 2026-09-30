@@ -63,9 +63,9 @@ class EchoParamsBackend:
 
     def execute_sql(
         self, sql: str, role_id=None, params=None, stream: bool = False, session_key=None, timeout_ms=0,
-        lane="user",
+        lane="user", client_gone=None,
     ):
-        del session_key, timeout_ms, lane
+        del session_key, timeout_ms, lane, client_gone
         params = list(params or [])
         self.calls.append((sql, params))
         return QueryResult(
@@ -258,6 +258,82 @@ def test_describe_defaults_uncast_params_to_int8(echo_server):
         assert c.describe_params("SELECT $1::text, $2") == [25, 20]
     finally:
         c.close()
+
+
+class _TrackedBatches:
+    """A row_batches iterator that records whether close() ever ran.
+
+    Stands in for arrow_bridge.stream_ipc_batches, which holds the Calcite
+    connection lock for its whole lifetime and releases it only in close()'s
+    finally. A Describe(Statement) that never reads this closed means the
+    lock is held forever (kenstott/govdata-ops#782).
+    """
+
+    def __init__(self, batches):
+        self._iter = iter(batches)
+        self.closed = False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._iter)
+
+    def close(self):
+        self.closed = True
+
+
+class LockTrackingBackend(EchoParamsBackend):
+    """Like EchoParamsBackend, but the result carries a closeable batch iterator."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_batches: _TrackedBatches | None = None
+
+    def execute_sql(
+        self, sql: str, role_id=None, params=None, stream: bool = False, session_key=None, timeout_ms=0,
+        lane="user", client_gone=None,
+    ):
+        del session_key, timeout_ms, lane, client_gone
+        params = list(params or [])
+        self.calls.append((sql, params))
+        self.last_batches = _TrackedBatches([[("row",)]])
+        return QueryResult(
+            column_names=["p0"], column_types=["VARCHAR"], row_batches=self.last_batches
+        )
+
+
+@pytest.fixture()
+def lock_tracking_server():
+    backend = LockTrackingBackend()
+    port = _free_port()
+    srv = launcher.serve(host="127.0.0.1", port=port, auth="none", backend=backend)
+    import pgwire_calcite.server as server_mod
+
+    server_mod.state.catalog_enabled = True
+    time.sleep(0.1)
+    yield "127.0.0.1", port, backend
+    srv.shutdown()
+
+
+def test_describe_statement_closes_result_without_execute(lock_tracking_server):
+    """PGW-782: Describe(Statement) alone must release the backend lock.
+
+    handle_describe's 'S' branch calls ctx.describe_statement(), which executes
+    the query to get column metadata, but the client never sends Execute (a real
+    client often Describes a statement it then abandons or only Binds later).
+    If that result's close() is never called, the batch iterator — and the
+    Calcite lock it holds — leaks for the life of the connection, wedging every
+    later statement on it.
+    """
+    host, port, backend = lock_tracking_server
+    c = ExtPgClient(host, port)
+    try:
+        c.describe_params("SELECT 1")
+    finally:
+        c.close()
+    assert backend.last_batches is not None
+    assert backend.last_batches.closed, "Describe(Statement) result was never closed — lock leak"
 
 
 # --------------------------------------------------------------------------
