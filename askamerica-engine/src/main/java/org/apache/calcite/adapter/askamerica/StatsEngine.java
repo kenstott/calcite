@@ -658,6 +658,112 @@ final class StatsEngine {
         }
     }
 
+    // ─── Cross-validated OLS ───────────────────────────────────────────────────
+
+    /** K-fold cross-validation of {@code y ~ intercept + x}: each fold is predicted by an OLS fit
+     *  on the other folds only, so the pooled out-of-sample R²/RMSE/MAE are honest predictive
+     *  accuracy, unlike the in-sample R² which only ever rewards extra terms. {@code folds == n}
+     *  is leave-one-out. Folds are a seeded shuffle, so the same seed reproduces the same split. */
+    static CrossValidationResult crossValidateOls(double[] y, double[][] x, String[] xNames,
+            int folds, long seed) {
+        int n = y.length;
+        int k = xNames.length;
+        if (folds < 2 || folds > n) {
+            throw new IllegalArgumentException("folds must be between 2 and n=" + n
+                + " (folds=n is leave-one-out), got " + folds);
+        }
+        int smallestTrain = n - (n + folds - 1) / folds;
+        if (smallestTrain < k + 2) {
+            throw new IllegalArgumentException("the smallest training set would have "
+                + smallestTrain + " rows for " + k + " predictors + intercept — need at least "
+                + (k + 2) + "; use fewer folds or fewer predictors");
+        }
+        OlsResult full = ols(y, x, xNames);
+        Integer[] order = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            order[i] = i;
+        }
+        Collections.shuffle(Arrays.asList(order), new java.util.Random(seed));
+        double[] predicted = new double[n];
+        for (int f = 0; f < folds; f++) {
+            List<Integer> test = new ArrayList<>();
+            List<Integer> train = new ArrayList<>();
+            for (int pos = 0; pos < n; pos++) {
+                (pos % folds == f ? test : train).add(order[pos]);
+            }
+            double[] yTrain = new double[train.size()];
+            double[][] xTrain = new double[train.size()][];
+            for (int i = 0; i < yTrain.length; i++) {
+                yTrain[i] = y[train.get(i)];
+                xTrain[i] = x[train.get(i)];
+            }
+            double[][] xTest = new double[test.size()][];
+            for (int i = 0; i < xTest.length; i++) {
+                xTest[i] = x[test.get(i)];
+            }
+            double[] fitted = predict(ols(yTrain, xTrain, xNames), xTest);
+            for (int i = 0; i < fitted.length; i++) {
+                predicted[test.get(i)] = fitted[i];
+            }
+        }
+        double yMean = mean(y);
+        double sse = 0;
+        double sae = 0;
+        double sst = 0;
+        for (int i = 0; i < n; i++) {
+            double e = y[i] - predicted[i];
+            sse += e * e;
+            sae += Math.abs(e);
+            sst += (y[i] - yMean) * (y[i] - yMean);
+        }
+        double inSampleRmse = Math.sqrt(full.errorVariance * full.dof / n);
+        return new CrossValidationResult(n, folds, seed, full.rSquared, 1 - sse / sst,
+            inSampleRmse, Math.sqrt(sse / n), sae / n);
+    }
+
+    static final class CrossValidationResult {
+        final int n;
+        final int folds;
+        final long seed;
+        final double inSampleRSquared;
+        final double cvRSquared;
+        final double inSampleRmse;
+        final double cvRmse;
+        final double cvMae;
+
+        CrossValidationResult(int n, int folds, long seed, double inSampleRSquared,
+                double cvRSquared, double inSampleRmse, double cvRmse, double cvMae) {
+            this.n = n;
+            this.folds = folds;
+            this.seed = seed;
+            this.inSampleRSquared = inSampleRSquared;
+            this.cvRSquared = cvRSquared;
+            this.inSampleRmse = inSampleRmse;
+            this.cvRmse = cvRmse;
+            this.cvMae = cvMae;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("n", n);
+            out.put("folds", folds);
+            out.put("method", folds == n ? "leave_one_out" : "k_fold");
+            out.put("seed", seed);
+            out.put("in_sample_r_squared", inSampleRSquared);
+            out.put("cv_r_squared", cvRSquared);
+            out.put("r_squared_optimism", inSampleRSquared - cvRSquared);
+            out.put("in_sample_rmse", inSampleRmse);
+            out.put("cv_rmse", cvRmse);
+            out.put("cv_mae", cvMae);
+            out.put("note", "cv_r_squared is out-of-sample only if the outcome, predictors and "
+                + "model form were fixed BEFORE looking at this data. If the predictors were "
+                + "picked by searching over candidates on these same rows, the selection itself "
+                + "is in-sample and this still overstates accuracy — hold out rows the search "
+                + "never saw (a separate time period or set of entities) and cross-validate there.");
+            return out;
+        }
+    }
+
     // ─── 2SLS (instrumental variables) ─────────────────────────────────────────
 
     /**

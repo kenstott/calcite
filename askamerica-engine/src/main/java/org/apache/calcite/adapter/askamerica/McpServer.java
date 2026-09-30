@@ -955,6 +955,8 @@ public class McpServer {
             + "predictors, an instrumented/endogenous relationship, a treatment-vs-control "
             + "comparison, or a real significance test:\n"
             + "- ols_regression — multivariate OLS, coefficients/SEs/p/R².\n"
+            + "- cross_validate — k-fold/leave-one-out out-of-sample R²/RMSE for an OLS "
+            + "model; in-sample R² overstates predictive accuracy.\n"
             + "- iv_2sls — 2SLS with corrected SEs (not the upward-biased ones a naive "
             + "two-OLS-call gives).\n"
             + "- diff_in_diff — treatment×post interaction; assumes parallel pre-trends and "
@@ -1757,6 +1759,34 @@ public class McpServer {
             + "warehouse rows, not whatever subset happened to fit in context."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(olsProps, new String[]{"sql", "outcome", "predictors"})));
+
+        ObjectNode cvProps = MAPPER.createObjectNode();
+        cvProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome and predictor columns, one row per observation. "
+            + "Use the SAME SQL you ran through ols_regression. Same dialect rules as the "
+            + "query tool."));
+        cvProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        ObjectNode cvPredictorsProp = MAPPER.createObjectNode();
+        cvPredictorsProp.put("type", "array");
+        cvPredictorsProp.put("description",
+            "Column names of the independent variables (x). An intercept is added "
+            + "automatically — do not include one.");
+        cvProps.set("predictors", cvPredictorsProp);
+        cvProps.set("folds", prop("integer",
+            "Number of cross-validation folds, 2 to n. Default 5. Pass n for leave-one-out."));
+        cvProps.set("seed", prop("integer",
+            "Seed for the random fold assignment. Default 42; the same seed gives the same split."));
+        tools.add(
+            tool("cross_validate",
+            "K-fold (or leave-one-out) cross-validation of an OLS model: every row is predicted "
+            + "by a fit that never saw it, so cv_r_squared / cv_rmse / cv_mae are honest "
+            + "out-of-sample accuracy, reported next to the in-sample R² and the gap between "
+            + "them (r_squared_optimism). ols_regression's R² is in-sample and always rewards "
+            + "extra terms — call this before claiming a model 'predicts' or 'explains' the "
+            + "outcome, and whenever you compared several candidate predictor sets. Cross-"
+            + "validating the winner of a search over the same rows is still optimistic; the "
+            + "result's note says how to hold out properly.",
+            schema(cvProps, new String[]{"sql", "outcome", "predictors"})));
 
         ObjectNode ivProps = MAPPER.createObjectNode();
         ivProps.set("sql", prop("string",
@@ -3753,6 +3783,19 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=ols_regression outcome=" + outcome
                         + " predictors=" + predictors);
                     StatsOutput r = olsRegressionTool(sql, outcome, predictors);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
+                    break;
+                }
+                case "cross_validate": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    List<String> predictors = textArray(args.path("predictors"));
+                    int folds = args.path("folds").asInt(5);
+                    long seed = args.path("seed").asLong(42L);
+                    log.println("[askamerica-mcp] tool=cross_validate outcome=" + outcome
+                        + " predictors=" + predictors + " folds=" + folds);
+                    StatsOutput r = crossValidateTool(sql, outcome, predictors, folds, seed);
                     text = r.text;
                     diagnostics = r.diagnostics;
                     break;
@@ -7117,7 +7160,7 @@ public class McpServer {
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
             "(?i)\\bOLS\\b|ordinary least squares|multivariate OLS"),
             new String[]{"ols_regression", "robust_regression", "flexible_regression",
-                "panel_fixed_effects"});
+                "panel_fixed_effects", "cross_validate"});
         STAT_METHOD_TOOLS.put(java.util.regex.Pattern.compile(
             "(?i)difference[- ]in[- ]differences|diff[- ]in[- ]diff\\b|(?-i:\\bDiD\\b)"),
             new String[]{"diff_in_diff"});
@@ -11271,6 +11314,26 @@ public class McpServer {
         double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
         StatsEngine.OlsResult result = StatsEngine.ols(y, x, predictors.toArray(new String[0]));
         ObjectNode out = result.toJson(MAPPER);
+        return statsResult(out, sql, predictors, ex);
+    }
+
+    static StatsOutput crossValidateTool(String sql, String outcome, List<String> predictors,
+            int folds, long seed) throws Exception {
+        if (sql == null || sql.trim().isEmpty() || outcome == null || outcome.trim().isEmpty()
+                || predictors.isEmpty()) {
+            throw new IllegalArgumentException(
+                "sql, outcome and at least one predictor are required for cross_validate");
+        }
+        String[] cols = new String[1 + predictors.size()];
+        cols[0] = outcome;
+        for (int i = 0; i < predictors.size(); i++) {
+            cols[1 + i] = predictors.get(i);
+        }
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols);
+        String[] names = predictors.toArray(new String[0]);
+        ObjectNode out = StatsEngine.crossValidateOls(ex.column(0), ex.columnsFor(names), names,
+            folds, seed).toJson(MAPPER);
         return statsResult(out, sql, predictors, ex);
     }
 

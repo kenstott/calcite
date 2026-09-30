@@ -808,4 +808,49 @@ class StatsEngineTest {
         assertEquals(1.0, StatsEngine.aggregate(col, "min"), EPS);
         assertEquals(4.0, StatsEngine.aggregate(col, "max"), EPS);
     }
+
+    @Test void crossValidationExposesOverfitting() {
+        Random rnd = new Random(7);
+        int n = 40;
+        int k = 15;
+        double[] y = new double[n];
+        double[][] x = new double[n][k];
+        String[] names = new String[k];
+        for (int j = 0; j < k; j++) {
+            names[j] = "noise" + j;
+        }
+        for (int i = 0; i < n; i++) {
+            y[i] = rnd.nextGaussian();
+            for (int j = 0; j < k; j++) {
+                x[i][j] = rnd.nextGaussian();
+            }
+        }
+        StatsEngine.CrossValidationResult r = StatsEngine.crossValidateOls(y, x, names, 5, 42L);
+        assertTrue(r.inSampleRSquared > 0.2, "in-sample R2 rewards pure-noise terms");
+        assertTrue(r.cvRSquared < 0.0, "out-of-sample R2 of pure noise is not positive");
+        assertEquals(r.inSampleRSquared - r.cvRSquared,
+            r.toJson(new ObjectMapper()).get("r_squared_optimism").asDouble(), EPS);
+    }
+
+    @Test void crossValidationOfTrueLinearModelIsNearPerfect() {
+        double[] y = new double[30];
+        double[][] x = new double[30][1];
+        for (int i = 0; i < 30; i++) {
+            x[i][0] = i;
+            y[i] = 2 + 3 * i;
+        }
+        StatsEngine.CrossValidationResult loo =
+            StatsEngine.crossValidateOls(y, x, new String[]{"x"}, 30, 1L);
+        assertEquals(1.0, loo.cvRSquared, 1e-9);
+        assertEquals(0.0, loo.cvRmse, 1e-6);
+    }
+
+    @Test void crossValidationRejectsTooManyPredictorsForTraining() {
+        double[] y = {1, 2, 3, 4, 5, 6};
+        double[][] x = new double[6][3];
+        assertThrows(IllegalArgumentException.class,
+            () -> StatsEngine.crossValidateOls(y, x, new String[]{"a", "b", "c"}, 3, 1L));
+        assertThrows(IllegalArgumentException.class,
+            () -> StatsEngine.crossValidateOls(y, x, new String[]{"a", "b", "c"}, 1, 1L));
+    }
 }
