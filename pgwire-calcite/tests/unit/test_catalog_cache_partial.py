@@ -37,11 +37,13 @@ class _Meta:
 class _ResultSet:
     """Minimal JDBC ResultSet over a list of dicts; ``fail_after`` raises from next()."""
 
-    def __init__(self, labels, rows, fail_after=None):
+    def __init__(self, labels, rows, fail_after=None,
+                 message="table broken is not found (case sensitive)"):
         self._labels = labels
         self._rows = rows
         self._i = -1
         self._fail_after = fail_after
+        self._message = message
 
     def getMetaData(self):
         return _Meta(self._labels)
@@ -49,7 +51,7 @@ class _ResultSet:
     def next(self):
         self._i += 1
         if self._fail_after is not None and self._i >= self._fail_after:
-            raise RuntimeError("table broken is not found (case sensitive)")
+            raise RuntimeError(self._message)
         return self._i < len(self._rows)
 
     def getString(self, i):
@@ -64,10 +66,13 @@ _COLUMN_LABELS = ["COLUMN_NAME", "TYPE_NAME", "NULLABLE", "REMARKS"]
 
 
 class _DatabaseMetaData:
-    def __init__(self, tables, broken_schemas=(), broken_tables=()):
+    def __init__(self, tables, broken_schemas=(), broken_tables=(), failing_views=None):
         self._tables = tables  # {schema: [table, ...]}
         self._broken_schemas = set(broken_schemas)
         self._broken_tables = set(broken_tables)
+        # {schema: view}: listed until its first resolution fails, then no longer listed --
+        # DuckDBPendingViews' behaviour for a view whose CREATE fails.
+        self._failing_views = dict(failing_views or {})
 
     def _table_rows(self, schemas):
         return [
@@ -78,10 +83,13 @@ class _DatabaseMetaData:
 
     def getTables(self, _catalog, schema, _pattern, _types):
         if schema is None:
-            fail = 0 if self._broken_schemas else None
+            fail = 0 if self._broken_schemas or self._failing_views else None
             return _ResultSet(_TABLE_LABELS, self._table_rows(self._tables), fail)
         if schema in self._broken_schemas:
             return _ResultSet(_TABLE_LABELS, [], fail_after=0)
+        view = self._failing_views.pop(schema, None)
+        if view is not None:
+            return _ResultSet(_TABLE_LABELS, [], fail_after=0, message=f"table {view} is not found")
         return _ResultSet(_TABLE_LABELS, self._table_rows([schema]))
 
     def getSchemas(self, _catalog, _pattern):
@@ -143,6 +151,15 @@ def test_walk_missing_a_tables_columns_is_not_cached(tmp_path):
         _Connection(_DatabaseMetaData(_TABLES, broken_tables=[("econ", "cpi")])), model_path)
     assert column_types[ctx.tables["econ.cpi"].table_id] == []
     assert not os.path.exists(catalog_populate.catalog_cache_path(model_path))
+
+
+def test_view_that_fails_to_resolve_once_does_not_drop_its_schema(tmp_path):
+    model_path = _model(tmp_path)
+    ctx, _ = catalog_populate.build_and_cache_context(
+        _Connection(_DatabaseMetaData(_TABLES, failing_views={"law": "scotus_cases"})),
+        model_path)
+    assert set(ctx.tables) == {"econ.gdp", "econ.cpi", "law.bills"}
+    assert os.path.isfile(catalog_populate.catalog_cache_path(model_path))
 
 
 def test_gaps_are_reported(tmp_path):
