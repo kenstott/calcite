@@ -6485,7 +6485,16 @@ tables:
     type: view
     comment: >
       State-level educational attainment showing population with high school diploma,
-      bachelor's degree, master's degree, and doctorate. Includes percentages.
+      bachelor's degree, master's degree, and doctorate. Includes percentages, all
+      as a share of pop_25_plus (population 25 and over). bachelors_rate_pct is
+      bachelor's degree ONLY (ACS B15003_022) and excludes anyone whose highest
+      degree is a master's, professional, or doctorate — it is NOT the
+      "bachelor's degree or higher" rate that external benchmarks usually report.
+      advanced_degree_pct is master's plus doctorate only (professional-school
+      degrees, B15003_024, are not ingested). hs_rate_pct is regular high school
+      diploma only, excluding GED/equivalency. To approximate "bachelor's or
+      higher", use bachelors_rate_pct + advanced_degree_pct, which omits
+      professional degrees and therefore understates the standard figure.
     sql: >
       SELECT
         state,
