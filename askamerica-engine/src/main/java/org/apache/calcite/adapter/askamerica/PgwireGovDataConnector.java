@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.askamerica;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -77,6 +78,9 @@ final class PgwireGovDataConnector {
    */
   private static final int SPAWN_TIMEOUT_MILLIS = 600_000;
   private static final int SPAWN_POLL_INTERVAL_MILLIS = 500;
+  // Waiting on a server someone else started: its mount takes minutes, and every failed probe
+  // logs a line, so poll it less often than our own fresh spawn.
+  private static final int STARTING_POLL_INTERVAL_MILLIS = 5000;
   /** Idle grace period passed to the spawned server (see pgwire-calcite's idle-shutdown watcher). */
   private static final String IDLE_SHUTDOWN_SECONDS = "120";
   /** Per-query timeout passed to the spawned server's --statement-timeout-ms (see spawnIfPossible). */
@@ -172,14 +176,19 @@ final class PgwireGovDataConnector {
     if (c != null) {
       return c;
     }
+    // The port answers but pgwire-govdata doesn't: either a server (another conversation's, or
+    // an orphan no pid file records) is still mounting, or one is wedged. Spawning our own
+    // first would only lose the bind race to it — resolve the occupant instead.
+    if (portIsOpen()) {
+      c = resolvePortOccupant();
+      if (c != null) {
+        return c;
+      }
+    }
     log().println("[askamerica-mcp] No pgwire-govdata server listening on " + host() + ":" + port()
         + " — attempting to spawn one.");
-    // Captured BEFORE spawning — spawnIfPossible() unconditionally overwrites the pid file
-    // with its own new pid, so this is the only chance to learn who held the port going into
-    // this attempt (see the isAlive() check below).
-    Long priorOccupantPid = readPidFile();
     Process spawned = spawnIfPossible();
-    boolean killedStaleOccupant = false;
+    boolean resolvedOccupant = false;
     long deadline = System.currentTimeMillis() + SPAWN_TIMEOUT_MILLIS;
     while (System.currentTimeMillis() < deadline) {
       c = tryDirectConnect();
@@ -199,22 +208,19 @@ final class PgwireGovDataConnector {
       // once and let a fresh spawn win the now-free port — the same recovery
       // killAndRespawn() already gives an in-flight wedge on an established connection (see
       // McpServer's watchdog thread), applied here to the startup path it was missing from.
-      if (!killedStaleOccupant && spawned != null && !spawned.isAlive()) {
-        killedStaleOccupant = true;
-        if (priorOccupantPid != null) {
-          log().println("[askamerica-mcp] Our own pgwire-govdata spawn (pid " + spawned.pid()
-              + ") exited immediately without ever becoming reachable — pid " + priorOccupantPid
-              + " already held " + host() + ":" + port() + " when we tried to bind. Killing it "
-              + "and retrying.");
-          killPid(priorOccupantPid,
-              "startup spawn lost the bind race to an unreachable occupant");
-          spawned = spawnIfPossible();
-        } else {
-          log().println("[askamerica-mcp] Our own pgwire-govdata spawn (pid " + spawned.pid()
-              + ") exited immediately without ever becoming reachable, and no prior pid was on "
-              + "record to kill — something is holding " + host() + ":" + port()
-              + " that this connector cannot identify. Will keep retrying until the timeout.");
+      // The occupant is identified by who actually holds the port, not by the pid file: an
+      // orphan whose pid no file records (seen live 2026-09-30, pid file naming a long-dead
+      // pid) would otherwise be unkillable here.
+      if (!resolvedOccupant && spawned != null && !spawned.isAlive()) {
+        resolvedOccupant = true;
+        log().println("[askamerica-mcp] Our own pgwire-govdata spawn (pid " + spawned.pid()
+            + ") exited without ever becoming reachable — something else holds " + host() + ":"
+            + port() + ".");
+        c = resolvePortOccupant();
+        if (c != null) {
+          return c;
         }
+        spawned = spawnIfPossible();
       }
       Thread.sleep(SPAWN_POLL_INTERVAL_MILLIS);
     }
@@ -223,16 +229,140 @@ final class PgwireGovDataConnector {
         + " within " + (SPAWN_TIMEOUT_MILLIS / 1000) + "s");
   }
 
+  /** What holds the pgwire port when pgwire-govdata isn't answering on it. */
+  enum OccupantState {
+    /** A pgwire-govdata process younger than the spawn budget — still mounting; wait for it. */
+    STARTING,
+    /** A pgwire-govdata process older than the spawn budget that still isn't answering. */
+    WEDGED,
+    /** Not a pgwire-govdata process — never ours to kill. */
+    FOREIGN
+  }
+
+  /**
+   * Classifies a port occupant. An unknown start time counts as STARTING: without it there is
+   * no evidence the process has had its full mount budget, so it gets one from now (see
+   * {@link #resolvePortOccupant}) before being treated as wedged.
+   */
+  static OccupantState occupantState(boolean isPgwireGovData,
+      java.util.Optional<java.time.Instant> startedAt, java.time.Instant now, long budgetMillis) {
+    if (!isPgwireGovData) {
+      return OccupantState.FOREIGN;
+    }
+    if (!startedAt.isPresent()) {
+      return OccupantState.STARTING;
+    }
+    return startedAt.get().plusMillis(budgetMillis).isAfter(now)
+        ? OccupantState.STARTING : OccupantState.WEDGED;
+  }
+
+  /**
+   * Pid of the process LISTENing on {@code port}, via {@code lsof}; null when nothing listens.
+   * Unsupported on Windows (no lsof) — throws, since a caller that needs the answer has no
+   * other way to get it and must say so rather than guess.
+   */
+  static Long portListenerPid(int port) throws IOException, InterruptedException {
+    if (isWindows()) {
+      throw new IOException("identifying the process holding a port is not supported on Windows");
+    }
+    Process p = new ProcessBuilder("lsof", "-nP", "-t", "-iTCP:" + port, "-sTCP:LISTEN")
+        .redirectErrorStream(true).start();
+    String out;
+    try (java.io.InputStream in = p.getInputStream()) {
+      out = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+    }
+    int exit = p.waitFor();
+    // lsof exits 1 with no output when nothing matches.
+    if (out.isEmpty() && exit == 1) {
+      return null;
+    }
+    if (exit != 0) {
+      throw new IOException("lsof exited " + exit + ": " + out);
+    }
+    return Long.parseLong(out.split("\\s+")[0]);
+  }
+
+  private static boolean portIsOpen() {
+    try (Socket probe = new Socket()) {
+      probe.connect(new InetSocketAddress(host(), port()), CONNECT_TIMEOUT_MILLIS);
+      return true;
+    // false means "nothing listening" — the question being asked, not a swallowed failure.
+    // fallback-guard: allow -- connection refused is the answer, not an error
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
+  /**
+   * The port is open but pgwire-govdata isn't answering on it. Identifies who actually holds
+   * it and: waits out a pgwire-govdata server that is still mounting (a cold mount answers
+   * nothing for minutes), kills one that has outlived the spawn budget, and refuses a foreign
+   * process outright. Returns a connection if the occupant came up, or null once the port has
+   * been freed for a fresh spawn.
+   */
+  private static Connection resolvePortOccupant() throws Exception {
+    Long pid;
+    try {
+      pid = portListenerPid(port());
+    } catch (IOException e) {
+      log().println("[askamerica-mcp] " + host() + ":" + port() + " is open but pgwire-govdata "
+          + "isn't answering, and the holder can't be identified (" + e.getMessage() + ").");
+      return null;
+    }
+    if (pid == null) {
+      return null;
+    }
+    java.util.Optional<ProcessHandle> ph = ProcessHandle.of(pid);
+    if (!ph.isPresent()) {
+      return null;
+    }
+    java.time.Instant now = java.time.Instant.now();
+    java.util.Optional<java.time.Instant> startedAt = ph.get().info().startInstant();
+    OccupantState state =
+        occupantState(isPgwireGovDataProcess(ph.get()), startedAt, now, SPAWN_TIMEOUT_MILLIS);
+    if (state == OccupantState.FOREIGN) {
+      throw new IllegalStateException(host() + ":" + port() + " is held by pid " + pid + " ("
+          + ph.get().info().commandLine().orElse("command line unreadable")
+          + "), which is not pgwire-govdata. Free the port or point ASKAMERICA_PGWIRE_PORT at "
+          + "a free one.");
+    }
+    if (state == OccupantState.STARTING) {
+      long deadline = startedAt.isPresent()
+          ? startedAt.get().plusMillis(SPAWN_TIMEOUT_MILLIS).toEpochMilli()
+          : now.toEpochMilli() + SPAWN_TIMEOUT_MILLIS;
+      log().println("[askamerica-mcp] pgwire-govdata pid " + pid + " holds " + host() + ":"
+          + port() + " and is still starting up"
+          + (startedAt.isPresent()
+              ? " (started " + java.time.Duration.between(startedAt.get(), now).getSeconds()
+                  + "s ago)"
+              : "")
+          + " — waiting for it instead of spawning another.");
+      while (System.currentTimeMillis() < deadline && ph.get().isAlive()) {
+        Thread.sleep(STARTING_POLL_INTERVAL_MILLIS);
+        Connection c = tryDirectConnect();
+        if (c != null) {
+          log().println("[askamerica-mcp] Connected to pgwire-govdata pid " + pid
+              + " once it finished starting.");
+          return c;
+        }
+      }
+      if (!ph.get().isAlive()) {
+        log().println("[askamerica-mcp] pgwire-govdata pid " + pid + " exited while starting.");
+        return null;
+      }
+    }
+    killPid(pid, "pgwire-govdata on " + host() + ":" + port() + " still not answering "
+        + (SPAWN_TIMEOUT_MILLIS / 1000) + "s after it started");
+    return null;
+  }
+
   private static Connection tryDirectConnect() {
     // A raw socket probe first: DriverManager.getConnection's own timeout handling for a
     // straight ECONNREFUSED varies by platform/driver version, and this needs to fail fast
     // and uniformly to know whether to spawn.
-    try (Socket probe = new Socket()) {
-      probe.connect(new InetSocketAddress(host(), port()), CONNECT_TIMEOUT_MILLIS);
-    // null means "nothing listening," never confused with a real connection; the caller's
-    // `if (c != null)` check is exactly this distinction.
-    // fallback-guard: allow -- null is the documented "nothing listening" sentinel
-    } catch (Exception e) {
+    if (!portIsOpen()) {
+      // null means "nothing listening," never confused with a real connection; the caller's
+      // `if (c != null)` check is exactly this distinction.
       return null;
     }
     try {
