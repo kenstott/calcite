@@ -37,7 +37,8 @@ class ReportArtifactTest {
 
   private static JsonNode firstPanel(DashboardLayout.Panel p) {
     ObjectNode out = ReportArtifact.build("Title", null, null, null,
-        Collections.<ReportPage.Section>emptyList(), Collections.singletonList(p), 2);
+        Collections.<ReportPage.Section>emptyList(), Collections.<ReportPage.Source>emptyList(),
+        Collections.singletonList(p), 2);
     return out.path("panels").get(0);
   }
 
@@ -74,10 +75,24 @@ class ReportArtifactTest {
   @Test void sectionsAndTitlePassThrough() {
     ObjectNode out = ReportArtifact.build("Head", "Sub", "Foot", null,
         Collections.singletonList(new ReportPage.Section("Summary", "<p>x</p>")),
+        Collections.<ReportPage.Source>emptyList(),
         Collections.<DashboardLayout.Panel>emptyList(), 2);
     assertEquals("Head", out.path("title").asText());
     assertEquals("Sub", out.path("subtitle").asText());
     assertEquals("<p>x</p>", out.path("sections").get(0).path("html").asText());
     assertTrue(out.path("byline").isMissingNode());
+  }
+
+  @Test void sourcesPassThroughAsCitations() {
+    ObjectNode out = ReportArtifact.build("Head", null, null, null,
+        Collections.<ReportPage.Section>emptyList(),
+        Collections.singletonList(new ReportPage.Source("BLS CPI", "https://bls.gov/cpi",
+            null, "SELECT 1", null, null)),
+        Collections.<DashboardLayout.Panel>emptyList(), 2);
+    JsonNode src = out.path("sources").get(0);
+    assertEquals("BLS CPI", src.path("label").asText());
+    assertEquals("https://bls.gov/cpi", src.path("url").asText());
+    assertEquals("SELECT 1", src.path("sql").asText());
+    assertTrue(src.path("note").isMissingNode());
   }
 }

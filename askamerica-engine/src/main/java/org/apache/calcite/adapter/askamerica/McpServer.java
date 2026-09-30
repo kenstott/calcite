@@ -533,7 +533,7 @@ public class McpServer {
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "web_fetch", "register", "upload_report", "mysite"));
+            "web_fetch", "register", "upload_report", "restore_report", "mysite"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -1243,9 +1243,10 @@ public class McpServer {
             + "the answer holds more than one figure worth showing side by side (a multi-panel "
             + "dashboard nobody can see inline in chat is not a deliverable left as an offer). "
             + "In either case: call compose_dashboard first when there is more than one figure, "
-            + "pass its panels through publish_report's dashboard argument so board and "
-            + "narrative compose in one page, and once the reader says yes to the offer, treat "
-            + "publish_report the same way — it is the deliverable at that point, not a "
+            + "pass its panels through create_report_artifact's dashboard argument so board and "
+            + "narrative compose in one report, and once the reader says yes to the offer, treat "
+            + "create_report_artifact (or publish_report, for a client that cannot render "
+            + "artifacts) the same way — it is the deliverable at that point, not a "
             + "nice-to-have, and a chart plus prose the reader has to reassemble by hand is "
             + "never an acceptable substitute for it.");
         return result(id, body);
@@ -1463,7 +1464,7 @@ public class McpServer {
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
             + "health, only that no listed defect was detected. "
             + "If this turns out to be your last query before writing the final answer: "
-            + "offer the reader a shareable report (see publish_report) rather than leaving "
+            + "offer the reader a report (see create_report_artifact) rather than leaving "
             + "the finding as chat text alone with no way to revisit or send it."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
@@ -2887,18 +2888,19 @@ public class McpServer {
         tools.add(
             tool("publish_report",
             "Build a complete answer — narrative, dashboard and citations — as one "
-            + "self-contained HTML page, and return a LOCAL, EPHEMERAL link to it (dies with "
-            + "this process — it does not survive past this session). Despite the tool name, "
-            + "this is the 'show me a report' / 'show report' action, not the 'publish' or "
-            + "'share' one: when the user says 'show report', call this alone. When the user "
-            + "says 'publish report' or 'share report', that means they want a DURABLE, "
-            + "shareable link instead — call this first (it also builds the page upload_report "
-            + "needs), then register (once per account) then upload_report, and return the "
-            + "durable link upload_report gives back, not this one. For a question worth more "
-            + "than a sentence, THIS IS WHAT TO OFFER THE READER (see the top-level instructions "
-            + "on when to offer vs. call this outright): the finding, the figures, the caveats "
-            + "and the sourcing in one page they can open, save, print or send, instead of a "
-            + "chart plus prose they have to reassemble. Pass the dashboard "
+            + "self-contained HTML page: the exact page upload_report would publish. Returns a "
+            + "local http link to it (served by this process until it exits) and a report_id "
+            + "whose saved copy outlives the process (see restore_report). Despite the tool "
+            + "name, nothing is published. Prefer create_report_artifact to show a report — it "
+            + "runs the same QC, renders in the conversation, and returns this same page as a "
+            + "preview; call this instead when the client cannot render artifacts or the reader "
+            + "asked for the standalone page. When the user says 'publish report' or 'share "
+            + "report', that means a DURABLE, shareable link — build the report with either "
+            + "tool, then register (once per account) then upload_report, and return the link "
+            + "upload_report gives back. For a question worth more than a sentence, a report is "
+            + "what to offer the reader (see the top-level instructions on when to offer vs. "
+            + "build one outright): the finding, the figures, the caveats and the sourcing in "
+            + "one place instead of a chart plus prose they have to reassemble. Pass the dashboard "
             + "argument to compose and inline the board in the same call. Costs about twenty "
             + "tokens to return, because what comes back is a link rather than the page. "
             + "REQUIRES question_coverage — see its own description; this is not optional "
@@ -2910,32 +2912,32 @@ public class McpServer {
             + "naming a table or document you never opened.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
 
-        ObjectNode artifactProps = MAPPER.createObjectNode();
-        for (String shared : new String[]{"title", "subtitle", "sections", "dashboard",
-            "footnote", "byline"}) {
-            artifactProps.set(shared, pubProps.get(shared));
-        }
         tools.add(
             tool("create_report_artifact",
-            "Hand back a report's data and layout hints so YOU render it with your own "
-            + "artifact/charting capability (for a Claude client: a published Claude Artifact "
-            + "inside the caller's own workspace), instead of AskAmerica's renderer. A second "
-            + "destination for the same report object publish_report takes — same title, "
-            + "subtitle, sections, dashboard, footnote and byline, no reshaping — for when the "
-            + "report should live where the caller already works rather than on AskAmerica's "
-            + "cloud. Returns JSON: the narrative sections, and each dashboard panel as data "
-            + "(categories/series or points) with a `hints` object — orientation_hint "
-            + "(bar charts) and suppressed_cells (values with no data: draw them as a gap or "
-            + "an explicit 'no data' mark, never as zero). Follow the hints instead of "
-            + "re-deriving presentation from the numbers. Charts are not rendered here; "
-            + "nothing is uploaded or hosted.",
-            schema(artifactProps, new String[]{"title"})));
+            "THE DEFAULT WAY TO SHOW A REPORT. Runs the same QC publish_report runs (same "
+            + "arguments, question_coverage included, same refusals) and hands back the QC'd "
+            + "report as data plus layout hints so YOU render it with your own artifact/charting "
+            + "capability (for a Claude client: a Claude Artifact in the conversation). Returns "
+            + "JSON: the narrative sections (including sections QC added), the citations as "
+            + "`sources`, and each dashboard panel as data (categories/series or points) with a "
+            + "`hints` object — orientation_hint (bar charts) and suppressed_cells (values with "
+            + "no data: draw them as a gap or an explicit 'no data' mark, never as zero). Follow "
+            + "the hints instead of re-deriving presentation from the numbers. It also builds the "
+            + "exact page upload_report would publish and returns a preview link to it, and saves "
+            + "both the report instructions and that page under a report_id that outlives this "
+            + "process. Nothing is uploaded: after the artifact, give the reader the preview link "
+            + "and call register/upload_report only if they say yes to publishing.",
+            schema(pubProps, new String[]{"title", "question_coverage"})));
 
         ObjectNode registerProps = MAPPER.createObjectNode();
         registerProps.set("name", prop("string",
             "Display name to publish reports under, e.g. 'Jane Ortiz' or 'Ortiz Policy Lab'."));
         registerProps.set("org", prop("string",
             "Optional organization name shown alongside the display name."));
+        ObjectNode uploadProps = MAPPER.createObjectNode();
+        uploadProps.set("report_id", prop("string",
+            "Optional saved report id, from create_report_artifact, publish_report or "
+            + "restore_report. Omit to upload this session's most recent report."));
         tools.add(
             tool("register",
             "Create (or update) a Studies account bound to this engine's own API key, so "
@@ -2947,18 +2949,29 @@ public class McpServer {
 
         tools.add(
             tool("upload_report",
-            "Publish the report most recently built by publish_report to the caller's Studies "
-            + "page — durably, under their registered name, unlike publish_report's local link "
-            + "which dies with this process. This is the actual 'publish report' / 'share "
-            + "report' action: when the user asks to publish or share (as opposed to just "
-            + "'show') a report, this — preceded by publish_report to build the page, and by "
-            + "register once per account — is what to call, and its returned link is the one "
-            + "to hand back, not publish_report's local one. Takes no arguments: it always "
-            + "uploads whatever publish_report last built in this session. Requires register to "
-            + "have been called first (errors otherwise); also errors if publish_report has not "
-            + "been called yet this session. The uploaded report cannot be edited afterward — "
-            + "only deleted, from the account's own Studies page once logged in there.",
-            schema(MAPPER.createObjectNode(), new String[]{})));
+            "Publish a QC'd report to the caller's Studies page — durably and shareably, under "
+            + "their registered name. This is the actual 'publish report' / 'share report' "
+            + "action: call it only when the reader asked to publish or share, or said yes to the "
+            + "offer after create_report_artifact / publish_report, and hand back the link it "
+            + "returns. Pass report_id (returned by create_report_artifact or publish_report, or "
+            + "listed by restore_report) to publish a report saved in any earlier session; "
+            + "without it, uploads the report most recently built in this session. Requires "
+            + "register to have been called first (errors otherwise). The uploaded report cannot "
+            + "be edited afterward — only deleted, from the account's own Studies page once "
+            + "logged in there.",
+            schema(uploadProps, new String[]{})));
+
+        ObjectNode restoreProps = MAPPER.createObjectNode();
+        restoreProps.set("report_id", prop("string",
+            "A saved report's id. Omit to list saved reports, newest first."));
+        tools.add(
+            tool("restore_report",
+            "Bring back a report built in an earlier session: re-serves its saved page over "
+            + "this process's local http link and returns that link plus the saved page's file "
+            + "link. Without report_id, lists saved reports (report_id, title, question) newest "
+            + "first so you can pick the one the reader means. Use it when a report link from "
+            + "an earlier session no longer opens.",
+            schema(restoreProps, new String[]{})));
 
         tools.add(
             tool("mysite",
@@ -4145,7 +4158,12 @@ public class McpServer {
                     diagnostics = r.diagnostics;
                     break;
                 }
-                case "publish_report": {
+                case "publish_report":
+                case "create_report_artifact": {
+                    // One QC path for both destinations: the artifact is only a second
+                    // rendering of a report that passed every publish_report gate, never a way
+                    // around them.
+                    boolean asArtifact = "create_report_artifact".equals(name);
                     String rTitle = args.path("title").asText(null);
                     String rSub = args.has("subtitle") && !args.get("subtitle").isNull()
                         ? args.get("subtitle").asText() : null;
@@ -4255,12 +4273,13 @@ public class McpServer {
                     String boardSvgUrl = null;
                     byte[] thumb = null;
                     JsonNode dash = args.path("dashboard");
+                    java.util.List<DashboardLayout.Panel> ps = new java.util.ArrayList<>();
+                    int c = 2;
                     if (dash.isObject() && dash.has("panels")) {
-                        java.util.List<DashboardLayout.Panel> ps = new java.util.ArrayList<>();
                         for (JsonNode pn : dash.path("panels")) {
                             ps.add(readPanel(pn));
                         }
-                        int c = dash.has("columns")
+                        c = dash.has("columns")
                             ? Math.min(Math.max(1, dash.get("columns").asInt()), 4) : 2;
                         int[] sz = DashboardLayout.defaultSize(ps, c);
                         DashboardLayout.Dashboard board = DashboardLayout.compose(
@@ -4279,7 +4298,11 @@ public class McpServer {
                         // eighth of a full-size board's image tokens either way.
                         thumb = board.toPng(0.40);
                     }
-                    chartPng = thumb;
+                    // The artifact path draws its own charts from the panel data; a thumbnail
+                    // of AskAmerica's board would only spend image tokens on a second copy.
+                    if (!asArtifact) {
+                        chartPng = thumb;
+                    }
                     java.util.List<ReportPage.Filter> flts = new java.util.ArrayList<>();
                     for (JsonNode fn : args.path("filters")) {
                         String cls = fn.path("class").asText(null);
@@ -4350,7 +4373,7 @@ public class McpServer {
                         StringBuilder combined = new StringBuilder(
                             "This report cannot be published yet -- " + gateProblems.size()
                             + " separate issue(s) found, ALL listed here so they can be fixed "
-                            + "in one pass rather than one publish_report attempt per issue:\n");
+                            + "in one pass rather than one " + name + " attempt per issue:\n");
                         for (int gi = 0; gi < gateProblems.size(); gi++) {
                             combined.append('[').append(gi + 1).append("] ")
                                 .append(gateProblems.get(gi)).append('\n');
@@ -4367,6 +4390,8 @@ public class McpServer {
                         args.has("byline") ? args.get("byline").asText(null) : null, flts);
                     LAST_REPORT = new LastReport(rTitle, coverage.path("question").asText(null),
                         html);
+                    ReportStore.Saved saved = ReportStore.save(name, rTitle,
+                        coverage.path("question").asText(null), args, html);
                     String evalReportNote = "";
                     if (EVAL_MODE && args.has("run_subpath")) {
                         // The http://127.0.0.1/... link below is only reachable while this
@@ -4395,8 +4420,35 @@ public class McpServer {
                         String srcUrl = args.path("source_url").asText(null);
                         ClaimsServer.record(srcUrl, args.path("title").asText(null), url, claims);
                     }
-                    log.println("[askamerica-mcp] tool=publish_report sections=" + secs.size()
-                        + " sources=" + srcs.size() + " board=" + (boardSvg != null));
+                    log.println("[askamerica-mcp] tool=" + name + " sections=" + secs.size()
+                        + " sources=" + srcs.size() + " board=" + (boardSvg != null)
+                        + " saved=" + saved.json);
+                    String savedLine = "Saved as report_id `" + saved.id + "` — the saved page "
+                        + "opens with no server at " + ReportStore.fileUrl(saved.id) + " and "
+                        + "outlives this process: restore_report re-serves it over http by that "
+                        + "id if a file link won't open, and upload_report publishes it by that "
+                        + "id in any later session.";
+                    if (asArtifact) {
+                        String previewLine = "Preview of the page upload_report would publish: ["
+                            + (rTitle == null || rTitle.isEmpty() ? "published version"
+                                : rTitle.replace("]", ")")) + "](" + ReportStore.fileUrl(saved.id)
+                            + ")" + (url == null ? "" : " (or over http while this session "
+                                + "lasts: " + url + ")") + ".";
+                        text = "Render this report with your own artifact/charting capability. "
+                            + "Follow each panel's `hints`: orientation_hint sets bar orientation, "
+                            + "and every suppressed_cells entry is a value with no data — show a "
+                            + "gap or a 'no data' mark there, never zero. `sections` html is the "
+                            + "narrative, in order, including any coverage-gap and claims sections "
+                            + "added by QC; list `sources` as the citations. Draw only what is in "
+                            + "this payload. After the artifact, give the reader the preview line "
+                            + "below, and publish it durably (register, then upload_report) only "
+                            + "if they say yes.\n\n" + previewLine + "\n" + savedLine + "\n\n"
+                            + MAPPER.writeValueAsString(ReportArtifact.build(rTitle, rSub,
+                                args.has("footnote") ? args.get("footnote").asText(null) : null,
+                                args.has("byline") ? args.get("byline").asText(null) : null,
+                                secs, srcs, ps, c));
+                        break;
+                    }
                     // A Markdown link, not a bare URL: this protocol version (2024-11-05) has no
                     // structured resource/resource_link content type, only "text" — a plain URL
                     // in that text is left for the reader to notice and paste, where
@@ -4422,14 +4474,14 @@ public class McpServer {
                         + "the whole answer in one page: " + secs.size() + " section(s), "
                         + srcs.size() + " citation(s)"
                         + (boardSvg == null ? "" : ", dashboard inlined")
-                        + ". This link is served locally by this engine process and stops "
-                        + "working the moment this process exits — it is NOT a durable URL, "
-                        + "regardless of how self-contained the page itself is."
+                        + ". This http link is served by this engine process and stops working "
+                        + "when it exits; the saved copy below does not — it is local to this "
+                        + "machine, not shareable."
                         + (EVAL_MODE ? "" : " If the reader asked to publish or share this "
                             + "(rather than just see it), call `register` once (if not already "
                             + "done this session) and then `upload_report` right after this call "
                             + "to get a permanent Studies-page link instead.")
-                        + evalReportNote;
+                        + evalReportNote + "\n\n" + savedLine;
                     // Every report's first section is required to be the summary (see this
                     // tool's own "sections" schema). Order is: the dashboard image (already
                     // first automatically whenever chartPng is set, below), then this summary,
@@ -4441,34 +4493,6 @@ public class McpServer {
                     text = summaryText.isEmpty() ? linkLine : summaryText + "\n\n" + linkLine;
                     break;
                 }
-                case "create_report_artifact": {
-                    java.util.List<ReportPage.Section> artSecs = new java.util.ArrayList<>();
-                    for (JsonNode sec : args.path("sections")) {
-                        artSecs.add(new ReportPage.Section(
-                            sec.path("heading").asText(null), sec.path("html").asText("")));
-                    }
-                    JsonNode artDash = args.path("dashboard");
-                    java.util.List<DashboardLayout.Panel> artPanels = new java.util.ArrayList<>();
-                    for (JsonNode pn : artDash.path("panels")) {
-                        artPanels.add(readPanel(pn));
-                    }
-                    int artCols = artDash.has("columns")
-                        ? Math.min(Math.max(1, artDash.get("columns").asInt()), 4) : 2;
-                    log.println("[askamerica-mcp] tool=create_report_artifact sections="
-                        + artSecs.size() + " panels=" + artPanels.size());
-                    text = "Render this report with your own artifact/charting capability. "
-                        + "Follow each panel's `hints`: orientation_hint sets bar orientation, "
-                        + "and every suppressed_cells entry is a value with no data — show a gap "
-                        + "or a 'no data' mark there, never zero. `sections` html is the "
-                        + "narrative, in order. Draw only what is in this payload.\n\n"
-                        + MAPPER.writeValueAsString(ReportArtifact.build(
-                            args.path("title").asText(null),
-                            args.path("subtitle").asText(null),
-                            args.path("footnote").asText(null),
-                            args.path("byline").asText(null),
-                            artSecs, artPanels, artCols));
-                    break;
-                }
                 case "register": {
                     String regName = args.path("name").asText(null);
                     String regOrg = args.has("org") ? args.get("org").asText(null) : null;
@@ -4477,8 +4501,41 @@ public class McpServer {
                     break;
                 }
                 case "upload_report": {
-                    log.println("[askamerica-mcp] tool=upload_report");
-                    text = uploadReport();
+                    String uploadId = args.hasNonNull("report_id")
+                        ? args.get("report_id").asText() : null;
+                    log.println("[askamerica-mcp] tool=upload_report report_id=" + uploadId);
+                    text = uploadReport(uploadId);
+                    break;
+                }
+                case "restore_report": {
+                    String restoreId = args.hasNonNull("report_id")
+                        ? args.get("report_id").asText() : null;
+                    log.println("[askamerica-mcp] tool=restore_report report_id=" + restoreId);
+                    if (restoreId == null) {
+                        ArrayNode saved = MAPPER.createArrayNode();
+                        for (JsonNode d : ReportStore.list(50)) {
+                            ObjectNode r = saved.addObject();
+                            r.put("report_id", d.path("id").asText());
+                            r.put("title", d.path("title").asText(null));
+                            r.put("question", d.path("question").asText(null));
+                        }
+                        text = saved.size() == 0
+                            ? "No saved reports in " + ReportStore.dir() + "."
+                            : "Saved reports, newest first — call restore_report with the "
+                                + "report_id the reader means:\n" + MAPPER.writeValueAsString(saved);
+                        break;
+                    }
+                    ReportStore.Saved restored = ReportStore.load(restoreId);
+                    String restoredUrl = ArtifactServer.publish(
+                        restored.html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "text/html; charset=utf-8", "html");
+                    String restoredLabel = restored.title == null || restored.title.isEmpty()
+                        ? "Open the report" : restored.title.replace("]", ")");
+                    text = (restoredUrl == null
+                        ? "No local server is available to re-serve it."
+                        : "Restored: [" + restoredLabel + "](" + restoredUrl + ") — served by "
+                            + "this engine process until it exits.")
+                        + " Saved page: " + ReportStore.fileUrl(restored.id) + ".";
                     break;
                 }
                 case "mysite": {
@@ -13495,7 +13552,8 @@ public class McpServer {
     }
 
     /**
-     * POSTs {@code report} to the account's Studies page. Pulled out of {@link #uploadReport()}
+     * POSTs {@code report} to the account's Studies page. Pulled out of
+     * {@link #uploadReport(String)}
      * so {@code publish_report} can call it automatically for an already-registered account
      * (see the call site there) without duplicating the HTTP handling -- a caller who already
      * registered once should never need to remember a second tool call just to keep a report
@@ -13555,12 +13613,18 @@ public class McpServer {
         }
     }
 
-    private static String uploadReport() {
+    private static String uploadReport(String reportId) throws java.io.IOException {
         Account acct = ACCOUNT;
         if (acct == null) {
             return "Not registered yet — call register first, then upload_report.";
         }
-        LastReport report = LAST_REPORT;
+        LastReport report;
+        if (reportId != null) {
+            ReportStore.Saved saved = ReportStore.load(reportId);
+            report = new LastReport(saved.title, saved.question, saved.html);
+        } else {
+            report = LAST_REPORT;
+        }
         if (report == null) {
             return "No report has been published yet this session — call publish_report first, "
                 + "then upload_report.";

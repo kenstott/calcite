@@ -38,9 +38,11 @@ final class ReportArtifact {
     private ReportArtifact() {
     }
 
-    /** Builds the payload; {@code sections} and {@code panels} may be empty, never null. */
+    /** Builds the payload; {@code sections}, {@code sources} and {@code panels} may be empty,
+     *  never null. */
     static ObjectNode build(String title, String subtitle, String footnote, String byline,
-            List<ReportPage.Section> sections, List<DashboardLayout.Panel> panels, int columns) {
+            List<ReportPage.Section> sections, List<ReportPage.Source> sources,
+            List<DashboardLayout.Panel> panels, int columns) {
         ObjectNode out = MAPPER.createObjectNode();
         out.put("schema_version", 1);
         putIfPresent(out, "title", title);
@@ -53,6 +55,16 @@ final class ReportArtifact {
             ObjectNode n = secs.addObject();
             putIfPresent(n, "heading", s.heading);
             n.put("html", s.html);
+        }
+        ArrayNode srcs = out.putArray("sources");
+        for (ReportPage.Source s : sources) {
+            ObjectNode n = srcs.addObject();
+            putIfPresent(n, "label", s.label);
+            putIfPresent(n, "url", s.url);
+            putIfPresent(n, "note", s.note);
+            putIfPresent(n, "sql", s.sql);
+            putIfPresent(n, "tool", s.tool);
+            putIfPresent(n, "params", s.toolParams);
         }
         ArrayNode ps = out.putArray("panels");
         for (DashboardLayout.Panel p : panels) {
