@@ -4771,6 +4771,20 @@ public class McpServer {
                     + " error: " + msg;
             }
         }
+        // Comma-form SUBSTR is not resolvable under this connection's function libraries in any
+        // clause, and the raw signature error reads as though the position were at fault. It is
+        // not rewritten to SUBSTRING mechanically: SUBSTR treats a zero or negative start
+        // position differently from ANSI SUBSTRING, so only the caller can pick the equivalent.
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null && msg.toLowerCase(java.util.Locale.ROOT).contains("substr(")
+                && msg.contains("No match found for function signature")) {
+                return "SUBSTR(<col>, start, len) is not supported by this SQL parser in any"
+                    + " clause (SELECT, WHERE, ...). Use ANSI SUBSTRING(<col> FROM start FOR len),"
+                    + " which works in every clause, or LIKE for a fixed-width pattern such as"
+                    + " <col> LIKE '__000'. Start positions are 1-based. Original error: " + msg;
+            }
+        }
         // An object-store credential or bucket-policy failure surfaces as DuckDB's own
         // "HTTP 403 Forbidden" / "Authentication Failure" from the parquet reader. The raw text
         // names a bucket path and says nothing about what it means for the ANSWER, and the

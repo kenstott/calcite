@@ -121,6 +121,16 @@ class McpServerErrorMessageTest {
         "and it must give an alternative that actually parses, got: " + compact);
   }
 
+  @Test @DisplayName("comma-form SUBSTR is redirected to ANSI SUBSTRING")
+  void explainsSubstr() {
+    String compact = McpServer.compactErrorMessage(new RuntimeException(
+        "No match found for function signature substr(<CHARACTER>, <NUMERIC>, <NUMERIC>)"));
+    assertTrue(compact.contains("SUBSTRING(<col> FROM start FOR len)"),
+        "the caller must get the form that parses, got: " + compact);
+    assertTrue(compact.contains("any clause"),
+        "the failure is not clause-dependent and the message must say so, got: " + compact);
+  }
+
   @Test @DisplayName("an unrelated signature error is not hijacked by the TRY_CAST branch")
   void leavesOtherSignatureErrorsAlone() {
     String msg = "No match found for function signature FOO(<CHARACTER>)";
