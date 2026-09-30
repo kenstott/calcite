@@ -40,6 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -633,6 +634,9 @@ public class EtlPipeline {
           }
         }
 
+        PartialPartitionGuard.reopenPartitions(config, combinations, standardUnprocessedIndices,
+            reopenableCombos(pipelineName, config));
+
         neededCount = standardUnprocessedIndices.size();
         skippedBatches = totalBatches - neededCount;
         LOGGER.info("Bulk filtering: {} unprocessed of {} total ({}ms, {}% cached)",
@@ -1057,6 +1061,11 @@ public class EtlPipeline {
                 pi + 1, partCount, partitionPlan.getContextKey(), contextValue,
                 partCombos.size(), pipelineName);
             unprocessedIndices = allIndicesSet(partCombos.size());
+          }
+
+          if (!forceReprocessAll) {
+            PartialPartitionGuard.reopenPartitions(config, partCombos, unprocessedIndices,
+                reopenableCombos(pipelineName, config));
           }
 
           if (unprocessedIndices.isEmpty()) {
@@ -1714,6 +1723,20 @@ public class EtlPipeline {
 
       if (progressListener != null) {
         progressListener.onPhaseComplete("data_processing", successfulBatches);
+      }
+
+      // A unit that failed to fetch contributes no rows, so committing a replace-partitions run
+      // would swap its partition for the surviving siblings alone and delete the failed unit's
+      // previously committed rows. Fail the run instead: nothing is committed, the tracker marks
+      // stay unapplied, and the next run retries against an intact table.
+      if (PartialPartitionGuard.applies(config)) {
+        List<String> blocking = PartialPartitionGuard.commitBlockingErrors(errors);
+        if (!blocking.isEmpty()) {
+          throw new IOException("Pipeline '" + pipelineName + "' has " + blocking.size()
+              + " failed batch(es) and replaces partitions whose key does not determine the fetch"
+              + " unit — refusing to commit, which would drop the failed units' committed rows."
+              + " First failure: " + blocking.get(0));
+        }
       }
 
       // Phase 6: Commit writes
@@ -3225,6 +3248,20 @@ public class EtlPipeline {
   private static boolean isPeriodDimensionName(String name) {
     return "year".equals(name) || "quarter".equals(name) || "month".equals(name)
         || "week".equals(name) || "day".equals(name);
+  }
+
+  /**
+   * Which combinations a partition reopen may dispatch again: all of them, except those the
+   * tracker holds as unavailable inside their retry window.
+   */
+  private Predicate<Map<String, String>> reopenableCombos(final String pipelineName,
+      final EtlPipelineConfig config) {
+    if (!(incrementalTracker instanceof PipelineTracker)) {
+      return combo -> true;
+    }
+    final PipelineTracker pipelineTracker = (PipelineTracker) incrementalTracker;
+    final long retryMillis = config.getErrorHandling().getNotFoundRetryDays() * 86400000L;
+    return combo -> !pipelineTracker.isUnavailable(pipelineName, pipelineName, combo, retryMillis);
   }
 
   /**

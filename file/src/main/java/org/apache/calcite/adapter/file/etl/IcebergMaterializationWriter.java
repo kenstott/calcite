@@ -277,18 +277,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (icebergConfig != null) {
       this.maxRetries = icebergConfig.getMaxRetries();
       this.retryDelayMs = icebergConfig.getRetryDelayMs();
-      this.overwritePartitions = icebergConfig.isOverwritePartitions();
-      // Optional run-mode override: when the configured operand path holds the "append" value,
-      // this run appends instead of replacing partitions (e.g. a daily incremental on a snapshot
-      // table whose historical run does a full-load replace). Keyed on a model operand so the
-      // distinction is declared in the model, not threaded through env vars.
-      String appendWhenOperand = icebergConfig.getAppendWhenOperand();
-      if (appendWhenOperand != null && !appendWhenOperand.isEmpty()
-          && icebergConfig.getAppendWhenValue() != null
-          && icebergConfig.getAppendWhenValue().equals(ModelOperand.getString(appendWhenOperand))) {
-        this.overwritePartitions = false;
+      this.overwritePartitions = icebergConfig.isReplacingPartitionsThisRun();
+      if (icebergConfig.isOverwritePartitions() && !this.overwritePartitions) {
         LOGGER.info("Iceberg write: append mode selected by operand {}={}",
-            appendWhenOperand, icebergConfig.getAppendWhenValue());
+            icebergConfig.getAppendWhenOperand(), icebergConfig.getAppendWhenValue());
       }
     }
 

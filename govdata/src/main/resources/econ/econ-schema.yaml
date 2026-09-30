@@ -5493,7 +5493,7 @@ partitionedTables:
         format: json
         # NOTE: dataPath removed - FredResponseTransformer already extracts observations array
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
