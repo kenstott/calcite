@@ -85,6 +85,9 @@ final class PgwireGovDataConnector {
   private static final String IDLE_SHUTDOWN_SECONDS = "120";
   /** Per-query timeout passed to the spawned server's --statement-timeout-ms (see spawnIfPossible). */
   private static final String STATEMENT_TIMEOUT_MS = "30000";
+  /** Least remaining lifetime the R2 credentials handed to a spawn may have. The first catalog
+   *  walk alone can run for minutes; a cached set with a few minutes left expires mid-walk. */
+  private static final long SPAWN_MIN_CREDENTIAL_LIFETIME_MS = 30L * 60_000L;
 
   /** How long killAndRespawn waits for a forcibly killed server to release its port. */
   private static final long KILL_EXIT_WAIT_SECONDS = 10;
@@ -522,7 +525,8 @@ final class PgwireGovDataConnector {
       String credsExpiresAt = null;
       try {
         Map<String, String> creds =
-            R2CredentialProvider.resolveOrFetch(R2CredentialProvider.credentialApiKey());
+            R2CredentialProvider.resolveOrFetch(R2CredentialProvider.credentialApiKey(),
+                SPAWN_MIN_CREDENTIAL_LIFETIME_MS);
         credsExpiresAt = creds.get("expiresAtMillis");
         pb.environment().put("AWS_ACCESS_KEY_ID", creds.getOrDefault("accessKeyId", ""));
         pb.environment().put("AWS_SECRET_ACCESS_KEY", creds.getOrDefault("secretAccessKey", ""));
@@ -545,6 +549,14 @@ final class PgwireGovDataConnector {
         String sessionToken = creds.get("sessionToken");
         if (sessionToken != null && !sessionToken.isEmpty()) {
           pb.environment().put("AWS_SESSION_TOKEN", sessionToken);
+        }
+        // With an expiry, model.json's credentialRotation has the server replace these in
+        // place before they lapse (govdata's R2CredentialRotator), rewriting the expiry file
+        // so serverCredentialsExpired() tracks the rotated set instead of respawning it.
+        if (credsExpiresAt != null && !credsExpiresAt.isEmpty()) {
+          pb.environment().put("AWS_CREDENTIALS_EXPIRES_AT_MILLIS", credsExpiresAt);
+          pb.environment().put("ASKAMERICA_PGWIRE_CREDS_EXPIRY_FILE",
+              credentialExpiryFile().getAbsolutePath());
         }
       } catch (Exception e) {
         // Do not claim a working fallback (mirrors ensureFreshR2Credentials's own contract):

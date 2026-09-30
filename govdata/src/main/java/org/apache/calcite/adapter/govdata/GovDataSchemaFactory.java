@@ -477,6 +477,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       s3Config = resolveS3Config(s3Config);
       operand.put("s3Config", s3Config);
       LOGGER.debug("Resolved S3 config with {} keys", s3Config.size());
+      R2CredentialRotator.startIfRequested(s3Config);
     } else {
       // Also check for individual S3 fields in operand
       if (operand.containsKey("accessKeyId") || operand.containsKey("secretAccessKey")
