@@ -115,6 +115,17 @@ final class QuestionDiagnostics {
 
     private static final Pattern YEAR_LITERAL = Pattern.compile("\\b(19\\d{2}|20\\d{2})\\b");
 
+    /**
+     * A predicate on a column whose bare name contains {@code year}: a comparison, a
+     * {@code BETWEEN} pair or an {@code IN} list. Only literals in these positions are years;
+     * a four-digit code compared to any other column (a BEA line code, an NAICS prefix) is not.
+     */
+    private static final Pattern YEAR_PREDICATE = Pattern.compile(
+        "(?i)\"?[a-z0-9_]*year[a-z0-9_]*\"?\\s*(?:"
+        + "(?:=|<>|!=|<=|>=|<|>)\\s*'?\\d{4}'?"
+        + "|BETWEEN\\s+'?\\d{4}'?\\s+AND\\s+'?\\d{4}'?"
+        + "|IN\\s*\\([^)]*\\))");
+
     private static final Set<String> META_SCHEMAS = new HashSet<>(
         Arrays.asList("information_schema", "pg_catalog", "metadata"));
 
@@ -166,15 +177,18 @@ final class QuestionDiagnostics {
         return sql != null && ANY_STAT_AGG.matcher(sql).find();
     }
 
-    /** Distinct four-digit years appearing as literals in the SQL. */
+    /** Distinct four-digit years the SQL compares against a year column. */
     static Set<Integer> yearLiterals(String sql) {
         Set<Integer> out = new LinkedHashSet<>();
         if (sql == null) {
             return out;
         }
-        Matcher m = YEAR_LITERAL.matcher(sql);
-        while (m.find()) {
-            out.add(Integer.valueOf(m.group(1)));
+        Matcher p = YEAR_PREDICATE.matcher(sql);
+        while (p.find()) {
+            Matcher m = YEAR_LITERAL.matcher(p.group());
+            while (m.find()) {
+                out.add(Integer.valueOf(m.group(1)));
+            }
         }
         return out;
     }

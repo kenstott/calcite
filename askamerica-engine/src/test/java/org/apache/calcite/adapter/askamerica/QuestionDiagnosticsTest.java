@@ -625,6 +625,17 @@ class QuestionDiagnosticsTest {
             "SELECT * FROM econ.x WHERE \"year\" BETWEEN '2019' AND '2023'"));
   }
 
+  @Test void yearListAndComparisonPredicatesAreRead() {
+    assertEquals(new java.util.LinkedHashSet<>(Arrays.asList(2001, 2005, 2010)),
+        QuestionDiagnostics.yearLiterals(
+            "SELECT * FROM econ.x WHERE fiscal_year IN (2001, 2005) AND data_year >= 2010"));
+  }
+
+  @Test void aFourDigitCodeOnANonYearColumnIsNotReadAsAYear() {
+    assertTrue(QuestionDiagnostics.yearLiterals(
+        "SELECT * FROM bea.sainc WHERE line_code = '2000' AND geo_fips = '2005'").isEmpty());
+  }
+
   @Test void aBareNumberThatIsNotAYearIsNotReadAsOne() {
     List<Integer> years = new java.util.ArrayList<>(
         QuestionDiagnostics.yearLiterals("SELECT * FROM econ.x WHERE amount > 150000"));
