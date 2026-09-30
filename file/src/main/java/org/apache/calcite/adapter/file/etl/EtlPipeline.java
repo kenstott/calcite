@@ -1725,6 +1725,20 @@ public class EtlPipeline {
         progressListener.onPhaseComplete("data_processing", successfulBatches);
       }
 
+      // A unit that failed to fetch contributes no rows, so committing a replace-partitions run
+      // would swap its partition for the surviving siblings alone and delete the failed unit's
+      // previously committed rows. Fail the run instead: nothing is committed, the tracker marks
+      // stay unapplied, and the next run retries against an intact table.
+      if (PartialPartitionGuard.applies(config)) {
+        List<String> blocking = PartialPartitionGuard.commitBlockingErrors(errors);
+        if (!blocking.isEmpty()) {
+          throw new IOException("Pipeline '" + pipelineName + "' has " + blocking.size()
+              + " failed batch(es) and replaces partitions whose key does not determine the fetch"
+              + " unit — refusing to commit, which would drop the failed units' committed rows."
+              + " First failure: " + blocking.get(0));
+        }
+      }
+
       // Phase 6: Commit writes
       LOGGER.info("Phase 6: Committing writes");
       writer.commit();

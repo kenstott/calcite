@@ -34,6 +34,10 @@ import java.util.function.Predicate;
  * all-or-nothing behavior {@link PerUnitSkipSafety} falls back to for freshness skipping. It is
  * independent of any freshness gate and of how the pending set was derived.
  *
+ * <p>The same holds at commit time: a unit whose fetch failed contributes no rows, so committing
+ * the run would replace its partition without it. {@link #commitBlockingErrors} identifies the
+ * failures that must stop the commit so the previously committed partition stays intact.
+ *
  * <p>Units the tracker records as unavailable are not reopened: they have no data to lose, and
  * re-requesting them ahead of their retry window is what the unavailable skip exists to prevent.
  */
@@ -101,6 +105,24 @@ final class PartialPartitionGuard {
           PerUnitSkipSafety.dimensionsOutsidePartition(config), added.size());
     }
     return added.size();
+  }
+
+  /**
+   * The batch errors that leave a unit's rows missing from a replaced partition. A batch that
+   * failed with HTTP 404 is recorded as unavailable — the source has no data for it, so there is
+   * nothing to lose — and does not count.
+   *
+   * @param errors the batch error messages collected during the run
+   * @return the errors that make a replace-partitions commit unsafe
+   */
+  static List<String> commitBlockingErrors(List<String> errors) {
+    List<String> blocking = new ArrayList<String>();
+    for (String error : errors) {
+      if (!error.contains("HTTP 404")) {
+        blocking.add(error);
+      }
+    }
+    return blocking;
   }
 
   /**

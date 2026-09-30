@@ -188,4 +188,17 @@ public class PartialPartitionGuardTest {
 
     assertFalse(PartialPartitionGuard.applies(c));
   }
+
+  @Test public void commitBlockingErrorsIgnoresUnavailableUnits() {
+    List<String> errors = Arrays.asList(
+        "Batch 3/9 failed: HTTP 404: not published",
+        "Batch 5/9 failed: HTTP 429: {\"error_code\":429}");
+    List<String> blocking = PartialPartitionGuard.commitBlockingErrors(errors);
+    assertEquals(1, blocking.size());
+    assertTrue(blocking.get(0).contains("HTTP 429"));
+  }
+
+  @Test public void commitBlockingErrorsEmptyWhenNoFailures() {
+    assertTrue(PartialPartitionGuard.commitBlockingErrors(new ArrayList<String>()).isEmpty());
+  }
 }
