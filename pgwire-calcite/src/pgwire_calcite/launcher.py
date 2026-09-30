@@ -225,6 +225,36 @@ def watch_owner(owner_pid: int, stop: threading.Event) -> threading.Thread:
     return t
 
 
+SHUTDOWN_BUDGET_SECONDS = 10.0
+EXIT_SHUTDOWN_STUCK = 3
+
+
+def close_server(srv, budget: float = SHUTDOWN_BUDGET_SECONDS, exit_fn=os._exit) -> None:
+    """Stop ``srv`` and release its port, never waiting on a wedged request thread.
+
+    ``server_close()`` joins every outstanding request thread, so one handler blocked on
+    something with no timeout would keep the process and its port alive indefinitely. Once
+    shutdown has been requested there is no in-flight work worth preserving, so if the close
+    does not finish within ``budget`` the process exits outright (``os._exit`` also ends
+    native JVM threads that a normal interpreter exit would wait on).
+    """
+    done = threading.Event()
+
+    def _close() -> None:
+        srv.shutdown()
+        srv.server_close()
+        done.set()
+
+    threading.Thread(target=_close, name="pgwire-server-close", daemon=True).start()
+    if not done.wait(budget):
+        log.error(
+            "[PGWIRE] server close did not finish within %.1fs (a request thread is stuck); "
+            "forcing exit to release the port",
+            budget,
+        )
+        exit_fn(EXIT_SHUTDOWN_STUCK)
+
+
 def install_shutdown_handler(stop: threading.Event) -> None:
     """Make SIGTERM (and SIGINT) request a clean shutdown instead of a hang.
 
@@ -489,8 +519,7 @@ def main(argv: list | None = None) -> int:
     except KeyboardInterrupt:
         stop.set()
     log.info("shutting down")
-    srv.shutdown()
-    srv.server_close()
+    close_server(srv)
     return 0
 
 

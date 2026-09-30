@@ -25,7 +25,12 @@ import signal
 import threading
 import time
 
-from pgwire_calcite.launcher import install_shutdown_handler, watch_owner
+from pgwire_calcite.launcher import (
+    EXIT_SHUTDOWN_STUCK,
+    close_server,
+    install_shutdown_handler,
+    watch_owner,
+)
 
 
 def test_sigterm_sets_stop_event():
@@ -121,3 +126,39 @@ def test_owner_watch_requests_shutdown_when_the_owner_dies():
     finally:
         if owner.poll() is None:
             owner.kill()
+
+
+class _FakeServer:
+    def __init__(self, block: threading.Event | None = None):
+        self._block = block
+        self.closed = False
+
+    def shutdown(self):
+        pass
+
+    def server_close(self):
+        if self._block is not None:
+            self._block.wait()
+        self.closed = True
+
+
+def test_close_server_does_not_exit_on_a_normal_close():
+    exits = []
+    srv = _FakeServer()
+    close_server(srv, budget=2.0, exit_fn=exits.append)
+    assert srv.closed
+    assert exits == []
+
+
+def test_close_server_forces_exit_when_a_request_thread_is_wedged():
+    release = threading.Event()
+    exits = []
+    srv = _FakeServer(block=release)
+    try:
+        start = time.monotonic()
+        close_server(srv, budget=0.3, exit_fn=exits.append)
+        assert time.monotonic() - start < 2.0
+        assert exits == [EXIT_SHUTDOWN_STUCK]
+        assert not srv.closed
+    finally:
+        release.set()
