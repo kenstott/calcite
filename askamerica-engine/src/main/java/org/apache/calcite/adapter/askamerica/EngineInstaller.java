@@ -55,6 +55,9 @@ final class EngineInstaller {
     private EngineInstaller() {
     }
 
+    /** The engine jar's asset name on every release. */
+    static final String ENGINE_ASSET = "askamerica-engine.jar";
+
     /** Stable, version-less asset URL — always the latest engine release. */
     private static final String DEFAULT_URL =
         "https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar";
@@ -209,9 +212,9 @@ final class EngineInstaller {
                 + ") — treating it as corrupt and re-downloading.");
             return true;
         }
-        String latest;
+        String release;
         try {
-            latest = latestVersion();
+            release = latestReleaseJson();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             report("Engine update check interrupted — keeping the cached jar.");
@@ -221,9 +224,17 @@ final class EngineInstaller {
                 + ") — keeping the cached jar.");
             return false;
         }
+        String latest = releaseVersion(release);
         if (latest == null) {
             report("Engine update check inconclusive (no engine-v tag in the release "
                 + "response) — keeping the cached jar.");
+            return false;
+        }
+        // A release is published before its workflow attaches the jar; until then the
+        // download URL answers 404, so the cached jar is still the newest engine there is.
+        if (!hasEngineJar(release)) {
+            report("Engine release " + latest + " has no " + ENGINE_ASSET
+                + " attached yet — keeping the cached jar.");
             return false;
         }
         if (have == null) {
@@ -256,11 +267,27 @@ final class EngineInstaller {
     }
 
     /**
-     * Version of the newest published engine release, or null when the response carried
-     * no recognisable {@code engine-v} tag. Parsed with a regex rather than a JSON
-     * library because this class runs before the engine jar is on the classpath.
+     * Version in a release response, or null when it carries no recognisable
+     * {@code engine-v} tag. Parsed with a regex rather than a JSON library because this
+     * class runs before the engine jar is on the classpath.
      */
-    static String latestVersion() throws IOException, InterruptedException {
+    static String releaseVersion(String releaseJson) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("\"tag_name\"\\s*:\\s*\"engine-v([^\"]+)\"")
+            .matcher(releaseJson);
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** Whether a release response lists the engine jar among its assets. */
+    static boolean hasEngineJar(String releaseJson) {
+        return java.util.regex.Pattern
+            .compile("\"name\"\\s*:\\s*\"" + java.util.regex.Pattern.quote(ENGINE_ASSET) + "\"")
+            .matcher(releaseJson)
+            .find();
+    }
+
+    /** The newest published release, as the GitHub API's JSON. */
+    static String latestReleaseJson() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(5))
@@ -275,10 +302,7 @@ final class EngineInstaller {
         if (resp.statusCode() != 200) {
             throw new IOException("release lookup returned HTTP " + resp.statusCode());
         }
-        java.util.regex.Matcher m = java.util.regex.Pattern
-            .compile("\"tag_name\"\\s*:\\s*\"engine-v([^\"]+)\"")
-            .matcher(resp.body());
-        return m.find() ? m.group(1) : null;
+        return resp.body();
     }
 
     /** Best-effort version label for diagnostics. */
