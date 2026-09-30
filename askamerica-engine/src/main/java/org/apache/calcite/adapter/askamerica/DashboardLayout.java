@@ -695,16 +695,16 @@ final class DashboardLayout {
             }
             if (p.points != null && !p.points.isEmpty()) {
                 p.scene = ChartRenderer.layoutPoints(p.chartType, p.title, p.xLabel, p.yLabel,
-                    p.points, w, h);
+                    p.points, w, h, p.bar.valueFormat);
             } else if ("pie".equals(p.chartType)) {
                 p.scene = ChartLayout.pieChart(p.title, p.categories, p.series.get(0).values,
-                    w, h);
+                    p.series.get(0).tooltips, p.bar.valueFormat, w, h);
             } else {
                 String chartType = p.chartType == null ? "line" : p.chartType;
                 if (!"bar".equals(chartType) && !p.bar.isDefault()) {
                     throw new IllegalArgumentException(
                         "chart panel '" + (p.title == null ? "untitled" : p.title)
-                        + "': orientation, sort, value_labels and value_format apply to "
+                        + "': orientation, sort and value_labels apply to "
                         + "chart_type 'bar' only, not '" + chartType + "'.");
                 }
                 p.scene = ChartLayout.categoryChart(chartType, p.title, p.xLabel, p.yLabel,

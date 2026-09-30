@@ -2465,8 +2465,12 @@ public class McpServer {
         chartProps.set("value_labels", prop("boolean",
             "'bar' only: print each value at the end of its bar. Default false."));
         chartProps.set("value_format", prop("string",
-            "'bar' only: a Java DecimalFormat pattern for value_labels, e.g. \"$#,##0\" or "
-            + "\"0.0'%'\". Default groups thousands and keeps up to two decimals."));
+            "Number format for value_labels, the value-axis ticks and the default hover "
+            + "tooltips: a Java DecimalFormat pattern such as \"$#,##0\" or \"0.0'%'\", or a "
+            + "d3-style one — optional '+', '$', ',' grouping, '.N' precision and type 'f' or "
+            + "'%' (value times 100), e.g. \"$,.0f\" or \"+.1%\". For scatter/bubble it "
+            + "applies to y; x is shown plain. Default groups thousands and keeps up to two "
+            + "decimals."));
         ObjectNode categoriesProp = MAPPER.createObjectNode();
         categoriesProp.put("type", "array");
         categoriesProp.put(
@@ -2480,7 +2484,11 @@ public class McpServer {
             "description",
             "For 'line'/'bar'/'pie' only. List of series to plot. Each object: name (string) "
             + "and values (array of numbers, same length and order as categories). 'pie' "
-            + "takes exactly one series, whose values become the slice sizes.");
+            + "takes exactly one series, whose values become the slice sizes. Optional "
+            + "tooltips (array of strings, same length as values; null takes the default) is "
+            + "the hover text for each bar, point or slice — e.g. \"California: +$18,130 "
+            + "(+22.1%); $82,019 -> $100,149\". Omit it and a default of category, series "
+            + "name and formatted value is generated.");
         chartProps.set("series", chartSeriesProp);
         ObjectNode pointsProp = MAPPER.createObjectNode();
         pointsProp.put("type", "array");
@@ -2490,7 +2498,9 @@ public class McpServer {
             + "(string), x (array of numbers), y (array of numbers, same length as x), and "
             + "for 'bubble' only, size (array of numbers, same length as x — the bubble "
             + "radius at each point). Points have no category axis, so every coordinate must "
-            + "be a real number — omit a point instead of passing null for a missing value.");
+            + "be a real number — omit a point instead of passing null for a missing value. "
+            + "Optional tooltips (array of strings, same length as x) is the hover text per "
+            + "point.");
         chartProps.set("points", pointsProp);
         chartProps.set(
             "width", prop("integer", "Image width in pixels (default 800, max 2000)."));
@@ -2546,9 +2556,9 @@ public class McpServer {
         panelsProp.put("description",
             "The panels, in reading order. Each is either a chart or a stat tile.\n"
             + "CHART panel: {\"type\":\"chart\", plus the same arguments render_chart takes "
-            + "— chart_type, title, x_label, y_label, the bar-only orientation/sort/value_labels/"
-            + "value_format, and categories+series (line/bar/pie) or "
-            + "points (scatter/bubble)}.\n"
+            + "— chart_type, title, x_label, y_label, the bar-only orientation/sort/value_labels, "
+            + "value_format, and categories+series (line/bar/pie) or points (scatter/bubble), "
+            + "each series/point series optionally with tooltips}.\n"
             + "STAT panel: {\"type\":\"stat\", \"label\":\"Real 10-year rise\", "
             + "\"value\":\"+$19,029\", \"delta\":\"+22.0%\", \"delta_direction\":"
             + "\"up\"|\"down\"|\"flat\"} — a headline number the charts explain.\n"
@@ -4476,8 +4486,8 @@ public class McpServer {
 
                     if ("scatter".equals(chartType) || "bubble".equals(chartType)) {
                         if (!readBarOptions(args, false).isDefault()) {
-                            throw new IllegalArgumentException("orientation, sort, value_labels "
-                                + "and value_format apply to chart_type 'bar' only, not '"
+                            throw new IllegalArgumentException("orientation, sort and value_labels "
+                                + "apply to chart_type 'bar' only, not '"
                                 + chartType + "'.");
                         }
                         java.util.List<ChartRenderer.PointSeriesSpec> points =
@@ -4499,13 +4509,14 @@ public class McpServer {
                                 }
                             }
                             points.add(new ChartRenderer.PointSeriesSpec(
-                                s.path("name").asText(), x, y, size));
+                                s.path("name").asText(), x, y, size, parseTooltips(s)));
                         }
 
                         log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
                             + " points=" + points.size());
                         ChartScene pointScene = ChartRenderer.layoutPoints(
-                            chartType, title, xLabel, yLabel, points, width, height);
+                            chartType, title, xLabel, yLabel, points, width, height,
+                            readBarOptions(args, false).valueFormat);
                         chartPng = pointScene.toPng();
                         chartSvg = pointScene.toSvg();
                         text = chartSummary(chartType, title, points.size() + " point series");
@@ -4536,7 +4547,8 @@ public class McpServer {
                                 + "' has no 'values' array (saw fields: " + seenKeys
                                 + "). Each series needs values (array of numbers) — not data or points.");
                         }
-                        series.add(new ChartRenderer.SeriesSpec(s.path("name").asText(), values));
+                        series.add(new ChartRenderer.SeriesSpec(s.path("name").asText(), values,
+                            parseTooltips(s)));
                     }
 
                     log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
@@ -7918,7 +7930,7 @@ public class McpServer {
                     }
                 }
                 p.points.add(new ChartRenderer.PointSeriesSpec(
-                    sNode.path("name").asText(), xs, ys, sz));
+                    sNode.path("name").asText(), xs, ys, sz, parseTooltips(sNode)));
             }
             return p;
         }
@@ -7948,7 +7960,8 @@ public class McpServer {
                     + "' has no 'values' array (saw fields: " + seenKeys
                     + "). Each series needs values (array of numbers) — not data or points.");
             }
-            p.series.add(new ChartRenderer.SeriesSpec(sNode.path("name").asText(), vals));
+            p.series.add(new ChartRenderer.SeriesSpec(sNode.path("name").asText(), vals,
+                parseTooltips(sNode)));
         }
         if (p.categories.isEmpty() || p.series.isEmpty()) {
             throw new IllegalArgumentException(
@@ -7956,6 +7969,24 @@ public class McpServer {
                 + "' needs categories + series (line/bar/pie) or points (scatter/bubble)");
         }
         return p;
+    }
+
+    /** A series' optional {@code tooltips} array; null when omitted, a JSON null stays null. */
+    private static java.util.List<String> parseTooltips(JsonNode series) {
+        JsonNode t = series.get("tooltips");
+        if (t == null || t.isNull()) {
+            return null;
+        }
+        if (!t.isArray()) {
+            throw new IllegalArgumentException(
+                "series '" + series.path("name").asText("(unnamed)")
+                + "': tooltips must be an array of strings, one per value.");
+        }
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (JsonNode n : t) {
+            out.add(n.isNull() ? null : n.asText());
+        }
+        return out;
     }
 
     /**

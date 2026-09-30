@@ -272,6 +272,82 @@ final class ChartScene {
         }
     }
 
+    /**
+     * An invisible, larger-than-the-mark area that receives pointer events, so a thin bar or a
+     * small point is still easy to hover. SVG only: the raster has no pointer.
+     */
+    static final class HitTarget extends Element {
+        final boolean circle;
+        final double a;
+        final double b;
+        final double c;
+        final double d;
+
+        private HitTarget(boolean circle, double a, double b, double c, double d) {
+            this.circle = circle;
+            this.a = a;
+            this.b = b;
+            this.c = c;
+            this.d = d;
+        }
+
+        static HitTarget rect(double x, double y, double w, double h) {
+            return new HitTarget(false, x, y, w, h);
+        }
+
+        static HitTarget circle(double cx, double cy, double r) {
+            return new HitTarget(true, cx, cy, r, 0);
+        }
+
+        @Override void writeSvg(StringBuilder sb, String indent) {
+            sb.append(indent);
+            if (circle) {
+                sb.append("<circle class=\"hit\" cx=\"").append(num(a)).append("\" cy=\"")
+                    .append(num(b)).append("\" r=\"").append(num(c)).append("\"");
+            } else {
+                sb.append("<rect class=\"hit\" x=\"").append(num(a)).append("\" y=\"")
+                    .append(num(b)).append("\" width=\"").append(num(c))
+                    .append("\" height=\"").append(num(d)).append("\"");
+            }
+            sb.append(" fill=\"#000\" fill-opacity=\"0\"/>\n");
+        }
+
+        @Override void drawPng(Graphics2D g) {
+        }
+    }
+
+    /**
+     * A mark with a hover tooltip: the mark, an optional larger {@link HitTarget}, and the text as
+     * a native SVG {@code <title>}. Browsers render {@code <title>} without any script and screen
+     * readers announce it, which is why this works inside a published report page whose scripts
+     * are disabled. The raster draws the mark alone.
+     */
+    static final class Hover extends Element {
+        final Element mark;
+        final HitTarget hit;
+        final String text;
+
+        Hover(Element mark, HitTarget hit, String text) {
+            this.mark = mark;
+            this.hit = hit;
+            this.text = text;
+        }
+
+        @Override void writeSvg(StringBuilder sb, String indent) {
+            sb.append(indent).append("<g class=\"hover\">\n");
+            sb.append(indent).append("  <title>").append(escape(text)).append("</title>\n");
+            mark.writeSvg(sb, indent + "  ");
+            if (hit != null) {
+                hit.writeSvg(sb, indent + "  ");
+            }
+            sb.append(indent).append("</g>\n");
+        }
+
+        @Override void drawPng(Graphics2D g) {
+            mark.drawPng(g);
+        }
+    }
+
     /** A run of text, optionally rotated about its anchor. */
     static final class Label extends Element {
         final double x;

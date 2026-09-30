@@ -12,7 +12,10 @@ package org.apache.calcite.adapter.askamerica;
 
 import org.apache.calcite.adapter.askamerica.ChartScene.Anchor;
 import org.apache.calcite.adapter.askamerica.ChartScene.Dot;
+import org.apache.calcite.adapter.askamerica.ChartScene.Element;
 import org.apache.calcite.adapter.askamerica.ChartScene.Group;
+import org.apache.calcite.adapter.askamerica.ChartScene.HitTarget;
+import org.apache.calcite.adapter.askamerica.ChartScene.Hover;
 import org.apache.calcite.adapter.askamerica.ChartScene.Label;
 import org.apache.calcite.adapter.askamerica.ChartScene.Line;
 import org.apache.calcite.adapter.askamerica.ChartScene.Path;
@@ -78,6 +81,8 @@ final class ChartLayout {
     private static final int HBAR_ROW = 17;
     private static final int AXIS_TITLE_SIZE = 12;
     private static final int AXIS_TITLE_MIN = 8;
+    /** Smallest hover area, in px, so a thin bar or a 3px point is still easy to hit. */
+    private static final double MIN_HIT = 16;
 
     static Color color(int index) {
         return PALETTE[Math.floorMod(index, PALETTE.length)];
@@ -117,6 +122,7 @@ final class ChartLayout {
     static ChartScene categoryChart(String type, String title, String xLabel, String yLabel,
             List<String> categories, List<ChartRenderer.SeriesSpec> series, int width,
             int height, double[] forcedDomain, ChartRenderer.BarOptions opts) {
+        ValueFormat fmt = opts.valueFormat;
         boolean bar = "bar".equals(type);
         if (bar && !"none".equals(opts.sort)) {
             List<String> sortedCats = new ArrayList<>();
@@ -156,8 +162,8 @@ final class ChartLayout {
             max = 0;
         }
         Ticks ticks = forcedDomain == null
-            ? niceTicks(min, max)
-            : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]));
+            ? niceTicks(min, max, fmt)
+            : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]), fmt);
 
         int legendHeight = legendBand(seriesNames(series), width);
         // Rotate rather than drop: measure first, then reserve the depth the choice needs.
@@ -258,10 +264,16 @@ final class ChartLayout {
                     double y = valueToY(v, ticks, top, plotH);
                     double zero = valueToY(0, ticks, top, plotH);
                     double x = left + slotWidth * i + groupPad + barW * si;
-                    g.add(new Rect(x, Math.min(y, zero), barW - 1, Math.abs(zero - y), c)
+                    Element barMark = new Rect(x, Math.min(y, zero), barW - 1,
+                        Math.abs(zero - y), c)
                         .at("mark-" + ChartScene.slug(s.name) + "-"
                             + ChartScene.slug(categories.get(i)))
-                        .styled("bar"));
+                        .styled("bar");
+                    double hitW = Math.max(barW - 1, MIN_HIT);
+                    g.add(new Hover(barMark,
+                        HitTarget.rect(x + (barW - 1 - hitW) / 2, top, hitW, plotH),
+                        tooltip(s.tooltips, i, categories.get(i) + " — " + s.name + ": "
+                            + ValueFormat.render(fmt, v))));
                     if (opts.valueLabels) {
                         String vt = opts.format(v);
                         double ly = v >= 0 ? y - 4 : y + 14;
@@ -286,11 +298,15 @@ final class ChartLayout {
                     if (v == null) {
                         continue;
                     }
-                    g.add(new Dot(left + slotWidth * (i + 0.5), valueToY(v, ticks, top, plotH),
-                        3, c, 1.0)
+                    double cx = left + slotWidth * (i + 0.5);
+                    double cy = valueToY(v, ticks, top, plotH);
+                    Element dot = new Dot(cx, cy, 3, c, 1.0)
                         .at("mark-" + ChartScene.slug(s.name) + "-"
                             + ChartScene.slug(categories.get(i)))
-                        .styled("point"));
+                        .styled("point");
+                    g.add(new Hover(dot, HitTarget.circle(cx, cy, MIN_HIT / 2),
+                        tooltip(s.tooltips, i, categories.get(i) + " — " + s.name + ": "
+                            + ValueFormat.render(fmt, v))));
                 }
             }
             scene.add(g);
@@ -332,9 +348,10 @@ final class ChartLayout {
         if (!any) {
             max = 1;
         }
+        ValueFormat fmt = opts.valueFormat;
         Ticks ticks = forcedDomain == null
-            ? niceTicks(min, max)
-            : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]));
+            ? niceTicks(min, max, fmt)
+            : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]), fmt);
 
         int legendHeight = legendBand(seriesNames(series), width);
         double titleBottom = title == null || title.isEmpty() ? 12 : 36;
@@ -456,8 +473,13 @@ final class ChartLayout {
                 double vx = valueToX(v, ticks, left, plotW);
                 double y = top + slotH * i + groupPad + barH * si;
                 String slug = ChartScene.slug(s.name) + "-" + ChartScene.slug(categories.get(i));
-                g.add(new Rect(Math.min(vx, zeroX), y, Math.abs(vx - zeroX), barH - 1, c)
-                    .at("mark-" + slug).styled("bar"));
+                Element barMark = new Rect(Math.min(vx, zeroX), y, Math.abs(vx - zeroX),
+                    barH - 1, c).at("mark-" + slug).styled("bar");
+                double hitH = Math.max(barH - 1, MIN_HIT);
+                g.add(new Hover(barMark,
+                    HitTarget.rect(left, y + (barH - 1 - hitH) / 2, plotW, hitH),
+                    tooltip(s.tooltips, i, categories.get(i) + " — " + s.name + ": "
+                        + ValueFormat.render(fmt, v))));
                 if (opts.valueLabels) {
                     boolean negative = v < 0;
                     g.add(new Label(negative ? vx - 4 : vx + 4, y + barH / 2 + 4,
@@ -534,7 +556,8 @@ final class ChartLayout {
     }
 
     static ChartScene pieChart(String title, List<String> categories,
-            List<Double> values, int width, int height) {
+            List<Double> values, List<String> tooltips, ValueFormat fmt, int width,
+            int height) {
         ChartScene scene = new ChartScene(width, height, BACKGROUND);
         double top = title == null || title.isEmpty() ? 16 : 44;
         if (title != null && !title.isEmpty()) {
@@ -569,7 +592,11 @@ final class ChartLayout {
                 double a = angle + sweep * k / steps;
                 wedge.to(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
             }
-            slices.add(wedge.at("mark-" + ChartScene.slug(categories.get(i))).styled("slice"));
+            Element slice = wedge.at("mark-" + ChartScene.slug(categories.get(i)))
+                .styled("slice");
+            slices.add(new Hover(slice, null, tooltip(tooltips, i, categories.get(i) + ": "
+                + ValueFormat.render(fmt, v)
+                + String.format(Locale.ROOT, " (%.1f%%)", v / total * 100))));
 
             double mid = angle + sweep / 2;
             double lx = cx + Math.cos(mid) * (r + 14);
@@ -590,7 +617,8 @@ final class ChartLayout {
 
     /** Layout of a scatter or bubble chart over two numeric axes. */
     static ChartScene pointChart(boolean bubble, String title, String xLabel, String yLabel,
-            List<ChartRenderer.PointSeriesSpec> series, int width, int height) {
+            List<ChartRenderer.PointSeriesSpec> series, int width, int height,
+            ValueFormat fmt) {
         ChartScene scene = new ChartScene(width, height, BACKGROUND);
         double xmin = Double.POSITIVE_INFINITY;
         double xmax = Double.NEGATIVE_INFINITY;
@@ -620,7 +648,7 @@ final class ChartLayout {
             ymin = 0;
             ymax = 1;
         }
-        Ticks yt = niceTicks(ymin, ymax);
+        Ticks yt = niceTicks(ymin, ymax, fmt);
         Ticks xt = niceTicks(xmin, xmax);
 
         boolean identity = isIdentityScatter(series);
@@ -686,8 +714,14 @@ final class ChartLayout {
                 if (bubble && s.size != null && smax > 0) {
                     r = 4 + Math.sqrt(Math.abs(s.size.get(i)) / smax) * 18;
                 }
-                g.add(new Dot(px, py, r, c, bubble ? 0.55 : 0.85)
-                    .at("mark-" + ChartScene.slug(s.name) + "-" + i).styled("point"));
+                Element dot = new Dot(px, py, r, c, bubble ? 0.55 : 0.85)
+                    .at("mark-" + ChartScene.slug(s.name) + "-" + i).styled("point");
+                String label = s.name + ": (" + ValueFormat.plain(s.x.get(i)) + ", "
+                    + ValueFormat.render(fmt, s.y.get(i)) + ")"
+                    + (bubble && s.size != null
+                        ? ", size " + ValueFormat.plain(s.size.get(i)) : "");
+                g.add(new Hover(dot, HitTarget.circle(px, py, Math.max(r, MIN_HIT / 2)),
+                    tooltip(s.tooltips, i, label)));
             }
             scene.add(g);
         }
@@ -1134,8 +1168,19 @@ final class ChartLayout {
         }
     }
 
+    /** The caller's tooltip for mark {@code i}, or the generated default when it gave none. */
+    private static String tooltip(List<String> supplied, int i, String generated) {
+        String t = supplied == null ? null : supplied.get(i);
+        return t == null ? generated : t;
+    }
+
     /** Axis bounds and ticks on 1/2/5×10ⁿ steps, the spacing people read without thinking. */
     static Ticks niceTicks(double min, double max) {
+        return niceTicks(min, max, null);
+    }
+
+    /** As above, labelling each tick with {@code fmt} when the caller supplied one. */
+    static Ticks niceTicks(double min, double max, ValueFormat fmt) {
         if (min == max) {
             max = min + (min == 0 ? 1 : Math.abs(min) * 0.1);
         }
@@ -1149,7 +1194,7 @@ final class ChartLayout {
         for (double v = lo; v <= hi + step * 0.5; v += step) {
             double rounded = Math.abs(v) < step * 1e-9 ? 0 : v;
             t.values.add(rounded);
-            t.labels.add(formatTick(rounded, step));
+            t.labels.add(fmt == null ? formatTick(rounded, step) : fmt.format(rounded));
         }
         return t;
     }
