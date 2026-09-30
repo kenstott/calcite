@@ -351,6 +351,24 @@ INSERT INTO dq_results SELECT 'census', 'lodes_workplace', 'all_same_value', 'wa
 -- T7: EXPECTED VALUES — domain-specific sanity checks
 -- ============================================================================
 
+-- acs1_income: each year with data carries exactly one national row with a plausible median household income
+INSERT INTO dq_results
+SELECT
+  'census', 'acs1_income', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'years without exactly one United States row, or whose national median household income is outside 20000-200000'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM (
+    SELECT year, SUM(CASE WHEN geo_name = 'United States' THEN 1 ELSE 0 END) AS n_us,
+           MAX(CASE WHEN geo_name = 'United States' THEN median_household_income END) AS us_median
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income', allow_moved_paths := true)
+    GROUP BY year
+  )
+  WHERE n_us != 1 OR us_median IS NULL OR us_median NOT BETWEEN 20000 AND 200000
+);
+
 -- acs_population: state FIPS code must be 2 characters
 INSERT INTO dq_results
 SELECT

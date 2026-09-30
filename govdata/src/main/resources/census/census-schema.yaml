@@ -4211,10 +4211,13 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Household median income and per capita income from the ACS 1-Year survey,
-      state level only (areas with 65,000+ population — no county breakout).
-      More current than the 5-year acs_income table (about 1 year behind vs. 2),
-      but based on a smaller annual sample, so estimates carry wider margins of
-      error.
+      state level plus one national row per year (areas with 65,000+ population — no
+      county breakout). The national row has geography = 'us', name = 'United States'
+      and a null state column; it is the Census-published national estimate, so the
+      national median household income needs no caller-side aggregation (state medians
+      cannot be averaged into a national median). More current than the 5-year
+      acs_income table (about 1 year behind vs. 2), but based on a smaller annual
+      sample, so estimates carry wider margins of error.
 
     dimensions:
       type:
@@ -4222,6 +4225,7 @@ partitionedTables:
       year: *acs1_year_range
       geography:
         - state
+        - us
 
     columns:
       - *name_column
