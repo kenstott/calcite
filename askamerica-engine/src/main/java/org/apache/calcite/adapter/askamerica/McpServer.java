@@ -2912,7 +2912,7 @@ public class McpServer {
 
         ObjectNode artifactProps = MAPPER.createObjectNode();
         for (String shared : new String[]{"title", "subtitle", "sections", "dashboard",
-            "footnote", "byline"}) {
+            "footnote", "byline", "sources"}) {
             artifactProps.set(shared, pubProps.get(shared));
         }
         tools.add(
@@ -2921,9 +2921,10 @@ public class McpServer {
             + "artifact/charting capability (for a Claude client: a published Claude Artifact "
             + "inside the caller's own workspace), instead of AskAmerica's renderer. A second "
             + "destination for the same report object publish_report takes — same title, "
-            + "subtitle, sections, dashboard, footnote and byline, no reshaping — for when the "
-            + "report should live where the caller already works rather than on AskAmerica's "
-            + "cloud. Returns JSON: the narrative sections, and each dashboard panel as data "
+            + "subtitle, sections, dashboard, footnote, byline and sources, no reshaping — for when "
+            + "the report should live where the caller already works rather than on AskAmerica's "
+            + "cloud. Returns JSON: the narrative sections, the `sources` citations exactly as given, "
+            + "and each dashboard panel as data "
             + "(categories/series or points) with a `hints` object — orientation_hint "
             + "(bar charts) and suppressed_cells (values with no data: draw them as a gap or "
             + "an explicit 'no data' mark, never as zero). Follow the hints instead of "
@@ -4460,13 +4461,17 @@ public class McpServer {
                         + "Follow each panel's `hints`: orientation_hint sets bar orientation, "
                         + "and every suppressed_cells entry is a value with no data — show a gap "
                         + "or a 'no data' mark there, never zero. `sections` html is the "
-                        + "narrative, in order. Draw only what is in this payload.\n\n"
+                        + "narrative, in order. Draw chart data only from the panels: no invented "
+                        + "points, and suppressed cells stay gaps. Render EVERY `sources` entry "
+                        + "as a reference, and for an entry with `sql` or `tool`/`params` show "
+                        + "that query or tool call as an expandable toggle beside the figure it "
+                        + "supports, so the reader can re-derive it.\n\n"
                         + MAPPER.writeValueAsString(ReportArtifact.build(
                             args.path("title").asText(null),
                             args.path("subtitle").asText(null),
                             args.path("footnote").asText(null),
                             args.path("byline").asText(null),
-                            artSecs, artPanels, artCols));
+                            artSecs, artPanels, artCols, args.path("sources")));
                     break;
                 }
                 case "register": {

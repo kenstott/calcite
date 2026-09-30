@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.askamerica;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,8 @@ class ReportArtifactTest {
 
   private static JsonNode firstPanel(DashboardLayout.Panel p) {
     ObjectNode out = ReportArtifact.build("Title", null, null, null,
-        Collections.<ReportPage.Section>emptyList(), Collections.singletonList(p), 2);
+        Collections.<ReportPage.Section>emptyList(), Collections.singletonList(p), 2,
+        MissingNode.getInstance());
     return out.path("panels").get(0);
   }
 
@@ -74,10 +76,23 @@ class ReportArtifactTest {
   @Test void sectionsAndTitlePassThrough() {
     ObjectNode out = ReportArtifact.build("Head", "Sub", "Foot", null,
         Collections.singletonList(new ReportPage.Section("Summary", "<p>x</p>")),
-        Collections.<DashboardLayout.Panel>emptyList(), 2);
+        Collections.<DashboardLayout.Panel>emptyList(), 2,
+        MissingNode.getInstance());
     assertEquals("Head", out.path("title").asText());
     assertEquals("Sub", out.path("subtitle").asText());
     assertEquals("<p>x</p>", out.path("sections").get(0).path("html").asText());
     assertTrue(out.path("byline").isMissingNode());
+  }
+
+  @Test void sourcesAreEchoedUnchanged() throws Exception {
+    JsonNode src = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+        "[{\"label\":\"ACS\",\"sql\":\"SELECT 1\"},"
+        + "{\"label\":\"CPI\",\"tool\":\"adjust_inflation\","
+        + "\"params\":[[\"from_year\",2014]]}]");
+    ObjectNode out = ReportArtifact.build("T", null, null, null,
+        Collections.<ReportPage.Section>emptyList(),
+        Collections.<DashboardLayout.Panel>emptyList(), 2, src);
+    assertEquals(2, out.path("schema_version").asInt());
+    assertEquals(src, out.path("sources"));
   }
 }

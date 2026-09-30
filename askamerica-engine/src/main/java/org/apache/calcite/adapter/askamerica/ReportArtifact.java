@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,11 +39,13 @@ final class ReportArtifact {
     private ReportArtifact() {
     }
 
-    /** Builds the payload; {@code sections} and {@code panels} may be empty, never null. */
+    /** Builds the payload; {@code sections} and {@code panels} may be empty, never null; {@code sources}
+     *  is echoed unchanged. */
     static ObjectNode build(String title, String subtitle, String footnote, String byline,
-            List<ReportPage.Section> sections, List<DashboardLayout.Panel> panels, int columns) {
+            List<ReportPage.Section> sections, List<DashboardLayout.Panel> panels, int columns,
+            JsonNode sources) {
         ObjectNode out = MAPPER.createObjectNode();
-        out.put("schema_version", 1);
+        out.put("schema_version", 2);
         putIfPresent(out, "title", title);
         putIfPresent(out, "subtitle", subtitle);
         putIfPresent(out, "footnote", footnote);
@@ -54,6 +57,7 @@ final class ReportArtifact {
             putIfPresent(n, "heading", s.heading);
             n.put("html", s.html);
         }
+        out.set("sources", sources.isArray() ? sources.deepCopy() : MAPPER.createArrayNode());
         ArrayNode ps = out.putArray("panels");
         for (DashboardLayout.Panel p : panels) {
             ps.add(panel(p));
