@@ -850,6 +850,20 @@ WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
 -- T7: EXPECTED VALUES — domain-specific sanity checks
 -- ============================================================================
 
+-- MEHOINUSA672N real median household income: annual, must be present and a plausible
+-- constant-dollar national figure (tens of thousands of dollars).
+INSERT INTO dq_results
+SELECT
+  'econ', 'fred_indicators', 'expected_values',
+  CASE WHEN n >= 10 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR) || ' rows, ' || CAST(bad AS VARCHAR) || ' out of range', '>=10 rows, 0 out of range',
+  'MEHOINUSA672N present with values in [30000,150000]'
+FROM (
+  SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE value NOT BETWEEN 30000 AND 150000) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators', allow_moved_paths := true)
+  WHERE series = 'MEHOINUSA672N'
+);
+
 -- employment_statistics: CPS rate/ratio series values in [0, 100]
 -- Headline unemployment rate and LFPR plus the by-educational-attainment breakouts
 -- (unemployment rate LNS140276xx, LFPR LNS113276xx, emp-pop ratio LNS123276xx).
