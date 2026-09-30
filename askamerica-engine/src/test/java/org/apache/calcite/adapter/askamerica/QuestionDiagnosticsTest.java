@@ -414,6 +414,20 @@ class QuestionDiagnosticsTest {
     assertTrue(hasType(env, "small_n"));
   }
 
+  @Test void aPassedControlIsNotReportedAsUnconditioned() {
+    ObjectNode env = QuestionDiagnostics.forExtraction("SELECT * FROM edu.naep",
+        McpServer.withFocal("spending", Collections.singletonList("pop_growth")),
+        new double[][]{{1, 5}, {2, 3}, {3, 9}}, 3, 3, 0);
+    assertFalse(hasType(env, "uncontrolled_confound"));
+  }
+
+  @Test void noControlsLeavesTheFocalVariableReportedAsUnconditioned() {
+    ObjectNode env = QuestionDiagnostics.forExtraction("SELECT * FROM edu.naep",
+        McpServer.withFocal("spending", Collections.<String>emptyList()),
+        new double[][]{{1}, {2}, {3}}, 3, 3, 0);
+    assertTrue(hasType(env, "uncontrolled_confound"));
+  }
+
   @Test void heavyNullDroppingIsReportedBecauseTheSurvivorsAreNotTheSelection() {
     ObjectNode env = QuestionDiagnostics.forExtraction("SELECT * FROM health.x",
         Arrays.asList("a", "b"), null, 400, 1000, 600);

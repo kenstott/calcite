@@ -11043,7 +11043,7 @@ public class McpServer {
         StatsEngine.Iv2slsResult result = StatsEngine.iv2sls(y, endog, instr, ctrl,
             instruments.toArray(new String[0]), controls.toArray(new String[0]));
         ObjectNode out = result.toJson(MAPPER);
-        return statsResult(out, sql, controls, ex);
+        return statsResult(out, sql, withFocal(endogenous, controls), ex);
     }
 
     private static StatsOutput diffInDiffTool(String sql, String outcome, String treatment,
@@ -11062,7 +11062,7 @@ public class McpServer {
         StatsEngine.DiffInDiffResult result = StatsEngine.diffInDiff(y, treat, postCol, ctrl,
             controls.toArray(new String[0]));
         ObjectNode out = result.toJson(MAPPER);
-        return statsResult(out, sql, controls, ex);
+        return statsResult(out, sql, withFocal(treatment, controls), ex);
     }
 
     private static StatsOutput hypothesisTestTool(String sql, String test, String valueCol,
@@ -11513,7 +11513,7 @@ public class McpServer {
         StatsEngine.PartialCorrelationResult result = StatsEngine.partialCorrelation(xCol, yCol,
             ctrl, controls.toArray(new String[0]));
         ObjectNode out = result.toJson(MAPPER);
-        return statsResult(out, sql, controls, ex);
+        return statsResult(out, sql, withFocal(x, controls), ex);
     }
 
     /** {@code scenario_sweep}'s literal substitution marker — kept as a constant so the tool
@@ -11639,7 +11639,7 @@ public class McpServer {
         StatsMlEngine.DoubleMlResult result = StatsMlEngine.doubleMlAte(y, treat, ctrl,
             controls.toArray(new String[0]), resolvedFolds, resolvedMethod);
         ObjectNode out = result.toJson(MAPPER);
-        return statsResult(out, sql, controls, ex);
+        return statsResult(out, sql, withFocal(treatment, controls), ex);
     }
 
     /**
@@ -11901,6 +11901,19 @@ public class McpServer {
         }
         out.put("rubric", QuestionGuidance.RUBRIC);
         return out.toString();
+    }
+
+    /**
+     * The covariate list for a tool whose {@code controls} adjust an estimate of one focal
+     * variable. Diagnostics count covariates to decide whether an estimate is adjusted at all,
+     * so the focal variable must be in the list: a single control then reads as two covariates
+     * (adjusted), and no controls as one (unadjusted).
+     */
+    static List<String> withFocal(String focal, List<String> controls) {
+        List<String> all = new ArrayList<>(controls.size() + 1);
+        all.add(focal);
+        all.addAll(controls);
+        return all;
     }
 
     /** A stats tool's payload plus its diagnostics envelope. The two travel separately so the
