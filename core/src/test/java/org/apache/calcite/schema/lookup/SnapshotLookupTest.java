@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.schema.lookup;
 
+import com.google.common.collect.ImmutableSet;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -38,6 +41,21 @@ class SnapshotLookupTest {
 
   @Test void testIgnoreCase() {
     assertThat(testee.getIgnoreCase("A"), equalTo(new Named<>("a", "1")));
+  }
+
+  /** A listed name the delegate then cannot produce (a view whose on-demand CREATE failed)
+   * must drop out of the frozen name set, or every later listing keeps naming it. */
+  @Test void testNameThatFailsToResolveIsNoLongerListed() {
+    Lookup<String> lookup = new SnapshotLookup<>(
+        new FakeLookup("a", "1", "b", "2") {
+          @Override public @Nullable String get(String name) {
+            return "b".equals(name) ? null : super.get(name);
+          }
+        });
+    assertThat(lookup.getNames(LikePattern.any()), equalTo(ImmutableSet.of("a", "b")));
+    assertThat(lookup.get("b"), nullValue());
+    assertThat(lookup.getNames(LikePattern.any()), equalTo(ImmutableSet.of("a")));
+    assertThat(lookup.get("a"), equalTo("1"));
   }
 
 }

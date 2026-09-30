@@ -597,11 +597,17 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
     info.setProperty("quotedCasing", "UNCHANGED");
     info.setProperty("caseSensitive", "false");
 
-    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
-         Statement statement = connection.createStatement()) {
-      // The first reference attempts the CREATE, which fails on the missing base table.
-      assertThrows(java.sql.SQLException.class,
-          () -> statement.executeQuery("SELECT * FROM over_missing").close());
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
+      // The first listing still names the pending view; resolving it attempts the CREATE,
+      // which fails on the missing base table -- the order a catalog walk hits it in.
+      assertThrows(Exception.class, () -> {
+        try (ResultSet tables =
+                 connection.getMetaData().getTables(null, "TEST", "%", null)) {
+          while (tables.next()) {
+            tables.getString("TABLE_NAME");
+          }
+        }
+      });
 
       boolean foundOrders = false;
       boolean foundView = false;
