@@ -311,7 +311,8 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   }
 
   @Override public Set<String> getTableNames() {
-    Set<String> tableNames = new java.util.LinkedHashSet<>(super.getTableNames());
+    Set<String> duckdbNames = super.getTableNames();
+    Set<String> tableNames = new java.util.LinkedHashSet<>(duckdbNames);
     // Always include tables defined in FileSchema YAML regardless of DuckDB view state.
     // This ensures JDBC metadata (getTables/getColumns) works even when iceberg views
     // haven't been created yet (e.g., first connection before ETL runs).
@@ -326,6 +327,16 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     // Views that ARE in DuckDB appear with TABLE_TYPE=VIEW so getTables(type=TABLE) correctly skips them.
     if (catalogPath != null) {
       tableNames.addAll(DuckDBPendingViews.pendingViewNames(catalogPath, schemaName));
+    }
+    // A declared table FileSchema omitted as not-yet-materialized has no DuckDB view and
+    // getTable() returns null for it. Listing it anyway makes JDBC getTables() fail for the
+    // whole schema (CalciteMetaImpl requires every listed name to resolve), so drop it here.
+    if (fileSchema != null) {
+      for (String omitted : fileSchema.getOmittedTableNames()) {
+        if (!duckdbNames.contains(omitted)) {
+          tableNames.remove(omitted);
+        }
+      }
     }
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
     return tableNames;

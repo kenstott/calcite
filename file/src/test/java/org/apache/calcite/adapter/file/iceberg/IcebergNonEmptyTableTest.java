@@ -395,4 +395,86 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
               + "omitted from the mounted schema's table listing");
     }
   }
+
+  /**
+   * Under the DuckDB engine, a not-yet-materialized declared table must not appear in the
+   * schema's table names either. DuckDBJdbcSchema lists declared and pending-view names, but
+   * getTable() returns null for an omitted table, and JDBC getTables() rejects a listed name that
+   * does not resolve — so one omitted table made the whole schema's metadata listing throw, and
+   * pgwire-govdata dropped the schema from its catalog.
+   */
+  @Test public void testOmittedTableDoesNotBreakDuckDbTableListing() throws Exception {
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"executionEngine\": \"duckdb\",\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base3") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          },\n"
+        + "          {\n"
+        + "            \"name\": \"never_materialized\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"does_not_exist\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+         Statement statement = connection.createStatement()) {
+      ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM orders");
+      assertTrue(rs.next(), "Should have a result row");
+      assertEquals(3, rs.getInt(1), "Real table's rows are unaffected by the missing sibling");
+      rs.close();
+
+      boolean foundOrders = false;
+      boolean foundOmitted = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          String tableName = tables.getString("TABLE_NAME");
+          if ("orders".equalsIgnoreCase(tableName)) {
+            foundOrders = true;
+          }
+          if ("never_materialized".equalsIgnoreCase(tableName)) {
+            foundOmitted = true;
+          }
+        }
+      }
+      assertTrue(foundOrders, "The materialized sibling must still be listed");
+      assertFalse(foundOmitted, "The not-yet-materialized table must not be listed");
+    }
+  }
 }
