@@ -249,15 +249,20 @@ public final class DuckDBPendingViews {
         }
         SQLException err = createViewWithTimeout(conn, pv);
         boolean dependencyCreated = false;
-        if (err != null) {
+        // DuckDB reports only the first unresolved reference per attempt, so a view that reads
+        // several pending tables needs one create-then-retry round per dependency.
+        Set<String> attempted = new java.util.HashSet<>();
+        while (err != null) {
           String missing = extractMissingReference(err);
           PendingView dependency =
               missing == null ? null : findByReference(pendingList, duckdbSchema, missing);
-          if (dependency != null) {
-            dependencyCreated = createOnDemand(dbPath, conn, dependency.duckdbSchema,
-                dependency.viewName, inFlight);
-            err = createViewWithTimeout(conn, pv);
+          if (dependency == null
+              || !attempted.add(qualified(dependency.duckdbSchema, dependency.viewName))) {
+            break;
           }
+          dependencyCreated |= createOnDemand(dbPath, conn, dependency.duckdbSchema,
+              dependency.viewName, inFlight);
+          err = createViewWithTimeout(conn, pv);
         }
         if (err == null) {
           LOGGER.debug("Created deferred view: {}", key);
