@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.102.0](https://github.com/kenstott/calcite/compare/engine-v0.101.0...engine-v0.102.0) (2026-09-30)
+
+
+### Features
+
+* **askamerica-engine:** optional point labels, label modes and highlight groups for scatter/bubble render_chart ([3a1ff60](https://github.com/kenstott/calcite/commit/3a1ff60715043abb7597fccdddf2095d8074a73c))
+* **govdata/census:** add national row to acs1_income ([f70d1d6](https://github.com/kenstott/calcite/commit/f70d1d61a2a25d09d98ef271e15c8cc8f7f04ec8))
+* **govdata/econ:** add MEHOINUSA672N real median household income to fred_indicators ([93314ab](https://github.com/kenstott/calcite/commit/93314abcd228c8110310d0c503fa0266dd686405))
+* **govdata:** IcebergSnapshotReattachRunner re-attaches newest surviving manifest list ([bd24066](https://github.com/kenstott/calcite/commit/bd2406678ac0224e2092331e29a3e0328e24d3e7))
+* **pgwire-calcite:** reject unfiltered scans of large tables ([#787](https://github.com/kenstott/calcite/issues/787) item 1) ([ab38a64](https://github.com/kenstott/calcite/commit/ab38a64dab697a84efd95575bc2a3cfc7d449f9d))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** carry find_recipe consulted state across process restarts ([dbfa738](https://github.com/kenstott/calcite/commit/dbfa738866f6c9d72a85ce7d47f1ac26ffc42a39))
+* **askamerica-engine:** don't invent a coverage window for columnless views ([3ebe00e](https://github.com/kenstott/calcite/commit/3ebe00e062041d3cbc3404d0af3d4e8d748b8321))
+* **askamerica-engine:** keep caller's ASKAMERICA_SELFTEST_ENABLED out of the test JVM ([14c6317](https://github.com/kenstott/calcite/commit/14c631713dccc088cadb261a711e012fd466f123))
+* **askamerica-engine:** update a cached engine in the background in --mcp mode ([e422ada](https://github.com/kenstott/calcite/commit/e422ada6a9ac53c9245eb2ca5147ee9ad2b22991))
+* **file/duckdb:** resolve every pending dependency of a deferred view, not just the first ([6e46b20](https://github.com/kenstott/calcite/commit/6e46b20ec837e1e858358886101a09ad0491a811))
+* **govdata/fec:** map committee_summaries columns to the CSV's actual header names ([2a3ad22](https://github.com/kenstott/calcite/commit/2a3ad22495ac69ea1188944d326217db1e77acb8))
+* **govdata:** stop health's year-mode sweep from redundantly reprocessing non-year tables ([71f827a](https://github.com/kenstott/calcite/commit/71f827aab3a871abdc94a00b5d0a0fa1d679b1e3))
+* **pgwire-calcite:** bound server shutdown so a wedged request thread cannot orphan the process ([87f8aa7](https://github.com/kenstott/calcite/commit/87f8aa778a713ad679e7bce056c0118de3c2f269))
+* **pgwire-calcite:** bound stream_ipc_batches lock wait when no cancel scope is passed ([79162ff](https://github.com/kenstott/calcite/commit/79162ffda4f3e542e4c8ff5d032aed5c0be4ff29))
+* **pgwire-calcite:** close Describe(Statement) result to release the Calcite lock ([fcef6b2](https://github.com/kenstott/calcite/commit/fcef6b200cc9798dccc5406125132ed3384f8e7b))
+
 ## [0.101.0](https://github.com/kenstott/calcite/compare/engine-v0.100.2...engine-v0.101.0) (2026-09-30)
 
 
