@@ -611,6 +611,13 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
           : new HashMap<>();
       cfg.put("accessKeyId",     creds.get("accessKeyId"));
       cfg.put("secretAccessKey", creds.get("secretAccessKey"));
+      // R2CredentialProvider.refresh populates this for session-scoped (STS-style) temporary
+      // credentials; dropping it here would make the retry this method exists for reuse the
+      // stale/absent token instead of the fresh one, silently defeating the refresh. A plain
+      // put (not conditional) matches every consumer's own read convention (S3StorageProvider
+      // etc. do a bare .get("sessionToken") null-check), so a refresh with no session token at
+      // all correctly clears any stale one already in the operand.
+      cfg.put("sessionToken",    creds.get("sessionToken"));
       cfg.put("endpoint",        creds.get("endpoint"));
       cfg.put("region",          creds.get("region"));
       operand.put(key, cfg);
