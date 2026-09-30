@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.101.0](https://github.com/kenstott/calcite/compare/engine-v0.100.2...engine-v0.101.0) (2026-09-30)
+
+
+### Features
+
+* **askamerica-engine:** steer callers to statistics tools instead of ad-hoc Python ([fb2023c](https://github.com/kenstott/calcite/commit/fb2023c9330abb682469ffcd2ce6ac62bc8d7da5))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** read years for low_coverage only from predicates on year columns ([41b5ec7](https://github.com/kenstott/calcite/commit/41b5ec7b92d821c2bb63b14b78918acf749ac5a5))
+* **askamerica-engine:** report coverage_declaration_stale once per table window, not on every query ([3ab9714](https://github.com/kenstott/calcite/commit/3ab9714395afd10988ea63e03eeff14991b30bc4))
+* **askamerica-engine:** stop cutting SQL error messages at 600 chars mid-token ([df6af01](https://github.com/kenstott/calcite/commit/df6af0117e7b0a0d31971be9ccb248468715cfb8))
+* **askamerica-engine:** stop flagging uncontrolled_confound when a control was passed ([8182cdf](https://github.com/kenstott/calcite/commit/8182cdf86a8ef026150e30735972dc7a9805578d))
+* **askamerica-engine:** stop flagging yoy/net/gain-style signed percentages as broken_field ([7cbcd09](https://github.com/kenstott/calcite/commit/7cbcd0964a3b6d7249c9b34f52cb4a2b75e35d30))
+* **core:** skip a listed table that fails to resolve instead of aborting getTables ([d5f1da8](https://github.com/kenstott/calcite/commit/d5f1da8ce21003fe00a7e1a329ab8f95959f948b))
+* **fiscal:** update county_migration_flows coverage after backfill to 2012-2021 ([f3d76b7](https://github.com/kenstott/calcite/commit/f3d76b7aaf323d3a0c0c904bcf660efa87c837f8))
+* **govdata/census:** disclose ACS 5-year source in unemployment_rate view comment ([8435872](https://github.com/kenstott/calcite/commit/8435872e0e7fac3f6779059f2c1dd0f6131d58a7))
+* **govdata:** regenerate the bundled seed with every schema's views ([05f6471](https://github.com/kenstott/calcite/commit/05f647165881984cb6f7dd7e7ff9c79904d5ac01))
+* **govdata:** stop reporting columnless views as having no year dimension ([70af2e1](https://github.com/kenstott/calcite/commit/70af2e133cc08a12fd0c518b758df43d8cbadadf))
+
 ## [0.100.2](https://github.com/kenstott/calcite/compare/engine-v0.100.1...engine-v0.100.2) (2026-09-30)
 
 
