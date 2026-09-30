@@ -8161,6 +8161,22 @@ public class McpServer {
         return DEFAULT_QUERY_TIMEOUT_SECONDS;
     }
 
+    /** Bounds a statement the same way {@link #runSqlRows} does: the configured query timeout
+     *  plus registration with the watchdog. Every statement that can run caller SQL must go
+     *  through this, because the stdio loop is serial and one unbounded statement stalls every
+     *  later call. Pair with {@link #releaseGuardedStatement}. */
+    static void guardStatement(Statement stmt) throws java.sql.SQLException {
+        int timeoutSeconds = queryTimeoutSeconds();
+        stmt.setQueryTimeout(timeoutSeconds);
+        ACTIVE_STATEMENTS.put(stmt, new long[]{System.currentTimeMillis(), timeoutSeconds});
+    }
+
+    /** Deregisters a statement bound by {@link #guardStatement}. */
+    static void releaseGuardedStatement(Statement stmt) {
+        ACTIVE_STATEMENTS.remove(stmt);
+        WATCHDOG_CANCELLED_AT.remove(stmt);
+    }
+
     /** Execute SQL on the single all-schemas connection, applying the same reserved-word
      *  quoting and default row-limit as query(). Every tool runs here: a narrower source
      *  set would mount a second connection and re-open all of that schema's Iceberg

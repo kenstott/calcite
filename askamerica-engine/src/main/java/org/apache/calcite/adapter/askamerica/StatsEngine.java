@@ -118,6 +118,7 @@ final class StatsEngine {
     static Extraction extractColumns(Connection conn, String sql, String[] columns)
             throws Exception {
         Statement stmt = conn.createStatement();
+        McpServer.guardStatement(stmt);
         try {
             ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
@@ -169,6 +170,7 @@ final class StatsEngine {
                 rs.close();
             }
         } finally {
+            McpServer.releaseGuardedStatement(stmt);
             stmt.close();
         }
     }
@@ -182,6 +184,7 @@ final class StatsEngine {
     static LabeledExtraction extractColumnsWithLabels(Connection conn, String sql,
             String[] numericColumns, String[] labelColumns) throws Exception {
         Statement stmt = conn.createStatement();
+        McpServer.guardStatement(stmt);
         try {
             ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
@@ -256,6 +259,7 @@ final class StatsEngine {
                 rs.close();
             }
         } finally {
+            McpServer.releaseGuardedStatement(stmt);
             stmt.close();
         }
     }
@@ -351,6 +355,7 @@ final class StatsEngine {
     static Map<String, double[]> extractGroupedColumn(Connection conn, String sql,
             String groupCol, String valueCol) throws Exception {
         Statement stmt = conn.createStatement();
+        McpServer.guardStatement(stmt);
         try {
             ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
@@ -385,6 +390,7 @@ final class StatsEngine {
                 rs.close();
             }
         } finally {
+            McpServer.releaseGuardedStatement(stmt);
             stmt.close();
         }
     }
@@ -395,6 +401,7 @@ final class StatsEngine {
     static ContingencyTable extractContingencyTable(Connection conn, String sql, String rowCol,
             String colCol) throws Exception {
         Statement stmt = conn.createStatement();
+        McpServer.guardStatement(stmt);
         try {
             ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
@@ -439,6 +446,7 @@ final class StatsEngine {
                 rs.close();
             }
         } finally {
+            McpServer.releaseGuardedStatement(stmt);
             stmt.close();
         }
     }
