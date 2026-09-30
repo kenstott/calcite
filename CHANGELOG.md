@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.100.2](https://github.com/kenstott/calcite/compare/engine-v0.100.1...engine-v0.100.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** keep the cached engine while the latest release has no jar attached ([d530753](https://github.com/kenstott/calcite/commit/d530753e4eb22dab035caef7e7d8029edb46060e))
+* **ci:** download the pgwire-govdata bundle from a draft engine release ([90f87ee](https://github.com/kenstott/calcite/commit/90f87eefa886807f808e45988be1edcf7713b58a))
+* **ci:** keep an engine release a draft until its jar is attached ([3931f7a](https://github.com/kenstott/calcite/commit/3931f7a95a1a68f6bdf5505cec1b163ec90c8dc8))
+* **govdata:** carry sessionToken through the R2 credential-refresh retry path ([1c0eb63](https://github.com/kenstott/calcite/commit/1c0eb63c6e6b20988cc5b93c857c1df855c630c7))
+* **pgwire-calcite:** exit when a cancelled statement never returns ([5124a4e](https://github.com/kenstott/calcite/commit/5124a4eba478d0bbdc5b7204ce787dcfee4d2b8a))
+* **pgwire:** check out adapter model.json with LF on every platform ([18e9fb1](https://github.com/kenstott/calcite/commit/18e9fb14c8f3efc2ac2f5682622495fbef8d887d))
+
 ## [0.100.1](https://github.com/kenstott/calcite/compare/engine-v0.100.0...engine-v0.100.1) (2026-09-30)
 
 
