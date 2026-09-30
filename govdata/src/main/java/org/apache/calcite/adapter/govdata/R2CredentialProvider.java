@@ -114,11 +114,44 @@ public final class R2CredentialProvider {
    * @throws IOException if a fetch is required and fails (missing/invalid key, etc.)
    */
   public static Map<String, String> resolveOrFetch(String apiKey) throws IOException {
+    return resolveOrFetch(apiKey, 0L);
+  }
+
+  /**
+   * Like {@link #resolveOrFetch(String)}, but also fetches when the cached set expires within
+   * {@code minRemainingMillis}. A process that captures credentials once and holds them (a
+   * spawned server's environment) needs them to outlive its startup, not merely to be unexpired
+   * at the instant it reads them.
+   *
+   * @param apiKey caller's ASKAMERICA_API_KEY (required only when a fetch is needed)
+   * @param minRemainingMillis the least remaining lifetime a cached set must have to be reused
+   * @throws IOException if a fetch is required and fails (missing/invalid key, etc.)
+   */
+  public static Map<String, String> resolveOrFetch(String apiKey, long minRemainingMillis)
+      throws IOException {
     Map<String, String> creds = resolve();
-    if (isComplete(creds)) {
+    if (isComplete(creds) && remainingMillis(creds) >= minRemainingMillis) {
       return creds;
     }
     return refresh(apiKey);
+  }
+
+  /**
+   * Milliseconds until the credential set's {@code expiresAtMillis} stamp, less the refresh
+   * margin. A set with no stamp never expires ({@link Long#MAX_VALUE}); an unparsable stamp has
+   * no remaining lifetime.
+   */
+  static long remainingMillis(Map<String, String> creds) {
+    String at = creds.get("expiresAtMillis");
+    if (at == null || at.isEmpty()) {
+      return Long.MAX_VALUE;
+    }
+    try {
+      return Long.parseLong(at) - EXPIRY_MARGIN_MS - System.currentTimeMillis();
+      // fallback-guard: allow fails safe: an unparsable expiry timestamp has no remaining lifetime, forcing a credential refresh instead of trusting corrupted state
+    } catch (NumberFormatException e) {
+      return 0L;
+    }
   }
 
   /**
