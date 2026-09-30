@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.103.0](https://github.com/kenstott/calcite/compare/engine-v0.102.0...engine-v0.103.0) (2026-09-30)
+
+
+### Features
+
+* **askamerica-engine:** make the Claude artifact the default report, saved durably ([c887418](https://github.com/kenstott/calcite/commit/c887418763a10b2f7d109dbeb566f12f02ae8541))
+* **askamerica-engine:** rename report tools to preview_report and publish_report ([e00e3d3](https://github.com/kenstott/calcite/commit/e00e3d38be3c575e032ffae8669540b306d05df9))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** start pgwire-govdata in its own session so connector teardown can't kill it ([5622e91](https://github.com/kenstott/calcite/commit/5622e916415ab816398b8503693b1a3e76b556f0))
+
 ## [0.102.0](https://github.com/kenstott/calcite/compare/engine-v0.101.0...engine-v0.102.0) (2026-09-30)
 
 
