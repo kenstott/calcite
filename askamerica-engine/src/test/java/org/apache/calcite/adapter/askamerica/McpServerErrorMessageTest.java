@@ -147,4 +147,24 @@ class McpServerErrorMessageTest {
     String zip = McpServer.compactErrorMessage(new java.util.zip.ZipException("invalid LOC header"));
     assertTrue(zip.contains("ENGINE'S OWN CODE COULD NOT BE LOADED"), zip);
   }
+
+  @Test @DisplayName("a long engine error keeps its full cause and is cut only at a line break")
+  void longErrorIsNotCutMidToken() {
+    StringBuilder sb = new StringBuilder("Binder Error: No function matches MAX(VARCHAR)\n");
+    for (int i = 0; i < 20; i++) {
+      sb.append("\tcandidate_").append(i).append("(DECIMAL) -> DECIMAL\n");
+    }
+    String medium = sb.toString();
+    assertTrue(medium.length() > 600 && medium.length() < McpServer.MAX_ERROR_MESSAGE_CHARS);
+    assertEquals(medium, McpServer.compactErrorMessage(new RuntimeException(medium)));
+
+    StringBuilder big = new StringBuilder("Binder Error: cause\n");
+    while (big.length() < McpServer.MAX_ERROR_MESSAGE_CHARS * 2) {
+      big.append("LINE 1: SELECT MAX(CAST(x AS DOUBLE)) FROM t WHERE y = 1 AND z = 2\n");
+    }
+    String compact = McpServer.compactErrorMessage(new RuntimeException(big.toString()));
+    assertTrue(compact.startsWith("Binder Error: cause\n"), compact);
+    assertTrue(compact.contains("[message truncated at"), compact);
+    assertFalse(compact.contains("CAST(x AS DOUBLE)) FROM t WHERE y = 1 AND z = 2...\n"), compact);
+  }
 }

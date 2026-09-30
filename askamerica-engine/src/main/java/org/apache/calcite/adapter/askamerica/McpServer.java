@@ -4619,7 +4619,7 @@ public class McpServer {
     static String compactErrorMessage(Throwable e) {
         // Every publish_report enforce* gate throws IllegalArgumentException with a complete,
         // deliberately-authored, actionable message -- never a raw stack trace or noisy driver
-        // text. The generic 600-char truncateMessage() fallback below exists for THOSE (a SQL
+        // text. The generic truncateMessage() fallback below exists for THOSE (a SQL
         // parser error, a DuckDB exception), and would defeat the combined-gate-error refusal
         // (measured live, 2026-09-12: three real gate violations combined comfortably exceed
         // 600 chars) that exists specifically so a caller sees every open issue in one publish
@@ -4785,8 +4785,25 @@ public class McpServer {
         return cause == t ? null : cause;
     }
 
-    private static String truncateMessage(String msg) {
-        return msg.length() > 600 ? msg.substring(0, 600) + "..." : msg;
+    /**
+     * Upper bound on an engine error's text. A DuckDB binder/conversion error can embed the
+     * offending statement and a candidate list before the failing clause; a bound small enough
+     * to cut inside that text leaves the caller unable to tell a syntax error from a type or
+     * missing-column error.
+     */
+    static final int MAX_ERROR_MESSAGE_CHARS = 4000;
+
+    /** Caps {@code msg}, cutting at the last line break so no token is split mid-way. */
+    static String truncateMessage(String msg) {
+        if (msg.length() <= MAX_ERROR_MESSAGE_CHARS) {
+            return msg;
+        }
+        int cut = msg.lastIndexOf('\n', MAX_ERROR_MESSAGE_CHARS);
+        if (cut <= 0) {
+            cut = MAX_ERROR_MESSAGE_CHARS;
+        }
+        return msg.substring(0, cut) + "\n... [message truncated at " + cut + " of "
+            + msg.length() + " chars]";
     }
 
     private static int countRows(String json) {
