@@ -346,8 +346,12 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     LOGGER.info("Looking for table: '{}'", name);
     // Create this one deferred view on demand — not the whole backlog — the first time
     // something actually asks for it by name. See DuckDBPendingViews for why.
-    if (catalogPath != null) {
-      DuckDBPendingViews.createOnDemand(catalogPath, persistentConnection, schemaName, name);
+    if (catalogPath != null
+        && DuckDBPendingViews.createOnDemand(catalogPath, persistentConnection, schemaName, name)) {
+      // JdbcSchema.getTable reads a cached table map that predates this CREATE VIEW; without
+      // recomputing it the view just created is reported as not found. getTableNames() is the
+      // parent's only public path that recomputes that map.
+      super.getTableNames();
     }
     // Heal a stale persistent-catalog view before Calcite introspects its columns, so a
     // schema change made by an earlier session doesn't bake a wrong row type into the plan.

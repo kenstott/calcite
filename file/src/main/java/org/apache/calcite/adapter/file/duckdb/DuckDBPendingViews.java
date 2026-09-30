@@ -189,54 +189,60 @@ public final class DuckDBPendingViews {
    * on demand. No-op if the name was never deferred, or was already resolved — including the
    * common case where the seed already shipped it, which this confirms with a single cheap
    * existence check rather than an object-store-binding {@code CREATE}.
+   *
+   * @return true when this call issued a successful {@code CREATE VIEW}, i.e. the catalog now
+   *     holds a view it did not hold before — a caller holding a cached table list must refresh it
    */
-  static void createOnDemand(String dbPath, Connection conn, String duckdbSchema,
+  static boolean createOnDemand(String dbPath, Connection conn, String duckdbSchema,
       String viewName) {
-    createOnDemand(dbPath, conn, duckdbSchema, viewName, new java.util.HashSet<>());
+    return createOnDemand(dbPath, conn, duckdbSchema, viewName, new java.util.HashSet<>());
   }
 
-  private static void createOnDemand(String dbPath, Connection conn, String duckdbSchema,
+  private static boolean createOnDemand(String dbPath, Connection conn, String duckdbSchema,
       String viewName, Set<String> inFlight) {
     CopyOnWriteArrayList<PendingView> pendingList = PENDING.get(dbPath);
     if (pendingList == null) {
-      return;
+      return false;
     }
     String key = qualified(duckdbSchema, viewName);
     if (!inFlight.add(key)) {
       // Already being resolved higher up this same call chain: a genuine circular reference,
       // not an ordering artifact. Let the original caller's CREATE fail on it naturally.
       LOGGER.error("Cannot create view {} — circular view reference", key);
-      return;
+      return false;
     }
     try {
       synchronized ((dbPath + '|' + key).intern()) {
         PendingView pv = findExact(pendingList, duckdbSchema, viewName);
         if (pv == null) {
-          return; // not pending: never deferred, or already resolved (by us or another caller)
+          return false; // not pending: never deferred, or already resolved (by us or another caller)
         }
         if (pv.lastError != null) {
           // Already attempted and failed in this cycle. It stays pending so {@link #buildAll} can
           // retry it, but the lazy per-query path must not re-pay CREATE_VIEW_TIMEOUT_SECONDS on
           // every reference in the meantime. buildAll clears lastError to force a fresh attempt.
-          return;
+          return false;
         }
         if (existsInCatalog(conn, duckdbSchema, viewName)) {
           pendingList.remove(pv);
-          return;
+          return false;
         }
         SQLException err = createViewWithTimeout(conn, pv);
+        boolean dependencyCreated = false;
         if (err != null) {
           String missing = extractMissingReference(err);
           PendingView dependency =
               missing == null ? null : findByReference(pendingList, duckdbSchema, missing);
           if (dependency != null) {
-            createOnDemand(dbPath, conn, dependency.duckdbSchema, dependency.viewName, inFlight);
+            dependencyCreated = createOnDemand(dbPath, conn, dependency.duckdbSchema,
+                dependency.viewName, inFlight);
             err = createViewWithTimeout(conn, pv);
           }
         }
         if (err == null) {
           LOGGER.debug("Created deferred view: {}", key);
           pendingList.remove(pv);
+          return true;
         } else {
           // Non-fatal by design: the view simply does not appear, rather than the failure
           // propagating and taking the rest of the schema down with it. Warn so the omission is
@@ -246,6 +252,7 @@ public final class DuckDBPendingViews {
           pv.lastError = err;
           LOGGER.warn("Cannot create view {} — {}. SQL: {}", key, classifyError(err),
               pv.viewSql.length() > 200 ? pv.viewSql.substring(0, 200) + "..." : pv.viewSql);
+          return dependencyCreated;
         }
       }
     } finally {

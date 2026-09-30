@@ -477,4 +477,76 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
       assertFalse(foundOmitted, "The not-yet-materialized table must not be listed");
     }
   }
+
+  /**
+   * A YAML view not yet in the DuckDB catalog (a fresh install, or a view newer than the seed)
+   * is created on demand by the metadata walk itself. The walk must then resolve it rather than
+   * report the just-created view as not found, which fails getTables for the whole schema.
+   */
+  @Test public void testViewCreatedOnDemandIsListedAndResolved() throws Exception {
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"executionEngine\": \"duckdb\",\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base4") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ],\n"
+        + "        \"views\": [\n"
+        + "          {\"name\": \"answer\", \"sql\": \"SELECT 42 AS answer\"}\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
+      boolean foundOrders = false;
+      boolean foundView = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          String tableName = tables.getString("TABLE_NAME");
+          if ("orders".equalsIgnoreCase(tableName)) {
+            foundOrders = true;
+          }
+          if ("answer".equalsIgnoreCase(tableName)) {
+            foundView = true;
+          }
+        }
+      }
+      assertTrue(foundOrders, "The table beside the view must be listed");
+      assertTrue(foundView, "The view created during the walk must be listed");
+
+      try (Statement statement = connection.createStatement();
+           ResultSet rs = statement.executeQuery("SELECT answer FROM answer")) {
+        assertTrue(rs.next(), "Should have a result row");
+        assertEquals(42, rs.getInt(1));
+      }
+    }
+  }
 }
