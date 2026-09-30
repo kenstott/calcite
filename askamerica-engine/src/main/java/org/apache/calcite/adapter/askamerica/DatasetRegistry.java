@@ -52,8 +52,8 @@ final class DatasetRegistry {
     while (body.endsWith(";")) {
       body = body.substring(0, body.length() - 1).trim();
     }
-    String head = body.length() >= 6 ? body.substring(0, 6).toLowerCase(Locale.ROOT) : "";
-    if (!head.equals("select") && !head.equals("with") && !body.startsWith("(")) {
+    if (!startsWithKeyword(body, "select") && !startsWithKeyword(body, "with")
+        && !body.startsWith("(")) {
       throw new IllegalArgumentException(
           "A dataset must be a SELECT or WITH statement; got: " + abbreviate(body));
     }
@@ -183,6 +183,14 @@ final class DatasetRegistry {
     default:
       return false;
     }
+  }
+
+  /** Case-insensitive prefix check that never throws, regardless of how {@code body}'s
+   *  length compares to {@code keyword}'s -- unlike a fixed-length substring, this works for
+   *  keywords of different lengths ("select" is 6 chars, "with" is 4) without truncating or
+   *  over-reading either one. */
+  private static boolean startsWithKeyword(String body, String keyword) {
+    return body.regionMatches(true, 0, keyword, 0, keyword.length());
   }
 
   private static String abbreviate(String s) {

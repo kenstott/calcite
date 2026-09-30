@@ -121,6 +121,12 @@ class CoverageAndExternalSourcesTest {
               schema + "." + table + " invented a window it declares none of: " + cov);
           continue;
         }
+        if ("unknown".equals(cov.path("form").asText())) {
+          // A columnless view: its SQL decides whether it has years, so no window is declared.
+          assertTrue(!cov.has("first_year") && !cov.has("last_year"),
+              schema + "." + table + " invented a window for a view of undeclared columns: " + cov);
+          continue;
+        }
         resolved++;
         if (cov.has("first_year") && cov.has("last_year")) {
           assertTrue(cov.path("first_year").asInt() <= cov.path("last_year").asInt(),

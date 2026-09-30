@@ -57,4 +57,16 @@ class DatasetRegistryTest {
     assertThrows(IllegalArgumentException.class, () -> r.define("1bad", "SELECT 1"));
     assertThrows(IllegalArgumentException.class, () -> r.define("ok", "DROP TABLE x"));
   }
+
+  @Test void acceptsADatasetWhoseOwnSqlIsAWithQuery() {
+    // A fixed-length head substring ("select".length() == 6) previously mis-measured "with"
+    // (4 chars), so define() rejected every WITH-headed dataset body unconditionally -- the
+    // other tests above all call expand() directly and never exercised this gate.
+    DatasetRegistry r = new DatasetRegistry();
+    r.define("cte_panel", "WITH base AS (SELECT 1 AS a) SELECT * FROM base");
+    assertEquals(
+        "WITH cte_panel AS (WITH base AS (SELECT 1 AS a) SELECT * FROM base) "
+            + "SELECT * FROM cte_panel",
+        r.expand("SELECT * FROM cte_panel"));
+  }
 }

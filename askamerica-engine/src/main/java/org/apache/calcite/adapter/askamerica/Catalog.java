@@ -238,8 +238,11 @@ final class Catalog {
         // logic below, which treats a missing "end" as "runs through the current year"
         // and would fabricate exactly the kind of overstated window this form exists to
         // avoid.
+        // "unknown" is the same again: a columnless view whose time axis the YAML cannot
+        // state, so any window computed for it would be invented.
         if ("none".equals(cov.path("form").asText(null))
-                || "columnOnly".equals(cov.path("form").asText(null))) {
+                || "columnOnly".equals(cov.path("form").asText(null))
+                || "unknown".equals(cov.path("form").asText(null))) {
             return (ObjectNode) cov.deepCopy();
         }
 
