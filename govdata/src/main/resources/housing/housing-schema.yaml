@@ -2188,9 +2188,11 @@ views:
       that state within the year (not necessarily the December/Q4 reading) and
       index_sa_year_avg is the mean across all periods; the query does not
       filter by frequency, so monthly and quarterly readings for the same
-      state/year are aggregated together. place_id is the USPS abbreviation —
-      ready to join geo.states.state_abbr and to sec homebuilder/REIT filings
-      by state.
+      state/year are aggregated together. Columns: data_year, state_abbr (the
+      USPS abbreviation, sourced from house_price_index.place_id — ready to
+      join geo.states.state_abbr and to sec homebuilder/REIT filings by
+      state), state_name, index_sa_year_end, index_sa_year_avg. There is no
+      place_id column; the view is year-organized on data_year.
     sql: >
       SELECT
         h.data_year,
