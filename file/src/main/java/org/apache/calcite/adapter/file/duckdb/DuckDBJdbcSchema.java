@@ -338,6 +338,15 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
         }
       }
     }
+    // Likewise a YAML view whose on-demand CREATE failed (e.g. its base table isn't ingested
+    // yet): it is also listed as a declared table, but getTable() returns null for it.
+    if (catalogPath != null) {
+      for (String failed : DuckDBPendingViews.failedViewNames(catalogPath, schemaName)) {
+        if (!duckdbNames.contains(failed)) {
+          tableNames.remove(failed);
+        }
+      }
+    }
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
     return tableNames;
   }

@@ -178,6 +178,26 @@ public final class DuckDBPendingViews {
     return names;
   }
 
+  /**
+   * Views of one DuckDB schema still pending after a failed {@link #createOnDemand} — the
+   * complement of {@link #pendingViewNames}. A listing that also takes names from elsewhere (the
+   * schema's declared tables include its YAML views) must drop these: {@code getTable} returns
+   * null for them until an operator-triggered {@link #buildAll} succeeds.
+   */
+  static Set<String> failedViewNames(String dbPath, String duckdbSchema) {
+    CopyOnWriteArrayList<PendingView> pendingList = PENDING.get(dbPath);
+    if (pendingList == null) {
+      return java.util.Collections.emptySet();
+    }
+    Set<String> names = new java.util.LinkedHashSet<>();
+    for (PendingView pv : pendingList) {
+      if (pv.duckdbSchema.equalsIgnoreCase(duckdbSchema) && pv.lastError != null) {
+        names.add(pv.viewName);
+      }
+    }
+    return names;
+  }
+
   /** Case-insensitive {@code schema.name} key; DuckDB identifiers here are lower-cased. */
   private static String qualified(String schema, String name) {
     return (schema == null ? "" : schema.toLowerCase(java.util.Locale.ROOT))

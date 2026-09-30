@@ -43,6 +43,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -547,6 +548,77 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
         assertTrue(rs.next(), "Should have a result row");
         assertEquals(42, rs.getInt(1));
       }
+    }
+  }
+
+  /**
+   * A YAML view over a table that isn't ingested yet fails its on-demand CREATE. Once it has,
+   * the schema's listing must stop naming it; otherwise every getTables for the schema fails.
+   */
+  @Test public void testViewWhoseCreateFailedIsNoLongerListed() throws Exception {
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"executionEngine\": \"duckdb\",\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base5") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ],\n"
+        + "        \"tables\": [\n"
+        + "          {\"name\": \"over_missing\", \"type\": \"view\",\n"
+        + "           \"sql\": \"SELECT * FROM not_ingested_yet\"}\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+         Statement statement = connection.createStatement()) {
+      // The first reference attempts the CREATE, which fails on the missing base table.
+      assertThrows(java.sql.SQLException.class,
+          () -> statement.executeQuery("SELECT * FROM over_missing").close());
+
+      boolean foundOrders = false;
+      boolean foundView = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          String tableName = tables.getString("TABLE_NAME");
+          if ("orders".equalsIgnoreCase(tableName)) {
+            foundOrders = true;
+          }
+          if ("over_missing".equalsIgnoreCase(tableName)) {
+            foundView = true;
+          }
+        }
+      }
+      assertTrue(foundOrders, "The table beside the failed view must still be listed");
+      assertFalse(foundView, "A view whose CREATE failed must not be listed");
     }
   }
 }
