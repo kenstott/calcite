@@ -342,6 +342,14 @@ def main(argv: list | None = None) -> int:
         "behind other statements before failing with a 'server busy' error "
         "(SQLSTATE 57014); 0 = unbounded. Applies even when statement_timeout is 0.",
     )
+    parser.add_argument(
+        "--cancel-grace-ms",
+        type=int,
+        default=60000,
+        help="how long a cancelled statement (statement_timeout or CancelRequest) may "
+        "take to return before the server logs a Java thread dump and exits with "
+        "status 3 so a fresh server replaces it; 0 = wait forever.",
+    )
     parser.add_argument("--tls-cert", default=None)
     parser.add_argument("--tls-key", default=None)
     parser.add_argument(
@@ -423,9 +431,10 @@ def main(argv: list | None = None) -> int:
                 parser.error(f"--auth {args.auth} requires --auth-store")
             store = AccountStore(args.auth_store)
             auth_provider = LocalAccountsProvider(store, scram_wire=(args.auth == "scram"))
-    from pgwire_calcite.calcite_backend import CancelScope
+    from pgwire_calcite.calcite_backend import CancelScope, InFlightStatement
 
     CancelScope.max_queue_wait_ms = max(0, args.max_queue_wait_ms)
+    InFlightStatement.cancel_grace_ms = max(0, args.cancel_grace_ms)
     try:
         srv = serve(
             host=args.host,

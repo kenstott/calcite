@@ -26,6 +26,7 @@ from __future__ import annotations
 import datetime
 import decimal
 import logging
+import os
 import threading
 import time
 from typing import Callable, List, Optional
@@ -61,6 +62,67 @@ def _attach_current_thread_to_jvm() -> None:
         jpype.java.lang.Thread.attachAsDaemon()
 
 
+#: Exit status when a cancelled statement never returns: the process is wedged.
+EXIT_STUCK_STATEMENT = 3
+
+#: How long the wedge report waits for the Java thread dump before exiting anyway —
+#: the dump itself cannot complete when the JVM is what is stalled.
+_THREAD_DUMP_TIMEOUT_S = 10.0
+
+
+def java_thread_dump() -> str:
+    """Every JVM thread's state, held/awaited monitor and full stack."""
+    import jpype
+
+    _attach_current_thread_to_jvm()
+    mx = jpype.JClass("java.lang.management.ManagementFactory").getThreadMXBean()
+    out = []
+    for info in mx.dumpAllThreads(True, True):
+        head = f'"{info.getThreadName()}" {info.getThreadState()}'
+        if info.getLockName() is not None:
+            head += f" on {info.getLockName()}"
+        if info.getLockOwnerName() is not None:
+            head += f" owned by \"{info.getLockOwnerName()}\""
+        out.append(head)
+        out.extend(f"    at {frame}" for frame in info.getStackTrace())
+    return "\n".join(out)
+
+
+def exit_wedged(reason: str, grace_ms: int) -> None:
+    """Log a cancelled statement that never returned, with the Java threads, and exit.
+
+    The statement still holds the shared connection lock, so every later statement
+    on this lane can only queue and time out; the process is useless until it is
+    replaced. Exiting lets the client that spawned it start a fresh server.
+    """
+    log.error(
+        "A statement cancelled for '%s' has not returned %dms later; it still holds the "
+        "shared Calcite connection, so this server can no longer run queries. Exiting "
+        "with status %d so a fresh server replaces it.",
+        reason, grace_ms, EXIT_STUCK_STATEMENT,
+    )
+    dump: List[str] = []
+
+    def _dump() -> None:
+        try:
+            dump.append(java_thread_dump())
+        except Exception:  # noqa: BLE001 - reported, then the exit proceeds regardless
+            log.exception("Java thread dump failed")
+
+    dumper = threading.Thread(target=_dump, name="pgwire-wedge-dump", daemon=True)
+    dumper.start()
+    dumper.join(_THREAD_DUMP_TIMEOUT_S)
+    if dump:
+        log.error("Java threads at the wedge:\n%s", dump[0])
+    elif dumper.is_alive():
+        log.error(
+            "Java thread dump did not complete within %.0fs: the JVM itself is stalled",
+            _THREAD_DUMP_TIMEOUT_S,
+        )
+    logging.shutdown()
+    os._exit(EXIT_STUCK_STATEMENT)
+
+
 class InFlightStatement:
     """One session's currently-executing JDBC Statement, cancellable from anywhere.
 
@@ -68,11 +130,22 @@ class InFlightStatement:
     thread than the one blocked in ``execute``, which is exactly the pgwire
     CancelRequest shape: a second connection asks the server to abort the first
     connection's running query.
+
+    A cancel only asks the engine to stop; work outside the engine's cancel checks
+    (seen live: a DuckDB-pushed scan held the lock 8+ minutes past a 30s timeout)
+    never returns. Once cancelled, the statement gets ``cancel_grace_ms`` to
+    return before the process is declared wedged (``exit_wedged``).
     """
+
+    #: How long a cancelled statement may take to return before the process is
+    #: declared wedged, in milliseconds; 0 = wait forever. Set once at startup by
+    #: the launcher (--cancel-grace-ms).
+    cancel_grace_ms: int = 60000
 
     def __init__(self, stmt) -> None:
         self._stmt = stmt
         self._lock = threading.Lock()
+        self._returned = threading.Event()
         #: PG wording for why this statement was cancelled; None while it runs normally.
         self.reason: Optional[str] = None
 
@@ -82,9 +155,23 @@ class InFlightStatement:
             if self.reason is not None:
                 return False
             self.reason = reason
+        if self.cancel_grace_ms:
+            # Started before Statement.cancel, which can itself block on a wedged engine.
+            threading.Thread(
+                target=self._await_return, args=(reason,), name="pgwire-cancel-grace", daemon=True
+            ).start()
         _attach_current_thread_to_jvm()
         self._stmt.cancel()
         return True
+
+    def finish(self) -> None:
+        """The statement returned (normally, by error, or by cancel) and released the lock."""
+        self._returned.set()
+
+    def _await_return(self, reason: str) -> None:
+        grace_ms = self.cancel_grace_ms
+        if not self._returned.wait(grace_ms / 1000.0):
+            exit_wedged(reason, grace_ms)
 
 
 class InFlightRegistry:
@@ -106,6 +193,7 @@ class InFlightRegistry:
         return handle
 
     def end(self, session_key: str, handle: InFlightStatement) -> None:
+        handle.finish()
         with self._lock:
             if self._by_session.get(session_key) is handle:
                 del self._by_session[session_key]
@@ -221,6 +309,8 @@ class CancelScope:
             self._timer = None
         if self._session_key is not None and self._handle is not None:
             IN_FLIGHT.end(self._session_key, self._handle)
+        elif self._handle is not None:
+            self._handle.finish()
         self._handle = None
 
     def raise_if_canceled(self) -> None:

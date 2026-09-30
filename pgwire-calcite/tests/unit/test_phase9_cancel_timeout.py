@@ -29,7 +29,13 @@ import pytest
 from pgwire_calcite import launcher
 from pgwire_calcite.backend import CANCELED_BY_TIMEOUT, CANCELED_BY_USER, CANCELED_CLIENT_GONE
 from pgwire_calcite.backend import QueryCanceled
-from pgwire_calcite.calcite_backend import IN_FLIGHT, CancelScope, InFlightRegistry
+from pgwire_calcite.calcite_backend import (
+    IN_FLIGHT,
+    CancelScope,
+    InFlightRegistry,
+    InFlightStatement,
+    java_thread_dump,
+)
 from pgwire_calcite.server import _format_statement_timeout, _parse_statement_timeout, _peer_closed
 
 from test_phase0_wire import _free_port
@@ -134,6 +140,111 @@ def test_registry_cancels_once_and_records_the_reason(monkeypatch):
     registry.end("sess-1", handle)
     assert registry.active_sessions() == set()
     assert registry.cancel("sess-1", CANCELED_BY_USER) is False  # nothing in flight
+
+
+# --- a cancelled statement that never returns wedges the server ---------------
+
+
+@pytest.fixture
+def wedge_exits(monkeypatch):
+    """Short grace window; records exit_wedged calls instead of exiting pytest."""
+    monkeypatch.setattr(
+        "pgwire_calcite.calcite_backend._attach_current_thread_to_jvm", lambda: None
+    )
+    monkeypatch.setattr(InFlightStatement, "cancel_grace_ms", 200)
+    calls = []
+    fired = threading.Event()
+
+    def _record(reason, grace_ms):
+        calls.append((reason, grace_ms))
+        fired.set()
+
+    monkeypatch.setattr("pgwire_calcite.calcite_backend.exit_wedged", _record)
+    return calls, fired
+
+
+def test_cancelled_statement_that_never_returns_exits_the_server(wedge_exits):
+    calls, fired = wedge_exits
+    registry = InFlightRegistry()
+    registry.begin("sess-1", _FakeStatement())
+
+    registry.cancel("sess-1", CANCELED_BY_TIMEOUT)
+
+    assert fired.wait(5)
+    assert calls == [(CANCELED_BY_TIMEOUT, 200)]
+
+
+def test_cancelled_statement_that_returns_within_the_grace_keeps_the_server(wedge_exits):
+    calls, fired = wedge_exits
+    registry = InFlightRegistry()
+    handle = registry.begin("sess-1", _FakeStatement())
+
+    registry.cancel("sess-1", CANCELED_BY_USER)
+    registry.end("sess-1", handle)
+
+    assert not fired.wait(0.6)
+    assert calls == []
+
+
+class _BlockingCancelStatement:
+    """A Statement whose cancel() itself hangs, as on a stalled engine."""
+
+    def __init__(self):
+        self.release = threading.Event()
+
+    def cancel(self):
+        self.release.wait(5)
+
+
+def test_wedge_is_detected_even_when_cancel_itself_blocks(wedge_exits):
+    calls, fired = wedge_exits
+    stmt = _BlockingCancelStatement()
+    handle = InFlightStatement(stmt)
+    canceller = threading.Thread(target=handle.cancel, args=(CANCELED_BY_TIMEOUT,), daemon=True)
+    canceller.start()
+
+    assert fired.wait(5)
+    assert calls == [(CANCELED_BY_TIMEOUT, 200)]
+    stmt.release.set()
+    canceller.join(5)
+
+
+def test_timeout_only_scope_marks_its_statement_returned_on_disarm(wedge_exits):
+    calls, fired = wedge_exits
+    scope = CancelScope(None, 60000)
+    scope.arm(_TimeoutableStatement())
+    handle = scope._handle
+
+    handle.cancel(CANCELED_BY_TIMEOUT)
+    scope.disarm()
+
+    assert not fired.wait(0.6)
+    assert calls == []
+
+
+class _TimeoutableStatement(_FakeStatement):
+    def setQueryTimeout(self, seconds):
+        self.timeout_s = seconds
+
+
+def test_wedge_report_dumps_every_java_thread_with_its_stack(calcite_backend):
+    dump = java_thread_dump()
+
+    assert '"Reference Handler"' in dump
+    assert "/java.lang.ref.Reference.waitForReferencePendingList(" in dump
+    assert "/sun.management.ThreadImpl.dumpThreads0(" in dump  # the dumping thread itself
+
+
+def test_zero_grace_never_declares_a_wedge(wedge_exits, monkeypatch):
+    calls, fired = wedge_exits
+    monkeypatch.setattr(InFlightStatement, "cancel_grace_ms", 0)
+    registry = InFlightRegistry()
+    registry.begin("sess-1", _FakeStatement())
+
+    registry.cancel("sess-1", CANCELED_BY_USER)
+
+    assert not fired.wait(0.6)
+    assert calls == []
 
 
 # --- through the wire --------------------------------------------------------
