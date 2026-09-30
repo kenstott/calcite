@@ -156,15 +156,19 @@ def stream_ipc_batches(
     (PGW-050/051). It stays armed for the generator's whole lifetime, because a
     cancel can land while rows are still streaming.
     """
-    C = _ArrowClasses.get()
-    if cancel_scope is not None:
-        cancel_scope.acquire(lock)
+    if cancel_scope is None:
+        # No scope from the caller: still take the lock through the server-wide
+        # queue bound, so a leaked holder fails this statement instead of wedging it.
+        from pgwire_calcite.calcite_backend import CancelScope
+
+        CancelScope(None, 0).acquire(lock)
     else:
-        lock.acquire()
+        cancel_scope.acquire(lock)
     acquired = True
     stmt = None
     allocator = None
     try:
+        C = _ArrowClasses.get()
         stmt = conn.createStatement()
         stmt.setFetchSize(batch_size)
         if cancel_scope is not None:

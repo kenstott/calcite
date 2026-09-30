@@ -613,3 +613,32 @@ def test_queue_wait_bounded_without_statement_timeout(monkeypatch):
     finally:
         release.set()
         t.join(2)
+
+
+def test_stream_without_a_cancel_scope_still_bounds_the_lock_wait(monkeypatch):
+    """A leaked lock holder fails the next statement with 'server busy' rather than wedging it."""
+    from pgwire_calcite import arrow_bridge
+    from pgwire_calcite.backend import CANCELED_SERVER_BUSY
+
+    monkeypatch.setattr(CancelScope, "max_queue_wait_ms", 300)
+    lock = threading.RLock()
+    release = threading.Event()
+    held = threading.Event()
+
+    def hold():
+        with lock:
+            held.set()
+            release.wait(5)
+
+    t = threading.Thread(target=hold, daemon=True)
+    t.start()
+    assert held.wait(2)
+    start = time.monotonic()
+    try:
+        with pytest.raises(QueryCanceled) as exc:
+            arrow_bridge.stream_ipc_batches(None, lock, "SELECT 1")
+        assert str(exc.value) == CANCELED_SERVER_BUSY
+        assert time.monotonic() - start < 2
+    finally:
+        release.set()
+        t.join(2)
