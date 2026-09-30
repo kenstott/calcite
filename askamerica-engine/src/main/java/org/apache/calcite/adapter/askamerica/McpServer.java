@@ -1391,7 +1391,14 @@ public class McpServer {
             + "column for the category name, then join its id back to the fact table."));
         queryProps.set(
             "limit", prop("integer",
-            "Max rows to return (default 500, max 5000)."));
+            "Max rows to return per call (default 500, max 5000). A result too large for one "
+            + "response is read in pages: keep limit modest and pass offset."));
+        queryProps.set(
+            "offset", prop("integer",
+            "Rows to skip before returning this page (default 0). Page through a large result "
+            + "by repeating the same SQL with offset += limit until fewer than limit rows come "
+            + "back. The SQL must carry an ORDER BY over a unique key and no FETCH FIRST/"
+            + "OFFSET of its own."));
         tools.add(
             tool("query",
             "**MANDATORY: if this is the first query of a multi-step comparison — across "
@@ -3443,12 +3450,13 @@ public class McpServer {
                     int limit = args.has("limit")
                         ? Math.min(Math.max(1, args.get("limit").asInt()), MAX_LIMIT)
                         : DEFAULT_LIMIT;
+                    int offset = Math.max(0, args.path("offset").asInt(0));
                     String sql = args.path("sql").asText();
                     telemetrySql = sql;
                     log.println("[askamerica-mcp] tool=query sql=" + sql);
-                    ArrayNode rows = query(sql, limit);
+                    ArrayNode rows = query(sql, limit, offset);
                     text = rows.toString();
-                    diagnostics = diagnose(sql, rows, limit);
+                    diagnostics = diagnose(sql, rows, limit, offset);
                     addRecipeNotice(diagnostics, sql);
                     break;
                 }
@@ -5815,6 +5823,10 @@ public class McpServer {
     }
 
     private static ArrayNode query(String sql, int limit) throws Exception {
+        return query(sql, limit, 0);
+    }
+
+    private static ArrayNode query(String sql, int limit, int offset) throws Exception {
         // No pre-emptive schema check. extractSchema() plays no part in choosing the
         // connection — runSqlOn always uses the all-schemas catalog connection — so
         // rejecting up front only refused SQL that would have run:
@@ -5826,7 +5838,7 @@ public class McpServer {
         // The advice it carried is still worth giving, so it is attached to the failure
         // instead — where it is a hint about a real error rather than a refusal to try.
         try {
-            return runSqlRows(sql, limit);
+            return runSqlRows(sql, limit, offset);
         } catch (Exception e) {
             String msg = e.getMessage();
             if (extractSchema(sql) == null && msg != null && looksLikeUnresolvedObject(msg)) {
@@ -8381,9 +8393,33 @@ public class McpServer {
      *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
      *  serialized form is identical either way. */
     private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
+        return runSqlRows(sql, limit, 0);
+    }
+
+    /**
+     * As {@link #runSqlRows(String, int)}, returning the page of {@code limit} rows that starts
+     * after the first {@code offset}. A page is only well defined over a total order and only
+     * appendable to a statement that has not already bounded itself, so an offset against SQL
+     * with no ORDER BY, or with its own FETCH FIRST/OFFSET, is refused rather than run as a
+     * page that could repeat or skip rows.
+     */
+    private static ArrayNode runSqlRows(String sql, int limit, int offset) throws Exception {
         String effective = repairDateTruncDateArg(stripRedundantLimitClause(sql));
         String lower = effective.toLowerCase();
-        if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
+        if (offset > 0) {
+            if (lower.contains("fetch first") || lower.contains("fetch next")
+                    || lower.contains(" offset ")) {
+                throw new IllegalArgumentException("offset cannot be combined with a FETCH FIRST "
+                    + "or OFFSET clause already in the SQL; remove it and use the limit/offset "
+                    + "arguments instead.");
+            }
+            if (!lower.contains("order by")) {
+                throw new IllegalArgumentException("offset requires an ORDER BY over a unique "
+                    + "key in the SQL; without a total order, pages can repeat or skip rows.");
+            }
+            effective = effective.replaceAll(";\\s*$", "")
+                + " OFFSET " + offset + " ROWS FETCH FIRST " + limit + " ROWS ONLY";
+        } else if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
             effective = effective.replaceAll(";\\s*$", "")
                 + " FETCH FIRST " + limit + " ROWS ONLY";
         }
@@ -11878,9 +11914,13 @@ public class McpServer {
      * indistinguishable from a clean result, so a broken check would read as a passing one.
      */
     private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit) {
+        return diagnose(sql, rows, rowLimit, 0);
+    }
+
+    private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit, int offset) {
         try {
             return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit,
-                relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
+                offset, relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
         // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
         // with a successful diagnostics result.
         // fallback-guard: allow -- explicit failure sentinel, see comment above

@@ -163,6 +163,35 @@ class QuestionDiagnosticsTest {
         + env);
   }
 
+  @Test void aFullOffsetPageIsReportedAsAContinuationNotAsTruncation() {
+    ArrayNode arr = MAPPER.createArrayNode();
+    for (int i = 0; i < 200; i++) {
+      ObjectNode row = MAPPER.createObjectNode();
+      row.put("state_fips", String.format("%03d", i));
+      arr.add(row);
+    }
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT state_fips FROM edu.naep_state ORDER BY state_fips", arr, 200, 400, null);
+
+    assertFalse(hasType(env, "row_limit_reached"), "a page is not a truncated result: " + env);
+    JsonNode more = firstOfType(env, "more_rows_may_follow");
+    assertNotNull(more, "a full page must tell the caller how to continue: " + env);
+    assertTrue(more.toString().contains("offset = 600"), more.toString());
+  }
+
+  @Test void aShortOffsetPageIsTheLastAndReportsNoContinuation() {
+    ArrayNode arr = MAPPER.createArrayNode();
+    for (int i = 0; i < 30; i++) {
+      ObjectNode row = MAPPER.createObjectNode();
+      row.put("state_fips", String.format("%03d", i));
+      arr.add(row);
+    }
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT state_fips FROM edu.naep_state ORDER BY state_fips", arr, 200, 400, null);
+
+    assertFalse(hasType(env, "more_rows_may_follow"), env.toString());
+  }
+
   @Test void aResultUnderTheCapIsNotFlaggedAsTruncated() {
     ArrayNode arr = MAPPER.createArrayNode();
     for (int i = 0; i < 40; i++) {

@@ -870,6 +870,13 @@ final class QuestionDiagnostics {
      *  {@code explicit_exclusion} name the units its predicates removed. */
     static ObjectNode forQuery(Connection conn, String sql, ArrayNode rows, int rowLimit,
             ExclusionProbe.SqlRunner runner) {
+        return forQuery(conn, sql, rows, rowLimit, 0, runner);
+    }
+
+    /** As above for the page of {@code rowLimit} rows that starts after the first
+     *  {@code offset}; a full page is reported as a continuation, not as a truncated result. */
+    static ObjectNode forQuery(Connection conn, String sql, ArrayNode rows, int rowLimit,
+            int offset, ExclusionProbe.SqlRunner runner) {
         ArrayNode warnings = MAPPER.createArrayNode();
         List<String> columns = columnsOf(rows);
         String grain = grainOf(columns);
@@ -877,7 +884,11 @@ final class QuestionDiagnostics {
         boolean capped = rows != null && rowLimit > 0 && rows.size() >= rowLimit;
 
         emptyOrLowCoverage(sql, rows, warnings);
-        rowCapReached(sql, capped, rowLimit, warnings);
+        if (offset > 0) {
+            pageContinuation(capped, rowLimit, offset, warnings);
+        } else {
+            rowCapReached(sql, capped, rowLimit, warnings);
+        }
         coveragePercentColumns(rows, columns, warnings);
         outOfCoverageYears(sql, rows, warnings);
         smallNAndGrain(sql, grain, n, capped, warnings);
@@ -939,7 +950,21 @@ final class QuestionDiagnostics {
             + "query as written, so this is very likely a truncated result, not the true row "
             + "count — especially for a GROUP BY or DISTINCT whose true cardinality can exceed "
             + "the cap. The full count is unknown; add an explicit LIMIT if a sample was "
-            + "intended, or aggregate/paginate to see the complete result."));
+            + "intended, aggregate, or read the rest with the offset argument (ORDER BY a "
+            + "unique key, offset = " + rowLimit + ", then += limit)."));
+    }
+
+    /** A full page means more rows may follow; a short page is the last one. */
+    private static void pageContinuation(boolean fullPage, int rowLimit, int offset,
+            ArrayNode warnings) {
+        if (!fullPage) {
+            return;
+        }
+        warnings.add(warning("more_rows_may_follow", INFO,
+            "This page returned the full " + rowLimit + " rows starting at offset " + offset
+            + ", so more rows may follow. Repeat the same SQL with offset = "
+            + (offset + rowLimit) + " to continue; a page with fewer than " + rowLimit
+            + " rows is the last."));
     }
 
     /** Unit names that a question's guidance most often singles out for a with-and-without
