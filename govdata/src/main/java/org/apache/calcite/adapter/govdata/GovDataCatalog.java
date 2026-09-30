@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Reads the govdata metadata catalog — schema / table / column names + {@code comment:}
@@ -225,7 +226,7 @@ public final class GovDataCatalog {
     // single-reference-year snapshot table (the "year" it carries changes release to
     // release). Either way the table plainly varies by year and can be filtered/grouped
     // by it, so "no time axis" would be a false claim, not an honest omission.
-    if (hasYearColumn(t)) {
+    if (hasYearColumn(t) || viewSelectsYear(t)) {
       ObjectNode cov = MAPPER.createObjectNode();
       cov.put("column", "year");
       cov.put("form", "columnOnly");
@@ -236,6 +237,18 @@ public final class GovDataCatalog {
           + "with different real ranges, or carries one release's reference year rather "
           + "than a continuous series. Call data_coverage(schema, table) for the actual "
           + "years present rather than assuming a continuous range.");
+      to.set("coverage", cov);
+      return;
+    }
+
+    // A view declares no column list, so its columns are unknown here; asserting "no year"
+    // would be a claim the YAML cannot support. Leave the time axis undetermined instead.
+    if (isColumnlessView(t)) {
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("form", "unknown");
+      cov.put("note", "This view's columns are defined by its SQL, so whether it carries a "
+          + "year column is not declared here. Call data_coverage(schema, table) or inspect "
+          + "its columns rather than assuming it has no time axis.");
       to.set("coverage", cov);
       return;
     }
@@ -252,6 +265,18 @@ public final class GovDataCatalog {
         + "year partition column, so it cannot be filtered or trended over time. Any "
         + "year-over-year question needs a different table.");
     to.set("coverage", cov);
+  }
+
+  private static final Pattern YEAR_TOKEN =
+      Pattern.compile("(?i)(^|[^A-Za-z0-9_])\"?year\"?\\s*(,|\\s+FROM\\b|\\s+AS\\b)");
+
+  private static boolean isColumnlessView(JsonNode t) {
+    return t.hasNonNull("sql") && !t.path("columns").isArray();
+  }
+
+  /** True when a columnless view's select list names a plain {@code year} column. */
+  private static boolean viewSelectsYear(JsonNode t) {
+    return isColumnlessView(t) && YEAR_TOKEN.matcher(text(t.get("sql"))).find();
   }
 
   private static boolean hasYearColumn(JsonNode t) {

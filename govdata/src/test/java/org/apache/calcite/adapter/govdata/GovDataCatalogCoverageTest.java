@@ -126,4 +126,15 @@ public class GovDataCatalogCoverageTest {
       }
     }
   }
+
+  /** A view declares no column list, so a year it selects must not be reported as absent. */
+  @Test void viewSelectingYearIsTimeVarying() {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList("census"));
+    for (String view : Arrays.asList("education_attainment", "unemployment_rate")) {
+      JsonNode cov = coverageOf(catalog, "census", view);
+      assertNotNull(cov, view + " must carry a coverage node");
+      assertEquals("columnOnly", cov.path("form").asText(), view + " selects year");
+      assertTrue(cov.path("time_varying").asBoolean(), view + " is time-varying");
+    }
+  }
 }
