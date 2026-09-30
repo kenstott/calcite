@@ -6510,6 +6510,11 @@ tables:
     comment: >
       State-level unemployment rates calculated from labor force and unemployed
       population. Shows labor force participation and unemployment percentages.
+      Source is the ACS 5-Year survey (table B23025, via acs_employment): each row
+      is a rolling 5-year estimate ending in "year", not a single-year annual rate,
+      so values will differ from BLS LAUS annual or monthly unemployment rates
+      (econ.regional_employment). Use this view for ACS-consistent comparisons with
+      other census tables; use the econ BLS tables for the official annual rate.
     sql: >
       SELECT
         state,
