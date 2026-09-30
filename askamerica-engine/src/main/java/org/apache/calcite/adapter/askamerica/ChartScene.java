@@ -523,8 +523,8 @@ final class ChartScene {
             .append("    .callout { font-style: italic }\n")
             .append("    @media (prefers-color-scheme: dark) {\n")
             .append("      .chart-bg { fill: #16181d }\n")
-            .append("      .title, .axis-title, .tick, .value-label, .callout, .legend-label "
-                + "{ fill: #e6e8eb }\n")
+            .append("      .title, .axis-title, .tick, .value-label, .callout, .legend-label, "
+                + ".point-label { fill: #e6e8eb }\n")
             .append("      .axis { stroke: #6b7280 }\n")
             .append("      .grid { stroke: #2c3038 }\n")
             .append("    }\n")

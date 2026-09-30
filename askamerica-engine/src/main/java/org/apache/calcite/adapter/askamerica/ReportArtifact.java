@@ -90,6 +90,24 @@ final class ReportArtifact {
                 if (s.size != null) {
                     putNumbers(sn.putArray("size"), s.size);
                 }
+                if (s.labels != null) {
+                    ArrayNode ln = sn.putArray("labels");
+                    for (String l : s.labels) {
+                        ln.add(l);
+                    }
+                    sn.put("label_mode", s.labelMode);
+                    sn.put("label_count", s.labelCount);
+                }
+                if (s.highlight != null) {
+                    ObjectNode hn = sn.putObject("highlight");
+                    for (java.util.Map.Entry<String, java.util.List<String>> g
+                        : s.highlight.entrySet()) {
+                        ArrayNode names = hn.putArray(g.getKey());
+                        for (String l : g.getValue()) {
+                            names.add(l);
+                        }
+                    }
+                }
                 for (int i = 0; i < s.y.size(); i++) {
                     if (s.y.get(i) == null || (i < s.x.size() && s.x.get(i) == null)) {
                         ObjectNode c = suppressed.addObject();

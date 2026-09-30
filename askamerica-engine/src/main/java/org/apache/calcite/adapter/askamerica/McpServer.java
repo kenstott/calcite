@@ -185,6 +185,52 @@ public class McpServer {
         + "</script>\n"
         + "</body></html>\n";
 
+    /** One scatter/bubble series, including its optional point labels and highlight groups. */
+    private static ChartRenderer.PointSeriesSpec readPointSeries(JsonNode s) {
+        java.util.List<Double> x = new java.util.ArrayList<>();
+        for (JsonNode v : s.path("x")) {
+            x.add(v.isNull() ? null : v.asDouble());
+        }
+        java.util.List<Double> y = new java.util.ArrayList<>();
+        for (JsonNode v : s.path("y")) {
+            y.add(v.isNull() ? null : v.asDouble());
+        }
+        java.util.List<Double> size = null;
+        if (s.has("size") && !s.get("size").isNull()) {
+            size = new java.util.ArrayList<>();
+            for (JsonNode v : s.path("size")) {
+                size.add(v.isNull() ? null : v.asDouble());
+            }
+        }
+        java.util.List<String> labels = null;
+        if (s.has("labels") && !s.get("labels").isNull()) {
+            labels = new java.util.ArrayList<>();
+            for (JsonNode v : s.path("labels")) {
+                labels.add(v.asText());
+            }
+        }
+        String labelMode = s.has("label_mode") && !s.get("label_mode").isNull()
+            ? s.get("label_mode").asText() : "none";
+        int labelCount = s.has("label_count") && !s.get("label_count").isNull()
+            ? s.get("label_count").asInt() : ChartRenderer.PointSeriesSpec.DEFAULT_LABEL_COUNT;
+        java.util.Map<String, java.util.List<String>> highlight = null;
+        if (s.has("highlight") && !s.get("highlight").isNull()) {
+            highlight = new java.util.LinkedHashMap<>();
+            java.util.Iterator<java.util.Map.Entry<String, JsonNode>> groups =
+                s.get("highlight").fields();
+            while (groups.hasNext()) {
+                java.util.Map.Entry<String, JsonNode> g = groups.next();
+                java.util.List<String> names = new java.util.ArrayList<>();
+                for (JsonNode v : g.getValue()) {
+                    names.add(v.asText());
+                }
+                highlight.put(g.getKey(), names);
+            }
+        }
+        return new ChartRenderer.PointSeriesSpec(s.path("name").asText(), x, y, size,
+            parseTooltips(s), labels, labelMode, labelCount, highlight);
+    }
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** Tool definitions, built on first use by {@link #toolDefs()}. */
@@ -2539,7 +2585,14 @@ public class McpServer {
             + "radius at each point). Points have no category axis, so every coordinate must "
             + "be a real number — omit a point instead of passing null for a missing value. "
             + "Optional tooltips (array of strings, same length as x) is the hover text per "
-            + "point.");
+            + "point. "
+            + "Optional labelling: labels (array of short strings, same length as x); "
+            + "label_mode 'none' (default), 'all', 'highlighted' (label only highlight "
+            + "members) or 'extremes' (label the label_count, default 5, points furthest "
+            + "from the fitted line or the centre); highlight (object of group name -> "
+            + "array of labels, e.g. {\"Top\":[\"CA\",\"WA\"],\"Bottom\":[\"ND\"]}: each "
+            + "group is drawn in its own colour with a legend entry, every other point "
+            + "muted; single series only). Labels never overlap.");
         chartProps.set("points", pointsProp);
         chartProps.set(
             "width", prop("integer", "Image width in pixels (default 800, max 2000)."));
@@ -4546,23 +4599,7 @@ public class McpServer {
                         java.util.List<ChartRenderer.PointSeriesSpec> points =
                             new java.util.ArrayList<>();
                         for (JsonNode s : args.path("points")) {
-                            java.util.List<Double> x = new java.util.ArrayList<>();
-                            for (JsonNode v : s.path("x")) {
-                                x.add(v.isNull() ? null : v.asDouble());
-                            }
-                            java.util.List<Double> y = new java.util.ArrayList<>();
-                            for (JsonNode v : s.path("y")) {
-                                y.add(v.isNull() ? null : v.asDouble());
-                            }
-                            java.util.List<Double> size = null;
-                            if (s.has("size") && !s.get("size").isNull()) {
-                                size = new java.util.ArrayList<>();
-                                for (JsonNode v : s.path("size")) {
-                                    size.add(v.isNull() ? null : v.asDouble());
-                                }
-                            }
-                            points.add(new ChartRenderer.PointSeriesSpec(
-                                s.path("name").asText(), x, y, size, parseTooltips(s)));
+                            points.add(readPointSeries(s));
                         }
 
                         log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
@@ -7971,23 +8008,7 @@ public class McpServer {
         if (pn.has("points") && pn.get("points").isArray() && pn.get("points").size() > 0) {
             p.points = new java.util.ArrayList<>();
             for (JsonNode sNode : pn.path("points")) {
-                java.util.List<Double> xs = new java.util.ArrayList<>();
-                for (JsonNode v : sNode.path("x")) {
-                    xs.add(v.isNull() ? null : v.asDouble());
-                }
-                java.util.List<Double> ys = new java.util.ArrayList<>();
-                for (JsonNode v : sNode.path("y")) {
-                    ys.add(v.isNull() ? null : v.asDouble());
-                }
-                java.util.List<Double> sz = null;
-                if (sNode.has("size") && !sNode.get("size").isNull()) {
-                    sz = new java.util.ArrayList<>();
-                    for (JsonNode v : sNode.path("size")) {
-                        sz.add(v.isNull() ? null : v.asDouble());
-                    }
-                }
-                p.points.add(new ChartRenderer.PointSeriesSpec(
-                    sNode.path("name").asText(), xs, ys, sz, parseTooltips(sNode)));
+                p.points.add(readPointSeries(sNode));
             }
             return p;
         }

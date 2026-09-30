@@ -11,8 +11,12 @@
 package org.apache.calcite.adapter.askamerica;
 
 import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Validates chart data and lays it out, for the {@code render_chart} MCP tool.
@@ -60,18 +64,40 @@ final class ChartRenderer {
         final List<Double> size;
         /** Optional hover text per point, same length as x; null entries take the default. */
         final List<String> tooltips;
+        /** One short text per point, or null when the series carries no labels. */
+        final List<String> labels;
+        /** One of {@link #LABEL_MODES}. */
+        final String labelMode;
+        /** How many points {@code extremes} labels. */
+        final int labelCount;
+        /** Named groups of point labels, in legend order; null when nothing is highlighted. */
+        final Map<String, List<String>> highlight;
+
+        static final List<String> LABEL_MODES =
+            Arrays.asList("all", "none", "highlighted", "extremes");
+        static final int DEFAULT_LABEL_COUNT = 5;
 
         PointSeriesSpec(String name, List<Double> x, List<Double> y, List<Double> size) {
-            this(name, x, y, size, null);
+            this(name, x, y, size, null, null, "none", DEFAULT_LABEL_COUNT, null);
         }
 
         PointSeriesSpec(String name, List<Double> x, List<Double> y, List<Double> size,
                 List<String> tooltips) {
+            this(name, x, y, size, tooltips, null, "none", DEFAULT_LABEL_COUNT, null);
+        }
+
+        PointSeriesSpec(String name, List<Double> x, List<Double> y, List<Double> size,
+                List<String> tooltips, List<String> labels, String labelMode, int labelCount,
+                Map<String, List<String>> highlight) {
             this.name = name;
             this.x = x;
             this.y = y;
             this.size = size;
             this.tooltips = tooltips;
+            this.labels = labels;
+            this.labelMode = labelMode;
+            this.labelCount = labelCount;
+            this.highlight = highlight;
         }
     }
 
@@ -208,6 +234,11 @@ final class ChartRenderer {
                     + "instead of passing null");
             }
             checkTooltips("points series '" + s.name + "'", s.tooltips, s.x.size());
+            validateLabels(s, series.size());
+            if ("highlighted".equals(s.labelMode) && s.highlight == null) {
+                throw new IllegalArgumentException("points series '" + s.name
+                    + "' has label_mode 'highlighted' but no highlight groups to label.");
+            }
             if (bubble) {
                 if (s.size == null || s.size.size() != s.x.size()) {
                     throw new IllegalArgumentException(
@@ -222,6 +253,48 @@ final class ChartRenderer {
         }
         return ChartLayout.pointChart(bubble, title, xLabel, yLabel, series, width, height,
             valueFormat);
+    }
+
+    private static void validateLabels(PointSeriesSpec s, int seriesCount) {
+        if (!PointSeriesSpec.LABEL_MODES.contains(s.labelMode)) {
+            throw new IllegalArgumentException("points series '" + s.name + "' has label_mode '"
+                + s.labelMode + "' — use all, none, highlighted, or extremes.");
+        }
+        if (s.labelCount < 1) {
+            throw new IllegalArgumentException(
+                "points series '" + s.name + "' has label_count " + s.labelCount
+                + " — it must be at least 1.");
+        }
+        boolean needsLabels = !"none".equals(s.labelMode) || s.highlight != null;
+        if (s.labels == null) {
+            if (needsLabels) {
+                throw new IllegalArgumentException("points series '" + s.name + "' asks for "
+                    + "labels (label_mode '" + s.labelMode + "'"
+                    + (s.highlight != null ? " / highlight" : "")
+                    + ") but has no labels array — pass one short text per point.");
+            }
+            return;
+        }
+        if (s.labels.size() != s.x.size()) {
+            throw new IllegalArgumentException("points series '" + s.name + "' has "
+                + s.x.size() + " x values but " + s.labels.size() + " labels");
+        }
+        if (s.highlight == null) {
+            return;
+        }
+        if (seriesCount != 1) {
+            throw new IllegalArgumentException("highlight groups colour the points of one series, "
+                + "so they need exactly one points series, not " + seriesCount
+                + " — use separate series for separate colours.");
+        }
+        for (Map.Entry<String, List<String>> g : s.highlight.entrySet()) {
+            for (String l : g.getValue()) {
+                if (!s.labels.contains(l)) {
+                    throw new IllegalArgumentException("highlight group '" + g.getKey()
+                        + "' names '" + l + "', which is not in the labels array");
+                }
+            }
+        }
     }
 
     /** Retained for callers that only want the raster. */

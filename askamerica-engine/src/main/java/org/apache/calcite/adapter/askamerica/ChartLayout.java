@@ -25,6 +25,7 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Turns chart data into a laid-out {@link ChartScene}.
@@ -652,7 +653,13 @@ final class ChartLayout {
         Ticks xt = niceTicks(xmin, xmax);
 
         boolean identity = isIdentityScatter(series);
-        int legendHeight = identity ? 0 : legendBand(pointSeriesNames(series), width);
+        // Highlight groups replace the series legend: with one series the groups are the only
+        // thing a legend can say, and they need an entry even when there is just one.
+        Map<String, List<String>> groups = series.get(0).highlight;
+        List<String> legendNames = groups != null ? new ArrayList<>(groups.keySet())
+            : identity || series.size() < 2 ? new ArrayList<String>() : pointSeriesNames(series);
+        int legendHeight = legendNames.isEmpty() ? 0
+            : legendRows(legendNames, width).size() * LEGEND_ROW_H + 4;
         int tickLabelWidth = 0;
         for (String t : yt.labels) {
             tickLabelWidth = Math.max(tickLabelWidth, ChartScene.textWidth(t, TICK_SIZE, false));
@@ -702,34 +709,218 @@ final class ChartLayout {
         }
         scene.add(xTicks);
 
+        List<double[]> labelBoxes = new ArrayList<>();
+        List<double[]> placedLabels = new ArrayList<>();
+        Group labelGroup = new Group().at("point-labels").styled("labels");
+        int pointBase = 0;
         for (int si = 0; si < series.size(); si++) {
             ChartRenderer.PointSeriesSpec s = series.get(si);
             Color c = identity ? color(0) : color(si);
             Group g = new Group().at("series-" + ChartScene.slug(s.name))
                 .styled("series");
-            for (int i = 0; i < s.x.size(); i++) {
-                double px = left + (s.x.get(i) - xt.min) / (xt.max - xt.min) * plotW;
-                double py = valueToY(s.y.get(i), yt, top, plotH);
-                double r = 4;
+            int n = s.x.size();
+            double[] px = new double[n];
+            double[] py = new double[n];
+            double[] pr = new double[n];
+            for (int i = 0; i < n; i++) {
+                px[i] = left + (s.x.get(i) - xt.min) / (xt.max - xt.min) * plotW;
+                py[i] = valueToY(s.y.get(i), yt, top, plotH);
+                pr[i] = 4;
                 if (bubble && s.size != null && smax > 0) {
-                    r = 4 + Math.sqrt(Math.abs(s.size.get(i)) / smax) * 18;
+                    pr[i] = 4 + Math.sqrt(Math.abs(s.size.get(i)) / smax) * 18;
                 }
-                Element dot = new Dot(px, py, r, c, bubble ? 0.55 : 0.85)
-                    .at("mark-" + ChartScene.slug(s.name) + "-" + i).styled("point");
-                String label = s.name + ": (" + ValueFormat.plain(s.x.get(i)) + ", "
-                    + ValueFormat.render(fmt, s.y.get(i)) + ")"
-                    + (bubble && s.size != null
-                        ? ", size " + ValueFormat.plain(s.size.get(i)) : "");
-                g.add(new Hover(dot, HitTarget.circle(px, py, Math.max(r, MIN_HIT / 2)),
-                    tooltip(s.tooltips, i, label)));
+            }
+            int[] group = highlightGroups(s);
+            boolean[] labelled = labelledPoints(s, group);
+            // Plain points first, so emphasised ones sit on top of them.
+            for (int pass = 0; pass < 2; pass++) {
+                for (int i = 0; i < n; i++) {
+                    boolean emphasised = labelled[i] || group[i] >= 0;
+                    if (emphasised != (pass == 1)) {
+                        continue;
+                    }
+                    Color fill = c;
+                    double alpha = bubble ? 0.55 : 0.85;
+                    if (s.highlight != null) {
+                        fill = group[i] >= 0 ? color(group[i]) : AXIS;
+                        if (group[i] < 0) {
+                            alpha = bubble ? 0.35 : 0.6;
+                        }
+                    }
+                    Element dot = new Dot(px[i], py[i], pr[i], fill, alpha)
+                        .at("mark-" + ChartScene.slug(s.name) + "-" + i).styled("point");
+                    String hover = s.name + ": (" + ValueFormat.plain(s.x.get(i)) + ", "
+                        + ValueFormat.render(fmt, s.y.get(i)) + ")"
+                        + (bubble && s.size != null
+                            ? ", size " + ValueFormat.plain(s.size.get(i)) : "");
+                    g.add(new Hover(dot,
+                        HitTarget.circle(px[i], py[i], Math.max(pr[i], MIN_HIT / 2)),
+                        tooltip(s.tooltips, i, hover)));
+                }
             }
             scene.add(g);
+            for (int i = 0; i < n; i++) {
+                if (labelled[i]) {
+                    labelBoxes.add(new double[]{px[i], py[i], pr[i], pointBase + i, i});
+                }
+            }
+            placeLabels(labelGroup, labelBoxes, placedLabels, s, left, top, plotW, plotH);
+            labelBoxes.clear();
+            pointBase += n;
         }
+        scene.add(labelGroup);
 
-        if (series.size() > 1 && !identity) {
-            addLegend(scene, pointSeriesNames(series), height - 10 - FOOTNOTE_BAND, width);
+        if (!legendNames.isEmpty()) {
+            addLegend(scene, legendNames, height - 10 - FOOTNOTE_BAND, width);
         }
         return scene;
+    }
+
+    /** Index of the highlight group each point belongs to (first match wins), or -1. */
+    private static int[] highlightGroups(ChartRenderer.PointSeriesSpec s) {
+        int[] group = new int[s.x.size()];
+        java.util.Arrays.fill(group, -1);
+        if (s.highlight == null) {
+            return group;
+        }
+        int gi = 0;
+        for (List<String> names : s.highlight.values()) {
+            for (int i = 0; i < group.length; i++) {
+                if (group[i] < 0 && names.contains(s.labels.get(i))) {
+                    group[i] = gi;
+                }
+            }
+            gi++;
+        }
+        return group;
+    }
+
+    /** Which points of the series get a text label under its label_mode. */
+    private static boolean[] labelledPoints(ChartRenderer.PointSeriesSpec s, int[] group) {
+        int n = s.x.size();
+        boolean[] out = new boolean[n];
+        switch (s.labelMode) {
+        case "all":
+            java.util.Arrays.fill(out, true);
+            break;
+        case "highlighted":
+            for (int i = 0; i < n; i++) {
+                out[i] = group[i] >= 0;
+            }
+            break;
+        case "extremes":
+            for (int i : furthestPoints(s)) {
+                out[i] = true;
+            }
+            break;
+        default:
+            break;
+        }
+        return out;
+    }
+
+    /**
+     * The labelCount points furthest from the least-squares line through the series, or from
+     * its centre (in axis-normalised units) when there are too few points or no x spread to
+     * fit a line.
+     */
+    private static List<Integer> furthestPoints(ChartRenderer.PointSeriesSpec s) {
+        int n = s.x.size();
+        double mx = 0;
+        double my = 0;
+        for (int i = 0; i < n; i++) {
+            mx += s.x.get(i) / n;
+            my += s.y.get(i) / n;
+        }
+        double sxx = 0;
+        double sxy = 0;
+        double sx2 = 0;
+        double sy2 = 0;
+        for (int i = 0; i < n; i++) {
+            double dx = s.x.get(i) - mx;
+            double dy = s.y.get(i) - my;
+            sxx += dx * dx;
+            sxy += dx * dy;
+            sy2 += dy * dy;
+        }
+        final double[] dist = new double[n];
+        boolean line = n >= 3 && sxx > 0;
+        double slope = line ? sxy / sxx : 0;
+        for (int i = 0; i < n; i++) {
+            double dx = s.x.get(i) - mx;
+            double dy = s.y.get(i) - my;
+            if (line) {
+                dist[i] = Math.abs(dy - slope * dx);
+            } else {
+                double nx = sxx > 0 ? dx / Math.sqrt(sxx) : 0;
+                double ny = sy2 > 0 ? dy / Math.sqrt(sy2) : 0;
+                dist[i] = Math.hypot(nx, ny);
+            }
+        }
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            order.add(i);
+        }
+        java.util.Collections.sort(order, new java.util.Comparator<Integer>() {
+            @Override public int compare(Integer a, Integer b) {
+                return Double.compare(dist[b], dist[a]);
+            }
+        });
+        return order.subList(0, Math.min(s.labelCount, n));
+    }
+
+    /**
+     * Places one label per entry of {points} (px, py, radius, label index, point index),
+     * to the right of its point and stepped down (then up) until it clears every label already
+     * placed. The plot edge flips it to the left. {placed} accumulates across series. A label that fits nowhere is an error rather
+     * than a silently dropped or overprinted one.
+     */
+    private static void placeLabels(Group out, List<double[]> points, List<double[]> placed,
+            ChartRenderer.PointSeriesSpec s, double left, double top, double plotW,
+            double plotH) {
+        int step = TICK_SIZE + 1;
+        // Left to right, so a nudged label never pushes one already settled.
+        java.util.Collections.sort(points, new java.util.Comparator<double[]>() {
+            @Override public int compare(double[] a, double[] b) {
+                int c = Double.compare(a[0], b[0]);
+                return c != 0 ? c : Double.compare(a[1], b[1]);
+            }
+        });
+        for (double[] pt : points) {
+            String text = s.labels.get((int) pt[4]);
+            int w = ChartScene.textWidth(text, TICK_SIZE, false);
+            boolean done = false;
+            for (int side = 0; side < 2 && !done; side++) {
+                double x0 = side == 0 ? pt[0] + pt[2] + 3 : pt[0] - pt[2] - 3 - w;
+                for (int k = 0; k < 40 && !done; k++) {
+                    double dy = ((k + 1) / 2) * step * (k % 2 == 1 ? 1 : -1);
+                    double base = pt[1] + 4 + dy;
+                    double[] box = {x0, base - TICK_SIZE, x0 + w, base + 3};
+                    if (box[0] < left || box[2] > left + plotW || box[1] < top
+                        || box[3] > top + plotH || overlaps(box, placed)) {
+                        continue;
+                    }
+                    placed.add(box);
+                    out.add(new Label(x0, base, text, INK, TICK_SIZE, Anchor.START, 0, false)
+                        .styled("point-label").at("label-" + (int) pt[3]));
+                    done = true;
+                }
+            }
+            if (!done) {
+                throw new IllegalArgumentException("no room to label point '" + text
+                    + "' without overlapping another label — label fewer points "
+                    + "(label_mode 'highlighted' or 'extremes') or enlarge the chart.");
+            }
+        }
+    }
+
+    private static boolean overlaps(double[] box, List<double[]> placed) {
+        for (double[] o : placed) {
+            if (box[0] < o[2] && o[0] < box[2] && box[1] < o[3] && o[1] < box[3]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── shared pieces ────────────────────────────────────────────────────────
