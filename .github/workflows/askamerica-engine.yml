@@ -1069,6 +1069,12 @@ jobs:
             --title "AskAmerica Engine ${TAG}" --notes-file /tmp/release-notes.md
           shopt -s globstar
           gh release upload "$TAG" --repo "${{ github.repository }}" --clobber release-assets/**/*
+          # release-please creates the release as a draft (release-please-config.json), so it
+          # is not releases/latest until now. Published before its jar was attached, every
+          # installed launcher saw a newer version, downloaded
+          # releases/latest/download/askamerica-engine.jar, got 404, and could not start
+          # (engine-v0.100.1, 2026-09-30).
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --latest
 
       # The pgwire-calcite installers attach on a release event, but a release created above by
       # GITHUB_TOKEN does not emit one. Dispatch that workflow explicitly now that the release
