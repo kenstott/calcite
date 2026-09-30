@@ -6042,6 +6042,18 @@ partitionedTables:
         type: double
         nullable: true
         comment: Value for this year (unpivoted from wide format)
+      - name: value_flag
+        type: string
+        nullable: true
+        comment: >
+          BEA's own marker for a cell with no published number, verbatim; NULL when data_value
+          holds a published number. '(D)' = withheld to avoid disclosing confidential
+          information, with the estimate included in higher-level totals; '(L)' = below BEA's
+          reporting floor but included in totals; '(T)' = suppressed to cover a corresponding
+          estimate elsewhere or below a small-amount threshold, included in the total (BEA's
+          footnote wording differs by table); '(NM)' = not meaningful; '(NA)' = not available.
+          data_value is NULL on every flagged row, so filter data_value IS NOT NULL to sum only
+          published numbers, and read value_flag to learn why a cell is empty.
 
 
     # API Configuration - references bulk download
@@ -6068,7 +6080,8 @@ partitionedTables:
         valueColumnPattern: "^\\d{4}$"  # Match 4-digit year columns (1929-2024)
         keyColumnName: year
         valueColumnName: data_value
-        skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]  # BEA notation for missing/suppressed data
+        flagColumnName: value_flag
+        flagValues: ["(NA)", "(D)", "(L)", "(NM)", "(T)"]
         columnMapping:
           GeoFIPS: geo_fips
           GeoName: geo_name
@@ -6183,6 +6196,18 @@ partitionedTables:
         type: double
         nullable: true
         comment: Value for this year (unpivoted from wide format)
+      - name: value_flag
+        type: string
+        nullable: true
+        comment: >
+          BEA's own marker for a cell with no published number, verbatim; NULL when data_value
+          holds a published number. '(D)' = withheld to avoid disclosing confidential
+          information, with the estimate included in higher-level totals; '(L)' = below BEA's
+          reporting floor but included in totals; '(T)' = suppressed to cover a corresponding
+          estimate elsewhere or below a small-amount threshold, included in the total (BEA's
+          footnote wording differs by table); '(NM)' = not meaningful; '(NA)' = not available.
+          data_value is NULL on every flagged row, so filter data_value IS NOT NULL to sum only
+          published numbers, and read value_flag to learn why a cell is empty.
 
 
     download:
@@ -6204,7 +6229,8 @@ partitionedTables:
         valueColumnPattern: "^\\d{4}$"
         keyColumnName: year
         valueColumnName: data_value
-        skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        flagColumnName: value_flag
+        flagValues: ["(NA)", "(D)", "(L)", "(NM)", "(T)"]
         columnMapping:
           GeoFIPS: geo_fips
           GeoName: geo_name
@@ -6311,6 +6337,18 @@ partitionedTables:
         type: double
         nullable: true
         comment: Value for this period (unpivoted from wide format)
+      - name: value_flag
+        type: string
+        nullable: true
+        comment: >
+          BEA's own marker for a cell with no published number, verbatim; NULL when data_value
+          holds a published number. '(D)' = withheld to avoid disclosing confidential
+          information, with the estimate included in higher-level totals; '(L)' = below BEA's
+          reporting floor but included in totals; '(T)' = suppressed to cover a corresponding
+          estimate elsewhere or below a small-amount threshold, included in the total (BEA's
+          footnote wording differs by table); '(NM)' = not meaningful; '(NA)' = not available.
+          data_value is NULL on every flagged row, so filter data_value IS NOT NULL to sum only
+          published numbers, and read value_flag to learn why a cell is empty.
 
 
     download:
@@ -6332,7 +6370,8 @@ partitionedTables:
         valueColumnPattern: "^\\d{4}:Q[1-4]$"  # Match BEA quarterly columns (1948:Q1, 2024:Q2)
         keyColumnName: year
         valueColumnName: data_value
-        skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        flagColumnName: value_flag
+        flagValues: ["(NA)", "(D)", "(L)", "(NM)", "(T)"]
         columnMapping:
           GeoFIPS: geo_fips
           GeoName: geo_name
@@ -6439,6 +6478,18 @@ partitionedTables:
         type: double
         nullable: true
         comment: Value for this period (unpivoted from wide format)
+      - name: value_flag
+        type: string
+        nullable: true
+        comment: >
+          BEA's own marker for a cell with no published number, verbatim; NULL when data_value
+          holds a published number. '(D)' = withheld to avoid disclosing confidential
+          information, with the estimate included in higher-level totals; '(L)' = below BEA's
+          reporting floor but included in totals; '(T)' = suppressed to cover a corresponding
+          estimate elsewhere or below a small-amount threshold, included in the total (BEA's
+          footnote wording differs by table); '(NM)' = not meaningful; '(NA)' = not available.
+          data_value is NULL on every flagged row, so filter data_value IS NOT NULL to sum only
+          published numbers, and read value_flag to learn why a cell is empty.
 
 
     download:
@@ -6460,7 +6511,8 @@ partitionedTables:
         valueColumnPattern: "^\\d{4}:Q[1-4]$"
         keyColumnName: year
         valueColumnName: data_value
-        skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        flagColumnName: value_flag
+        flagValues: ["(NA)", "(D)", "(L)", "(NM)", "(T)"]
         columnMapping:
           GeoFIPS: geo_fips
           GeoName: geo_name
@@ -6574,6 +6626,18 @@ partitionedTables:
         type: double
         nullable: true
         comment: Value for this year (unpivoted from wide format)
+      - name: value_flag
+        type: string
+        nullable: true
+        comment: >
+          BEA's own marker for a cell with no published number, verbatim; NULL when data_value
+          holds a published number. '(D)' = withheld to avoid disclosing confidential
+          information, with the estimate included in higher-level totals; '(L)' = below BEA's
+          reporting floor but included in totals; '(T)' = suppressed to cover a corresponding
+          estimate elsewhere or below a small-amount threshold, included in the total (BEA's
+          footnote wording differs by table); '(NM)' = not meaningful; '(NA)' = not available.
+          data_value is NULL on every flagged row, so filter data_value IS NOT NULL to sum only
+          published numbers, and read value_flag to learn why a cell is empty.
 
 
     download:
@@ -6595,7 +6659,8 @@ partitionedTables:
         valueColumnPattern: "^\\d{4}$"
         keyColumnName: year
         valueColumnName: data_value
-        skipValues: ["(NA)", "(D)", "(L)", "(NM)", ""]
+        flagColumnName: value_flag
+        flagValues: ["(NA)", "(D)", "(L)", "(NM)", "(T)"]
         columnMapping:
           GeoFIPS: geo_fips
           GeoName: geo_name

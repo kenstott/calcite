@@ -776,6 +776,48 @@ class HttpSourceConfigDeepTest {
     assertFalse(config.shouldSkipValue("12345.0"));
   }
 
+  @Test void testWideToNarrowFlagValues() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("Col1"));
+    map.put("flagColumnName", "value_flag");
+    map.put("flagValues", Arrays.asList("(D)", "(NA)"));
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    assertEquals("value_flag", config.getFlagColumnName());
+    assertTrue(config.isFlagValue("(D)"));
+    assertTrue(config.isFlagValue("(NA)"));
+    assertFalse(config.isFlagValue("(L)"));
+    assertFalse(config.isFlagValue("12345.0"));
+    assertFalse(config.isFlagValue(null));
+    assertTrue(config.shouldSkipValue(""));
+  }
+
+  @Test void testWideToNarrowFlagColumnAbsentByDefault() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("Col1"));
+
+    HttpSourceConfig.WideToNarrowConfig config =
+        HttpSourceConfig.WideToNarrowConfig.fromMap(map);
+
+    assertNull(config.getFlagColumnName());
+    assertFalse(config.isFlagValue("(D)"));
+  }
+
+  @Test void testWideToNarrowFlagValuesRequireColumnName() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("keyColumns", Arrays.asList("Col1"));
+    map.put("flagValues", Arrays.asList("(D)"));
+    assertThrows(IllegalArgumentException.class,
+        () -> HttpSourceConfig.WideToNarrowConfig.fromMap(map));
+
+    map.remove("flagValues");
+    map.put("flagColumnName", "value_flag");
+    assertThrows(IllegalArgumentException.class,
+        () -> HttpSourceConfig.WideToNarrowConfig.fromMap(map));
+  }
+
   @Test void testWideToNarrowIsValueColumn() {
     Map<String, Object> map = new HashMap<String, Object>();
     map.put("keyColumns", Arrays.asList("GeoFIPS", "GeoName"));

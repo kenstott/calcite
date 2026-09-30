@@ -1942,7 +1942,14 @@ public class HttpSourceConfig {
    *   keyColumnName: Year             # Name for unpivoted key column
    *   valueColumnName: DataValue      # Name for unpivoted value column
    *   skipValues: ["(NA)", "(D)", ""]  # Values to skip during unpivot
+   *   flagColumnName: value_flag       # Optional: keep marker cells as null rows carrying the marker
+   *   flagValues: ["(D)", "(NA)"]      # Source markers reported in flagColumnName instead of skipped
    * }</pre>
+   *
+   * <p>When {@code flagColumnName} is set, a cell whose source text is one of {@code flagValues}
+   * yields an output row whose value column is null and whose flag column holds the source
+   * marker verbatim; every other output row has a null flag. This keeps a publisher's
+   * suppression or unavailability code distinguishable from a cell that was never published.
    */
   public static class WideToNarrowConfig {
     private final List<String> keyColumns;
@@ -1951,10 +1958,12 @@ public class HttpSourceConfig {
     private final String valueColumnName;
     private final Set<String> skipValues;
     private final Map<String, String> columnMapping;
+    private final String flagColumnName;
+    private final Set<String> flagValues;
 
     private WideToNarrowConfig(List<String> keyColumns, String valueColumnPattern,
         String keyColumnName, String valueColumnName, Set<String> skipValues,
-        Map<String, String> columnMapping) {
+        Map<String, String> columnMapping, String flagColumnName, Set<String> flagValues) {
       this.keyColumns = keyColumns != null
           ? Collections.unmodifiableList(new ArrayList<String>(keyColumns))
           : Collections.<String>emptyList();
@@ -1967,6 +1976,10 @@ public class HttpSourceConfig {
       this.columnMapping = columnMapping != null
           ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(columnMapping))
           : Collections.<String, String>emptyMap();
+      this.flagColumnName = flagColumnName;
+      this.flagValues = flagValues != null
+          ? Collections.unmodifiableSet(new HashSet<String>(flagValues))
+          : Collections.<String>emptySet();
     }
 
     /**
@@ -2011,8 +2024,23 @@ public class HttpSourceConfig {
         }
       }
 
+      String flagColumnName = (String) map.get("flagColumnName");
+      Set<String> flagValues = new HashSet<String>();
+      Object flagValuesObj = map.get("flagValues");
+      if (flagValuesObj instanceof List) {
+        for (Object item : (List<?>) flagValuesObj) {
+          flagValues.add(String.valueOf(item));
+        }
+      }
+      if (flagColumnName == null && !flagValues.isEmpty()) {
+        throw new IllegalArgumentException("wideToNarrow.flagValues requires flagColumnName");
+      }
+      if (flagColumnName != null && flagValues.isEmpty()) {
+        throw new IllegalArgumentException("wideToNarrow.flagColumnName requires flagValues");
+      }
+
       return new WideToNarrowConfig(keyColumns, valueColumnPattern, keyColumnName,
-          valueColumnName, skipValues, columnMapping);
+          valueColumnName, skipValues, columnMapping, flagColumnName, flagValues);
     }
 
     /**
@@ -2067,6 +2095,22 @@ public class HttpSourceConfig {
      */
     public boolean shouldSkipValue(String value) {
       return value == null || value.isEmpty() || skipValues.contains(value);
+    }
+
+    /**
+     * Returns the name of the column that carries a source marker for a cell with no value,
+     * or null when markers are not reported.
+     */
+    public String getFlagColumnName() {
+      return flagColumnName;
+    }
+
+    /**
+     * Checks if a cell's source text is a marker to report in the flag column rather than
+     * as a value. A flag value takes precedence over {@link #shouldSkipValue(String)}.
+     */
+    public boolean isFlagValue(String value) {
+      return value != null && flagValues.contains(value);
     }
 
     /**

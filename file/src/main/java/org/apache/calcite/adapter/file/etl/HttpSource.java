@@ -2865,14 +2865,18 @@ public class HttpSource implements DataSource {
                 String valueStr = stripQuotesIfPresent(values[idx].trim(), quoted);
 
                 // Skip null/empty values based on config
-                if (wideToNarrow.shouldSkipValue(valueStr)) {
+                boolean flagged = wideToNarrow.isFlagValue(valueStr);
+                if (!flagged && wideToNarrow.shouldSkipValue(valueStr)) {
                   continue;
                 }
 
                 Map<String, Object> row = new LinkedHashMap<String, Object>(baseRow);
                 row.put(wideToNarrow.getKeyColumnName(), valueColumnNames.get(i));  // e.g., "2020"
                 String valueColumn = wideToNarrow.getValueColumnName();
-                row.put(valueColumn, parseValue(valueColumn, valueStr));  // e.g., 12345.0
+                row.put(valueColumn, flagged ? null : parseValue(valueColumn, valueStr));
+                if (wideToNarrow.getFlagColumnName() != null) {
+                  row.put(wideToNarrow.getFlagColumnName(), flagged ? valueStr : null);
+                }
                 expandedRowQueue.add(row);
                 matchedRows++;
 
@@ -3118,14 +3122,18 @@ public class HttpSource implements DataSource {
               String valueStr = stripQuotesIfPresent(values[idx].trim(), quoted);
 
               // Skip null/empty values based on config
-              if (wideToNarrow.shouldSkipValue(valueStr)) {
+              boolean flagged = wideToNarrow.isFlagValue(valueStr);
+              if (!flagged && wideToNarrow.shouldSkipValue(valueStr)) {
                 continue;
               }
 
               Map<String, Object> row = new LinkedHashMap<String, Object>(baseRow);
               row.put(wideToNarrow.getKeyColumnName(), valueColumnNames.get(i));  // e.g., "2020"
               String valueColumn = wideToNarrow.getValueColumnName();
-              row.put(valueColumn, parseValue(valueColumn, valueStr));  // e.g., 12345.0
+              row.put(valueColumn, flagged ? null : parseValue(valueColumn, valueStr));
+              if (wideToNarrow.getFlagColumnName() != null) {
+                row.put(wideToNarrow.getFlagColumnName(), flagged ? valueStr : null);
+              }
               result.add(row);
               matchedRows++;
 
