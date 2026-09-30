@@ -25,6 +25,7 @@ import smile.regression.RandomForest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 /**
  * Nonlinear regression (random forest / gradient boosting) and Double Machine Learning, via
@@ -114,6 +115,143 @@ final class StatsMlEngine {
                 + "decrease summed across trees, not a causal effect size or even guaranteed "
                 + "monotonic direction — pair with domain reasoning, not a substitute for it.");
             return out;
+        }
+    }
+
+    // ─── Cross-validated permutation importance ───────────────────────────────
+
+    private static final int PERMUTATION_SEED = 20260930;
+    private static final int PERMUTATION_REPEATS = 5;
+    private static final int MAX_FOLDS = 5;
+    /** Rows per predictor below which a ranking is reported as unstable. */
+    private static final int MIN_ROWS_PER_PREDICTOR = 10;
+
+    /**
+     * Ranks predictors by held-out permutation importance: for each cross-validation fold a
+     * model is fit on the other folds, and a predictor's importance is the increase in that
+     * fold's held-out MSE when the predictor's values are shuffled across the held-out rows.
+     * Unlike impurity decrease, this is measured out of sample, so a predictor the trees split
+     * on but that adds no predictive power (e.g. one collinear with others) scores near zero
+     * or negative. Importance is reported as mean and standard error across folds, with the
+     * count of folds in which shuffling hurt.
+     *
+     * <p>Fold assignment ({@code row index % folds}) and shuffling (fixed seed) are
+     * deterministic; the tree ensembles themselves use Smile's internal randomness, so
+     * repeated calls agree closely but not bit-for-bit.
+     */
+    static PermutationImportanceResult permutationImportance(double[] y, double[][] x,
+            String outcome, String[] predictors, String method) {
+        validateMethod(method);
+        int n = y.length;
+        int p = predictors.length;
+        int folds = Math.min(MAX_FOLDS, n / 2);
+        if (folds < 2) {
+            throw new IllegalArgumentException("cross-validated importance needs at least 4 "
+                + "rows (got n=" + n + ")");
+        }
+        double[][] foldImportance = new double[p][folds];
+        double[] oofPredicted = new double[n];
+        Random rnd = new Random(PERMUTATION_SEED);
+
+        for (int fold = 0; fold < folds; fold++) {
+            List<Integer> trainList = new ArrayList<>();
+            List<Integer> testList = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                if (i % folds == fold) {
+                    testList.add(i);
+                } else {
+                    trainList.add(i);
+                }
+            }
+            int[] trainIdx = toArray(trainList);
+            int[] testIdx = toArray(testList);
+            DataFrame train = buildDataFrame(y, outcome, x, predictors, trainIdx);
+            StructType schema = controlsSchema(x, predictors, trainIdx);
+            java.util.function.ToDoubleFunction<Tuple> model = fitPredictor(method, outcome, train);
+
+            double[][] testRows = new double[testIdx.length][];
+            double[] testY = new double[testIdx.length];
+            for (int r = 0; r < testIdx.length; r++) {
+                testRows[r] = x[testIdx[r]];
+                testY[r] = y[testIdx[r]];
+            }
+            double[] basePred = predictRows(model, testRows, schema);
+            for (int r = 0; r < testIdx.length; r++) {
+                oofPredicted[testIdx[r]] = basePred[r];
+            }
+            double baseMse = mse(testY, basePred);
+
+            for (int j = 0; j < p; j++) {
+                double increase = 0;
+                for (int rep = 0; rep < PERMUTATION_REPEATS; rep++) {
+                    int[] perm = allIndices(testIdx.length);
+                    for (int k = perm.length - 1; k > 0; k--) {
+                        int s = rnd.nextInt(k + 1);
+                        int tmp = perm[k];
+                        perm[k] = perm[s];
+                        perm[s] = tmp;
+                    }
+                    double[][] shuffled = new double[testRows.length][];
+                    for (int r = 0; r < testRows.length; r++) {
+                        shuffled[r] = testRows[r].clone();
+                        shuffled[r][j] = testRows[perm[r]][j];
+                    }
+                    increase += mse(testY, predictRows(model, shuffled, schema)) - baseMse;
+                }
+                foldImportance[j][fold] = increase / PERMUTATION_REPEATS;
+            }
+        }
+
+        double[] mean = new double[p];
+        double[] se = new double[p];
+        int[] foldsPositive = new int[p];
+        for (int j = 0; j < p; j++) {
+            double sum = 0;
+            for (int f = 0; f < folds; f++) {
+                sum += foldImportance[j][f];
+                if (foldImportance[j][f] > 0) {
+                    foldsPositive[j]++;
+                }
+            }
+            mean[j] = sum / folds;
+            double ss = 0;
+            for (int f = 0; f < folds; f++) {
+                double d = foldImportance[j][f] - mean[j];
+                ss += d * d;
+            }
+            se[j] = Math.sqrt(ss / (folds - 1) / folds);
+        }
+        return new PermutationImportanceResult(method, predictors, mean, se, foldsPositive,
+            folds, rSquared(y, oofPredicted), n);
+    }
+
+    static final class PermutationImportanceResult {
+        final String method;
+        final String[] predictors;
+        /** Mean held-out MSE increase from shuffling the predictor. */
+        final double[] importance;
+        final double[] stdError;
+        final int[] foldsPositive;
+        final int folds;
+        final double cvR2;
+        final int n;
+
+        PermutationImportanceResult(String method, String[] predictors, double[] importance,
+                double[] stdError, int[] foldsPositive, int folds, double cvR2, int n) {
+            this.method = method;
+            this.predictors = predictors;
+            this.importance = importance;
+            this.stdError = stdError;
+            this.foldsPositive = foldsPositive;
+            this.folds = folds;
+            this.cvR2 = cvR2;
+            this.n = n;
+        }
+
+        /** True when the sample has fewer than {@link #MIN_ROWS_PER_PREDICTOR} rows per
+         *  predictor. */
+        boolean smallSample() {
+            return n < MIN_ROWS_PER_PREDICTOR * predictors.length;
         }
     }
 
@@ -338,6 +476,34 @@ final class StatsMlEngine {
             vectors[j] = new DoubleVector(names[j], col);
         }
         return new DataFrame(vectors).schema();
+    }
+
+    private static java.util.function.ToDoubleFunction<Tuple> fitPredictor(String method,
+            String outcome, DataFrame train) {
+        if ("gradient_boosting".equals(method)) {
+            GradientTreeBoost model = GradientTreeBoost.fit(Formula.lhs(outcome), train);
+            return model::predict;
+        }
+        RandomForest model = RandomForest.fit(Formula.lhs(outcome), train);
+        return model::predict;
+    }
+
+    private static double[] predictRows(java.util.function.ToDoubleFunction<Tuple> model,
+            double[][] rows, StructType schema) {
+        double[] out = new double[rows.length];
+        for (int r = 0; r < rows.length; r++) {
+            out[r] = model.applyAsDouble(rowTuple(rows[r], schema));
+        }
+        return out;
+    }
+
+    private static double mse(double[] actual, double[] predicted) {
+        double sum = 0;
+        for (int i = 0; i < actual.length; i++) {
+            double e = actual[i] - predicted[i];
+            sum += e * e;
+        }
+        return sum / actual.length;
     }
 
     private static Tuple rowTuple(double[] row, StructType schema) {

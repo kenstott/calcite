@@ -92,6 +92,51 @@ class StatsMlEngineTest {
 
     // ─── Double ML ATE ──────────────────────────────────────────────────────────
 
+    @Test void permutationImportanceScoresNoiseNearZeroAndSignalHigh() {
+        int n = 200;
+        double[] y = new double[n];
+        double[][] x = new double[n][3];
+        Random rnd = new Random(11);
+        for (int i = 0; i < n; i++) {
+            x[i][0] = rnd.nextDouble() * 10;
+            x[i][1] = rnd.nextGaussian();
+            x[i][2] = rnd.nextGaussian();
+            y[i] = 3 * x[i][0] + rnd.nextGaussian();
+        }
+        StatsMlEngine.PermutationImportanceResult r = StatsMlEngine.permutationImportance(
+            y, x, "y", new String[]{"signal", "noise1", "noise2"}, "random_forest");
+        assertTrue(r.importance[0] > 10 * Math.max(Math.abs(r.importance[1]),
+            Math.abs(r.importance[2])), "signal must dominate noise: " + r.importance[0]
+            + " vs " + r.importance[1] + "," + r.importance[2]);
+        assertTrue(r.cvR2 > 0.8, "cv r2=" + r.cvR2);
+        assertTrue(r.foldsPositive[0] == r.folds);
+        assertTrue(!r.smallSample());
+    }
+
+    @Test void permutationImportanceFlagsSmallSample() {
+        int n = 30;
+        double[] y = new double[n];
+        double[][] x = new double[n][5];
+        Random rnd = new Random(5);
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < 5; j++) {
+                x[i][j] = rnd.nextGaussian();
+            }
+            y[i] = x[i][0] + rnd.nextGaussian();
+        }
+        String[] names = {"a", "b", "c", "d", "e"};
+        StatsMlEngine.PermutationImportanceResult r1 =
+            StatsMlEngine.permutationImportance(y, x, "y", names, "random_forest");
+        assertTrue(r1.smallSample());
+        assertTrue(r1.stdError[0] > 0);
+    }
+
+    @Test void permutationImportanceRejectsTooFewRows() {
+        assertThrows(IllegalArgumentException.class, () -> StatsMlEngine.permutationImportance(
+            new double[]{1, 2, 3}, new double[][]{{1}, {2}, {3}}, "y", new String[]{"x"},
+            "random_forest"));
+    }
+
     @Test void doubleMlAteRecoversApproximateTreatmentEffectUnderConfounding() {
         // Classic confounded design: a control variable w drives BOTH treatment assignment
         // and the outcome nonlinearly, so a naive unadjusted comparison would be badly biased.

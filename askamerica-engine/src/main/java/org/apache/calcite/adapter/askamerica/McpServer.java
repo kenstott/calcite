@@ -972,8 +972,8 @@ public class McpServer {
             + "Each of the above runs the FULL result set through real matrix algebra (Apache "
             + "Commons Math), not the row-capped query() path. For nonlinear/interaction "
             + "effects or ML-based causal estimation: flexible_regression (RF/GBM — in-sample "
-            + "fit + importance, NOT a held-out substitute), feature_importance (usage-based "
-            + "ranking, not causal), double_ml_ate (Double/Debiased ML ATE — valid with "
+            + "fit + importance, NOT a held-out substitute), feature_importance (held-out "
+            + "permutation ranking with uncertainty, not causal), double_ml_ate (Double/Debiased ML ATE — valid with "
             + "flexible nuisance models but still ASSUMES unconfoundedness like any "
             + "observational estimate; prefer iv_2sls when a real instrument exists). These "
             + "three run on Smile, separate from the Commons Math tools above. (All of these "
@@ -2028,12 +2028,14 @@ public class McpServer {
             "'random_forest' (default if omitted) or 'gradient_boosting'."));
         tools.add(
             tool("feature_importance",
-            "Ranks predictors by how much a random forest / gradient boosting model actually "
-            + "used them to predict the outcome (impurity decrease summed across trees) — "
-            + "captures nonlinear and interaction effects a bivariate corr() ranking would "
-            + "miss entirely. NOT a causal ranking and not necessarily monotonic — a variable "
-            + "can rank high because trees split on it a lot, not because increasing it "
-            + "increases the outcome. Always call this tool for an importance ranking rather "
+            "Ranks predictors by held-out permutation importance from a random forest / gradient "
+            + "boosting model: how much cross-validated prediction error rises when the "
+            + "predictor is shuffled, with a standard error across folds and the model's "
+            + "cross-validated R². Captures nonlinear and interaction effects a bivariate "
+            + "corr() ranking would miss, and unlike impurity importance it does not reward "
+            + "a predictor that merely overlaps with others. Also returns impurity_importance "
+            + "for comparison and a small_sample_warning when there are under 10 rows per "
+            + "predictor. NOT a causal ranking and not necessarily monotonic. Always call this tool for an importance ranking rather "
             + "than a Python feature-importance script; it runs on the actual warehouse rows."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(importanceProps, new String[]{"sql", "outcome", "predictors"})));
@@ -11805,8 +11807,10 @@ public class McpServer {
         StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols);
         double[] y = ex.column(0);
         double[][] x = ex.columnsFor(predictorNames);
-        StatsMlEngine.FlexibleRegressionResult result =
+        StatsMlEngine.FlexibleRegressionResult fit =
             StatsMlEngine.flexibleRegression(y, x, outcome, predictorNames, resolvedMethod);
+        StatsMlEngine.PermutationImportanceResult result =
+            StatsMlEngine.permutationImportance(y, x, outcome, predictorNames, resolvedMethod);
 
         Integer[] order = new Integer[predictorNames.length];
         for (int i = 0; i < order.length; i++) {
@@ -11818,17 +11822,32 @@ public class McpServer {
         ObjectNode out = MAPPER.createObjectNode();
         out.put("method", resolvedMethod);
         out.put("n", result.n);
+        out.put("cv_folds", result.folds);
+        out.put("cv_r_squared", result.cvR2);
         ArrayNode ranked = MAPPER.createArrayNode();
         for (int idx : order) {
             ObjectNode row = MAPPER.createObjectNode();
             row.put("predictor", predictorNames[idx]);
-            row.put("importance", result.importance[idx]);
+            row.put("permutation_importance", result.importance[idx]);
+            row.put("permutation_std_error", result.stdError[idx]);
+            row.put("folds_where_shuffling_hurt", result.foldsPositive[idx]);
+            row.put("impurity_importance", fit.importance[idx]);
             ranked.add(row);
         }
         out.set("ranked_importance", ranked);
-        out.put("note", "Ranked by impurity decrease summed across trees (" + resolvedMethod
-            + ") — reflects how much the model relied on each predictor to split, not a "
-            + "causal or necessarily monotonic effect size.");
+        if (result.smallSample()) {
+            out.put("small_sample_warning", "n=" + result.n + " is under 10 rows per predictor ("
+                + predictorNames.length + " predictors): the ranking is unstable at this size. "
+                + "Trust only predictors whose permutation_importance exceeds about twice its "
+                + "permutation_std_error.");
+        }
+        out.put("note", "Ranked by held-out permutation importance (" + resolvedMethod
+            + "): the mean increase in " + result.folds + "-fold cross-validated MSE when the "
+            + "predictor is shuffled, in outcome units squared. Near zero or negative means the "
+            + "predictor adds nothing out of sample, which is typical of a variable overlapping "
+            + "with other predictors. impurity_importance is the in-sample tree-split measure, "
+            + "which inflates collinear or noisy predictors; it is given for comparison only. "
+            + "Not a causal or necessarily monotonic effect size.");
         return statsResult(out, sql, predictors, ex);
     }
 
