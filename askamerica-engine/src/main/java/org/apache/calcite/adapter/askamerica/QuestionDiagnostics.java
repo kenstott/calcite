@@ -1076,6 +1076,13 @@ final class QuestionDiagnostics {
         }
     }
 
+    /**
+     * Declared-vs-observed mismatches already reported by this server process. The mismatch is
+     * static schema information, so it is surfaced once per table and window pair rather than on
+     * every query, which would bury the warnings that vary per query.
+     */
+    private static final Set<String> STALE_ANNOUNCED = ConcurrentHashMap.newKeySet();
+
     private static void outOfCoverageYears(String sql, ArrayNode rows, ArrayNode warnings) {
         Set<Integer> years = yearLiterals(sql);
         if (years.isEmpty()) {
@@ -1113,7 +1120,9 @@ final class QuestionDiagnostics {
                 last = scanned ? observed.get("last_year").asInt()
                     : cov.get("observed_last_year").asInt();
                 basis = "observed";
-                if (first != declaredFirst || last != declaredLast) {
+                if ((first != declaredFirst || last != declaredLast)
+                    && STALE_ANNOUNCED.add(ref + ":" + declaredFirst + "-" + declaredLast
+                        + ":" + first + "-" + last)) {
                     ObjectNode stale = warning("coverage_declaration_stale", INFO,
                         "This table's declared coverage window disagrees with the years "
                         + "actually loaded. The observed window is used here; the schema "
