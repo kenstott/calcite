@@ -2459,6 +2459,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
+   * Declared tables omitted so far because their backing Iceberg table is not yet materialized
+   * — by {@link #getTableMap()} or a lazy {@link #getDeclaredTable} resolution. Callers that list
+   * {@link #getDeclaredTableNames()} must exclude these: {@link #getDeclaredTable} returns null
+   * for them.
+   */
+  public synchronized Set<String> getOmittedTableNames() {
+    return new LinkedHashSet<>(omittedTables);
+  }
+
+  /**
    * One declared table's Iceberg location, computed purely from its own config (the ETL writer's
    * warehousePath/tableName convention — see {@code IcebergMaterializationWriter}) — no I/O, no
    * catalog lookup. Returns null when the table's config doesn't resolve one this cheaply: not

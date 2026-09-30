@@ -250,11 +250,26 @@ jobs:
           # needed -- the runtime path computation independently lands on the same name. Only
           # present for adapters that have generated one; not every adapter's schema is large
           # enough to need it.
+          #
+          # An adapter that ships a cache must ship the one for ITS CURRENT model.json: a cache
+          # left behind by an older model.json is never matched at runtime, so every install
+          # silently cold-walks again (shipped that way in engine-v0.100.0 -- the only cache was
+          # for a model.json three commits old). Fail the build rather than ship a dead file.
           shopt -s nullglob
-          for cache_file in "pgwire-${{ matrix.adapter.name }}"/catalog-cache-*.pkl; do
-            cp "$cache_file" "bundle/model/$(basename "$cache_file")"
-          done
+          caches=("pgwire-${{ matrix.adapter.name }}"/catalog-cache-*.pkl)
           shopt -u nullglob
+          if [ "${#caches[@]}" -gt 0 ]; then
+            model_hash=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest()[:16])' \
+              "pgwire-${{ matrix.adapter.name }}/model.json")
+            expected="pgwire-${{ matrix.adapter.name }}/catalog-cache-${model_hash}.pkl"
+            for cache_file in "${caches[@]}"; do
+              if [ "$cache_file" != "$expected" ]; then
+                echo "::error::$cache_file does not match model.json (expected $expected) -- regenerate the catalog cache and delete the stale one"
+                exit 1
+              fi
+            done
+            cp "$expected" "bundle/model/$(basename "$expected")"
+          fi
           # Adapter-specific entry: starts the calcite backend against this adapter's model.
           # --database defaults the reported catalog name to the adapter's topic (e.g. govdata)
           # instead of the generic "postgres". Extra args (e.g. --port, --auth, --database) are

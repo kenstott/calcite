@@ -110,15 +110,45 @@ class EntityMentionExtractorTest {
     }
 
     @Test
-    void lookupSqlIsAnEqualityProbeWithQuotingAndNoScanPredicates() {
+    void bridgeSqlIsAnEqualityProbeWithQuotingAndNoScanPredicates() {
         String sql = McpServer.buildExtractEntitiesSql(Arrays.asList("apple", "o'reilly auto"));
         assertTrue(sql.contains("source_name_normalized IN ('apple', 'o''reilly auto')"), sql);
         assertFalse(sql.toUpperCase().contains(" LIKE "), "a LIKE is a full scan here");
         assertFalse(sql.toUpperCase().contains("JARO"), "fuzzy scoring is a full scan here");
-        assertTrue(sql.contains("ref.entity_org_bridge") && sql.contains("ref.canonical_org_entity"));
-        assertTrue(sql.contains("fec_committee_id"), "identifier columns must be selected");
+        assertTrue(sql.contains("ref.entity_org_bridge"), sql);
+        assertFalse(sql.contains("canonical_org_entity") || sql.contains("gleif_entities"),
+            "joining the 10M-row canonical table here scans all of it (measured >70s)");
         assertThrows(IllegalArgumentException.class,
             () -> McpServer.buildExtractEntitiesSql(Arrays.<String>asList()));
+    }
+
+    @Test
+    void canonicalSqlUsesALiteralKeyListNeverASubquery() {
+        String sql = McpServer.buildCanonicalOrgSql(Arrays.asList("K1", "K2"),
+            new HashSet<>(Arrays.asList("fec_committee_id", "lobbying_client_id")));
+        assertTrue(sql.contains("canonical_entity_id IN ('K1', 'K2')"), sql);
+        assertFalse(sql.toUpperCase().contains("(SELECT"), "an IN-subquery scans the table");
+        assertTrue(sql.contains("GROUP BY canonical_entity_id"), sql);
+    }
+
+    @Test
+    void canonicalSqlSelectsOnlyIdentifierColumnsTheDeployedTableHas() {
+        String sql = McpServer.buildCanonicalOrgSql(Arrays.asList("K1"),
+            new HashSet<>(Arrays.asList("fec_committee_id")));
+        assertTrue(sql.contains("MAX(fec_committee_id) AS fec_committee_id"), sql);
+        assertFalse(sql.contains("lobbying_client_id"),
+            "a declared-but-undeployed column would fail the whole statement");
+        String people = McpServer.buildExtractPersonsSql(Arrays.asList("nancy pelosi"),
+            new HashSet<>(Arrays.asList("officials_judge_jid")));
+        assertTrue(people.contains("officials_judge_jid"), people);
+        assertFalse(people.contains("officials_member_bioguide_id"), people);
+    }
+
+    @Test
+    void gleifSqlIsALiteralLeiList() {
+        String sql = McpServer.buildGleifSql(Arrays.asList("ABC123"));
+        assertTrue(sql.contains("lei IN ('ABC123')"), sql);
+        assertTrue(sql.contains("ref.gleif_entities"), sql);
     }
 
     private static EntityMentionExtractor.Candidate byName(String text, String surface) {
@@ -188,7 +218,8 @@ class EntityMentionExtractorTest {
 
     @Test
     void personSqlProbesBothNameOrdersByEquality() {
-        String sql = McpServer.buildExtractPersonsSql(Arrays.asList("nancy pelosi"));
+        String sql = McpServer.buildExtractPersonsSql(Arrays.asList("nancy pelosi"),
+            new HashSet<>(Arrays.asList("officials_member_bioguide_id")));
         assertTrue(sql.contains("lower(canonical_name) IN ('nancy pelosi', 'pelosi, nancy')"),
             sql);
         assertFalse(sql.toUpperCase().contains(" LIKE "), sql);
@@ -205,5 +236,40 @@ class EntityMentionExtractorTest {
         assertTrue(counties.contains("lower(county_code) IN ('mecklenburg county')"), counties);
         assertFalse(counties.contains("county_name IN"),
             "bare county names would turn every 'Orange' into a county");
+    }
+
+    @Test
+    void bareSurnameGoesToTheNamedPersonEvenWhenItAlsoMatchesAnOrganisation() {
+        String text = "Mitch McConnell said no. Later, McConnell left.";
+        List<EntityMentionExtractor.Candidate> all = EntityMentionExtractor.candidates(text);
+        // The registry has the person AND an organisation literally named "McConnell".
+        List<EntityMentionExtractor.Candidate> accepted = EntityMentionExtractor.resolve(all,
+            c -> "mitch mcconnell".equals(c.personKey) || "mcconnell".equals(c.norm));
+        EntityMentionExtractor.Surnames sn = EntityMentionExtractor.applySurnames(all,
+            accepted, new HashSet<>(Arrays.asList("mitch mcconnell")));
+        for (EntityMentionExtractor.Candidate c : sn.kept) {
+            assertFalse("mcconnell".equals(c.norm),
+                "the bare surname must not stay behind as an organisation match");
+        }
+        assertEquals(1, sn.mentions.get("p:mitch mcconnell").size());
+        assertEquals(text.lastIndexOf("McConnell"),
+            sn.mentions.get("p:mitch mcconnell").get(0).start);
+    }
+
+    @Test
+    void sharedSurnameStaysWithWhateverItMatchedBefore() {
+        String text = "Mitch McConnell met Mary McConnell. Later, McConnell left.";
+        List<EntityMentionExtractor.Candidate> all = EntityMentionExtractor.candidates(text);
+        List<EntityMentionExtractor.Candidate> accepted = EntityMentionExtractor.resolve(all,
+            c -> "mitch mcconnell".equals(c.personKey) || "mary mcconnell".equals(c.personKey)
+                || "mcconnell".equals(c.norm));
+        EntityMentionExtractor.Surnames sn = EntityMentionExtractor.applySurnames(all,
+            accepted, new HashSet<>(Arrays.asList("mitch mcconnell", "mary mcconnell")));
+        assertTrue(sn.mentions.isEmpty(), "two McConnells named: the bare surname is ambiguous");
+        boolean bareKept = false;
+        for (EntityMentionExtractor.Candidate c : sn.kept) {
+            bareKept |= "mcconnell".equals(c.norm);
+        }
+        assertTrue(bareKept, "an unattributable surname keeps its own match");
     }
 }

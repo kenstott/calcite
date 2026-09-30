@@ -27,6 +27,7 @@ import hashlib
 import logging
 import os
 import pickle
+import re
 from typing import Dict, List
 
 from pgwire_calcite import catalog, normalize
@@ -41,6 +42,9 @@ log = logging.getLogger(__name__)
 
 # Schemas Calcite/JDBC exposes that are not user data — skipped in discovery.
 _SYSTEM_SCHEMAS = {"metadata", "information_schema", "pg_catalog", ""}
+
+# CalciteMetaImpl's error for a listed table name that getTable() then could not resolve.
+_NOT_FOUND = re.compile(r"table (\S+) is not found")
 
 
 class SharedContexts:
@@ -68,9 +72,44 @@ def _rows(rs):
     rs.close()
 
 
+def _schema_table_rows(md, schema_name):
+    """One schema's getTables() rows, or None when the listing cannot be completed.
+
+    A listed YAML view is only created in DuckDB when getTables first resolves it, so the
+    listing can name a view whose CREATE then fails (its base table isn't ingested yet) and
+    the whole call throws. A view that failed once is no longer listed, so the listing is
+    retried while each failure names a view not seen before; a repeated name means the
+    failure is not that one-time view case and the schema is given up on.
+    """
+    failed_names = set()
+    while True:
+        try:
+            return list(_rows(md.getTables(None, schema_name, "%", None)))
+        except Exception as e:
+            match = _NOT_FOUND.search(str(e))
+            name = match.group(1) if match else None
+            if name is None or name in failed_names:
+                log.warning("getTables(schema=%s) failed (%s: %s) — omitting this schema "
+                            "from the catalog", schema_name, type(e).__name__, e)
+                return None
+            failed_names.add(name)
+            log.warning("getTables(schema=%s) named %s, which could not be resolved (%s) — "
+                        "listing the schema again without it", schema_name, name, e)
+
+
 def build_context(conn) -> tuple:
     """Introspect the Calcite JDBC connection. Returns (ctx, column_types dict)."""
+    ctx, column_types, _ = build_context_reporting_gaps(conn)
+    return ctx, column_types
+
+
+def build_context_reporting_gaps(conn) -> tuple:
+    """Like :func:`build_context`, plus the list of what the walk had to leave out:
+    ``"schema <name>"`` for a schema whose table listing failed, ``"table <s>.<t>"``
+    for a table whose columns could not be read. Empty means the catalog is complete.
+    Returns (ctx, column_types dict, gaps list)."""
     md = conn.getMetaData()
+    gaps: List[str] = []
     ctx = CompilationContext()
     column_types: Dict[int, List[ColumnMeta]] = {}
     # (schema, table) -> TableMeta, so FK targets resolve.
@@ -124,13 +163,12 @@ def build_context(conn) -> tuple:
             schema_name = sr.get("TABLE_SCHEM") or ""
             if schema_name.lower() in _SYSTEM_SCHEMAS:
                 continue
-            try:
-                for r in _rows(md.getTables(None, schema_name, "%", None)):
-                    _add_table_row(r)
-            except Exception as e2:
-                log.warning("getTables(schema=%s) failed (%s: %s) — omitting this schema "
-                            "from the catalog", schema_name, type(e2).__name__, e2)
+            rows = _schema_table_rows(md, schema_name)
+            if rows is None:
+                gaps.append(f"schema {schema_name}")
                 continue
+            for r in rows:
+                _add_table_row(r)
 
     # Columns per table.
     for schema, name, tm in table_keys:
@@ -171,6 +209,7 @@ def build_context(conn) -> tuple:
         except Exception as e:
             log.warning("getColumns failed for %s.%s (%s: %s) — leaving it column-less",
                         schema, name, type(e).__name__, e)
+            gaps.append(f"table {schema}.{name}")
             continue
 
     # Primary keys (empty for constraint-less adapters — reported as such).
@@ -227,7 +266,7 @@ def build_context(conn) -> tuple:
         len(ctx.pk_columns),
         len(ctx.joins),
     )
-    return ctx, column_types
+    return ctx, column_types, gaps
 
 
 def _enrich_keys_from_statistic(conn, ctx: CompilationContext, by_qualified) -> None:
@@ -456,10 +495,21 @@ def catalog_cache_path(model_path: str) -> str:
 
 def build_and_cache_context(conn, model_path: str):
     """Run the live JDBC/Iceberg discovery once and write the result to
-    :func:`catalog_cache_path`'s file, unconditionally (used by the seed-generation
-    script -- always regenerate, never trust a stale file on disk)."""
-    ctx, column_types = build_context(conn)
+    :func:`catalog_cache_path`'s file -- always regenerating, never trusting a stale
+    file on disk.
+
+    Only a complete walk is written. The cache has no invalidation other than a
+    model.json change, so a walk that had to leave a schema or table out (a
+    server still warming up, a schema whose listing threw) would otherwise be
+    served as the whole catalog on every later launch. A partial result is still
+    returned for this launch, and the next launch walks live again."""
+    ctx, column_types, gaps = build_context_reporting_gaps(conn)
     cache_path = catalog_cache_path(model_path)
+    if gaps:
+        log.error(
+            "Catalog walk was incomplete (%d gap(s): %s) -- NOT writing %s; the next "
+            "launch will walk live again", len(gaps), ", ".join(gaps), cache_path)
+        return ctx, column_types
     tmp_path = cache_path + ".tmp"
     with open(tmp_path, "wb") as f:
         pickle.dump((_CACHE_FORMAT_VERSION, ctx, column_types), f, protocol=pickle.HIGHEST_PROTOCOL)

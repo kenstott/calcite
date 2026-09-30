@@ -43,6 +43,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -393,6 +394,237 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
       assertFalse(found,
           "A table with a dangling version-hint.text (no matching metadata.json) must be "
               + "omitted from the mounted schema's table listing");
+    }
+  }
+
+  /**
+   * Under the DuckDB engine, a not-yet-materialized declared table must not appear in the
+   * schema's table names either. DuckDBJdbcSchema lists declared and pending-view names, but
+   * getTable() returns null for an omitted table, and JDBC getTables() rejects a listed name that
+   * does not resolve — so one omitted table made the whole schema's metadata listing throw, and
+   * pgwire-govdata dropped the schema from its catalog.
+   */
+  @Test public void testOmittedTableDoesNotBreakDuckDbTableListing() throws Exception {
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"executionEngine\": \"duckdb\",\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base3") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          },\n"
+        + "          {\n"
+        + "            \"name\": \"never_materialized\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"does_not_exist\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+         Statement statement = connection.createStatement()) {
+      ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM orders");
+      assertTrue(rs.next(), "Should have a result row");
+      assertEquals(3, rs.getInt(1), "Real table's rows are unaffected by the missing sibling");
+      rs.close();
+
+      boolean foundOrders = false;
+      boolean foundOmitted = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          String tableName = tables.getString("TABLE_NAME");
+          if ("orders".equalsIgnoreCase(tableName)) {
+            foundOrders = true;
+          }
+          if ("never_materialized".equalsIgnoreCase(tableName)) {
+            foundOmitted = true;
+          }
+        }
+      }
+      assertTrue(foundOrders, "The materialized sibling must still be listed");
+      assertFalse(foundOmitted, "The not-yet-materialized table must not be listed");
+    }
+  }
+
+  /**
+   * A YAML view not yet in the DuckDB catalog (a fresh install, or a view newer than the seed)
+   * is created on demand by the metadata walk itself. The walk must then resolve it rather than
+   * report the just-created view as not found, which fails getTables for the whole schema.
+   */
+  @Test public void testViewCreatedOnDemandIsListedAndResolved() throws Exception {
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"executionEngine\": \"duckdb\",\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base4") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ],\n"
+        + "        \"views\": [\n"
+        + "          {\"name\": \"answer\", \"sql\": \"SELECT 42 AS answer\"}\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
+      boolean foundOrders = false;
+      boolean foundView = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          String tableName = tables.getString("TABLE_NAME");
+          if ("orders".equalsIgnoreCase(tableName)) {
+            foundOrders = true;
+          }
+          if ("answer".equalsIgnoreCase(tableName)) {
+            foundView = true;
+          }
+        }
+      }
+      assertTrue(foundOrders, "The table beside the view must be listed");
+      assertTrue(foundView, "The view created during the walk must be listed");
+
+      try (Statement statement = connection.createStatement();
+           ResultSet rs = statement.executeQuery("SELECT answer FROM answer")) {
+        assertTrue(rs.next(), "Should have a result row");
+        assertEquals(42, rs.getInt(1));
+      }
+    }
+  }
+
+  /**
+   * A YAML view over a table that isn't ingested yet fails its on-demand CREATE. Once it has,
+   * the schema's listing must stop naming it; otherwise every getTables for the schema fails.
+   */
+  @Test public void testViewWhoseCreateFailedIsNoLongerListed() throws Exception {
+    String model = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"TEST\",\n"
+        + "  \"schemas\": [\n"
+        + "    {\n"
+        + "      \"name\": \"TEST\",\n"
+        + "      \"type\": \"custom\",\n"
+        + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "      \"operand\": {\n"
+        + "        \"ephemeralCache\": true,\n"
+        + "        \"executionEngine\": \"duckdb\",\n"
+        + "        \"baseDirectory\": \"" + tempDir.resolve("base5") + "\",\n"
+        + "        \"partitionedTables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"orders\",\n"
+        + "            \"materialize\": {\n"
+        + "              \"enabled\": true,\n"
+        + "              \"format\": \"iceberg\",\n"
+        + "              \"iceberg\": {\n"
+        + "                \"warehousePath\": \"" + warehousePath + "\",\n"
+        + "                \"tableName\": \"orders\"\n"
+        + "              }\n"
+        + "            }\n"
+        + "          }\n"
+        + "        ],\n"
+        + "        \"tables\": [\n"
+        + "          {\"name\": \"over_missing\", \"type\": \"view\",\n"
+        + "           \"sql\": \"SELECT * FROM not_ingested_yet\"}\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
+    Properties info = new Properties();
+    info.setProperty("model", "inline:" + model);
+    info.setProperty("lex", "ORACLE");
+    info.setProperty("unquotedCasing", "TO_LOWER");
+    info.setProperty("quotedCasing", "UNCHANGED");
+    info.setProperty("caseSensitive", "false");
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
+      // The first listing still names the pending view; resolving it attempts the CREATE,
+      // which fails on the missing base table -- the order a catalog walk hits it in.
+      assertThrows(Exception.class, () -> {
+        try (ResultSet tables =
+                 connection.getMetaData().getTables(null, "TEST", "%", null)) {
+          while (tables.next()) {
+            tables.getString("TABLE_NAME");
+          }
+        }
+      });
+
+      boolean foundOrders = false;
+      boolean foundView = false;
+      try (ResultSet tables =
+               connection.getMetaData().getTables(null, "TEST", "%", null)) {
+        while (tables.next()) {
+          String tableName = tables.getString("TABLE_NAME");
+          if ("orders".equalsIgnoreCase(tableName)) {
+            foundOrders = true;
+          }
+          if ("over_missing".equalsIgnoreCase(tableName)) {
+            foundView = true;
+          }
+        }
+      }
+      assertTrue(foundOrders, "The table beside the failed view must still be listed");
+      assertFalse(foundView, "A view whose CREATE failed must not be listed");
     }
   }
 }

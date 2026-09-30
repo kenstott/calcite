@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.similarity;
 
 import org.apache.calcite.DataContext;
+import org.apache.calcite.adapter.file.storage.RotatingS3Credentials;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.rel.type.RelDataType;
@@ -21,8 +22,12 @@ import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -286,8 +291,7 @@ public final class SemanticSearch {
   // query reuses the same credentials/endpoint the adapter already set up — no launcher flags.
   private static volatile String s3Endpoint;   // host:port, no scheme
   private static volatile String s3Region;
-  private static volatile String s3AccessKey;
-  private static volatile String s3SecretKey;
+  private static volatile @Nullable RotatingS3Credentials s3Credentials;
   private static volatile boolean s3UseSsl;
   private static volatile boolean s3Configured;
 
@@ -321,14 +325,52 @@ public final class SemanticSearch {
    * builds its own {@code duckdb_s3_secret}). System properties {@code calcite.vss.s3.*} remain
    * a fallback for standalone use.
    */
-  public static void configure(String endpoint, String region, String accessKey,
-      String secretKey, boolean useSsl) {
+  public static void configure(String endpoint, String region,
+      @Nullable RotatingS3Credentials credentials, boolean useSsl) {
     s3Endpoint = endpoint;
     s3Region = region;
-    s3AccessKey = accessKey;
-    s3SecretKey = secretKey;
     s3UseSsl = useSsl;
-    s3Configured = accessKey != null && secretKey != null;
+    s3Configured = credentials != null;
+    if (credentials != null && s3Credentials != credentials) {
+      s3Credentials = credentials;
+      // The cached connection's s3_* settings are copied once, so a rotation must re-set them.
+      credentials.onRotation(SemanticSearch::applyRotatedCredentials);
+    }
+  }
+
+  /** Re-sets the cached connection's S3 key after a rotation; the next connection() reads the
+   *  live set anyway, so there is nothing to do before one exists. */
+  private static void applyRotatedCredentials(AwsCredentials rotated) {
+    synchronized (SemanticSearch.class) {
+      Connection c = duck;
+      try {
+        if (c == null || c.isClosed()) {
+          return;
+        }
+        try (Statement st = c.createStatement()) {
+          setS3Key(st, rotated.accessKeyId(), rotated.secretAccessKey(), sessionToken(rotated));
+        }
+      } catch (SQLException e) {
+        throw new IllegalStateException("Could not apply rotated S3 credentials to the "
+            + "SEMANTIC_SEARCH connection", e);
+      }
+    }
+  }
+
+  private static @Nullable String sessionToken(AwsCredentials c) {
+    return c instanceof AwsSessionCredentials ? ((AwsSessionCredentials) c).sessionToken() : null;
+  }
+
+  private static void setS3Key(Statement st, @Nullable String key, @Nullable String secret,
+      @Nullable String token) throws SQLException {
+    if (key != null) {
+      st.execute("SET s3_access_key_id='" + esc(key) + "'");
+    }
+    if (secret != null) {
+      st.execute("SET s3_secret_access_key='" + esc(secret) + "'");
+    }
+    // Short-lived credentials sign with their session token; without it every read 403s.
+    st.execute("SET s3_session_token='" + esc(token == null ? "" : token) + "'");
   }
 
   /**
@@ -567,8 +609,12 @@ public final class SemanticSearch {
       String region = firstNonEmpty(s3Region, System.getProperty("calcite.vss.s3.region"),
           "us-east-1");
       String endpoint = firstNonEmpty(s3Endpoint, System.getProperty("calcite.vss.s3.endpoint"));
-      String key = firstNonEmpty(s3AccessKey, System.getProperty("calcite.vss.s3.accessKey"));
-      String secret = firstNonEmpty(s3SecretKey, System.getProperty("calcite.vss.s3.secretKey"));
+      RotatingS3Credentials live = s3Credentials;
+      String key = live != null ? live.accessKeyId()
+          : System.getProperty("calcite.vss.s3.accessKey");
+      String secret = live != null ? live.secretAccessKey()
+          : System.getProperty("calcite.vss.s3.secretKey");
+      String token = live != null ? live.sessionToken() : null;
       boolean useSsl = s3Configured ? s3UseSsl
           : Boolean.parseBoolean(System.getProperty("calcite.vss.s3.useSsl", "false"));
 
@@ -583,12 +629,7 @@ public final class SemanticSearch {
         if (endpoint != null) {
           st.execute("SET s3_endpoint='" + esc(endpoint) + "'");
         }
-        if (key != null) {
-          st.execute("SET s3_access_key_id='" + esc(key) + "'");
-        }
-        if (secret != null) {
-          st.execute("SET s3_secret_access_key='" + esc(secret) + "'");
-        }
+        setS3Key(st, key, secret, token);
         st.execute("SET s3_url_style='path'");
         st.execute("SET s3_use_ssl=" + useSsl);
       }

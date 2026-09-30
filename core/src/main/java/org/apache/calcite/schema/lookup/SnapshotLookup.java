@@ -40,6 +40,10 @@ import java.util.stream.Collectors;
  * -clause identifier resolution, for instance, via {@code getTableNames()}) does not force
  * every table in the schema to be constructed.
  *
+ * <p>A snapshotted name whose resolution returns null (the delegate listed an entity it then
+ * could not produce) is dropped from later {@link #getNames} results, so a caller that lists
+ * and then resolves every name does not keep being handed one it cannot resolve.
+ *
  * @param <T> Element Type
  */
 public class SnapshotLookup<T> implements Lookup<T> {
@@ -47,6 +51,7 @@ public class SnapshotLookup<T> implements Lookup<T> {
   private final Lookup<T> delegate;
   private final LazyReference<NameMap<String>> namesRef = new LazyReference<>();
   private final ConcurrentMap<String, T> resolved = new ConcurrentHashMap<>();
+  private final Set<String> unresolvable = ConcurrentHashMap.newKeySet();
   private boolean enabled = true;
 
   public SnapshotLookup(Lookup<T> delegate) {
@@ -83,6 +88,7 @@ public class SnapshotLookup<T> implements Lookup<T> {
     }
     final Predicate1<String> matcher = pattern.matcher();
     return names().map().keySet().stream()
+        .filter(name -> !unresolvable.contains(name))
         .filter(matcher::apply)
         .collect(Collectors.toSet());
   }
@@ -100,6 +106,7 @@ public class SnapshotLookup<T> implements Lookup<T> {
     }
     T value = delegate.get(name);
     if (value == null) {
+      unresolvable.add(name);
       return null;
     }
     T race = resolved.putIfAbsent(name, value);
@@ -122,6 +129,7 @@ public class SnapshotLookup<T> implements Lookup<T> {
     if (!enabled) {
       namesRef.reset();
       resolved.clear();
+      unresolvable.clear();
     }
     this.enabled = enabled;
   }

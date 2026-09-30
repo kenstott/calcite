@@ -362,4 +362,48 @@ final class EntityMentionExtractor {
         }
         return out;
     }
+
+    /** The outcome of {@link #applySurnames}. */
+    static final class Surnames {
+        /** Accepted mentions with bare-surname matches removed. */
+        final List<Candidate> kept;
+        /** Person group key ("p:first last") to the bare-surname mentions attached to it. */
+        final Map<String, List<Candidate>> mentions;
+
+        Surnames(List<Candidate> kept, Map<String, List<Candidate>> mentions) {
+            this.kept = kept;
+            this.mentions = mentions;
+        }
+    }
+
+    /**
+     * When exactly one person with a given surname was named in full, every bare use of that
+     * surname belongs to them, even if the surname alone also matches a registered
+     * organisation ("Pelosi said" is the Speaker, not "Pelosi Family Trust"). Two named
+     * people sharing a surname leave the bare surname unattached, since guessing which one is
+     * the error this exists to avoid, and it then keeps whatever match it had.
+     */
+    static Surnames applySurnames(List<Candidate> all, List<Candidate> accepted,
+            Set<String> namedPersonKeys) {
+        Map<String, String> lastToGroup = new java.util.HashMap<>();
+        Set<String> shared = new HashSet<>();
+        for (String key : namedPersonKeys) {
+            String last = key.substring(key.lastIndexOf(' ') + 1);
+            if (lastToGroup.containsKey(last)) {
+                shared.add(last);
+            }
+            lastToGroup.put(last, "p:" + key);
+        }
+        for (String s : shared) {
+            lastToGroup.remove(s);
+        }
+        List<Candidate> kept = new ArrayList<>();
+        for (Candidate c : accepted) {
+            if (c.tokens == 1 && lastToGroup.containsKey(c.surface.toLowerCase())) {
+                continue;
+            }
+            kept.add(c);
+        }
+        return new Surnames(kept, surnameMentions(all, kept, lastToGroup));
+    }
 }

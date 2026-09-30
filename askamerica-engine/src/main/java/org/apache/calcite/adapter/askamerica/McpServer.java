@@ -8979,49 +8979,116 @@ public class McpServer {
         return in.toString();
     }
 
+    private static final java.util.Map<String, java.util.Set<String>> DEPLOYED_COLUMNS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
-     * Exact-equality probe of candidate names against the variant registry.
+     * The columns the deployed table really has. The schema YAML can declare columns the
+     * materialized table does not yet carry (the lobbying identifiers on the canonical tables
+     * were declared before their ingest ran), and selecting a missing column fails the whole
+     * statement, so the identifier columns selected are the mapped ones that exist. What is
+     * mapped but absent is returned to the caller, not dropped silently.
+     */
+    private static java.util.Set<String> deployedColumns(String schema, String table)
+            throws Exception {
+        String key = schema + "." + table;
+        java.util.Set<String> cached = DEPLOYED_COLUMNS.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        java.util.Set<String> cols = new java.util.HashSet<>();
+        for (JsonNode r : timedRows("columns_" + table, "SELECT column_name FROM "
+                + "information_schema.columns WHERE table_schema = " + sqlStr(schema)
+                + " AND table_name = " + sqlStr(table))) {
+            String c = rowText(r, "column_name");
+            if (c != null) {
+                cols.add(c.toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        if (cols.isEmpty()) {
+            throw new IllegalStateException(key + " has no columns in information_schema — "
+                + "the table is not mounted");
+        }
+        DEPLOYED_COLUMNS.put(key, cols);
+        return cols;
+    }
+
+    /** Mapped identifier columns present in {@code available}, in map order. */
+    private static java.util.List<String> presentColumns(
+            java.util.Map<String, java.util.List<String>> mapped,
+            java.util.Set<String> available) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String c : mapped.keySet()) {
+            if (available.contains(c)) {
+                out.add(c);
+            }
+        }
+        return out;
+    }
+
+    private static java.util.List<String> absentColumns(
+            java.util.Map<String, java.util.List<String>> mapped,
+            java.util.Set<String> available) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String c : mapped.keySet()) {
+            if (!available.contains(c)) {
+                out.add(c);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Step 1 of the organization lookup: exact-equality probe of candidate names against the
+     * variant registry.
      *
      * <p>Equality on {@code source_name_normalized} only — never LIKE. The bridge has no index
      * on the name, so a prefix or fuzzy predicate is a full scan per statement; an IN list of
      * equalities is the one shape that stays cheap however many candidates a text produces.
-     * Every variant row points at its entity through
-     * {@code COALESCE(lei, sec_cik, source_name_normalized) = canonical_entity_id}; the
-     * canonical table has one row per source mention, so it is collapsed per entity before
-     * joining.
+     * Each variant row points at its entity through
+     * {@code COALESCE(lei, sec_cik, source_name_normalized) = canonical_entity_id}.
+     *
+     * <p>The canonical and GLEIF tables are deliberately NOT joined here. A join or an
+     * {@code IN (SELECT ...)} against the 10M-row canonical table scans all of it (measured
+     * at over 70s, past the 30s statement limit), whereas the same lookup by a literal key
+     * list is a few seconds. The keys this returns feed
+     * {@link #buildCanonicalOrgSql} and {@link #buildGleifSql}.
      */
     static String buildExtractEntitiesSql(java.util.Collection<String> norms) {
-        String in = inList(norms);
-        StringBuilder fk = new StringBuilder();
-        StringBuilder outFk = new StringBuilder();
-        for (String col : ORG_LINKED.keySet()) {
-            if ("sec_cik".equals(col)) {
-                continue;
-            }
-            fk.append(", MAX(").append(col).append(") AS ").append(col);
-            outFk.append(", cagg.").append(col);
-        }
         return "WITH raw AS (SELECT source_name_normalized AS matched_norm, "
             + "COALESCE(lei, sec_cik, source_name_normalized) AS entity_key, lei, sec_cik, "
             + "gleif_legal_name, source_schema FROM ref.entity_org_bridge "
-            + "WHERE source_name_normalized IN (" + in + ")), "
+            + "WHERE source_name_normalized IN (" + inList(norms) + ")), "
             + "sch AS (SELECT DISTINCT matched_norm, entity_key, source_schema FROM raw), "
             + "agg_sch AS (SELECT matched_norm, entity_key, string_agg(source_schema) "
             + "AS matched_in FROM sch GROUP BY matched_norm, entity_key), "
             + "m AS (SELECT matched_norm, entity_key, MAX(lei) AS lei, MAX(sec_cik) AS sec_cik, "
             + "MAX(gleif_legal_name) AS gleif_legal_name, COUNT(*) AS variant_rows "
-            + "FROM raw GROUP BY matched_norm, entity_key), "
-            + "cagg AS (SELECT canonical_entity_id, MAX(canonical_name) AS canonical_name" + fk
-            + " FROM ref.canonical_org_entity WHERE canonical_entity_id IN "
-            + "(SELECT entity_key FROM m) GROUP BY canonical_entity_id) "
-            + "SELECT m.matched_norm, m.entity_key AS canonical_entity_id, "
-            + "COALESCE(cagg.canonical_name, m.gleif_legal_name, m.entity_key) AS canonical_name, "
-            + "m.lei, m.sec_cik, m.variant_rows, agg_sch.matched_in, "
-            + "ge.jurisdiction, ge.headquarters_city, ge.entity_status" + outFk + " "
-            + "FROM m LEFT JOIN agg_sch ON agg_sch.matched_norm = m.matched_norm "
-            + "AND agg_sch.entity_key = m.entity_key "
-            + "LEFT JOIN cagg ON cagg.canonical_entity_id = m.entity_key "
-            + "LEFT JOIN ref.gleif_entities ge ON ge.lei = m.lei";
+            + "FROM raw GROUP BY matched_norm, entity_key) "
+            + "SELECT m.matched_norm, m.entity_key, m.lei, m.sec_cik, m.gleif_legal_name, "
+            + "m.variant_rows, agg_sch.matched_in FROM m LEFT JOIN agg_sch "
+            + "ON agg_sch.matched_norm = m.matched_norm AND agg_sch.entity_key = m.entity_key";
+    }
+
+    /** Step 2: canonical name and per-source identifiers for a literal list of entity keys.
+     *  The table has one row per source mention, so it is collapsed per entity. */
+    static String buildCanonicalOrgSql(java.util.Collection<String> entityKeys,
+            java.util.Set<String> availableColumns) {
+        StringBuilder fk = new StringBuilder();
+        for (String col : presentColumns(ORG_LINKED, availableColumns)) {
+            if (!"sec_cik".equals(col)) {
+                fk.append(", MAX(").append(col).append(") AS ").append(col);
+            }
+        }
+        return "SELECT canonical_entity_id, MAX(canonical_name) AS canonical_name" + fk
+            + " FROM ref.canonical_org_entity WHERE canonical_entity_id IN ("
+            + inList(entityKeys) + ") GROUP BY canonical_entity_id";
+    }
+
+    /** Step 3: jurisdiction, headquarters and status for a literal list of LEIs. */
+    static String buildGleifSql(java.util.Collection<String> leis) {
+        return "SELECT lei, jurisdiction, headquarters_city, entity_status "
+            + "FROM ref.gleif_entities WHERE lei IN (" + inList(leis) + ")";
     }
 
     /**
@@ -9031,7 +9098,8 @@ public class McpServer {
      * both "first last" and "last, first" are probed. It is one IN-list scan of one column per
      * call, not one scan per candidate.
      */
-    static String buildExtractPersonsSql(java.util.Collection<String> personKeys) {
+    static String buildExtractPersonsSql(java.util.Collection<String> personKeys,
+            java.util.Set<String> availableColumns) {
         java.util.Set<String> forms = new java.util.LinkedHashSet<>();
         for (String k : personKeys) {
             forms.add(k);
@@ -9039,7 +9107,7 @@ public class McpServer {
             forms.add(k.substring(sp + 1) + ", " + k.substring(0, sp));
         }
         StringBuilder cols = new StringBuilder();
-        for (String col : PERSON_LINKED.keySet()) {
+        for (String col : presentColumns(PERSON_LINKED, availableColumns)) {
             cols.append(", ").append(col);
         }
         return "SELECT canonical_entity_id, canonical_name" + cols + " "
@@ -9057,6 +9125,22 @@ public class McpServer {
         // probed: it would turn every capitalized "Orange" or "Washington" into a county.
         return "SELECT DISTINCT county_fips, state_fips, county_name, county_code "
             + "FROM geo.counties WHERE lower(county_code) IN (" + inList(norms) + ")";
+    }
+
+    /** Runs one extract_entities lookup statement and logs how long it took, so a slow step
+     *  is visible in the server log instead of surfacing as an unattributed read timeout. */
+    private static ArrayNode timedRows(String step, String sql) throws Exception {
+        long t0 = System.currentTimeMillis();
+        try {
+            ArrayNode rows = runSqlRows(sql, MAX_LIMIT);
+            log.println("[askamerica-mcp] extract_entities step=" + step + " ms="
+                + (System.currentTimeMillis() - t0) + " rows=" + rows.size());
+            return rows;
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] extract_entities step=" + step + " FAILED ms="
+                + (System.currentTimeMillis() - t0) + " " + e.getClass().getSimpleName());
+            throw e;
+        }
     }
 
     private static String rowText(JsonNode r, String col) {
@@ -9193,8 +9277,8 @@ public class McpServer {
                 for (String t : tickers) {
                     up.add(t.toUpperCase(java.util.Locale.ROOT));
                 }
-                for (JsonNode r : runSqlRows("SELECT ticker, title FROM ref.sec_company_tickers "
-                        + "WHERE upper(ticker) IN (" + inList(up) + ")", MAX_LIMIT)) {
+                for (JsonNode r : timedRows("tickers", "SELECT ticker, title FROM ref.sec_company_tickers "
+                        + "WHERE upper(ticker) IN (" + inList(up) + ")")) {
                     String tk = rowText(r, "ticker");
                     String title = rowText(r, "title");
                     if (tk != null && title != null) {
@@ -9216,28 +9300,86 @@ public class McpServer {
         java.util.List<String> probeList = new java.util.ArrayList<>(normProbe);
         java.util.List<String> personList = new java.util.ArrayList<>(personProbe);
 
+        java.util.List<String> absent = new java.util.ArrayList<>();
         java.util.Map<String, java.util.List<ObjectNode>> byNorm = new java.util.HashMap<>();
         if (wantOrg) {
+            java.util.Set<String> orgCols = deployedColumns("ref", "canonical_org_entity");
+            for (String c : absentColumns(ORG_LINKED, orgCols)) {
+                absent.add("ref.canonical_org_entity." + c);
+            }
+            java.util.List<JsonNode> bridgeRows = new java.util.ArrayList<>();
             for (int i = 0; i < probeList.size(); i += ENTITY_PROBE_CHUNK) {
-                for (JsonNode r : runSqlRows(buildExtractEntitiesSql(probeList.subList(i,
-                        Math.min(probeList.size(), i + ENTITY_PROBE_CHUNK))), MAX_LIMIT)) {
-                    ObjectNode e = MAPPER.createObjectNode();
-                    e.put("entity_type", "org");
-                    e.put("canonical_entity_id", rowText(r, "canonical_entity_id"));
-                    e.put("canonical_name", rowText(r, "canonical_name"));
-                    addIdentifiers(e, r, ORG_LINKED, new String[]{"lei", "sec_cik",
-                        "jurisdiction", "headquarters_city", "entity_status", "matched_in"});
-                    byNorm.computeIfAbsent(rowText(r, "matched_norm"),
-                        k -> new java.util.ArrayList<>()).add(e);
+                for (JsonNode r : timedRows("org_bridge", buildExtractEntitiesSql(probeList.subList(i,
+                        Math.min(probeList.size(), i + ENTITY_PROBE_CHUNK))))) {
+                    bridgeRows.add(r);
                 }
+            }
+            java.util.Set<String> keys = new java.util.LinkedHashSet<>();
+            java.util.Set<String> leis = new java.util.LinkedHashSet<>();
+            for (JsonNode r : bridgeRows) {
+                keys.add(rowText(r, "entity_key"));
+                if (rowText(r, "lei") != null) {
+                    leis.add(rowText(r, "lei"));
+                }
+            }
+            java.util.Map<String, JsonNode> canonical = new java.util.HashMap<>();
+            java.util.List<String> keyList = new java.util.ArrayList<>(keys);
+            for (int i = 0; i < keyList.size(); i += ENTITY_PROBE_CHUNK) {
+                for (JsonNode r : timedRows("org_canonical", buildCanonicalOrgSql(keyList.subList(i,
+                        Math.min(keyList.size(), i + ENTITY_PROBE_CHUNK)), orgCols))) {
+                    canonical.put(rowText(r, "canonical_entity_id"), r);
+                }
+            }
+            java.util.Map<String, JsonNode> gleif = new java.util.HashMap<>();
+            java.util.List<String> leiList = new java.util.ArrayList<>(leis);
+            for (int i = 0; i < leiList.size(); i += ENTITY_PROBE_CHUNK) {
+                for (JsonNode r : timedRows("org_gleif", buildGleifSql(leiList.subList(i,
+                        Math.min(leiList.size(), i + ENTITY_PROBE_CHUNK))))) {
+                    gleif.put(rowText(r, "lei"), r);
+                }
+            }
+            for (JsonNode r : bridgeRows) {
+                String key = rowText(r, "entity_key");
+                JsonNode c = canonical.get(key);
+                ObjectNode e = MAPPER.createObjectNode();
+                e.put("entity_type", "org");
+                e.put("canonical_entity_id", key);
+                String name = c != null && rowText(c, "canonical_name") != null
+                    ? rowText(c, "canonical_name")
+                    : rowText(r, "gleif_legal_name") != null ? rowText(r, "gleif_legal_name")
+                    : key;
+                e.put("canonical_name", name);
+                // Merge the bridge row, the canonical row and the GLEIF row into one view of
+                // the entity so addIdentifiers reads every column from a single object.
+                ObjectNode merged = MAPPER.createObjectNode();
+                for (JsonNode src : new JsonNode[]{r, c, rowText(r, "lei") == null ? null
+                        : gleif.get(rowText(r, "lei"))}) {
+                    if (src == null) {
+                        continue;
+                    }
+                    java.util.Iterator<java.util.Map.Entry<String, JsonNode>> it = src.fields();
+                    while (it.hasNext()) {
+                        java.util.Map.Entry<String, JsonNode> f = it.next();
+                        merged.set(f.getKey().toLowerCase(java.util.Locale.ROOT), f.getValue());
+                    }
+                }
+                addIdentifiers(e, merged, ORG_LINKED, new String[]{"lei", "sec_cik",
+                    "jurisdiction", "headquarters_city", "entity_status", "matched_in"});
+                byNorm.computeIfAbsent(rowText(r, "matched_norm"),
+                    k -> new java.util.ArrayList<>()).add(e);
             }
             rankByIdentifiers(byNorm);
         }
         java.util.Map<String, java.util.List<ObjectNode>> byPerson = new java.util.HashMap<>();
         if (wantPerson && !personList.isEmpty()) {
+            java.util.Set<String> personCols =
+                deployedColumns("ref", "canonical_person_entity");
+            for (String c : absentColumns(PERSON_LINKED, personCols)) {
+                absent.add("ref.canonical_person_entity." + c);
+            }
             for (int i = 0; i < personList.size(); i += ENTITY_PROBE_CHUNK) {
-                for (JsonNode r : runSqlRows(buildExtractPersonsSql(personList.subList(i,
-                        Math.min(personList.size(), i + ENTITY_PROBE_CHUNK))), MAX_LIMIT)) {
+                for (JsonNode r : timedRows("person", buildExtractPersonsSql(personList.subList(i,
+                        Math.min(personList.size(), i + ENTITY_PROBE_CHUNK)), personCols))) {
                     ObjectNode e = MAPPER.createObjectNode();
                     e.put("entity_type", "person");
                     e.put("canonical_entity_id", rowText(r, "canonical_entity_id"));
@@ -9255,7 +9397,7 @@ public class McpServer {
             for (int i = 0; i < probeList.size(); i += ENTITY_PROBE_CHUNK) {
                 java.util.List<String> chunk = probeList.subList(i,
                     Math.min(probeList.size(), i + ENTITY_PROBE_CHUNK));
-                for (JsonNode r : runSqlRows(buildExtractStatesSql(chunk), MAX_LIMIT)) {
+                for (JsonNode r : timedRows("geo_states", buildExtractStatesSql(chunk))) {
                     ObjectNode e = MAPPER.createObjectNode();
                     e.put("entity_type", "geo");
                     e.put("geo_level", "state");
@@ -9267,7 +9409,7 @@ public class McpServer {
                     byGeo.computeIfAbsent(normalizeOrgName(rowText(r, "state_name")),
                         k -> new java.util.ArrayList<>()).add(e);
                 }
-                for (JsonNode r : runSqlRows(buildExtractCountiesSql(chunk), MAX_LIMIT)) {
+                for (JsonNode r : timedRows("geo_counties", buildExtractCountiesSql(chunk))) {
                     ObjectNode e = MAPPER.createObjectNode();
                     e.put("entity_type", "geo");
                     e.put("geo_level", "county");
@@ -9287,35 +9429,27 @@ public class McpServer {
                 || byGeo.containsKey(c.norm)
                 || (c.personKey != null && byPerson.containsKey(c.personKey)));
 
-        // Group mentions: a person is keyed by "first last" so "Nancy P. Pelosi" and
-        // "Nancy Pelosi" are one entity; everything else by normalized name.
+        // A person is keyed by "first last", so "Nancy P. Pelosi" and "Nancy Pelosi" are one
+        // entity; a bare surname joins the one person of that surname named in full, even
+        // when it alone also matches an organisation.
+        java.util.Set<String> namedPeople = new java.util.LinkedHashSet<>();
+        for (EntityMentionExtractor.Candidate c : accepted) {
+            if (c.personKey != null && byPerson.containsKey(c.personKey)) {
+                namedPeople.add(c.personKey);
+            }
+        }
+        EntityMentionExtractor.Surnames surnames =
+            EntityMentionExtractor.applySurnames(cands, accepted, namedPeople);
         java.util.Map<String, java.util.List<EntityMentionExtractor.Candidate>> grouped =
             new java.util.LinkedHashMap<>();
-        for (EntityMentionExtractor.Candidate c : accepted) {
+        for (EntityMentionExtractor.Candidate c : surnames.kept) {
             String key = c.personKey != null && byPerson.containsKey(c.personKey)
                 ? "p:" + c.personKey : c.norm;
             grouped.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(c);
         }
-        // Bare surnames ("Pelosi said") join the one person already named in full.
-        java.util.Map<String, String> lastToGroup = new java.util.HashMap<>();
-        java.util.Set<String> ambiguousLast = new java.util.HashSet<>();
-        for (String key : grouped.keySet()) {
-            if (key.startsWith("p:")) {
-                String personKey = key.substring(2);
-                String last = personKey.substring(personKey.lastIndexOf(' ') + 1);
-                if (lastToGroup.containsKey(last)) {
-                    ambiguousLast.add(last);
-                }
-                lastToGroup.put(last, key);
-            }
-        }
-        for (String amb : ambiguousLast) {
-            lastToGroup.remove(amb);
-        }
         java.util.Map<String, Integer> surnameCount = new java.util.HashMap<>();
         for (java.util.Map.Entry<String, java.util.List<EntityMentionExtractor.Candidate>> sm
-                : EntityMentionExtractor.surnameMentions(cands, accepted, lastToGroup)
-                    .entrySet()) {
+                : surnames.mentions.entrySet()) {
             grouped.get(sm.getKey()).addAll(sm.getValue());
             surnameCount.put(sm.getKey(), sm.getValue().size());
         }
@@ -9453,6 +9587,12 @@ public class McpServer {
             }
         }
         out.set("types_searched", MAPPER.valueToTree(types));
+        if (!absent.isEmpty()) {
+            out.set("identifier_columns_not_deployed", MAPPER.valueToTree(absent));
+            out.put("identifier_columns_note", "These identifier columns are declared in the "
+                + "schema but absent from the deployed table, so linked_sources cannot show "
+                + "them: a missing link here is not evidence the entity has none.");
+        }
         out.put("candidates_probed", probeList.size());
         out.put("dropped_weak_single_token", dropped);
         if (dropped > 0) {
