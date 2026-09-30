@@ -18,10 +18,10 @@ import java.util.List;
 
 /**
  * The destination-neutral report payload: the same narrative sections and dashboard panels
- * {@code publish_report} takes, restated as data plus prescriptive layout hints for a chatbot
+ * {@code preview_report} takes, restated as data plus prescriptive layout hints for a chatbot
  * that draws the charts itself (for example as a Claude Artifact).
  *
- * <p>Panels are read by the same reader {@code publish_report} and {@code compose_dashboard}
+ * <p>Panels are read by the same reader {@code preview_report} and {@code compose_dashboard}
  * use, so one report object drives both destinations without reshaping. The hints are computed
  * only from the panel data: a chatbot never has to read diagnostics to decide how to present a
  * value, and a missing value is passed through as a distinct suppressed cell rather than a

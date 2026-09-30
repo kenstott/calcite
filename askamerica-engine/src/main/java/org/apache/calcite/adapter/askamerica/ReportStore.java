@@ -41,7 +41,7 @@ final class ReportStore {
     private ReportStore() {
     }
 
-    /** A saved report, as {@code upload_report} needs it. */
+    /** A saved report, as {@code publish_report} needs it. */
     static final class Saved {
         final String id;
         final String title;

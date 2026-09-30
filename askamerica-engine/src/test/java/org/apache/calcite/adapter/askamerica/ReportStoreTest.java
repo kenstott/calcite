@@ -55,7 +55,7 @@ class ReportStoreTest {
   }
 
   @Test void savedPageHasAFileLinkAndIsListedNewestFirst(@TempDir File dir) throws Exception {
-    ReportStore.Saved first = ReportStore.save(dir, "publish_report", "First", "Q1",
+    ReportStore.Saved first = ReportStore.save(dir, "preview_report", "First", "Q1",
         MAPPER.createObjectNode(), "<html>1</html>");
     Thread.sleep(1100);
     ReportStore.Saved second = ReportStore.save(dir, "create_report_artifact", "Second", "Q2",

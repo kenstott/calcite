@@ -32,7 +32,7 @@ import java.util.List;
  *
  * <p>Fails closed: any transport error, non-200 response (after retrying 429/529 per the
  * docs' backoff guidance), or malformed response throws rather than returning a default
- * verdict — a silent fallback here would let an unscored claim through {@code publish_report}
+ * verdict — a silent fallback here would let an unscored claim through {@code preview_report}
  * looking exactly like a scored one.
  */
 final class JevClient {
@@ -102,7 +102,7 @@ final class JevClient {
      * Score one claim: {@code assertion} is the statement under test, {@code evidence} is a
      * plain-text summary of what was found (the article's figure vs. the warehouse or
      * independent figure, and the sources), and {@code candidateVerdicts} are the allowed
-     * choices (mirrors the {@code verdict} values {@code publish_report} already accepts,
+     * choices (mirrors the {@code verdict} values {@code preview_report} already accepts,
      * e.g. "accurate", "not checkable here", "stale vintage", "misleading", "false").
      *
      * @throws IOException on any transport failure, non-2xx response after retries, or a

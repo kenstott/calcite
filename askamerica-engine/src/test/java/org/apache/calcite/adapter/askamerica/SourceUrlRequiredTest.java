@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Regression test for the fix to {@code publish_report}'s {@code source_url} handling.
+ * Regression test for the fix to {@code preview_report}'s {@code source_url} handling.
  *
  * <p>Measured live 2026-09-23 (an amny.com article validation): the report published
  * successfully, but the browser extension's popup on the article's own page said "No

@@ -27,10 +27,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * A rejected {@code publish_report} attempt must not become the recency boundary
+ * A rejected {@code preview_report} attempt must not become the recency boundary
  * {@code recentCallLogSnapshot} uses to decide which prior tool calls still count as
  * belonging to the report being validated. Measured live (2026-09-21, an Al Jazeera tariff
- * validation): a first, rejected {@code publish_report} attempt cut a real, earlier
+ * validation): a first, rejected {@code preview_report} attempt cut a real, earlier
  * {@code search_catalog}/{@code query} pair out of the snapshot on the very next retry,
  * making {@code enforceTableProvenance}/{@code enforceResearchDepthOnGap} refuse research
  * the model had genuinely already done. Only a call that actually returned (no {@code error}
@@ -72,7 +72,7 @@ class RecentCallLogSnapshotTest {
     @Test void rejectedPublishReportIsNotABoundary() throws Exception {
         ObjectNode search = entry("search_catalog", null);
         ObjectNode query = entry("query", null);
-        ObjectNode rejected = entry("publish_report", "validation refused: ...");
+        ObjectNode rejected = entry("preview_report", "validation refused: ...");
         callLog().add(search);
         callLog().add(query);
         callLog().add(rejected);
@@ -80,7 +80,7 @@ class RecentCallLogSnapshotTest {
         List<ObjectNode> snap = snapshot();
 
         assertEquals(3, snap.size(),
-            "a rejected publish_report must not cut earlier calls out of the snapshot");
+            "a rejected preview_report must not cut earlier calls out of the snapshot");
         assertSame(search, snap.get(0));
         assertSame(query, snap.get(1));
         assertSame(rejected, snap.get(2));
@@ -88,7 +88,7 @@ class RecentCallLogSnapshotTest {
 
     @Test void successfulPublishReportIsABoundary() throws Exception {
         ObjectNode staleQuery = entry("query", null);
-        ObjectNode successfulPublish = entry("publish_report", null);
+        ObjectNode successfulPublish = entry("preview_report", null);
         ObjectNode newSearch = entry("search_catalog", null);
         callLog().add(staleQuery);
         callLog().add(successfulPublish);
@@ -97,14 +97,14 @@ class RecentCallLogSnapshotTest {
         List<ObjectNode> snap = snapshot();
 
         assertEquals(1, snap.size(),
-            "a genuinely successful publish_report must still cut off the prior report's calls");
+            "a genuinely successful preview_report must still cut off the prior report's calls");
         assertSame(newSearch, snap.get(0));
     }
 
     @Test void multipleRejectedAttemptsAllStayVisible() throws Exception {
         ObjectNode query = entry("query", null);
-        ObjectNode rejected1 = entry("publish_report", "issue 1");
-        ObjectNode rejected2 = entry("publish_report", "issue 2");
+        ObjectNode rejected1 = entry("preview_report", "issue 1");
+        ObjectNode rejected2 = entry("preview_report", "issue 2");
         callLog().add(query);
         callLog().add(rejected1);
         callLog().add(rejected2);
@@ -119,8 +119,8 @@ class RecentCallLogSnapshotTest {
 
     @Test void mostRecentSuccessfulPublishReportWinsOverEarlierRejections() throws Exception {
         ObjectNode staleQuery = entry("query", null);
-        ObjectNode rejected = entry("publish_report", "issue 1");
-        ObjectNode successful = entry("publish_report", null);
+        ObjectNode rejected = entry("preview_report", "issue 1");
+        ObjectNode successful = entry("preview_report", null);
         ObjectNode newQuery = entry("query", null);
         callLog().add(staleQuery);
         callLog().add(rejected);

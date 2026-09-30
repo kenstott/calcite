@@ -262,13 +262,13 @@ public class McpServer {
         }
     }
 
-    // The most recently built publish_report page this session — the stdio server is one
+    // The most recently built preview_report page this session — the stdio server is one
     // process per client session, so process lifetime IS session lifetime, matching the
-    // same reasoning LAST_CHART_PNG below relies on. upload_report ships whatever this
+    // same reasoning LAST_CHART_PNG below relies on. publish_report ships whatever this
     // holds; it takes no payload of its own.
     private static volatile LastReport LAST_REPORT;
 
-    /** The report built by the most recent publish_report call, ready for upload_report. */
+    /** The report built by the most recent preview_report call, ready for publish_report. */
     private static final class LastReport {
         final String title;
         final String question;
@@ -533,7 +533,7 @@ public class McpServer {
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "web_fetch", "register", "upload_report", "restore_report", "mysite"));
+            "web_fetch", "register", "publish_report", "restore_report", "mysite"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -832,7 +832,7 @@ public class McpServer {
             + "5. Charts follow YOUR analysis. Every assertion graded from a warehouse figure, a "
             + "relationship test, a series you computed, or a comparison you ran against an "
             + "external figure gets a render_chart of that evidence; compose_dashboard the set "
-            + "and pass it as publish_report's `dashboard`, and publish_report REFUSES a publish "
+            + "and pass it as preview_report's `dashboard`, and preview_report REFUSES a publish "
             + "whose claims carry a warehouse_value or sql but no chart. A validation graded "
             + "entirely from publications, with no statistical or quantitative analysis of your "
             + "own anywhere in it, carries NO chart: a graph of nothing measured is noise.\n"
@@ -842,7 +842,7 @@ public class McpServer {
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
             + "where the article cites a release newer than the loaded window is 'stale "
             + "vintage' — a freshness gap, not a falsehood.\n"
-            + "7. publish_report with the `claims` array (one entry per assertion, each with "
+            + "7. preview_report with the `claims` array (one entry per assertion, each with "
             + "article_value, warehouse_value, independent_value, sources, table, sql and "
             + "reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
             + "leads with the tally and the "
@@ -853,8 +853,8 @@ public class McpServer {
             + "stylistic choice, because it throws away the short scannable table and per-claim "
             + "detail sections the reader depends on. If you notice — before or after "
             + "publishing — that you graded two or more distinct assertions but the last "
-            + "publish_report call carried no `claims` array (or an empty one), that publish is "
-            + "incomplete: call publish_report again, this time with every assertion you graded "
+            + "preview_report call carried no `claims` array (or an empty one), that publish is "
+            + "incomplete: call preview_report again, this time with every assertion you graded "
             + "placed in `claims`, before you finish. A validation with exactly one assertion "
             + "may be reported in prose if a table would be silly for one row; two or more "
             + "assertions always go in `claims`.\n"
@@ -1205,7 +1205,7 @@ public class McpServer {
             + "re-query, not caveat; no warnings is not a clean bill of health, only that no "
             + "listed defect was detected. critique_query runs the same form-level checks on "
             + "SQL before you run it.\n"
-            + "- **BEFORE CALLING publish_report — three checks, all required:**\n"
+            + "- **BEFORE CALLING preview_report — three checks, all required:**\n"
             + "  1. Count your distinct external sources on any question with a real-world "
             + "antecedent. Fewer than 3-5 is a stop signal, not a publishable state — go back "
             + "to workflow step 1 and search from an angle you haven't tried yet, rather than "
@@ -1230,7 +1230,7 @@ public class McpServer {
             + "just each side's own point estimate — survives its own uncertainty.\n"
             + "- **OFFER THE REPORT — DO NOT SILENTLY SKIP IT OR SILENTLY BUILD IT.** Measured "
             + "live (2026-09-15, real Desktop sessions): two substantive analyses were "
-            + "delivered as chat prose alone, with publish_report never called and never "
+            + "delivered as chat prose alone, with preview_report never called and never "
             + "mentioned — the reader had no way to know a formatted, shareable report was "
             + "even possible until they thought to ask for one by name. An internal MUST that "
             + "the model can silently fail to follow is not a real guarantee; a choice put to "
@@ -1245,7 +1245,7 @@ public class McpServer {
             + "In either case: call compose_dashboard first when there is more than one figure, "
             + "pass its panels through create_report_artifact's dashboard argument so board and "
             + "narrative compose in one report, and once the reader says yes to the offer, treat "
-            + "create_report_artifact (or publish_report, for a client that cannot render "
+            + "create_report_artifact (or preview_report, for a client that cannot render "
             + "artifacts) the same way — it is the deliverable at that point, not a "
             + "nice-to-have, and a chart plus prose the reader has to reassemble by hand is "
             + "never an acceptable substitute for it.");
@@ -2619,7 +2619,7 @@ public class McpServer {
             + "Do not move plotted geometry — the coordinates are derived from the values you "
             + "passed, so shifting a mark makes the picture disagree with its own numbers. "
             + "Once this chart is genuinely the whole deliverable, offer the reader a "
-            + "permanent, shareable version of it via publish_report rather than leaving only "
+            + "permanent, shareable version of it via preview_report rather than leaving only "
             + "an inline image that dies with this chat.",
             schema(chartProps, new String[]{})));
 
@@ -2677,7 +2677,7 @@ public class McpServer {
             + "with it. That is enough for a chart embedded in an answer you are writing "
             + "yourself, but you have just built the board for a question worth more than a "
             + "sentence — this is exactly the moment to OFFER the reader a full report, not "
-            + "assume either way: pass these same panels via publish_report's dashboard "
+            + "assume either way: pass these same panels via preview_report's dashboard "
             + "argument only once they say yes, and it composes the board and inlines it under "
             + "your prose in one page.",
             schema(dashProps, new String[]{"panels"})));
@@ -2867,12 +2867,12 @@ public class McpServer {
             tools.add(
                 tool("score_claim",
                 "Get an independent, calibrated second opinion on one already-evidenced claim "
-                + "before grading it in `publish_report`'s `claims` array. Sends the assertion "
+                + "before grading it in `preview_report`'s `claims` array. Sends the assertion "
                 + "and your gathered evidence to a separate scoring model (typesafe.ai's Jev) "
                 + "that returns a typed verdict and a 0-4 Pinocchios rating, each with its own "
                 + "confidence -- a real check against self-grading, not a restatement of your "
                 + "own reasoning. Requires warehouse or independent evidence already in hand; "
-                + "this scores a claim, it does not gather evidence for one. `publish_report` "
+                + "this scores a claim, it does not gather evidence for one. `preview_report` "
                 + "automatically cross-checks each graded claim (anything other than 'not "
                 + "checkable here'/'stale vintage') against your most recent score_claim calls "
                 + "for this session, in the order you called them and the order the claims are "
@@ -2886,18 +2886,18 @@ public class McpServer {
         }
 
         tools.add(
-            tool("publish_report",
+            tool("preview_report",
             "Build a complete answer — narrative, dashboard and citations — as one "
-            + "self-contained HTML page: the exact page upload_report would publish. Returns a "
+            + "self-contained HTML page: the exact page publish_report would publish. Returns a "
             + "local http link to it (served by this process until it exits) and a report_id "
-            + "whose saved copy outlives the process (see restore_report). Despite the tool "
-            + "name, nothing is published. Prefer create_report_artifact to show a report — it "
+            + "whose saved copy outlives the process (see restore_report). Nothing is "
+            + "published. Prefer create_report_artifact to show a report — it "
             + "runs the same QC, renders in the conversation, and returns this same page as a "
             + "preview; call this instead when the client cannot render artifacts or the reader "
             + "asked for the standalone page. When the user says 'publish report' or 'share "
             + "report', that means a DURABLE, shareable link — build the report with either "
-            + "tool, then register (once per account) then upload_report, and return the link "
-            + "upload_report gives back. For a question worth more than a sentence, a report is "
+            + "tool, then register (once per account) then publish_report, and return the link "
+            + "publish_report gives back. For a question worth more than a sentence, a report is "
             + "what to offer the reader (see the top-level instructions on when to offer vs. "
             + "build one outright): the finding, the figures, the caveats and the sourcing in "
             + "one place instead of a chart plus prose they have to reassemble. Pass the dashboard "
@@ -2914,7 +2914,7 @@ public class McpServer {
 
         tools.add(
             tool("create_report_artifact",
-            "THE DEFAULT WAY TO SHOW A REPORT. Runs the same QC publish_report runs (same "
+            "THE DEFAULT WAY TO SHOW A REPORT. Runs the same QC preview_report runs (same "
             + "arguments, question_coverage included, same refusals) and hands back the QC'd "
             + "report as data plus layout hints so YOU render it with your own artifact/charting "
             + "capability (for a Claude client: a Claude Artifact in the conversation). Returns "
@@ -2923,10 +2923,10 @@ public class McpServer {
             + "`hints` object — orientation_hint (bar charts) and suppressed_cells (values with "
             + "no data: draw them as a gap or an explicit 'no data' mark, never as zero). Follow "
             + "the hints instead of re-deriving presentation from the numbers. It also builds the "
-            + "exact page upload_report would publish and returns a preview link to it, and saves "
+            + "exact page publish_report would publish and returns a preview link to it, and saves "
             + "both the report instructions and that page under a report_id that outlives this "
             + "process. Nothing is uploaded: after the artifact, give the reader the preview link "
-            + "and call register/upload_report only if they say yes to publishing.",
+            + "and call register/publish_report only if they say yes to publishing.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
 
         ObjectNode registerProps = MAPPER.createObjectNode();
@@ -2936,24 +2936,24 @@ public class McpServer {
             "Optional organization name shown alongside the display name."));
         ObjectNode uploadProps = MAPPER.createObjectNode();
         uploadProps.set("report_id", prop("string",
-            "Optional saved report id, from create_report_artifact, publish_report or "
+            "Optional saved report id, from create_report_artifact, preview_report or "
             + "restore_report. Omit to upload this session's most recent report."));
         tools.add(
             tool("register",
             "Create (or update) a Studies account bound to this engine's own API key, so "
-            + "upload_report has somewhere to publish to. Call this once before the first "
-            + "upload_report; safe to call again later to change the display name or org. "
+            + "publish_report has somewhere to publish to. Call this once before the first "
+            + "publish_report; safe to call again later to change the display name or org. "
             + "Returns the account's public Studies page link — save it, since it will not be "
             + "shown again automatically (use mysite to look it up if lost).",
             schema(registerProps, new String[]{"name"})));
 
         tools.add(
-            tool("upload_report",
+            tool("publish_report",
             "Publish a QC'd report to the caller's Studies page — durably and shareably, under "
             + "their registered name. This is the actual 'publish report' / 'share report' "
             + "action: call it only when the reader asked to publish or share, or said yes to the "
-            + "offer after create_report_artifact / publish_report, and hand back the link it "
-            + "returns. Pass report_id (returned by create_report_artifact or publish_report, or "
+            + "offer after create_report_artifact / preview_report, and hand back the link it "
+            + "returns. Pass report_id (returned by create_report_artifact or preview_report, or "
             + "listed by restore_report) to publish a report saved in any earlier session; "
             + "without it, uploads the report most recently built in this session. Requires "
             + "register to have been called first (errors otherwise). The uploaded report cannot "
@@ -2986,7 +2986,7 @@ public class McpServer {
             + "conversation on this machine, not limited to this one. Local report links still "
             + "die when the process that built them exits; the row itself and its tally survive "
             + "that. For durable, permanent history use mysite's Studies page link instead. "
-            + "Lists only validations (a publish_report call with a claims array and a "
+            + "Lists only validations (a preview_report call with a claims array and a "
             + "source_url) — a general research report with no claims, or a validation of "
             + "pasted/static text with no source URL, was never keyed by URL and will not "
             + "appear here.",
@@ -4158,10 +4158,10 @@ public class McpServer {
                     diagnostics = r.diagnostics;
                     break;
                 }
-                case "publish_report":
+                case "preview_report":
                 case "create_report_artifact": {
                     // One QC path for both destinations: the artifact is only a second
-                    // rendering of a report that passed every publish_report gate, never a way
+                    // rendering of a report that passed every preview_report gate, never a way
                     // around them.
                     boolean asArtifact = "create_report_artifact".equals(name);
                     String rTitle = args.path("title").asText(null);
@@ -4426,10 +4426,10 @@ public class McpServer {
                     String savedLine = "Saved as report_id `" + saved.id + "` — the saved page "
                         + "opens with no server at " + ReportStore.fileUrl(saved.id) + " and "
                         + "outlives this process: restore_report re-serves it over http by that "
-                        + "id if a file link won't open, and upload_report publishes it by that "
+                        + "id if a file link won't open, and publish_report publishes it by that "
                         + "id in any later session.";
                     if (asArtifact) {
-                        String previewLine = "Preview of the page upload_report would publish: ["
+                        String previewLine = "Preview of the page publish_report would publish: ["
                             + (rTitle == null || rTitle.isEmpty() ? "published version"
                                 : rTitle.replace("]", ")")) + "](" + ReportStore.fileUrl(saved.id)
                             + ")" + (url == null ? "" : " (or over http while this session "
@@ -4441,7 +4441,7 @@ public class McpServer {
                             + "narrative, in order, including any coverage-gap and claims sections "
                             + "added by QC; list `sources` as the citations. Draw only what is in "
                             + "this payload. After the artifact, give the reader the preview line "
-                            + "below, and publish it durably (register, then upload_report) only "
+                            + "below, and publish it durably (register, then publish_report) only "
                             + "if they say yes.\n\n" + previewLine + "\n" + savedLine + "\n\n"
                             + MAPPER.writeValueAsString(ReportArtifact.build(rTitle, rSub,
                                 args.has("footnote") ? args.get("footnote").asText(null) : null,
@@ -4457,11 +4457,11 @@ public class McpServer {
                     String linkLabel = (rTitle == null || rTitle.isEmpty())
                         ? "Open the report" : rTitle;
                     // Deliberately NOT auto-uploaded durably here, even when an account is
-                    // already registered: "show report"/publish_report alone means the reader
+                    // already registered: "show report"/preview_report alone means the reader
                     // gets the ephemeral local link only. A durable copy is a separate ask —
                     // "publish report" or "share report" — which the calling model routes to
-                    // upload_report itself (see that tool's own description). Auto-uploading on
-                    // every publish_report call regardless of the user's own wording was tried
+                    // publish_report itself (see that tool's own description). Auto-uploading on
+                    // every preview_report call regardless of the user's own wording was tried
                     // and reverted (2026-09-18): it silently answered "show" and "share" the
                     // same way, which is exactly the distinction the caller asked for. Skipped
                     // entirely in EVAL_MODE either way, so a comparative-eval run never posts
@@ -4479,7 +4479,7 @@ public class McpServer {
                         + "machine, not shareable."
                         + (EVAL_MODE ? "" : " If the reader asked to publish or share this "
                             + "(rather than just see it), call `register` once (if not already "
-                            + "done this session) and then `upload_report` right after this call "
+                            + "done this session) and then `publish_report` right after this call "
                             + "to get a permanent Studies-page link instead.")
                         + evalReportNote + "\n\n" + savedLine;
                     // Every report's first section is required to be the summary (see this
@@ -4500,10 +4500,10 @@ public class McpServer {
                     text = registerAccount(regName, regOrg);
                     break;
                 }
-                case "upload_report": {
+                case "publish_report": {
                     String uploadId = args.hasNonNull("report_id")
                         ? args.get("report_id").asText() : null;
-                    log.println("[askamerica-mcp] tool=upload_report report_id=" + uploadId);
+                    log.println("[askamerica-mcp] tool=publish_report report_id=" + uploadId);
                     text = uploadReport(uploadId);
                     break;
                 }
@@ -4605,7 +4605,7 @@ public class McpServer {
                         // SVG too large to inline.
                         + "The image above is the same board as a PNG, already viewable "
                         + "inline. For a real, shareable link (not tied to this machine or "
-                        + "session), call register once and then upload_report."
+                        + "session), call register once and then publish_report."
                         + (wantSvg
                             ? (oversizeSvgNotice(chartSvg, dashUrl) == null
                                 ? " The block after this is the SVG source you asked for. Panel "
@@ -4903,7 +4903,7 @@ public class McpServer {
      * </ul>
      */
     static String compactErrorMessage(Throwable e) {
-        // Every publish_report enforce* gate throws IllegalArgumentException with a complete,
+        // Every preview_report enforce* gate throws IllegalArgumentException with a complete,
         // deliberately-authored, actionable message -- never a raw stack trace or noisy driver
         // text. The generic truncateMessage() fallback below exists for THOSE (a SQL
         // parser error, a DuckDB exception), and would defeat the combined-gate-error refusal
@@ -6122,7 +6122,7 @@ public class McpServer {
 
     /**
      * The most recent {@code compose_dashboard} render at 2x, kept separately from
-     * {@link #LAST_CHART_PNG}: publish_report returns a 40% thumbnail of its board as the
+     * {@link #LAST_CHART_PNG}: preview_report returns a 40% thumbnail of its board as the
      * call's image, and "the last image this process produced" was therefore a 352x258
      * picture that no reader could use. The saved dashboard.png is this one when it exists.
      */
@@ -6189,17 +6189,17 @@ public class McpServer {
      * {@link #CALL_LOG}, cut down to calls that plausibly belong to the report being validated
      * right now, not a stale earlier conversation sharing the same long-lived process (see
      * {@link #CALL_LOG}'s javadoc for why that happens). The boundary is the most recent PRIOR
-     * SUCCESSFUL {@code publish_report} call, if any -- everything from just after it onward is
+     * SUCCESSFUL {@code preview_report} call, if any -- everything from just after it onward is
      * kept, and everything at-or-before it is dropped as belonging to whatever report that call
      * concluded.
      *
-     * <p>A REJECTED {@code publish_report} attempt (one of the {@code enforce*} gates threw, so
+     * <p>A REJECTED {@code preview_report} attempt (one of the {@code enforce*} gates threw, so
      * this same entry carries an {@code error} field) is deliberately NOT a boundary. Measured
      * live (2026-09-21, an Al Jazeera tariff validation): a report needing several
-     * {@code publish_report} round trips to clear every gate -- an already-documented, common
+     * {@code preview_report} round trips to clear every gate -- an already-documented, common
      * pattern (see {@link #addIfPresent}'s javadoc) -- had its own genuine, earlier
      * {@code search_catalog}/{@code query} calls cut out by this boundary on the SECOND attempt,
-     * because the first, rejected attempt had already been logged as tool="publish_report" and
+     * because the first, rejected attempt had already been logged as tool="preview_report" and
      * counted as "a report concluded here." {@link #enforceTableProvenance} and
      * {@link #enforceResearchDepthOnGap} then refused the second attempt for research the model
      * had genuinely already done, quoting "no query call anywhere this session" for a query
@@ -6210,13 +6210,13 @@ public class McpServer {
      * <p>Deliberately NOT {@code compose_dashboard}, even though it can also mark the end of a
      * prior, unrelated conversation: {@code compose_dashboard} is routinely called as an
      * intermediate step of the CURRENT report too (queries first produce the data, then
-     * compose_dashboard turns it into panels, then publish_report), so treating it as a cutoff
+     * compose_dashboard turns it into panels, then preview_report), so treating it as a cutoff
      * would drop that same report's own supporting queries -- turning this into a false
      * negative on exactly the disclosure check it's meant to protect.
      *
      * <p>This is a mitigation, not a complete fix: a conversation that calls compose_dashboard
-     * and stops (no publish_report) leaves no boundary behind it, so a LATER, unrelated
-     * publish_report elsewhere in the same process can still reach back past it. MCP over a
+     * and stops (no preview_report) leaves no boundary behind it, so a LATER, unrelated
+     * preview_report elsewhere in the same process can still reach back past it. MCP over a
      * shared stdio connection gives a server no protocol-level way to know a new conversation
      * started at all; this uses the one real signal CALL_LOG actually contains for "a report
      * concluded here" instead of guessing from a time window.
@@ -6229,7 +6229,7 @@ public class McpServer {
     /** A hard backstop independent of any boundary detection succeeding: no snapshot reaches
      *  further back than this from the current moment, however long the process has been alive
      *  and however many chat windows it has silently served. Bounds the known gap in the
-     *  publish_report-success boundary (a conversation that never successfully publishes leaves
+     *  preview_report-success boundary (a conversation that never successfully publishes leaves
      *  no marker) to "reach back at most this far" instead of "reach back to process start." */
     private static final long MAX_LOOKBACK_MS = 2 * 60 * 60 * 1000L;
 
@@ -6239,7 +6239,7 @@ public class McpServer {
      * {@link #CALL_LOG}'s javadoc for why that happens). Three boundary signals, checked from
      * newest backward, first hit wins (the boundary closest to "now" is used):
      *
-     * <p>1. The most recent PRIOR SUCCESSFUL {@code publish_report} call, if any (unchanged from
+     * <p>1. The most recent PRIOR SUCCESSFUL {@code preview_report} call, if any (unchanged from
      * before) -- everything from just after it onward is kept, everything at-or-before it belongs
      * to whatever report that call concluded. A REJECTED attempt is deliberately not a boundary
      * (see the long-standing javadoc on this below); only a call that actually returned marks the
@@ -6272,7 +6272,7 @@ public class McpServer {
         Long prevTs = null;
         for (int i = snapshot.size() - 1; i >= 0; i--) {
             ObjectNode entry = snapshot.get(i);
-            if ("publish_report".equals(entry.path("tool").asText("")) && !entry.has("error")) {
+            if ("preview_report".equals(entry.path("tool").asText("")) && !entry.has("error")) {
                 boundary = i;
                 break;
             }
@@ -6679,7 +6679,7 @@ public class McpServer {
      *   still lines results up correctly, because a model scoring several claims in one pass
      *   tends to call score_claim for each in roughly the order it lists them, and taking the
      *   LAST N calls (not the first N) discards stale calls left over from an earlier,
-     *   since-revised publish_report attempt.</li>
+     *   since-revised preview_report attempt.</li>
      * </ol>
      * A heuristic match says so in its refusal message, so a genuine false pairing can be
      * explained away in the claim's own text rather than silently trusted either way.
@@ -6779,10 +6779,10 @@ public class McpServer {
     }
 
     /** Appends {@code problem} to {@code problems} when non-null. Every {@code enforce*} gate
-     *  in {@code publish_report}'s pipeline returns a violation message (or null when it
+     *  in {@code preview_report}'s pipeline returns a violation message (or null when it
      *  passes) rather than throwing directly, so the handler can run every gate regardless of
      *  whether an earlier one failed and report every open issue in one refusal -- measured
-     *  live (q105, q121, 2026-09-12): a report needed 4-5 publish_report round trips to
+     *  live (q105, q121, 2026-09-12): a report needed 4-5 preview_report round trips to
      *  converge because each attempt only ever learned about the single next unmet gate. */
     private static void addIfPresent(java.util.List<String> problems, String problem) {
         if (problem != null && !problem.isEmpty()) {
@@ -7472,7 +7472,7 @@ public class McpServer {
             + "to silently defaulting to the best-documented historical instance.";
     }
 
-    /** Verdict vocabulary for {@code publish_report}'s {@code claims}. Order matters: it is
+    /** Verdict vocabulary for {@code preview_report}'s {@code claims}. Order matters: it is
      *  the order the tally tiles render in. */
     static final String[] VERDICTS = {"true", "mostly true", "partially true",
         "mostly false", "false", "not checkable here", "stale vintage"};
@@ -13526,12 +13526,12 @@ public class McpServer {
     }
 
     /**
-     * Uploads the report most recently built by publish_report (see {@link #LAST_REPORT})
+     * Uploads the report most recently built by preview_report (see {@link #LAST_REPORT})
      * to the caller's Studies page via POST /v1/studies/reports. Takes no arguments of its
-     * own — there is exactly one thing to upload, whatever publish_report last built.
+     * own — there is exactly one thing to upload, whatever preview_report last built.
      */
     /** Outcome of a durable-upload attempt, whether triggered explicitly by the {@code
-     *  upload_report} tool or automatically from {@code publish_report}. Exactly one of
+     *  publish_report} tool or automatically from {@code preview_report}. Exactly one of
      *  {@code url} or {@code error} is set. */
     private static final class UploadResult {
         final String url;
@@ -13554,7 +13554,7 @@ public class McpServer {
     /**
      * POSTs {@code report} to the account's Studies page. Pulled out of
      * {@link #uploadReport(String)}
-     * so {@code publish_report} can call it automatically for an already-registered account
+     * so {@code preview_report} can call it automatically for an already-registered account
      * (see the call site there) without duplicating the HTTP handling -- a caller who already
      * registered once should never need to remember a second tool call just to keep a report
      * from dying with this process.
@@ -13588,23 +13588,23 @@ public class McpServer {
             if (code >= 200 && code < 300) {
                 JsonNode resp = MAPPER.readTree(c.getInputStream());
                 String reportUrl = resp.path("url").asText(null);
-                log.println("[askamerica-mcp] upload_report succeeded (HTTP " + code + ")");
+                log.println("[askamerica-mcp] publish_report succeeded (HTTP " + code + ")");
                 return UploadResult.ok(reportUrl);
             }
             if (code == 401 || code == 403) {
-                log.println("[askamerica-mcp] upload_report rejected: HTTP " + code);
+                log.println("[askamerica-mcp] publish_report rejected: HTTP " + code);
                 return UploadResult.failed("Upload rejected (HTTP " + code + ") — the API key "
                     + "is invalid or has been revoked. Do not retry; the account holder needs a "
                     + "new key.");
             }
-            log.println("[askamerica-mcp] upload_report failed: HTTP " + code);
+            log.println("[askamerica-mcp] publish_report failed: HTTP " + code);
             return UploadResult.failed("Could not upload (HTTP " + code + "). Nothing was "
                 + "published — please retry.");
         // UploadResult.failed(...) is an explicit failure sentinel -- not confused with a
         // successful UploadResult.ok(...).
         // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
-            log.println("[askamerica-mcp] upload_report error: " + e.getMessage());
+            log.println("[askamerica-mcp] publish_report error: " + e.getMessage());
             return UploadResult.failed("Could not upload: " + e.getMessage() + ". Please retry.");
         } finally {
             if (c != null) {
@@ -13616,7 +13616,7 @@ public class McpServer {
     private static String uploadReport(String reportId) throws java.io.IOException {
         Account acct = ACCOUNT;
         if (acct == null) {
-            return "Not registered yet — call register first, then upload_report.";
+            return "Not registered yet — call register first, then publish_report.";
         }
         LastReport report;
         if (reportId != null) {
@@ -13626,8 +13626,8 @@ public class McpServer {
             report = LAST_REPORT;
         }
         if (report == null) {
-            return "No report has been published yet this session — call publish_report first, "
-                + "then upload_report.";
+            return "No report has been published yet this session — call preview_report first, "
+                + "then publish_report.";
         }
         UploadResult result = doUploadReport(acct, report);
         return result.url != null ? "Uploaded: " + result.url : result.error;
