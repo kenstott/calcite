@@ -17,9 +17,6 @@ import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
@@ -188,11 +185,10 @@ public class S3StorageProvider implements StorageProvider {
           .httpClientBuilder(httpClient)
           .overrideConfiguration(overrideConfig)
           .region(Region.of(region))
+          // Read on every request, so a rotation of short-lived credentials reaches this
+          // long-lived client without rebuilding it.
           .credentialsProvider(
-              StaticCredentialsProvider.create(
-                  sessionToken != null && !sessionToken.isEmpty()
-                      ? AwsSessionCredentials.create(accessKeyId, secretAccessKey, sessionToken)
-                      : AwsBasicCredentials.create(accessKeyId, secretAccessKey)));
+              RotatingS3Credentials.of(accessKeyId, secretAccessKey, sessionToken));
 
       // If custom endpoint is provided, use it with path-style access (MinIO/R2).
       if (endpoint != null) {
@@ -578,8 +574,25 @@ public class S3StorageProvider implements StorageProvider {
     return "s3";
   }
 
+  /** The stored config with the credentials' current values, so consumers that copy it after a
+   *  rotation (Iceberg table loads, DuckDB secrets) never pick up the expired originals. */
   @Override public java.util.Map<String, String> getS3Config() {
-    return s3Config;
+    if (s3Config == null || s3Config.get("accessKeyId") == null
+        || s3Config.get("secretAccessKey") == null) {
+      return s3Config;
+    }
+    RotatingS3Credentials live = RotatingS3Credentials.of(s3Config.get("accessKeyId"),
+        s3Config.get("secretAccessKey"), s3Config.get("sessionToken"));
+    java.util.Map<String, String> current = new java.util.HashMap<>(s3Config);
+    current.put("accessKeyId", live.accessKeyId());
+    current.put("secretAccessKey", live.secretAccessKey());
+    String token = live.sessionToken();
+    if (token == null) {
+      current.remove("sessionToken");
+    } else {
+      current.put("sessionToken", token);
+    }
+    return current;
   }
 
   @Override public String resolvePath(String basePath, String relativePath) {

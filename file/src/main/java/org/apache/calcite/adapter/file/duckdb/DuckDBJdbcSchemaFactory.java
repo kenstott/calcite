@@ -15,6 +15,7 @@ package org.apache.calcite.adapter.file.duckdb;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.adapter.file.storage.RotatingS3Credentials;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.Lex;
@@ -29,8 +30,12 @@ import org.apache.calcite.sql.parser.SqlParser;
 import com.google.common.annotations.VisibleForTesting;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.duckdb.DuckDBConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 
 import java.io.File;
 import java.io.PrintWriter;
@@ -279,6 +284,57 @@ public class DuckDBJdbcSchemaFactory {
       this.convention = convention;
       this.dialect = dialect;
     }
+  }
+
+  /** {@code CREATE OR REPLACE PERSISTENT SECRET duckdb_s3_secret} for these credentials. */
+  private static String s3SecretSql(AwsCredentials credentials, @Nullable String region,
+      @Nullable String endpointHostPort, @Nullable Boolean useSSL) {
+    // PERSISTENT so the secret is available across every connection to the database instance.
+    StringBuilder secretSQL = new StringBuilder();
+    secretSQL.append("CREATE OR REPLACE PERSISTENT SECRET duckdb_s3_secret (");
+    secretSQL.append("TYPE s3, ");
+    secretSQL.append("PROVIDER config, ");
+    secretSQL.append("KEY_ID '").append(credentials.accessKeyId()).append("', ");
+    secretSQL.append("SECRET '").append(credentials.secretAccessKey()).append("'");
+    // Temporary (scoped, short-lived) R2/S3 credentials carry a session token.
+    if (credentials instanceof AwsSessionCredentials) {
+      secretSQL.append(", SESSION_TOKEN '")
+          .append(((AwsSessionCredentials) credentials).sessionToken()).append("'");
+    }
+    if (region != null) {
+      secretSQL.append(", REGION '").append(region).append("'");
+    }
+    if (endpointHostPort != null) {
+      secretSQL.append(", ENDPOINT '").append(endpointHostPort).append("'");
+      secretSQL.append(", URL_STYLE 'path'");
+      secretSQL.append(", USE_SSL ").append(useSSL);
+    }
+    secretSQL.append(")");
+    return secretSQL.toString();
+  }
+
+  /**
+   * Replaces the database instance's S3 secret with rotated credentials. Runs on a duplicate of
+   * the setup connection, which shares the instance (and so its secrets) without contending for
+   * the setup connection itself. A closed setup connection means its instance was shut down, so
+   * there is no secret left to replace.
+   */
+  private static void replaceS3Secret(Connection setupConn, AwsCredentials rotated,
+      @Nullable String region, @Nullable String endpointHostPort, @Nullable Boolean useSSL) {
+    try {
+      if (setupConn.isClosed()) {
+        return;
+      }
+      try (Connection conn = setupConn.unwrap(DuckDBConnection.class).duplicate();
+           Statement stmt = conn.createStatement()) {
+        stmt.execute(s3SecretSql(rotated, region, endpointHostPort, useSSL));
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("Could not replace the DuckDB S3 secret with rotated "
+          + "credentials", e);
+    }
+    LOGGER.info("DuckDB S3 secret replaced with rotated credentials for endpoint: {}",
+        endpointHostPort != null ? endpointHostPort : "default");
   }
 
   static {
@@ -533,6 +589,7 @@ public class DuckDBJdbcSchemaFactory {
       String s3Endpoint = null;
       String endpointHostPort = null;
       Boolean useSSL = null;
+      RotatingS3Credentials s3Credentials = null;
 
       // Install and load S3/HTTPFS extension for cloud storage support
       try {
@@ -597,37 +654,22 @@ public class DuckDBJdbcSchemaFactory {
 
         // Apply S3 configuration to setup connection using modern CREATE SECRET approach
         if (s3AccessKey != null && s3SecretKey != null) {
-          // Use CREATE PERSISTENT SECRET with CONFIG provider for explicit credentials
-          // PERSISTENT ensures the secret is saved to the database file and available across connections
-          // This is the modern DuckDB approach instead of legacy SET statements
-          StringBuilder secretSQL = new StringBuilder();
-          secretSQL.append("CREATE OR REPLACE PERSISTENT SECRET duckdb_s3_secret (");
-          secretSQL.append("TYPE s3, ");
-          secretSQL.append("PROVIDER config, ");
-          secretSQL.append("KEY_ID '").append(s3AccessKey).append("', ");
-          secretSQL.append("SECRET '").append(s3SecretKey).append("'");
-
-          // Temporary (scoped, short-lived) R2/S3 credentials carry a session token.
-          if (s3SessionToken != null && !s3SessionToken.isEmpty()) {
-            secretSQL.append(", SESSION_TOKEN '").append(s3SessionToken).append("'");
-          }
-
-          if (s3Region != null) {
-            secretSQL.append(", REGION '").append(s3Region).append("'");
-          }
-
-          if (endpointHostPort != null) {
-            secretSQL.append(", ENDPOINT '").append(endpointHostPort).append("'");
-            secretSQL.append(", URL_STYLE 'path'");
-            secretSQL.append(", USE_SSL ").append(useSSL);
-          }
-
-          secretSQL.append(")");
-
-          LOGGER.info("Creating DuckDB PERSISTENT S3 secret with SQL: {}", secretSQL.toString());
-          setupConn.createStatement().execute(secretSQL.toString());
+          // The live set, not the operand strings: a schema mounted after a rotation still
+          // carries the original, expired values.
+          s3Credentials = RotatingS3Credentials.of(s3AccessKey, s3SecretKey, s3SessionToken);
+          LOGGER.info("Creating DuckDB PERSISTENT S3 secret for endpoint: {}",
+              endpointHostPort != null ? endpointHostPort : "default");
+          setupConn.createStatement().execute(
+              s3SecretSql(s3Credentials.resolveCredentials(), s3Region, endpointHostPort, useSSL));
           LOGGER.info("DuckDB S3 secret created successfully for endpoint: {} (SSL: {})",
                      endpointHostPort != null ? endpointHostPort : "default", useSSL);
+          // The secret is instance-level and copied once, so a rotation must replace it.
+          final Connection secretConn = setupConn;
+          final String secretRegion = s3Region;
+          final String secretEndpoint = endpointHostPort;
+          final Boolean secretSsl = useSSL;
+          s3Credentials.onRotation(rotated ->
+              replaceS3Secret(secretConn, rotated, secretRegion, secretEndpoint, secretSsl));
         } else {
           LOGGER.info("No S3 credentials found in operands - S3 access will not be available");
         }
@@ -648,7 +690,7 @@ public class DuckDBJdbcSchemaFactory {
       // Hand the Path B semantic-search function the S3 config we just resolved, so it reuses
       // these credentials/endpoint and needs no separate launcher flags.
       org.apache.calcite.adapter.file.similarity.SemanticSearch.configure(
-          finalEndpointHostPort, finalS3Region, finalS3AccessKey, finalS3SecretKey,
+          finalEndpointHostPort, finalS3Region, s3Credentials,
           finalUseSSL != null && finalUseSSL);
 
       // Load query-time extensions for optimization (vss, fts)

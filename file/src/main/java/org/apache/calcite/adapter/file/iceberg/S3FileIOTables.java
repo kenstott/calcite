@@ -10,12 +10,15 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
+import org.apache.calcite.adapter.file.storage.RotatingS3Credentials;
+
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.StaticTableOperations;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableMetadata;
+import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.exceptions.NotFoundException;
 import org.apache.iceberg.io.FileIO;
@@ -300,11 +303,21 @@ public final class S3FileIOTables {
     if (src == null) {
       return props;
     }
-    putFirst(props, "s3.access-key-id", src, "fs.s3a.access.key", "accessKeyId");
-    putFirst(props, "s3.secret-access-key", src, "fs.s3a.secret.key", "secretAccessKey");
-    // Short-lived credentials must sign with their session token; dropping it here made
-    // every Iceberg metadata read fail with 403 SignatureDoesNotMatch.
-    putFirst(props, "s3.session-token", src, "fs.s3a.session.token", "sessionToken");
+    String accessKeyId = firstNonEmpty(src, "fs.s3a.access.key", "accessKeyId");
+    String secretAccessKey = firstNonEmpty(src, "fs.s3a.secret.key", "secretAccessKey");
+    if (accessKeyId != null && secretAccessKey != null) {
+      // Not s3.access-key-id / s3.secret-access-key: Iceberg bakes those into a static
+      // provider, and a loaded table keeps its S3FileIO for the life of the process, so
+      // short-lived credentials would expire underneath it. The live set is read per request.
+      // Short-lived credentials must sign with their session token; dropping it made every
+      // Iceberg metadata read fail with 403 SignatureDoesNotMatch.
+      RotatingS3Credentials.of(accessKeyId, secretAccessKey,
+          firstNonEmpty(src, "fs.s3a.session.token", "sessionToken"));
+      props.put(AwsClientProperties.CLIENT_CREDENTIALS_PROVIDER,
+          RotatingS3Credentials.class.getName());
+      props.put(AwsClientProperties.CLIENT_CREDENTIALS_PROVIDER + "."
+          + RotatingS3Credentials.ACCESS_KEY_ID_PROPERTY, accessKeyId);
+    }
     putFirst(props, "s3.endpoint", src, "fs.s3a.endpoint", "endpoint");
     String pathStyle = firstNonEmpty(src, "fs.s3a.path.style.access", "pathStyleAccess");
     props.put("s3.path-style-access", pathStyle != null ? pathStyle : "true");
