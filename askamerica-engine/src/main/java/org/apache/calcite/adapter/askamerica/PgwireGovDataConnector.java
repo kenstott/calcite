@@ -462,17 +462,7 @@ final class PgwireGovDataConnector {
       return null;
     }
     try {
-      java.util.List<String> command = new java.util.ArrayList<>();
-      // ProcessBuilder does not reliably run a .bat directly on every JDK/Windows
-      // combination (CreateProcess needs an actual executable; whether a bare .bat path is
-      // transparently resolved through cmd.exe is not something to depend on unverified) —
-      // invoke it explicitly through cmd.exe /c, which is documented, unambiguous behavior.
-      if (isWindows() && launcher.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".bat")) {
-        command.add("cmd.exe");
-        command.add("/c");
-      }
-      command.add(launcher.getAbsolutePath());
-      ProcessBuilder pb = new ProcessBuilder(command);
+      ProcessBuilder pb = new ProcessBuilder(launchCommand(launcher, isWindows()));
       pb.command().addAll(java.util.Arrays.asList(
           "--host", host(), "--port", String.valueOf(port()),
           // Server-wide default (state.py: statement_timeout_ms=0, i.e. unlimited, unless a
@@ -627,6 +617,36 @@ final class PgwireGovDataConnector {
 
   /** The release stamped in the bundle {@code launcher} belongs to ({@code <root>/bin/<launcher>}),
    *  or null for an unstamped bundle (an override or an installer-bundled copy). */
+  /**
+   * The command that starts {@code launcher}. On Unix the server is started as the leader of a
+   * new session, so it is outside the spawning connector's process group: Claude Desktop runs
+   * each connector under {@code disclaimer --pgroup} and kills that whole group when it tears
+   * the connector down, which took the shared server down mid cold start (5-9 minutes of schema
+   * mounting lost each time) whenever the conversation that happened to spawn it went away.
+   * macOS has no {@code setsid} binary, so the bundle's own cpython calls {@code os.setsid()}
+   * and execs the launcher, keeping the same pid for the pid file.
+   */
+  static java.util.List<String> launchCommand(File launcher, boolean windows) {
+    java.util.List<String> command = new java.util.ArrayList<>();
+    if (windows) {
+      // ProcessBuilder does not reliably run a .bat directly on every JDK/Windows
+      // combination (CreateProcess needs an actual executable; whether a bare .bat path is
+      // transparently resolved through cmd.exe is not something to depend on unverified) —
+      // invoke it explicitly through cmd.exe /c, which is documented, unambiguous behavior.
+      if (launcher.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".bat")) {
+        command.add("cmd.exe");
+        command.add("/c");
+      }
+    } else {
+      File bundleRoot = launcher.getAbsoluteFile().getParentFile().getParentFile();
+      command.add(new File(bundleRoot, "cpython/bin/python").getAbsolutePath());
+      command.add("-c");
+      command.add("import os, sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])");
+    }
+    command.add(launcher.getAbsolutePath());
+    return command;
+  }
+
   static String launcherBundleVersion(File launcher) {
     File bin = launcher.getAbsoluteFile().getParentFile();
     File root = bin == null ? null : bin.getParentFile();
