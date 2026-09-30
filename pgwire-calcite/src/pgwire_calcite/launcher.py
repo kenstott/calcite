@@ -373,6 +373,20 @@ def main(argv: list | None = None) -> int:
         "(SQLSTATE 57014); 0 = unbounded. Applies even when statement_timeout is 0.",
     )
     parser.add_argument(
+        "--max-unfiltered-scan-rows",
+        type=int,
+        default=0,
+        help="reject a SELECT that scans a table estimated above this many rows without "
+        "filtering on one of its partition columns (SQLSTATE 54000); 0 = off. "
+        "Requires --table-coverage-file.",
+    )
+    parser.add_argument(
+        "--table-coverage-file",
+        default=None,
+        help="JSON of schema.table -> {row_count, partition_columns}, written by "
+        "scripts/export_table_coverage.py; the row estimates --max-unfiltered-scan-rows uses.",
+    )
+    parser.add_argument(
         "--cancel-grace-ms",
         type=int,
         default=60000,
@@ -461,8 +475,16 @@ def main(argv: list | None = None) -> int:
                 parser.error(f"--auth {args.auth} requires --auth-store")
             store = AccountStore(args.auth_store)
             auth_provider = LocalAccountsProvider(store, scram_wire=(args.auth == "scram"))
-    from pgwire_calcite.calcite_backend import CancelScope, InFlightStatement
+    from pgwire_calcite.calcite_backend import CalciteBackend, CancelScope, InFlightStatement
 
+    if args.max_unfiltered_scan_rows > 0:
+        if not args.table_coverage_file:
+            parser.error("--max-unfiltered-scan-rows requires --table-coverage-file")
+        from pgwire_calcite.admission import AdmissionPolicy, load_coverage
+
+        CalciteBackend.admission = AdmissionPolicy(
+            args.max_unfiltered_scan_rows, load_coverage(args.table_coverage_file)
+        )
     CancelScope.max_queue_wait_ms = max(0, args.max_queue_wait_ms)
     InFlightStatement.cancel_grace_ms = max(0, args.cancel_grace_ms)
     try:

@@ -40,6 +40,18 @@ uv pip install --python .venv -e ./vendor/buenavista -e . pytest
 psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -c "SELECT 1;"
 ```
 
+## Rejecting unfiltered scans of large tables
+
+A SELECT that scans a very large table with no partition filter holds the shared engine
+connection for minutes while every other statement queues. Set `--max-unfiltered-scan-rows N`
+and `--table-coverage-file FILE` to reject such a statement up front (SQLSTATE `54000`), with
+an error naming the table and the partition columns to filter on. A `LIMIT` with no ordering,
+grouping or aggregation is admitted, as is any table missing from the file. Off by default.
+
+Generate the file from the govdata schemas' measured row counts:
+
+    python3 scripts/export_table_coverage.py coverage.json ../govdata/src/main/resources/*/*-schema.yaml
+
 ## Client timeouts and cancellation
 
 `statement_timeout` (per session via `SET`, server default via launcher state) bounds a

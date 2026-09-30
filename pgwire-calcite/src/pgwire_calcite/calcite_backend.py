@@ -32,6 +32,7 @@ import time
 from typing import Callable, List, Optional
 
 from pgwire_calcite import normalize
+from pgwire_calcite.admission import AdmissionPolicy
 from pgwire_calcite.backend import (
     CANCELED_BY_TIMEOUT,
     CANCELED_CLIENT_GONE,
@@ -323,6 +324,10 @@ class CancelScope:
 class CalciteBackend:
     """Embedded Calcite JDBC backend reached via JPype."""
 
+    #: Rejects unfiltered scans of large tables before they reach the shared connection.
+    #: Set once at startup by the launcher; None = no admission control.
+    admission: Optional[AdmissionPolicy] = None
+
     def __init__(
         self,
         model_path: Optional[str] = None,
@@ -490,6 +495,8 @@ class CalciteBackend:
         client_gone: Optional[Callable[[], bool]] = None,
     ) -> QueryResult:
         del role_id, params  # params already substituted upstream (server._substitute_params)
+        if self.admission is not None:
+            self.admission.check(sql)
         calcite_sql = transpile_pg_to_calcite(
             sql,
             json_enabled=("json" in self._extensions),
