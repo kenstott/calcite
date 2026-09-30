@@ -134,6 +134,9 @@ tasks.test {
     dependsOn(tasks.shadowJar)
     // Working directory must be the module root so build/libs is resolvable
     workingDir = projectDir
+    // The self-test metering bypass is opt-in via env; tests assert the default-off
+    // behaviour, so the test JVM must not inherit the caller's opt-in.
+    environment.remove("ASKAMERICA_SELFTEST_ENABLED")
     testLogging {
         events("passed", "skipped", "failed")
         showStandardStreams = true
