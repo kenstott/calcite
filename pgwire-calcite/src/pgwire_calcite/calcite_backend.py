@@ -360,6 +360,7 @@ class CalciteBackend:
         self._probe_conn = None
         self._probe_lock = threading.RLock()
         self._Types = None
+        self._stats_rewriter = None
         self._start_jvm()
         self._connect()
 
@@ -412,10 +413,28 @@ class CalciteBackend:
         for key, value in self._extra_props.items():
             props.setProperty(str(key), str(value))
 
+        self._stats_rewriter = self._resolve_stats_rewriter(JClass)
         self._conn = DriverManager.getConnection("jdbc:calcite:", props)
         # The model's schema is shared across connections, so this open is cheap.
         self._probe_conn = DriverManager.getConnection("jdbc:calcite:", props)
         log.info("[CALCITE] connected (model=%s, lex=%s)", self._model_path, self._lex)
+
+    @staticmethod
+    def _resolve_stats_rewriter(JClass):
+        """The file adapter's pre-parse rewrite for corr()/regr_*() (reserved Calcite words).
+
+        The file adapter registers these aggregates under non-reserved ``agg_*`` names and
+        relies on this rewrite to reach them; GovDataDriver applies it on the embedded path,
+        but this backend opens ``jdbc:calcite:`` directly, so it must apply it itself. The
+        class exists only when the file adapter is on the classpath; other models have no
+        such aggregates to reach.
+        """
+        name = "org.apache.calcite.adapter.file.duckdb.DuckDBSqlRewriter"
+        try:
+            return JClass(name)
+        except TypeError:
+            log.info("[CALCITE] %s not on classpath; corr()/regr_*() rewrite disabled", name)
+            return None
 
     @property
     def extensions(self) -> frozenset:
@@ -502,6 +521,8 @@ class CalciteBackend:
             json_enabled=("json" in self._extensions),
             vector_enabled=("vector" in self._extensions),
         )
+        if self._stats_rewriter is not None:
+            calcite_sql = str(self._stats_rewriter.rewrite(calcite_sql))
         log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
         conn, lock = self.lane(lane)
         if conn is None:
