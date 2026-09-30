@@ -3343,13 +3343,12 @@ views:
       Per-county natural gas pipeline presence, spatially joining gas_pipelines'
       segment-level line geometry (geometry_wkt) against geo.counties' own boundary
       geometry (its `geometry` column, latest TIGER vintage year) with DuckDB spatial
-      (`&&` bounding-box prefilter, then ST_Intersects/ST_Intersection/ST_Length over
-      WGS84 WKT — both sources use SRID 4326, no reprojection needed), following the
+      (ST_Intersects/ST_Intersection/ST_Length over WGS84 WKT — both sources use SRID 4326, no reprojection needed), following the
       same pattern as lands.county_federal_fee_land_share. Unlike that view, no
       per-row state filter is applied before the spatial predicate: gas_pipelines
-      carries no state column to prefilter on, and the `&&` bounding-box operator
-      (evaluated before the more expensive ST_Intersects) keeps the ~3,144 x ~32,900
-      cross product tractable without one. pipeline_length_miles is not a raw
+      carries no state column to prefilter on; ST_Intersects itself rejects
+      non-overlapping bounding boxes before any exact geometry test, which keeps the
+      ~3,144 x ~32,900 cross product tractable without one. pipeline_length_miles is not a raw
       degree-based length (DuckDB ST_Length has no CRS awareness, so a WGS84-degree
       length is not a distance) — instead, for each intersecting segment, the fraction
       of the segment's own line length that falls within the county
@@ -3400,8 +3399,7 @@ views:
           ST_Length(ST_Intersection(c.geom, p.geom))          AS overlap_length_deg
         FROM latest_counties c
         LEFT JOIN pipeline_geom p
-          ON c.geom && p.geom
-         AND ST_Intersects(c.geom, p.geom)
+          ON ST_Intersects(c.geom, p.geom)
       )
       SELECT
         county_fips,
