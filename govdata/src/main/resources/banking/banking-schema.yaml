@@ -650,7 +650,11 @@ partitionedTables:
       - name: cost_thousands
         type: double
         nullable: true
-        comment: Estimated cost to the Deposit Insurance Fund (USD thousands)
+        comment: >
+          Estimated cost to the Deposit Insurance Fund (USD thousands). Carried as published
+          by FDIC: a literal 0 means FDIC's failures API publishes COST=0 for that record
+          (e.g. Signature Bank, 2023), not a computed zero. Missing values load as null.
+          Do not rank or sum failures by cost without excluding these zero-published records.
 
     backfill_period: annual
 
