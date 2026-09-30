@@ -261,7 +261,13 @@ for arg in "$@"; do
       # census=qwi_employment (fixed literal 2022-2024 quarter list, no year dimension --
       # without this slot it fell through to every census:${_y} worker at once, all racing
       # to commit the same Iceberg partitions concurrently; confirmed live 2026-08-14).
-      for _s in ag disasters housing transport environment fiscal census banking; do
+      # health is the same split, but fenced inside worker-health.sh itself (a delegated
+      # specialty script, not worker.sh's inline _split_year_tables/_split_once_tables) via its
+      # own YEAR_MODE_GROUPS/ONCE_MODE_GROUPS arrays and `once` MODE case — without this slot,
+      # ONCE_MODE_GROUPS (fda_ndc_products and 10 other no-year-column tables) got refetched and
+      # recommitted on EVERY year slot below, 5+ processes racing to prune the same Iceberg
+      # table's metadata concurrently; confirmed live 2026-09-30 (kenstott/govdata-ops#836).
+      for _s in ag disasters housing transport environment fiscal census banking health; do
         hcy_enqueue "$_s" once
       done
       # housing's HUD-API tables (fair_market_rents, income_limits, income_limits_county) share one

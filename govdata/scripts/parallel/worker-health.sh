@@ -23,7 +23,7 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <daily|historical> [--force]" >&2
+  echo "Usage: $0 <daily|historical|once|YYYY|YYYY-YYYY> [--force]" >&2
   exit 1
 fi
 
@@ -146,27 +146,57 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 # per-source rate limits noted on the daily-only groups — that the schema does not express.
 #
 # Each entry is "<model name>|<comma-separated tables>".
-ALL_MODE_GROUPS=(
-  "health-fda|fda_ndc_products,fda_drug_approvals,fda_drug_recalls,fda_adverse_events,fda_device_recalls,fda_drug_shortages"
+#
+# Split in two by whether the member tables actually have a `year` column (health-schema.yaml).
+# A bare-year/range MODE (below) is invoked once PER YEAR in run-pool.sh's historical sweep
+# (_year_schemas loop) — fine for YEAR_MODE_GROUPS, which genuinely have something new to fetch
+# each year, but for ONCE_MODE_GROUPS (freshness-gated snapshots with no year dimension at all)
+# every one of those per-year invocations does the identical fetch+write+commit, redundantly.
+# Confirmed live 2026-09-30: 5 concurrent worker-health-<year> processes all racing to write and
+# prune the same fda_ndc_products Iceberg table at once (kenstott/govdata-ops#836). ag, disasters,
+# housing, transport, environment, fiscal, census and banking already avoid this exact trap via
+# their own `hcy_enqueue "$_s" once` slot in run-pool.sh; ONCE_MODE_GROUPS + the `once` MODE below
+# give health the same treatment instead of inventing a new mechanism.
+YEAR_MODE_GROUPS=(
   "health-who|who_gho_indicators"
-  "health-trials|clinical_trials,clinical_trial_conditions,clinical_trial_interventions"
-  "health-cdc|cdc_covid_vaccinations,cdc_mortality,cdc_brfss"
-  "health-cms-medicaid|cms_hospital_quality,cms_open_payments,medicaid_drug_utilization,cms_pos_facilities,cms_nursing_home,cms_nursing_home_deficiencies,cms_pos_termination_history,hospital_cost_report_financials"
-  "health-rxnorm|rxnorm_drugs"
-  "health-hrsa|ahrf_physician_supply"
+  "health-cdc-year|cdc_mortality,cdc_brfss"
+  "health-medicaid-year|medicaid_drug_utilization"
   # SSA OASDI county beneficiary data — own group since it's a distinct source (ssa.gov) from
   # every group above, and its (state x year) dimension cross-product (50 states x ~21 years)
   # is worth isolating for failure/rate-limit reasons the way CDC WONDER is above.
   "health-ssa|ssa_oasdi_county"
 )
 
-# Run the grouped health tables. Called from both historical and daily — same rationale as every
-# other group here already: each table self-manages its own cadence via freshness:/releaseWindow:.
-run_all_health_tables() {
+ONCE_MODE_GROUPS=(
+  "health-fda|fda_ndc_products,fda_drug_approvals,fda_drug_recalls,fda_adverse_events,fda_device_recalls,fda_drug_shortages"
+  "health-trials|clinical_trials,clinical_trial_conditions,clinical_trial_interventions"
+  "health-cdc-once|cdc_covid_vaccinations"
+  "health-cms-medicaid|cms_hospital_quality,cms_open_payments,cms_pos_facilities,cms_nursing_home,cms_nursing_home_deficiencies,cms_pos_termination_history,hospital_cost_report_financials"
+  "health-rxnorm|rxnorm_drugs"
+  "health-hrsa|ahrf_physician_supply"
+)
+
+run_year_health_tables() {
   local entry
-  for entry in "${ALL_MODE_GROUPS[@]}"; do
+  for entry in "${YEAR_MODE_GROUPS[@]}"; do
     run_health_model "${entry%%|*}" "${entry#*|}"
   done
+}
+
+run_once_health_tables() {
+  local entry
+  for entry in "${ONCE_MODE_GROUPS[@]}"; do
+    run_health_model "${entry%%|*}" "${entry#*|}"
+  done
+}
+
+# Run every grouped table, year-scoped and snapshot alike. Called from `historical` (a single
+# full-sweep invocation, so nothing here repeats) and `daily` (each snapshot's own freshness:
+# gate makes a same-day re-check cheap) — never from a bare-year/range MODE, which calls
+# run_year_health_tables alone so ONCE_MODE_GROUPS isn't redone on every year of the sweep.
+run_all_health_tables() {
+  run_year_health_tables
+  run_once_health_tables
 }
 
 # Daily-only: the 9 CDC WONDER tables, the 4 data.cdc.gov Socrata county/state tables and the
@@ -214,7 +244,8 @@ run_daily_only_health_tables() {
 # proper group; running it in a catch-all is the safe default, not the intended end state.
 run_ungrouped_health_tables() {
   local kind="$1" unassigned
-  unassigned="$(unassigned_schema_tables health "$kind" "${ALL_MODE_GROUPS[@]}" "${DAILY_ONLY_GROUPS[@]}")" || return 1
+  unassigned="$(unassigned_schema_tables health "$kind" "${YEAR_MODE_GROUPS[@]}" \
+    "${ONCE_MODE_GROUPS[@]}" "${DAILY_ONLY_GROUPS[@]}")" || return 1
 
   [ -n "$unassigned" ] || return 0
   log_info "$WORKER_ID: WARNING — health-schema.yaml declares tables in no worker group: ${unassigned}. Running them in health-ungrouped; assign them to a group in worker-health.sh."
@@ -223,19 +254,35 @@ run_ungrouped_health_tables() {
 
 case "$MODE" in
 
-  historical|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
-    # A bare year (2025) or range (2020-2023) narrows the backfill to that span so health
-    # advances with the year-major front; plain 'historical' = full 2010..current-1 backfill.
-    if [ "$MODE" != "historical" ]; then
-      export GOVDATA_START_YEAR="${MODE%-*}"
-      INCREMENTAL_YEAR=$(( ${MODE#*-} + 1 ))
-    fi
+  historical)
+    # Full 2010..current-1 backfill in one shot — ALL_MODE_GROUPS' old behavior, unchanged:
+    # every group runs exactly once regardless of year-partitioning, since this invocation
+    # itself only happens once.
     export GOVDATA_UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
     export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
     run_all_health_tables
+    run_ungrouped_health_tables year
+    ;;
+
+  [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+    # A bare year (2025) or range (2020-2023) narrows the backfill to that span so health
+    # advances with the year-major front. YEAR_MODE_GROUPS only — ONCE_MODE_GROUPS has nothing
+    # year-specific to do and is covered by its own `once` slot (run-pool.sh's
+    # `hcy_enqueue health once`), not by every year of this sweep.
+    export GOVDATA_START_YEAR="${MODE%-*}"
+    INCREMENTAL_YEAR=$(( ${MODE#*-} + 1 ))
+    export GOVDATA_UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
+    export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+    run_year_health_tables
     # Only year-addressable strays here: a snapshot table has nothing for a backfill to do, and
     # daily picks it up below on its own pass.
     run_ungrouped_health_tables year
+    ;;
+
+  once)
+    # ONCE_MODE_GROUPS only — the historical sweep's single non-year-scoped pass. Matches
+    # ag/disasters/housing/transport/environment/fiscal/census/banking's own `:once` slot.
+    run_once_health_tables
     ;;
 
   daily)
@@ -246,7 +293,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: daily, historical, a year (2025), or a range (2020-2023)" >&2
+    echo "Unknown mode: $MODE. Valid modes: daily, historical, once, a year (2025), or a range (2020-2023)" >&2
     exit 1
     ;;
 esac
