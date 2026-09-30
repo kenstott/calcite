@@ -70,7 +70,17 @@ def _rows(rs):
 
 def build_context(conn) -> tuple:
     """Introspect the Calcite JDBC connection. Returns (ctx, column_types dict)."""
+    ctx, column_types, _ = build_context_reporting_gaps(conn)
+    return ctx, column_types
+
+
+def build_context_reporting_gaps(conn) -> tuple:
+    """Like :func:`build_context`, plus the list of what the walk had to leave out:
+    ``"schema <name>"`` for a schema whose table listing failed, ``"table <s>.<t>"``
+    for a table whose columns could not be read. Empty means the catalog is complete.
+    Returns (ctx, column_types dict, gaps list)."""
     md = conn.getMetaData()
+    gaps: List[str] = []
     ctx = CompilationContext()
     column_types: Dict[int, List[ColumnMeta]] = {}
     # (schema, table) -> TableMeta, so FK targets resolve.
@@ -130,6 +140,7 @@ def build_context(conn) -> tuple:
             except Exception as e2:
                 log.warning("getTables(schema=%s) failed (%s: %s) — omitting this schema "
                             "from the catalog", schema_name, type(e2).__name__, e2)
+                gaps.append(f"schema {schema_name}")
                 continue
 
     # Columns per table.
@@ -171,6 +182,7 @@ def build_context(conn) -> tuple:
         except Exception as e:
             log.warning("getColumns failed for %s.%s (%s: %s) — leaving it column-less",
                         schema, name, type(e).__name__, e)
+            gaps.append(f"table {schema}.{name}")
             continue
 
     # Primary keys (empty for constraint-less adapters — reported as such).
@@ -227,7 +239,7 @@ def build_context(conn) -> tuple:
         len(ctx.pk_columns),
         len(ctx.joins),
     )
-    return ctx, column_types
+    return ctx, column_types, gaps
 
 
 def _enrich_keys_from_statistic(conn, ctx: CompilationContext, by_qualified) -> None:
@@ -456,10 +468,21 @@ def catalog_cache_path(model_path: str) -> str:
 
 def build_and_cache_context(conn, model_path: str):
     """Run the live JDBC/Iceberg discovery once and write the result to
-    :func:`catalog_cache_path`'s file, unconditionally (used by the seed-generation
-    script -- always regenerate, never trust a stale file on disk)."""
-    ctx, column_types = build_context(conn)
+    :func:`catalog_cache_path`'s file -- always regenerating, never trusting a stale
+    file on disk.
+
+    Only a complete walk is written. The cache has no invalidation other than a
+    model.json change, so a walk that had to leave a schema or table out (a
+    server still warming up, a schema whose listing threw) would otherwise be
+    served as the whole catalog on every later launch. A partial result is still
+    returned for this launch, and the next launch walks live again."""
+    ctx, column_types, gaps = build_context_reporting_gaps(conn)
     cache_path = catalog_cache_path(model_path)
+    if gaps:
+        log.error(
+            "Catalog walk was incomplete (%d gap(s): %s) -- NOT writing %s; the next "
+            "launch will walk live again", len(gaps), ", ".join(gaps), cache_path)
+        return ctx, column_types
     tmp_path = cache_path + ".tmp"
     with open(tmp_path, "wb") as f:
         pickle.dump((_CACHE_FORMAT_VERSION, ctx, column_types), f, protocol=pickle.HIGHEST_PROTOCOL)
