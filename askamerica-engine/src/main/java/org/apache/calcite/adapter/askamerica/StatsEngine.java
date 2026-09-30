@@ -39,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Multivariate regression and hypothesis-testing tools backed by Apache Commons Math, for
@@ -134,6 +135,7 @@ final class StatsEngine {
                 int droppedForNull = 0;
                 int labelIdx = labelColumnIndex(rs, idx);
                 List<String> droppedLabels = new ArrayList<>();
+                Set<String> usedLabels = new LinkedHashSet<>();
                 while (rs.next()) {
                     totalRows++;
                     if (totalRows > STATS_MAX_ROWS) {
@@ -156,10 +158,13 @@ final class StatsEngine {
                         noteDropped(droppedLabels, rs, labelIdx, totalRows);
                     } else {
                         rows.add(row);
+                        noteUsed(usedLabels, rs, labelIdx);
                     }
                 }
-                return new Extraction(columns, rows.toArray(new double[0][]), totalRows,
-                    droppedForNull, droppedLabels);
+                Extraction ex = new Extraction(columns, rows.toArray(new double[0][]),
+                    totalRows, droppedForNull, droppedLabels);
+                ex.setUsedLabels(labelIdx > 0 ? md.getColumnLabel(labelIdx) : null, usedLabels);
+                return ex;
             } finally {
                 rs.close();
             }
@@ -198,6 +203,7 @@ final class StatsEngine {
                 int totalRows = 0;
                 int droppedForNull = 0;
                 List<String> droppedLabels = new ArrayList<>();
+                Set<String> usedLabels = new LinkedHashSet<>();
                 while (rs.next()) {
                     totalRows++;
                     if (totalRows > STATS_MAX_ROWS) {
@@ -235,11 +241,17 @@ final class StatsEngine {
                     } else {
                         rows.add(row);
                         labelRows.add(labelRow);
+                        if (labelRow.length > 0) {
+                            usedLabels.add(labelRow[0]);
+                        }
                     }
                 }
-                return new LabeledExtraction(numericColumns, rows.toArray(new double[0][]),
-                    labelColumns, labelRows.toArray(new String[0][]), totalRows, droppedForNull,
+                LabeledExtraction ex = new LabeledExtraction(numericColumns,
+                    rows.toArray(new double[0][]), labelColumns,
+                    labelRows.toArray(new String[0][]), totalRows, droppedForNull,
                     droppedLabels);
+                ex.setUsedLabels(labelColumns.length > 0 ? labelColumns[0] : null, usedLabels);
+                return ex;
             } finally {
                 rs.close();
             }
@@ -256,6 +268,15 @@ final class StatsEngine {
         final int totalRows;
         final int droppedForNull;
         final List<String> droppedLabels;
+        /** Column the used labels come from; null when the result had none. */
+        String usedLabelColumn;
+        /** Distinct labels of the rows that survived complete-case filtering. */
+        Set<String> usedLabels = new LinkedHashSet<>();
+
+        void setUsedLabels(String column, Set<String> labels) {
+            this.usedLabelColumn = column;
+            this.usedLabels = labels;
+        }
 
         LabeledExtraction(String[] numericColumns, double[][] rows, String[] labelColumns,
                 String[][] labelRows, int totalRows, int droppedForNull) {
@@ -441,6 +462,10 @@ final class StatsEngine {
      *  that a 200k-row extraction ships a list nobody reads. */
     static final int MAX_DROPPED_LABELS = 25;
 
+    /** How many used units are named back to the caller; a 51-state or 3,000-county panel
+     *  fits, a 200k-row extraction does not ship them all. */
+    static final int MAX_USED_LABELS = 5000;
+
     /** The first string-typed column NOT among the requested numeric ones — a state name,
      *  a jurisdiction, a ticker — used to name a dropped row. -1 when the result carries no
      *  such column, in which case the row number stands in. */
@@ -477,6 +502,20 @@ final class StatsEngine {
         droppedLabels.add(label != null ? label : ("row " + rowNumber));
     }
 
+    /** Records the label of a row that survived filtering, so the result can name the units
+     *  the model actually ran on. Nothing is recorded without a label column — a row number
+     *  is no help in identifying a unit. */
+    static void noteUsed(Set<String> usedLabels, ResultSet rs, int labelIdx)
+            throws SQLException {
+        if (labelIdx <= 0) {
+            return;
+        }
+        String label = rs.getString(labelIdx);
+        if (label != null) {
+            usedLabels.add(label);
+        }
+    }
+
     static final class Extraction {
         final String[] columns;
         final double[][] rows;   // rows[i] is one observation, in `columns` order
@@ -484,6 +523,15 @@ final class StatsEngine {
         final int droppedForNull;
         /** Labels (or row numbers) of the first {@link #MAX_DROPPED_LABELS} dropped rows. */
         final List<String> droppedLabels;
+        /** Column the used labels come from; null when the result had no label column. */
+        String usedLabelColumn;
+        /** Distinct labels of the rows that survived complete-case filtering. */
+        Set<String> usedLabels = new LinkedHashSet<>();
+
+        void setUsedLabels(String column, Set<String> labels) {
+            this.usedLabelColumn = column;
+            this.usedLabels = labels;
+        }
 
         Extraction(String[] columns, double[][] rows, int totalRows, int droppedForNull) {
             this(columns, rows, totalRows, droppedForNull, new ArrayList<String>());

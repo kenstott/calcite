@@ -580,6 +580,29 @@ class StatsEngineTest {
         }
     }
 
+    @Test void extractColumnsNamesTheUnitsItKept() throws Exception {
+        try (Connection conn = openBareCalciteConnection()) {
+            String sql = "SELECT * FROM (VALUES ('CA', 1.0), ('TX', CAST(NULL AS DOUBLE)), "
+                + "('NY', 3.0)) AS t(state, val)";
+            StatsEngine.Extraction ex = StatsEngine.extractColumns(conn, sql, new String[]{"val"});
+            assertEquals("state", ex.usedLabelColumn);
+            assertEquals(Arrays.asList("CA", "NY"), new ArrayList<>(ex.usedLabels));
+            assertEquals(Arrays.asList("TX"), ex.droppedLabels);
+        }
+    }
+
+    @Test void extractColumnsWithLabelsReportsDistinctUnitsKept() throws Exception {
+        try (Connection conn = openBareCalciteConnection()) {
+            String sql = "SELECT * FROM (VALUES ('CA', '2020', 1.0), ('CA', '2021', 2.0), "
+                + "('TX', '2020', CAST(NULL AS DOUBLE)), ('NY', '2020', 3.0)) "
+                + "AS t(state, yr, val)";
+            StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(conn, sql,
+                new String[]{"val"}, new String[]{"state", "yr"});
+            assertEquals("state", ex.usedLabelColumn);
+            assertEquals(Arrays.asList("CA", "NY"), new ArrayList<>(ex.usedLabels));
+        }
+    }
+
     @Test void anovaDetectsGroupDifference() {
         Map<String, double[]> groups = new LinkedHashMap<>();
         groups.put("low", new double[]{1, 2, 1, 2, 1});

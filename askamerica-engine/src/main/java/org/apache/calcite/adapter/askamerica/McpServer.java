@@ -11623,6 +11623,7 @@ public class McpServer {
         out.put("rows_returned_by_sql", totalRows);
         out.put("rows_dropped_for_null", droppedForNull);
         out.put("never_treated_rows", neverTreatedRows);
+        addUsedUnits(out, unitCol, new java.util.LinkedHashSet<>(units));
         return new StatsOutput(out.toString(), diagnoseStats(sql,
             java.util.Collections.<String>emptyList(), null, ys.size(), totalRows,
             droppedForNull));
@@ -12350,6 +12351,31 @@ public class McpServer {
         out.put("rows_returned_by_sql", ex.totalRows);
         out.put("rows_dropped_for_null", ex.droppedForNull);
         addDroppedExamples(out, ex.droppedLabels, ex.droppedForNull);
+        addUsedUnits(out, ex.usedLabelColumn, ex.usedLabels);
+    }
+
+    /** Which units the model actually ran on — the distinct values of the result's label
+     *  column among rows that survived complete-case filtering — so a run can be reproduced
+     *  from its own response rather than by re-running the SQL. */
+    private static void addUsedUnits(ObjectNode out, String column,
+            java.util.Set<String> labels) {
+        if (column == null || labels.isEmpty()) {
+            return;
+        }
+        out.put("units_used_column", column);
+        out.put("units_used_count", labels.size());
+        ArrayNode arr = out.putArray("units_used");
+        int shown = 0;
+        for (String l : labels) {
+            if (shown++ >= StatsEngine.MAX_USED_LABELS) {
+                break;
+            }
+            arr.add(l);
+        }
+        if (labels.size() > StatsEngine.MAX_USED_LABELS) {
+            out.put("units_used_note", "first " + StatsEngine.MAX_USED_LABELS + " of "
+                + labels.size() + " distinct units");
+        }
     }
 
     /** Which rows complete-case filtering removed, by label — so "n=45 of 51" comes with
@@ -12374,6 +12400,7 @@ public class McpServer {
         out.put("rows_returned_by_sql", ex.totalRows);
         out.put("rows_dropped_for_null", ex.droppedForNull);
         addDroppedExamples(out, ex.droppedLabels, ex.droppedForNull);
+        addUsedUnits(out, ex.usedLabelColumn, ex.usedLabels);
     }
 
     /** Base for the AskAmerica API — system property, then env, then production. */
