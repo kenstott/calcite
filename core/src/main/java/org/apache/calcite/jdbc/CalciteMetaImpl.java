@@ -74,6 +74,8 @@ import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.sql.Connection;
@@ -85,6 +87,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
@@ -94,6 +97,8 @@ import static java.util.Objects.requireNonNull;
  * {@link org.apache.calcite.avatica.AvaticaDatabaseMetaData#getTables}.
  */
 public class CalciteMetaImpl extends MetaImpl {
+  private static final Logger LOGGER = LoggerFactory.getLogger(CalciteMetaImpl.class);
+
   static final Driver DRIVER = new Driver();
 
   private final CalciteMetaTableFactory metaTableFactory;
@@ -442,15 +447,20 @@ public class CalciteMetaImpl extends MetaImpl {
 
   Enumerable<MetaTable> tables(final MetaSchema schema_, LikePattern tableNamePattern) {
     final CalciteMetaSchema schema = (CalciteMetaSchema) schema_;
+    // A schema may list a name it can only resolve lazily (e.g. a deferred view created on first
+    // lookup); if that lookup fails the name is skipped, not fatal to the whole enumeration.
     return Linq4j.asEnumerable(schema.calciteSchema.getTableNames(tableNamePattern))
         .select(name -> {
-          final Table table =
-              requireNonNull(schema.calciteSchema.getTable(name, true),
-                  () -> "table " + name + " is not found (case sensitive)")
-                  .getTable();
-          return metaTableFactory.createTable(table, schema.tableCatalog,
+          final CalciteSchema.TableEntry entry = schema.calciteSchema.getTable(name, true);
+          if (entry == null) {
+            LOGGER.warn("Skipping table {}.{}: listed by its schema but not resolvable",
+                schema.tableSchem, name);
+            return null;
+          }
+          return metaTableFactory.createTable(entry.getTable(), schema.tableCatalog,
               schema.tableSchem, name);
         })
+        .where(Objects::nonNull)
         .concat(
             Linq4j.asEnumerable(
                 schema.calciteSchema.getTablesBasedOnNullaryFunctions()
