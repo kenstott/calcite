@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.100.1](https://github.com/kenstott/calcite/compare/engine-v0.100.0...engine-v0.100.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** identify the pgwire port holder by its listener, wait on a still-starting one ([aa8c0c7](https://github.com/kenstott/calcite/commit/aa8c0c75e6669a1e6d25c168868d9b15814e97fd))
+* **askamerica-engine:** keep a running pgwire-govdata server's R2 credentials from expiring ([1daf202](https://github.com/kenstott/calcite/commit/1daf202be4ac926e154cd4a68e0e0b13d72c51ad))
+* **ci:** refuse to ship a pgwire-govdata catalog cache that doesn't match model.json ([b6af883](https://github.com/kenstott/calcite/commit/b6af883cb544fec7c84c59f675a8e21d70e7a35e))
+* **core:** drop a snapshotted table name that fails to resolve from later listings ([1676a0f](https://github.com/kenstott/calcite/commit/1676a0f07ab30e254c844d143e8cb6bbd00f3aec))
+* **file:** let every S3 consumer take a rotated credential set in place ([e4c3607](https://github.com/kenstott/calcite/commit/e4c360727434e51389a7a5f71f969a582b3a37eb))
+* **file:** resolve a DuckDB view created on demand instead of reporting it not found ([852a8b4](https://github.com/kenstott/calcite/commit/852a8b4190938a1c33b77c990569df01d5e9e409))
+* **file:** stop listing a DuckDB view whose on-demand CREATE failed ([e91ef0e](https://github.com/kenstott/calcite/commit/e91ef0e8e9e047086831f38184e72b4a3daaef9b))
+* **file:** stop listing omitted Iceberg tables in DuckDB schema table names ([b8497c5](https://github.com/kenstott/calcite/commit/b8497c5fe2fa11d2d055eb14d39cc4dbd7c83d1b))
+* **govdata:** fetch fresh R2 credentials when the cached set is too short-lived to use ([e577fb1](https://github.com/kenstott/calcite/commit/e577fb1223536c222e4b11449e5fb5d56e9a261a))
+* **pgwire-calcite:** list a schema again when a view fails its first resolution ([81c837a](https://github.com/kenstott/calcite/commit/81c837a308e312bd78b47b5ddd8474d71c70f8c3))
+* **pgwire-calcite:** never write a partial catalog walk to the disk cache ([631f071](https://github.com/kenstott/calcite/commit/631f071cf73ecae0e50bc6fbd6d20846673d83d3))
+* **pgwire-govdata:** rotate the server's R2 credentials in place and ship the matching catalog cache ([573d23b](https://github.com/kenstott/calcite/commit/573d23b3ad1c247285ae6621c9fe639803f4808e))
+
 ## [0.100.0](https://github.com/kenstott/calcite/compare/engine-v0.99.2...engine-v0.100.0) (2026-09-29)
 
 
