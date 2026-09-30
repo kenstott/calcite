@@ -585,7 +585,7 @@ class StatsEngineTest {
             String sql = "SELECT * FROM (VALUES ('CA', 1.0), ('TX', CAST(NULL AS DOUBLE)), "
                 + "('NY', 3.0)) AS t(state, val)";
             StatsEngine.Extraction ex = StatsEngine.extractColumns(conn, sql, new String[]{"val"});
-            assertEquals("state", ex.usedLabelColumn);
+            assertEquals("STATE", ex.usedLabelColumn);
             assertEquals(Arrays.asList("CA", "NY"), new ArrayList<>(ex.usedLabels));
             assertEquals(Arrays.asList("TX"), ex.droppedLabels);
         }
