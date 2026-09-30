@@ -863,6 +863,13 @@ final class QuestionDiagnostics {
      *                  read as a complete count of units
      */
     static ObjectNode forQuery(Connection conn, String sql, ArrayNode rows, int rowLimit) {
+        return forQuery(conn, sql, rows, rowLimit, null);
+    }
+
+    /** {@link #forQuery(Connection, String, ArrayNode, int)} with a runner that lets
+     *  {@code explicit_exclusion} name the units its predicates removed. */
+    static ObjectNode forQuery(Connection conn, String sql, ArrayNode rows, int rowLimit,
+            ExclusionProbe.SqlRunner runner) {
         ArrayNode warnings = MAPPER.createArrayNode();
         List<String> columns = columnsOf(rows);
         String grain = grainOf(columns);
@@ -882,7 +889,7 @@ final class QuestionDiagnostics {
         geographyLevelMixing(sql, rows, columns, warnings);
         rollupContamination(sql, rows, columns, warnings);
         nameMatchingWithoutResolution(sql, warnings);
-        explicitExclusion(sql, warnings);
+        explicitExclusion(sql, rows, runner, warnings);
 
         ObjectNode out = envelope(warnings);
         ObjectNode diag = (ObjectNode) out.get("diagnostics");
@@ -966,7 +973,8 @@ final class QuestionDiagnostics {
      * recipe for this (report-what-an-exclusion-changed-not-only-that-you-made-one); this puts
      * the same rule at the point of use, on the result the exclusion produced.
      */
-    static void explicitExclusion(String sql, ArrayNode warnings) {
+    static void explicitExclusion(String sql, ArrayNode originalRows,
+            ExclusionProbe.SqlRunner runner, ArrayNode warnings) {
         if (sql == null) {
             return;
         }
@@ -1010,6 +1018,7 @@ final class QuestionDiagnostics {
                 + "that test exists to catch." : ""));
         w.set("predicates", predicates);
         w.put("recipe", "report-what-an-exclusion-changed-not-only-that-you-made-one");
+        ExclusionProbe.annotate(w, sql, originalRows, diffAliases, runner);
         warnings.add(w);
     }
 
@@ -1502,10 +1511,19 @@ final class QuestionDiagnostics {
     static ObjectNode forExtraction(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped,
             List<String> droppedLabels) {
+        return forExtraction(sql, covariates, covariateCols, n, totalRows, dropped,
+            droppedLabels, null);
+    }
+
+    /** As above, with a runner that lets {@code explicit_exclusion} name the units its
+     *  predicates removed. */
+    static ObjectNode forExtraction(String sql, List<String> covariates,
+            double[][] covariateCols, int n, int totalRows, int dropped,
+            List<String> droppedLabels, ExclusionProbe.SqlRunner runner) {
         ArrayNode warnings = MAPPER.createArrayNode();
 
         sampleAttrition(totalRows, dropped, droppedLabels, warnings);
-        explicitExclusion(sql, warnings);
+        explicitExclusion(sql, null, runner, warnings);
 
         if (n > 0 && n <= SMALL_N) {
             ObjectNode w = warning("small_n", CAUTION,

@@ -6187,6 +6187,9 @@ public class McpServer {
                 if ("explicit_exclusion".equals(type) && w.has("predicates")) {
                     e.set("exclusions", w.get("predicates"));
                 }
+                if ("explicit_exclusion".equals(type) && w.has("excluded_units")) {
+                    e.set("excluded_units", w.get("excluded_units"));
+                }
                 if ("sample_attrition".equals(type) && w.has("dropped_units")) {
                     e.set("dropped_units", w.get("dropped_units"));
                 }
@@ -6878,6 +6881,9 @@ public class McpServer {
                 keyTermByPredicate.put(pred, im.find() ? im.group(1) : pred.trim());
             }
             for (JsonNode u : e.path("dropped_units")) {
+                units.add(u.asText());
+            }
+            for (JsonNode u : e.path("excluded_units")) {
                 units.add(u.asText());
             }
         }
@@ -11790,7 +11796,8 @@ public class McpServer {
      */
     private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit) {
         try {
-            return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit);
+            return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit,
+                relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
         // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
         // with a successful diagnostics result.
         // fallback-guard: allow -- explicit failure sentinel, see comment above
@@ -12014,7 +12021,8 @@ public class McpServer {
             List<String> droppedLabels) {
         try {
             return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
-                totalRows, dropped, droppedLabels);
+                totalRows, dropped, droppedLabels,
+                relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
         // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
         // with a successful diagnostics result.
         // fallback-guard: allow -- explicit failure sentinel, see comment above
