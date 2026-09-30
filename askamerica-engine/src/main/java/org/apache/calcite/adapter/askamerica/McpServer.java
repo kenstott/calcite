@@ -3604,7 +3604,7 @@ public class McpServer {
                         ? Math.min(Math.max(1, args.get("limit").asInt()), 20)
                         : 5;
                     log.println("[askamerica-mcp] tool=find_recipe topic=" + topic);
-                    RECIPE_CONSULTED.set(true);
+                    markRecipeConsulted();
                     text = RecipeCatalog.find(topic, lim);
                     break;
                 }
@@ -5957,6 +5957,41 @@ public class McpServer {
     private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_CONSULTED =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    /**
+     * How long a recorded find_recipe call keeps counting as consulted across process restarts.
+     * A host that drops and re-spawns the stdio process mid-task starts a fresh process for the
+     * same working session, so the in-memory flag alone would re-fire the warning for a caller
+     * that already did the right thing; the marker file carries it over, bounded so a later,
+     * unrelated session still gets prompted.
+     */
+    private static final long RECIPE_CONSULTED_TTL_MILLIS = TimeUnit.HOURS.toMillis(4);
+
+    private static java.io.File recipeConsultedMarker() {
+        return new java.io.File(System.getProperty("user.home"), ".askamerica/recipe-consulted");
+    }
+
+    private static boolean recipeConsulted() {
+        if (RECIPE_CONSULTED.get()) {
+            return true;
+        }
+        long markedAt = recipeConsultedMarker().lastModified();
+        return markedAt > 0 && System.currentTimeMillis() - markedAt < RECIPE_CONSULTED_TTL_MILLIS;
+    }
+
+    private static void markRecipeConsulted() {
+        RECIPE_CONSULTED.set(true);
+        try {
+            java.io.File marker = recipeConsultedMarker();
+            java.io.File dir = marker.getParentFile();
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            java.nio.file.Files.write(marker.toPath(), new byte[0]);
+        } catch (java.io.IOException e) {
+            log.println("[askamerica-mcp] recipe-consulted marker write failed: " + e.getMessage());
+        }
+    }
+
     /** Below this confidence (on either the verdict or the Pinocchios score), a
      *  {@code score_claim} result counts as unresolved rather than a real second opinion. */
     private static final double SCORE_CLAIM_CONFIDENCE_THRESHOLD = 0.6;
@@ -6769,7 +6804,7 @@ public class McpServer {
      * that never checked.
      */
     private static String enforceRecipeConsulted() {
-        if (RECIPE_CONSULTED.get()) {
+        if (recipeConsulted()) {
             return null;
         }
         java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
@@ -12110,7 +12145,7 @@ public class McpServer {
      * re-query rather than caveat, which is exactly the action wanted here.
      */
     private static void addRecipeNotice(ObjectNode diagnostics, String sql) {
-        if (diagnostics == null || RECIPE_CONSULTED.get() || !isMultiStepShape(sql)) {
+        if (diagnostics == null || recipeConsulted() || !isMultiStepShape(sql)) {
             return;
         }
         ObjectNode inner = diagnostics.get("diagnostics") instanceof ObjectNode
@@ -12196,7 +12231,7 @@ public class McpServer {
      * @return the envelope, or null when already reminded or find_recipe was already called
      */
     private static ObjectNode recipeReminderDiagnostics() {
-        if (RECIPE_CONSULTED.get() || !RECIPE_REMINDED.compareAndSet(false, true)) {
+        if (recipeConsulted() || !RECIPE_REMINDED.compareAndSet(false, true)) {
             return null;
         }
         ObjectNode envelope = MAPPER.createObjectNode();
