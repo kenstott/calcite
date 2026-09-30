@@ -1413,6 +1413,25 @@ public class McpServer {
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
+        ObjectNode datasetProps = MAPPER.createObjectNode();
+        datasetProps.set("name", prop("string",
+            "Dataset name: lowercase letters, digits and underscores, e.g. 'panel'."));
+        datasetProps.set("sql", prop("string",
+            "The SELECT (or WITH ... SELECT) that defines the dataset. It may reference "
+            + "datasets registered earlier. It is not executed at registration."));
+        tools.add(
+            tool("define_dataset",
+            "Register a SELECT once under a name for this session, then use the name as a "
+            + "table in FROM/JOIN of any later call — query, critique_query and every "
+            + "statistics tool's sql argument — instead of pasting the same SQL each time. "
+            + "e.g. define_dataset(name='panel', sql='SELECT ...') then "
+            + "ols_regression(sql='SELECT * FROM panel', ...). The name is expanded to the "
+            + "identical WITH clause in every call, so all analyses provably run on the same "
+            + "dataset. Re-registering a name replaces it for later calls only. Nothing is "
+            + "created in the warehouse and the registry ends with the session. The SQL is "
+            + "validated when first used, not when registered.",
+            schema(datasetProps, new String[]{"name", "sql"})));
+
         ObjectNode critiqueProps = MAPPER.createObjectNode();
         critiqueProps.set("sql", prop("string",
             "The SQL you are about to run. It is not executed."));
@@ -3304,6 +3323,8 @@ public class McpServer {
         return ready;
     }
 
+    private static final DatasetRegistry DATASETS = new DatasetRegistry();
+
     private static ObjectNode handleToolsCall(JsonNode id, JsonNode params) throws Exception {
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
@@ -3326,6 +3347,10 @@ public class McpServer {
             // exception escaped the handler and the caller was answered with nothing at all.
             applyArgAliases(name, args);
             validateArgs(name, args);
+            if (!"define_dataset".equals(name) && args.isObject()
+                && args.path("sql").isTextual()) {
+                ((ObjectNode) args).put("sql", DATASETS.expand(args.get("sql").asText()));
+            }
             switch (name) {
                 case "list_schemas":
                     log.println("[askamerica-mcp] tool=list_schemas");
@@ -3413,6 +3438,14 @@ public class McpServer {
                     text = rows.toString();
                     diagnostics = diagnose(sql, rows, limit);
                     addRecipeNotice(diagnostics, sql);
+                    break;
+                }
+                case "define_dataset": {
+                    String datasetName = args.path("name").asText();
+                    log.println("[askamerica-mcp] tool=define_dataset name=" + datasetName);
+                    DATASETS.define(datasetName, args.path("sql").asText());
+                    text = "Dataset '" + datasetName.trim().toLowerCase(java.util.Locale.ROOT)
+                        + "' registered. Registered datasets: " + DATASETS.names();
                     break;
                 }
                 case "critique_query": {
