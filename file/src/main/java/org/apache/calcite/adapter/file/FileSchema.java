@@ -2472,8 +2472,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * One declared table's Iceberg location, computed purely from its own config (the ETL writer's
    * warehousePath/tableName convention — see {@code IcebergMaterializationWriter}) — no I/O, no
    * catalog lookup. Returns null when the table's config doesn't resolve one this cheaply: not
-   * materialize:iceberg, disabled, or missing altogether. A null here means the caller must fall
-   * back to {@link #getDeclaredTable} to resolve the table the normal way.
+   * materialize:iceberg, explicitly disabled ({@code enabled: false}), or missing altogether. A
+   * null here means the caller must fall back to {@link #getDeclaredTable} to resolve the table
+   * the normal way.
    */
   @SuppressWarnings("unchecked")
   public @Nullable String declaredIcebergTablePath(String tableName) {
@@ -2486,7 +2487,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       return null;
     }
     Map<String, Object> materializeConf = (Map<String, Object>) materializeObj;
-    if (!Boolean.TRUE.equals(materializeConf.get("enabled"))) {
+    // Absent means enabled, exactly as MaterializeConfig.fromMap reads it. Requiring an explicit
+    // "enabled: true" sent every table that omits the key (352 of govdata's 537 Iceberg tables)
+    // down the eager per-table path, an object-store round trip each: ~4 of the ~4.5 minutes a
+    // pgwire-govdata server took to start on 2026-10-01.
+    if (Boolean.FALSE.equals(materializeConf.get("enabled"))) {
       return null;
     }
     if (!"iceberg".equals(materializeConf.get("format"))) {
