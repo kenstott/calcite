@@ -10,7 +10,6 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,10 +18,10 @@ import java.util.List;
 
 /**
  * The destination-neutral report payload: the same narrative sections and dashboard panels
- * {@code publish_report} takes, restated as data plus prescriptive layout hints for a chatbot
+ * {@code preview_report} takes, restated as data plus prescriptive layout hints for a chatbot
  * that draws the charts itself (for example as a Claude Artifact).
  *
- * <p>Panels are read by the same reader {@code publish_report} and {@code compose_dashboard}
+ * <p>Panels are read by the same reader {@code preview_report} and {@code compose_dashboard}
  * use, so one report object drives both destinations without reshaping. The hints are computed
  * only from the panel data: a chatbot never has to read diagnostics to decide how to present a
  * value, and a missing value is passed through as a distinct suppressed cell rather than a
@@ -39,13 +38,13 @@ final class ReportArtifact {
     private ReportArtifact() {
     }
 
-    /** Builds the payload; {@code sections} and {@code panels} may be empty, never null; {@code sources}
-     *  is echoed unchanged. */
+    /** Builds the payload; {@code sections}, {@code sources} and {@code panels} may be empty,
+     *  never null. */
     static ObjectNode build(String title, String subtitle, String footnote, String byline,
-            List<ReportPage.Section> sections, List<DashboardLayout.Panel> panels, int columns,
-            JsonNode sources) {
+            List<ReportPage.Section> sections, List<ReportPage.Source> sources,
+            List<DashboardLayout.Panel> panels, int columns) {
         ObjectNode out = MAPPER.createObjectNode();
-        out.put("schema_version", 2);
+        out.put("schema_version", 1);
         putIfPresent(out, "title", title);
         putIfPresent(out, "subtitle", subtitle);
         putIfPresent(out, "footnote", footnote);
@@ -57,7 +56,16 @@ final class ReportArtifact {
             putIfPresent(n, "heading", s.heading);
             n.put("html", s.html);
         }
-        out.set("sources", sources.isArray() ? sources.deepCopy() : MAPPER.createArrayNode());
+        ArrayNode srcs = out.putArray("sources");
+        for (ReportPage.Source s : sources) {
+            ObjectNode n = srcs.addObject();
+            putIfPresent(n, "label", s.label);
+            putIfPresent(n, "url", s.url);
+            putIfPresent(n, "note", s.note);
+            putIfPresent(n, "sql", s.sql);
+            putIfPresent(n, "tool", s.tool);
+            putIfPresent(n, "params", s.toolParams);
+        }
         ArrayNode ps = out.putArray("panels");
         for (DashboardLayout.Panel p : panels) {
             ps.add(panel(p));

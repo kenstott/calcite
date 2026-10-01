@@ -194,7 +194,7 @@ final class ClaimsServer {
     }
 
     /** Records a validation for the extension to find by article URL. Best-effort: a storage
-     *  failure is logged, not thrown -- publish_report's own success already happened, and a
+     *  failure is logged, not thrown -- preview_report's own success already happened, and a
      *  reader losing the extension overlay is a lesser failure than the whole publish erroring
      *  out over a problem in a side table. */
     static void record(String sourceUrl, String title, String reportUrl, JsonNode claims) {

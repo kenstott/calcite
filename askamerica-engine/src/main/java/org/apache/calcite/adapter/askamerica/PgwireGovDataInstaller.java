@@ -24,6 +24,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,6 +33,7 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -54,6 +57,15 @@ import java.util.regex.Pattern;
  * open keeps working until it is replaced. Installs are serialized across processes by a
  * file lock. When an update cannot be completed and a working bundle exists, the working
  * bundle is kept and the failure is reported, never silently absorbed.
+ *
+ * <p>An update never delays a spawn. The bundle is 900 MB; fetched before the server starts it
+ * held every query for the length of the download, and Claude Desktop restarting the connector
+ * restarted it from zero (observed 2026-09-30, 0.102.0 superseded by 0.103.0, ~50 minutes at
+ * 300 KB/s). So while a working bundle exists the server is spawned from it, and the new
+ * release is downloaded (resuming a partial file), verified and extracted on a background
+ * thread into a sibling {@code .ready-<version>} directory. The next spawn — the only moment no
+ * server is running on the old files — swaps it in by rename. Only a machine with no bundle at
+ * all waits for the download.
  *
  * <p>An operator-supplied {@code ASKAMERICA_PGWIRE_LAUNCHER} or an installer-bundled copy is
  * never touched: those are resolved before this class is reached.
@@ -109,11 +121,17 @@ final class PgwireGovDataInstaller {
      * to throws {@link InstallFailedException} with the specific cause.
      */
     static File ensureLauncher() {
-        Path dir = cacheDir();
+        return ensureLauncher(cacheDir(), ownEngineVersion(), PgwireGovDataInstaller::startDaemon);
+    }
+
+    /** {@link #ensureLauncher()} over an explicit bundle directory and engine release, with the
+     *  executor that runs a background update, so a test can observe one being scheduled
+     *  without it reaching the network. */
+    static File ensureLauncher(Path dir, String own, Executor background) {
         File existing = launcherPath(dir);
         boolean have = existing.isFile();
         String installed = have ? readMarker(dir) : null;
-        if (have && installed != null && ownEngineVersion() == null) {
+        if (have && installed != null && own == null) {
             // A local build has no release of its own to match, and asking GitHub for the latest
             // one on every spawn runs into its unauthenticated rate limit (60 an hour) under a
             // test suite. A stamped bundle is a real release, so keep it; only an unstamped or
@@ -122,7 +140,7 @@ final class PgwireGovDataInstaller {
         }
         String target;
         try {
-            target = targetVersion();
+            target = targetVersion(own);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -145,25 +163,117 @@ final class PgwireGovDataInstaller {
                 + target + ") — keeping it; an older engine never downgrades the shared bundle.");
             return existing;
         }
-        try {
-            File launcher = installUnderLock(dir, target);
-            if (launcher == null) {
-                if (have) {
-                    report("No pgwire-govdata asset for this OS in release " + target
-                        + " — keeping the installed bundle (" + describe(installed) + ").");
-                    return existing;
-                }
+        if (action == Action.INSTALL) {
+            return installUnderLock(dir, target);
+        }
+        File adopted = adoptPrepared(dir, target);
+        if (adopted != null) {
+            return adopted;
+        }
+        report("Installed pgwire-govdata (" + describe(installed) + ") is older than this "
+            + "engine's " + target + " — starting the server from it while " + target
+            + " downloads in the background. Until then it may lack schemas or columns the "
+            + "engine expects.");
+        background.execute(() -> updateInBackground(dir, target));
+        return existing;
+    }
+
+    private static void startDaemon(Runnable task) {
+        Thread t = new Thread(task, "askamerica-pgwire-bundle-update");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Where a downloaded, verified and extracted release waits to be swapped in. */
+    static Path readyDir(Path dir, String version) {
+        return dir.resolveSibling(dir.getFileName() + ".ready-" + version);
+    }
+
+    /** True once {@link #updateInBackground} has finished preparing {@code version}: the
+     *  directory only ever appears by rename of a complete, stamped extraction. */
+    static boolean isPrepared(Path dir, String version) {
+        Path ready = readyDir(dir, version);
+        return launcherPath(ready).isFile() && version.equals(readMarker(ready));
+    }
+
+    /**
+     * Swaps a prepared release in and returns its launcher, or null when there is none to
+     * adopt yet. Uses {@code tryLock}: a held lock means another process is installing or
+     * adopting right now, and a spawn must not wait on it.
+     */
+    static File adoptPrepared(Path dir, String version) {
+        if (!isPrepared(dir, version)) {
+            return null;
+        }
+        Path lockFile = lockFile(dir);
+        try (FileChannel ch = FileChannel.open(lockFile,
+                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = tryLock(ch)) {
+            if (lock == null) {
                 return null;
             }
-            return launcher;
-        } catch (InstallFailedException e) {
-            if (have) {
-                report("pgwire-govdata update to " + target + " FAILED (" + e.getMessage()
-                    + ") — keeping the installed bundle (" + describe(installed) + "). It is "
-                    + "older than this engine and may lack schemas or columns the engine expects.");
-                return existing;
+            if (decide(launcherPath(dir).isFile(), readMarker(dir), version) != Action.UPDATE) {
+                // Another process adopted it while this one waited for the lock.
+                return launcherPath(dir);
             }
-            throw e;
+            if (!isPrepared(dir, version)) {
+                return null;
+            }
+            swapIn(readyDir(dir, version), dir);
+            report("pgwire-govdata updated to " + version + " at " + launcherPath(dir));
+            return launcherPath(dir);
+        } catch (IOException e) {
+            report("Could not swap in the downloaded pgwire-govdata " + version + " ("
+                + e.getMessage() + ") — keeping the installed bundle; the next spawn retries.");
+            return null;
+        }
+    }
+
+    /**
+     * Downloads, verifies and extracts {@code version} into {@link #readyDir} while the server
+     * runs on the installed bundle. Uses {@code tryLock}: another process holding the lock is
+     * already preparing or installing, and waiting on it would only duplicate that work.
+     */
+    static void updateInBackground(Path dir, String version) {
+        Path lockFile = lockFile(dir);
+        try (FileChannel ch = FileChannel.open(lockFile,
+                 StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock lock = tryLock(ch)) {
+            if (lock == null) {
+                report("Another AskAmerica process is already updating pgwire-govdata — "
+                    + "skipping.");
+                return;
+            }
+            if (decide(launcherPath(dir).isFile(), readMarker(dir), version) != Action.UPDATE
+                || isPrepared(dir, version)) {
+                return;
+            }
+            Path staging = prepareRelease(dir, version);
+            if (staging == null) {
+                return;
+            }
+            Files.move(staging, readyDir(dir, version),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            report("pgwire-govdata " + version + " downloaded and verified — it replaces the "
+                + "installed bundle the next time the server is started.");
+        } catch (InstallFailedException | IOException e) {
+            report("Background pgwire-govdata update to " + version + " FAILED ("
+                + e.getMessage() + ") — the installed bundle stays in service; the next spawn "
+                + "retries, resuming any partial download.");
+        }
+    }
+
+    private static Path lockFile(Path dir) {
+        return dir.resolveSibling(dir.getFileName() + ".install.lock");
+    }
+
+    /** {@code tryLock} that also answers null when another thread of THIS process holds the
+     *  lock, which the JDK reports as an exception rather than as a lock not acquired. */
+    private static FileLock tryLock(FileChannel ch) throws IOException {
+        try {
+            return ch.tryLock();
+        } catch (java.nio.channels.OverlappingFileLockException e) {
+            return null;
         }
     }
 
@@ -209,8 +319,7 @@ final class PgwireGovDataInstaller {
      * else (a local build with no stamped bundle yet) the newest published release. Throws when
      * neither can be read.
      */
-    static String targetVersion() throws IOException, InterruptedException {
-        String own = ownEngineVersion();
+    static String targetVersion(String own) throws IOException, InterruptedException {
         if (own != null) {
             return own;
         }
@@ -283,31 +392,77 @@ final class PgwireGovDataInstaller {
     }
 
     /**
-     * Installs {@code version} under a cross-process file lock, re-checking inside the lock so a
-     * process that waited while another one installed the same release does not repeat it.
+     * Installs {@code version} where there is no bundle at all, under a cross-process file
+     * lock, re-checking inside the lock so a process that waited while another one installed
+     * the same release does not repeat it. Returns null when that release publishes no asset
+     * for this OS.
      */
     private static File installUnderLock(Path dir, String version) {
-        Path lockFile = dir.resolveSibling(dir.getFileName() + ".install.lock");
+        Path lockFile = lockFile(dir);
         try {
             Files.createDirectories(lockFile.getParent());
-            try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(lockFile,
+            try (FileChannel ch = FileChannel.open(lockFile,
                      StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 java.nio.channels.FileLock ignored = ch.lock()) {
+                 FileLock ignored = ch.lock()) {
                 File now = launcherPath(dir);
-                if (now.isFile() && decide(true, readMarker(dir), version) != Action.UPDATE) {
+                if (now.isFile()) {
                     return now;
                 }
-                return installRelease(dir, version);
+                Path staging = prepareRelease(dir, version);
+                if (staging == null) {
+                    return null;
+                }
+                swapIn(staging, dir);
+                report("pgwire-govdata " + version + " ready at " + launcherPath(dir));
+                return launcherPath(dir);
             }
         } catch (IOException e) {
-            throw new InstallFailedException("Could not lock " + lockFile + " to install "
-                + "pgwire-govdata: " + e.getMessage(), e);
+            throw new InstallFailedException("Could not install pgwire-govdata " + version
+                + " under " + lockFile + ": " + e.getMessage(), e);
         }
     }
 
-    /** Downloads, verifies, stages and swaps in the bundle of release {@code version}. Returns
-     *  null when that release publishes no asset for this OS. */
-    private static File installRelease(Path dir, String version) {
+    /** The partial download of {@code version}; a stable name, so an interrupted download is
+     *  resumed by the next attempt instead of restarted. */
+    static Path partFile(Path dir, String version, String variant) {
+        return dir.resolveSibling(dir.getFileName() + "-" + version + "-" + variant
+            + ".tar.gz.part");
+    }
+
+    /**
+     * Removes what a killed install left beside {@code dir}: staging directories, partial
+     * downloads other than {@code keepPart}, and prepared releases other than {@code version}.
+     * The caller must hold the install lock, which makes it the only writer of these.
+     */
+    static void removeOrphans(Path dir, String version, Path keepPart) throws IOException {
+        String name = dir.getFileName().toString();
+        java.util.List<Path> orphans = new java.util.ArrayList<>();
+        try (java.util.stream.Stream<Path> siblings = Files.list(dir.toAbsolutePath().getParent())) {
+            siblings.forEach(p -> {
+                String n = p.getFileName().toString();
+                boolean staging = n.startsWith(name + ".staging-");
+                boolean part = n.startsWith(name + "-") && n.endsWith(".tar.gz.part")
+                    && !p.equals(keepPart);
+                boolean otherReady = n.startsWith(name + ".ready-")
+                    && !n.equals(name + ".ready-" + version);
+                if (staging || part || otherReady) {
+                    orphans.add(p);
+                }
+            });
+        }
+        for (Path p : orphans) {
+            deleteRecursively(p);
+            report("Removed leftover " + p.getFileName() + " from an interrupted install.");
+        }
+    }
+
+    /**
+     * Downloads, verifies and extracts the bundle of release {@code version} into a staging
+     * directory beside {@code dir} and returns it, stamped and ready to be renamed into place.
+     * Returns null when that release publishes no asset for this OS. The caller must hold the
+     * install lock.
+     */
+    private static Path prepareRelease(Path dir, String version) {
         String variant = osVariant();
         String json;
         try {
@@ -328,17 +483,22 @@ final class PgwireGovDataInstaller {
         report("Downloading pgwire-govdata " + version + " (" + variant + ") from " + assetUrl);
         Path staging = dir.resolveSibling(dir.getFileName() + ".staging-"
             + ProcessHandle.current().pid());
+        Path part = partFile(dir, version, variant);
         try {
-            deleteRecursively(staging);
-            Path tmp = Files.createTempFile("pgwire-govdata-", ".tar.gz");
+            removeOrphans(dir, version, part);
+            // A failed download keeps the partial file so the next attempt resumes it.
+            download(assetUrl, part);
             try {
-                download(assetUrl, tmp);
-                verifySha256(tmp, expectedSha256);
+                verifySha256(part, expectedSha256);
                 Files.createDirectories(staging);
-                extract(tmp, staging);
-            } finally {
-                Files.deleteIfExists(tmp);
+                extract(part, staging);
+            } catch (IOException | InterruptedException e) {
+                // A complete file that fails verification or extraction can never succeed on a
+                // retry; discard it so the next attempt downloads afresh.
+                Files.deleteIfExists(part);
+                throw e;
             }
+            Files.deleteIfExists(part);
             File staged = launcherPath(staging);
             if (!staged.isFile()) {
                 throw new IOException("the extracted bundle has no launcher at " + staged
@@ -348,7 +508,7 @@ final class PgwireGovDataInstaller {
                 staged.setExecutable(true);
             }
             Files.writeString(staging.resolve(MARKER), version);
-            swapIn(staging, dir);
+            return staging;
         } catch (Exception e) {
             try {
                 deleteRecursively(staging);
@@ -363,8 +523,6 @@ final class PgwireGovDataInstaller {
                 + " from " + assetUrl + ": " + e.getClass().getSimpleName() + ": "
                 + e.getMessage(), e);
         }
-        report("pgwire-govdata " + version + " ready at " + launcherPath(dir));
-        return launcherPath(dir);
     }
 
     /** Fetches a URL's text; the seam {@link #requiredChecksum} is tested through. */
@@ -514,22 +672,43 @@ final class PgwireGovDataInstaller {
         return m.find() ? m.group(1) : null;
     }
 
-    private static void download(String url, Path dest) throws IOException, InterruptedException {
+    /**
+     * Downloads {@code url} into {@code part}, resuming from the bytes already there. A server
+     * that ignores the range answers 200 with the whole asset, which overwrites the partial
+     * file; 416 means the partial file already holds every byte, which the caller's sha256
+     * check confirms or rejects.
+     */
+    static void download(String url, Path part) throws IOException, InterruptedException {
+        long have = Files.isRegularFile(part) ? Files.size(part) : 0L;
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(30))
             .build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+        HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(url))
             .header("User-Agent", "askamerica-mcp-pgwire-installer")
-            .GET()
-            .build();
-        HttpResponse<InputStream> resp = client.send(req, HttpResponse.BodyHandlers.ofInputStream());
-        if (resp.statusCode() != 200) {
-            throw new IOException("pgwire-govdata download failed: HTTP " + resp.statusCode()
+            .GET();
+        if (have > 0) {
+            req.header("Range", "bytes=" + have + "-");
+        }
+        HttpResponse<InputStream> resp =
+            client.send(req.build(), HttpResponse.BodyHandlers.ofInputStream());
+        int status = resp.statusCode();
+        if (have > 0 && status == 416) {
+            resp.body().close();
+            return;
+        }
+        if (status != 200 && status != 206) {
+            resp.body().close();
+            throw new IOException("pgwire-govdata download failed: HTTP " + status
                 + " from " + url);
         }
+        boolean resume = have > 0 && status == 206;
+        if (resume) {
+            report("Resuming the pgwire-govdata download at " + (have / (1024 * 1024)) + " MB.");
+        }
         try (InputStream in = resp.body();
-             OutputStream out = Files.newOutputStream(dest, StandardOpenOption.TRUNCATE_EXISTING)) {
+             OutputStream out = Files.newOutputStream(part, StandardOpenOption.CREATE,
+                 resume ? StandardOpenOption.APPEND : StandardOpenOption.TRUNCATE_EXISTING)) {
             byte[] buf = new byte[1 << 16];
             int n;
             while ((n = in.read(buf)) != -1) {
@@ -538,7 +717,7 @@ final class PgwireGovDataInstaller {
         }
     }
 
-    private static void verifySha256(Path file, String expectedHex) throws IOException {
+    static void verifySha256(Path file, String expectedHex) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (InputStream in = Files.newInputStream(file)) {

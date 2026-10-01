@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code publish_report} gates judge a report against the tool calls recorded in this
+ * The {@code preview_report} gates judge a report against the tool calls recorded in this
  * process, so two properties keep them from returning the same refusal whatever the caller
  * changes: the call log always ends at the current call once it is full, and the plain
  * English word "did" is never read as the DiD (difference-in-differences) method.

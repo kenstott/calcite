@@ -10,15 +10,25 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
+import com.sun.net.httpserver.HttpServer;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
 
 import static org.apache.calcite.adapter.askamerica.PgwireGovDataInstaller.Action;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -136,5 +146,178 @@ class PgwireGovDataInstallerTest {
   @Test void ownVersionIsNullOutsideAStampedJar() {
     // Under the test runner this class loads from a classes directory, not a stamped jar.
     assertNull(PgwireGovDataInstaller.ownEngineVersion());
+  }
+
+  // ── an update never delays a spawn ───────────────────────────────────────
+
+  @Test void olderBundleIsServedAtOnceAndUpdatedInTheBackground(@TempDir Path home)
+      throws IOException {
+    Path dir = bundle(home.resolve("pgwire-govdata"), "old");
+    Files.writeString(dir.resolve(PgwireGovDataInstaller.MARKER), "0.99.0");
+    List<Runnable> scheduled = new ArrayList<>();
+
+    File launcher = PgwireGovDataInstaller.ensureLauncher(dir, "0.100.0", scheduled::add);
+
+    assertEquals("old", Files.readString(launcher.toPath()),
+        "the installed bundle must be returned without waiting for the download");
+    assertEquals(1, scheduled.size(), "the update must be handed to the background executor");
+  }
+
+  @Test void currentBundleSchedulesNoUpdate(@TempDir Path home) throws IOException {
+    Path dir = bundle(home.resolve("pgwire-govdata"), "current");
+    Files.writeString(dir.resolve(PgwireGovDataInstaller.MARKER), "0.100.0");
+    List<Runnable> scheduled = new ArrayList<>();
+
+    File launcher = PgwireGovDataInstaller.ensureLauncher(dir, "0.100.0", scheduled::add);
+
+    assertEquals("current", Files.readString(launcher.toPath()));
+    assertTrue(scheduled.isEmpty());
+  }
+
+  @Test void preparedReleaseIsSwappedInAtTheNextSpawn(@TempDir Path home) throws IOException {
+    Path dir = bundle(home.resolve("pgwire-govdata"), "old");
+    Files.writeString(dir.resolve(PgwireGovDataInstaller.MARKER), "0.99.0");
+    Files.writeString(dir.resolve("pgwire.pid"), "4242");
+    Path ready = bundle(PgwireGovDataInstaller.readyDir(dir, "0.100.0"), "new");
+    Files.writeString(ready.resolve(PgwireGovDataInstaller.MARKER), "0.100.0");
+    List<Runnable> scheduled = new ArrayList<>();
+
+    File launcher = PgwireGovDataInstaller.ensureLauncher(dir, "0.100.0", scheduled::add);
+
+    assertEquals(PgwireGovDataInstaller.launcherPath(dir), launcher);
+    assertEquals("new", Files.readString(launcher.toPath()));
+    assertEquals("0.100.0", PgwireGovDataInstaller.readMarker(dir));
+    assertEquals("4242", Files.readString(dir.resolve("pgwire.pid")));
+    assertFalse(Files.exists(ready));
+    assertTrue(scheduled.isEmpty(), "nothing is left to download once the release is adopted");
+  }
+
+  @Test void directoryThatIsNotACompletePreparedReleaseIsNeverAdopted(@TempDir Path home)
+      throws IOException {
+    Path dir = bundle(home.resolve("pgwire-govdata"), "old");
+    Files.writeString(dir.resolve(PgwireGovDataInstaller.MARKER), "0.99.0");
+    // Stamped with another release: not what this engine asked for.
+    Path ready = bundle(PgwireGovDataInstaller.readyDir(dir, "0.100.0"), "new");
+    Files.writeString(ready.resolve(PgwireGovDataInstaller.MARKER), "0.99.5");
+    List<Runnable> scheduled = new ArrayList<>();
+
+    File launcher = PgwireGovDataInstaller.ensureLauncher(dir, "0.100.0", scheduled::add);
+
+    assertFalse(PgwireGovDataInstaller.isPrepared(dir, "0.100.0"));
+    assertEquals("old", Files.readString(launcher.toPath()));
+    assertEquals(1, scheduled.size());
+  }
+
+  @Test void orphansOfAKilledInstallAreRemovedButTheResumablePartIsKept(@TempDir Path home)
+      throws IOException {
+    Path dir = bundle(home.resolve("pgwire-govdata"), "old");
+    Path keep = PgwireGovDataInstaller.partFile(dir, "0.100.0", "macos-arm64");
+    Files.writeString(keep, "partial");
+    Path stalePart = PgwireGovDataInstaller.partFile(dir, "0.99.5", "macos-arm64");
+    Files.writeString(stalePart, "partial");
+    Path staging = bundle(home.resolve("pgwire-govdata.staging-77"), "half");
+    Path staleReady = bundle(PgwireGovDataInstaller.readyDir(dir, "0.99.5"), "stale");
+    Path ready = bundle(PgwireGovDataInstaller.readyDir(dir, "0.100.0"), "new");
+    Files.writeString(home.resolve("pgwire-govdata.install.lock"), "");
+
+    PgwireGovDataInstaller.removeOrphans(dir, "0.100.0", keep);
+
+    assertTrue(Files.exists(keep));
+    assertTrue(Files.exists(ready));
+    assertTrue(Files.exists(dir));
+    assertTrue(Files.exists(home.resolve("pgwire-govdata.install.lock")));
+    assertFalse(Files.exists(stalePart));
+    assertFalse(Files.exists(staging));
+    assertFalse(Files.exists(staleReady));
+  }
+
+  // ── resumable download ───────────────────────────────────────────────────
+
+  /** Serves {@code body}; honours a Range header only when {@code ranges} is set. Records the
+   *  Range header of each request (empty string when there was none). */
+  private static HttpServer serve(byte[] body, boolean ranges, List<String> seen)
+      throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/bundle.tar.gz", ex -> {
+      String range = ex.getRequestHeaders().getFirst("Range");
+      seen.add(range == null ? "" : range);
+      byte[] out = body;
+      int status = 200;
+      if (ranges && range != null) {
+        int from = Integer.parseInt(range.substring("bytes=".length(), range.length() - 1));
+        if (from >= body.length) {
+          ex.sendResponseHeaders(416, -1);
+          ex.close();
+          return;
+        }
+        out = Arrays.copyOfRange(body, from, body.length);
+        status = 206;
+      }
+      ex.sendResponseHeaders(status, out.length);
+      try (OutputStream os = ex.getResponseBody()) {
+        os.write(out);
+      }
+    });
+    server.start();
+    return server;
+  }
+
+  private static String url(HttpServer server) {
+    return "http://127.0.0.1:" + server.getAddress().getPort() + "/bundle.tar.gz";
+  }
+
+  private static byte[] payload() {
+    byte[] body = new byte[200_000];
+    new Random(7).nextBytes(body);
+    return body;
+  }
+
+  @Test void interruptedDownloadIsResumedFromTheBytesAlreadyOnDisk(@TempDir Path home)
+      throws Exception {
+    byte[] body = payload();
+    Path part = home.resolve("bundle.part");
+    Files.write(part, Arrays.copyOfRange(body, 0, 60_000));
+    List<String> seen = new ArrayList<>();
+    HttpServer server = serve(body, true, seen);
+    try {
+      PgwireGovDataInstaller.download(url(server), part);
+    } finally {
+      server.stop(0);
+    }
+    assertEquals(Arrays.asList("bytes=60000-"), seen);
+    assertArrayEquals(body, Files.readAllBytes(part));
+  }
+
+  @Test void serverThatIgnoresTheRangeReplacesThePartialFile(@TempDir Path home)
+      throws Exception {
+    byte[] body = payload();
+    Path part = home.resolve("bundle.part");
+    Files.write(part, new byte[60_000]);
+    HttpServer server = serve(body, false, new ArrayList<>());
+    try {
+      PgwireGovDataInstaller.download(url(server), part);
+    } finally {
+      server.stop(0);
+    }
+    assertArrayEquals(body, Files.readAllBytes(part),
+        "a 200 answer is the whole asset and must not be appended to the partial file");
+  }
+
+  @Test void freshDownloadSendsNoRangeAndAFullyDownloadedPartIsLeftAlone(@TempDir Path home)
+      throws Exception {
+    byte[] body = payload();
+    Path part = home.resolve("bundle.part");
+    List<String> seen = new ArrayList<>();
+    HttpServer server = serve(body, true, seen);
+    try {
+      PgwireGovDataInstaller.download(url(server), part);
+      assertArrayEquals(body, Files.readAllBytes(part));
+      // Killed between download and extraction: the next attempt asks for nothing more.
+      PgwireGovDataInstaller.download(url(server), part);
+    } finally {
+      server.stop(0);
+    }
+    assertEquals(Arrays.asList("", "bytes=200000-"), seen);
+    assertArrayEquals(body, Files.readAllBytes(part));
   }
 }
