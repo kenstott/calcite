@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.104.0](https://github.com/kenstott/calcite/compare/engine-v0.103.1...engine-v0.104.0) (2026-10-01)
+
+
+### Features
+
+* **askamerica-engine:** grade causal claims alone, worst first; build reports unasked ([ce4e58b](https://github.com/kenstott/calcite/commit/ce4e58ba342df571e59127680bb886f4127238c9))
+* **askamerica-engine:** open the article under review in the client's in-chat browser ([22dd6fc](https://github.com/kenstott/calcite/commit/22dd6fc4ef4992caa470c12bb74f5d46c7563349))
+* **askamerica-engine:** score honesty and bias per author and speaker; drop Pinocchios ([af2608f](https://github.com/kenstott/calcite/commit/af2608fb411ca6690e9b165e6131bb29948ed568))
+* **askamerica-engine:** unsupported verdict and central-claim honesty cap ([02c7953](https://github.com/kenstott/calcite/commit/02c7953af7ae9e31633ba801a0487b49712cc0f6))
+* **askamerica-engine:** validation headline states the verdict from the scores ([322fb1e](https://github.com/kenstott/calcite/commit/322fb1ec550ab031988e83f82d695aed611e280f))
+* **govdata:** per-year watermark tracking for ChunkOrganizer sweeps ([5ad206e](https://github.com/kenstott/calcite/commit/5ad206efe566b2326ab9ae44b379fa6dc36ca02d))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** deliver every report both ways, artifact and local page ([d9ff37f](https://github.com/kenstott/calcite/commit/d9ff37f69d29c6873a9cb1aefd61f5351e5ef954))
+* **askamerica-engine:** group validation claims by what they grade; artifact from data ([0e1f9ff](https://github.com/kenstott/calcite/commit/0e1f9ff34febe9249ef08fb1c54bb079fffc91d3))
+* **askamerica-engine:** identify pgwire-govdata by its schema list, not a table read ([61ed4bb](https://github.com/kenstott/calcite/commit/61ed4bb322c08892b2a183d390df17d2803c7a08))
+* **askamerica-engine:** take over the pgwire bundle update when the process doing it is closed ([1fd1ca9](https://github.com/kenstott/calcite/commit/1fd1ca9a1f0c5e09ac89b99da716e31f9dd6192f))
+* **file:** close the S3FileIO behind getExistingPartitions' loaded table ([94a4760](https://github.com/kenstott/calcite/commit/94a4760cb6b6308cb5b80f1482a66da7977b3859))
+* **file:** stop resolving every declared table at DuckDB schema start ([5333a4b](https://github.com/kenstott/calcite/commit/5333a4bbefb01d06ca29d779c2d249e21755384f))
+* **govdata:** rotate R2 credentials issued under an unchanged access key id ([6b13129](https://github.com/kenstott/calcite/commit/6b1312913c294d35dd7fab5797045a2efce6c89c))
+
 ## [0.103.1](https://github.com/kenstott/calcite/compare/engine-v0.103.0...engine-v0.103.1) (2026-10-01)
 
 
