@@ -94,3 +94,18 @@ def test_string_agg_converted_to_listagg():
 def test_pg_only_constructs_rejected_not_mistranslated(sql):
     with pytest.raises(UnsupportedConstruct):
         transpile_pg_to_calcite(sql)
+
+
+def test_substring_stays_ansi_form_in_every_clause():
+    out = transpile_pg_to_calcite(
+        "SELECT SUBSTRING(h FROM 1 FOR 2) AS c, COUNT(*) FROM t "
+        "WHERE SUBSTRING(h FROM 1 FOR 2) IN ('72') GROUP BY SUBSTRING(h FROM 1 FOR 2) ORDER BY c"
+    )
+    assert "SUBSTR(" not in out.replace("SUBSTRING(", "")
+    assert out.count("SUBSTRING(H FROM 1 FOR 2)") == 3 or out.count("SUBSTRING(h FROM 1 FOR 2)") == 3
+
+
+def test_substring_without_length_and_comma_form():
+    assert "SUBSTRING(" in transpile_pg_to_calcite("SELECT SUBSTRING(h FROM 3) FROM t")
+    out = transpile_pg_to_calcite("SELECT SUBSTR(h, 2, 3) FROM t")
+    assert " FROM 2 FOR 3)" in out

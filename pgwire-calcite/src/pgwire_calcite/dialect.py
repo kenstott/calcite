@@ -40,6 +40,22 @@ class Calcite(Oracle):
             # Calcite wants ARRAY[a, b, c] (bracket form); Oracle renders ARRAY(...).
             return "ARRAY[" + self.expressions(expression, flat=True) + "]"
 
+        def _substring_ansi(self, expression) -> str:
+            # Calcite resolves only the ANSI form SUBSTRING(x FROM s [FOR n]); Oracle renders
+            # the comma-form SUBSTR, which is not in the connection's operator table.
+            this = self.sql(expression, "this")
+            start = self.sql(expression, "start")
+            length = self.sql(expression, "length")
+            out = f"SUBSTRING({this} FROM {start}"
+            if length:
+                out += f" FOR {length}"
+            return out + ")"
+
+        TRANSFORMS = {
+            **Oracle.Generator.TRANSFORMS,
+            exp.Substring: _substring_ansi,
+        }
+
         # Undo Oracle-specific type spellings; Calcite uses standard SQL names.
         TYPE_MAPPING = {
             **Oracle.Generator.TYPE_MAPPING,
