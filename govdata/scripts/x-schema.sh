@@ -119,6 +119,14 @@ fi
 # production; the entity-bridge sweep above is unaffected either way, since the two are
 # independent.
 if [ "${GOVDATA_XSCHEMA_RUN_CHUNKS:-false}" = "true" ]; then
+  # Opt-in trust mode, forwarded to ChunkOrganizer as CHUNK_ORGANIZER_SKIP_HASH_COMPARE (see its
+  # writeToPgStaging javadoc): skips the existing-hash lookup before every parent write and always
+  # tombstones+inserts instead of skipping an unchanged one. Saves one Postgres round-trip per
+  # batch; does not change what gets read or chunked, so it has no effect on sweep duration.
+  # Unset (the default) keeps the skip-if-unchanged optimization, i.e. unchanged behaviour.
+  if [ "${GOVDATA_XSCHEMA_CHUNK_SKIP_HASH_COMPARE:-false}" = "true" ]; then
+    export CHUNK_ORGANIZER_SKIP_HASH_COMPARE=true
+  fi
   if ! run_step "sweeping every registered source into vc_staging" \
       "${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-}" \
       org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then

@@ -1218,7 +1218,24 @@ if $RUN_EMBEDDINGS; then
 
   log_info "x-schema: sweeping every registered source (SEC included) into vc_staging"
   if [ -f "$VSS_DIR/x-schema.sh" ]; then
-    bash "$VSS_DIR/x-schema.sh" || log_info "WARNING: x-schema sweep failed (non-fatal)"
+    # ChunkOrganizer itself has no overall time box unless GOVDATA_XSCHEMA_CHUNK_TIMEOUT is set --
+    # a full sweep is otherwise unbounded (ops#327: observed 20-40+ hours against production
+    # scale). Default this scheduled invocation to 2h so it can never monopolize the window
+    # vss-local.sh (the next step) also needs; a hard `timeout` kill, not cooperative yielding
+    # (see x-schema.sh's run_step). The per-year watermark + mid-scan cursor added this session
+    # (vc_sync_state_year / vc_sync_state_cursor) mean a kill mid-source only costs a redo of the
+    # one batch in flight on the next scheduled run, not the whole source's scoped rescan -- see
+    # ChunkOrganizer.java's sweep()/queryRowsBatched javadoc.
+    #
+    # GOVDATA_XSCHEMA_CHUNK_SKIP_HASH_COMPARE is deliberately NOT defaulted here: it only removes
+    # one Postgres round-trip per batch (selectExistingParentHashes), it does nothing for restart
+    # speed (that's the watermark/cursor above), and it costs real downstream work -- every
+    # re-swept parent gets tombstoned even when unchanged, which makes vss-local.sh re-embed
+    # content that never actually changed. Opt in explicitly only if that round-trip is ever
+    # confirmed to matter.
+    GOVDATA_XSCHEMA_CHUNK_TIMEOUT="${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-2h}" \
+      bash "$VSS_DIR/x-schema.sh" \
+      || log_info "WARNING: x-schema sweep failed (non-fatal)"
   else
     log_info "WARNING: x-schema.sh not found — chunk-parsing sweep skipped"
   fi

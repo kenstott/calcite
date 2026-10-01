@@ -448,11 +448,16 @@ public class ChunkOrganizer {
         // of the one year in flight on the next sweep, not every year in this source's scope.
         for (Integer year : changedYears) {
           chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource,
-              Collections.singleton(year), skipHashCompare);
+              Collections.singleton(year), skipHashCompare, yearCompletedAt.get(year));
           markYearSwept(pg, src.sourceSchema, src.sourceTable, year, yearCompletedAt.get(year));
         }
       } else {
-        chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare);
+        // sourceNeedsSweep already confirmed this is non-null -- a null here would mean
+        // table_completion's row for this source was deleted in the gap between that check and
+        // this one, the same narrow race markSwept already tolerates (see its own fallback).
+        Long sourceAsOf = selectTableCompletedAt(pg, src.sourceTable);
+        chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare,
+            sourceAsOf != null ? sourceAsOf : System.currentTimeMillis());
       }
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
@@ -470,12 +475,14 @@ public class ChunkOrganizer {
             changedYearsBlob);
         for (Integer year : changedYearsBlob) {
           chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource,
-              Collections.singleton(year), skipHashCompare);
+              Collections.singleton(year), skipHashCompare, yearCompletedAtBlob.get(year));
           markYearSwept(pg, src.sourceSchema, src.sourceTable, year,
               yearCompletedAtBlob.get(year));
         }
       } else {
-        chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare);
+        Long sourceAsOfBlob = selectTableCompletedAt(pg, src.sourceTable);
+        chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare,
+            sourceAsOfBlob != null ? sourceAsOfBlob : System.currentTimeMillis());
       }
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
@@ -574,6 +581,78 @@ public class ChunkOrganizer {
       ps.setString(2, sourceTable);
       ps.setInt(3, year);
       ps.setLong(4, completedAt);
+      ps.executeUpdate();
+    }
+    pg.commit();
+  }
+
+  /** {@code year} value {@link #selectValidCursor}/{@link #saveCursor}/{@link #clearCursor} use
+   *  for a source with no per-year tracking (the whole-source unfiltered scan) -- a real year is
+   *  never negative, so this can share the same (source_schema, source_table, year) primary key
+   *  as the per-year rows without colliding with one. */
+  private static final int NO_YEAR_SENTINEL = -1;
+
+  /** Reads the persisted mid-scan cursor for (sourceTable, year), but ONLY if it is still valid
+   *  -- its saved {@code cursor_as_of} must still equal {@code currentAsOf}, meaning nothing in
+   *  this scope's source data has changed since the cursor was taken (see {@link #sweep}'s
+   *  per-year {@code completed_at} / {@link #selectTableCompletedAt}'s source-level one). Returns
+   *  {@code null} when no cursor exists, or one exists but is stale (currentAsOf has moved) --
+   *  staleness is not an error, it just means this scope needs a full rescan from the start, the
+   *  same as before this existed; never trust a cursor whose validity can't be confirmed. */
+  static String selectValidCursor(Connection pg, String sourceTable, int year, long currentAsOf)
+      throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "SELECT cursor_literal, cursor_as_of FROM vc_sync_state_cursor "
+        + "WHERE source_table = ? AND year = ?")) {
+      ps.setString(1, sourceTable);
+      ps.setInt(2, year);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (!rs.next()) {
+          return null;
+        }
+        String cursorLiteral = rs.getString(1);
+        long savedAsOf = rs.getLong(2);
+        return savedAsOf == currentAsOf ? cursorLiteral : null;
+      }
+    }
+  }
+
+  /** Persists the keyset-pagination cursor reached so far within one scoped scan, called after
+   *  every batch (see {@link #queryRowsBatched}'s {@code cursorConsumer}) so a kill mid-scan
+   *  loses at most one batch, not the whole scope. {@code cursorLiteral} is the pre-rendered
+   *  {@code (pk1, pk2, ...)} SQL tuple (via {@link #sqlLiteral}), reused verbatim as the WHERE
+   *  clause on resume -- storing it pre-rendered avoids ever having to re-infer a PK column's
+   *  type from a persisted string. */
+  static void saveCursor(Connection pg, String sourceSchema, String sourceTable, int year,
+      String cursorLiteral, long asOf) throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "INSERT INTO vc_sync_state_cursor (source_schema, source_table, year, cursor_literal, "
+        + "cursor_as_of) VALUES (?, ?, ?, ?, ?) "
+        + "ON CONFLICT (source_schema, source_table, year) "
+        + "DO UPDATE SET cursor_literal = EXCLUDED.cursor_literal, "
+        + "cursor_as_of = EXCLUDED.cursor_as_of")) {
+      ps.setString(1, sourceSchema);
+      ps.setString(2, sourceTable);
+      ps.setInt(3, year);
+      ps.setString(4, cursorLiteral);
+      ps.setLong(5, asOf);
+      ps.executeUpdate();
+    }
+    pg.commit();
+  }
+
+  /** Drops the mid-scan cursor once a scoped scan fully completes -- called alongside {@link
+   *  #markYearSwept}/{@link #markSwept}, since a finished scope has nothing left to resume. Not
+   *  calling this on a genuinely unfinished scan is what makes the cursor resumable in the first
+   *  place; it is only ever cleared on confirmed completion. */
+  static void clearCursor(Connection pg, String sourceSchema, String sourceTable, int year)
+      throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "DELETE FROM vc_sync_state_cursor "
+        + "WHERE source_schema = ? AND source_table = ? AND year = ?")) {
+      ps.setString(1, sourceSchema);
+      ps.setString(2, sourceTable);
+      ps.setInt(3, year);
       ps.executeUpdate();
     }
     pg.commit();
@@ -776,7 +855,7 @@ public class ChunkOrganizer {
    *  so peak memory stays O(batch size) regardless of table size. */
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src, int maxRowsPerSource) throws SQLException {
-    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, null, false);
+    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, null, false, 0L);
   }
 
   /** As above, but when {@code changedYears} is non-null, scopes the scan to just those years'
@@ -789,14 +868,21 @@ public class ChunkOrganizer {
    *  call in the first place could itself be stale by the time this runs. */
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears) throws SQLException {
-    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, changedYears, false);
+    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, changedYears, false, 0L);
   }
 
   /** As above, with {@code skipHashCompare} forwarded to {@link #writeToPgStaging} -- see its
-   *  javadoc and {@link #sweep}'s matching parameter. */
+   *  javadoc and {@link #sweep}'s matching parameter. {@code cursorAsOf} is this call's scope's
+   *  own {@code completed_at} (the per-year one when {@code changedYears} is a single year, the
+   *  source-level one from {@link #selectTableCompletedAt} otherwise) -- see {@link
+   *  #selectValidCursor}/{@link #saveCursor}. A {@code changedYears} with anything other than
+   *  exactly one year (null, or in principle more than one, though {@link #sweep} never passes
+   *  that) gets no cursor tracking: a combined multi-year scan's cursor position doesn't
+   *  correspond to any single year's watermark, so there is nothing safe to validate it against
+   *  on resume -- not a correctness bug, just no resumability benefit for that call. */
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears,
-      boolean skipHashCompare) throws SQLException {
+      boolean skipHashCompare, long cursorAsOf) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
     // is the PK and also carries real text), so query each column once, not once per role.
@@ -816,8 +902,16 @@ public class ChunkOrganizer {
     // across the entire scan (not just one batch) since keyset pagination can split a duplicate
     // pair across page boundaries.
     Set<String> seenPk = new HashSet<String>();
+    boolean singleYear = changedYears != null && changedYears.size() == 1;
+    boolean trackCursor = singleYear || changedYears == null;
+    int cursorYear = singleYear ? changedYears.iterator().next() : NO_YEAR_SENTINEL;
+    String seedCursor = trackCursor
+        ? selectValidCursor(pg, src.sourceTable, cursorYear, cursorAsOf) : null;
     queryRowsBatched(conn, loc, selectCols, src.pkColumns, ROW_CONCAT_BATCH_SIZE, maxRowsPerSource,
-        changedYears, batch -> {
+        changedYears, seedCursor,
+        trackCursor ? cursorLiteral -> saveCursor(pg, src.sourceSchema, src.sourceTable,
+            cursorYear, cursorLiteral, cursorAsOf) : null,
+        batch -> {
       List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
       for (Map<String, Object> row : batch) {
         String pkValue = stringifyPk(row, src.pkColumns);
@@ -853,6 +947,9 @@ public class ChunkOrganizer {
       totals[0] += chunkRows.size();
       totals[1] += batch.size();
     });
+    if (trackCursor) {
+      clearCursor(pg, src.sourceSchema, src.sourceTable, cursorYear);
+    }
     LOGGER.info("ChunkOrganizer: row-concat {}.{} -> {} chunks from {} rows",
         src.sourceSchema, src.sourceTable, totals[0], totals[1]);
   }
@@ -949,7 +1046,7 @@ public class ChunkOrganizer {
    *  future custom {@link ChunkFunction}) does real per-row work, not just a string split. */
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
       DocumentBlobSource src, int maxRowsPerSource) throws SQLException {
-    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, null, false);
+    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, null, false, 0L);
   }
 
   /** As above, but scoped to {@code changedYears} when non-null -- see {@link
@@ -959,14 +1056,15 @@ public class ChunkOrganizer {
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
       DocumentBlobSource src, int maxRowsPerSource, Set<Integer> changedYears)
       throws SQLException {
-    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, changedYears, false);
+    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, changedYears, false, 0L);
   }
 
-  /** As above, with {@code skipHashCompare} forwarded to {@link #writeToPgStaging} -- see its
-   *  javadoc and {@link #sweep}'s matching parameter. */
+  /** As above, with {@code skipHashCompare}/{@code cursorAsOf} forwarded exactly as in {@link
+   *  #chunkRowConcatSource}'s matching overload -- see its javadoc for the cursor-tracking
+   *  contract, identical here for the document-blob path. */
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
       DocumentBlobSource src, int maxRowsPerSource, Set<Integer> changedYears,
-      boolean skipHashCompare) throws SQLException {
+      boolean skipHashCompare, long cursorAsOf) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     List<String> selectCols = new ArrayList<String>(src.pkColumns);
     if (!selectCols.contains(src.blobColumn)) {
@@ -976,8 +1074,16 @@ public class ChunkOrganizer {
     // See the matching guard in chunkRowConcatSource for why this is needed: a source table's
     // declared primary key is not a guarantee its data is actually unique.
     Set<String> seenPk = new HashSet<String>();
+    boolean singleYear = changedYears != null && changedYears.size() == 1;
+    boolean trackCursor = singleYear || changedYears == null;
+    int cursorYear = singleYear ? changedYears.iterator().next() : NO_YEAR_SENTINEL;
+    String seedCursor = trackCursor
+        ? selectValidCursor(pg, src.sourceTable, cursorYear, cursorAsOf) : null;
     queryRowsBatched(conn, loc, selectCols, src.pkColumns, DOCUMENT_BLOB_BATCH_SIZE,
-        maxRowsPerSource, changedYears, batch -> {
+        maxRowsPerSource, changedYears, seedCursor,
+        trackCursor ? cursorLiteral -> saveCursor(pg, src.sourceSchema, src.sourceTable,
+            cursorYear, cursorLiteral, cursorAsOf) : null,
+        batch -> {
       List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
       for (Map<String, Object> row : batch) {
         Object blobValue = row.get(src.blobColumn);
@@ -1019,6 +1125,9 @@ public class ChunkOrganizer {
       totals[0] += chunkRows.size();
       totals[1] += batch.size();
     });
+    if (trackCursor) {
+      clearCursor(pg, src.sourceSchema, src.sourceTable, cursorYear);
+    }
     LOGGER.info("ChunkOrganizer: document-blob {}.{} -> {} chunks from {} rows",
         src.sourceSchema, src.sourceTable, totals[0], totals[1]);
   }
@@ -1377,6 +1486,24 @@ public class ChunkOrganizer {
           + "  last_swept_completed_at BIGINT NOT NULL DEFAULT 0,"
           + "  PRIMARY KEY (source_schema, source_table, year)"
           + ")");
+      // Mid-scan checkpoint, one level finer than vc_sync_state_year: the exact keyset-pagination
+      // cursor (see queryRowsBatched) reached within a still-in-progress scoped scan, plus the
+      // source's own completed_at AT THE TIME the cursor was saved. year uses NO_YEAR_SENTINEL for
+      // a source with no per-year tracking (the whole-source unfiltered scan). A cursor is only
+      // ever trusted on resume if cursor_as_of still equals the CURRENT completed_at for that
+      // scope (see selectValidCursor) -- if it has moved, something changed underneath the
+      // partial scan and the cursor is discarded in favor of a full rescan, same as before this
+      // existed. cursor_literal is a pre-rendered SQL literal tuple (via sqlLiteral), not a
+      // re-parsed value, so resuming never has to re-infer a PK column's type.
+      stmt.execute(
+          "CREATE TABLE IF NOT EXISTS vc_sync_state_cursor ("
+          + "  source_schema VARCHAR NOT NULL,"
+          + "  source_table VARCHAR NOT NULL,"
+          + "  year INT NOT NULL,"
+          + "  cursor_literal VARCHAR NOT NULL,"
+          + "  cursor_as_of BIGINT NOT NULL,"
+          + "  PRIMARY KEY (source_schema, source_table, year)"
+          + ")");
       // applied_at/last_synced_at existed only to mark a tombstone/schema as drained into
       // ref.vectorized_chunks -- dead columns now that sync-to-Iceberg was removed in favor of a
       // plain pg_dump backup of vc_staging (see the class javadoc). Dropped here, not just
@@ -1452,6 +1579,12 @@ public class ChunkOrganizer {
     void accept(List<Map<String, Object>> batch) throws SQLException;
   }
 
+  /** Receives the keyset-pagination cursor reached after each successfully written batch, as a
+   *  pre-rendered SQL literal tuple -- see {@link #saveCursor}. */
+  private interface CursorConsumer {
+    void accept(String cursorLiteral) throws SQLException;
+  }
+
   /** Streams {@code loc}'s rows in fixed-size batches via keyset pagination ordered by {@code
    *  pkColumns} -- {@code WHERE (pk1, pk2, ...) > (lastSeen1, lastSeen2, ...) ORDER BY pk1,
    *  pk2, ... LIMIT batchSize}, not {@code OFFSET} (which DuckDB re-scans-and-discards on every
@@ -1487,6 +1620,21 @@ public class ChunkOrganizer {
   private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
       List<String> pkColumns, int batchSize, int maxTotalRows, Set<Integer> yearFilter,
       BatchConsumer batchConsumer) throws SQLException {
+    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, maxTotalRows, yearFilter,
+        null, null, batchConsumer);
+  }
+
+  /** As above, but resumable: when {@code initialCursorLiteral} is non-null, the FIRST page
+   *  starts from it instead of the beginning of the scan -- see {@link #selectValidCursor}; a
+   *  caller only ever passes a cursor it already confirmed is still valid for this exact scope.
+   *  When {@code cursorConsumer} is non-null, it is invoked with the newly-reached cursor (as a
+   *  pre-rendered SQL literal tuple, via {@link #sqlLiteral}) after every batch that writes
+   *  successfully -- a caller persists this via {@link #saveCursor} so a kill partway through
+   *  loses at most one batch of this scope's progress, not the whole scope. */
+  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
+      List<String> pkColumns, int batchSize, int maxTotalRows, Set<Integer> yearFilter,
+      String initialCursorLiteral, CursorConsumer cursorConsumer, BatchConsumer batchConsumer)
+      throws SQLException {
     if (yearFilter != null && yearFilter.isEmpty()) {
       return;
     }
@@ -1506,6 +1654,7 @@ public class ChunkOrganizer {
     }
     String orderBy = String.join(", ", pkColumns);
     List<Object> cursor = null;
+    String firstPageCursorLiteral = initialCursorLiteral;
     long fetched = 0;
     while (true) {
       int limit = batchSize;
@@ -1521,7 +1670,9 @@ public class ChunkOrganizer {
       if (yearClause != null) {
         whereClauses.add(yearClause);
       }
-      if (cursor != null) {
+      if (firstPageCursorLiteral != null) {
+        whereClauses.add("(" + orderBy + ") > (" + firstPageCursorLiteral + ")");
+      } else if (cursor != null) {
         StringBuilder cursorClause = new StringBuilder("(").append(orderBy).append(") > (");
         for (int i = 0; i < cursor.size(); i++) {
           if (i > 0) {
@@ -1532,6 +1683,7 @@ public class ChunkOrganizer {
         cursorClause.append(')');
         whereClauses.add(cursorClause.toString());
       }
+      firstPageCursorLiteral = null;
       if (!whereClauses.isEmpty()) {
         sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
       }
@@ -1542,13 +1694,23 @@ public class ChunkOrganizer {
       }
       batchConsumer.accept(batch);
       fetched += batch.size();
-      if (batch.size() < limit) {
-        break;
-      }
       Map<String, Object> last = batch.get(batch.size() - 1);
       cursor = new ArrayList<Object>(pkColumns.size());
       for (String pk : pkColumns) {
         cursor.add(last.get(pk));
+      }
+      if (cursorConsumer != null) {
+        StringBuilder literal = new StringBuilder();
+        for (int i = 0; i < cursor.size(); i++) {
+          if (i > 0) {
+            literal.append(", ");
+          }
+          literal.append(sqlLiteral(cursor.get(i)));
+        }
+        cursorConsumer.accept(literal.toString());
+      }
+      if (batch.size() < limit) {
+        break;
       }
     }
   }
