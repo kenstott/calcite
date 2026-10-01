@@ -163,9 +163,13 @@ partitionedTables:
       U.S. Congress). One row per (bioguide_id, congress) pair — a member serving
       multiple congresses has multiple rows. `terms_json` is the member's full chamber
       service history (all congresses, not just this row's), as a JSON array of
-      {chamber, start_year, end_year} — list-level terms carry chamber and year span
-      only, not per-Congress party/state/district (that finer grain requires an N+1
-      detail call per member and is not pulled in this table). Coverage is bounded by
+      {chamber, start_year, end_year}. `party_name` is the party held in this row's
+      Congress (from the detail endpoint's partyHistory; a mid-Congress switch resolves to
+      the party held when that Congress ended), so a party switcher's rows differ by
+      Congress. Chamber is not a column: `district` is null for senators and non-null
+      (0 = at-large) for House members. A Congress holds more rows than seats because
+      mid-Congress replacements each get a row, so party control is not a plain COUNT.
+      `state_name` and `district` are as reported by the per-Congress list endpoint. Coverage is bounded by
       `congress_range` (see dimension_values comment) — not full 1789-present history
       by default. Cross-references geo.state_ref via state_name (full name; geo.states
       is a year-vintaged boundary snapshot and not a valid FK target — see constraints
@@ -197,7 +201,10 @@ partitionedTables:
       - name: party_name
         type: string
         nullable: true
-        comment: Democratic, Republican, Independent, Independent Democrat, or Libertarian
+        comment: >
+          Party the member held in this row's Congress (Congress.gov partyHistory span in
+          effect when the Congress ended), e.g. Democratic, Republican, Independent,
+          Independent Democrat, Libertarian. Null when the detail call for the row failed.
       - name: district
         type: integer
         nullable: true
