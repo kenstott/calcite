@@ -320,6 +320,32 @@ class ClaimGroupsTest {
     assertTrue(problem.contains("its verdict is 'unsupported'"), problem);
   }
 
+  @Test void theHeadlineStatesTheVerdictTheScoresGive() {
+    String subject = "The Ledger article's claims about rents and immigration";
+    ArrayNode bad = claims(
+        author("Immigration drove rents up", "false", "toward_thesis").put("central", true),
+        author("Lots of people think so", "unsupported", "toward_thesis"),
+        author("Rents doubled", "mostly false", "toward_thesis"),
+        author("Rents rose 4 percent", "true", null));
+    assertEquals(subject + " are very biased and mostly false.",
+        ClaimScoring.headline(subject + ".", bad));
+
+    ArrayNode good = claims(author("Rents rose 4 percent", "true", null).put("central", true),
+        author("Wages rose 3 percent", "true", null),
+        author("Vacancy fell", "true", null));
+    String headline = ClaimScoring.headline(subject, good);
+    assertEquals(subject + " are balanced and accurate.", headline);
+    assertEquals(headline, ClaimScoring.headline(headline, good));
+
+    ArrayNode few = claims(author("Rents rose 4 percent", "true", null).put("central", true));
+    assertEquals(subject + " are too few to rate.", ClaimScoring.headline(subject, few));
+
+    assertNull(ClaimScoring.headlineProblem(subject));
+    String problem = ClaimScoring.headlineProblem("Rents are up because of immigration");
+    assertNotNull(problem);
+    assertTrue(problem.contains("subject of the headline"), problem);
+  }
+
   @Test void theMiddleVerdictIsPartiallyFalse() {
     assertEquals(0.5, ClaimScoring.credit(author("Rents rose 4 percent", "partially false",
         "toward_thesis")));

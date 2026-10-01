@@ -868,7 +868,11 @@ public class McpServer {
             + "with `group`, `speaker`, `kind`, `central`, `rests_on`, `support`, "
             + "`source_finding`, `errs`, "
             + "article_value, warehouse_value, independent_value, sources, table, "
-            + "sql and reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
+            + "sql and reason), `source_url` (the article's URL), a `title` that MUST be the "
+            + "headline's subject only (\"The <publication> article's claims about <a>, <b> "
+            + "and <c>\", no verdict — the engine completes it from the scores, e.g. \"... are "
+            + "very biased and mostly false.\" or \"... are balanced and accurate.\", and you "
+            + "MUST open your answer with that completed headline, unchanged), the `dashboard`, and a summary that "
             + "leads with the honesty and bias result for the author and each speaker and the "
             + "assertion that matters most — a failed causal claim before any accurate figure. The user asked whether the piece can be trusted; "
             + "answer that first. **The `claims` array is not optional and prose is not a "
@@ -2722,7 +2726,12 @@ public class McpServer {
             schema(dashProps, new String[]{"panels"})));
 
         ObjectNode pubProps = MAPPER.createObjectNode();
-        pubProps.set("title", prop("string", "The finding, as a sentence a reader could quote."));
+        pubProps.set("title", prop("string", "The finding, as a sentence a reader could quote. "
+            + "For a validation (`claims` given) it MUST be the headline's subject only, with "
+            + "no verdict: \"The <publication> article's claims about <a>, <b> and <c>\", "
+            + "naming the publication and the two or three topics its claims are about. The "
+            + "engine completes it from the scores (\"... are very biased and mostly false.\", "
+            + "\"... are balanced and accurate.\") and returns the full headline."));
         pubProps.set("subtitle", prop("string",
             "Source, vintage and units the whole report shares."));
         ObjectNode sectionsProp = MAPPER.createObjectNode();
@@ -4364,6 +4373,10 @@ public class McpServer {
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
                         addIfPresent(gateProblems, ClaimScoring.enforce(claims));
+                        addIfPresent(gateProblems, ClaimScoring.headlineProblem(rTitle));
+                        if (gateProblems.isEmpty()) {
+                            rTitle = ClaimScoring.headline(rTitle, claims);
+                        }
                         ReportPage.Section claimsSec = claimsSection(claims);
                         if (claimsSec != null) {
                             // Directly under the summary, where a reader looks first.
@@ -4431,7 +4444,7 @@ public class McpServer {
                         // Guaranteed non-blank here: enforceSourceUrlPresent already refused
                         // the publish above if it were missing.
                         String srcUrl = args.path("source_url").asText(null);
-                        ClaimsServer.record(srcUrl, args.path("title").asText(null), url, claims);
+                        ClaimsServer.record(srcUrl, rTitle, url, claims);
                     }
                     log.println("[askamerica-mcp] tool=" + name + " sections=" + secs.size()
                         + " sources=" + srcs.size() + " board=" + (boardSvg != null)
@@ -4442,7 +4455,9 @@ public class McpServer {
                     String savedLine = "Saved as report_id `" + saved.id + "` — the saved page "
                         + "outlives this process: restore_report re-serves it over http by that "
                         + "id if the file link won't open, and publish_report publishes it by "
-                        + "that id in any later session.";
+                        + "that id in any later session."
+                        + (hasClaims ? " The headline is \"" + rTitle + "\" — you MUST open "
+                            + "your answer with it, unchanged." : "");
                     if (asArtifact) {
                         // The artifact is drawn from the report description, never from the
                         // rendered page: the claims travel as data, so the page's claims

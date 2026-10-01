@@ -339,6 +339,78 @@ final class ClaimScoring {
         return out;
     }
 
+    /**
+     * The headline's verdict on a block's claims — "are very biased and mostly false", "are
+     * balanced and accurate" — from that block's scores. Bias is left out when the errors are
+     * too few to show a lean.
+     */
+    static String verdictClause(JsonNode score) {
+        if (score.path("graded").asInt() < MIN_FOR_LABEL) {
+            return "are too few to rate";
+        }
+        int honesty = score.path("honesty_score").asInt();
+        String accuracy = honesty >= 90 ? "accurate"
+            : honesty >= 75 ? "mostly accurate"
+            : honesty >= 50 ? "partly false"
+            : honesty >= 25 ? "mostly false" : "false";
+        int errors = score.path("errors").asInt();
+        if (errors == 0) {
+            return "are balanced and " + accuracy;
+        }
+        if (errors < MIN_FOR_LABEL) {
+            return "are " + accuracy;
+        }
+        int bias = score.path("bias_score").asInt();
+        if (bias <= -25) {
+            return "are " + accuracy + " and cut against its own case";
+        }
+        return "are " + (bias >= 75 ? "very biased" : bias >= 50 ? "biased"
+            : bias >= 25 ? "somewhat biased" : "balanced") + " and " + accuracy;
+    }
+
+    /** The block a validation's headline speaks for: the author's claims, or the only
+     *  speaker's when the piece has no author's voice; null when several speakers share it. */
+    static String headlineBlock(JsonNode claims) {
+        List<String> scored = new ArrayList<>();
+        for (String b : blocks(claims)) {
+            if (isScored(b)) {
+                scored.add(b);
+            }
+        }
+        return scored.contains(GROUP_AUTHOR) ? GROUP_AUTHOR
+            : scored.size() == 1 ? scored.get(0) : null;
+    }
+
+    /**
+     * A validation's headline: the subject the caller named, completed with the verdict its
+     * scores give — "The Ledger article's claims about rents and wages are very biased and
+     * mostly false." The subject is returned as given when no single party speaks for the
+     * piece.
+     */
+    static String headline(String subject, JsonNode claims) {
+        String block = headlineBlock(claims);
+        String s = subject.trim().replaceAll("[.!?\\s]+$", "");
+        if (block == null) {
+            return s;
+        }
+        String clause = verdictClause(score(claims, block));
+        return s.endsWith(clause) ? s + "." : s + " " + clause + ".";
+    }
+
+    /** A validation's {@code title} must be the headline's subject; null when it is. */
+    static String headlineProblem(String title) {
+        if (title != null && HEADLINE_SUBJECT.matcher(title).find()) {
+            return null;
+        }
+        return "validation refused: for a validation `title` is the subject of the headline "
+            + "only — \"The <publication> article's claims about <a>, <b> and <c>\" — naming the "
+            + "publication and the two or three topics its claims are about, with no verdict. "
+            + "The engine completes the sentence from the scores. Rewrite `title` in that form.";
+    }
+
+    private static final java.util.regex.Pattern HEADLINE_SUBJECT =
+        java.util.regex.Pattern.compile("(?i)\\bclaims\\b");
+
     static String honestyLabel(int score) {
         return score >= 90 ? "honest"
             : score >= 75 ? "mostly honest"
