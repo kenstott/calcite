@@ -55,7 +55,17 @@ final class ClaimScoring {
     static final int MIN_FOR_LABEL = 3;
 
     static final String KIND_CAUSAL = "causal";
-    static final List<String> KINDS = Arrays.asList("fact", KIND_CAUSAL);
+    static final String KIND_ATTACK = "attack";
+    static final List<String> KINDS = Arrays.asList("fact", KIND_CAUSAL, KIND_ATTACK);
+
+    /** Asserted as fact with no evidence offered and none found: an insult, an appeal to what
+     *  "lots of people think" or "everyone knows". Unlike a claim that cannot be checked here,
+     *  it is graded: a piece does not look honest by asserting what nobody can show. */
+    static final String VERDICT_UNSUPPORTED = "unsupported";
+
+    /** A party's honesty cannot exceed their central claim's own credit by more than this many
+     *  points: accurate detail does not redeem a case whose main assertion failed. */
+    static final int CENTRAL_CAP_MARGIN = 25;
 
     /** Wording that joins a fact to a cause. A sentence carrying it asserts the cause, and is
      *  graded on the cause: "snow falls because planes drop it" is not half right. */
@@ -157,11 +167,21 @@ final class ClaimScoring {
         return KIND_CAUSAL.equals(c.path("kind").asText("").trim().toLowerCase(Locale.ROOT));
     }
 
+    /** A personal attack: an unsupported claim like any other, and counted on its own line. */
+    static boolean isAttack(JsonNode c) {
+        return KIND_ATTACK.equals(c.path("kind").asText("").trim().toLowerCase(Locale.ROOT));
+    }
+
+    /** True for the one claim a party's case depends on. */
+    static boolean isCentral(JsonNode c) {
+        return c.path("central").asBoolean(false);
+    }
+
     /**
      * The 1-based numbers of a block's claims in the order they are shown. A scored block
-     * leads with the claims that held up least, so the assertion that matters is not buried
-     * under the accurate ones around it; claims that could not be graded come last. The source
-     * audit keeps the order given.
+     * leads with the party's central claim, then the claims that held up least, so the
+     * assertion that matters is not buried under the accurate ones around it; claims that
+     * could not be graded come last. The source audit keeps the order given.
      */
     static List<Integer> order(JsonNode claims, String block) {
         List<Integer> out = new ArrayList<>();
@@ -180,6 +200,9 @@ final class ClaimScoring {
     }
 
     private static double rank(JsonNode c) {
+        if (isCentral(c)) {
+            return -1;
+        }
         double credit = credit(c);
         return credit < 0 ? 2 : credit;
     }
@@ -217,6 +240,7 @@ final class ClaimScoring {
             base = 0.5;
             break;
         case "mostly false":
+        case VERDICT_UNSUPPORTED:
             base = 0.25;
             break;
         case "false":
@@ -233,9 +257,10 @@ final class ClaimScoring {
 
     /**
      * One scored block's result: how many claims were graded and how many could not be, the
-     * honesty score (0-100, the mean credit of the graded claims) with its characterization,
-     * the bias score (-100 to 100, the net share of the error that favours the party's own
-     * case) with its characterization, and the numbers of the citejacked claims.
+     * honesty score (0-100, the mean credit of the graded claims, capped by the central
+     * claim) with its characterization, the bias score (-100 to 100, the net share of the
+     * error that favours the party's own case) with its characterization, how many of the
+     * claims are personal attacks, and the numbers of the citejacked claims.
      */
     static ObjectNode score(JsonNode claims, String block) {
         int graded = 0;
@@ -244,6 +269,9 @@ final class ClaimScoring {
         double creditSum = 0;
         double errorWeight = 0;
         double lean = 0;
+        int attacks = 0;
+        int central = 0;
+        double centralCredit = -1;
         ArrayNode citejacked = MAPPER.createArrayNode();
         int n = 0;
         for (JsonNode c : claims) {
@@ -251,10 +279,17 @@ final class ClaimScoring {
             if (!block.equals(block(c))) {
                 continue;
             }
+            if (isAttack(c)) {
+                attacks++;
+            }
             if (isCitejacked(c)) {
                 citejacked.add(n);
             }
             double credit = credit(c);
+            if (isCentral(c) && central == 0) {
+                central = n;
+                centralCredit = credit;
+            }
             if (credit < 0) {
                 excluded++;
                 continue;
@@ -272,8 +307,19 @@ final class ClaimScoring {
         ObjectNode out = MAPPER.createObjectNode();
         out.put("graded", graded);
         out.put("excluded", excluded);
+        out.put("attacks", attacks);
+        if (central > 0) {
+            out.put("central", central);
+        }
         if (graded > 0) {
             int honesty = (int) Math.round(100 * creditSum / graded);
+            if (centralCredit >= 0) {
+                int cap = (int) Math.round(100 * centralCredit) + CENTRAL_CAP_MARGIN;
+                if (honesty > cap) {
+                    out.put("honesty_before_cap", honesty);
+                    honesty = cap;
+                }
+            }
             out.put("honesty_score", honesty);
             out.put("honesty", graded < MIN_FOR_LABEL
                 ? "too few checkable claims to characterize" : honestyLabel(honesty));
@@ -311,8 +357,9 @@ final class ClaimScoring {
      * Refuses a validation of two or more claims whose claims are not sorted and linked well
      * enough to score: every claim in a group, every subject claim with its speaker, every
      * scored claim naming the claims it rests on, how well that evidence carries it and what
-     * the evidence itself found, and every claim that fell short saying which way it errs.
-     * Returns null when the claims can be scored.
+     * the evidence itself found, every claim that fell short saying which way it errs, and
+     * the author and each speaker with exactly one central claim. Returns null when the claims
+     * can be scored.
      */
     static String enforce(JsonNode claims) {
         if (claims.size() < 2) {
@@ -320,6 +367,7 @@ final class ClaimScoring {
         }
         List<Integer> ungrouped = new ArrayList<>();
         List<String> problems = new ArrayList<>();
+        java.util.Map<String, Integer> centrals = new java.util.LinkedHashMap<>();
         int n = 0;
         for (JsonNode c : claims) {
             n++;
@@ -339,6 +387,22 @@ final class ClaimScoring {
             if (!kind.isEmpty() && !KINDS.contains(kind)) {
                 problems.add("claim " + n + " has `kind` '" + kind + "': it is "
                     + String.join(" | ", KINDS));
+            }
+            String b = block(c);
+            centrals.put(b, Integer.valueOf((centrals.containsKey(b)
+                ? centrals.get(b).intValue() : 0) + (isCentral(c) ? 1 : 0)));
+            if (isAttack(c)) {
+                if (!VERDICT_UNSUPPORTED.equals(verdict(c))) {
+                    problems.add("claim " + n + " is `kind`: \"" + KIND_ATTACK + "\" with "
+                        + "verdict '" + verdict(c) + "': a personal attack offers no evidence, "
+                        + "so its verdict is '" + VERDICT_UNSUPPORTED + "'. A factual assertion "
+                        + "inside it is a separate claim with its own verdict");
+                }
+                if (isCentral(c)) {
+                    problems.add("claim " + n + " is a personal attack marked `central`: the "
+                        + "central claim is the factual or causal assertion the case depends "
+                        + "on");
+                }
             }
             Matcher causal = CAUSAL_WORDING.matcher(c.path("assertion").asText(""));
             if (causal.find() && !isCausal(c)) {
@@ -377,6 +441,15 @@ final class ClaimScoring {
                     && !ERRS.contains(c.path("errs").asText("").trim().toLowerCase(Locale.ROOT))) {
                 problems.add("claim " + n + " fell short of true and supported but carries no "
                     + "valid `errs` (" + String.join(" | ", ERRS) + ")");
+            }
+        }
+        for (java.util.Map.Entry<String, Integer> e : centrals.entrySet()) {
+            if (e.getValue().intValue() != 1) {
+                String speaker = blockSpeaker(e.getKey());
+                problems.add((speaker == null ? "the author's claims" : "the claims by " + speaker)
+                    + " have " + e.getValue() + " claims marked `central`: mark exactly one "
+                    + "with `central`: true — the assertion that party's case depends on, the "
+                    + "one a reader would repeat");
             }
         }
         if (!ungrouped.isEmpty()) {

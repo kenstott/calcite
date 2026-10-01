@@ -837,7 +837,18 @@ public class McpServer {
             + "entirely from publications, with no statistical or quantitative analysis of your "
             + "own anywhere in it, carries NO chart: a graph of nothing measured is noise.\n"
             + "6. Verdict per assertion: true | mostly true | partially false | mostly false | "
-            + "false | not checkable here | stale vintage. 'Partially false' needs the reason: "
+            + "false | unsupported | not checkable here | stale vintage. 'Unsupported': the "
+            + "piece asserts it as fact, offers no evidence for it, and your own search of the "
+            + "corpus and of primary sources found none either way. That covers an insult or "
+            + "characterization ('John stinks like fish'), an appeal to unnamed people ('lots "
+            + "of people think John is dumb', 'critics say') and an appeal to common "
+            + "knowledge ('everyone knows ...'), unless a poll, survey or record is offered or "
+            + "found. An assertion with no evidence behind it MUST be graded 'unsupported' "
+            + "and MUST NOT be graded 'not checkable here', which is only for a measure that "
+            + "exists but that no table here carries. A personal attack on a person or group "
+            + "MUST also carry `kind`: `attack`; any factual assertion inside it ('was "
+            + "convicted of fraud') MUST be split out and graded as its own claim. "
+            + "'Partially false' needs the reason: "
             + "right direction wrong magnitude, right figure wrong year, true nationally but not "
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
             + "where the article cites a release newer than the loaded window is 'stale "
@@ -848,9 +859,14 @@ public class McpServer {
             + "evidence for the link alone. A true fact MUST NOT raise it, and it MUST NOT be "
             + "graded 'partially false' because the fact half is true: 'snow falls because "
             + "planes drop it' is false. A cause the evidence runs against, or that no "
-            + "evidence establishes, is 'false' or 'mostly false'.\n"
+            + "evidence establishes, is 'false' or 'mostly false'. For the author and for "
+            + "each speaker you MUST mark exactly one claim `central`: true — the assertion "
+            + "that party's case depends on, the one a reader would repeat. When a sentence "
+            + "was split into a fact and a cause, the cause is the central candidate, never "
+            + "the fact.\n"
             + "7. create_report_artifact with the `claims` array (one entry per assertion, each "
-            + "with `group`, `speaker`, `rests_on`, `support`, `source_finding`, `errs`, "
+            + "with `group`, `speaker`, `kind`, `central`, `rests_on`, `support`, "
+            + "`source_finding`, `errs`, "
             + "article_value, warehouse_value, independent_value, sources, table, "
             + "sql and reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
             + "leads with the honesty and bias result for the author and each speaker and the "
@@ -2773,7 +2789,7 @@ public class McpServer {
         pubProps.set("sources", sourcesProp);
         pubProps.set("claims", prop("array",
             "For an article or claim validation: one object per assertion, as "
-            + "[{assertion, group, speaker, kind, rests_on, support, source_finding, errs, verdict, "
+            + "[{assertion, group, speaker, kind, central, rests_on, support, source_finding, errs, verdict, "
             + "article_value, warehouse_value, independent_value, "
             + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
             + "score_claim_ref, score_claim_override_reason}]. `assertion` "
@@ -2798,13 +2814,19 @@ public class McpServer {
             + "one its evidence contradicts counts for nothing. `kind` is `causal` for a "
             + "claim that asserts a cause, motive or consequence — split from the fact it "
             + "starts from, which is its own claim — and its verdict grades the evidence for "
-            + "that link alone; otherwise `fact` or omitted. "
+            + "that link alone; `attack` for a personal attack, whose verdict is "
+            + "`unsupported` and which is counted on its own line; otherwise `fact` or omitted. `central` is true on "
+            + "exactly one claim of the author and of each speaker — the assertion their case "
+            + "depends on; honesty cannot exceed that claim's own credit by more than "
+            + ClaimScoring.CENTRAL_CAP_MARGIN + " points. "
             + "`verdict` is one of: true | mostly true | partially false "
-            + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
+            + "| mostly false | false | unsupported | not checkable here | stale vintage. `warehouse_value` "
             + "and `table` are what this corpus says and where; `sql` is the query that "
             + "produced it. `independent_value` is the figure from primary sources the article "
             + "did not supply, and `sources` (array of {title, url}) names them — every claim "
-            + "needs at least one. Use 'not checkable here' only when search_catalog's "
+            + "needs at least one, except an `unsupported` claim, whose `reason` names what "
+            + "was searched. Use 'unsupported' when the piece asserts it as fact with no "
+            + "evidence and none was found. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
             + "that is a freshness gap, not a falsehood. If any claim was scored with the "
@@ -2870,8 +2892,9 @@ public class McpServer {
             candidateVerdictsProp.put("type", "array");
             candidateVerdictsProp.put("description",
                 "Allowed verdict values for this claim, e.g. [\"accurate\", \"misleading\", "
-                + "\"false\"]. Omit 'not checkable here' or 'stale vintage' here -- call this "
-                + "tool only once real evidence has been gathered; those two verdicts don't "
+                + "\"false\"]. Omit 'unsupported', 'not checkable here' or 'stale vintage' "
+                + "here -- call this "
+                + "tool only once real evidence has been gathered; those verdicts don't "
                 + "need independent scoring.");
             scoreClaimProps.set("candidate_verdicts", candidateVerdictsProp);
             tools.add(
@@ -4441,12 +4464,16 @@ public class McpServer {
                                 + "the first section, one block per entry of `validation.groups` "
                                 + "in order — its `label` as the heading, then for a block with "
                                 + "`score` its honesty (`honesty_score` of 100 and the `honesty` "
-                                + "characterization), its bias (`bias_score`, -100 to 100, and "
-                                + "the `bias` characterization), the graded/excluded counts and "
+                                + "characterization; when `honesty_before_cap` is present say "
+                                + "the score is capped by central claim number `central` and "
+                                + "give the figure before the cap), its bias (`bias_score`, -100 to 100, and "
+                                + "the `bias` characterization), the graded/excluded counts, the "
+                                + "`attacks` count as personal attacks and "
                                 + "the `citejacked` claim numbers called out as citejacking, "
                                 + "then its `tally` and a table of its `claims` in the order "
-                                + "given, worst first (n, assertion, "
-                                + "verdict, and for a scored block rests_on and support) with "
+                                + "given, central claim then worst first (n, assertion, "
+                                + "verdict — marked central, causal or personal attack where "
+                                + "the claim is — and for a scored block rests_on and support) with "
                                 + "each claim's evidence fields behind an expander. A block "
                                 + "without `score` is the source audit: label it not scored. "
                                 + "You MUST show the scores and characterizations exactly as "
@@ -6654,14 +6681,18 @@ public class McpServer {
             boolean warehouse = nonBlank(c, "sql") || nonBlank(c, "warehouse_value");
             boolean independent = nonBlank(c, "independent_value")
                 && c.path("sources").isArray() && c.path("sources").size() > 0;
-            boolean graded = !"not checkable here".equals(verdict) && !"stale vintage".equals(verdict);
+            boolean graded = !"not checkable here".equals(verdict)
+                && !"stale vintage".equals(verdict)
+                && !ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict);
             if (graded && !warehouse && !independent) {
                 problems.add("the assertion \"" + assertion
                     + "\" is graded '" + verdict + "' with no evidence attached. A graded verdict "
                     + "needs either a warehouse figure (warehouse_value and the sql that produced "
                     + "it) or an independent figure (independent_value plus at least one entry in "
-                    + "sources). If neither exists, the verdict is 'not checkable here' with a "
-                    + "reason naming what was searched.");
+                    + "sources). If neither exists, the verdict is 'unsupported' when the "
+                    + "piece asserts it as fact and no evidence was found, or 'not checkable "
+                    + "here' when the measure exists but no table carries it, with a reason "
+                    + "naming what was searched.");
             }
             if (!graded && !nonBlank(c, "reason")) {
                 problems.add("the assertion \"" + assertion
@@ -6710,7 +6741,8 @@ public class McpServer {
         for (JsonNode c : claims) {
             String verdict = c.path("verdict").asText("").trim().toLowerCase(
                 java.util.Locale.ROOT);
-            if ("not checkable here".equals(verdict) || "stale vintage".equals(verdict)) {
+            if ("not checkable here".equals(verdict) || "stale vintage".equals(verdict)
+                    || ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict)) {
                 continue;
             }
             String ref = c.path("score_claim_ref").asText("").trim();
@@ -7492,7 +7524,7 @@ public class McpServer {
     /** Verdict vocabulary for {@code preview_report}'s {@code claims}. Order matters: it is
      *  the order the tally tiles render in. */
     static final String[] VERDICTS = {"true", "mostly true", "partially false",
-        "mostly false", "false", "not checkable here", "stale vintage"};
+        "mostly false", "false", "unsupported", "not checkable here", "stale vintage"};
 
     /**
      * The claim-by-claim section an article validation publishes. A verdict without the
@@ -7553,6 +7585,8 @@ public class McpServer {
                 .append("<td>").append(ReportPage.esc(assertion)).append("</td>")
                 .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong>")
                 .append(ClaimScoring.isCausal(c) ? " &middot; causal claim" : "")
+                .append(ClaimScoring.isAttack(c) ? " &middot; personal attack" : "")
+                .append(ClaimScoring.isCentral(c) ? " &middot; central claim" : "")
                 .append("</td>");
             if (ClaimScoring.isScored(block)) {
                 rows.append("<td>").append(restsOn.isEmpty() ? "none cited"
@@ -7611,7 +7645,12 @@ public class McpServer {
                     .append(ReportPage.esc(whVintage)).append("</dd>\n");
             }
             appendDetailRow(details, "Asserts", ClaimScoring.isCausal(c)
-                ? "a cause — graded on the evidence for the cause alone" : "");
+                ? "a cause — graded on the evidence for the cause alone"
+                : ClaimScoring.isAttack(c) ? "a personal attack — no evidence offered for it"
+                    : "");
+            appendDetailRow(details, "Central claim", ClaimScoring.isCentral(c)
+                ? "the assertion this party's case depends on; it caps their honesty score"
+                : "");
             appendDetailRow(details, "Rests on", restsOn);
             appendDetailRow(details, "What that evidence found",
                 c.path("source_finding").asText(""));
@@ -7667,12 +7706,16 @@ public class McpServer {
         }
         String html = groups
             + "<p class=\"note\">Verdicts: true, mostly true, partially false, mostly false, "
-            + "false, not checkable here (no table carries the measure), stale vintage (the "
+            + "false, unsupported (asserted as fact with no evidence offered and none found), "
+            + "not checkable here (no table carries the measure), stale vintage (the "
             + "article cites a release this corpus has not loaded — a freshness gap, not a "
             + "falsehood). Honesty is the share of a party's checkable claims that held up "
-            + "(true 1, mostly true 0.75, partially false 0.5, mostly false 0.25, false 0); a "
+            + "(true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported "
+            + "0.25, false 0); a "
             + "claim resting on cited evidence narrower than the claim counts for at most half, "
-            + "and one resting on evidence that contradicts it counts for nothing. Bias is the "
+            + "and one resting on evidence that contradicts it counts for nothing. Honesty "
+            + "cannot exceed the credit of the party's central claim by more than "
+            + ClaimScoring.CENTRAL_CAP_MARGIN + " points. Bias is the "
             + "net share of a party's error that favours their own case (+100 every error "
             + "helps it, 0 no lean, negative errors cut against it). Both describe this "
             + "article only, are not characterized below " + ClaimScoring.MIN_FOR_LABEL
@@ -7687,7 +7730,13 @@ public class McpServer {
         if (score.has("honesty_score")) {
             sb.append(score.path("honesty_score").asInt()).append("/100 — ");
         }
-        sb.append(ReportPage.esc(score.path("honesty").asText())).append("</strong> &middot; "
+        sb.append(ReportPage.esc(score.path("honesty").asText()));
+        if (score.has("honesty_before_cap")) {
+            sb.append(" (capped by central claim #").append(score.path("central").asInt())
+                .append("; ").append(score.path("honesty_before_cap").asInt())
+                .append(" before the cap)");
+        }
+        sb.append("</strong> &middot; "
             + "<strong>Bias ");
         if (score.has("bias_score")) {
             int bias = score.path("bias_score").asInt();
@@ -7696,7 +7745,13 @@ public class McpServer {
         sb.append(ReportPage.esc(score.path("bias").asText())).append("</strong></p><p>")
             .append(score.path("graded").asInt()).append(" claims graded, ")
             .append(score.path("excluded").asInt()).append(" not gradable, ")
-            .append(score.path("errors").asInt()).append(" fell short. In this article only.");
+            .append(score.path("errors").asInt()).append(" fell short");
+        int attacks = score.path("attacks").asInt();
+        if (attacks > 0) {
+            sb.append(", ").append(attacks)
+                .append(attacks == 1 ? " of them a personal attack" : " of them personal attacks");
+        }
+        sb.append(". In this article only.");
         JsonNode citejacked = score.path("citejacked");
         if (citejacked.size() > 0) {
             StringBuilder nums = new StringBuilder();

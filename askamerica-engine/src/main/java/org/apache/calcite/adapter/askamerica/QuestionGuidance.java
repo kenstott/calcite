@@ -548,7 +548,11 @@ final class QuestionGuidance {
             + "carry `rests_on` (the numbers of the claims offered as its evidence, [] when "
             + "none) and, when that is not empty, `source_finding` (what the evidence itself "
             + "found, read from the source) and `support`: supported | overreach | "
-            + "contradicted | decorative. Every author or subject claim that fell short MUST "
+            + "contradicted | decorative. A claim asserted as fact with no evidence offered "
+            + "and none found MUST be graded `unsupported`. A sentence joining a fact to a "
+            + "cause MUST be split, the cause carrying `kind`: `causal`; a personal attack "
+            + "MUST carry `kind`: `attack` and verdict `unsupported`. The author and each speaker MUST have exactly one "
+            + "claim marked `central`: true. Every author or subject claim that fell short MUST "
             + "carry `errs`: toward_thesis | against_thesis | neutral. The engine computes the "
             + "honesty and bias scores for the author and each speaker; you MUST NOT assign a "
             + "rating of your own, and you MUST report them for this article only."),

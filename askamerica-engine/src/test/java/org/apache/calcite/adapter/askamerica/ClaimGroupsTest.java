@@ -73,13 +73,14 @@ class ClaimGroupsTest {
     ArrayNode claims = MAPPER.createArrayNode();
     claims.add(claim("The study found rents rose 1.4 percent", "fidelity", "true"));
     claims.add(restingOn(author("Wages at the low end were suppressed", "mostly false",
-        "toward_thesis"), 1, "contradicted"));
+        "toward_thesis"), 1, "contradicted").put("central", true));
     claims.add(claim("The committee reported 85,000 lost children", "fidelity", "mostly true"));
     ObjectNode quoted = claim("Crossings nearly stopped overnight", "subject_claims",
         "mostly true");
     quoted.put("speaker", "Senator Vale");
     quoted.putArray("rests_on");
     quoted.put("errs", "neutral");
+    quoted.put("central", true);
     claims.add(quoted);
     return claims;
   }
@@ -218,6 +219,7 @@ class ClaimGroupsTest {
         "Snow falls from the sky because Russian planes are dropping it", "false",
         "toward_thesis"), 1, "decorative");
     cause.put("kind", "causal");
+    cause.put("central", true);
     assertNull(ClaimScoring.enforce(claims(claims.get(0).deepCopy(), cause)));
   }
 
@@ -240,6 +242,82 @@ class ClaimGroupsTest {
         .path("groups").get(0);
     assertEquals(4, block.path("claims").get(0).path("n").asInt());
     assertEquals(2, block.path("claims").get(3).path("n").asInt());
+  }
+
+  @Test void anAssertionWithNoEvidenceBehindItCountsAgainstHonesty() {
+    ArrayNode claims = claims(author("Rents rose 4 percent", "true", null),
+        author("Everyone knows the city is finished", "unsupported", "toward_thesis"),
+        author("Morale collapsed", "not checkable here", null));
+    assertEquals(0.25, ClaimScoring.credit(claims.get(1)), 1e-9);
+    JsonNode score = ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR);
+    assertEquals(2, score.path("graded").asInt());
+    assertEquals(1, score.path("excluded").asInt());
+    assertEquals(63, score.path("honesty_score").asInt());
+    assertTrue(java.util.Arrays.asList(McpServer.VERDICTS).contains("unsupported"));
+  }
+
+  @Test void aFailedCentralClaimCapsTheHonestyScore() {
+    ObjectNode cause = author("Rents are higher due to immigration", "false", "toward_thesis");
+    cause.put("kind", "causal");
+    cause.put("central", true);
+    ArrayNode claims = claims(author("Rents rose 4 percent", "true", null),
+        author("Arrivals rose 9 percent", "true", null),
+        author("Vacancy fell", "true", null), cause);
+    assertNull(ClaimScoring.enforce(claims));
+    JsonNode score = ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR);
+    assertEquals(75, score.path("honesty_before_cap").asInt());
+    assertEquals(25, score.path("honesty_score").asInt());
+    assertEquals("dishonest", score.path("honesty").asText());
+    assertEquals(4, score.path("central").asInt());
+    assertEquals(java.util.Arrays.asList(4, 1, 2, 3),
+        ClaimScoring.order(claims, ClaimScoring.GROUP_AUTHOR));
+
+    String html = McpServer.claimsSection(claims).html;
+    assertTrue(html.contains("Honesty 25/100 — dishonest (capped by central claim #4; 75 "
+        + "before the cap)"), html);
+    assertTrue(html.contains("&middot; causal claim &middot; central claim"), html);
+
+    // A central claim that held up caps nothing.
+    ((ObjectNode) claims.get(3)).put("verdict", "mostly true").put("errs", "neutral");
+    JsonNode held = ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR);
+    assertFalse(held.has("honesty_before_cap"));
+    assertEquals(94, held.path("honesty_score").asInt());
+  }
+
+  @Test void eachPartyNeedsExactlyOneCentralClaim() {
+    ArrayNode none = claims(author("Rents rose 4 percent", "true", null),
+        author("Vacancy fell", "true", null));
+    String problem = ClaimScoring.enforce(none);
+    assertNotNull(problem);
+    assertTrue(problem.contains("the author's claims have 0 claims marked `central`"), problem);
+
+    ((ObjectNode) none.get(0)).put("central", true);
+    assertNull(ClaimScoring.enforce(none));
+    ((ObjectNode) none.get(1)).put("central", true);
+    assertTrue(ClaimScoring.enforce(none).contains("have 2 claims marked `central`"));
+  }
+
+  @Test void aPersonalAttackIsAnUnsupportedClaimCountedOnItsOwnLine() {
+    ObjectNode attack = author("John stinks like fish", "unsupported", "toward_thesis");
+    attack.put("kind", "attack");
+    ArrayNode claims = claims(author("Rents rose 4 percent", "true", null).put("central", true),
+        author("Lots of people think John is dumb", "unsupported", "toward_thesis"), attack);
+    assertNull(ClaimScoring.enforce(claims));
+    JsonNode score = ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR);
+    assertEquals(3, score.path("graded").asInt());
+    assertEquals(1, score.path("attacks").asInt());
+    assertEquals(50, score.path("honesty_score").asInt());
+    assertEquals(100, score.path("bias_score").asInt());
+
+    String html = McpServer.claimsSection(claims).html;
+    assertTrue(html.contains("<strong>unsupported</strong> &middot; personal attack"), html);
+    assertTrue(html.contains("2 fell short, 1 of them a personal attack. In this article only."),
+        html);
+
+    attack.put("verdict", "not checkable here");
+    String problem = ClaimScoring.enforce(claims(claims.get(0).deepCopy(), attack));
+    assertNotNull(problem);
+    assertTrue(problem.contains("its verdict is 'unsupported'"), problem);
   }
 
   @Test void theMiddleVerdictIsPartiallyFalse() {
@@ -270,7 +348,7 @@ class ClaimGroupsTest {
   }
 
   @Test void claimsThatCouldNotBeGradedAreLeftOutOfTheScore() {
-    ArrayNode claims = claims(author("Rents rose", "true", null),
+    ArrayNode claims = claims(author("Rents rose", "true", null).put("central", true),
         author("Morale collapsed", "not checkable here", null),
         author("Arrivals fell last month", "stale vintage", null));
     assertNull(ClaimScoring.enforce(claims));
