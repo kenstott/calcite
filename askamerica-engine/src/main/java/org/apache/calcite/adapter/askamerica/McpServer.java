@@ -861,7 +861,8 @@ public class McpServer {
             + "create_report_artifact and deliver BOTH of its outputs: the artifact rendered "
             + "in the conversation AND the file:// link to the local report page. When the "
             + "client cannot render artifacts (a terminal client, for example), deliver the "
-            + "file:// link alone.\n"
+            + "file:// link alone. When the client has an in-chat browser, you MUST also "
+            + "open the article (`source_url`) in it.\n"
             + "8. With two or more claims, every claim MUST carry `group` and the report MUST "
             + "carry `pinocchios`, refused without them. `group` is `fidelity` when the "
             + "assertion relays a study, release, report, official figure or other source the "
@@ -4474,7 +4475,9 @@ public class McpServer {
                                 + "(of 4) and explanation, its `tally`, and a table of its "
                                 + "`claims` (n, assertion, verdict) with each claim's evidence "
                                 + "fields behind an expander. You MUST NOT merge the groups into "
-                                + "one table or move a claim between groups.";
+                                + "one table or move a claim between groups. When this "
+                                + "client has an in-chat browser, you MUST also open "
+                                + "`validation.source_url` in it.";
                         }
                         text = "Build the artifact from the JSON below with your own "
                             + "artifact/charting capability. You MUST NOT fetch, embed, iframe or "
