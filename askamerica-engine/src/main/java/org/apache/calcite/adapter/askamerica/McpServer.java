@@ -843,9 +843,10 @@ public class McpServer {
             + "where the article cites a release newer than the loaded window is 'stale "
             + "vintage' — a freshness gap, not a falsehood.\n"
             + "7. create_report_artifact with the `claims` array (one entry per assertion, each "
-            + "with `group`, article_value, warehouse_value, independent_value, sources, table, "
+            + "with `group`, `speaker`, `rests_on`, `support`, `source_finding`, `errs`, "
+            + "article_value, warehouse_value, independent_value, sources, table, "
             + "sql and reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
-            + "leads with the tally and the "
+            + "leads with the honesty and bias result for the author and each speaker and the "
             + "assertion that matters most. The user asked whether the piece can be trusted; "
             + "answer that first. **The `claims` array is not optional and prose is not a "
             + "substitute for it.** Writing the verdicts as free-text sections ('Claim 1 — ...', "
@@ -863,31 +864,49 @@ public class McpServer {
             + "client cannot render artifacts (a terminal client, for example), deliver the "
             + "file:// link alone. When the client has an in-chat browser, you MUST also "
             + "open the article (`source_url`) in it.\n"
-            + "8. With two or more claims, every claim MUST carry `group` and the report MUST "
-            + "carry `pinocchios`, refused without them. `group` is `fidelity` when the "
-            + "assertion relays a study, release, report, official figure or other source the "
-            + "piece cites as evidence — its verdict grades whether the piece represented that "
-            + "source accurately. `group` is `claims_accuracy` when the assertion is one the "
-            + "piece, its author, or the subject it covers puts forward as their own — its "
-            + "verdict grades whether the assertion is true. A figure the piece relays "
-            + "correctly from a cited study MUST be grouped `fidelity`; it MUST NOT count "
-            + "toward claims_accuracy. Claims in both groups: pass the split form "
-            + "{\"fidelity\": {\"count\":0-4,\"explanation\":\"...\"}, \"claims_accuracy\": "
-            + "{\"count\":0-4,\"explanation\":\"...\"}}. Claims in one group only: pass the "
-            + "single form {\"count\": 0-4, \"explanation\": \"...\"}. Group every claim "
-            + "FIRST, then rate each group from its own claims only — an explanation MUST NOT "
-            + "cite a claim from the other group. Weigh what the central, most-repeated "
-            + "assertion in that group actually claims and how far it strays, not its vaguest "
-            + "or most defensible line. Washington Post Fact Checker scale: 0 = true or no "
-            + "significant issues; "
-            + "1 = some shading of the facts or selective framing that is still individually "
-            + "defensible; 2 = significant omissions or exaggerations — a real number wearing "
-            + "a misleading label, a qualifier that only survives by not checking it; "
-            + "3 = significant factual errors or self-contradiction — a headline claim the "
-            + "most recent data actually runs the opposite direction from; 4 = whoppers — a "
-            + "number or claim invented or contradicted outright by the primary source. Name "
-            + "which claim(s) drove each rating in its explanation, not a restatement of the "
-            + "claims table.\n\n"
+            + "8. With two or more claims, every claim MUST carry `group`, refused without it. "
+            + "`fidelity`: the assertion relays a study, release, report, official figure or "
+            + "other source the piece cites as evidence. Its verdict grades whether the source "
+            + "was represented accurately: figure, unit, period, population AND the source's "
+            + "own finding. Fidelity claims are an audit; they are never scored and earn no "
+            + "credit. `author_claims`: the piece's author asserts it in their own voice — "
+            + "conclusions, causal statements, characterizations, framing, the headline. "
+            + "`subject_claims`: a person or organization the piece covers asserts it; it MUST "
+            + "carry `speaker`. A quoted politician's assertion is the politician's; the "
+            + "reporter's sentence around the quote is the author's. A figure relayed "
+            + "correctly from a cited source MUST be grouped `fidelity` and MUST NOT be "
+            + "restated as an author or subject claim. Every author and subject claim MUST "
+            + "carry `rests_on`: the numbers (1-based position in `claims`) of the claims "
+            + "offered as its evidence, [] when none. When `rests_on` is not empty the claim "
+            + "MUST carry `source_finding` and `support` (step 9). Every author or subject "
+            + "claim whose verdict is not `true`, or whose support is `overreach` or "
+            + "`contradicted`, MUST carry `errs`: `toward_thesis` when the error makes that "
+            + "party's own case look stronger, `against_thesis` when it weakens it, `neutral` "
+            + "otherwise. The engine computes an honesty score and a bias score for the "
+            + "author and for each speaker from these fields and returns each with its "
+            + "characterization. You MUST NOT assign a rating of your own. You MUST report "
+            + "the engine's scores and characterizations as returned, for this article only, "
+            + "and MUST NOT present them as a judgment of the person in general.\n"
+            + "9. CITEJACKING: borrowing a source's credibility for an assertion the source "
+            + "does not carry. You MUST test every author and subject claim that rests on a "
+            + "citation: (a) fetch the cited source itself — a link, a named study or an "
+            + "'according to' does not show what it found; (b) write the source's own headline "
+            + "finding, with its population, period, place and stated limits, in "
+            + "`source_finding`; (c) compare that finding with the assertion and set "
+            + "`support`. `contradicted`: the source's finding runs against the assertion, or "
+            + "the source warns against that reading. `overreach`: the source is narrower than "
+            + "the assertion — another population, period or place; a subgroup presented as "
+            + "the whole; a correlation presented as a cause; a projection or one scenario "
+            + "presented as a result; one year presented as a trend; a range reported by its "
+            + "extreme. `decorative`: the citation is real but does not bear on the assertion. "
+            + "`supported`: the source's own finding carries the assertion as stated. You MUST "
+            + "check for these signals: an accurate figure followed by 'this shows', 'which "
+            + "means' or 'proving'; a conclusion in the headline or closing paragraph that no "
+            + "cited source states; a source quoted for one number while its conclusion goes "
+            + "unmentioned; several accurate citations followed by a claim none of them makes; "
+            + "a citation to an abstract or press release whose body qualifies it. You MUST "
+            + "name every `contradicted` or `overreach` claim in the summary, with the "
+            + "source's actual finding beside the assertion.\n\n"
 
             + "## WORKFLOW — RESEARCH FIRST, DATA SECOND, IN ORDER\n\n"
             + "Measured, most recently in a 25-run reaudit: the average answer still cites only "
@@ -2757,16 +2776,30 @@ public class McpServer {
         pubProps.set("sources", sourcesProp);
         pubProps.set("claims", prop("array",
             "For an article or claim validation: one object per assertion, as "
-            + "[{assertion, group, verdict, article_value, warehouse_value, independent_value, "
+            + "[{assertion, group, speaker, rests_on, support, source_finding, errs, verdict, "
+            + "article_value, warehouse_value, independent_value, "
             + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
             + "score_claim_ref, score_claim_override_reason}]. `assertion` "
             + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
             + "say X' is graded on X). `group` is REQUIRED on every claim when there are two or "
             + "more: `fidelity` for an assertion that relays a study, release, report, "
             + "official figure or other source the piece cites as evidence (the verdict grades "
-            + "whether the piece represented that source accurately), `claims_accuracy` for an "
-            + "assertion the piece, its author, or the subject it covers puts forward as their "
-            + "own (the verdict grades whether it is true). `verdict` is one of: true | mostly true | partially true "
+            + "whether the piece represented that source accurately, including the source's "
+            + "own finding; never scored), `author_claims` for an assertion the piece's author "
+            + "makes in their own voice, `subject_claims` for an assertion made by a person or "
+            + "organization the piece covers, with `speaker` naming them. Every author and "
+            + "subject claim carries `rests_on`, the 1-based numbers of the claims offered as "
+            + "its evidence ([] when none); when that is not empty it also carries "
+            + "`source_finding` (what that evidence itself found, read from the source) and "
+            + "`support`: supported | overreach (the evidence is narrower than the claim) | "
+            + "contradicted (the evidence's own finding runs against the claim) | decorative "
+            + "(the evidence does not bear on the claim). Every author or subject claim that "
+            + "is not `true`, or whose support is overreach or contradicted, carries `errs`: "
+            + "toward_thesis | against_thesis | neutral. The engine computes an honesty score "
+            + "(0-100) and a bias score (-100 to 100) for the author and for each speaker from "
+            + "these fields; a claim that overreaches its evidence counts for at most half and "
+            + "one its evidence contradicts counts for nothing. "
+            + "`verdict` is one of: true | mostly true | partially true "
             + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
             + "and `table` are what this corpus says and where; `sql` is the query that "
             + "produced it. `independent_value` is the figure from primary sources the article "
@@ -2797,38 +2830,6 @@ public class McpServer {
             + "extension looks up a page's validation by this URL, so it must be the precise "
             + "page under test, not a reference or fact-check source fetched along the way. "
             + "The publish is refused if this is missing when claims are present."));
-        pubProps.set("pinocchios", prop("object",
-            "For a validation with two or more claims: a Pinocchio rating (Washington Post "
-            + "Fact Checker style), count 0-4 with an explanation. The piece under test is not "
-            + "always a news report — it may be a paper, a blog post, a press release, a "
-            + "transcript. Two shapes exist; the claims' `group` values decide which, and a "
-            + "mismatch is refused:\n"
-            + "SPLIT, {\"fidelity\": {\"count\":0-4,\"explanation\":\"...\"}, "
-            + "\"claims_accuracy\": {\"count\":0-4,\"explanation\":\"...\"}} — REQUIRED when "
-            + "the claims span both groups. `fidelity` rates only the claims grouped "
-            + "`fidelity` (did the piece represent the sources it cites accurately); "
-            + "`claims_accuracy` rates only the claims grouped `claims_accuracy` (are the "
-            + "assertions the piece, its author or its subject put forward as their own "
-            + "true). A figure relayed correctly from a cited source is credit for fidelity "
-            + "and MUST NOT be cited in the claims_accuracy explanation.\n"
-            + "SINGLE, {\"count\": 0-4, \"explanation\": \"...\"} — REQUIRED when every claim "
-            + "is in the same group.\n"
-            + "Either shape is a judgment call across its set of claims, not a mechanical count "
-            + "of false ones — weigh what the central, most-repeated assertion in that group "
-            + "actually claims, not its vaguest or most defensible one. count=0: true or no "
-            + "significant issues. count=1: some shading of the facts, selective framing, a "
-            + "defensible-but-flattering choice of comparison. count=2: significant omissions "
-            + "or exaggerations — a real number wearing a misleading label (e.g. a true "
-            + "magnitude attributed to a cause the data doesn't support), or a qualifier that "
-            + "only survives by not checking it. count=3: significant factual errors and/or "
-            + "self-contradiction — a headline claim the most recent data actually runs the "
-            + "opposite direction from. count=4: whoppers — a number or claim invented or "
-            + "contradicted outright by the primary source. Each explanation should read like "
-            + "an editorial verdict, not a restatement of the claims table: name which claim(s) "
-            + "drove that rating and why the count landed where it did, not higher or lower. "
-            + "A group holding a claim graded false or mostly false cannot be rated 0. "
-            + "Renders as a labeled banner above its own group's claim table. Omit only for a "
-            + "validation with a single claim."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -2934,8 +2935,8 @@ public class McpServer {
             + "MUST build the artifact from the returned JSON; you MUST NOT fetch, embed or "
             + "copy the saved report page. Returns "
             + "JSON: the narrative sections (including sections QC added), the citations as "
-            + "`sources`, for a validation the article link, Pinocchio ratings and graded "
-            + "claims per group as `validation`, and each dashboard panel as data (categories/series or points) with a "
+            + "`sources`, for a validation the article link, honesty and bias scores and graded "
+            + "claims per author, speaker and source audit as `validation`, and each dashboard panel as data (categories/series or points) with a "
             + "`hints` object — orientation_hint (bar charts) and suppressed_cells (values with "
             + "no data: draw them as a gap or an explicit 'no data' mark, never as zero). Follow "
             + "the hints instead of re-deriving presentation from the numbers. It also builds the "
@@ -4338,41 +4339,8 @@ public class McpServer {
                         addIfPresent(gateProblems, enforceClaimShape(claims));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
-                        JsonNode pinocchios = args.path("pinocchios");
-                        boolean isSplit = pinocchios.isObject()
-                            && (pinocchios.has("fidelity") || pinocchios.has("claims_accuracy"));
-                        if (isSplit) {
-                            validatePinocchiosSubRating(pinocchios, "fidelity");
-                            validatePinocchiosSubRating(pinocchios, "claims_accuracy");
-                        } else if (pinocchios.isObject()) {
-                            if (!pinocchios.hasNonNull("count") || !pinocchios.hasNonNull("explanation")
-                                    || pinocchios.path("explanation").asText("").trim().isEmpty()) {
-                                throw new IllegalArgumentException(
-                                    "pinocchios needs both a 'count' (0-4) and a non-empty "
-                                    + "'explanation' -- a bare rating with no reasoning is not "
-                                    + "useful to a reader deciding whether to trust it.");
-                            }
-                            int count = pinocchios.path("count").asInt(-1);
-                            if (count < 0 || count > 4) {
-                                throw new IllegalArgumentException(
-                                    "pinocchios.count must be 0-4 (Washington Post Fact "
-                                    + "Checker scale), got " + count);
-                            }
-                        } else if (claims.size() >= 2) {
-                            throw new IllegalArgumentException(
-                                "This validation grades " + claims.size() + " claims but "
-                                + "carries no pinocchios rating. Every validation with two or "
-                                + "more claims needs one -- either an overall {count, "
-                                + "explanation}, or, when the graded claims mix the piece's "
-                                + "own fidelity with the factual accuracy of what it relays or "
-                                + "quotes from another source, a split {fidelity, "
-                                + "claims_accuracy} rating instead. Weigh each group's "
-                                + "central, most-repeated assertion (not its vaguest one) and "
-                                + "rate 0-4 per the Washington Post Fact Checker scale, with an "
-                                + "explanation naming which claim(s) drove each count.");
-                        }
-                        addIfPresent(gateProblems, enforceClaimGroups(claims, pinocchios));
-                        ReportPage.Section claimsSec = claimsSection(claims, pinocchios);
+                        addIfPresent(gateProblems, ClaimScoring.enforce(claims));
+                        ReportPage.Section claimsSec = claimsSection(claims);
                         if (claimsSec != null) {
                             // Directly under the summary, where a reader looks first.
                             secs.add(Math.min(1, secs.size()), claimsSec);
@@ -4465,17 +4433,24 @@ public class McpServer {
                         String validationHint = "";
                         if (hasClaims) {
                             artifact.set("validation", ReportArtifact.validation(
-                                args.path("source_url").asText(null), claims,
-                                args.path("pinocchios")));
+                                args.path("source_url").asText(null), claims));
                             validationHint = " `validation` is the fact-check as data: show "
                                 + "`validation.source_url` as a prominent link to the article "
                                 + "under review directly under the title, then, directly under "
                                 + "the first section, one block per entry of `validation.groups` "
-                                + "in order — its `label` as the heading, its `pinocchios` count "
-                                + "(of 4) and explanation, its `tally`, and a table of its "
-                                + "`claims` (n, assertion, verdict) with each claim's evidence "
-                                + "fields behind an expander. You MUST NOT merge the groups into "
-                                + "one table or move a claim between groups. When this "
+                                + "in order — its `label` as the heading, then for a block with "
+                                + "`score` its honesty (`honesty_score` of 100 and the `honesty` "
+                                + "characterization), its bias (`bias_score`, -100 to 100, and "
+                                + "the `bias` characterization), the graded/excluded counts and "
+                                + "the `citejacked` claim numbers called out as citejacking, "
+                                + "then its `tally` and a table of its `claims` (n, assertion, "
+                                + "verdict, and for a scored block rests_on and support) with "
+                                + "each claim's evidence fields behind an expander. A block "
+                                + "without `score` is the source audit: label it not scored. "
+                                + "You MUST show the scores and characterizations exactly as "
+                                + "given, state that they describe this article only, and MUST "
+                                + "NOT compute, round or reword them, merge blocks into one "
+                                + "table, or move a claim between blocks. When this "
                                 + "client has an in-chat browser, you MUST also open "
                                 + "`validation.source_url` in it.";
                         }
@@ -6634,8 +6609,8 @@ public class McpServer {
                 + "validation and the claims array is mandatory whenever two or more assertions "
                 + "are graded -- it is not a stylistic choice. Rebuild each of these sections as "
                 + "one entry in `claims` (assertion, verdict, article_value, warehouse_value, "
-                + "independent_value, sources, reason), add the required `pinocchios` rating for "
-                + "the piece as a whole. Do not resubmit this prose-section version.");
+                + "independent_value, sources, reason). "
+                + "Do not resubmit this prose-section version.");
         }
         String body = allText.toString().replaceAll("<[^>]+>", " ");
         java.util.regex.Matcher admission = SUBSTANCE_NOT_TESTED_ADMISSION.matcher(body);
@@ -6650,8 +6625,8 @@ public class McpServer {
                 + "tested exactly like an unattributed claim: build the `claims` array, "
                 + "actually test each one (retry a failed query rather than abandoning it), "
                 + "grade 'not checkable here' with a named reason only when search_catalog's "
-                + "unmatched_terms genuinely show no table carries it, and add the required "
-                + "`pinocchios` rating. A verdict of 'accurate' resting on unattempted claims "
+                + "unmatched_terms genuinely show no table carries it. "
+                + "A verdict of 'accurate' resting on unattempted claims "
                 + "is not honest.");
         }
         if (problems.isEmpty()) {
@@ -7517,63 +7492,30 @@ public class McpServer {
         "mostly false", "false", "not checkable here", "stale vintage"};
 
     /**
-     * The claim-by-claim table an article validation publishes. A verdict without the
-     * figures on both sides is an opinion; the table forces both figures, the table they came
-     * from, and both vintages onto the page, and tallies the verdicts so a reader sees the
-     * shape of the article's accuracy before the detail.
+     * The claim-by-claim section an article validation publishes. A verdict without the
+     * figures on both sides is an opinion; the section forces both figures, the table they came
+     * from, and both vintages onto the page.
+     *
+     * <p>Claims render in the blocks {@link ClaimScoring} sorts them into: the author's own
+     * claims, then each speaker's, each under the honesty and bias scores computed from that
+     * block alone, then the unscored audit of the sources the piece relays. A figure relayed
+     * correctly from a cited source therefore never reads as credit for anyone's own claims.
+     * Measured live, 2026-10-01: an op-ed validation with 11 claims relayed from cited sources
+     * and 9 of the author's own rendered all 20 in one table, and its rating took credit for
+     * figures that were only relayed correctly.
      */
-    /** Validates one sub-rating ({@code count} + {@code explanation}) of a SPLIT {@code
-     *  pinocchios} object, e.g. the {@code fidelity} or {@code
-     *  claims_accuracy} field. */
-    private static void validatePinocchiosSubRating(JsonNode pinocchios, String field) {
-        JsonNode sub = pinocchios.path(field);
-        if (!sub.isObject() || !sub.hasNonNull("count") || !sub.hasNonNull("explanation")
-                || sub.path("explanation").asText("").trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                "pinocchios." + field + " needs both a 'count' (0-4) and a non-empty "
-                + "'explanation' -- a split rating needs both halves filled in, not just one.");
-        }
-        int count = sub.path("count").asInt(-1);
-        if (count < 0 || count > 4) {
-            throw new IllegalArgumentException(
-                "pinocchios." + field + ".count must be 0-4 (Washington Post Fact Checker "
-                + "scale), got " + count);
-        }
-    }
-
-    /** Renders one Pinocchios banner. {@code label} is null for a SINGLE overall rating, or
-     *  the sub-rating's name ("Reporting Accuracy", "Subject Claims Accuracy") for SPLIT. */
-    private static String pinocchioBadge(String label, JsonNode rating) {
-        if (rating == null || !rating.isObject()) {
-            return "";
-        }
-        int count = rating.path("count").asInt(0);
-        String explanation = rating.path("explanation").asText("");
-        StringBuilder icons = new StringBuilder();
-        for (int i = 0; i < 4; i++) {
-            icons.append(i < count ? "🤥" : "○");
-        }
-        String verdict = count == 0 ? "No Pinocchios — true or no significant issues"
-            : count + " of 4 Pinocchios";
-        String heading = label == null ? verdict : ReportPage.esc(label) + ": " + verdict;
-        return "<div class=\"pinocchio-rating\"><p><strong>" + icons + " " + heading
-            + "</strong></p><p>" + ReportPage.esc(explanation) + "</p></div>\n";
-    }
-
-    static ReportPage.Section claimsSection(JsonNode claims, JsonNode pinocchios) {
-        // One tally and one table per group, so a figure the piece relays correctly from a
-        // source it cites is counted under Fidelity and never as credit for Claims Accuracy.
-        // "" holds claims that carry no group (a single-claim validation).
+    static ReportPage.Section claimsSection(JsonNode claims) {
+        java.util.List<String> blocks = ClaimScoring.blocks(claims);
         java.util.Map<String, java.util.Map<String, Integer>> tallies =
             new java.util.LinkedHashMap<>();
-        java.util.Map<String, StringBuilder> rowsByGroup = new java.util.LinkedHashMap<>();
-        for (String g : new String[]{GROUP_FIDELITY, GROUP_CLAIMS_ACCURACY, ""}) {
+        java.util.Map<String, StringBuilder> rowsByBlock = new java.util.LinkedHashMap<>();
+        for (String b : blocks) {
             java.util.Map<String, Integer> t = new java.util.LinkedHashMap<>();
             for (String v : VERDICTS) {
                 t.put(v, Integer.valueOf(0));
             }
-            tallies.put(g, t);
-            rowsByGroup.put(g, new StringBuilder());
+            tallies.put(b, t);
+            rowsByBlock.put(b, new StringBuilder());
         }
         StringBuilder details = new StringBuilder();
         int n = 0;
@@ -7585,13 +7527,15 @@ public class McpServer {
                 throw new IllegalArgumentException("each claim needs a non-empty 'assertion' "
                     + "and 'verdict'; got " + c);
             }
-            String group = claimGroup(c);
-            if (!tallies.containsKey(group)) {
-                throw new IllegalArgumentException("claim group must be " + GROUP_FIDELITY
-                    + " | " + GROUP_CLAIMS_ACCURACY + "; got '" + group + "' for: " + assertion);
+            String block = ClaimScoring.block(c);
+            if (block.isEmpty() && !ClaimScoring.group(c).isEmpty()) {
+                throw new IllegalArgumentException("claim group must be "
+                    + ClaimScoring.GROUP_FIDELITY + " | " + ClaimScoring.GROUP_AUTHOR + " | "
+                    + ClaimScoring.GROUP_SUBJECT + "; got '" + ClaimScoring.group(c)
+                    + "' for: " + assertion);
             }
-            java.util.Map<String, Integer> tally = tallies.get(group);
-            StringBuilder rows = rowsByGroup.get(group);
+            java.util.Map<String, Integer> tally = tallies.get(block);
+            StringBuilder rows = rowsByBlock.get(block);
             if (!tally.containsKey(verdict)) {
                 throw new IllegalArgumentException("claim verdict must be one of "
                     + String.join(" | ", VERDICTS) + "; got '" + verdict + "' for: "
@@ -7599,19 +7543,26 @@ public class McpServer {
             }
             tally.put(verdict, Integer.valueOf(tally.get(verdict).intValue() + 1));
             n++;
+            String restsOn = restsOnText(c);
+            String support = ClaimScoring.support(c);
             String cls = "verdict-" + verdict.replace(' ', '-');
             rows.append("<tr class=\"").append(cls).append("\">")
                 .append("<td>").append(n).append("</td>")
                 .append("<td>").append(ReportPage.esc(assertion)).append("</td>")
-                .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong></td>")
-                .append("</tr>\n");
+                .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong></td>");
+            if (ClaimScoring.isScored(block)) {
+                rows.append("<td>").append(restsOn.isEmpty() ? "none cited"
+                    : ReportPage.esc(restsOn + (support.isEmpty() ? "" : " — " + support)))
+                    .append("</td>");
+            }
+            rows.append("</tr>\n");
 
             details.append("<details class=\"claim-detail ").append(cls).append("\">")
                 .append("<summary>#").append(n).append(" &middot; <strong>")
                 .append(ReportPage.esc(verdict)).append("</strong> &mdash; ")
                 .append(ReportPage.esc(assertion)).append("</summary>\n")
                 .append("<dl>\n");
-            appendDetailRow(details, "Graded for", groupLabel(group));
+            appendDetailRow(details, "Graded for", ClaimScoring.label(block));
             appendDetailRow(details, "Article says", c.path("article_value").asText(""));
             String warehouseValue = c.path("warehouse_value").asText("");
             if (!warehouseValue.isEmpty() || c.hasNonNull("table")) {
@@ -7654,6 +7605,11 @@ public class McpServer {
                     .append(ReportPage.esc(artVintage)).append(" / ")
                     .append(ReportPage.esc(whVintage)).append("</dd>\n");
             }
+            appendDetailRow(details, "Rests on", restsOn);
+            appendDetailRow(details, "What that evidence found",
+                c.path("source_finding").asText(""));
+            appendDetailRow(details, "Evidence support", supportText(support));
+            appendDetailRow(details, "Errs", errsText(c.path("errs").asText("")));
             appendDetailRow(details, "Why", c.path("reason").asText(""));
             appendDetailRow(details, "Overrode Jev's score because",
                 c.path("score_claim_override_reason").asText(""));
@@ -7668,129 +7624,115 @@ public class McpServer {
         if (n == 0) {
             return null;
         }
-        boolean isSplit = pinocchios != null && pinocchios.isObject()
-            && (pinocchios.has(GROUP_FIDELITY) || pinocchios.has(GROUP_CLAIMS_ACCURACY));
         StringBuilder groups = new StringBuilder();
-        for (java.util.Map.Entry<String, java.util.Map<String, Integer>> g : tallies.entrySet()) {
-            int inGroup = 0;
+        for (String b : blocks) {
+            int inBlock = 0;
             StringBuilder tiles = new StringBuilder("<p>");
-            for (java.util.Map.Entry<String, Integer> t : g.getValue().entrySet()) {
+            for (java.util.Map.Entry<String, Integer> t : tallies.get(b).entrySet()) {
                 if (t.getValue().intValue() > 0) {
-                    inGroup += t.getValue().intValue();
+                    inBlock += t.getValue().intValue();
                     tiles.append("<strong>").append(t.getValue()).append("</strong> ")
                         .append(ReportPage.esc(t.getKey())).append(" &middot; ");
                 }
             }
-            if (inGroup == 0) {
-                continue;
-            }
-            tiles.append("<strong>").append(inGroup).append("</strong> assertions checked</p>\n");
-            String label = groupLabel(g.getKey());
+            tiles.append("<strong>").append(inBlock).append("</strong> assertions checked</p>\n");
+            String label = ClaimScoring.label(b);
             if (!label.isEmpty()) {
                 groups.append("<h3>").append(ReportPage.esc(label)).append("</h3>\n");
             }
-            JsonNode rating = pinocchios == null ? null
-                : isSplit ? pinocchios.path(g.getKey()) : pinocchios;
-            groups.append(pinocchioBadge(g.getKey().isEmpty() ? null : groupName(g.getKey()),
-                    rating))
-                .append(tiles)
+            boolean scored = ClaimScoring.isScored(b);
+            if (scored) {
+                groups.append(scoreBanner(ClaimScoring.score(claims, b)));
+            } else if (ClaimScoring.GROUP_FIDELITY.equals(b)) {
+                groups.append("<p class=\"note\">Not scored. Relaying a source accurately earns "
+                    + "no credit; these rows only show whether the piece's citations say what "
+                    + "the piece says they do.</p>\n");
+            }
+            groups.append(tiles)
                 .append("<table><thead><tr><th>#</th><th>Assertion (verbatim)</th>"
-                    + "<th>Verdict</th></tr></thead><tbody>\n")
-                .append(rowsByGroup.get(g.getKey())).append("</tbody></table>\n");
+                    + "<th>Verdict</th>")
+                .append(scored ? "<th>Evidence it rests on</th>" : "")
+                .append("</tr></thead><tbody>\n")
+                .append(rowsByBlock.get(b)).append("</tbody></table>\n");
         }
         String html = groups
             + "<p class=\"note\">Verdicts: true, mostly true, partially true, mostly false, "
             + "false, not checkable here (no table carries the measure), stale vintage (the "
             + "article cites a release this corpus has not loaded — a freshness gap, not a "
-            + "falsehood).</p>\n"
+            + "falsehood). Honesty is the share of a party's checkable claims that held up "
+            + "(true 1, mostly true 0.75, partially true 0.5, mostly false 0.25, false 0); a "
+            + "claim resting on cited evidence narrower than the claim counts for at most half, "
+            + "and one resting on evidence that contradicts it counts for nothing. Bias is the "
+            + "net share of a party's error that favours their own case (+100 every error "
+            + "helps it, 0 no lean, negative errors cut against it). Both describe this "
+            + "article only, are not characterized below " + ClaimScoring.MIN_FOR_LABEL
+            + " claims or errors, and do not measure what the piece left out.</p>\n"
             + "<h3>Claim detail</h3>\n" + details;
         return new ReportPage.Section("Claim-by-claim verdicts", html);
     }
 
-    static final String GROUP_FIDELITY = "fidelity";
-    static final String GROUP_CLAIMS_ACCURACY = "claims_accuracy";
-
-    /** The claim's {@code group}, lower-cased; empty when the claim carries none. */
-    static String claimGroup(JsonNode c) {
-        return c.path("group").asText("").trim().toLowerCase(java.util.Locale.ROOT);
-    }
-
-    private static String groupName(String group) {
-        return GROUP_FIDELITY.equals(group) ? "Fidelity"
-            : GROUP_CLAIMS_ACCURACY.equals(group) ? "Claims Accuracy" : "";
-    }
-
-    /** Heading for one group's block: its name and what a verdict in it grades. */
-    static String groupLabel(String group) {
-        return GROUP_FIDELITY.equals(group)
-            ? "Fidelity — did the piece represent the sources it cites accurately"
-            : GROUP_CLAIMS_ACCURACY.equals(group)
-                ? "Claims Accuracy — are the piece's own assertions true" : "";
-    }
-
-    /**
-     * A validation with two or more claims sorts every claim into {@link #GROUP_FIDELITY}
-     * (the piece relaying a source it cites) or {@link #GROUP_CLAIMS_ACCURACY} (an assertion the
-     * piece, its author or its subject makes as their own), and its {@code pinocchios} shape
-     * follows from that sort: split when both groups hold claims, single otherwise. Measured
-     * live, 2026-10-01: an op-ed validation with 11 claims relayed from cited sources and 9 of
-     * the author's own rendered all 20 in one table, and its claims_accuracy rating took credit
-     * for figures that were only relayed correctly.
-     */
-    static String enforceClaimGroups(JsonNode claims, JsonNode pinocchios) {
-        if (claims.size() < 2) {
-            return null;
+    /** The honesty and bias line above one scored block's table. */
+    private static String scoreBanner(JsonNode score) {
+        StringBuilder sb = new StringBuilder("<div class=\"claim-score\"><p><strong>Honesty ");
+        if (score.has("honesty_score")) {
+            sb.append(score.path("honesty_score").asInt()).append("/100 — ");
         }
-        java.util.List<Integer> ungrouped = new java.util.ArrayList<>();
-        java.util.Map<String, Boolean> hasFalse = new java.util.LinkedHashMap<>();
-        int n = 0;
-        for (JsonNode c : claims) {
-            n++;
-            String group = claimGroup(c);
-            if (!GROUP_FIDELITY.equals(group) && !GROUP_CLAIMS_ACCURACY.equals(group)) {
-                ungrouped.add(Integer.valueOf(n));
-                continue;
+        sb.append(ReportPage.esc(score.path("honesty").asText())).append("</strong> &middot; "
+            + "<strong>Bias ");
+        if (score.has("bias_score")) {
+            int bias = score.path("bias_score").asInt();
+            sb.append(bias > 0 ? "+" : "").append(bias).append("/100 — ");
+        }
+        sb.append(ReportPage.esc(score.path("bias").asText())).append("</strong></p><p>")
+            .append(score.path("graded").asInt()).append(" claims graded, ")
+            .append(score.path("excluded").asInt()).append(" not gradable, ")
+            .append(score.path("errors").asInt()).append(" fell short. In this article only.");
+        JsonNode citejacked = score.path("citejacked");
+        if (citejacked.size() > 0) {
+            StringBuilder nums = new StringBuilder();
+            for (JsonNode cj : citejacked) {
+                nums.append(nums.length() == 0 ? "#" : ", #").append(cj.asInt());
             }
-            String verdict = c.path("verdict").asText("").trim()
-                .toLowerCase(java.util.Locale.ROOT);
-            boolean isFalse = "false".equals(verdict) || "mostly false".equals(verdict);
-            hasFalse.put(group, Boolean.valueOf(isFalse
-                || Boolean.TRUE.equals(hasFalse.get(group))));
+            sb.append(" <strong>Citejacking:</strong> ").append(nums).append(citejacked.size() == 1
+                ? " leans on cited evidence that does not carry it."
+                : " lean on cited evidence that does not carry them.");
         }
-        if (!ungrouped.isEmpty()) {
-            return "validation refused: claim(s) " + ungrouped + " carry no `group`. Every "
-                + "claim needs `group`: \"" + GROUP_FIDELITY + "\" when the assertion relays a "
-                + "study, release, report, official figure or other source the piece cites as "
-                + "evidence (the verdict grades whether the piece represented that source "
-                + "accurately), or \"" + GROUP_CLAIMS_ACCURACY + "\" when the assertion is one "
-                + "the piece, its author or its subject puts forward as their own (the verdict "
-                + "grades whether it is true). Group every claim, then rate each group from "
-                + "its own claims only.";
+        return sb.append("</p></div>\n").toString();
+    }
+
+    /** The claims a claim rests on, as "#1, #3"; empty when it names none. */
+    private static String restsOnText(JsonNode c) {
+        StringBuilder sb = new StringBuilder();
+        for (JsonNode r : c.path("rests_on")) {
+            sb.append(sb.length() == 0 ? "#" : ", #").append(r.asText());
         }
-        boolean isSplit = pinocchios.has(GROUP_FIDELITY)
-            || pinocchios.has(GROUP_CLAIMS_ACCURACY);
-        if (hasFalse.size() == 2 && !isSplit) {
-            return "validation refused: the claims span both groups (" + GROUP_FIDELITY
-                + " and " + GROUP_CLAIMS_ACCURACY + ") but `pinocchios` is a single rating. "
-                + "Pass the split form {\"fidelity\": {count, explanation}, "
-                + "\"claims_accuracy\": {count, explanation}}, each rated from its own group's "
-                + "claims only.";
+        return sb.toString();
+    }
+
+    private static String supportText(String support) {
+        switch (support) {
+        case "supported":
+            return "supported — the evidence's own finding carries the claim";
+        case ClaimScoring.SUPPORT_OVERREACH:
+            return "overreach — the evidence is narrower than the claim";
+        case ClaimScoring.SUPPORT_CONTRADICTED:
+            return "contradicted — the evidence's own finding runs against the claim";
+        case "decorative":
+            return "decorative — the evidence does not bear on the claim";
+        default:
+            return support;
         }
-        if (hasFalse.size() == 1 && isSplit) {
-            return "validation refused: every claim is grouped `"
-                + hasFalse.keySet().iterator().next() + "` but `pinocchios` is split. Pass the "
-                + "single form {count, explanation}, or regroup the claims if some belong to "
-                + "the other group.";
+    }
+
+    private static String errsText(String errs) {
+        switch (errs.trim().toLowerCase(java.util.Locale.ROOT)) {
+        case ClaimScoring.ERRS_TOWARD:
+            return "toward their own case";
+        case ClaimScoring.ERRS_AGAINST:
+            return "against their own case";
+        default:
+            return errs;
         }
-        for (java.util.Map.Entry<String, Boolean> g : hasFalse.entrySet()) {
-            JsonNode rating = isSplit ? pinocchios.path(g.getKey()) : pinocchios;
-            if (g.getValue().booleanValue() && rating.path("count").asInt(-1) == 0) {
-                return "validation refused: the " + g.getKey() + " group holds a claim graded "
-                    + "false or mostly false, but its Pinocchio count is 0. Rate that group "
-                    + "from its own claims only, at 1 or higher.";
-            }
-        }
-        return null;
     }
 
     /** Markdown link to the saved page's {@code file://} URL, labelled with the report title. */

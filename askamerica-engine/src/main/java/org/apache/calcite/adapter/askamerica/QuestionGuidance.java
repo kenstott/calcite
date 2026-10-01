@@ -541,15 +541,17 @@ final class QuestionGuidance {
             + "create_report_artifact again "
             + "with every graded assertion in `claims` before you finish. Only a validation "
             + "with a single assertion may skip the array. With two or more claims, every "
-            + "claim MUST carry `group` — `fidelity` when it relays a source the piece cites "
-            + "as evidence, `claims_accuracy` when it is the piece's, its author's or its "
-            + "subject's own assertion — and the report MUST carry `pinocchios`, a Washington "
-            + "Post Fact Checker-style rating, refused without one: {\"fidelity\": {\"count\": "
-            + "0-4, \"explanation\": \"...\"}, \"claims_accuracy\": {...}} when the claims span "
-            + "both groups, {\"count\": 0-4, \"explanation\": \"...\"} when they share one. "
-            + "Rate each group from its own claims only: weigh the central, most-repeated "
-            + "claim's distance from the facts, not a mechanical count of false verdicts, and "
-            + "name which claim(s) drove the count."),
+            + "claim MUST carry `group`: `fidelity` when it relays a source the piece cites "
+            + "as evidence (audited, never scored), `author_claims` when the author asserts "
+            + "it in their own voice, `subject_claims` with `speaker` when a person or "
+            + "organization the piece covers asserts it. Every author and subject claim MUST "
+            + "carry `rests_on` (the numbers of the claims offered as its evidence, [] when "
+            + "none) and, when that is not empty, `source_finding` (what the evidence itself "
+            + "found, read from the source) and `support`: supported | overreach | "
+            + "contradicted | decorative. Every author or subject claim that fell short MUST "
+            + "carry `errs`: toward_thesis | against_thesis | neutral. The engine computes the "
+            + "honesty and bias scores for the author and each speaker; you MUST NOT assign a "
+            + "rating of your own, and you MUST report them for this article only."),
         new Template(
             "marginal_comparison",
             "Compare two options at the margin on one measured outcome, with an effect size "
