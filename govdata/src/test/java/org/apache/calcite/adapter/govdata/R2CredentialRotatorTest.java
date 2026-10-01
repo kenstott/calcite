@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import org.apache.calcite.adapter.file.storage.RotatingS3Credentials;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,6 +25,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Opt-in and validation of in-place R2 credential rotation. */
 @Tag("unit")
@@ -64,6 +67,26 @@ class R2CredentialRotatorTest {
     c.put(R2CredentialRotator.ROTATION_KEY, "r2");
     c.put(R2CredentialRotator.EXPIRES_AT_KEY, "123");
     assertThrows(IllegalArgumentException.class, () -> R2CredentialRotator.startIfRequested(c));
+  }
+
+  /** R2 issues every temporary set under the parent access key id: only the secret and the
+   *  session token change. */
+  @Test void aFreshSetUnderTheSameAccessKeyIdIsApplied() {
+    RotatingS3Credentials live = RotatingS3Credentials.of("same-id-ak", "sk1", "st1");
+    java.util.List<String> applied = new java.util.ArrayList<>();
+    live.onRotation(c -> applied.add(c.secretAccessKey()));
+    Map<String, String> fresh = new HashMap<>();
+    fresh.put("accessKeyId", "same-id-ak");
+    fresh.put("secretAccessKey", "sk2");
+    fresh.put("sessionToken", "st2");
+
+    assertTrue(R2CredentialRotator.apply(live, fresh));
+    assertEquals("sk2", live.secretAccessKey());
+    assertEquals("st2", live.sessionToken());
+    assertEquals(java.util.Collections.singletonList("sk2"), applied);
+
+    assertFalse(R2CredentialRotator.apply(live, fresh));
+    assertEquals(1, applied.size());
   }
 
   @Test void expiryFileIsReplacedAndRemoved(@TempDir Path dir) throws Exception {

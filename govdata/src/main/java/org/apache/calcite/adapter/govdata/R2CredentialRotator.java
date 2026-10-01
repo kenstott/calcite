@@ -136,18 +136,34 @@ final class R2CredentialRotator {
    *  and applies them. Package-private for tests. */
   void check() throws IOException {
     Map<String, String> fresh = R2CredentialProvider.resolveOrFetch(apiKey, MIN_REMAINING_MS);
-    String currentId = credentials.accessKeyId();
-    String freshId = fresh.get("accessKeyId");
-    if (currentId.equals(freshId)) {
+    if (!apply(credentials, fresh)) {
       return;
     }
-    RotatingS3Credentials.rotate(currentId, freshId, fresh.get("secretAccessKey"),
-        fresh.get("sessionToken"));
     String expiresAt = fresh.get("expiresAtMillis");
     LOGGER.info("R2 credentials rotated in place; new set expires at {}", expiresAt);
     if (expiryFile != null) {
       writeExpiryFile(expiryFile, expiresAt);
     }
+  }
+
+  /**
+   * Replaces {@code credentials} with {@code fresh} unless they are the same set. R2 issues
+   * every temporary set under the parent access key id, so a new set differs from the one it
+   * replaces only in its secret and session token.
+   *
+   * @return whether the credentials were replaced
+   */
+  static boolean apply(RotatingS3Credentials credentials, Map<String, String> fresh) {
+    String currentId = credentials.accessKeyId();
+    String freshId = fresh.get("accessKeyId");
+    String freshSecret = fresh.get("secretAccessKey");
+    String freshToken = fresh.get("sessionToken");
+    if (currentId.equals(freshId) && credentials.secretAccessKey().equals(freshSecret)
+        && java.util.Objects.equals(credentials.sessionToken(), freshToken)) {
+      return false;
+    }
+    RotatingS3Credentials.rotate(currentId, freshId, freshSecret, freshToken);
+    return true;
   }
 
   /** Atomically replaces the stamp; an unstamped set removes it, meaning "never expires". */

@@ -969,16 +969,17 @@ final class PgwireGovDataConnector {
           + " is running but is not a pgwire-govdata process — not killing it.");
       return;
     }
-    boolean destroyed = ph.get().destroyForcibly();
     // The port and the expired credentials are held until the process is really gone; a
     // spawn that starts before that loses the bind and exits, leaving connect() to time out.
+    boolean destroyed = false;
     boolean exited = false;
     try {
-      ph.get().onExit().get(KILL_EXIT_WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+      destroyed = killTree(ph.get(), KILL_EXIT_WAIT_SECONDS);
       exited = true;
     } catch (java.util.concurrent.TimeoutException e) {
       log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
-          + " still running " + KILL_EXIT_WAIT_SECONDS + "s after the forced kill.");
+          + " or a child of it still running " + KILL_EXIT_WAIT_SECONDS
+          + "s after the forced kill.");
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       log().println("[askamerica-mcp] killAndRespawn(" + reason + "): interrupted waiting for "
@@ -991,6 +992,31 @@ final class PgwireGovDataConnector {
         + "pgwire-govdata pid " + pid + " (" + (destroyed ? "signal sent" : "failed to send")
         + (exited ? ", exited" : "")
         + "). The next connection attempt will spawn a fresh server.");
+  }
+
+  /**
+   * Force-kills {@code root} and every process under it, and waits for all of them to exit.
+   * The pid on file is the launcher; the server holding the port is its child, and a forced
+   * kill runs no shutdown hook, so killing the launcher alone leaves the server running.
+   *
+   * @return whether the kill signal reached {@code root}
+   */
+  static boolean killTree(ProcessHandle root, long waitSeconds)
+      throws InterruptedException, java.util.concurrent.ExecutionException,
+      java.util.concurrent.TimeoutException {
+    java.util.List<ProcessHandle> tree = new java.util.ArrayList<>();
+    tree.add(root);
+    root.descendants().forEach(tree::add);
+    boolean destroyed = root.destroyForcibly();
+    for (ProcessHandle child : tree.subList(1, tree.size())) {
+      child.destroyForcibly();
+    }
+    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(waitSeconds);
+    for (ProcessHandle h : tree) {
+      h.onExit().get(Math.max(1L, deadline - System.nanoTime()),
+          java.util.concurrent.TimeUnit.NANOSECONDS);
+    }
+    return destroyed;
   }
 
   /** Whether the process's own command line names pgwire-govdata (the launcher, or the
