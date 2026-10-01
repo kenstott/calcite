@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,6 +37,54 @@ final class ReportArtifact {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ReportArtifact() {
+    }
+
+    /**
+     * A validation as data: the article under review and its claims sorted into the groups
+     * their verdicts grade, each group with its own Pinocchio rating and verdict tally. Claims
+     * keep the number they have in the order given, so a group's table and the saved page
+     * agree. A single rating (every claim in one group) is carried on that one group.
+     */
+    static ObjectNode validation(String sourceUrl, JsonNode claims, JsonNode pinocchios) {
+        ObjectNode out = MAPPER.createObjectNode();
+        putIfPresent(out, "source_url", sourceUrl);
+        boolean isSplit = pinocchios.has(McpServer.GROUP_FIDELITY)
+            || pinocchios.has(McpServer.GROUP_CLAIMS_ACCURACY);
+        ArrayNode groups = out.putArray("groups");
+        for (String g : new String[]{McpServer.GROUP_FIDELITY,
+            McpServer.GROUP_CLAIMS_ACCURACY, ""}) {
+            ObjectNode tally = MAPPER.createObjectNode();
+            ArrayNode inGroup = MAPPER.createArrayNode();
+            int n = 0;
+            for (JsonNode claim : claims) {
+                n++;
+                if (!g.equals(McpServer.claimGroup(claim))) {
+                    continue;
+                }
+                String verdict = claim.path("verdict").asText("").trim()
+                    .toLowerCase(java.util.Locale.ROOT);
+                tally.put(verdict, tally.path(verdict).asInt(0) + 1);
+                ObjectNode numbered = MAPPER.createObjectNode();
+                numbered.put("n", n);
+                numbered.setAll((ObjectNode) claim);
+                inGroup.add(numbered);
+            }
+            if (inGroup.size() == 0) {
+                continue;
+            }
+            ObjectNode group = groups.addObject();
+            if (!g.isEmpty()) {
+                group.put("group", g);
+                group.put("label", McpServer.groupLabel(g));
+            }
+            JsonNode rating = isSplit ? pinocchios.path(g) : pinocchios;
+            if (rating.isObject()) {
+                group.set("pinocchios", rating);
+            }
+            group.set("tally", tally);
+            group.set("claims", inGroup);
+        }
+        return out;
     }
 
     /** Builds the payload; {@code sections}, {@code sources} and {@code panels} may be empty,

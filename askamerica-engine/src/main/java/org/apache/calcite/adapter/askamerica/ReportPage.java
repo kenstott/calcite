@@ -121,7 +121,7 @@ final class ReportPage {
 
     static String render(String title, String subtitle, List<Section> sections,
             String dashboardSvg, String svgDownloadUrl, List<Source> sources, String footnote,
-            String byline, List<Filter> filters) {
+            String byline, List<Filter> filters, String sourceUrl) {
         // Sections are rewritten FIRST: sorting a table produces the CSS that drives it, and the
         // <style> block is emitted before the body. Doing it in place would mean writing the
         // rules after the stylesheet had already closed.
@@ -175,6 +175,15 @@ final class ReportPage {
         }
         if (subtitle != null && !subtitle.isEmpty()) {
             sb.append("<p class=\"subtitle\">").append(esc(subtitle)).append("</p>\n");
+        }
+        if (sourceUrl != null && !sourceUrl.trim().isEmpty()) {
+            // The piece a validation grades, above everything else: a reader checks the
+            // verdicts against the article, so the way back to it cannot sit in the citations.
+            String u = sourceUrl.trim();
+            boolean linkable = u.startsWith("https://") || u.startsWith("http://");
+            sb.append("<p class=\"under-review\"><span>Article under review</span>")
+                .append(linkable ? "<a href=\"" + esc(u) + "\">" + esc(u) + "</a>" : esc(u))
+                .append("</p>\n");
         }
         sb.append("</header>\n");
 
@@ -655,6 +664,11 @@ final class ReportPage {
             + "h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}\n"
             + "h3{font-size:1rem;margin:1.4rem 0 .4rem}\n"
             + ".subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}\n"
+            + ".under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);"
+            + "border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}\n"
+            + ".under-review span{display:block;color:var(--muted);font-size:.75rem;"
+            + "text-transform:uppercase;letter-spacing:.06em}\n"
+            + ".under-review a{font-weight:600}\n"
             + ".board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;"
             + "overflow:hidden;background:var(--bg)}\n"
             + ".board svg{display:block;width:100%;height:auto}\n"

@@ -832,8 +832,8 @@ public class McpServer {
             + "5. Charts follow YOUR analysis. Every assertion graded from a warehouse figure, a "
             + "relationship test, a series you computed, or a comparison you ran against an "
             + "external figure gets a render_chart of that evidence; compose_dashboard the set "
-            + "and pass it as preview_report's `dashboard`, and preview_report REFUSES a publish "
-            + "whose claims carry a warehouse_value or sql but no chart. A validation graded "
+            + "and pass it as create_report_artifact's `dashboard`; a report "
+            + "whose claims carry a warehouse_value or sql but no chart is REFUSED. A validation graded "
             + "entirely from publications, with no statistical or quantitative analysis of your "
             + "own anywhere in it, carries NO chart: a graph of nothing measured is noise.\n"
             + "6. Verdict per assertion: true | mostly true | partially true | mostly false | "
@@ -842,9 +842,9 @@ public class McpServer {
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
             + "where the article cites a release newer than the loaded window is 'stale "
             + "vintage' — a freshness gap, not a falsehood.\n"
-            + "7. preview_report with the `claims` array (one entry per assertion, each with "
-            + "article_value, warehouse_value, independent_value, sources, table, sql and "
-            + "reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
+            + "7. create_report_artifact with the `claims` array (one entry per assertion, each "
+            + "with `group`, article_value, warehouse_value, independent_value, sources, table, "
+            + "sql and reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
             + "leads with the tally and the "
             + "assertion that matters most. The user asked whether the piece can be trusted; "
             + "answer that first. **The `claims` array is not optional and prose is not a "
@@ -853,28 +853,30 @@ public class McpServer {
             + "stylistic choice, because it throws away the short scannable table and per-claim "
             + "detail sections the reader depends on. If you notice — before or after "
             + "publishing — that you graded two or more distinct assertions but the last "
-            + "preview_report call carried no `claims` array (or an empty one), that publish is "
-            + "incomplete: call preview_report again, this time with every assertion you graded "
+            + "report call carried no `claims` array (or an empty one), that publish is "
+            + "incomplete: call create_report_artifact again, this time with every assertion you graded "
             + "placed in `claims`, before you finish. A validation with exactly one assertion "
             + "may be reported in prose if a table would be silly for one row; two or more "
-            + "assertions always go in `claims`.\n"
-            + "8. With two or more claims, also pass `pinocchios`, refused without one — "
-            + "Washington Post Fact Checker style, {\"count\": 0-4, \"explanation\": \"...\"}. "
-            + "A validated piece is not always a news report — it may be a paper, a blog post, "
-            + "a press release, a transcript. **MANDATORY: if even one graded claim is "
-            + "attributed to a person, study, organization, or release the piece cites — not "
-            + "an assertion the piece itself is making in its own voice — use the split form: "
+            + "assertions always go in `claims`. You MUST build a validation with "
+            + "create_report_artifact and render the artifact in the conversation; "
+            + "preview_report is only for a client that cannot render artifacts.\n"
+            + "8. With two or more claims, every claim MUST carry `group` and the report MUST "
+            + "carry `pinocchios`, refused without them. `group` is `fidelity` when the "
+            + "assertion relays a study, release, report, official figure or other source the "
+            + "piece cites as evidence — its verdict grades whether the piece represented that "
+            + "source accurately. `group` is `claims_accuracy` when the assertion is one the "
+            + "piece, its author, or the subject it covers puts forward as their own — its "
+            + "verdict grades whether the assertion is true. A figure the piece relays "
+            + "correctly from a cited study MUST be grouped `fidelity`; it MUST NOT count "
+            + "toward claims_accuracy. Claims in both groups: pass the split form "
             + "{\"fidelity\": {\"count\":0-4,\"explanation\":\"...\"}, \"claims_accuracy\": "
-            + "{\"count\":0-4,\"explanation\":\"...\"}}. Use the single form ONLY when every "
-            + "graded claim is the piece's own unattributed assertion — a press release is not "
-            + "automatically exempt just because its author and its subject are the same "
-            + "entity; one built from a cited data sheet still attributes that data. Check "
-            + "every claim in the group for an attribution before choosing the form.** "
-            + "Fidelity grades whether the piece accurately represented the event, study, "
-            + "quote, or source it describes; claims_accuracy grades whether the attributed "
-            + "assertion itself holds up. Either way, weigh what the central, "
-            + "most-repeated assertion in that group actually claims and how far it strays, "
-            + "not its vaguest or most defensible line. 0 = true or no significant issues; "
+            + "{\"count\":0-4,\"explanation\":\"...\"}}. Claims in one group only: pass the "
+            + "single form {\"count\": 0-4, \"explanation\": \"...\"}. Group every claim "
+            + "FIRST, then rate each group from its own claims only — an explanation MUST NOT "
+            + "cite a claim from the other group. Weigh what the central, most-repeated "
+            + "assertion in that group actually claims and how far it strays, not its vaguest "
+            + "or most defensible line. Washington Post Fact Checker scale: 0 = true or no "
+            + "significant issues; "
             + "1 = some shading of the facts or selective framing that is still individually "
             + "defensible; 2 = significant omissions or exaggerations — a real number wearing "
             + "a misleading label, a qualifier that only survives by not checking it; "
@@ -1205,7 +1207,8 @@ public class McpServer {
             + "re-query, not caveat; no warnings is not a clean bill of health, only that no "
             + "listed defect was detected. critique_query runs the same form-level checks on "
             + "SQL before you run it.\n"
-            + "- **BEFORE CALLING preview_report — three checks, all required:**\n"
+            + "- **BEFORE CALLING create_report_artifact (or preview_report) — three checks, "
+            + "all required:**\n"
             + "  1. Count your distinct external sources on any question with a real-world "
             + "antecedent. Fewer than 3-5 is a stop signal, not a publishable state — go back "
             + "to workflow step 1 and search from an angle you haven't tried yet, rather than "
@@ -1230,7 +1233,7 @@ public class McpServer {
             + "just each side's own point estimate — survives its own uncertainty.\n"
             + "- **OFFER THE REPORT — DO NOT SILENTLY SKIP IT OR SILENTLY BUILD IT.** Measured "
             + "live (2026-09-15, real Desktop sessions): two substantive analyses were "
-            + "delivered as chat prose alone, with preview_report never called and never "
+            + "delivered as chat prose alone, with no report tool ever called and never "
             + "mentioned — the reader had no way to know a formatted, shareable report was "
             + "even possible until they thought to ask for one by name. An internal MUST that "
             + "the model can silently fail to follow is not a real guarantee; a choice put to "
@@ -2619,7 +2622,8 @@ public class McpServer {
             + "Do not move plotted geometry — the coordinates are derived from the values you "
             + "passed, so shifting a mark makes the picture disagree with its own numbers. "
             + "Once this chart is genuinely the whole deliverable, offer the reader a "
-            + "permanent, shareable version of it via preview_report rather than leaving only "
+            + "permanent, shareable version of it via create_report_artifact rather than leaving "
+            + "only "
             + "an inline image that dies with this chat.",
             schema(chartProps, new String[]{})));
 
@@ -2677,7 +2681,7 @@ public class McpServer {
             + "with it. That is enough for a chart embedded in an answer you are writing "
             + "yourself, but you have just built the board for a question worth more than a "
             + "sentence — this is exactly the moment to OFFER the reader a full report, not "
-            + "assume either way: pass these same panels via preview_report's dashboard "
+            + "assume either way: pass these same panels via create_report_artifact's dashboard "
             + "argument only once they say yes, and it composes the board and inlines it under "
             + "your prose in one page.",
             schema(dashProps, new String[]{"panels"})));
@@ -2750,11 +2754,16 @@ public class McpServer {
         pubProps.set("sources", sourcesProp);
         pubProps.set("claims", prop("array",
             "For an article or claim validation: one object per assertion, as "
-            + "[{assertion, verdict, article_value, warehouse_value, independent_value, "
+            + "[{assertion, group, verdict, article_value, warehouse_value, independent_value, "
             + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
             + "score_claim_ref, score_claim_override_reason}]. `assertion` "
             + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
-            + "say X' is graded on X). `verdict` is one of: true | mostly true | partially true "
+            + "say X' is graded on X). `group` is REQUIRED on every claim when there are two or "
+            + "more: `fidelity` for an assertion that relays a study, release, report, "
+            + "official figure or other source the piece cites as evidence (the verdict grades "
+            + "whether the piece represented that source accurately), `claims_accuracy` for an "
+            + "assertion the piece, its author, or the subject it covers puts forward as their "
+            + "own (the verdict grades whether it is true). `verdict` is one of: true | mostly true | partially true "
             + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
             + "and `table` are what this corpus says and where; `sql` is the query that "
             + "produced it. `independent_value` is the figure from primary sources the article "
@@ -2789,21 +2798,18 @@ public class McpServer {
             "For a validation with two or more claims: a Pinocchio rating (Washington Post "
             + "Fact Checker style), count 0-4 with an explanation. The piece under test is not "
             + "always a news report — it may be a paper, a blog post, a press release, a "
-            + "transcript. Two shapes exist; the choice is MANDATORY, not a style preference:\n"
+            + "transcript. Two shapes exist; the claims' `group` values decide which, and a "
+            + "mismatch is refused:\n"
             + "SPLIT, {\"fidelity\": {\"count\":0-4,\"explanation\":\"...\"}, "
-            + "\"claims_accuracy\": {\"count\":0-4,\"explanation\":\"...\"}} — REQUIRED if even "
-            + "one graded claim is attributed to a person, study, organization, or release the "
-            + "piece cites, rather than an assertion the piece makes in its own voice. Grade "
-            + "fidelity (did it quote/frame/cite them accurately) separately from "
-            + "claims_accuracy (are the numbers and assertions THEY made actually true) — "
-            + "collapsing these into one count when they diverge, a piece faithfully relaying "
-            + "someone else's exaggerated claim, hides the more useful of the two verdicts.\n"
-            + "SINGLE, {\"count\": 0-4, \"explanation\": \"...\"} — use ONLY when every claim "
-            + "graded is the piece's own unattributed assertion, nothing attributed to a "
-            + "separate source it quotes or cites. A press release is not automatically exempt "
-            + "just because its author and its subject are the same entity — one built from a "
-            + "cited data sheet still attributes that data. Check every claim in the group for "
-            + "an attribution before choosing the form; do not default to SINGLE.\n"
+            + "\"claims_accuracy\": {\"count\":0-4,\"explanation\":\"...\"}} — REQUIRED when "
+            + "the claims span both groups. `fidelity` rates only the claims grouped "
+            + "`fidelity` (did the piece represent the sources it cites accurately); "
+            + "`claims_accuracy` rates only the claims grouped `claims_accuracy` (are the "
+            + "assertions the piece, its author or its subject put forward as their own "
+            + "true). A figure relayed correctly from a cited source is credit for fidelity "
+            + "and MUST NOT be cited in the claims_accuracy explanation.\n"
+            + "SINGLE, {\"count\": 0-4, \"explanation\": \"...\"} — REQUIRED when every claim "
+            + "is in the same group.\n"
             + "Either shape is a judgment call across its set of claims, not a mechanical count "
             + "of false ones — weigh what the central, most-repeated assertion in that group "
             + "actually claims, not its vaguest or most defensible one. count=0: true or no "
@@ -2817,9 +2823,9 @@ public class McpServer {
             + "contradicted outright by the primary source. Each explanation should read like "
             + "an editorial verdict, not a restatement of the claims table: name which claim(s) "
             + "drove that rating and why the count landed where it did, not higher or lower. "
-            + "Renders as a labeled banner (or two, for SPLIT) above the claim table. Omit for "
-            + "a validation with only one claim or none graded false/misleading enough to "
-            + "warrant a rating."));
+            + "A group holding a claim graded false or mostly false cannot be rated 0. "
+            + "Renders as a labeled banner above its own group's claim table. Omit only for a "
+            + "validation with a single claim."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -2867,13 +2873,13 @@ public class McpServer {
             tools.add(
                 tool("score_claim",
                 "Get an independent, calibrated second opinion on one already-evidenced claim "
-                + "before grading it in `preview_report`'s `claims` array. Sends the assertion "
+                + "before grading it in a report's `claims` array. Sends the assertion "
                 + "and your gathered evidence to a separate scoring model (typesafe.ai's Jev) "
                 + "that returns a typed verdict and a 0-4 Pinocchios rating, each with its own "
                 + "confidence -- a real check against self-grading, not a restatement of your "
                 + "own reasoning. Requires warehouse or independent evidence already in hand; "
-                + "this scores a claim, it does not gather evidence for one. `preview_report` "
-                + "automatically cross-checks each graded claim (anything other than 'not "
+                + "this scores a claim, it does not gather evidence for one. The report "
+                + "tools automatically cross-check each graded claim (anything other than 'not "
                 + "checkable here'/'stale vintage') against your most recent score_claim calls "
                 + "for this session, in the order you called them and the order the claims are "
                 + "listed -- no extra field needed, just call this once per claim, in the same "
@@ -2891,9 +2897,9 @@ public class McpServer {
             + "self-contained HTML page: the exact page publish_report would publish. Returns a "
             + "local http link to it (served by this process until it exits) and a report_id "
             + "whose saved copy outlives the process (see restore_report). Nothing is "
-            + "published. Prefer create_report_artifact to show a report — it "
+            + "published. You MUST use create_report_artifact to show a report — it "
             + "runs the same QC, renders in the conversation, and returns this same page as a "
-            + "preview; call this instead when the client cannot render artifacts or the reader "
+            + "preview; call this ONLY when the client cannot render artifacts or the reader "
             + "asked for the standalone page. When the user says 'publish report' or 'share "
             + "report', that means a DURABLE, shareable link — build the report with either "
             + "tool, then register (once per account) then publish_report, and return the link "
@@ -2914,19 +2920,24 @@ public class McpServer {
 
         tools.add(
             tool("create_report_artifact",
-            "THE DEFAULT WAY TO SHOW A REPORT. Runs the same QC preview_report runs (same "
+            "THE DEFAULT WAY TO SHOW A REPORT, article validations included: after this call "
+            + "you MUST render the returned report as an artifact in the conversation. Runs "
+            + "the same QC preview_report runs (same "
             + "arguments, question_coverage included, same refusals) and hands back the QC'd "
             + "report as data plus layout hints so YOU render it with your own artifact/charting "
-            + "capability (for a Claude client: a Claude Artifact in the conversation). Returns "
+            + "capability (for a Claude client: a Claude Artifact in the conversation). You "
+            + "MUST build the artifact from the returned JSON; you MUST NOT fetch, embed or "
+            + "copy the saved report page. Returns "
             + "JSON: the narrative sections (including sections QC added), the citations as "
-            + "`sources`, and each dashboard panel as data (categories/series or points) with a "
+            + "`sources`, for a validation the article link, Pinocchio ratings and graded "
+            + "claims per group as `validation`, and each dashboard panel as data (categories/series or points) with a "
             + "`hints` object — orientation_hint (bar charts) and suppressed_cells (values with "
             + "no data: draw them as a gap or an explicit 'no data' mark, never as zero). Follow "
             + "the hints instead of re-deriving presentation from the numbers. It also builds the "
-            + "exact page publish_report would publish and returns a preview link to it, and saves "
+            + "exact page publish_report would publish and returns a file:// link to it, and saves "
             + "both the report instructions and that page under a report_id that outlives this "
-            + "process. Nothing is uploaded: after the artifact, give the reader the preview link "
-            + "and call register/publish_report only if they say yes to publishing.",
+            + "process. Nothing is uploaded: after the artifact, give the reader the file:// "
+            + "link exactly as returned and call register/publish_report only if they say yes to publishing.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
 
         ObjectNode registerProps = MAPPER.createObjectNode();
@@ -4316,6 +4327,7 @@ public class McpServer {
                     }
                     java.util.List<String> gateProblems = new java.util.ArrayList<>();
                     JsonNode claims = args.path("claims");
+                    ReportPage.Section renderedClaims = null;
                     if (claims.isArray() && claims.size() > 0) {
                         addIfPresent(gateProblems, enforceSourceUrlPresent(args));
                         addIfPresent(gateProblems, enforceClaimShape(claims));
@@ -4354,10 +4366,12 @@ public class McpServer {
                                 + "rate 0-4 per the Washington Post Fact Checker scale, with an "
                                 + "explanation naming which claim(s) drove each count.");
                         }
+                        addIfPresent(gateProblems, enforceClaimGroups(claims, pinocchios));
                         ReportPage.Section claimsSec = claimsSection(claims, pinocchios);
                         if (claimsSec != null) {
                             // Directly under the summary, where a reader looks first.
                             secs.add(Math.min(1, secs.size()), claimsSec);
+                            renderedClaims = claimsSec;
                         }
                     } else {
                         addIfPresent(gateProblems, enforceClaimsArrayPresence(secs));
@@ -4384,10 +4398,12 @@ public class McpServer {
                     if (appendix != null) {
                         secs.add(appendix);
                     }
+                    boolean hasClaims = claims.isArray() && claims.size() > 0;
                     String html = ReportPage.render(rTitle, rSub, secs, boardSvg, boardSvgUrl,
                         srcs,
                         args.has("footnote") ? args.get("footnote").asText(null) : null,
-                        args.has("byline") ? args.get("byline").asText(null) : null, flts);
+                        args.has("byline") ? args.get("byline").asText(null) : null, flts,
+                        hasClaims ? args.path("source_url").asText(null) : null);
                     LAST_REPORT = new LastReport(rTitle, coverage.path("question").asText(null),
                         html);
                     ReportStore.Saved saved = ReportStore.save(name, rTitle,
@@ -4423,42 +4439,58 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=" + name + " sections=" + secs.size()
                         + " sources=" + srcs.size() + " board=" + (boardSvg != null)
                         + " saved=" + saved.json);
+                    String fileLink = reportFileLink(rTitle, ReportStore.fileUrl(saved.id));
+                    String httpNote = url == null ? "" : " The same page is served over http "
+                        + "while this engine process lasts: " + url;
                     String savedLine = "Saved as report_id `" + saved.id + "` — the saved page "
-                        + "opens with no server at " + ReportStore.fileUrl(saved.id) + " and "
                         + "outlives this process: restore_report re-serves it over http by that "
-                        + "id if a file link won't open, and publish_report publishes it by that "
-                        + "id in any later session.";
+                        + "id if the file link won't open, and publish_report publishes it by "
+                        + "that id in any later session.";
                     if (asArtifact) {
-                        String previewLine = "Preview of the page publish_report would publish: ["
-                            + (rTitle == null || rTitle.isEmpty() ? "published version"
-                                : rTitle.replace("]", ")")) + "](" + ReportStore.fileUrl(saved.id)
-                            + ")" + (url == null ? "" : " (or over http while this session "
-                                + "lasts: " + url + ")") + ".";
-                        text = "Render this report with your own artifact/charting capability. "
+                        // The artifact is drawn from the report description, never from the
+                        // rendered page: the claims travel as data, so the page's claims
+                        // section is left out of the narrative rather than sent as markup.
+                        java.util.List<ReportPage.Section> narrative =
+                            new java.util.ArrayList<>(secs);
+                        narrative.remove(renderedClaims);
+                        ObjectNode artifact = ReportArtifact.build(rTitle, rSub,
+                            args.has("footnote") ? args.get("footnote").asText(null) : null,
+                            args.has("byline") ? args.get("byline").asText(null) : null,
+                            narrative, srcs, ps, c);
+                        String validationHint = "";
+                        if (hasClaims) {
+                            artifact.set("validation", ReportArtifact.validation(
+                                args.path("source_url").asText(null), claims,
+                                args.path("pinocchios")));
+                            validationHint = " `validation` is the fact-check as data: show "
+                                + "`validation.source_url` as a prominent link to the article "
+                                + "under review directly under the title, then, directly under "
+                                + "the first section, one block per entry of `validation.groups` "
+                                + "in order — its `label` as the heading, its `pinocchios` count "
+                                + "(of 4) and explanation, its `tally`, and a table of its "
+                                + "`claims` (n, assertion, verdict) with each claim's evidence "
+                                + "fields behind an expander. You MUST NOT merge the groups into "
+                                + "one table or move a claim between groups.";
+                        }
+                        text = "Build the artifact from the JSON below with your own "
+                            + "artifact/charting capability. You MUST NOT fetch, embed, iframe or "
+                            + "copy the saved report page: the JSON is the report. "
                             + "Follow each panel's `hints`: orientation_hint sets bar orientation, "
                             + "and every suppressed_cells entry is a value with no data — show a "
                             + "gap or a 'no data' mark there, never zero. `sections` html is the "
-                            + "narrative, in order, including any coverage-gap and claims sections "
-                            + "added by QC; list `sources` as the citations. Draw only what is in "
-                            + "this payload. After the artifact, give the reader the preview line "
-                            + "below, and publish it durably (register, then publish_report) only "
-                            + "if they say yes.\n\n" + previewLine + "\n" + savedLine + "\n\n"
-                            + MAPPER.writeValueAsString(ReportArtifact.build(rTitle, rSub,
-                                args.has("footnote") ? args.get("footnote").asText(null) : null,
-                                args.has("byline") ? args.get("byline").asText(null) : null,
-                                secs, srcs, ps, c));
+                            + "narrative, in order, including any coverage-gap sections added by "
+                            + "QC; list `sources` as the citations." + validationHint
+                            + " Draw only what is in this payload. After the artifact, give the "
+                            + "reader the file:// link below exactly as written, and publish it "
+                            + "durably (register, then publish_report) only if they say yes.\n\n"
+                            + "Standalone copy for the reader: " + fileLink + " — a local file "
+                            + "that opens with no server." + httpNote + "\n" + savedLine + "\n\n"
+                            + MAPPER.writeValueAsString(artifact);
                         break;
                     }
-                    // A Markdown link, not a bare URL: this protocol version (2024-11-05) has no
-                    // structured resource/resource_link content type, only "text" — a plain URL
-                    // in that text is left for the reader to notice and paste, where
-                    // [label](url) renders as a clickable hyperlink in every client that
-                    // markdown-renders tool-result text, Claude included.
-                    String linkLabel = (rTitle == null || rTitle.isEmpty())
-                        ? "Open the report" : rTitle;
                     // Deliberately NOT auto-uploaded durably here, even when an account is
                     // already registered: "show report"/preview_report alone means the reader
-                    // gets the ephemeral local link only. A durable copy is a separate ask —
+                    // gets the local link only. A durable copy is a separate ask —
                     // "publish report" or "share report" — which the calling model routes to
                     // publish_report itself (see that tool's own description). Auto-uploading on
                     // every preview_report call regardless of the user's own wording was tried
@@ -4466,17 +4498,13 @@ public class McpServer {
                     // same way, which is exactly the distinction the caller asked for. Skipped
                     // entirely in EVAL_MODE either way, so a comparative-eval run never posts
                     // real content to a real Studies account.
-                    String linkLine = url == null
-                        ? "Report built (" + html.length() + " bytes) but no local server is "
-                            + "available to serve it."
-                        : "Report published: [" + linkLabel.replace("]", ")") + "](" + url
-                        + ")\n\nGive the reader that link — it is "
+                    String linkLine = "Report built: " + fileLink
+                        + "\n\nGive the reader that file:// link exactly as written — it is "
                         + "the whole answer in one page: " + secs.size() + " section(s), "
                         + srcs.size() + " citation(s)"
                         + (boardSvg == null ? "" : ", dashboard inlined")
-                        + ". This http link is served by this engine process and stops working "
-                        + "when it exits; the saved copy below does not — it is local to this "
-                        + "machine, not shareable."
+                        + ". It is a file on this machine: it opens with no server and outlives "
+                        + "this process, but it is not shareable." + httpNote
                         + (EVAL_MODE ? "" : " If the reader asked to publish or share this "
                             + "(rather than just see it), call `register` once (if not already "
                             + "done this session) and then `publish_report` right after this call "
@@ -6272,7 +6300,9 @@ public class McpServer {
         Long prevTs = null;
         for (int i = snapshot.size() - 1; i >= 0; i--) {
             ObjectNode entry = snapshot.get(i);
-            if ("preview_report".equals(entry.path("tool").asText("")) && !entry.has("error")) {
+            String loggedTool = entry.path("tool").asText("");
+            if (("preview_report".equals(loggedTool)
+                    || "create_report_artifact".equals(loggedTool)) && !entry.has("error")) {
                 boundary = i;
                 break;
             }
@@ -7521,12 +7551,21 @@ public class McpServer {
             + "</strong></p><p>" + ReportPage.esc(explanation) + "</p></div>\n";
     }
 
-    private static ReportPage.Section claimsSection(JsonNode claims, JsonNode pinocchios) {
-        java.util.Map<String, Integer> tally = new java.util.LinkedHashMap<>();
-        for (String v : VERDICTS) {
-            tally.put(v, Integer.valueOf(0));
+    static ReportPage.Section claimsSection(JsonNode claims, JsonNode pinocchios) {
+        // One tally and one table per group, so a figure the piece relays correctly from a
+        // source it cites is counted under Fidelity and never as credit for Claims Accuracy.
+        // "" holds claims that carry no group (a single-claim validation).
+        java.util.Map<String, java.util.Map<String, Integer>> tallies =
+            new java.util.LinkedHashMap<>();
+        java.util.Map<String, StringBuilder> rowsByGroup = new java.util.LinkedHashMap<>();
+        for (String g : new String[]{GROUP_FIDELITY, GROUP_CLAIMS_ACCURACY, ""}) {
+            java.util.Map<String, Integer> t = new java.util.LinkedHashMap<>();
+            for (String v : VERDICTS) {
+                t.put(v, Integer.valueOf(0));
+            }
+            tallies.put(g, t);
+            rowsByGroup.put(g, new StringBuilder());
         }
-        StringBuilder rows = new StringBuilder();
         StringBuilder details = new StringBuilder();
         int n = 0;
         for (JsonNode c : claims) {
@@ -7537,6 +7576,13 @@ public class McpServer {
                 throw new IllegalArgumentException("each claim needs a non-empty 'assertion' "
                     + "and 'verdict'; got " + c);
             }
+            String group = claimGroup(c);
+            if (!tallies.containsKey(group)) {
+                throw new IllegalArgumentException("claim group must be " + GROUP_FIDELITY
+                    + " | " + GROUP_CLAIMS_ACCURACY + "; got '" + group + "' for: " + assertion);
+            }
+            java.util.Map<String, Integer> tally = tallies.get(group);
+            StringBuilder rows = rowsByGroup.get(group);
             if (!tally.containsKey(verdict)) {
                 throw new IllegalArgumentException("claim verdict must be one of "
                     + String.join(" | ", VERDICTS) + "; got '" + verdict + "' for: "
@@ -7556,6 +7602,7 @@ public class McpServer {
                 .append(ReportPage.esc(verdict)).append("</strong> &mdash; ")
                 .append(ReportPage.esc(assertion)).append("</summary>\n")
                 .append("<dl>\n");
+            appendDetailRow(details, "Graded for", groupLabel(group));
             appendDetailRow(details, "Article says", c.path("article_value").asText(""));
             String warehouseValue = c.path("warehouse_value").asText("");
             if (!warehouseValue.isEmpty() || c.hasNonNull("table")) {
@@ -7612,34 +7659,136 @@ public class McpServer {
         if (n == 0) {
             return null;
         }
-        StringBuilder tiles = new StringBuilder("<p>");
-        for (java.util.Map.Entry<String, Integer> t : tally.entrySet()) {
-            if (t.getValue().intValue() > 0) {
-                tiles.append("<strong>").append(t.getValue()).append("</strong> ")
-                    .append(ReportPage.esc(t.getKey())).append(" &middot; ");
+        boolean isSplit = pinocchios != null && pinocchios.isObject()
+            && (pinocchios.has(GROUP_FIDELITY) || pinocchios.has(GROUP_CLAIMS_ACCURACY));
+        StringBuilder groups = new StringBuilder();
+        for (java.util.Map.Entry<String, java.util.Map<String, Integer>> g : tallies.entrySet()) {
+            int inGroup = 0;
+            StringBuilder tiles = new StringBuilder("<p>");
+            for (java.util.Map.Entry<String, Integer> t : g.getValue().entrySet()) {
+                if (t.getValue().intValue() > 0) {
+                    inGroup += t.getValue().intValue();
+                    tiles.append("<strong>").append(t.getValue()).append("</strong> ")
+                        .append(ReportPage.esc(t.getKey())).append(" &middot; ");
+                }
             }
-        }
-        tiles.append("<strong>").append(n).append("</strong> assertions checked</p>\n");
-        String pinocchioHtml = "";
-        if (pinocchios != null && pinocchios.isObject()) {
-            boolean isSplit = pinocchios.has("fidelity")
-                || pinocchios.has("claims_accuracy");
-            if (isSplit) {
-                pinocchioHtml = pinocchioBadge("Fidelity", pinocchios.path("fidelity"))
-                    + pinocchioBadge("Claims Accuracy", pinocchios.path("claims_accuracy"));
-            } else {
-                pinocchioHtml = pinocchioBadge(null, pinocchios);
+            if (inGroup == 0) {
+                continue;
             }
+            tiles.append("<strong>").append(inGroup).append("</strong> assertions checked</p>\n");
+            String label = groupLabel(g.getKey());
+            if (!label.isEmpty()) {
+                groups.append("<h3>").append(ReportPage.esc(label)).append("</h3>\n");
+            }
+            JsonNode rating = pinocchios == null ? null
+                : isSplit ? pinocchios.path(g.getKey()) : pinocchios;
+            groups.append(pinocchioBadge(g.getKey().isEmpty() ? null : groupName(g.getKey()),
+                    rating))
+                .append(tiles)
+                .append("<table><thead><tr><th>#</th><th>Assertion (verbatim)</th>"
+                    + "<th>Verdict</th></tr></thead><tbody>\n")
+                .append(rowsByGroup.get(g.getKey())).append("</tbody></table>\n");
         }
-        String html = pinocchioHtml + tiles
-            + "<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th>"
-            + "</tr></thead><tbody>\n" + rows + "</tbody></table>\n"
+        String html = groups
             + "<p class=\"note\">Verdicts: true, mostly true, partially true, mostly false, "
             + "false, not checkable here (no table carries the measure), stale vintage (the "
             + "article cites a release this corpus has not loaded — a freshness gap, not a "
             + "falsehood).</p>\n"
             + "<h3>Claim detail</h3>\n" + details;
         return new ReportPage.Section("Claim-by-claim verdicts", html);
+    }
+
+    static final String GROUP_FIDELITY = "fidelity";
+    static final String GROUP_CLAIMS_ACCURACY = "claims_accuracy";
+
+    /** The claim's {@code group}, lower-cased; empty when the claim carries none. */
+    static String claimGroup(JsonNode c) {
+        return c.path("group").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String groupName(String group) {
+        return GROUP_FIDELITY.equals(group) ? "Fidelity"
+            : GROUP_CLAIMS_ACCURACY.equals(group) ? "Claims Accuracy" : "";
+    }
+
+    /** Heading for one group's block: its name and what a verdict in it grades. */
+    static String groupLabel(String group) {
+        return GROUP_FIDELITY.equals(group)
+            ? "Fidelity — did the piece represent the sources it cites accurately"
+            : GROUP_CLAIMS_ACCURACY.equals(group)
+                ? "Claims Accuracy — are the piece's own assertions true" : "";
+    }
+
+    /**
+     * A validation with two or more claims sorts every claim into {@link #GROUP_FIDELITY}
+     * (the piece relaying a source it cites) or {@link #GROUP_CLAIMS_ACCURACY} (an assertion the
+     * piece, its author or its subject makes as their own), and its {@code pinocchios} shape
+     * follows from that sort: split when both groups hold claims, single otherwise. Measured
+     * live, 2026-10-01: an op-ed validation with 11 claims relayed from cited sources and 9 of
+     * the author's own rendered all 20 in one table, and its claims_accuracy rating took credit
+     * for figures that were only relayed correctly.
+     */
+    static String enforceClaimGroups(JsonNode claims, JsonNode pinocchios) {
+        if (claims.size() < 2) {
+            return null;
+        }
+        java.util.List<Integer> ungrouped = new java.util.ArrayList<>();
+        java.util.Map<String, Boolean> hasFalse = new java.util.LinkedHashMap<>();
+        int n = 0;
+        for (JsonNode c : claims) {
+            n++;
+            String group = claimGroup(c);
+            if (!GROUP_FIDELITY.equals(group) && !GROUP_CLAIMS_ACCURACY.equals(group)) {
+                ungrouped.add(Integer.valueOf(n));
+                continue;
+            }
+            String verdict = c.path("verdict").asText("").trim()
+                .toLowerCase(java.util.Locale.ROOT);
+            boolean isFalse = "false".equals(verdict) || "mostly false".equals(verdict);
+            hasFalse.put(group, Boolean.valueOf(isFalse
+                || Boolean.TRUE.equals(hasFalse.get(group))));
+        }
+        if (!ungrouped.isEmpty()) {
+            return "validation refused: claim(s) " + ungrouped + " carry no `group`. Every "
+                + "claim needs `group`: \"" + GROUP_FIDELITY + "\" when the assertion relays a "
+                + "study, release, report, official figure or other source the piece cites as "
+                + "evidence (the verdict grades whether the piece represented that source "
+                + "accurately), or \"" + GROUP_CLAIMS_ACCURACY + "\" when the assertion is one "
+                + "the piece, its author or its subject puts forward as their own (the verdict "
+                + "grades whether it is true). Group every claim, then rate each group from "
+                + "its own claims only.";
+        }
+        boolean isSplit = pinocchios.has(GROUP_FIDELITY)
+            || pinocchios.has(GROUP_CLAIMS_ACCURACY);
+        if (hasFalse.size() == 2 && !isSplit) {
+            return "validation refused: the claims span both groups (" + GROUP_FIDELITY
+                + " and " + GROUP_CLAIMS_ACCURACY + ") but `pinocchios` is a single rating. "
+                + "Pass the split form {\"fidelity\": {count, explanation}, "
+                + "\"claims_accuracy\": {count, explanation}}, each rated from its own group's "
+                + "claims only.";
+        }
+        if (hasFalse.size() == 1 && isSplit) {
+            return "validation refused: every claim is grouped `"
+                + hasFalse.keySet().iterator().next() + "` but `pinocchios` is split. Pass the "
+                + "single form {count, explanation}, or regroup the claims if some belong to "
+                + "the other group.";
+        }
+        for (java.util.Map.Entry<String, Boolean> g : hasFalse.entrySet()) {
+            JsonNode rating = isSplit ? pinocchios.path(g.getKey()) : pinocchios;
+            if (g.getValue().booleanValue() && rating.path("count").asInt(-1) == 0) {
+                return "validation refused: the " + g.getKey() + " group holds a claim graded "
+                    + "false or mostly false, but its Pinocchio count is 0. Rate that group "
+                    + "from its own claims only, at 1 or higher.";
+            }
+        }
+        return null;
+    }
+
+    /** Markdown link to the saved page's {@code file://} URL, labelled with the report title. */
+    static String reportFileLink(String title, String fileUrl) {
+        String label = title == null || title.isEmpty() ? "Open the report"
+            : title.replace("]", ")");
+        return "[" + label + "](" + fileUrl + ")";
     }
 
     private static void appendDetailRow(StringBuilder details, String label, String value) {
