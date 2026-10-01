@@ -20,8 +20,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -229,6 +232,21 @@ class PgwireGovDataInstallerTest {
     assertFalse(Files.exists(stalePart));
     assertFalse(Files.exists(staging));
     assertFalse(Files.exists(staleReady));
+  }
+
+  @Test void secondUpdateInTheSameProcessIsSkipped(@TempDir Path home) throws IOException {
+    Path dir = bundle(home.resolve("pgwire-govdata"), "old");
+    Files.writeString(dir.resolve(PgwireGovDataInstaller.MARKER), "0.99.0");
+    Path lockFile = home.resolve("pgwire-govdata.install.lock");
+    try (FileChannel ch =
+             FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+         FileLock held = ch.lock()) {
+      // Returns at once: no wait on this process's own lock, no lookup, nothing staged.
+      PgwireGovDataInstaller.updateInBackground(dir, "0.100.0");
+      assertTrue(held.isValid());
+    }
+    assertFalse(PgwireGovDataInstaller.isPrepared(dir, "0.100.0"));
+    assertEquals("0.99.0", PgwireGovDataInstaller.readMarker(dir));
   }
 
   // ── resumable download ───────────────────────────────────────────────────
