@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.103.1](https://github.com/kenstott/calcite/compare/engine-v0.103.0...engine-v0.103.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** update the pgwire bundle in the background instead of blocking the spawn ([85ef3c6](https://github.com/kenstott/calcite/commit/85ef3c69c77033cffd0e0d65f82968cefb605f00))
+
 ## [0.103.0](https://github.com/kenstott/calcite/compare/engine-v0.102.0...engine-v0.103.0) (2026-09-30)
 
 
