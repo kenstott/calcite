@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.104.1](https://github.com/kenstott/calcite/compare/engine-v0.104.0...engine-v0.104.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** state what each report delivery is for ([dae15e7](https://github.com/kenstott/calcite/commit/dae15e75b8ef458ef7a3cfa692b19ca1ca247437))
+
 ## [0.104.0](https://github.com/kenstott/calcite/compare/engine-v0.103.1...engine-v0.104.0) (2026-10-01)
 
 
