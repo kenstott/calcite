@@ -3119,8 +3119,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return partitions;
     }
 
+    Table table = null;
     try {
-      Table table = IcebergCatalogManager.loadTable(catalogConfig, tableId);
+      table = IcebergCatalogManager.loadTable(catalogConfig, tableId);
       org.apache.iceberg.Snapshot currentSnapshot = table.currentSnapshot();
 
       if (currentSnapshot == null) {
@@ -3169,6 +3170,18 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       // data as a duplicate, or skipping a partition that genuinely still needs writing.
       throw new RuntimeException(
           "Failed to read existing partitions from " + tableId, e);
+    } finally {
+      // loadTable's S3FileIO is otherwise only reclaimed when Iceberg's own finalizer catches
+      // it during a later GC (surfaced as a "Unclosed S3FileIO instance" WARN with no caller
+      // visible from the trace) -- close it deterministically here instead; observed live in
+      // the self-healing cache-rebuild path this method serves.
+      if (table != null) {
+        try {
+          table.io().close();
+        } catch (Exception closeEx) {
+          LOGGER.debug("Failed to close S3FileIO for table {}: {}", tableId, closeEx.getMessage());
+        }
+      }
     }
   }
 }
