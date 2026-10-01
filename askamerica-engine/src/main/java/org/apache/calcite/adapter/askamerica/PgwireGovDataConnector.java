@@ -373,9 +373,8 @@ final class PgwireGovDataConnector {
       props.setProperty("user", "askamerica");
       props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_MILLIS / 1000));
       // Bounds EVERY query on this connection, not just the identity check below — a shared
-      // server that wedges mid-query (seen live: information_schema.schemata queries hang
-      // indefinitely against pgwire-calcite, no error, no response) must not silently freeze
-      // whatever MCP tool call is waiting on it forever.
+      // server that wedges mid-query must not silently freeze whatever MCP tool call is
+      // waiting on it forever.
       props.setProperty("socketTimeout", "30");
       // Routes the identity check to pgwire-calcite's reserved probe connection, so it
       // reports "busy" only when the server truly is, never because a user scan holds the
@@ -385,7 +384,7 @@ final class PgwireGovDataConnector {
           "jdbc:postgresql://" + host() + ":" + port() + "/govdata", props);
       if (!verifyIsGovData(c)) {
         log().println("[askamerica-mcp] Something is listening on " + host() + ":" + port()
-            + " but it isn't pgwire-govdata (sec.filing_metadata not queryable) — treating the "
+            + " but it isn't pgwire-govdata (it does not mount the sec, fec and crime schemas) — treating the "
             + "port as unavailable rather than using the wrong catalog. Point "
             + "ASKAMERICA_PGWIRE_PORT at a free port for this connector, or free this one.");
         closeQuietly(c);
@@ -406,16 +405,29 @@ final class PgwireGovDataConnector {
    * match pgwire-calcite's own shared 5433) pointing at a DIFFERENT pgwire-* adapter (file,
    * splunk, sharepoint, cloudops) that happens to answer on this port — the postgresql driver's
    * "/govdata" database name in the connect URL is only a label these lightweight servers
-   * report back, not something they actually validate against the connecting client. Queries a
-   * real table every govdata deployment always has, NOT information_schema (see the
-   * socketTimeout comment above — schemata lookups hang against this server, so this is not
-   * just a style choice).
+   * report back, not something they actually validate against the connecting client.
+   *
+   * <p>Counts three schemas only govdata mounts. The schema list is answered from the mounted
+   * model with no table resolved and no table I/O, which matters because this check runs before
+   * the first tool call of every cold start can answer. Measured 2026-10-01 on a cold server:
+   * <ul>
+   *   <li>{@code SELECT 1 FROM sec.filing_metadata LIMIT 1} (the check until then): 30 s — DuckDB
+   *       fetches every Iceberg manifest of the table to estimate its cardinality.
+   *   <li>{@code information_schema.tables} filtered to one table: 4 s — resolves that table and
+   *       downloads the Iceberg schema cache.
+   *   <li>any {@code pg_catalog} relation: 144 s — resolves every table of every schema.
+   * </ul>
    */
+  static final String IDENTITY_PROBE_SQL = "SELECT count(*) FROM information_schema.schemata "
+      + "WHERE schema_name IN ('sec', 'fec', 'crime')";
+
+  /** How many rows {@link #IDENTITY_PROBE_SQL} counts on a pgwire-govdata server. */
+  static final int IDENTITY_PROBE_SCHEMAS = 3;
+
   private static boolean verifyIsGovData(Connection c) {
     try (java.sql.Statement st = c.createStatement();
-         java.sql.ResultSet rs = st.executeQuery(
-             "SELECT 1 FROM sec.filing_metadata LIMIT 1")) {
-      return rs.next();
+         java.sql.ResultSet rs = st.executeQuery(IDENTITY_PROBE_SQL)) {
+      return rs.next() && rs.getInt(1) == IDENTITY_PROBE_SCHEMAS;
     // false ("not verified as govdata") is the safe direction to fail toward: the caller
     // discards this connection and spawns its own rather than trusting an unverified one.
     // Logged by the caller when this returns false.

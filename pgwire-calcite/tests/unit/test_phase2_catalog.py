@@ -58,6 +58,17 @@ def test_information_schema_tables_from_calcite(client):
     assert r["rows"] == [["SALES", "depts"], ["SALES", "emps"]]
 
 
+def test_schema_count_the_connector_identity_probe_uses(client):
+    """askamerica-engine's PgwireGovDataConnector.IDENTITY_PROBE_SQL has this exact shape."""
+    probe = "SELECT count(*) FROM information_schema.schemata WHERE schema_name IN (%s)"
+    present = client.query(probe % "'SALES'")
+    assert present["error"] is None, present["error"]
+    assert [int(r[0]) for r in present["rows"]] == [1]
+    absent = client.query(probe % "'sec', 'fec', 'crime'")
+    assert absent["error"] is None, absent["error"]
+    assert [int(r[0]) for r in absent["rows"]] == [0]
+
+
 def test_information_schema_columns_types(client):
     r = client.query(
         "SELECT column_name, data_type FROM information_schema.columns "
