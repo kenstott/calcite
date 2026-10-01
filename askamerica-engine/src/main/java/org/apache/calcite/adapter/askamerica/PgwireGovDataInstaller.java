@@ -231,17 +231,22 @@ final class PgwireGovDataInstaller {
 
     /**
      * Downloads, verifies and extracts {@code version} into {@link #readyDir} while the server
-     * runs on the installed bundle. Uses {@code tryLock}: another process holding the lock is
-     * already preparing or installing, and waiting on it would only duplicate that work.
+     * runs on the installed bundle.
+     *
+     * <p>When another process holds the lock this waits for it rather than giving up. Claude
+     * Desktop starts connectors and tears them down seconds later; the one that won the lock is
+     * as likely as any to be the one torn down, and if the survivors had skipped, nothing would
+     * download until the next spawn (2026-10-01: the lock holder lived three seconds). The
+     * operating system releases a dead holder's lock, so a waiter takes over and resumes its
+     * partial download; if the holder finishes instead, the waiter finds the release prepared
+     * and returns. Only a second update in THIS process is skipped.
      */
     static void updateInBackground(Path dir, String version) {
         Path lockFile = lockFile(dir);
         try (FileChannel ch = FileChannel.open(lockFile,
                  StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             FileLock lock = tryLock(ch)) {
+             FileLock lock = lockOrWait(ch)) {
             if (lock == null) {
-                report("Another AskAmerica process is already updating pgwire-govdata — "
-                    + "skipping.");
                 return;
             }
             if (decide(launcherPath(dir).isFile(), readMarker(dir), version) != Action.UPDATE
@@ -265,6 +270,22 @@ final class PgwireGovDataInstaller {
 
     private static Path lockFile(Path dir) {
         return dir.resolveSibling(dir.getFileName() + ".install.lock");
+    }
+
+    /** The lock, waiting for another process to release it; null when another thread of THIS
+     *  process holds it, since that thread is already doing the update. */
+    private static FileLock lockOrWait(FileChannel ch) throws IOException {
+        try {
+            FileLock lock = ch.tryLock();
+            if (lock != null) {
+                return lock;
+            }
+            report("Another AskAmerica process is already updating pgwire-govdata — waiting "
+                + "to take over if it is closed before it finishes.");
+            return ch.lock();
+        } catch (java.nio.channels.OverlappingFileLockException e) {
+            return null;
+        }
     }
 
     /** {@code tryLock} that also answers null when another thread of THIS process holds the

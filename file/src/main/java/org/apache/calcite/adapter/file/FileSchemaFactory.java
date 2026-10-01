@@ -643,12 +643,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     @SuppressWarnings("unchecked") Map<String, Object> csvTypeInference =
         (Map<String, Object>) operand.get("csvTypeInference");
 
-    // Get prime_cache option (default to true for optimal performance)
-    final Boolean primeCache = operand.get("primeCache") != null
-        ? (Boolean) operand.get("primeCache")
-        : operand.get("prime_cache") != null
-            ? (Boolean) operand.get("prime_cache")
-            : Boolean.TRUE;  // Default to true
+    // The non-DuckDB branches below; the DuckDB branch asks isPrimeCacheEnabled(operand, true).
+    final Boolean primeCache = isPrimeCacheEnabled(operand, false);
 
     // Get canonical schema name for consistent .aperio directory naming
     // This is set by GovDataSchemaFactory to ensure paths like .aperio/econ are used
@@ -760,7 +756,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       FileSchema fileSchema =
           new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, null,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+          storageType, storageConfig, flatten, csvTypeInference, isPrimeCacheEnabled(operand, true), comment,
+          canonicalSchemaName);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1346,6 +1343,23 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
    * @param name the schema name to validate
    * @throws IllegalArgumentException if a schema with the same name already exists
    */
+  /**
+   * Whether the schema primes its statistics cache in the background: the operand's
+   * {@code primeCache} (or {@code prime_cache}) when it sets one, else on for every engine but
+   * DuckDB.
+   *
+   * <p>The primer resolves every declared table through {@code FileSchema.getTableMap()} — an
+   * object-store round trip each — to load statistics only the Parquet engine's planner reads.
+   * Under DuckDB the tables are resolved one at a time on first use (FILE-697), and a background
+   * full build undoes that: measured 2026-10-01 on govdata, 26 primer threads resolved 537
+   * tables and loaded 0 statistics while the server's first query waited behind them.
+   */
+  static boolean isPrimeCacheEnabled(Map<String, Object> operand, boolean duckDB) {
+    Object explicit = operand.get("primeCache") != null
+        ? operand.get("primeCache") : operand.get("prime_cache");
+    return explicit != null ? (Boolean) explicit : !duckDB;
+  }
+
   private static void validateUniqueSchemaName(SchemaPlus parentSchema, String name) {
     if (parentSchema == null || name == null) {
       return;
