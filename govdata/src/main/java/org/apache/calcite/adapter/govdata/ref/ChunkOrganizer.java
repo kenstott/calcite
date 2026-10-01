@@ -413,6 +413,17 @@ public class ChunkOrganizer {
    *  CHUNK_ORGANIZER_MAX_ROWS_PER_SOURCE}. */
   static void sweep(Connection duckdb, Connection pg, String base, int maxRowsPerSource)
       throws SQLException {
+    sweep(duckdb, pg, base, maxRowsPerSource, false);
+  }
+
+  /** As above, but when {@code skipHashCompare} is true, every scanned parent is written
+   *  unconditionally instead of first checking whether its {@code parent_hash} already matches
+   *  what's staged -- see {@link #main}'s {@code CHUNK_ORGANIZER_SKIP_HASH_COMPARE} and {@link
+   *  #writeToPgStaging}'s matching parameter. Trades away the "skip an unchanged parent's write"
+   *  optimization for one fewer Postgres round-trip per batch; does not affect how much gets
+   *  read or chunked -- that cost is identical either way. */
+  static void sweep(Connection duckdb, Connection pg, String base, int maxRowsPerSource,
+      boolean skipHashCompare) throws SQLException {
     LOGGER.info("ChunkOrganizer sweep: checking {} row-concat + {} document-blob source(s)",
         ROW_CONCAT_SOURCES.size(), DOCUMENT_BLOB_SOURCES.size());
     int swept = 0;
@@ -426,15 +437,23 @@ public class ChunkOrganizer {
       // pipeline tracks completion per year -- see selectChangedYears' javadoc. null means no
       // per-year data exists for this source (most reference tables), so chunkRowConcatSource
       // falls back to its original unfiltered full scan, unchanged from before this.
-      Long lastSwept = selectLastSweptCompletedAt(pg, src.sourceTable);
-      Set<Integer> changedYears = selectChangedYears(pg, src.sourceTable,
-          lastSwept != null ? lastSwept : 0L);
+      Map<Integer, Long> yearCompletedAt = selectYearCompletedAt(pg, src.sourceTable);
+      Set<Integer> changedYears = selectChangedYears(pg, src.sourceTable, yearCompletedAt);
       if (changedYears != null) {
         LOGGER.info("ChunkOrganizer: {}.{} has per-year tracking -- scoping rescan to {} "
             + "changed year(s): {}", src.sourceSchema, src.sourceTable, changedYears.size(),
             changedYears);
+        // One year at a time, not the whole changedYears set in one call: markYearSwept fires
+        // right after EACH year finishes, so an interruption partway through only costs a redo
+        // of the one year in flight on the next sweep, not every year in this source's scope.
+        for (Integer year : changedYears) {
+          chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource,
+              Collections.singleton(year), skipHashCompare);
+          markYearSwept(pg, src.sourceSchema, src.sourceTable, year, yearCompletedAt.get(year));
+        }
+      } else {
+        chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare);
       }
-      chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource, changedYears);
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
     }
@@ -443,15 +462,21 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
-      Long lastSweptBlob = selectLastSweptCompletedAt(pg, src.sourceTable);
-      Set<Integer> changedYearsBlob = selectChangedYears(pg, src.sourceTable,
-          lastSweptBlob != null ? lastSweptBlob : 0L);
+      Map<Integer, Long> yearCompletedAtBlob = selectYearCompletedAt(pg, src.sourceTable);
+      Set<Integer> changedYearsBlob = selectChangedYears(pg, src.sourceTable, yearCompletedAtBlob);
       if (changedYearsBlob != null) {
         LOGGER.info("ChunkOrganizer: {}.{} has per-year tracking -- scoping rescan to {} "
             + "changed year(s): {}", src.sourceSchema, src.sourceTable, changedYearsBlob.size(),
             changedYearsBlob);
+        for (Integer year : changedYearsBlob) {
+          chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource,
+              Collections.singleton(year), skipHashCompare);
+          markYearSwept(pg, src.sourceSchema, src.sourceTable, year,
+              yearCompletedAtBlob.get(year));
+        }
+      } else {
+        chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare);
       }
-      chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource, changedYearsBlob);
       markSwept(pg, src.sourceSchema, src.sourceTable);
       swept++;
     }
@@ -514,42 +539,67 @@ public class ChunkOrganizer {
     pg.commit();
   }
 
-  /** Narrows a full-table rescan (triggered by {@link #sourceNeedsSweep}'s coarse, whole-table
-   *  watermark) down to just the years that actually changed, when the ETL pipeline that writes
-   *  {@code sourceTable} tracks completion per year -- the same {@code table_completion} table
-   *  already carries per-year rows for those pipelines, named {@code
-   *  <sourceTable>#iceberg-accession-sync#year=<year>}, alongside the bare whole-table row {@link
-   *  #sourceNeedsSweep} reads. No new tracker needed; this data already exists, just wasn't being
-   *  read this way. Returns {@code null} (meaning "no per-year data -- caller must full-scan
-   *  unfiltered") for sources whose pipeline never writes per-year completion rows (most
-   *  reference/dimension tables); otherwise returns exactly the years whose own {@code
-   *  completed_at} has advanced past {@code lastSweptWatermark}, which may be empty if the coarse
-   *  check's own watermark read raced a commit between the two queries -- correct to fall through
-   *  to a full unfiltered scan in that case too, never to silently skip everything.
-   *
-   *  Confirmed live 2026-09-16: sec.risk_factor_sections' coarse watermark correctly flagged the
-   *  whole table as changed (today's targeted #29/#240 backfill touched a few years), but without
-   *  this the fix would have re-hashed all 8.7M rows across all 18 years to confirm 13 of them
-   *  never changed -- observed as 4h39m of continuous "0 replaced" batches before this existed. */
-  static Set<Integer> selectChangedYears(Connection pg, String sourceTable, long lastSweptWatermark)
+  /** Per-year counterpart to {@link #selectLastSweptCompletedAt}: every tracked year's own
+   *  watermark for {@code sourceTable}, read in one query since {@link #selectChangedYears}
+   *  needs to compare every year against its own prior sweep, not one shared value. A year
+   *  absent from the result has never been swept at this granularity (treated as watermark 0). */
+  static Map<Integer, Long> selectLastSweptCompletedAtByYear(Connection pg, String sourceTable)
+      throws SQLException {
+    Map<Integer, Long> result = new HashMap<Integer, Long>();
+    try (PreparedStatement ps = pg.prepareStatement(
+        "SELECT year, last_swept_completed_at FROM vc_sync_state_year WHERE source_table = ?")) {
+      ps.setString(1, sourceTable);
+      try (ResultSet rs = ps.executeQuery()) {
+        while (rs.next()) {
+          result.put(rs.getInt(1), rs.getLong(2));
+        }
+      }
+    }
+    return result;
+  }
+
+  /** Advances the per-year watermark for one (source, year) pair -- called immediately after
+   *  that single year's scoped scan completes, not once for the whole source like {@link
+   *  #markSwept}. This is what lets a restart skip years already finished within a source whose
+   *  multi-year rescan was interrupted, instead of redoing the source from its first changed
+   *  year every time. */
+  static void markYearSwept(Connection pg, String sourceSchema, String sourceTable, int year,
+      long completedAt) throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "INSERT INTO vc_sync_state_year (source_schema, source_table, year, "
+        + "last_swept_completed_at) VALUES (?, ?, ?, ?) "
+        + "ON CONFLICT (source_schema, source_table, year) "
+        + "DO UPDATE SET last_swept_completed_at = EXCLUDED.last_swept_completed_at")) {
+      ps.setString(1, sourceSchema);
+      ps.setString(2, sourceTable);
+      ps.setInt(3, year);
+      ps.setLong(4, completedAt);
+      ps.executeUpdate();
+    }
+    pg.commit();
+  }
+
+  /** Every per-year {@code table_completion} row for {@code sourceTable}, keyed by year -- the
+   *  pipeline writes one row per year named {@code <sourceTable>#iceberg-accession-sync#year=
+   *  <year>}, alongside the bare whole-table row {@link #sourceNeedsSweep} reads. Returns {@code
+   *  null} (meaning "no per-year data -- caller must full-scan unfiltered") for sources whose
+   *  pipeline never writes per-year completion rows (most reference/dimension tables). Split out
+   *  from {@link #selectChangedYears} so {@link #sweep} can also read each year's own {@code
+   *  completed_at} to persist via {@link #markYearSwept} once that year's scan completes. */
+  static Map<Integer, Long> selectYearCompletedAt(Connection pg, String sourceTable)
       throws SQLException {
     String prefix = sourceTable + "#iceberg-accession-sync#year=";
-    Set<Integer> changedYears = new HashSet<Integer>();
-    boolean anyYearRows = false;
+    Map<Integer, Long> result = new HashMap<Integer, Long>();
     try (PreparedStatement ps = pg.prepareStatement(
         "SELECT pipeline_name, completed_at FROM table_completion WHERE pipeline_name LIKE ?")) {
       ps.setString(1, prefix + "%");
       try (ResultSet rs = ps.executeQuery()) {
         while (rs.next()) {
-          anyYearRows = true;
           String pipelineName = rs.getString(1);
           long completedAt = rs.getLong(2);
           String yearSuffix = pipelineName.substring(prefix.length());
           try {
-            int year = Integer.parseInt(yearSuffix);
-            if (completedAt > lastSweptWatermark) {
-              changedYears.add(year);
-            }
+            result.put(Integer.parseInt(yearSuffix), completedAt);
           } catch (NumberFormatException e) {
             // Matched the prefix but the suffix isn't a bare year -- not this naming
             // convention (a different sync mechanism reusing a similar prefix); ignore it
@@ -560,7 +610,41 @@ public class ChunkOrganizer {
         }
       }
     }
-    return anyYearRows ? changedYears : null;
+    return result.isEmpty() ? null : result;
+  }
+
+  /** Narrows a full-table rescan (triggered by {@link #sourceNeedsSweep}'s coarse, whole-table
+   *  watermark) down to just the years that actually changed, by comparing each year in {@code
+   *  yearCompletedAt} (from {@link #selectYearCompletedAt}; {@code null} means no per-year data,
+   *  so this returns {@code null} too -- caller must full-scan unfiltered) against that SAME
+   *  year's own watermark in {@code vc_sync_state_year} ({@link
+   *  #selectLastSweptCompletedAtByYear}), not one shared source-level value. This is the
+   *  granularity change from the source-level-only design: a year whose watermark already
+   *  advanced past its own completed_at is excluded even if OTHER years in the same source are
+   *  still pending, so a restart mid-source only re-queues the years that never finished.
+   *
+   *  <p>May return an empty set if the coarse check's own watermark read raced a commit between
+   *  queries -- correct to scan nothing in that case too (the next sweep will catch it), never to
+   *  guess.
+   *
+   *  Confirmed live 2026-09-16: sec.risk_factor_sections' coarse watermark correctly flagged the
+   *  whole table as changed (today's targeted #29/#240 backfill touched a few years), but without
+   *  this the fix would have re-hashed all 8.7M rows across all 18 years to confirm 13 of them
+   *  never changed -- observed as 4h39m of continuous "0 replaced" batches before this existed. */
+  static Set<Integer> selectChangedYears(Connection pg, String sourceTable,
+      Map<Integer, Long> yearCompletedAt) throws SQLException {
+    if (yearCompletedAt == null) {
+      return null;
+    }
+    Map<Integer, Long> perYearWatermarks = selectLastSweptCompletedAtByYear(pg, sourceTable);
+    Set<Integer> changedYears = new HashSet<Integer>();
+    for (Map.Entry<Integer, Long> entry : yearCompletedAt.entrySet()) {
+      Long lastSweptForYear = perYearWatermarks.get(entry.getKey());
+      if (entry.getValue() > (lastSweptForYear != null ? lastSweptForYear : 0L)) {
+        changedYears.add(entry.getKey());
+      }
+    }
+    return changedYears;
   }
 
   private static String ensureSocketTimeout(String jdbcUrl) {
@@ -602,6 +686,12 @@ public class ChunkOrganizer {
     if (maxRowsEnv != null && !maxRowsEnv.isEmpty()) {
       maxRowsPerSource = Integer.parseInt(maxRowsEnv);
     }
+    // Opt-in trust mode: skip writeToPgStaging's existing-hash lookup and always tombstone+
+    // insert every parent. Unset (the normal production path) keeps the skip-if-unchanged
+    // optimization -- see writeToPgStaging's javadoc. Same exemption category as
+    // CHUNK_ORGANIZER_MAX_ROWS_PER_SOURCE above.
+    boolean skipHashCompare = Boolean.parseBoolean(
+        System.getenv("CHUNK_ORGANIZER_SKIP_HASH_COMPARE"));
 
     try (Connection pg = user != null ? DriverManager.getConnection(jdbcUrl, user, password)
             : DriverManager.getConnection(jdbcUrl);
@@ -613,7 +703,7 @@ public class ChunkOrganizer {
       }
       ensureVcSchema(pg);
       pg.commit();
-      sweep(duckdb, pg, base, maxRowsPerSource);
+      sweep(duckdb, pg, base, maxRowsPerSource, skipHashCompare);
     }
   }
 
@@ -686,7 +776,7 @@ public class ChunkOrganizer {
    *  so peak memory stays O(batch size) regardless of table size. */
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src, int maxRowsPerSource) throws SQLException {
-    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, null);
+    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, null, false);
   }
 
   /** As above, but when {@code changedYears} is non-null, scopes the scan to just those years'
@@ -699,6 +789,14 @@ public class ChunkOrganizer {
    *  call in the first place could itself be stale by the time this runs. */
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears) throws SQLException {
+    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, changedYears, false);
+  }
+
+  /** As above, with {@code skipHashCompare} forwarded to {@link #writeToPgStaging} -- see its
+   *  javadoc and {@link #sweep}'s matching parameter. */
+  private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
+      RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears,
+      boolean skipHashCompare) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
     // is the PK and also carries real text), so query each column once, not once per role.
@@ -750,7 +848,7 @@ public class ChunkOrganizer {
         }
       }
       if (!chunkRows.isEmpty()) {
-        writeToPgStaging(pg, chunkRows);
+        writeToPgStaging(pg, chunkRows, skipHashCompare);
       }
       totals[0] += chunkRows.size();
       totals[1] += batch.size();
@@ -851,7 +949,7 @@ public class ChunkOrganizer {
    *  future custom {@link ChunkFunction}) does real per-row work, not just a string split. */
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
       DocumentBlobSource src, int maxRowsPerSource) throws SQLException {
-    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, null);
+    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, null, false);
   }
 
   /** As above, but scoped to {@code changedYears} when non-null -- see {@link
@@ -861,6 +959,14 @@ public class ChunkOrganizer {
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
       DocumentBlobSource src, int maxRowsPerSource, Set<Integer> changedYears)
       throws SQLException {
+    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, changedYears, false);
+  }
+
+  /** As above, with {@code skipHashCompare} forwarded to {@link #writeToPgStaging} -- see its
+   *  javadoc and {@link #sweep}'s matching parameter. */
+  private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
+      DocumentBlobSource src, int maxRowsPerSource, Set<Integer> changedYears,
+      boolean skipHashCompare) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     List<String> selectCols = new ArrayList<String>(src.pkColumns);
     if (!selectCols.contains(src.blobColumn)) {
@@ -908,7 +1014,7 @@ public class ChunkOrganizer {
         }
       }
       if (!chunkRows.isEmpty()) {
-        writeToPgStaging(pg, chunkRows);
+        writeToPgStaging(pg, chunkRows, skipHashCompare);
       }
       totals[0] += chunkRows.size();
       totals[1] += batch.size();
@@ -941,6 +1047,17 @@ public class ChunkOrganizer {
    *  2026-08-31 the cost was Postgres round-trip chatter, not DuckDB read time or chunking CPU. */
   static void writeToPgStaging(Connection pg, List<Map<String, Object>> chunkRows)
       throws SQLException {
+    writeToPgStaging(pg, chunkRows, false);
+  }
+
+  /** As above, but when {@code skipHashCompare} is true, skips {@link
+   *  #selectExistingParentHashes} entirely and treats every parent in this batch as changed --
+   *  always tombstone+insert, never skip-as-unchanged. Saves the one bulk round-trip that method
+   *  costs per batch; does not change what gets written (the freshly computed chunk rows are
+   *  correct either way) or touch the read+chunk cost above this method, which is unaffected
+   *  either way -- see {@link #main}'s {@code CHUNK_ORGANIZER_SKIP_HASH_COMPARE}. */
+  static void writeToPgStaging(Connection pg, List<Map<String, Object>> chunkRows,
+      boolean skipHashCompare) throws SQLException {
     if (chunkRows.isEmpty()) {
       return;
     }
@@ -956,8 +1073,8 @@ public class ChunkOrganizer {
           k -> new ArrayList<Map<String, Object>>()).add(row);
     }
 
-    Map<String, String> existingHashes =
-        selectExistingParentHashes(pg, sourceSchema, sourceTable, byParent.keySet());
+    Map<String, String> existingHashes = skipHashCompare ? Collections.<String, String>emptyMap()
+        : selectExistingParentHashes(pg, sourceSchema, sourceTable, byParent.keySet());
 
     List<String> changedFks = new ArrayList<String>();
     List<Map<String, Object>> toInsert = new ArrayList<Map<String, Object>>();
@@ -965,7 +1082,7 @@ public class ChunkOrganizer {
     for (Map.Entry<String, List<Map<String, Object>>> entry : byParent.entrySet()) {
       String stringifiedFk = entry.getKey();
       String newHash = (String) entry.getValue().get(0).get("parent_hash");
-      if (newHash.equals(existingHashes.get(stringifiedFk))) {
+      if (!skipHashCompare && newHash.equals(existingHashes.get(stringifiedFk))) {
         skipped++;
         continue;
       }
@@ -1247,6 +1364,19 @@ public class ChunkOrganizer {
       // pipeline_tracker.source_as_of.
       stmt.execute("ALTER TABLE vc_sync_state ADD COLUMN IF NOT EXISTS "
           + "last_swept_completed_at BIGINT NOT NULL DEFAULT 0");
+      // Per-year counterpart to vc_sync_state, for sources whose ETL tracks completion per year
+      // (see selectChangedYears). vc_sync_state's one watermark per source only lets a sweep skip
+      // a source entirely; this lets it skip individual already-complete years within a source
+      // too, so an interruption mid-source only forces a redo of the one year in flight, not
+      // the source's whole scoped rescan.
+      stmt.execute(
+          "CREATE TABLE IF NOT EXISTS vc_sync_state_year ("
+          + "  source_schema VARCHAR NOT NULL,"
+          + "  source_table VARCHAR NOT NULL,"
+          + "  year INT NOT NULL,"
+          + "  last_swept_completed_at BIGINT NOT NULL DEFAULT 0,"
+          + "  PRIMARY KEY (source_schema, source_table, year)"
+          + ")");
       // applied_at/last_synced_at existed only to mark a tombstone/schema as drained into
       // ref.vectorized_chunks -- dead columns now that sync-to-Iceberg was removed in favor of a
       // plain pg_dump backup of vc_staging (see the class javadoc). Dropped here, not just
