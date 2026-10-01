@@ -190,7 +190,10 @@ partitionedTables:
       - name: state_name
         type: string
         nullable: true
-        comment: Full state name represented (join key into geo.states.name, not FIPS/abbr)
+        comment: >
+          Full state name represented in this row's Congress (join key into
+          geo.state_ref.state_name, not FIPS/abbr; geo.states is a year-vintaged boundary
+          snapshot and not a valid FK target)
       - name: party_name
         type: string
         nullable: true

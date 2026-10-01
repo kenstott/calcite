@@ -137,4 +137,16 @@ public class GovDataCatalogCoverageTest {
       assertTrue(cov.path("time_varying").asBoolean(), view + " is time-varying");
     }
   }
+
+  /** A table fanned out by congress has a time axis (two-year terms) and must not claim none. */
+  @Test void congressDimensionedTableIsTimeVarying() {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList("officials"));
+    JsonNode cov = coverageOf(catalog, "officials", "members");
+    assertNotNull(cov, "members must carry a coverage node");
+    assertEquals("congressRange", cov.path("form").asText());
+    assertEquals("congress", cov.path("column").asText());
+    assertTrue(cov.path("time_varying").asBoolean(), "congress is a time dimension");
+    assertTrue(!cov.path("note").asText().contains("cannot be filtered"),
+        "must not tell callers the table cannot be trended over time");
+  }
 }

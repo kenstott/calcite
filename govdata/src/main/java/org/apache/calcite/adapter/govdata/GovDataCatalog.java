@@ -170,8 +170,9 @@ public final class GovDataCatalog {
    * <p>The schemas declare a year three different ways, and all three are real coverage:
    * a {@code yearRange} dimension, an explicit list of years, or nothing but a
    * {@code year} hive partition column — the last meaning the table rides the global
-   * start/end with the schema's own {@code dataLagYears} as its ceiling. A table with no
-   * year in any of those positions — the ~83 partitioned by something other than time — gets
+   * start/end with the schema's own {@code dataLagYears} as its ceiling. A table fanned out
+   * by {@code congress} reports {@code form: "congressRange"}. A table with no
+   * year or congress in any of those positions — the ~83 partitioned by something other than time — gets
    * an explicit {@code form: "none"} / {@code time_varying: false} node rather than no node at
    * all, so "has no time axis" is distinguishable from "coverage unknown".
    */
@@ -216,6 +217,29 @@ public final class GovDataCatalog {
       // caller omits first_year rather than inventing one. The ceiling is real.
       putInt(cov, "dataLag", schemaLag);
       putObserved(cov, observed);
+      to.set("coverage", cov);
+      return;
+    }
+
+    // A Congress is a two-year term (Congress N spans calendar years 1789+2(N-1) and
+    // 1790+2(N-1)), so a table fanned out by `congress` is time-varying even though it has no
+    // year column. Report the declared congress window rather than claiming no time axis.
+    JsonNode congress = t.path("dimensions").path("congress");
+    if (congress.isObject() || hasPartitionColumn(t, "congress")) {
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("column", "congress");
+      cov.put("form", "congressRange");
+      cov.put("time_varying", true);
+      if (congress.isObject()) {
+        putText(cov, "start", congress.get("start"));
+        putText(cov, "end", congress.get("end"));
+      }
+      putObserved(cov, observed);
+      cov.put("note", "This table is organized by Congress (a two-year term; Congress N covers "
+          + "calendar years 1789+2(N-1) and 1790+2(N-1), e.g. 115 = 2017-2018), not by year. "
+          + "Filter or trend over time with the congress column. start/end are Congress "
+          + "numbers and may be derived from the global start/end year; run SELECT "
+          + "MIN(congress), MAX(congress) for the range actually loaded.");
       to.set("coverage", cov);
       return;
     }
@@ -320,8 +344,12 @@ public final class GovDataCatalog {
   }
 
   private static boolean hasYearPartitionColumn(JsonNode t) {
+    return hasPartitionColumn(t, "year");
+  }
+
+  private static boolean hasPartitionColumn(JsonNode t, String column) {
     for (JsonNode c : t.path("partitions").path("columnDefinitions")) {
-      if ("year".equalsIgnoreCase(text(c.get("name")))) {
+      if (column.equalsIgnoreCase(text(c.get("name")))) {
         return true;
       }
     }
