@@ -447,7 +447,8 @@ final class PgwireGovDataConnector {
     File launcher = resolveLauncher();
     if (launcher == null) {
       // No operator override and no installer-bundled copy: use the lazy-download cache, which
-      // ensureLauncher installs on first use and keeps at this engine's release thereafter.
+      // ensureLauncher installs on first use; thereafter it returns the installed bundle at
+      // once and brings it to this engine's release in the background.
       // Returns null ONLY when there's genuinely nothing published for this OS; any real
       // failure (bad download, bad sha256, bad extraction) throws InstallFailedException
       // deliberately uncaught here, so it propagates straight through connect() instead of
@@ -669,8 +670,8 @@ final class PgwireGovDataConnector {
     }
   }
 
-  /** Reason the running server must be replaced because it runs an older bundle than this
-   *  engine, or null when it need not be (same or newer release, or either side unstamped). */
+  /** Reason the running server must be replaced because it runs an older bundle than both this
+   *  engine and the installed bundle, or null when it need not be. */
   static String serverBundleSuperseded() {
     File f = serverBundleVersionFile();
     if (!f.isFile()) {
@@ -683,21 +684,31 @@ final class PgwireGovDataConnector {
       throw new IllegalStateException("Cannot read " + f + " to check pgwire-govdata's bundle "
           + "release", e);
     }
-    return bundleSupersededReason(server, PgwireGovDataInstaller.ownEngineVersion());
+    return bundleSupersededReason(server, PgwireGovDataInstaller.ownEngineVersion(),
+        PgwireGovDataInstaller.readMarker(PgwireGovDataInstaller.cacheDir()));
   }
 
-  /** Pure form of {@link #serverBundleSuperseded()}: only a server strictly OLDER than this
-   *  engine is replaced, so engines of different releases sharing one machine cannot keep
-   *  killing each other's server. */
-  static String bundleSupersededReason(String serverVersion, String engineVersion) {
-    if (serverVersion == null || serverVersion.isEmpty() || engineVersion == null) {
+  /**
+   * Pure form of {@link #serverBundleSuperseded()}. Only a server strictly OLDER than this
+   * engine is replaced, so engines of different releases sharing one machine cannot keep
+   * killing each other's server. And only when the installed bundle is newer than the server:
+   * an update is downloaded in the background while the server runs on the installed bundle,
+   * so until it lands a respawn would start the same release again — killing it would cost a
+   * cold start on every query and gain nothing.
+   */
+  static String bundleSupersededReason(String serverVersion, String engineVersion,
+      String installedVersion) {
+    if (serverVersion == null || serverVersion.isEmpty() || engineVersion == null
+        || installedVersion == null) {
       return null;
     }
-    if (PgwireGovDataInstaller.compareVersions(serverVersion, engineVersion) >= 0) {
+    if (PgwireGovDataInstaller.compareVersions(serverVersion, engineVersion) >= 0
+        || PgwireGovDataInstaller.compareVersions(serverVersion, installedVersion) >= 0) {
       return null;
     }
     return "the running pgwire-govdata server was spawned from bundle " + serverVersion
-        + ", older than this engine's " + engineVersion;
+        + ", older than this engine's " + engineVersion + " and the installed bundle "
+        + installedVersion;
   }
 
   // ── cache_httpfs directory for the spawned server ────────────────────────
@@ -999,7 +1010,8 @@ final class PgwireGovDataConnector {
     // The lazy-download cache under ~/.askamerica/pgwire-govdata is deliberately NOT returned
     // here: returning an existing cached launcher directly is how a bundle installed once stayed
     // in service, never updated, under every later engine. PgwireGovDataInstaller.ensureLauncher
-    // owns that directory and returns its launcher only once it matches this engine's release.
+    // owns that directory: it swaps in a downloaded update before returning the launcher, and
+    // starts the download of this engine's release when the installed bundle is older.
     return null;
   }
 

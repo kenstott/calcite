@@ -46,16 +46,23 @@ class PgwireGovDataConnectorBundleTest {
   }
 
   @Test void onlyAServerOlderThanTheEngineIsReplaced() {
-    assertNotNull(PgwireGovDataConnector.bundleSupersededReason("0.94.3", "0.99.2"));
-    assertNull(PgwireGovDataConnector.bundleSupersededReason("0.99.2", "0.99.2"));
+    assertNotNull(PgwireGovDataConnector.bundleSupersededReason("0.94.3", "0.99.2", "0.99.2"));
+    assertNull(PgwireGovDataConnector.bundleSupersededReason("0.99.2", "0.99.2", "0.99.2"));
     // A newer server is left alone, or engines of two releases would kill each other's server.
-    assertNull(PgwireGovDataConnector.bundleSupersededReason("1.0.0", "0.99.2"));
+    assertNull(PgwireGovDataConnector.bundleSupersededReason("1.0.0", "0.99.2", "1.0.0"));
+  }
+
+  @Test void aServerOnTheInstalledBundleIsKeptWhileTheUpdateIsStillDownloading() {
+    // Respawning would start 0.94.3 again: a cold start on every query, for nothing.
+    assertNull(PgwireGovDataConnector.bundleSupersededReason("0.94.3", "0.99.2", "0.94.3"));
+    assertNotNull(PgwireGovDataConnector.bundleSupersededReason("0.94.3", "0.99.2", "0.98.0"));
   }
 
   @Test void unstampedSidesNeverTriggerAReplacement() {
-    assertNull(PgwireGovDataConnector.bundleSupersededReason(null, "0.99.2"));
-    assertNull(PgwireGovDataConnector.bundleSupersededReason("", "0.99.2"));
-    assertNull(PgwireGovDataConnector.bundleSupersededReason("0.94.3", null));
+    assertNull(PgwireGovDataConnector.bundleSupersededReason(null, "0.99.2", "0.99.2"));
+    assertNull(PgwireGovDataConnector.bundleSupersededReason("", "0.99.2", "0.99.2"));
+    assertNull(PgwireGovDataConnector.bundleSupersededReason("0.94.3", null, "0.99.2"));
+    assertNull(PgwireGovDataConnector.bundleSupersededReason("0.94.3", "0.99.2", null));
   }
 
   @Test void noRecordedServerReleaseMeansNothingToReplace() {
