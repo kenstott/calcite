@@ -43,8 +43,9 @@ final class ReportArtifact {
      * A validation as data: the article under review and its claims sorted into the blocks
      * {@link ClaimScoring} scores them in — the author's own claims, each speaker's, then the
      * unscored audit of the sources the piece relays. A scored block carries its honesty and
-     * bias scores, computed from its own claims. Claims keep the number they have in the order
-     * given, so a block's table and the saved page agree.
+     * bias scores, computed from its own claims, and lists the claims that held up least first.
+     * Claims keep the number they have in the order given, so a block's table and the saved
+     * page agree.
      */
     static ObjectNode validation(String sourceUrl, JsonNode claims) {
         ObjectNode out = MAPPER.createObjectNode();
@@ -54,12 +55,9 @@ final class ReportArtifact {
         for (String b : ClaimScoring.blocks(claims)) {
             ObjectNode tally = MAPPER.createObjectNode();
             ArrayNode inBlock = MAPPER.createArrayNode();
-            int n = 0;
-            for (JsonNode claim : claims) {
-                n++;
-                if (!b.equals(ClaimScoring.block(claim))) {
-                    continue;
-                }
+            for (Integer number : ClaimScoring.order(claims, b)) {
+                int n = number.intValue();
+                JsonNode claim = claims.get(n - 1);
                 String verdict = claim.path("verdict").asText("").trim()
                     .toLowerCase(java.util.Locale.ROOT);
                 tally.put(verdict, tally.path(verdict).asInt(0) + 1);

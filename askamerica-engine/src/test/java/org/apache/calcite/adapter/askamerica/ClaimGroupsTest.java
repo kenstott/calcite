@@ -206,6 +206,50 @@ class ClaimGroupsTest {
     assertEquals(4, score.path("citejacked").get(1).asInt());
   }
 
+  @Test void aSentenceAssertingACauseIsGradedAsACausalClaim() {
+    ArrayNode claims = claims(author("Snow falls from the sky", "true", null),
+        author("Snow falls from the sky because Russian planes are dropping it",
+            "partially false", "toward_thesis"));
+    String problem = ClaimScoring.enforce(claims);
+    assertNotNull(problem);
+    assertTrue(problem.contains("claim 2") && problem.contains("'because'"), problem);
+
+    ObjectNode cause = restingOn(author(
+        "Snow falls from the sky because Russian planes are dropping it", "false",
+        "toward_thesis"), 1, "decorative");
+    cause.put("kind", "causal");
+    assertNull(ClaimScoring.enforce(claims(claims.get(0).deepCopy(), cause)));
+  }
+
+  @Test void aScoredBlockLeadsWithTheClaimsThatHeldUpLeast() {
+    ObjectNode cause = author("Rents are higher due to immigration", "false", "toward_thesis");
+    cause.put("kind", "causal");
+    ArrayNode claims = claims(author("Rents rose 4 percent", "true", null),
+        author("Morale collapsed", "not checkable here", null),
+        author("Arrivals rose", "mostly true", "neutral"), cause);
+    assertEquals(java.util.Arrays.asList(4, 3, 1, 2),
+        ClaimScoring.order(claims, ClaimScoring.GROUP_AUTHOR));
+
+    String html = McpServer.claimsSection(claims).html;
+    int table = html.indexOf("<tbody>");
+    assertTrue(html.indexOf("<td>4</td><td>Rents are higher due to immigration") > table
+        && html.indexOf("<td>4</td>") < html.indexOf("<td>1</td><td>Rents rose 4 percent"), html);
+    assertTrue(html.contains("<strong>false</strong> &middot; causal claim"), html);
+
+    JsonNode block = ReportArtifact.validation("https://example.com/op-ed", claims)
+        .path("groups").get(0);
+    assertEquals(4, block.path("claims").get(0).path("n").asInt());
+    assertEquals(2, block.path("claims").get(3).path("n").asInt());
+  }
+
+  @Test void theMiddleVerdictIsPartiallyFalse() {
+    assertEquals(0.5, ClaimScoring.credit(author("Rents rose 4 percent", "partially false",
+        "toward_thesis")));
+    assertNotNull(McpServer.claimsSection(claims(claim("Rents rose", null, "partially false"))));
+    assertThrows(IllegalArgumentException.class,
+        () -> McpServer.claimsSection(claims(claim("Rents rose", null, "partially true"))));
+  }
+
   @Test void theAuthorAndEachSpeakerAreScoredFromTheirOwnClaims() {
     ArrayNode claims = mixedClaims();
     // The author, one speaker, then the source audit.

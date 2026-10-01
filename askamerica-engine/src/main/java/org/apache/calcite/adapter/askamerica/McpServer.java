@@ -836,18 +836,25 @@ public class McpServer {
             + "whose claims carry a warehouse_value or sql but no chart is REFUSED. A validation graded "
             + "entirely from publications, with no statistical or quantitative analysis of your "
             + "own anywhere in it, carries NO chart: a graph of nothing measured is noise.\n"
-            + "6. Verdict per assertion: true | mostly true | partially true | mostly false | "
-            + "false | not checkable here | stale vintage. 'Partially true' needs the reason: "
+            + "6. Verdict per assertion: true | mostly true | partially false | mostly false | "
+            + "false | not checkable here | stale vintage. 'Partially false' needs the reason: "
             + "right direction wrong magnitude, right figure wrong year, true nationally but not "
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
             + "where the article cites a release newer than the loaded window is 'stale "
-            + "vintage' — a freshness gap, not a falsehood.\n"
+            + "vintage' — a freshness gap, not a falsehood. A sentence that joins a fact to a "
+            + "cause, motive or consequence ('X because Y', 'X due to Y', 'X, which shows Y') "
+            + "MUST be split: the fact is one claim; the link is a second claim with `kind`: "
+            + "`causal` that `rests_on` the first. The causal claim's verdict MUST grade the "
+            + "evidence for the link alone. A true fact MUST NOT raise it, and it MUST NOT be "
+            + "graded 'partially false' because the fact half is true: 'snow falls because "
+            + "planes drop it' is false. A cause the evidence runs against, or that no "
+            + "evidence establishes, is 'false' or 'mostly false'.\n"
             + "7. create_report_artifact with the `claims` array (one entry per assertion, each "
             + "with `group`, `speaker`, `rests_on`, `support`, `source_finding`, `errs`, "
             + "article_value, warehouse_value, independent_value, sources, table, "
             + "sql and reason), `source_url` (the article's URL), the `dashboard`, and a summary that "
             + "leads with the honesty and bias result for the author and each speaker and the "
-            + "assertion that matters most. The user asked whether the piece can be trusted; "
+            + "assertion that matters most — a failed causal claim before any accurate figure. The user asked whether the piece can be trusted; "
             + "answer that first. **The `claims` array is not optional and prose is not a "
             + "substitute for it.** Writing the verdicts as free-text sections ('Claim 1 — ...', "
             + "'Claim 2 — ...') instead of populating `claims` is a failure of this task, not a "
@@ -1253,27 +1260,19 @@ public class McpServer {
             + "attributing each number to its own. If the answer reports that a ranking or "
             + "comparison holds, this check includes testing whether the GAP driving it — not "
             + "just each side's own point estimate — survives its own uncertainty.\n"
-            + "- **OFFER THE REPORT — DO NOT SILENTLY SKIP IT OR SILENTLY BUILD IT.** Measured "
-            + "live (2026-09-15, real Desktop sessions): two substantive analyses were "
-            + "delivered as chat prose alone, with no report tool ever called and never "
-            + "mentioned — the reader had no way to know a formatted, shareable report was "
-            + "even possible until they thought to ask for one by name. An internal MUST that "
-            + "the model can silently fail to follow is not a real guarantee; a choice put to "
-            + "the reader in the answer itself is. So: for any question worth more than a "
-            + "sentence, END your chat answer by asking whether the reader wants it as a "
-            + "durable, shareable report — e.g. 'Want this as a formatted report with a "
-            + "permanent link you can revisit or send to someone?' — rather than building one "
-            + "unasked or leaving the offer unstated. Build it immediately without asking only "
-            + "when the question already asked for a report/document/dashboard by name, or when "
-            + "the answer holds more than one figure worth showing side by side (a multi-panel "
-            + "dashboard nobody can see inline in chat is not a deliverable left as an offer). "
-            + "In either case: call compose_dashboard first when there is more than one figure, "
-            + "pass its panels through create_report_artifact's dashboard argument so board and "
-            + "narrative compose in one report, and once the reader says yes to the offer, treat "
-            + "create_report_artifact (or preview_report, for a client that cannot render "
-            + "artifacts) the same way — it is the deliverable at that point, not a "
-            + "nice-to-have, and a chart plus prose the reader has to reassemble by hand is "
-            + "never an acceptable substitute for it.");
+            + "- **BUILD THE REPORT, THEN OFFER TO PUBLISH IT.** For any question worth more "
+            + "than a sentence you MUST call create_report_artifact (preview_report only when "
+            + "the client cannot render artifacts) and show the result. You MUST NOT ask the "
+            + "reader for permission, confirmation or a yes before building or showing an "
+            + "artifact or a local report page: both stay on the reader's machine and nothing "
+            + "is uploaded. When there is more than one figure, call compose_dashboard first "
+            + "and pass its panels through create_report_artifact's dashboard argument so "
+            + "board and narrative compose in one report. The ONLY step that needs the "
+            + "reader's yes is publish_report, which uploads the report to their Studies page. "
+            + "You MUST offer it only AFTER the report is on screen, in one line — e.g. 'Want "
+            + "a permanent link to this that you can send to someone?' — and MUST NOT call "
+            + "register or publish_report until the reader says yes or asks to publish or "
+            + "share. A chart plus prose the reader has to reassemble by hand is never an acceptable substitute for it.");
         return result(id, body);
     }
 
@@ -1489,8 +1488,8 @@ public class McpServer {
             + "usually means re-query rather than caveat. No warnings is not a clean bill of "
             + "health, only that no listed defect was detected. "
             + "If this turns out to be your last query before writing the final answer: "
-            + "offer the reader a report (see create_report_artifact) rather than leaving "
-            + "the finding as chat text alone with no way to revisit or send it."
+            + "build the report (see create_report_artifact) without asking first, rather "
+            + "than leaving the finding as chat text alone."
             + QuestionGuidance.EXEMPLAR_POINTER,
             schema(queryProps, new String[]{"sql"})));
 
@@ -2643,10 +2642,9 @@ public class McpServer {
             + "each of those is a targeted change. Re-render only when the data itself changes. "
             + "Do not move plotted geometry — the coordinates are derived from the values you "
             + "passed, so shifting a mark makes the picture disagree with its own numbers. "
-            + "Once this chart is genuinely the whole deliverable, offer the reader a "
-            + "permanent, shareable version of it via create_report_artifact rather than leaving "
-            + "only "
-            + "an inline image that dies with this chat.",
+            + "Once this chart is genuinely the whole deliverable, build it into a report via "
+            + "create_report_artifact without asking first, rather than leaving only an inline "
+            + "image that dies with this chat.",
             schema(chartProps, new String[]{})));
 
         ObjectNode dashProps = MAPPER.createObjectNode();
@@ -2702,10 +2700,9 @@ public class McpServer {
             + "THIS CALL ALONE RETURNS ONLY THE BOARD — no narrative, sourcing or caveats travel "
             + "with it. That is enough for a chart embedded in an answer you are writing "
             + "yourself, but you have just built the board for a question worth more than a "
-            + "sentence — this is exactly the moment to OFFER the reader a full report, not "
-            + "assume either way: pass these same panels via create_report_artifact's dashboard "
-            + "argument only once they say yes, and it composes the board and inlines it under "
-            + "your prose in one page.",
+            + "sentence — build the full report now, without asking first: pass these same "
+            + "panels via create_report_artifact's dashboard argument, and it composes the "
+            + "board and inlines it under your prose in one page.",
             schema(dashProps, new String[]{"panels"})));
 
         ObjectNode pubProps = MAPPER.createObjectNode();
@@ -2776,7 +2773,7 @@ public class McpServer {
         pubProps.set("sources", sourcesProp);
         pubProps.set("claims", prop("array",
             "For an article or claim validation: one object per assertion, as "
-            + "[{assertion, group, speaker, rests_on, support, source_finding, errs, verdict, "
+            + "[{assertion, group, speaker, kind, rests_on, support, source_finding, errs, verdict, "
             + "article_value, warehouse_value, independent_value, "
             + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
             + "score_claim_ref, score_claim_override_reason}]. `assertion` "
@@ -2798,8 +2795,11 @@ public class McpServer {
             + "toward_thesis | against_thesis | neutral. The engine computes an honesty score "
             + "(0-100) and a bias score (-100 to 100) for the author and for each speaker from "
             + "these fields; a claim that overreaches its evidence counts for at most half and "
-            + "one its evidence contradicts counts for nothing. "
-            + "`verdict` is one of: true | mostly true | partially true "
+            + "one its evidence contradicts counts for nothing. `kind` is `causal` for a "
+            + "claim that asserts a cause, motive or consequence — split from the fact it "
+            + "starts from, which is its own claim — and its verdict grades the evidence for "
+            + "that link alone; otherwise `fact` or omitted. "
+            + "`verdict` is one of: true | mostly true | partially false "
             + "| mostly false | false | not checkable here | stale vintage. `warehouse_value` "
             + "and `table` are what this corpus says and where; `sql` is the query that "
             + "produced it. `independent_value` is the figure from primary sources the article "
@@ -2907,8 +2907,7 @@ public class McpServer {
             + "report', that means a DURABLE, shareable link — build the report with either "
             + "tool, then register (once per account) then publish_report, and return the link "
             + "publish_report gives back. For a question worth more than a sentence, a report is "
-            + "what to offer the reader (see the top-level instructions on when to offer vs. "
-            + "build one outright): the finding, the figures, the caveats and the sourcing in "
+            + "what to build, without asking first (see the top-level instructions): the finding, the figures, the caveats and the sourcing in "
             + "one place instead of a chart plus prose they have to reassemble. Pass the dashboard "
             + "argument to compose and inline the board in the same call. Costs about twenty "
             + "tokens to return, because what comes back is a link rather than the page. "
@@ -2943,7 +2942,9 @@ public class McpServer {
             + "exact page publish_report would publish and returns a file:// link to it, and saves "
             + "both the report instructions and that page under a report_id that outlives this "
             + "process. Nothing is uploaded: after the artifact, give the reader the file:// "
-            + "link exactly as returned and call register/publish_report only if they say yes to publishing.",
+            + "link exactly as returned. You MUST NOT ask before calling this tool or before "
+            + "showing the artifact. Offer publishing only after the artifact is shown, and "
+            + "call register/publish_report only if they say yes.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
 
         ObjectNode registerProps = MAPPER.createObjectNode();
@@ -4443,7 +4444,8 @@ public class McpServer {
                                 + "characterization), its bias (`bias_score`, -100 to 100, and "
                                 + "the `bias` characterization), the graded/excluded counts and "
                                 + "the `citejacked` claim numbers called out as citejacking, "
-                                + "then its `tally` and a table of its `claims` (n, assertion, "
+                                + "then its `tally` and a table of its `claims` in the order "
+                                + "given, worst first (n, assertion, "
                                 + "verdict, and for a scored block rests_on and support) with "
                                 + "each claim's evidence fields behind an expander. A block "
                                 + "without `score` is the source audit: label it not scored. "
@@ -4465,8 +4467,9 @@ public class McpServer {
                             + " Draw only what is in this payload. You MUST deliver both: the "
                             + "artifact, then the file:// link below exactly as written. If this "
                             + "client cannot render artifacts, give the file:// link alone. "
-                            + "Publish durably (register, then publish_report) only if the "
-                            + "reader says yes.\n\n"
+                            + "You MUST NOT ask the reader before showing either. Once both "
+                            + "are shown, offer a permanent link in one line; call register "
+                            + "and publish_report only if the reader says yes.\n\n"
                             + "Local report page for the reader: " + fileLink + " — a local file "
                             + "that opens with no server." + httpNote + "\n" + savedLine + "\n\n"
                             + MAPPER.writeValueAsString(artifact);
@@ -7488,7 +7491,7 @@ public class McpServer {
 
     /** Verdict vocabulary for {@code preview_report}'s {@code claims}. Order matters: it is
      *  the order the tally tiles render in. */
-    static final String[] VERDICTS = {"true", "mostly true", "partially true",
+    static final String[] VERDICTS = {"true", "mostly true", "partially false",
         "mostly false", "false", "not checkable here", "stale vintage"};
 
     /**
@@ -7508,14 +7511,13 @@ public class McpServer {
         java.util.List<String> blocks = ClaimScoring.blocks(claims);
         java.util.Map<String, java.util.Map<String, Integer>> tallies =
             new java.util.LinkedHashMap<>();
-        java.util.Map<String, StringBuilder> rowsByBlock = new java.util.LinkedHashMap<>();
+        java.util.Map<Integer, String> rowByNumber = new java.util.HashMap<>();
         for (String b : blocks) {
             java.util.Map<String, Integer> t = new java.util.LinkedHashMap<>();
             for (String v : VERDICTS) {
                 t.put(v, Integer.valueOf(0));
             }
             tallies.put(b, t);
-            rowsByBlock.put(b, new StringBuilder());
         }
         StringBuilder details = new StringBuilder();
         int n = 0;
@@ -7535,7 +7537,7 @@ public class McpServer {
                     + "' for: " + assertion);
             }
             java.util.Map<String, Integer> tally = tallies.get(block);
-            StringBuilder rows = rowsByBlock.get(block);
+            StringBuilder rows = new StringBuilder();
             if (!tally.containsKey(verdict)) {
                 throw new IllegalArgumentException("claim verdict must be one of "
                     + String.join(" | ", VERDICTS) + "; got '" + verdict + "' for: "
@@ -7549,13 +7551,16 @@ public class McpServer {
             rows.append("<tr class=\"").append(cls).append("\">")
                 .append("<td>").append(n).append("</td>")
                 .append("<td>").append(ReportPage.esc(assertion)).append("</td>")
-                .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong></td>");
+                .append("<td><strong>").append(ReportPage.esc(verdict)).append("</strong>")
+                .append(ClaimScoring.isCausal(c) ? " &middot; causal claim" : "")
+                .append("</td>");
             if (ClaimScoring.isScored(block)) {
                 rows.append("<td>").append(restsOn.isEmpty() ? "none cited"
                     : ReportPage.esc(restsOn + (support.isEmpty() ? "" : " — " + support)))
                     .append("</td>");
             }
             rows.append("</tr>\n");
+            rowByNumber.put(Integer.valueOf(n), rows.toString());
 
             details.append("<details class=\"claim-detail ").append(cls).append("\">")
                 .append("<summary>#").append(n).append(" &middot; <strong>")
@@ -7605,6 +7610,8 @@ public class McpServer {
                     .append(ReportPage.esc(artVintage)).append(" / ")
                     .append(ReportPage.esc(whVintage)).append("</dd>\n");
             }
+            appendDetailRow(details, "Asserts", ClaimScoring.isCausal(c)
+                ? "a cause — graded on the evidence for the cause alone" : "");
             appendDetailRow(details, "Rests on", restsOn);
             appendDetailRow(details, "What that evidence found",
                 c.path("source_finding").asText(""));
@@ -7652,15 +7659,18 @@ public class McpServer {
                 .append("<table><thead><tr><th>#</th><th>Assertion (verbatim)</th>"
                     + "<th>Verdict</th>")
                 .append(scored ? "<th>Evidence it rests on</th>" : "")
-                .append("</tr></thead><tbody>\n")
-                .append(rowsByBlock.get(b)).append("</tbody></table>\n");
+                .append("</tr></thead><tbody>\n");
+            for (Integer number : ClaimScoring.order(claims, b)) {
+                groups.append(rowByNumber.get(number));
+            }
+            groups.append("</tbody></table>\n");
         }
         String html = groups
-            + "<p class=\"note\">Verdicts: true, mostly true, partially true, mostly false, "
+            + "<p class=\"note\">Verdicts: true, mostly true, partially false, mostly false, "
             + "false, not checkable here (no table carries the measure), stale vintage (the "
             + "article cites a release this corpus has not loaded — a freshness gap, not a "
             + "falsehood). Honesty is the share of a party's checkable claims that held up "
-            + "(true 1, mostly true 0.75, partially true 0.5, mostly false 0.25, false 0); a "
+            + "(true 1, mostly true 0.75, partially false 0.5, mostly false 0.25, false 0); a "
             + "claim resting on cited evidence narrower than the claim counts for at most half, "
             + "and one resting on evidence that contradicts it counts for nothing. Bias is the "
             + "net share of a party's error that favours their own case (+100 every error "

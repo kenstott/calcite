@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Who a validation's claims belong to, and what they say about that party's honesty and bias.
@@ -51,6 +53,16 @@ final class ClaimScoring {
     /** Fewer graded claims, or fewer errors, than this is a number without a characterization:
      *  one or two claims are not grounds for calling anyone dishonest or biased. */
     static final int MIN_FOR_LABEL = 3;
+
+    static final String KIND_CAUSAL = "causal";
+    static final List<String> KINDS = Arrays.asList("fact", KIND_CAUSAL);
+
+    /** Wording that joins a fact to a cause. A sentence carrying it asserts the cause, and is
+     *  graded on the cause: "snow falls because planes drop it" is not half right. */
+    static final Pattern CAUSAL_WORDING = Pattern.compile(
+        "\\b(because|due to|caused by|as a result of|thanks to|owing to|driven by|led to|"
+        + "leads to|resulted in|results in|is why|responsible for|blamed? (?:on|for))\\b",
+        Pattern.CASE_INSENSITIVE);
 
     private static final String SUBJECT_PREFIX = GROUP_SUBJECT + ":";
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -141,6 +153,37 @@ final class ClaimScoring {
         return c.path("verdict").asText("").trim().toLowerCase(Locale.ROOT);
     }
 
+    static boolean isCausal(JsonNode c) {
+        return KIND_CAUSAL.equals(c.path("kind").asText("").trim().toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * The 1-based numbers of a block's claims in the order they are shown. A scored block
+     * leads with the claims that held up least, so the assertion that matters is not buried
+     * under the accurate ones around it; claims that could not be graded come last. The source
+     * audit keeps the order given.
+     */
+    static List<Integer> order(JsonNode claims, String block) {
+        List<Integer> out = new ArrayList<>();
+        int n = 0;
+        for (JsonNode c : claims) {
+            n++;
+            if (block.equals(block(c))) {
+                out.add(Integer.valueOf(n));
+            }
+        }
+        if (isScored(block)) {
+            out.sort((a, b) -> Double.compare(rank(claims.get(a.intValue() - 1)),
+                rank(claims.get(b.intValue() - 1))));
+        }
+        return out;
+    }
+
+    private static double rank(JsonNode c) {
+        double credit = credit(c);
+        return credit < 0 ? 2 : credit;
+    }
+
     static String support(JsonNode c) {
         return c.path("support").asText("").trim().toLowerCase(Locale.ROOT);
     }
@@ -170,7 +213,7 @@ final class ClaimScoring {
         case "mostly true":
             base = 0.75;
             break;
-        case "partially true":
+        case "partially false":
             base = 0.5;
             break;
         case "mostly false":
@@ -291,6 +334,19 @@ final class ClaimScoring {
             if (GROUP_SUBJECT.equals(g) && speaker(c).isEmpty()) {
                 problems.add("claim " + n + " is grouped `" + GROUP_SUBJECT + "` with no "
                     + "`speaker`: name the person or organization who made the assertion");
+            }
+            String kind = c.path("kind").asText("").trim().toLowerCase(Locale.ROOT);
+            if (!kind.isEmpty() && !KINDS.contains(kind)) {
+                problems.add("claim " + n + " has `kind` '" + kind + "': it is "
+                    + String.join(" | ", KINDS));
+            }
+            Matcher causal = CAUSAL_WORDING.matcher(c.path("assertion").asText(""));
+            if (causal.find() && !isCausal(c)) {
+                problems.add("claim " + n + " asserts a cause ('" + causal.group()
+                    + "') but is not `kind`: \"" + KIND_CAUSAL + "\". Split the sentence: the "
+                    + "fact is one claim, the cause is a second claim with `kind`: \""
+                    + KIND_CAUSAL + "\" that rests on it. The causal claim's verdict grades the "
+                    + "evidence for the cause alone; the fact being true does not raise it");
             }
             JsonNode restsOn = c.path("rests_on");
             if (!restsOn.isArray()) {
