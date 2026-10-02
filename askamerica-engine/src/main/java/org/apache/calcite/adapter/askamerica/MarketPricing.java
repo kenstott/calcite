@@ -19,6 +19,8 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -314,6 +316,17 @@ final class MarketPricing {
     static Priced priceEvent(PredictionMarkets.LiveEvent live, Forecast forecast,
             Map<String, Condition> given, double minEdge, Double feeRate, boolean bothSides,
             String column) {
+        return priceEvent(live, forecast, given, minEdge, feeRate, bothSides, column, null);
+    }
+
+    /**
+     * As the overload without {@code size}, and with {@code size} non-null each priced row also
+     * carries days to settlement, annualized return, breakeven fair values and, for a mispriced
+     * row, an order ticket and its depth. Rows and legs are otherwise those of the plain call.
+     */
+    static Priced priceEvent(PredictionMarkets.LiveEvent live, Forecast forecast,
+            Map<String, Condition> given, double minEdge, Double feeRate, boolean bothSides,
+            String column, SizeOptions size) {
         PredictionMarkets.Event event = live.event;
         Set<String> ids = new HashSet<>();
         for (PredictionMarkets.Market m : event.legs) {
@@ -430,6 +443,10 @@ final class MarketPricing {
                 mispricedCount++;
             }
             row.put("verdict", verdict);
+            if (size != null) {
+                addSizeFields(row, m, rate, offers, best, fair, "mispriced".equals(verdict),
+                    minEdge, size);
+            }
             markets.add(row);
             for (Leg o : offers) {
                 if (bothSides || (mispriced && o == best)) {
@@ -450,7 +467,13 @@ final class MarketPricing {
         json.put("fee_basis", (feeRate == null ? "read from " + event.source
             : "fee_rate argument") + "; fee per contract = rate * price * (1 - price), a taker "
             + "order at the quote. Not modelled: Kalshi's rounding of each order's fee up to "
-            + "the cent, Kalshi event-level fee overrides, the depth behind the quote.");
+            + "the cent, Kalshi event-level fee overrides, the depth behind the quote"
+            + (size == null ? "." : " (the depth is walked only where an order book was "
+            + "supplied; see each ticketed row's depth)."));
+        if (size != null) {
+            json.put("quote_time", size.now.toString());
+            json.put("annualized_return_convention", ANNUALIZED_CONVENTION);
+        }
         json.put("min_edge", minEdge);
         json.put("mispriced_markets", mispricedCount);
         ArrayNode legArr = json.putArray("legs");
@@ -485,6 +508,246 @@ final class MarketPricing {
             l.edge = "yes".equals(side) ? fair - price - fee : (1 - price) - fair - fee;
         }
         return l;
+    }
+
+    // ─── Size, tickets and re-quotes ───────────────────────────────────────────
+
+    /** Price grid of both venues' standard markets, in dollars. */
+    static final double TICK = 0.01;
+    static final String ANNUALIZED_CONVENTION = "return_on_cost * 365 / days_to_settlement, "
+        + "simple (not compounded); omitted when settlement is under one day away";
+
+    /** What the size-aware pricing needs from the caller; the pricing code fetches nothing. */
+    static final class SizeOptions {
+        /** The time of the quotes; days to settlement and the ticket's quote time. */
+        final Instant now;
+        /** Order books by market_id, or null when none were read. */
+        final Map<String, MarketHistory.OrderBook> books;
+        /** Contracts to walk the book for, or null. */
+        final Double size;
+
+        SizeOptions(Instant now, Map<String, MarketHistory.OrderBook> books, Double size) {
+            if (now == null) {
+                throw new IllegalArgumentException("the quote time is required");
+            }
+            if (size != null && !(size > 0)) {
+                throw new IllegalArgumentException("size must be above 0 contracts, got " + size);
+            }
+            this.now = now;
+            this.books = books;
+            this.size = size;
+        }
+    }
+
+    /**
+     * The highest price on a side's own contract at which the edge still reaches
+     * {@code minEdge}, given the side's win probability. Solves
+     * {@code wins - p - rate * p * (1 - p) >= minEdge} for the larger p; the left side falls as p
+     * rises. Returns 0 when no price qualifies.
+     */
+    static double maxPrice(double wins, double minEdge, double rate) {
+        double g = wins - minEdge;
+        if (!(g > 0)) {
+            return 0;
+        }
+        double disc = Math.max(0, (1 + rate) * (1 + rate) - 4 * rate * g);
+        // The smaller root of rate * p^2 - (1 + rate) * p + g = 0, rationalized so that a
+        // zero rate gives g.
+        return 2 * g / ((1 + rate) + Math.sqrt(disc));
+    }
+
+    private static double floorToTick(double price) {
+        return PredictionMarkets.round(Math.floor(price / TICK + 1e-9) * TICK, 4);
+    }
+
+    private static MarketHistory.Side buySide(String side) {
+        if ("yes".equals(side)) {
+            return MarketHistory.Side.BUY_YES;
+        }
+        if ("no".equals(side)) {
+            return MarketHistory.Side.BUY_NO;
+        }
+        throw new IllegalArgumentException("side must be yes or no, got '" + side + "'");
+    }
+
+    /** Best price on the side's own contract, or null when the book has nothing on it. */
+    private static Double bestPrice(MarketHistory.OrderBook book, String side) {
+        if ("yes".equals(side)) {
+            MarketHistory.Level a = book.bestAsk();
+            return a == null ? null : a.price;
+        }
+        MarketHistory.Level b = book.bestBid();
+        return b == null ? null : PredictionMarkets.round(1 - b.price, 6);
+    }
+
+    private static double winProbability(String side, double fair) {
+        return "yes".equals(side) ? fair : 1 - fair;
+    }
+
+    private static void addSizeFields(ObjectNode row, PredictionMarkets.Market m, double rate,
+            List<Leg> offers, Leg best, Double fair, boolean mispriced, double minEdge,
+            SizeOptions opts) {
+        // Days to settlement and annualized return.
+        if (m.closeTime == null) {
+            row.putNull("days_to_settlement");
+            row.put("annualized_return_note", "the venue gave no close time for this market");
+        } else {
+            double days = Duration.between(opts.now, PredictionMarkets.closeInstant(m.closeTime))
+                .toMillis() / 86400000.0;
+            row.put("days_to_settlement", PredictionMarkets.round(days, 3));
+            if (best != null) {
+                if (days < 1) {
+                    row.put("annualized_return_note",
+                        "settlement is under one day away (or past): not annualized");
+                } else {
+                    row.put("annualized_return_simple_365d", PredictionMarkets.round(
+                        best.edge / (best.price + best.fee) * 365 / days, 4));
+                }
+            }
+        }
+        // Breakeven fair value (the probability of YES) per side, at the quote and its fee.
+        Double beYes = null;
+        Double beNo = null;
+        for (Leg o : offers) {
+            if ("yes".equals(o.side)) {
+                beYes = o.price + o.fee;
+            } else {
+                beNo = 1 - (o.price + o.fee);
+            }
+        }
+        PredictionMarkets.putNumber(row, "breakeven_fair_buy_yes", rounded(beYes, 4));
+        PredictionMarkets.putNumber(row, "breakeven_fair_buy_no", rounded(beNo, 4));
+        if (best == null) {
+            row.putNull("breakeven_fair");
+        } else {
+            row.put("breakeven_fair", PredictionMarkets.round(
+                "yes".equals(best.side) ? beYes : beNo, 4));
+        }
+        if (!mispriced) {
+            return;
+        }
+        // The order ticket.
+        double wins = winProbability(best.side, fair);
+        double limit = floorToTick(maxPrice(wins, minEdge, rate));
+        if (!(limit > 0)) {
+            row.putNull("ticket");
+            row.put("ticket_note", "no price on the " + best.side + " side clears min_edge "
+                + minEdge + " on the " + TICK + " tick");
+            return;
+        }
+        ObjectNode t = row.putObject("ticket");
+        t.put("source", best.source);
+        t.put("event_id", best.eventId);
+        t.put("market_id", best.id);
+        t.put("side", best.side);
+        t.put("limit_price", limit);
+        t.put("tick", TICK);
+        t.put("fair", fair);
+        t.put("fee_rate", rate);
+        t.put("min_edge", minEdge);
+        t.put("edge_at_limit", PredictionMarkets.round(
+            wins - limit - PredictionMarkets.takerFee(rate, limit), 4));
+        if (opts.size != null) {
+            t.put("size", opts.size);
+        }
+        t.put("quote_time", opts.now.toString());
+        t.put("limit_basis", "the highest price on the tick at which edge = win probability - "
+            + "price - rate * price * (1 - price) is still at least min_edge");
+        ArrayNode voids = t.putArray("void_conditions");
+        if (m.closeTime != null) {
+            ObjectNode v = voids.addObject();
+            v.put("type", "settlement_close");
+            v.put("time", m.closeTime);
+        }
+        // The book behind the ticket.
+        ObjectNode depth = row.putObject("depth");
+        MarketHistory.OrderBook book = opts.books == null ? null : opts.books.get(m.marketId);
+        if (book == null) {
+            depth.put("book_read", false);
+            depth.put("note", "no order book was supplied for this market; the quote above is "
+                + "top of book and its depth is unknown");
+            return;
+        }
+        depth.put("book_read", true);
+        MarketHistory.Side bs = buySide(best.side);
+        MarketHistory.Fill atLimit = book.fill(bs, 1, limit);
+        double available = atLimit.availableAtLimit;
+        depth.put("contracts_at_or_under_limit", available);
+        depth.put("dollars_at_or_under_limit", available > 0
+            ? PredictionMarkets.round(book.fill(bs, available, limit).cost, 4) : 0.0);
+        PredictionMarkets.putNumber(depth, "book_best_price", bestPrice(book, best.side));
+        if (opts.size == null) {
+            return;
+        }
+        MarketHistory.Fill all = book.fill(bs, opts.size, null);
+        depth.put("size_requested", opts.size);
+        depth.put("size_filled_by_book", all.filled);
+        depth.put("fills_completely_under_limit", book.fill(bs, opts.size, limit).complete);
+        if (all.averagePrice == null) {
+            depth.putNull("fill_average_price");
+            depth.put("fill_note", "the book has nothing on the " + best.side + " side");
+            return;
+        }
+        double fee = PredictionMarkets.takerFee(rate, all.averagePrice);
+        depth.put("fill_average_price", PredictionMarkets.round(all.averagePrice, 4));
+        depth.put("fill_fee_per_contract", PredictionMarkets.round(fee, 5));
+        depth.put("fill_cost_dollars", PredictionMarkets.round(all.cost, 4));
+        depth.put("fill_fee_dollars", PredictionMarkets.round(fee * all.filled, 4));
+        depth.put("fill_edge", PredictionMarkets.round(wins - all.averagePrice - fee, 4));
+        depth.put("fill_basis", "walks the book from the best price with no limit; the fee is "
+            + "taken per contract at the average fill price");
+    }
+
+    private static JsonNode need(JsonNode ticket, String field) {
+        JsonNode v = ticket == null ? null : ticket.get(field);
+        if (v == null || v.isNull()) {
+            throw new IllegalArgumentException("the ticket has no '" + field + "'");
+        }
+        return v;
+    }
+
+    /**
+     * Quotes a ticket against a fresh order book: no forecast, no fetch. Status is {@code open}
+     * when the ticket's size (at least one contract when it has none) is available at or under
+     * its limit, {@code partly_open} when some but not all is, {@code gone} when none is.
+     */
+    static ObjectNode requote(JsonNode ticket, MarketHistory.OrderBook book) {
+        String marketId = need(ticket, "market_id").asText();
+        String side = need(ticket, "side").asText();
+        double limit = need(ticket, "limit_price").asDouble();
+        double fair = need(ticket, "fair").asDouble();
+        double rate = need(ticket, "fee_rate").asDouble();
+        if (book.marketId != null && !book.marketId.equals(marketId)) {
+            throw new IllegalArgumentException("the book is for market " + book.marketId
+                + ", the ticket for " + marketId);
+        }
+        MarketHistory.Side bs = buySide(side);
+        Double size = ticket.hasNonNull("size") ? ticket.get("size").asDouble() : null;
+        double available = book.fill(bs, 1, limit).availableAtLimit;
+        double wanted = size == null ? 1 : size;
+        String status = available >= wanted - 1e-9 ? "open" : available > 0 ? "partly_open"
+            : "gone";
+        ObjectNode o = MAPPER.createObjectNode();
+        o.put("market_id", marketId);
+        o.put("side", side);
+        o.put("status", status);
+        o.put("limit_price", limit);
+        PredictionMarkets.putNumber(o, "ticket_size", size);
+        o.put("contracts_at_or_under_limit", available);
+        if ("partly_open".equals(status)) {
+            o.put("contracts_left", available);
+        }
+        Double best = bestPrice(book, side);
+        PredictionMarkets.putNumber(o, "current_best_price", best);
+        if (best == null) {
+            o.putNull("edge_at_current_best");
+            o.put("note", "the book has nothing on the " + side + " side");
+        } else {
+            o.put("edge_at_current_best", PredictionMarkets.round(
+                winProbability(side, fair) - best - PredictionMarkets.takerFee(rate, best), 4));
+        }
+        o.put("edge_basis", "the ticket's fair value, unchanged; no forecast was rerun");
+        return o;
     }
 
     // ─── Baskets ───────────────────────────────────────────────────────────────

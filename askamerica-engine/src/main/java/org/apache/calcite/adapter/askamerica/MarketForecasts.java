@@ -162,6 +162,9 @@ final class MarketForecasts {
         /** What a unit of the series counts when its values are in thousands (jobs), so the
          *  forecast can be put in the units a venue strikes in; null when not declared. */
         String countUnit;
+        /** Days after a monthly period ends by which its first print is out; null when not
+         *  declared (a caller's own series). Only an as_of cutoff reads it. */
+        Integer publishLagDays;
 
         Series copy() {
             Series s = new Series();
@@ -178,6 +181,7 @@ final class MarketForecasts {
             s.label = label;
             s.defaultTransform = defaultTransform;
             s.countUnit = countUnit;
+            s.publishLagDays = publishLagDays;
             return s;
         }
     }
@@ -267,6 +271,43 @@ final class MarketForecasts {
         fred("CSUSHPISA", Freq.MONTHLY, true, "index", true, null,
             "Case-Shiller U.S. national home price index, seasonally adjusted")));
 
+    /** Days after month end by which each monthly catalog series has printed, by release:
+     *  the latest day of the following month(s) the agency's schedule puts it on. */
+    private static final Map<String, Integer> PUBLISH_LAG_DAYS = new LinkedHashMap<>();
+
+    static {
+        // BLS Consumer Price Index: mid-month, the 15th at the latest.
+        for (String id : new String[]{"CUUR0000SA0", "CUUR0000SA0L1E", "CUUR0000SAF11",
+            "CUUR0000SEFV", "CPIAUCSL", "CPIAUCNS", "CPILFESL"}) {
+            PUBLISH_LAG_DAYS.put(id, 16);
+        }
+        // BLS Employment Situation: the first or second Friday.
+        for (String id : new String[]{"LNS14000000", "LNS13327709", "CES0000000001",
+            "CES0500000001", "UNRATE"}) {
+            PUBLISH_LAG_DAYS.put(id, 10);
+        }
+        // BEA Personal Income and Outlays: the end of the following month.
+        PUBLISH_LAG_DAYS.put("PCEPI", 31);
+        PUBLISH_LAG_DAYS.put("PCEPILFE", 31);
+        // Federal Reserve H.15 monthly average: the first business days of the month.
+        PUBLISH_LAG_DAYS.put("FEDFUNDS", 4);
+        // Census New Residential Construction: around the 18th.
+        PUBLISH_LAG_DAYS.put("HOUST", 21);
+        PUBLISH_LAG_DAYS.put("PERMIT", 21);
+        // S&P Case-Shiller: the last Tuesday of the second month after.
+        PUBLISH_LAG_DAYS.put("CSUSHPISA", 62);
+        for (Series c : CATALOG) {
+            if (c.freq == Freq.MONTHLY) {
+                Integer lag = PUBLISH_LAG_DAYS.get(c.id);
+                if (lag == null) {
+                    throw new IllegalStateException("monthly catalog series " + c.id
+                        + " declares no publication lag");
+                }
+                c.publishLagDays = lag;
+            }
+        }
+    }
+
     /** Ids the rules may name in another form, and the catalog series that is the same
      *  quantity: the BLS seasonally adjusted CPI ids are carried by FRED. */
     private static final Map<String, String> ALIASES = new LinkedHashMap<>();
@@ -284,12 +325,15 @@ final class MarketForecasts {
     private static final Pattern MONTH_NAMED;
 
     static {
-        StringBuilder names = new StringBuilder();
+        // A month by its name or its three-letter form ("Apr 2026" is how Kalshi titles some
+        // events). The day may not be the first two digits of the year that follows.
+        StringBuilder names = new StringBuilder("sept");
         for (Month m : Month.values()) {
-            names.append(names.length() > 0 ? "|" : "")
-                .append(m.name().toLowerCase(Locale.ROOT));
+            String name = m.name().toLowerCase(Locale.ROOT);
+            names.append('|').append(name).append('|').append(name, 0, 3);
         }
-        MONTH_NAMED = Pattern.compile("\\b(" + names + ")\\b(?:\\s+\\d{1,2},?)?(?:\\s+(\\d{4}))?");
+        MONTH_NAMED = Pattern.compile("\\b(" + names
+            + ")\\b\\.?(?:\\s+\\d{1,2}(?!\\d),?)?(?:\\s+(\\d{4}))?");
     }
 
     private static final Pattern SA_NEGATIVE = Pattern.compile(
@@ -972,15 +1016,18 @@ final class MarketForecasts {
     private static final class Obs {
         final LocalDate date;
         final double value;
-        /** The day the observation is treated as known: the period's last day for a monthly
-         *  series, the observation date otherwise. */
+        /** The day the observation is treated as known: for a monthly series the period's
+         *  last day plus the series' publication lag (no lag when it declares none), the
+         *  observation date otherwise. */
         final LocalDate knownBy;
 
-        Obs(LocalDate date, double value, Freq freq) {
+        Obs(LocalDate date, double value, Series s) {
             this.date = date;
             this.value = value;
-            this.knownBy = freq == Freq.MONTHLY
-                ? YearMonth.from(date).atEndOfMonth() : date;
+            this.knownBy = s.freq == Freq.MONTHLY
+                ? YearMonth.from(date).atEndOfMonth().plusDays(
+                    s.publishLagDays == null ? 0 : s.publishLagDays)
+                : date;
         }
     }
 
@@ -988,24 +1035,32 @@ final class MarketForecasts {
         return "'" + s.replace("'", "''") + "'";
     }
 
+    /** A column name as a quoted identifier. An unquoted {@code date} is a keyword to the
+     *  engine's parser, and the query then costs minutes instead of seconds. */
+    private static String column(String name) {
+        return '"' + name.replace("\"", "\"\"") + '"';
+    }
+
     private static String seriesQuery(Series s, LocalDate asOf, LocalDate ref, int years) {
         if (s.sql != null) {
             return s.sql;
         }
         LocalDate from = ref.minusYears(years);
+        String value = column(s.valueColumn) + " AS \"value\"";
+        String where = " FROM " + s.table + " WHERE " + column(s.seriesColumn) + " = "
+            + quote(s.id);
         if (s.dateColumn == null) {
-            return "SELECT year, period, " + s.valueColumn + " AS value FROM " + s.table
-                + " WHERE " + s.seriesColumn + " = " + quote(s.id)
-                + " AND period LIKE 'M%' AND period <> 'M13'"
-                + " AND year >= " + from.getYear()
-                + (asOf == null ? "" : " AND year <= " + asOf.getYear())
-                + " ORDER BY year, period";
+            return "SELECT \"year\", \"period\", " + value + where
+                + " AND \"period\" LIKE 'M%' AND \"period\" <> 'M13'"
+                + " AND \"year\" >= " + from.getYear()
+                + (asOf == null ? "" : " AND \"year\" <= " + asOf.getYear())
+                + " ORDER BY \"year\", \"period\"";
         }
-        return "SELECT " + s.dateColumn + " AS date, " + s.valueColumn + " AS value FROM "
-            + s.table + " WHERE " + s.seriesColumn + " = " + quote(s.id)
-            + " AND " + s.dateColumn + " >= DATE '" + from + "'"
-            + (asOf == null ? "" : " AND " + s.dateColumn + " <= DATE '" + asOf + "'")
-            + " ORDER BY " + s.dateColumn;
+        String date = column(s.dateColumn);
+        return "SELECT " + date + " AS \"date\", " + value + where
+            + " AND " + date + " >= DATE '" + from + "'"
+            + (asOf == null ? "" : " AND " + date + " <= DATE '" + asOf + "'")
+            + " ORDER BY " + date;
     }
 
     private static double valueOf(JsonNode row, String field, String what, int n) {
@@ -1056,7 +1111,7 @@ final class MarketForecasts {
                     d = d.withDayOfMonth(1);
                 }
             }
-            Obs o = new Obs(d, v, s.freq);
+            Obs o = new Obs(d, v, s);
             if (asOf == null || !o.knownBy.isAfter(asOf)) {
                 out.add(o);
             }
@@ -1093,7 +1148,13 @@ final class MarketForecasts {
     }
 
     private static YearMonth monthWithYear(Matcher m, String closeTime) {
-        int month = Month.valueOf(m.group(1).toUpperCase(Locale.ROOT)).getValue();
+        String prefix = m.group(1).substring(0, 3).toUpperCase(Locale.ROOT);
+        int month = 0;
+        for (Month named : Month.values()) {
+            if (named.name().startsWith(prefix)) {
+                month = named.getValue();
+            }
+        }
         if (m.group(2) != null) {
             return YearMonth.of(Integer.parseInt(m.group(2)), month);
         }
@@ -1146,8 +1207,9 @@ final class MarketForecasts {
         } else {
             json.put("as_of", req.asOf.toString());
         }
-        json.put("as_of_rule", "a monthly row is used once its month has ended on or before "
-            + "as_of; a weekly or daily row once its date is on or before as_of");
+        json.put("as_of_rule", "a monthly row is used once its month has ended and its "
+            + "release has printed (the series' publication lag in days after month end) on "
+            + "or before as_of; a weekly or daily row once its date is on or before as_of");
         Result result = new Result();
         result.json = json;
         if (spec.notSourcedId != null) {
@@ -1413,6 +1475,11 @@ final class MarketForecasts {
         }
         LocalDate newest = s.freq == Freq.MONTHLY
             ? YearMonth.from(last.date).plusMonths(1).atEndOfMonth() : last.date;
+        if (req.asOf != null && s.freq == Freq.MONTHLY && s.publishLagDays == null) {
+            flags.add("publication_lag_unknown", s.id + " declares no publication lag, so "
+                + "as_of " + req.asOf + " keeps every month that had ended by then, whether or "
+                + "not its release had printed.");
+        }
         long age = ChronoUnit.DAYS.between(newest, ref);
         int limit = s.freq == Freq.DAILY ? STALE_DAILY_DAYS
             : s.freq == Freq.WEEKLY ? STALE_WEEKLY_DAYS : STALE_MONTHLY_DAYS;

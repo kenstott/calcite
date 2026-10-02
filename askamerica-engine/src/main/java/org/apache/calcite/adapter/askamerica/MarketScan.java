@@ -60,6 +60,7 @@ final class MarketScan {
     private final PredictionMarkets.Fetcher fetcher;
     private final PredictionMarkets.ListingCache cache;
     private final MarketForecasts builder;
+    private final MarketBacktest backtest;
     private final Supplier<Instant> clock;
     private final long listingWaitMillis;
     private final long budgetMillis;
@@ -70,6 +71,16 @@ final class MarketScan {
     MarketScan(PredictionMarkets.Fetcher fetcher, PredictionMarkets.ListingCache cache,
             MarketTools.SqlRunner sql, Supplier<Instant> clock, long listingWaitMillis,
             long budgetMillis, Duration ttl) {
+        this(fetcher, cache, sql, clock, listingWaitMillis, budgetMillis, ttl,
+            new MarketBacktest(fetcher, sql, clock));
+    }
+
+    /** @param backtest whose records grade each opportunity and drop a series the venue's
+     *                 price has beaten */
+    MarketScan(PredictionMarkets.Fetcher fetcher, PredictionMarkets.ListingCache cache,
+            MarketTools.SqlRunner sql, Supplier<Instant> clock, long listingWaitMillis,
+            long budgetMillis, Duration ttl, MarketBacktest backtest) {
+        this.backtest = backtest;
         this.fetcher = fetcher;
         this.cache = cache;
         this.builder = new MarketForecasts(fetcher, sql, clock);
@@ -91,6 +102,8 @@ final class MarketScan {
         boolean blocked;
         /** The market's implied median is outside the forecast's p05 to p95. */
         boolean outside;
+        /** The baseline beat this series' price in the last backtest. */
+        boolean backtested;
         /** The mispriced markets, best edge first. */
         List<JsonNode> past;
         /** json with the markets that count under this call's arguments. */
@@ -242,7 +255,8 @@ final class MarketScan {
             return row;
         }
         MarketPricing.Priced priced = MarketPricing.priceEvent(live, built.forecast,
-            Collections.<String, MarketPricing.Condition>emptyMap(), 0, null, false, null);
+            Collections.<String, MarketPricing.Condition>emptyMap(), 0, null, false, null,
+            new MarketPricing.SizeOptions(row.at, null, null));
         List<JsonNode> past = new ArrayList<>();
         boolean any = false;
         for (JsonNode m : priced.json.path("priced_markets")) {
@@ -262,6 +276,7 @@ final class MarketScan {
         o.put("source", ev.source);
         o.put("event_id", ev.eventId);
         o.put("event_title", ev.eventTitle);
+        o.put("venue_series", ev.series);
         o.put("driver", ev.driver == null ? null : ev.driver.name);
         o.put("url", ev.url);
         o.put("close_time", ev.closeTime);
@@ -382,6 +397,8 @@ final class MarketScan {
         List<Row> passed = new ArrayList<>();
         int forecast = 0;
         int flagged = 0;
+        int beaten = 0;
+        boolean unbacktested = false;
         for (PredictionMarkets.Event e : chosen) {
             Row r = rows.get(key(e));
             if (r == null) {
@@ -411,8 +428,11 @@ final class MarketScan {
                 if (counted++ < MARKETS_SHOWN) {
                     ObjectNode shown = markets.addObject();
                     for (String f : new String[]{"market_id", "title", "side", "price",
-                        "fair", "se", "fee", "edge", "return_on_cost", "volume"}) {
-                        shown.set(f, m.get(f));
+                        "fair", "se", "fee", "edge", "return_on_cost",
+                        "annualized_return_simple_365d", "breakeven_fair", "volume"}) {
+                        if (m.has(f)) {
+                            shown.set(f, m.get(f));
+                        }
                     }
                 }
             }
@@ -425,10 +445,27 @@ final class MarketScan {
                 flagged++;
                 continue;
             }
+            String series = o.hasNonNull("venue_series")
+                ? o.get("venue_series").asText() : null;
+            ObjectNode record = backtest.record(o.get("source").asText(), series);
+            if (record != null && !includeFlagged
+                && "market_beats_baseline".equals(record.path("verdict").asText())) {
+                beaten++;
+                continue;
+            }
+            ObjectNode confidence = MarketBacktest.confidence(record,
+                o.get("forecast").get("flags"), true, o.get("source").asText(), series);
+            confidence.remove("must");
+            o.set("confidence", confidence);
+            r.backtested = MarketBacktest.TIER_BACKTESTED.equals(
+                confidence.get("tier").asText());
+            unbacktested |= record == null && "kalshi".equals(o.get("source").asText());
             passed.add(r);
         }
-        // A market outside the baseline's own range is the sharper disagreement.
-        passed.sort(Comparator.comparing((Row r) -> !r.outside)
+        // A series whose baseline has beaten the price comes first; then a market outside
+        // the baseline's own range, the sharper disagreement.
+        passed.sort(Comparator.comparing((Row r) -> !r.backtested)
+            .thenComparing((Row r) -> !r.outside)
             .thenComparing(Comparator.comparingDouble((Row r) -> r.bestEdge).reversed()));
         ObjectNode funnel = out.putObject("funnel");
         funnel.put("events_matched", matched.size());
@@ -437,6 +474,8 @@ final class MarketScan {
         funnel.put("events_forecast", forecast);
         funnel.put("events_passed", passed.size());
         funnel.put("events_past_min_edge_left_out_for_a_blocking_flag", flagged);
+        funnel.put("events_past_min_edge_left_out_as_the_price_beat_the_baseline_in_backtest",
+            beaten);
         ArrayNode opps = out.putArray("opportunities");
         for (int i = 0; i < passed.size() && i < limit; i++) {
             opps.add(passed.get(i).shown);
@@ -482,8 +521,11 @@ final class MarketScan {
             out.put("next", "Vet at most 3 of opportunities before reporting: "
                 + "price_market_event(source, event_id, build_forecast=true), read rules, "
                 + "confirm the forecast's series, period and rounding are what the rules "
-                + "name, and state every flag and baseline_vs_market. When asked for a random event, pick at random "
-                + "among opportunities.");
+                + "name, and state every flag, confidence and baseline_vs_market. "
+                + (unbacktested ? "For a Kalshi opportunity whose confidence.backtest is null "
+                    + "you MUST call " + MarketBacktest.TOOL + "(source, series=venue_series) "
+                    + "and state its verdict. " : "")
+                + "When asked for a random event, pick at random among opportunities.");
         }
         return MAPPER.writeValueAsString(out);
     }

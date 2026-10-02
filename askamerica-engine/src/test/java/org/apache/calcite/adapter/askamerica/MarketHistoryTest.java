@@ -102,6 +102,26 @@ class MarketHistoryTest {
       + kalshiSettledMarket("KXCPI-26AUG-T0.9", "0.9", "0.0100") + "]}";
   private static final String KALSHI_SETTLED_PAGE_2 = "{\"cursor\":\"\",\"markets\":["
       + kalshiSettledMarket("KXCPI-26AUG-T0.2", "0.2", "0.9900") + "]}";
+  private static final String KALSHI_NO_MARKETS = "{\"cursor\":\"\",\"markets\":[]}";
+  /** The historical tier: one market the live tier also lists, and one only it holds. */
+  private static final String KALSHI_HISTORICAL_PAGE = "{\"cursor\":\"\",\"markets\":["
+      + kalshiSettledMarket("KXCPI-26AUG-T0.2", "0.2", "0.9900") + ","
+      + kalshiSettledMarket("KXCPI-26JUN-T0.3", "0.3", "0.0100") + "]}";
+  /** A candle of the historical tier: no unit suffix on its fields, a null close when no
+   *  trade printed. */
+  private static final String KALSHI_HISTORICAL_CANDLES = """
+      {"candlesticks":[
+       {"end_period_ts":1782874800,"open_interest":"21021.29",
+        "price":{"close":"0.0200","high":"0.0200","low":"0.0200","mean":"0.0200","open":"0.0200","previous":"0.0200"},
+        "volume":"1.00",
+        "yes_ask":{"close":"0.0200","high":"0.0200","low":"0.0100","open":"0.0200"},
+        "yes_bid":{"close":"0.0000","high":"0.0000","low":"0.0000","open":"0.0000"}},
+       {"end_period_ts":1783267200,"open_interest":"21020.29",
+        "price":{"close":null,"high":null,"low":null,"mean":null,"open":null,"previous":"0.0100"},
+        "volume":"0.00",
+        "yes_ask":{"close":"0.0100","high":"0.0100","low":"0.0100","open":"0.0100"},
+        "yes_bid":{"close":"0.0000","high":"0.0000","low":"0.0000","open":"0.0000"}}]}
+      """;
 
   private static final String POLY_SETTLED = """
       [{"id":"45883","title":"Fed decision in January?","endDate":"2026-01-28T00:00:00Z",
@@ -221,7 +241,8 @@ class MarketHistoryTest {
     FakeFetcher f = new FakeFetcher()
         .on(K + "/markets?status=settled&series_ticker=KXCPI&limit=198&cursor=",
             KALSHI_SETTLED_PAGE_2)
-        .on(K + "/markets?status=settled", KALSHI_SETTLED_PAGE_1);
+        .on(K + "/markets?status=settled", KALSHI_SETTLED_PAGE_1)
+        .on(K + "/historical/markets?series_ticker=KXCPI&limit=197", KALSHI_NO_MARKETS);
     List<MarketHistory.SettledMarket> out =
         MarketHistory.settledMarkets(f, "kalshi", "KXCPI", 200);
     assertEquals(3, out.size());
@@ -238,8 +259,79 @@ class MarketHistoryTest {
     assertEquals("2026-09-11T12:25:00Z", m.closeTime);
     assertEquals("2026-09-11T13:28:53.706257Z", m.settleTime);
     assertEquals(0.99, out.get(2).lastPrice);
-    assertEquals(2, f.urls.size());
+    assertEquals(3, f.urls.size());
     assertTrue(f.urls.get(1).contains("cursor=CgwIhfWJ0wYQ8OD22wES"), f.urls.get(1));
+  }
+
+  @Test void kalshiSettledMarketsPastTheCutoffComeFromTheHistoricalTier() throws Exception {
+    FakeFetcher f = new FakeFetcher()
+        .on(K + "/markets?status=settled", KALSHI_SETTLED_PAGE_2)
+        .on(K + "/historical/markets?series_ticker=KXCPI&limit=199", KALSHI_HISTORICAL_PAGE);
+    List<MarketHistory.SettledMarket> out =
+        MarketHistory.settledMarkets(f, "kalshi", "KXCPI", 200);
+    // The market both tiers list is kept once, from the live tier.
+    assertEquals(2, out.size());
+    assertEquals("KXCPI-26AUG-T0.2", out.get(0).marketId);
+    assertFalse(out.get(0).historical);
+    assertEquals("KXCPI-26JUN-T0.3", out.get(1).marketId);
+    assertTrue(out.get(1).historical);
+    assertEquals("no", out.get(1).outcome);
+
+    // A limit the live tier fills leaves the historical tier unread.
+    FakeFetcher g = new FakeFetcher().on(K + "/markets?status=settled", KALSHI_SETTLED_PAGE_2);
+    assertEquals(1, MarketHistory.settledMarkets(g, "kalshi", "KXCPI", 1).size());
+    assertEquals(1, g.urls.size());
+  }
+
+  @Test void aKalshiMarketTheLiveTierNoLongerHoldsResolvesFromTheHistoricalTier()
+      throws Exception {
+    String ticker = "KXCPI-26JUN-T0.3";
+    JsonNode market = MAPPER.readTree("{\"market\":{\"title\":\"Will CPI rise more than 0.3%?\","
+        + "\"status\":\"finalized\",\"event_ticker\":\"KXCPI-26JUN\"}}");
+    List<String> urls = new ArrayList<>();
+    PredictionMarkets.Fetcher f = url -> {
+      urls.add(url);
+      if (url.equals(K + "/historical/markets/" + ticker)) {
+        return market;
+      }
+      throw new PredictionMarkets.HttpStatusException(404, url);
+    };
+    MarketHistory.MarketRef ref = MarketHistory.resolve(f, "kalshi", ticker, "KXCPI");
+    assertTrue(ref.historical);
+    assertFalse(ref.open);
+    assertEquals("finalized", ref.status);
+    assertEquals("KXCPI", ref.series);
+    assertEquals(List.of(K + "/markets/" + ticker, K + "/historical/markets/" + ticker), urls);
+
+    // A ticker neither tier holds raises the venue's own 404.
+    PredictionMarkets.HttpStatusException e = assertThrows(
+        PredictionMarkets.HttpStatusException.class,
+        () -> MarketHistory.resolve(f, "kalshi", "NOPE", "KXCPI"));
+    assertEquals(404, e.status);
+  }
+
+  @Test void kalshiHistoricalPriceHistoryReadsTheHistoricalCandles() throws Exception {
+    String ticker = "KXCPI-26JUN-T0.3";
+    FakeFetcher f = new FakeFetcher()
+        .on(K + "/historical/markets/" + ticker + "/candlesticks", KALSHI_HISTORICAL_CANDLES);
+    MarketHistory.MarketRef ref = new MarketHistory.MarketRef();
+    ref.source = "kalshi";
+    ref.marketId = ticker;
+    ref.series = "KXCPI";
+    ref.historical = true;
+    List<MarketHistory.PricePoint> points = MarketHistory.priceHistory(f, ref,
+        Instant.ofEpochSecond(1782700000L), Instant.ofEpochSecond(1783267200L),
+        MarketHistory.Interval.HOUR);
+    assertEquals(2, points.size());
+    assertEquals(0.02, points.get(0).price);
+    assertEquals(1.0, points.get(0).volume);
+    assertEquals(0.0, points.get(0).yesBid);
+    assertEquals(0.02, points.get(0).yesAsk);
+    assertNull(points.get(1).price);
+    assertEquals(0.01, points.get(1).yesAsk);
+    assertTrue(f.urls.get(0).startsWith(K + "/historical/markets/" + ticker
+        + "/candlesticks?start_ts=1782700000&end_ts=1783267200&period_interval=60"),
+        f.urls.get(0));
   }
 
   @Test void kalshiSettledLimitBoundsPagesAndResults() throws Exception {
@@ -314,16 +406,22 @@ class MarketHistoryTest {
     assertEquals(3, f.urls.size());
   }
 
+  /** A venue whose live tier answers {@code page} and whose historical tier is empty. */
+  private static FakeFetcher liveTierOnly(String page) {
+    return new FakeFetcher().on(K + "/markets", page)
+        .on(K + "/historical/markets?series_ticker=", KALSHI_NO_MARKETS);
+  }
+
   @Test void missingFieldsAreNamed() {
     String noResult = KALSHI_SETTLED_PAGE_2.replace("\"result\":\"no\",", "");
-    FakeFetcher f = new FakeFetcher().on(K + "/markets", noResult);
+    FakeFetcher f = liveTierOnly(noResult);
     IllegalStateException e = assertThrows(IllegalStateException.class,
         () -> MarketHistory.settledMarkets(f, "kalshi", "KXCPI", 5));
     assertTrue(e.getMessage().contains("'result'"), e.getMessage());
 
     String noValue = KALSHI_SETTLED_PAGE_2.replace("\"expiration_value\":\"0.4\",", "");
     e = assertThrows(IllegalStateException.class, () -> MarketHistory.settledMarkets(
-        new FakeFetcher().on(K + "/markets", noValue), "kalshi", "KXCPI", 5));
+        liveTierOnly(noValue), "kalshi", "KXCPI", 5));
     assertTrue(e.getMessage().contains("'expiration_value'"), e.getMessage());
 
     String noPrices = POLY_SETTLED.replace("\"outcomePrices\"", "\"outcomeP\"");
@@ -333,16 +431,35 @@ class MarketHistoryTest {
 
     String noCursor = KALSHI_SETTLED_PAGE_2.replace("\"cursor\":\"\",", "");
     e = assertThrows(IllegalStateException.class, () -> MarketHistory.settledMarkets(
-        new FakeFetcher().on(K + "/markets", noCursor), "kalshi", "KXCPI", 5));
+        liveTierOnly(noCursor), "kalshi", "KXCPI", 5));
     assertTrue(e.getMessage().contains("'cursor'"), e.getMessage());
   }
 
-  @Test void unknownResultAndSourceAreRejected() {
+  @Test void aResultThatIsNotYesOrNoIsKeptAndMarkedNotScoreable() throws IOException {
     String odd = KALSHI_SETTLED_PAGE_2.replace("\"result\":\"no\"", "\"result\":\"scalar\"");
-    IllegalStateException e = assertThrows(IllegalStateException.class,
-        () -> MarketHistory.settledMarkets(new FakeFetcher().on(K + "/markets", odd),
-            "kalshi", "KXCPI", 5));
-    assertTrue(e.getMessage().contains("scalar"), e.getMessage());
+    List<MarketHistory.SettledMarket> got = MarketHistory.settledMarkets(
+        liveTierOnly(odd), "kalshi", "KXCPI", 5);
+    assertEquals(1, got.size());
+    assertEquals("scalar", got.get(0).outcome);
+    assertFalse(got.get(0).scoreable);
+    assertTrue(got.get(0).notScoreableReason.contains("scalar"), got.get(0).notScoreableReason);
+    assertTrue(got.get(0).toJson().get("not_scoreable_reason").asText().contains("scalar"));
+    String yes = KALSHI_SETTLED_PAGE_2.replace("\"result\":\"no\"", "\"result\":\"yes\"");
+    assertTrue(MarketHistory.settledMarkets(liveTierOnly(yes),
+        "kalshi", "KXCPI", 5).get(0).scoreable);
+  }
+
+  @Test void theRulesTextOfASettledMarketIsReturned() throws IOException {
+    String withRules = KALSHI_SETTLED_PAGE_2.replace("\"result\":\"no\"",
+        "\"result\":\"no\",\"rules_primary\":\"One decimal.\",\"rules_secondary\":\"BLS.\"");
+    assertEquals("One decimal. BLS.", MarketHistory.settledMarkets(
+        liveTierOnly(withRules), "kalshi", "KXCPI", 5).get(0).rules);
+    assertNull(MarketHistory.settledMarkets(
+        liveTierOnly(KALSHI_SETTLED_PAGE_2), "kalshi", "KXCPI", 5)
+        .get(0).rules);
+  }
+
+  @Test void anUnknownSourceIsRejected() {
     assertThrows(IllegalArgumentException.class,
         () -> MarketHistory.settledMarkets(new FakeFetcher(), "manifold", "x", 5));
   }

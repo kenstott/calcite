@@ -97,6 +97,8 @@ final class MarketHistory {
   /** One settled market, in the shape both venues are normalized to. */
   static final class SettledMarket {
     String source;
+    /** Kalshi: listed by the historical tier, so its candles are read from there too. */
+    boolean historical;
     String eventId;
     /** Null on Kalshi, whose market payload carries no event title. */
     String eventTitle;
@@ -108,8 +110,19 @@ final class MarketHistory {
     Double floorStrike;
     Double capStrike;
     String condition;
-    /** "yes", "no", or on Polymarket the winning outcome's name; "unresolved" if none won. */
+    /**
+     * "yes", "no", or on Polymarket the winning outcome's name; "unresolved" if none won. On
+     * Kalshi a result that is neither yes nor no (void, scalar, empty) is kept as sent, with
+     * {@link #scoreable} false.
+     */
     String outcome;
+    /** False when the market has no yes or no outcome to score a probability against. */
+    boolean scoreable = true;
+    /** Why {@link #scoreable} is false; null otherwise. */
+    String notScoreableReason;
+    /** The market's rules text where the venue sends it (Kalshi rules_primary and
+     *  rules_secondary, Polymarket description); null when it sends none. */
+    String rules;
     /** The value the market settled on where the venue reports one (Kalshi); else null. */
     String settlementValue;
     String closeTime;
@@ -131,6 +144,8 @@ final class MarketHistory {
       PredictionMarkets.putNumber(o, "cap_strike", capStrike);
       o.put("condition", condition);
       o.put("outcome", outcome);
+      o.put("scoreable", scoreable);
+      o.put("not_scoreable_reason", notScoreableReason);
       o.put("settlement_value", settlementValue);
       o.put("close_time", closeTime);
       o.put("settle_time", settleTime);
@@ -148,6 +163,9 @@ final class MarketHistory {
     String series;
     /** Polymarket CLOB token id of the Yes outcome; null on Kalshi. */
     String yesTokenId;
+    /** Kalshi: the market is past the venue's historical cutoff, so its candles are read
+     *  from the historical tier. */
+    boolean historical;
     /** True when the venue is still taking orders, so a book can be read. */
     boolean open;
     /** The venue's own status text, for the report. */
@@ -350,19 +368,37 @@ final class MarketHistory {
     throw badSource(source);
   }
 
+  /**
+   * Kalshi keeps a market on /markets until its settlement passes the venue's historical
+   * cutoff, then serves it only from /historical/markets. Both are most recent first and the
+   * live tier is the newer, so it is read first and the historical tier makes up the rest.
+   */
   private static List<SettledMarket> kalshiSettled(PredictionMarkets.Fetcher fetcher,
       String series, int limit) throws IOException {
     List<SettledMarket> out = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    kalshiSettledTier(fetcher, "/markets?status=settled&series_ticker=", false, series, limit,
+        out, seen);
+    kalshiSettledTier(fetcher, "/historical/markets?series_ticker=", true, series, limit, out,
+        seen);
+    return out;
+  }
+
+  private static void kalshiSettledTier(PredictionMarkets.Fetcher fetcher, String path,
+      boolean historical, String series, int limit, List<SettledMarket> out, Set<String> seen)
+      throws IOException {
     String cursor = "";
     while (out.size() < limit) {
-      String url = PredictionMarkets.KALSHI + "/markets?status=settled&series_ticker="
-          + enc(series) + "&limit=" + Math.min(KALSHI_PAGE, limit - out.size())
+      String url = PredictionMarkets.KALSHI + path + enc(series) + "&limit="
+          + Math.min(KALSHI_PAGE, limit - out.size())
           + (cursor.isEmpty() ? "" : "&cursor=" + enc(cursor));
       JsonNode doc = fetcher.get(url);
       JsonNode markets = required(doc, "markets", "Kalshi markets response");
       for (JsonNode m : markets) {
-        if (out.size() < limit) {
-          out.add(kalshiSettledMarket(m, series));
+        if (out.size() < limit && seen.add(required(m, "ticker", "Kalshi market").asText())) {
+          SettledMarket s = kalshiSettledMarket(m, series);
+          s.historical = historical;
+          out.add(s);
         }
       }
       cursor = required(doc, "cursor", "Kalshi markets response").asText();
@@ -370,7 +406,6 @@ final class MarketHistory {
         break;
       }
     }
-    return out;
   }
 
   private static SettledMarket kalshiSettledMarket(JsonNode m, String series) {
@@ -383,11 +418,19 @@ final class MarketHistory {
     s.eventId = required(m, "event_ticker", what).asText();
     s.title = required(m, "title", what).asText();
     String result = required(m, "result", what).asText();
-    if (!"yes".equals(result) && !"no".equals(result)) {
-      throw new IllegalStateException(what + " is settled with result '" + result
-          + "', not yes or no");
-    }
     s.outcome = result;
+    if (!"yes".equals(result) && !"no".equals(result)) {
+      s.scoreable = false;
+      s.notScoreableReason = "settled with result '" + result + "', not yes or no";
+    }
+    StringBuilder rules = new StringBuilder();
+    for (String f : new String[] {"rules_primary", "rules_secondary"}) {
+      String part = textOrNull(m, f);
+      if (part != null && !part.isEmpty()) {
+        rules.append(rules.length() > 0 ? " " : "").append(part);
+      }
+    }
+    s.rules = rules.length() == 0 ? null : rules.toString();
     String value = required(m, "expiration_value", what).asText();
     s.settlementValue = value.isEmpty() ? null : value;
     s.closeTime = required(m, "close_time", what).asText();
@@ -440,6 +483,7 @@ final class MarketHistory {
     s.marketId = id;
     s.title = required(m, "question", what).asText();
     s.condition = textOrNull(m, "groupItemTitle");
+    s.rules = textOrNull(m, "description");
     List<String> outcomes = stringList(required(m, "outcomes", what), what + " outcomes");
     List<String> prices = stringList(required(m, "outcomePrices", what),
         what + " outcomePrices");
@@ -474,8 +518,19 @@ final class MarketHistory {
     ref.source = source;
     ref.marketId = marketId;
     if ("kalshi".equals(source)) {
-      JsonNode m = required(fetcher.get(PredictionMarkets.KALSHI + "/markets/" + enc(marketId)),
-          "market", "Kalshi market response");
+      JsonNode doc;
+      try {
+        doc = fetcher.get(PredictionMarkets.KALSHI + "/markets/" + enc(marketId));
+      } catch (PredictionMarkets.HttpStatusException e) {
+        if (e.status != 404) {
+          throw e;
+        }
+        // Not on the live tier: a market past the historical cutoff, or no market at all;
+        // the historical tier's own 404 says which.
+        doc = fetcher.get(PredictionMarkets.KALSHI + "/historical/markets/" + enc(marketId));
+        ref.historical = true;
+      }
+      JsonNode m = required(doc, "market", "Kalshi market response");
       String what = "Kalshi market " + marketId;
       ref.title = required(m, "title", what).asText();
       ref.status = required(m, "status", what).asText();
@@ -535,12 +590,13 @@ final class MarketHistory {
             + " periods; Kalshi returns at most " + KALSHI_CANDLE_CAP
             + ". Shorten the window or use interval=day.");
       }
-      JsonNode doc = fetcher.get(PredictionMarkets.KALSHI + "/series/" + enc(ref.series)
+      JsonNode doc = fetcher.get(PredictionMarkets.KALSHI
+          + (ref.historical ? "/historical" : "/series/" + enc(ref.series))
           + "/markets/" + enc(ref.marketId) + "/candlesticks?start_ts="
           + start.getEpochSecond() + "&end_ts=" + end.getEpochSecond() + "&period_interval="
           + interval.minutes);
       for (JsonNode c : required(doc, "candlesticks", "Kalshi candlesticks response")) {
-        out.add(kalshiPoint(c, ref.marketId));
+        out.add(kalshiPoint(c, ref.marketId, ref.historical));
       }
     } else if ("polymarket".equals(ref.source)) {
       // startTs/endTs is rejected as "too long" beyond about two weeks, so the whole
@@ -562,14 +618,17 @@ final class MarketHistory {
     return out;
   }
 
-  private static PricePoint kalshiPoint(JsonNode c, String ticker) {
+  /** The historical tier names a candle's fields without the live tier's unit suffixes. */
+  private static PricePoint kalshiPoint(JsonNode c, String ticker, boolean historical) {
     String what = "Kalshi candlestick of " + ticker;
+    String volume = historical ? "volume" : "volume_fp";
+    String close = historical ? "close" : "close_dollars";
     PricePoint p = new PricePoint();
     p.epochSecond = required(c, "end_period_ts", what).asLong();
-    p.volume = number(required(c, "volume_fp", what), what + " volume_fp");
-    p.price = tradePrice(required(c, "price", what), what + " price");
-    p.yesBid = candleClose(required(c, "yes_bid", what), what + " yes_bid");
-    p.yesAsk = candleClose(required(c, "yes_ask", what), what + " yes_ask");
+    p.volume = number(required(c, volume, what), what + " " + volume);
+    p.price = tradePrice(required(c, "price", what), close, what + " price");
+    p.yesBid = candleClose(required(c, "yes_bid", what), close, what + " yes_bid");
+    p.yesAsk = candleClose(required(c, "yes_ask", what), close, what + " yes_ask");
     return p;
   }
 
@@ -577,16 +636,16 @@ final class MarketHistory {
    * A candle's last trade. The venue sends {@code {}} or only {@code previous_dollars} for a
    * period with no trade; that is null, not a gap in the data.
    */
-  private static Double tradePrice(JsonNode part, String what) {
-    return part.has("close_dollars") ? candleClose(part, what) : null;
+  private static Double tradePrice(JsonNode part, String close, String what) {
+    return part.hasNonNull(close) ? candleClose(part, close, what) : null;
   }
 
   /** A candle's closing dollars; an empty object means nothing quoted: null. */
-  private static Double candleClose(JsonNode part, String what) {
+  private static Double candleClose(JsonNode part, String close, String what) {
     if (part.size() == 0) {
       return null;
     }
-    return dollars(required(part, "close_dollars", what), what + ".close_dollars");
+    return dollars(required(part, close, what), what + "." + close);
   }
 
   // ─── Order book ────────────────────────────────────────────────────────────

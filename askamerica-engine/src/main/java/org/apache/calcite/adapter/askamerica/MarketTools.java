@@ -54,6 +54,10 @@ final class MarketTools {
     static final int MAX_DRAWS = 8;
     /** Counterparts named in an instruction; the full list is in other_venue. */
     static final int MAX_NAMED = 6;
+    /** Order books read per priced event: its mispriced markets, largest edge first. */
+    static final int BOOKS_READ = 3;
+    static final String VOID_CLOSE = "settlement_close";
+    static final String VOID_RELEASE = "settlement_series_release";
     static final List<String> VENUES =
         Collections.unmodifiableList(Arrays.asList("kalshi", "polymarket"));
 
@@ -69,6 +73,7 @@ final class MarketTools {
     private final Supplier<Instant> clock;
     private final long listingWaitMillis;
     private final MarketForecasts builder;
+    private final MarketBacktest backtest;
     /** Events priced against a forecast by this server process, with how many of their
      *  markets passed {@code min_edge}: what a "find a mispriced event" search has covered. */
     private final Map<String, Integer> forecastPriced = new LinkedHashMap<>();
@@ -81,6 +86,15 @@ final class MarketTools {
 
     MarketTools(PredictionMarkets.Fetcher fetcher, PredictionMarkets.ListingCache cache,
             SqlRunner sql, Supplier<Instant> clock, long listingWaitMillis) {
+        this(fetcher, cache, sql, clock, listingWaitMillis,
+            new MarketBacktest(fetcher, sql, clock));
+    }
+
+    /** @param backtest whose records grade the confidence of a forecast edge */
+    MarketTools(PredictionMarkets.Fetcher fetcher, PredictionMarkets.ListingCache cache,
+            SqlRunner sql, Supplier<Instant> clock, long listingWaitMillis,
+            MarketBacktest backtest) {
+        this.backtest = backtest;
         this.fetcher = fetcher;
         this.cache = cache;
         this.sql = sql;
@@ -437,6 +451,17 @@ final class MarketTools {
 
     private MarketPricing.Priced price(JsonNode spec, double minEdge, boolean bothSides)
             throws Exception {
+        return price(spec, minEdge, bothSides, false);
+    }
+
+    /**
+     * Prices one event spec. With {@code ticketed} and a forecast, the order books of the
+     * {@link #BOOKS_READ} mispriced markets with the largest edge are read and every priced
+     * row carries days to settlement, annualized return and breakeven; a mispriced row
+     * carries an order ticket and, where its book was read, its depth.
+     */
+    private MarketPricing.Priced price(JsonNode spec, double minEdge, boolean bothSides,
+            boolean ticketed) throws Exception {
         String source = requiredText(spec, "source");
         String eventId = requiredText(spec, "event_id");
         PredictionMarkets.LiveEvent live =
@@ -461,10 +486,32 @@ final class MarketTools {
             : null;
         MarketPricing.Priced priced = MarketPricing.priceEvent(live, forecast,
             conditionsOf(spec), minEdge, feeRate, bothSides, textArg(spec, "column"));
+        Instant now = clock.get();
+        if (ticketed && forecast != null) {
+            List<JsonNode> past = new ArrayList<>();
+            for (JsonNode m : priced.json.path("priced_markets")) {
+                if ("mispriced".equals(m.path("verdict").asText())) {
+                    past.add(m);
+                }
+            }
+            past.sort((a, b) -> Double.compare(b.get("edge").asDouble(),
+                a.get("edge").asDouble()));
+            Map<String, MarketHistory.OrderBook> books = new LinkedHashMap<>();
+            for (JsonNode m : past.subList(0, Math.min(BOOKS_READ, past.size()))) {
+                String id = m.get("market_id").asText();
+                books.put(id, MarketHistory.orderBook(fetcher,
+                    MarketHistory.resolve(fetcher, source, id, null)));
+            }
+            priced = MarketPricing.priceEvent(live, forecast, conditionsOf(spec), minEdge,
+                feeRate, bothSides, textArg(spec, "column"), new MarketPricing.SizeOptions(now,
+                    books, has(spec, "size") ? Double.valueOf(doubleArg(spec, "size")) : null));
+            priced.json.put("books_read", books.size());
+        }
         if (built != null) {
             priced.json.set("forecast_built", built);
         }
-        priced.json.put("quotes_read_at", clock.get().toString());
+        priced.json.put("quotes_read_at", now.toString());
+        priced.json.put("venue_series", live.event.series);
         return priced;
     }
 
@@ -514,8 +561,9 @@ final class MarketTools {
 
     String priceEvent(JsonNode args) throws Exception {
         double minEdge = has(args, "min_edge") ? doubleArg(args, "min_edge") : 0.03;
-        MarketPricing.Priced priced = price(args, minEdge, boolArg(args, "both_sides"));
+        MarketPricing.Priced priced = price(args, minEdge, boolArg(args, "both_sides"), true);
         ObjectNode json = priced.json;
+        int tickets = addReleaseVoid(json);
         json.set("other_venue", otherVenue(json.get("source").asText(),
             json.hasNonNull("driver") ? json.get("driver").asText() : null,
             json.get("close_time").asText()));
@@ -545,8 +593,137 @@ final class MarketTools {
             json.put("chart_panel_use", "You MUST pass chart_panel in dashboard.panels of "
                 + "the report for each event the report names.");
             json.set("search", searchProgress(json, minEdge));
+            String source = json.get("source").asText();
+            String series = json.hasNonNull("venue_series")
+                ? json.get("venue_series").asText() : null;
+            boolean built = json.has("forecast_built");
+            json.set("confidence", MarketBacktest.confidence(backtest.record(source, series),
+                built ? json.get("forecast_built").path("flags") : null, built, source,
+                series));
+            if (tickets > 0) {
+                json.put("ticket_use", "Each mispriced market carries a ticket: the side, the "
+                    + "limit_price (the most to pay and still clear min_edge after the fee), "
+                    + "depth (contracts and dollars resting at or under that limit, read for "
+                    + "the " + BOOKS_READ + " largest edges) and void_conditions. The quote is "
+                    + "as of quote_time. You MUST report limit_price, depth and "
+                    + "void_conditions with each opportunity. Asked later whether it is still "
+                    + "there, you MUST call requote_market_opportunity with the ticket.");
+            }
         }
         return MAPPER.writeValueAsString(json);
+    }
+
+    /**
+     * Adds to every ticket the release that voids it: a ticket priced on a built forecast is
+     * void once the catalog holds a period after the one the forecast started from. Returns
+     * the number of tickets.
+     */
+    private static int addReleaseVoid(ObjectNode json) {
+        JsonNode built = json.get("forecast_built");
+        int tickets = 0;
+        for (JsonNode m : json.path("priced_markets")) {
+            if (!m.hasNonNull("ticket")) {
+                continue;
+            }
+            tickets++;
+            if (built != null && built.hasNonNull("series") && built.hasNonNull("last_period")) {
+                ObjectNode v = ((ArrayNode) m.get("ticket").get("void_conditions")).addObject();
+                v.put("type", VOID_RELEASE);
+                v.set("series", built.get("series"));
+                v.set("last_period", built.get("last_period"));
+                v.put("void_when", "the catalog holds a period of the series after "
+                    + "last_period: the forecast is then one release behind");
+            }
+        }
+        return tickets;
+    }
+
+    // ─── requote_market_opportunity ────────────────────────────────────────────
+
+    /**
+     * Quotes a ticket of {@link #priceEvent} again: whether the contracts are still resting
+     * at or under its limit, and whether one of its void conditions has occurred. Reads the
+     * market, its order book and, for a release condition, the settlement series' last
+     * period. The ticket's fair value is not recomputed.
+     */
+    String requote(JsonNode args) throws Exception {
+        JsonNode ticket = args.get("ticket");
+        if (ticket == null || !ticket.isObject()) {
+            throw new IllegalArgumentException("ticket is required: the ticket object of a "
+                + "mispriced market, as price_market_event returned it");
+        }
+        String source = requiredText(ticket, "source");
+        String eventId = requiredText(ticket, "event_id");
+        String marketId = requiredText(ticket, "market_id");
+        Instant now = clock.get();
+        ArrayNode voided = MAPPER.createArrayNode();
+        Boolean released = null;
+        for (JsonNode c : ticket.path("void_conditions")) {
+            String type = c.path("type").asText();
+            if (VOID_CLOSE.equals(type)) {
+                if (!now.isBefore(PredictionMarkets.closeInstant(requiredText(c, "time")))) {
+                    voided.addObject().put("type", type).put("why", "the market closed at "
+                        + c.get("time").asText());
+                }
+            } else if (VOID_RELEASE.equals(type)) {
+                String was = requiredText(c, "last_period");
+                PredictionMarkets.Event ev =
+                    PredictionMarkets.fetchEvent(fetcher, source, eventId).event;
+                JsonNode nowBuilt = builder.forecast(ev.eventTitle, ev.rules, ev.driver,
+                    ev.closeTime, new MarketForecasts.Request()).json;
+                if (!nowBuilt.hasNonNull("last_period")) {
+                    throw new IllegalStateException("the settlement series of " + source + " "
+                        + eventId + " no longer resolves, so its last period cannot be read");
+                }
+                String is = nowBuilt.get("last_period").asText();
+                released = !is.equals(was);
+                if (released) {
+                    voided.addObject().put("type", type).put("why", "the catalog's last "
+                        + "period of " + c.path("series").asText() + " is now " + is
+                        + ", the ticket was priced from " + was);
+                }
+            } else {
+                throw new IllegalArgumentException("unknown void condition type '" + type + "'");
+            }
+        }
+        MarketHistory.MarketRef ref = MarketHistory.resolve(fetcher, source, marketId, null);
+        ObjectNode out;
+        if (ref.open) {
+            out = MarketPricing.requote(ticket, MarketHistory.orderBook(fetcher, ref));
+            out.put("book_status", out.get("status").asText());
+        } else {
+            out = MAPPER.createObjectNode();
+            out.put("market_id", marketId);
+            out.put("book_status", "closed");
+            out.put("venue_status", ref.status);
+            out.put("status", "gone");
+        }
+        if (voided.size() > 0) {
+            out.put("status", "void");
+        }
+        out.put("source", source);
+        out.put("event_id", eventId);
+        out.set("ticket_quote_time", ticket.get("quote_time"));
+        out.put("requoted_at", now.toString());
+        out.set("voided_by", voided);
+        if (released == null) {
+            out.putNull("release_since_quote");
+        } else {
+            out.put("release_since_quote", released);
+        }
+        String status = out.get("status").asText();
+        out.put("next", "void".equals(status)
+            ? "The ticket is void (voided_by). You MUST NOT report it as available. Price the "
+                + "event again with price_market_event(build_forecast=true) for a new ticket."
+            : "gone".equals(status)
+            ? "Nothing rests at or under limit_price. Say the opportunity is gone at this "
+                + "limit and give current_best_price and edge_at_current_best."
+            : "partly_open".equals(status)
+            ? "Only contracts_at_or_under_limit of the ticket size rest at or under "
+                + "limit_price. Say so, with contracts_left."
+            : "The ticket is open at its limit as of requoted_at. State that the fair value "
+                + "is the ticket's and was not recomputed.");
+        return MAPPER.writeValueAsString(out);
     }
 
     /**

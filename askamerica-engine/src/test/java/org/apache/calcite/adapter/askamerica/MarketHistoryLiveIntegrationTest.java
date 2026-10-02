@@ -72,6 +72,35 @@ class MarketHistoryLiveIntegrationTest {
     assertTrue(out.get("order_book").has("best_bid"), out.toString());
   }
 
+  /** Kalshi's historical tier: the settled listing past the live tier's cutoff, and the
+   *  candles of one of its markets. */
+  @Test void kalshiHistoricalSettledMarketsAndCandles() throws Exception {
+    List<MarketHistory.SettledMarket> settled =
+        MarketHistory.settledMarkets(FETCHER, "kalshi", "KXCPI", 400);
+    MarketHistory.SettledMarket old = null;
+    for (MarketHistory.SettledMarket m : settled) {
+      if (m.historical) {
+        old = m;
+        break;
+      }
+    }
+    assertTrue(old != null, "no KXCPI market came from the historical tier in "
+        + settled.size() + " settled markets");
+    assertTrue("yes".equals(old.outcome) || "no".equals(old.outcome), old.outcome);
+
+    MarketHistory.MarketRef ref = MarketHistory.resolve(FETCHER, "kalshi", old.marketId, null);
+    assertTrue(ref.historical);
+    assertFalse(ref.open);
+    assertEquals("KXCPI", ref.series);
+    Instant close = PredictionMarkets.closeInstant(old.closeTime);
+    List<MarketHistory.PricePoint> pts = MarketHistory.priceHistory(FETCHER, ref,
+        close.minus(Duration.ofDays(14)), close, MarketHistory.Interval.DAY);
+    assertFalse(pts.isEmpty());
+    for (MarketHistory.PricePoint p : pts) {
+      assertTrue(p.yesAsk == null || (p.yesAsk >= 0 && p.yesAsk <= 1), String.valueOf(p.yesAsk));
+    }
+  }
+
   @Test void polymarketSettledPriceHistoryAndBook() throws Exception {
     List<MarketHistory.SettledMarket> settled =
         MarketHistory.settledMarkets(FETCHER, "polymarket", "fed-interest-rates", 5);

@@ -92,6 +92,33 @@ limits and the leg to execute first. `requote_market_opportunity` takes a ticket
 returns open / partly open (size left) / gone, the current ask and edge, and whether a
 release has printed since the quote. One venue call per leg, no forecast rerun.
 
+Phase 2 as built (2026-10-02):
+
+- Confidence tier is `backtested` or `weak`, on every forecast edge from `price_market_event`
+  and every scan opportunity. `backtested` needs an engine-built forecast, no blocking flag
+  (seasonal adjustment, units, rounding, stale history) and a series record whose verdict is
+  `baseline_beats_market`. The record is kept per series for the life of the process, written
+  only by a backtest of the engine's own forecast (no `forecast_args` override). The scan
+  leaves out a series whose record says the price beat the baseline. The `lock` tier is
+  deferred to Phase 3, where baskets get `rules_match`.
+- Publication lag. `as_of` used to keep every month that had ended; a monthly row now counts
+  as known only once its release has printed (CPI 16 days after month end, jobs 10, PCE 31,
+  fed funds 4, housing starts and permits 21, Case-Shiller 62). Without this the backtest
+  read the settlement month's own value.
+- Kalshi serves settled markets from two tiers. `/markets?status=settled` holds only those
+  settled after the venue's cutoff (`/historical/cutoff`, about two months back);
+  `/historical/markets?series_ticker=` holds the rest, and their candles are at
+  `/historical/markets/{ticker}/candlesticks`, whose fields drop the `_dollars` and `_fp`
+  suffixes. Reading only the live tier gave 2 events per series and an `inconclusive`
+  verdict every time. Both tiers are read now.
+- Column names in the builder's series query are quoted. Unquoted `date` cost about 160 s on
+  the first query of a process against 4 to 10 s quoted. The engine behaviour behind it
+  (an unquoted keyword-named column triggering a load of every schema) affects any query and
+  is not fixed here.
+- Ticket depth is read for the three largest edges of an event (one book call each).
+  `contracts_left` on a re-quote is what still rests at or under the limit, not the unfilled
+  part of the ticket.
+
 Exit test: a reported opportunity carries a backtest record, a dollar capacity, an
 annualized return and an order ticket; re-quoting it returns its current status.
 
@@ -117,6 +144,22 @@ Needs the fields from Phases 1–3.
 |---|---|---|
 | A | Three ready-made dashboards returned by the tools, as `chart_panel` is today: opportunity card (stat row, fair-vs-ask ladder, forecast vs market-implied distribution, series history with forecast fan), scan board (drawn → forecast → passed funnel, ranked table, edge vs standard error), basket sheet (legs, payoff diagram, fee waterfall, what breaks the lock). | `MarketLayouts.java`, `MarketLayoutsTest.java` |
 | B | Per-driver forecasting recipes (CPI, jobs, GDP, mortgage rate, weather, oil barrier) and the structure recipes, in the recipe catalog. `follow_ups` in tool output: size it, breakeven, hedge leg on the other venue, re-quote, settle-within-N-days. | `recipes.json`, `MarketFollowUps.java`, `MarketFollowUpsTest.java` |
+
+Chart types (asked for by the user 2026-10-02: candlesticks and what forecasting charts
+use). `render_chart` draws line, bar, pie, scatter and bubble only, so these are new marks in
+`ChartRenderer`, done before teammate A's layouts and owned by the lead (shared file):
+
+| Chart | Shows | Data it needs |
+|---|---|---|
+| Candlestick with volume bars | venue price of one market over time | open, high, low, close per period — `PricePoint` keeps only the close today |
+| Fan chart | series history, then the forecast's median and 50/80/95% bands | quantiles of the builder's samples per horizon |
+| Distribution overlay | forecast density against the market-implied distribution, strikes marked | builder samples; implied probabilities per strike |
+| Fair-versus-ask ladder | per strike: fair value, bid, ask, edge after fees | `price_market_event` rows |
+| Calibration (reliability) plot | predicted probability against realised frequency, baseline and price | per-market rows of the backtest |
+| Brier by event | baseline and price score per settled event, in time order | backtest `events` |
+| Depth chart | cumulative contracts by price, the ticket's limit marked | order book |
+| Payoff diagram | basket profit by settlement value, fee-inclusive floor marked | `price_market_basket` (Phase 3 B) |
+| Edge decay | edge of an opportunity from quote to re-quote | ticket and re-quotes |
 
 Lead: report gate requires the layout that matches the question (one event, N events, basket).
 

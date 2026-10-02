@@ -266,7 +266,7 @@ class MarketForecastsTest {
     assertEquals(2.0, out.get("p95").asDouble(), EPS);
     assertFalse(out.get("method").asText().contains("calendar"));
     assertEquals(0, out.get("flags").size());
-    assertTrue(sql.queries.get(0).contains("series = 'CPIAUCSL'"));
+    assertTrue(sql.queries.get(0).contains("\"series\" = 'CPIAUCSL'"));
   }
 
   /**
@@ -288,6 +288,25 @@ class MarketForecastsTest {
     assertEquals(0.2, out.get("median").asDouble(), EPS);
     assertTrue(out.get("method").asText().contains("calendar month"));
     assertEquals(0, out.get("flags").size());
+  }
+
+  /** Kalshi titles some events "Apr 2026" and names the month in full only in the rules. */
+  @Test void theSettlementMonthIsReadFromAnAbbreviatedTitleAndFromTheRulesYear()
+      throws Exception {
+    double[] v = new double[32];
+    for (int t = 0; t < v.length; t++) {
+      v[t] = 100 * Math.pow(1.0025, t);
+    }
+    String rules = "BLS CPI-U 12-month change, not seasonally adjusted, one decimal, in percent.";
+    FakeSql sql = new FakeSql().on("CUUR0000SA0", blsRows(YearMonth.of(2024, 1), v));
+    JsonNode out = run(venue("Inflation in Sep 2026 (CPI YoY)", rules, CLOSE, 3.0), sql, "");
+    assertEquals("2026-09", out.get("settlement_period").asText(), out.toString());
+
+    // No month in the title: the rules' month and its year, not the close time's.
+    out = run(venue("CPI inflation (YoY)", "If CPI increases by more than 3.0% in the twelve "
+        + "months ending September 2026, the market resolves to Yes. " + rules, CLOSE, 3.0),
+        sql, "");
+    assertEquals("2026-09", out.get("settlement_period").asText(), out.toString());
   }
 
   /** Steady 0.25% monthly growth gives a constant 12-month change, so every sample is it. */
@@ -363,23 +382,26 @@ class MarketForecastsTest {
     FakeSql sql = new FakeSql().on("LNS14000000", blsRows(YearMonth.of(2025, 1), v));
     JsonNode out = run(venue("Unemployment rate in September 2026", UNEMPLOYMENT_RULES,
         CLOSE, 4.0), sql, ",'as_of':'" + asOf + "'");
-    assertTrue(sql.queries.get(0).contains("year <= 2026"));
+    assertTrue(sql.queries.get(0).contains("\"year\" <= 2026"));
     return out;
   }
 
-  @Test void asOfDropsRowsWhosePeriodHasNotEnded() throws Exception {
-    JsonNode july = asOfRun("2026-07-31");
+  @Test void asOfDropsRowsWhoseReleaseHasNotPrinted() throws Exception {
+    // The unemployment rate prints within 10 days of its month's end.
+    JsonNode july = asOfRun("2026-08-10");
     assertEquals("2026-07", july.get("last_period").asText());
-    assertEquals("2026-07-31", july.get("as_of").asText());
+    assertEquals("2026-08-10", july.get("as_of").asText());
     assertEquals(2, july.get("steps_ahead").asInt());
     assertEquals(17, july.get("n").asInt());
     assertTrue(july.get("p95").asDouble() < 5);
     assertTrue(flagCodes(july).contains("last_period_before_settlement"));
 
-    // August has not ended on the 30th, so its row is not yet known.
-    assertEquals("2026-07", asOfRun("2026-08-30").get("last_period").asText());
-    // On the 31st it is.
-    JsonNode august = asOfRun("2026-08-31");
+    // July had ended on the 31st, but its release had not printed.
+    assertEquals("2026-06", asOfRun("2026-07-31").get("last_period").asText());
+    // August's has not printed on September 9, so its row is not yet known.
+    assertEquals("2026-07", asOfRun("2026-09-09").get("last_period").asText());
+    // On the 10th it is.
+    JsonNode august = asOfRun("2026-09-10");
     assertEquals("2026-08", august.get("last_period").asText());
     assertTrue(august.get("p95").asDouble() > 90);
   }
@@ -690,8 +712,8 @@ class MarketForecastsTest {
     assertEquals(11, out.get("n").asInt());
     assertTrue(out.get("seasonally_adjusted").asBoolean());
     String q = sql.queries.get(0);
-    assertTrue(q.contains("obs_date AS date") && q.contains("val AS value")
-        && q.contains("series = 'ABC'"), q);
+    assertTrue(q.contains("\"obs_date\" AS \"date\"") && q.contains("\"val\" AS \"value\"")
+        && q.contains("\"series\" = 'ABC'"), q);
     assertEquals(0, out.get("flags").size());
   }
 

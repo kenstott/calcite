@@ -138,8 +138,49 @@ class MarketToolsTest {
     return ev;
   }
 
+  /** A Kalshi book: resting No bids (a No bid at p is a Yes ask at 1 - p) and Yes bids. */
+  private static ObjectNode kalshiBook(String[][] noBids, String[][] yesBids) {
+    ObjectNode doc = MAPPER.createObjectNode();
+    ObjectNode book = doc.putObject("orderbook_fp");
+    ArrayNode no = book.putArray("no_dollars");
+    for (String[] level : noBids) {
+      no.addArray().add(level[0]).add(level[1]);
+    }
+    ArrayNode yes = book.putArray("yes_dollars");
+    for (String[] level : yesBids) {
+      yes.addArray().add(level[0]).add(level[1]);
+    }
+    return doc;
+  }
+
+  private static String bookUrl(String ticker) {
+    return PredictionMarkets.KALSHI + "/markets/" + ticker + "/orderbook";
+  }
+
   private static FakeFetcher venues() {
     FakeFetcher f = new FakeFetcher();
+    // Books first: a market's URL is a prefix of its book's.
+    // T3.0 quotes 0.40 / 0.44: 300 Yes offered at 0.44, 500 at 0.50, 1000 at 0.95.
+    f.byPrefix.put(bookUrl(KALSHI_ID + "-T3.0"), kalshiBook(
+        new String[][]{{"0.0500", "1000.00"}, {"0.5000", "500.00"}, {"0.5600", "300.00"}},
+        new String[][]{{"0.4000", "200.00"}}));
+    f.byPrefix.put(bookUrl(KALSHI_ID + "-T3.2"), kalshiBook(
+        new String[][]{{"0.7600", "150.00"}}, new String[][]{{"0.2000", "100.00"}}));
+    for (JsonNode m : kalshiEvent().get("markets")) {
+      ObjectNode one = MAPPER.createObjectNode();
+      ObjectNode market = ((ObjectNode) m).deepCopy();
+      market.put("event_ticker", KALSHI_ID);
+      one.set("market", market);
+      f.byPrefix.put(PredictionMarkets.KALSHI + "/markets/" + m.get("ticker").asText(), one);
+    }
+    ObjectNode polyMarket = ((ObjectNode) polymarketEvent().get("markets").get(0)).deepCopy();
+    polyMarket.put("acceptingOrders", true);
+    polyMarket.put("clobTokenIds", "[\"yes1\", \"no1\"]");
+    f.byPrefix.put(PredictionMarkets.POLYMARKET + "/markets/m1", polyMarket);
+    ObjectNode polyBook = MAPPER.createObjectNode();
+    polyBook.putArray("bids").addObject().put("price", "0.54").put("size", "400");
+    polyBook.putArray("asks").addObject().put("price", "0.56").put("size", "250");
+    f.byPrefix.put(MarketHistory.CLOB + "/book?token_id=yes1", polyBook);
     ObjectNode series = MAPPER.createObjectNode();
     series.putObject("series").put("fee_type", "quadratic").put("fee_multiplier", 1);
     f.byPrefix.put(PredictionMarkets.KALSHI + "/series/KXCPI", series);
@@ -676,7 +717,8 @@ class MarketToolsTest {
       all.append(description).append(t.get("inputSchema"));
     }
     for (String name : new String[]{"forecast_market_event", "market_price_history",
-        "scan_market_opportunities"}) {
+        "scan_market_opportunities", "backtest_market_forecast",
+        "requote_market_opportunity"}) {
       JsonNode t = defs.get(name);
       assertNotNull(t, name + " is not registered");
       int length = t.get("description").asText().length();
@@ -702,9 +744,13 @@ class MarketToolsTest {
 
   /** CPI rising a steady 0.25% a month, to August 2026: a 12-month rate near 3.04%. */
   private static ArrayNode cpiRows() {
+    return cpiRows(32);
+  }
+
+  private static ArrayNode cpiRows(int months) {
     ArrayNode rows = MAPPER.createArrayNode();
     java.time.YearMonth start = java.time.YearMonth.of(2024, 1);
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < months; i++) {
       java.time.YearMonth ym = start.plusMonths(i);
       ObjectNode r = rows.addObject();
       r.put("year", ym.getYear());
@@ -730,6 +776,163 @@ class MarketToolsTest {
     assertFalse(out.get("forecast").isNull());
     assertTrue(out.get("priced_markets").get(0).get("fair").isNumber());
     assertNotNull(out.get("chart_panel"));
+  }
+
+  // ─── Tickets and re-quotes ─────────────────────────────────────────────────
+
+  private static JsonNode ticketOf(JsonNode priced, String marketId) {
+    for (JsonNode m : priced.get("priced_markets")) {
+      if (m.get("market_id").asText().equals(marketId)) {
+        return m.get("ticket");
+      }
+    }
+    throw new AssertionError("no market " + marketId);
+  }
+
+  private static JsonNode requoteArgs(JsonNode ticket) {
+    ObjectNode a = MAPPER.createObjectNode();
+    a.set("ticket", ticket);
+    return a;
+  }
+
+  @Test void aMispricedMarketCarriesATicketAndTheDepthBehindIt() throws Exception {
+    JsonNode out = call(tools().priceEvent(
+        args(kalshiSpec(",'mean':3.3,'sd':0.1,'min_edge':0.10,'size':400"))));
+    assertEquals(2, out.get("books_read").asInt());
+    JsonNode m = out.get("priced_markets").get(0);
+    assertEquals(KALSHI_ID + "-T3.0", m.get("market_id").asText());
+    assertTrue(m.get("annualized_return_simple_365d").asDouble() > 0, m.toString());
+    assertTrue(m.get("breakeven_fair").isNumber());
+    JsonNode t = m.get("ticket");
+    assertEquals("yes", t.get("side").asText());
+    // fair 0.9987, fee rate 0.07: the largest tick with 0.9987 - p - 0.07 p (1 - p) >= 0.10.
+    assertEquals(0.89, t.get("limit_price").asDouble(), 1e-9, t.toString());
+    assertTrue(t.get("edge_at_limit").asDouble() >= 0.10, t.toString());
+    assertEquals(NOW.toString(), t.get("quote_time").asText());
+    assertEquals(MarketTools.VOID_CLOSE, t.get("void_conditions").get(0).get("type").asText());
+    assertEquals(1, t.get("void_conditions").size(), "no built forecast, no release condition");
+    JsonNode depth = m.get("depth");
+    assertTrue(depth.get("book_read").asBoolean());
+    assertEquals(800, depth.get("contracts_at_or_under_limit").asDouble(), 1e-9);
+    assertEquals(300 * 0.44 + 500 * 0.50, depth.get("dollars_at_or_under_limit").asDouble(),
+        1e-6);
+    assertEquals((300 * 0.44 + 100 * 0.50) / 400, depth.get("fill_average_price").asDouble(),
+        1e-4);
+    assertTrue(depth.get("fills_completely_under_limit").asBoolean());
+    assertTrue(out.get("ticket_use").asText().contains("requote_market_opportunity"));
+  }
+
+  @Test void aRequoteSaysWhetherTheTicketIsOpenPartlyOpenOrGone() throws Exception {
+    FakeFetcher f = venues();
+    MarketTools t = tools(f, (q, limit) -> {
+      throw new AssertionError("no query expected: " + q);
+    }, 10_000L);
+    JsonNode ticket = ticketOf(call(t.priceEvent(
+        args(kalshiSpec(",'mean':3.3,'sd':0.1,'min_edge':0.10,'size':400")))),
+        KALSHI_ID + "-T3.0");
+
+    JsonNode open = call(t.requote(requoteArgs(ticket)));
+    assertEquals("open", open.get("status").asText(), open.toString());
+    assertEquals(0.44, open.get("current_best_price").asDouble(), 1e-9);
+    assertTrue(open.get("release_since_quote").isNull());
+    assertEquals(0, open.get("voided_by").size());
+    assertEquals(NOW.toString(), open.get("requoted_at").asText());
+
+    f.byPrefix.put(bookUrl(KALSHI_ID + "-T3.0"), kalshiBook(
+        new String[][]{{"0.0500", "1000.00"}, {"0.5600", "100.00"}}, new String[][]{}));
+    JsonNode partly = call(t.requote(requoteArgs(ticket)));
+    assertEquals("partly_open", partly.get("status").asText(), partly.toString());
+    // contracts_left is what still rests at or under the limit, of the 400 asked for.
+    assertEquals(100, partly.get("contracts_left").asDouble(), 1e-9);
+    assertEquals(400, partly.get("ticket_size").asDouble(), 1e-9);
+
+    f.byPrefix.put(bookUrl(KALSHI_ID + "-T3.0"), kalshiBook(
+        new String[][]{{"0.0500", "1000.00"}}, new String[][]{}));
+    JsonNode gone = call(t.requote(requoteArgs(ticket)));
+    assertEquals("gone", gone.get("status").asText(), gone.toString());
+    assertEquals(0.95, gone.get("current_best_price").asDouble(), 1e-9);
+    assertTrue(gone.get("edge_at_current_best").asDouble() < 0.10);
+    assertTrue(gone.get("next").asText().contains("gone"));
+  }
+
+  @Test void aTicketIsVoidOnceItsMarketHasClosed() throws Exception {
+    FakeFetcher f = venues();
+    JsonNode ticket = ticketOf(call(tools(f, (q, limit) -> cpiRows(), 10_000L).priceEvent(
+        args(kalshiSpec(",'mean':3.3,'sd':0.1,'min_edge':0.10")))), KALSHI_ID + "-T3.0");
+    MarketTools later = new MarketTools(f,
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), (q, limit) -> cpiRows(),
+        () -> Instant.parse("2026-11-12T13:30:00Z"), 10_000L);
+    JsonNode out = call(later.requote(requoteArgs(ticket)));
+    assertEquals("void", out.get("status").asText(), out.toString());
+    assertEquals(MarketTools.VOID_CLOSE, out.get("voided_by").get(0).get("type").asText());
+    assertTrue(out.get("next").asText().contains("MUST NOT report it as available"));
+  }
+
+  @Test void aTicketOnABuiltForecastIsVoidOnceTheSeriesPrintsAgain() throws Exception {
+    FakeFetcher f = venues();
+    int[] months = {32};
+    MarketTools t = tools(f, (q, limit) -> cpiRows(months[0]), 10_000L);
+    JsonNode ticket = ticketOf(call(t.priceEvent(
+        args(kalshiSpec(",'build_forecast':true,'min_edge':0.10")))), KALSHI_ID + "-T3.0");
+    JsonNode release = ticket.get("void_conditions").get(1);
+    assertEquals(MarketTools.VOID_RELEASE, release.get("type").asText(), ticket.toString());
+    assertEquals("CUUR0000SA0", release.get("series").asText());
+    assertEquals("2026-08", release.get("last_period").asText());
+
+    JsonNode same = call(t.requote(requoteArgs(ticket)));
+    assertFalse(same.get("release_since_quote").asBoolean(), same.toString());
+    assertEquals("open", same.get("status").asText(), same.toString());
+
+    months[0] = 33;
+    JsonNode printed = call(t.requote(requoteArgs(ticket)));
+    assertTrue(printed.get("release_since_quote").asBoolean(), printed.toString());
+    assertEquals("void", printed.get("status").asText());
+    assertEquals("open", printed.get("book_status").asText());
+    assertTrue(printed.get("voided_by").get(0).get("why").asText().contains("2026-09"));
+  }
+
+  @Test void aForecastEdgeCarriesItsConfidenceAndTheBacktestThatSetIt() throws Exception {
+    FakeFetcher f = venues();
+    MarketTools.SqlRunner sql = (q, limit) -> cpiRows();
+    MarketBacktest backtest = new MarketBacktest(f, sql, () -> NOW);
+    MarketTools t = new MarketTools(f,
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), sql, () -> NOW, 10_000L,
+        backtest);
+
+    JsonNode given = call(t.priceEvent(args(kalshiSpec(",'mean':3.3,'sd':0.1"))))
+        .get("confidence");
+    assertEquals("weak", given.get("tier").asText());
+    assertTrue(given.get("reasons").get(0).asText().contains("given by the caller"));
+
+    JsonNode before = call(t.priceEvent(args(kalshiSpec(",'build_forecast':true"))));
+    assertEquals("KXCPI", before.get("venue_series").asText());
+    JsonNode unrun = before.get("confidence");
+    assertEquals("weak", unrun.get("tier").asText(), unrun.toString());
+    assertTrue(unrun.get("backtest").isNull());
+    assertTrue(unrun.get("must").asText().contains(
+        "backtest_market_forecast(source='kalshi', series='KXCPI')"), unrun.toString());
+
+    ObjectNode report = MAPPER.createObjectNode();
+    report.put("source", "kalshi").put("series", "KXCPI")
+        .put("verdict", "baseline_beats_market").put("verdict_reason", "r")
+        .put("events_scored", 9).put("days_before", 7).put("brier_baseline", 0.05)
+        .put("brier_price", 0.09).put("brier_difference", -0.04)
+        .put("brier_difference_se", 0.01);
+    backtest.remember(report);
+    JsonNode after = call(t.priceEvent(args(kalshiSpec(",'build_forecast':true"))))
+        .get("confidence");
+    assertEquals("backtested", after.get("tier").asText(), after.toString());
+    assertEquals(9, after.get("backtest").get("events_scored").asInt());
+    assertEquals(NOW.toString(), after.get("backtest").get("run_at").asText());
+
+    assertFalse(call(t.priceEvent(args(kalshiSpec("")))).has("confidence"),
+        "quotes alone carry no forecast to grade");
+  }
+
+  @Test void aRequoteNeedsATicket() {
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> tools().requote(args("{}")));
+    assertTrue(e.getMessage().contains("ticket is required"), e.getMessage());
   }
 
   @Test void buildForecastTakesNoOtherForecast() {

@@ -31,6 +31,8 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -156,9 +158,14 @@ class MarketScanTest {
   }
 
   private static ArrayNode cpiRows() {
+    return cpiRows(32);
+  }
+
+  /** Monthly index rows from 2024-01; 32 months end at 2026-08, the latest print at NOW. */
+  private static ArrayNode cpiRows(int months) {
     ArrayNode rows = MAPPER.createArrayNode();
     YearMonth start = YearMonth.of(2024, 1);
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < months; i++) {
       YearMonth ym = start.plusMonths(i);
       ObjectNode r = rows.addObject();
       r.put("year", ym.getYear());
@@ -171,12 +178,71 @@ class MarketScanTest {
   private final List<String> queries = new ArrayList<>();
 
   private MarketScan scan(long budgetMillis) {
+    return scan(budgetMillis, 32);
+  }
+
+  private MarketScan scan(long budgetMillis, int months) {
     FakeFetcher f = venues();
     return new MarketScan(f, new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)),
         (q, limit) -> {
           queries.add(q);
-          return cpiRows();
+          return cpiRows(months);
         }, () -> NOW, 10_000L, budgetMillis, Duration.ofMinutes(15));
+  }
+
+  private static ObjectNode backtestReport(String series, String verdict) {
+    ObjectNode r = MAPPER.createObjectNode();
+    r.put("source", "kalshi").put("series", series).put("verdict", verdict)
+        .put("verdict_reason", "r").put("events_scored", 9).put("days_before", 7)
+        .put("brier_baseline", 0.05).put("brier_price", 0.09).put("brier_difference", -0.04)
+        .put("brier_difference_se", 0.01);
+    return r;
+  }
+
+  @Test void anOpportunityIsGradedByItsSeriesBacktestAndLeftOutWhenThePriceWon()
+      throws Exception {
+    FakeFetcher f = venues();
+    MarketTools.SqlRunner sql = (q, limit) -> cpiRows(32);
+    MarketBacktest backtest = new MarketBacktest(f, sql, () -> NOW);
+    MarketScan s = new MarketScan(f,
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), sql, () -> NOW, 10_000L,
+        60_000L, Duration.ofMinutes(15), backtest);
+
+    JsonNode first = MAPPER.readTree(s.scan(args("{'within':90}")));
+    JsonNode kalshi = null;
+    for (JsonNode o : first.get("opportunities")) {
+      if ("kalshi".equals(o.get("source").asText())) {
+        kalshi = o;
+      }
+    }
+    assertNotNull(kalshi, first.toString());
+    int passed = first.get("funnel").get("events_passed").asInt();
+    String series = kalshi.get("venue_series").asText();
+    assertEquals("weak", kalshi.get("confidence").get("tier").asText());
+    assertTrue(kalshi.get("confidence").get("backtest").isNull());
+    assertTrue(first.get("next").asText().contains(
+        "you MUST call backtest_market_forecast(source, series=venue_series)"),
+        first.get("next").asText());
+
+    backtest.remember(backtestReport(series, "baseline_beats_market"));
+    JsonNode graded = MAPPER.readTree(s.scan(args("{'within':90}")));
+    JsonNode top = graded.get("opportunities").get(0);
+    assertEquals(kalshi.get("event_id").asText(), top.get("event_id").asText(),
+        "a backtested series ranks first");
+    assertEquals("backtested", top.get("confidence").get("tier").asText(), top.toString());
+    assertEquals(passed, graded.get("funnel").get("events_passed").asInt());
+
+    backtest.remember(backtestReport(series, "market_beats_baseline"));
+    JsonNode beaten = MAPPER.readTree(s.scan(args("{'within':90}")));
+    String leftOut = "events_past_min_edge_left_out_as_the_price_beat_the_baseline_in_backtest";
+    assertEquals(1, beaten.get("funnel").get(leftOut).asInt(), beaten.toString());
+    assertEquals(passed - 1, beaten.get("funnel").get("events_passed").asInt());
+    for (JsonNode o : beaten.get("opportunities")) {
+      assertFalse(kalshi.get("event_id").asText().equals(o.get("event_id").asText()));
+    }
+
+    JsonNode shown = MAPPER.readTree(s.scan(args("{'within':90,'include_flagged':true}")));
+    assertEquals(passed, shown.get("funnel").get("events_passed").asInt());
   }
 
   private static JsonNode args(String json) throws Exception {
@@ -230,6 +296,23 @@ class MarketScanTest {
     // The forecast is 3.0 exactly, so any other implied median is outside its range.
     assertEquals(MarketScan.OUTSIDE, opp.get("baseline_vs_market").asText(), opp.toString());
     assertTrue(out.get("baseline_vs_market_is").asText().contains(MarketScan.INSIDE));
+  }
+
+  @Test void aForecastFromStaleHistoryIsLeftOutUnlessAskedFor() throws Exception {
+    // Rows end at 2026-05: the following month ended 94 days before NOW.
+    MarketScan stale = scan(60_000L, 29);
+    JsonNode out = MAPPER.readTree(stale.scan(args("{'within':90}")));
+    JsonNode funnel = out.get("funnel");
+    assertEquals(1, funnel.get("events_forecast").asInt(), out.toString());
+    assertEquals(0, funnel.get("events_passed").asInt(), out.toString());
+    assertEquals(1, funnel.get("events_past_min_edge_left_out_for_a_blocking_flag").asInt(),
+        out.toString());
+    assertEquals(0, out.get("opportunities").size());
+
+    JsonNode shown = MAPPER.readTree(stale.scan(args("{'within':90,'include_flagged':true}")));
+    assertEquals(1, shown.get("opportunities").size(), shown.toString());
+    assertTrue(shown.get("opportunities").get(0).toString().contains("history_stale"),
+        shown.toString());
   }
 
   @Test void aScanOutOfTimeResumesWhereItStopped() throws Exception {

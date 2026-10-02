@@ -538,7 +538,8 @@ public class McpServer {
             // samples_sql / scenarios_sql calls touch the DB, and MARKETS takes the lock there.
             "find_market_candidates", "price_market_event", "find_market_baskets",
             "price_market_basket", "forecast_market_event", "market_price_history",
-            "scan_market_opportunities"));
+            "scan_market_opportunities", "requote_market_opportunity",
+            "backtest_market_forecast"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -3241,12 +3242,15 @@ public class McpServer {
         mktEventProps.set("build_forecast", prop("boolean",
             "true: the engine builds the forecast from the catalog series the rules settle "
             + "on and prices with it. Give no other forecast form and no round."));
+        mktEventProps.set("size", prop("number",
+            "Contracts to buy. Each mispriced market's depth then gives the average fill "
+            + "price, fee and edge for that size from its order book."));
         tools.add(
             tool("price_market_event",
             "Price one Kalshi or Polymarket event against a forecast of the quantity it "
             + "settles on, net of the venue's taker fee. With no forecast it returns the live "
             + "quotes, the settlement rules text, the fee rates and each market's strike "
-            + "condition. With a forecast it returns, per market: fair (probability under the "
+            + "condition. With a forecast it returns per market: fair (probability under the "
             + "forecast), the side to take, price, fee, edge = fair - price - fee in "
             + "probability points, return_on_cost, and a verdict (mispriced, "
             + "within_sampling_error, within_min_edge, no_quote, not_forecast). Give the "
@@ -3259,7 +3263,8 @@ public class McpServer {
             + "and calendar window in every past year, or historical period-over-period "
             + "changes applied to the latest level. A regression forecast (ols_regression, "
             + "flexible_regression) goes in as mean + sd after cross_validate. other_venue "
-            + "lists events on the other venue settling on the same driver within 3 days. "
+            + "lists other-venue events settling on the same driver within 3 days. "
+            + "A mispriced market carries a ticket: limit price, depth, void conditions. "
             + "'Mispriced by more than 10%' means edge >= 0.10 unless return on cost is asked "
             + "for. You MUST read rules before forecasting. You MUST use build_forecast=true "
             + "first and state every forecast_built flag. When it fails you MUST build the "
@@ -3274,6 +3279,27 @@ public class McpServer {
         tools.add(MarketForecasts.toolDef());
         tools.add(MarketHistory.toolDef());
         tools.add(MarketScan.toolDef());
+        tools.add(MarketBacktest.toolDef());
+
+        ObjectNode mktRequoteProps = MAPPER.createObjectNode();
+        mktRequoteProps.set("ticket", prop("object",
+            "The ticket object of one mispriced market, exactly as price_market_event "
+            + "returned it."));
+        tools.add(
+            tool("requote_market_opportunity",
+            "Check whether an opportunity price_market_event reported can still be taken. "
+            + "Takes the ticket of one mispriced market and reads that market's order book "
+            + "now. Returns status: open (the ticket's size, or at least one contract, rests "
+            + "at or under limit_price), partly_open (with contracts_left), gone (nothing "
+            + "rests at or under limit_price, or the market closed), or void (a void "
+            + "condition occurred: the market closed, or the settlement series has printed a "
+            + "period after the one the forecast started from). Also returns "
+            + "current_best_price, edge_at_current_best against the ticket's fair value, "
+            + "release_since_quote and voided_by. The fair value is the ticket's: no "
+            + "forecast is rerun. You MUST call this before saying a previously reported "
+            + "opportunity is still available. You MUST NOT report a void ticket as "
+            + "available. You MUST state requoted_at.",
+            schema(mktRequoteProps, new String[]{"ticket"})));
 
         ObjectNode mktBasketProps = MAPPER.createObjectNode();
         mktBasketProps.set("recipe", prop("string",
@@ -3752,11 +3778,13 @@ public class McpServer {
     };
     private static final PredictionMarkets.ListingCache MARKET_LISTING =
         new PredictionMarkets.ListingCache(MARKET_FETCHER, java.time.Duration.ofMinutes(15));
+    private static final MarketBacktest MARKET_BACKTEST =
+        new MarketBacktest(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
     private static final MarketTools MARKETS = new MarketTools(MARKET_FETCHER,
-        MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L);
+        MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, MARKET_BACKTEST);
     private static final MarketScan MARKET_SCAN = new MarketScan(MARKET_FETCHER,
         MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
-        java.time.Duration.ofMinutes(15));
+        java.time.Duration.ofMinutes(15), MARKET_BACKTEST);
     private static final MarketForecasts MARKET_FORECASTS =
         new MarketForecasts(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
     private static final MarketHistory MARKET_HISTORY =
@@ -3962,6 +3990,19 @@ public class McpServer {
                         + args.path("source").asText("") + " event_id="
                         + args.path("event_id").asText(""));
                     text = MARKET_FORECASTS.forecastMarketEvent(args);
+                    break;
+                }
+                case "backtest_market_forecast": {
+                    log.println("[askamerica-mcp] tool=backtest_market_forecast series="
+                        + args.path("series").asText(""));
+                    text = MARKET_BACKTEST.backtestTool(args);
+                    break;
+                }
+                case "requote_market_opportunity": {
+                    log.println("[askamerica-mcp] tool=requote_market_opportunity source="
+                        + args.path("ticket").path("source").asText("") + " market_id="
+                        + args.path("ticket").path("market_id").asText(""));
+                    text = MARKETS.requote(args);
                     break;
                 }
                 case "scan_market_opportunities": {
