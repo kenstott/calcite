@@ -533,7 +533,11 @@ public class McpServer {
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "web_fetch", "register", "publish_report", "restore_report", "mysite"));
+            "web_fetch", "register", "publish_report", "restore_report", "mysite",
+            // The market tools read two venues over HTTP for up to a minute; only their
+            // samples_sql / scenarios_sql calls touch the DB, and MARKETS takes the lock there.
+            "find_market_candidates", "price_market_event", "find_market_baskets",
+            "price_market_basket"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -3134,6 +3138,243 @@ public class McpServer {
             + "hasn't covered this yet, not that your plan is fine.",
             schema(recipeProps, new String[]{})));
 
+        ObjectNode mktCandProps = MAPPER.createObjectNode();
+        mktCandProps.set("driver", prop("string",
+            "Only this driver, e.g. inflation, policy_rate, payrolls, unemployment, output, "
+            + "temperature, precipitation, storms, crop_yield, tariffs. An unknown name returns "
+            + "the full list."));
+        mktCandProps.set("basis", prop("string",
+            "Only this basis: release (a federal statistic), climatology (a weather "
+            + "reading), policy (a decision), market_price (a traded price)."));
+        mktCandProps.set("limit", prop("integer",
+            "Events to show, alternating venues (default 20)."));
+        mktCandProps.set("sample", prop("integer",
+            "Draw this many at random instead of the top by volume."));
+        mktCandProps.set("seed", prop("integer",
+            "Seed for sample; the one used is returned."));
+        mktCandProps.set("exclude", arrayProp("string",
+            "event_ids to leave out — the ones already drawn, to draw again."));
+        mktCandProps.set("detail", prop("boolean",
+            "Include every market's quotes and the rules text per event."));
+        mktCandProps.set("within", prop("integer",
+            "Only events closing within this many days (default 180)."));
+        mktCandProps.set("min_days", prop("integer",
+            "Only events closing at least this many days out (default 1)."));
+        mktCandProps.set("min_volume", prop("number",
+            "Minimum event volume (default 1000; contracts on Kalshi, dollars on "
+            + "Polymarket)."));
+        mktCandProps.set("refresh", prop("boolean",
+            "Re-read both venues instead of using the listing kept for 15 minutes."));
+        tools.add(
+            tool("find_market_candidates",
+            "List open prediction-market events on Kalshi AND Polymarket that settle on a "
+            + "quantity this catalog can forecast: a federal release (CPI, payrolls, GDP, "
+            + "rates), a weather reading, a policy decision, a traded price. Both venues are "
+            + "read on every call and the list alternates between them; matched_by_venue says "
+            + "what each had. Each event carries its driver, the govdata_tables holding the "
+            + "settlement series, forecast_with (the forecasting tool that fits its basis: "
+            + "arima_forecast, volatility_forecast / garch_forecast, or a samples_sql "
+            + "climatology), its median bid-ask spread, the market's own implied_median, and "
+            + "any locks visible in the quotes alone. sample=N draws N at random; the seed is "
+            + "returned, and exclude draws again without repeats. A candidate is where to "
+            + "look, not a mispricing. Next: price_market_event with no forecast to read the "
+            + "rules, forecast the settlement value, then price_market_event with the "
+            + "forecast. For 'find a mispriced event' or 'find N': draw, forecast and price "
+            + "each, count the ones that pass, and draw again with exclude. You MUST keep "
+            + "drawing until N pass (N is 1 for 'a mispriced event') or 8 events have been "
+            + "forecast and priced. A 'spread' or 'gap' of X% in a mispricing question is the "
+            + "edge between forecast fair value and price, not the bid-ask spread. The first call reads about 200 pages from the venues and can return "
+            + "status 'loading'. You MUST call again with the same arguments while status is "
+            + "'loading'. You MUST cover both venues in the answer, or state that one had no "
+            + "matching event. You MUST NOT call an event mispriced before price_market_event "
+            + "has scored it against a forecast. You MUST NOT fill a requested count with "
+            + "events you did not forecast.",
+            schema(mktCandProps, new String[]{})));
+
+        ObjectNode mktEventProps = MAPPER.createObjectNode();
+        mktEventProps.set("source", prop("string",
+            "kalshi or polymarket."));
+        mktEventProps.set("event_id", prop("string",
+            "The event_id from find_market_candidates (Kalshi event ticker, Polymarket "
+            + "event id)."));
+        mktEventProps.set("mean", prop("number",
+            "Forecast mean of the settlement value. With sd: arima_forecast's forecast[h-1] "
+            + "and forecast_std_error[h-1]. With lower, upper and level: its interval."));
+        mktEventProps.set("sd", prop("number",
+            "Standard error of the forecast, with mean."));
+        mktEventProps.set("lower", prop("number",
+            "Lower interval bound, with mean and upper."));
+        mktEventProps.set("upper", prop("number",
+            "Upper interval bound, with mean and lower."));
+        mktEventProps.set("level", prop("number",
+            "Coverage of lower..upper (default 0.95)."));
+        mktEventProps.set("price_median", prop("number",
+            "volatility_forecast price_band.price_median, with cumulative_vol_pct: a "
+            + "lognormal band around a price."));
+        mktEventProps.set("cumulative_vol_pct", prop("number",
+            "price_band.cumulative_vol_pct from volatility_forecast, or garch_forecast's "
+            + "forecast_cumulative_vol_pct at the horizon, in percent."));
+        mktEventProps.set("samples", arrayProp("number",
+            "An empirical distribution of the settlement value, as numbers."));
+        mktEventProps.set("samples_sql", prop("string",
+            "A query whose first column is that distribution, one row per sample, no NULLs, "
+            + "under 5000 rows. E.g. the same station and calendar window in every past year."));
+        mktEventProps.set("round", prop("integer",
+            "Decimals the rules settle on; the forecast is rounded to it before it is "
+            + "compared with strikes."));
+        mktEventProps.set("conditions", prop("object",
+            "Strike condition per market_id, in the units of the forecast, for markets the "
+            + "venue gives no structured strike (every Polymarket market): {\"<market_id>\": "
+            + "{\"above\": 3.6}}. Kinds: above, at_least, below, at_most, between [low, high]."));
+        mktEventProps.set("fee_rate", prop("number",
+            "Override the taker fee rate read from the venue."));
+        mktEventProps.set("min_edge", prop("number",
+            "Smallest edge, in probability points after fees, reported as mispriced "
+            + "(default 0.03). Use 0.10 for 'mispriced by more than 10%'."));
+        mktEventProps.set("both_sides", prop("boolean",
+            "Return a leg for both sides of every market, not only the mispriced side."));
+        mktEventProps.set("column", prop("string",
+            "Name of the quantity this event settles on, used as its scenario column in "
+            + "price_market_basket (default: the event_id)."));
+        tools.add(
+            tool("price_market_event",
+            "Price one Kalshi or Polymarket event against a forecast of the quantity it "
+            + "settles on, net of the venue's taker fee. With no forecast it returns the live "
+            + "quotes, the settlement rules text, the fee rates and each market's strike "
+            + "condition. With a forecast it returns, per market: fair (probability under the "
+            + "forecast), the side to take, price, fee, edge = fair - price - fee in "
+            + "probability points, return_on_cost, and a verdict (mispriced, "
+            + "within_sampling_error, within_min_edge, no_quote, not_forecast). Give the "
+            + "forecast in exactly one form. mean + sd: arima_forecast's forecast and "
+            + "forecast_std_error at the settlement period. mean + lower + upper + level: its "
+            + "interval. price_median + cumulative_vol_pct: volatility_forecast's price_band, "
+            + "or garch_forecast's cumulative vol (check it with backtest_volatility). "
+            + "samples or samples_sql: an empirical distribution, such as the same station "
+            + "and calendar window in every past year, or historical period-over-period "
+            + "changes applied to the latest level. A regression forecast (ols_regression, "
+            + "flexible_regression) goes in as mean + sd after cross_validate. other_venue "
+            + "lists events on the other venue settling on the same driver within 3 days. "
+            + "'Mispriced by more than 10%' means edge >= 0.10 unless return on cost is asked "
+            + "for. You MUST read rules before forecasting. You MUST build the "
+            + "forecast from rows queried from govdata_tables. You MUST forecast the exact "
+            + "series, period, units and rounding the rules name. You MUST state whether a "
+            + "percentage is edge or return on cost. You MUST price each other_venue "
+            + "counterpart with the same forecast. You MUST report the forecast's source "
+            + "table and last period, fair, price, fee, edge, volume, and what would make the "
+            + "forecast wrong. You MUST NOT price a policy decision without an explicit, "
+            + "sourced probability.",
+            schema(mktEventProps, new String[]{"source", "event_id"})));
+
+        ObjectNode mktBasketProps = MAPPER.createObjectNode();
+        mktBasketProps.set("recipe", prop("string",
+            "One of cross_venue, same_place, linked_drivers, series_run. Omit for all."));
+        mktBasketProps.set("match", prop("string",
+            "Only baskets whose name contains this text, e.g. a driver, a state, or a link "
+            + "name."));
+        mktBasketProps.set("basis", arrayProp("string",
+            "Bases to keep (default release, climatology, policy; add market_price for "
+            + "traded prices)."));
+        mktBasketProps.set("max_spread", prop("number",
+            "Drop events whose median bid-ask spread exceeds this (default 0.10)."));
+        mktBasketProps.set("limit", prop("integer",
+            "Baskets to show (default 10)."));
+        mktBasketProps.set("events_per_basket", prop("integer",
+            "Events listed per basket, alternating venues (default 8)."));
+        mktBasketProps.set("within", prop("integer",
+            "Only events closing within this many days (default 180)."));
+        mktBasketProps.set("min_days", prop("integer",
+            "Only events closing at least this many days out (default 1)."));
+        mktBasketProps.set("min_volume", prop("number",
+            "Minimum event volume (default 1000; contracts on Kalshi, dollars on "
+            + "Polymarket)."));
+        mktBasketProps.set("refresh", prop("boolean",
+            "Re-read both venues instead of using the listing kept for 15 minutes."));
+        tools.add(
+            tool("find_market_baskets",
+            "Propose baskets of correlated Kalshi and Polymarket events — arbitrage "
+            + "candidates — from the open events this catalog can forecast. Recipes, in "
+            + "order: cross_venue, the same quantity quoted on both venues and closing within "
+            + "3 days — the simplest arbitrage, testable with no forecast; same_place, events "
+            + "on one state or city; linked_drivers, drivers with an economic link (weather, "
+            + "crop yield and commodity prices; inflation and Fed policy; labor and growth; "
+            + "rates and housing; energy and weather); series_run, consecutive events of one "
+            + "series on one venue. Each basket gives why its events should move together, "
+            + "its venues, the govdata_tables to measure that in, and its events. A basket's "
+            + "why is a hypothesis, not a measurement. For cross_venue: price_market_basket "
+            + "with both events, lock=true, scenario_grid=true and one shared column. For the "
+            + "others: measure the link with fetch_aligned_series and correlation_matrix, "
+            + "forecast each event, then price_market_basket with joint scenarios. Can return "
+            + "status 'loading' while the venues are read. You MUST call again with the same "
+            + "arguments while status is 'loading'. You MUST check cross_venue first when "
+            + "asked for an arbitrage or a locked yield. You MUST read both events' rules "
+            + "before treating a cross_venue pair as one outcome. You MUST NOT report a "
+            + "basket as an arbitrage before price_market_basket has scored it net of fees.",
+            schema(mktBasketProps, new String[]{})));
+
+        ObjectNode mktPriceBasketProps = MAPPER.createObjectNode();
+        ObjectNode mktEventsProp = MAPPER.createObjectNode();
+        mktEventsProp.put("type", "array");
+        mktEventsProp.put("description",
+            "Event specs, one object per event, each with price_market_event's arguments: "
+            + "source, event_id, a forecast (not needed when lock=true), conditions, column, "
+            + "round, fee_rate. Give events that settle on the same quantity the same column.");
+        mktEventsProp.set("items", MAPPER.createObjectNode().put("type", "object"));
+        mktPriceBasketProps.set("events", mktEventsProp);
+        ObjectNode mktScenariosProp = MAPPER.createObjectNode();
+        mktScenariosProp.put("type", "array");
+        mktScenariosProp.put("description",
+            "Joint scenarios inline: one object per scenario with a number for every "
+            + "event's column, and optionally p, its probability (all p sum to 1; equal "
+            + "weights otherwise). E.g. the rows of a scenario_sweep.");
+        mktScenariosProp.set("items", MAPPER.createObjectNode().put("type", "object"));
+        mktPriceBasketProps.set("scenarios", mktScenariosProp);
+        mktPriceBasketProps.set("scenarios_sql", prop("string",
+            "Joint scenarios from the catalog: one row per scenario, one numeric column "
+            + "named for each event's column, no NULLs, under 5000 rows. Historical periods "
+            + "of the aligned series keep the correlation between them."));
+        mktPriceBasketProps.set("scenario_grid", prop("boolean",
+            "With lock=true and one shared column: every distinct outcome of that quantity "
+            + "— each strike and a value in every gap between, below and above them. The "
+            + "cross-venue lock test."));
+        mktPriceBasketProps.set("lock", prop("boolean",
+            "Use both sides of every quoted market and keep only baskets whose worst-case "
+            + "payout exceeds cost after fees."));
+        mktPriceBasketProps.set("search", prop("integer",
+            "Score every subset of up to this many legs and rank them (default 0: score the "
+            + "basket as given)."));
+        mktPriceBasketProps.set("min_yield", prop("number",
+            "Keep only baskets whose floor (when lock) or yield (expected / cost) is at "
+            + "least this, e.g. 0.10."));
+        mktPriceBasketProps.set("top", prop("integer",
+            "Ranked baskets to return (default 10)."));
+        mktPriceBasketProps.set("min_edge", prop("number",
+            "Edge a market needs to become a leg when lock is false (default 0.03)."));
+        tools.add(
+            tool("price_market_basket",
+            "Score a basket of Kalshi and Polymarket events as one position, net of each "
+            + "venue's taker fee, across joint scenarios: cost, worst case (lowest payout "
+            + "minus cost), floor (worst case / cost), best case, and — when scenarios carry probabilities — probability "
+            + "of profit, expected value and yield. Each entry of events is priced as "
+            + "price_market_event prices it. Without lock, the legs are each event's "
+            + "mispriced markets, so every event needs a forecast. With lock=true the legs "
+            + "are both sides of every quoted market and only baskets with a positive floor "
+            + "are kept: a lock, which needs no forecast. Scenarios, exactly one of: "
+            + "scenario_grid=true (lock only; every outcome of one shared column — how a "
+            + "cross-venue pair is tested); scenarios_sql (one row per historical period with "
+            + "a column per event's column, e.g. the query behind fetch_aligned_series; keeps "
+            + "the correlation between events); scenarios (inline rows, e.g. from "
+            + "scenario_sweep). search=k scores every subset of up to k legs; min_yield=0.10 "
+            + "keeps those yielding over 10%. Fees are a taker order at the quote; depth, "
+            + "position limits and cost of capital are not modelled. Yield is to settlement, "
+            + "not annualized. You MUST give events that settle on the same quantity the same "
+            + "column, and state every Polymarket market's condition in that column's units. "
+            + "You MUST read both rules texts before reporting a cross-venue lock. You MUST "
+            + "state the scenario basis and row count: a floor holds only across the "
+            + "scenarios given. You MUST report cost, fees, floor, yield, days to close and "
+            + "volume for every basket reported. You MUST report 'no lock after fees' as the "
+            + "finding when none is kept, with the best floor before it.",
+            schema(mktPriceBasketProps, new String[]{"events"})));
+
         ObjectNode xlsxProps = MAPPER.createObjectNode();
         ObjectNode webFetchProps = MAPPER.createObjectNode();
         webFetchProps.set(
@@ -3492,6 +3733,16 @@ public class McpServer {
 
     private static final DatasetRegistry DATASETS = new DatasetRegistry();
 
+    private static final PredictionMarkets.Fetcher MARKET_FETCHER =
+        new PredictionMarkets.HttpFetcher();
+    private static final MarketTools MARKETS = new MarketTools(MARKET_FETCHER,
+        new PredictionMarkets.ListingCache(MARKET_FETCHER, java.time.Duration.ofMinutes(15)),
+        (sql, limit) -> {
+            synchronized (DB_LOCK) {
+                return runSqlRows(DATASETS.expand(sql), limit);
+            }
+        }, java.time.Instant::now, 40_000L);
+
     private static ObjectNode handleToolsCall(JsonNode id, JsonNode params) throws Exception {
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
@@ -3671,6 +3922,32 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=find_recipe topic=" + topic);
                     markRecipeConsulted();
                     text = RecipeCatalog.find(topic, lim);
+                    break;
+                }
+                case "find_market_candidates": {
+                    log.println("[askamerica-mcp] tool=find_market_candidates driver="
+                        + args.path("driver").asText("") + " sample="
+                        + args.path("sample").asInt(0));
+                    text = MARKETS.findCandidates(args);
+                    break;
+                }
+                case "price_market_event": {
+                    log.println("[askamerica-mcp] tool=price_market_event source="
+                        + args.path("source").asText("") + " event_id="
+                        + args.path("event_id").asText(""));
+                    text = MARKETS.priceEvent(args);
+                    break;
+                }
+                case "find_market_baskets": {
+                    log.println("[askamerica-mcp] tool=find_market_baskets recipe="
+                        + args.path("recipe").asText(""));
+                    text = MARKETS.findBaskets(args);
+                    break;
+                }
+                case "price_market_basket": {
+                    log.println("[askamerica-mcp] tool=price_market_basket events="
+                        + args.path("events").size());
+                    text = MARKETS.priceBasket(args);
                     break;
                 }
                 case "set_telemetry": {
@@ -4394,6 +4671,8 @@ public class McpServer {
                     addIfPresent(gateProblems, enforceStatisticalProvenance(secs));
                     addIfPresent(gateProblems, enforceRecurringEventRecency(rTitle, rSub, secs));
                     addIfPresent(gateProblems, enforceRecipeConsulted());
+                    addIfPresent(gateProblems, enforceMarketSearchFinished());
+                    addIfPresent(gateProblems, enforceMarketChart(boardSvg));
                     addIfPresent(gateProblems, enforceResearchDepthOnGap());
                     if (!gateProblems.isEmpty()) {
                         StringBuilder combined = new StringBuilder(
@@ -4406,6 +4685,7 @@ public class McpServer {
                         }
                         throw new IllegalArgumentException(combined.toString());
                     }
+                    MARKETS.resetSearch();
                     ReportPage.Section appendix = queryAppendix();
                     if (appendix != null) {
                         secs.add(appendix);
@@ -6927,6 +7207,40 @@ public class McpServer {
      * that never checked.
      */
     private static String enforceRecipeConsulted() {
+        return enforceRecipeConsultedImpl();
+    }
+
+    /**
+     * Holds a report back while a random search for mispriced market events is unfinished —
+     * see {@link MarketTools#searchGate()}. Scoped to the calls since the last published
+     * report, so a search abandoned for another question never blocks that question's report.
+     */
+    private static String enforceMarketSearchFinished() {
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            String tool = e.path("tool").asText("");
+            if ("find_market_candidates".equals(tool) || "price_market_event".equals(tool)) {
+                return MARKETS.searchGate();
+            }
+        }
+        return null;
+    }
+
+    /** A report on events priced against a forecast carries the chart the pricing returned. */
+    private static String enforceMarketChart(String boardSvg) {
+        if (boardSvg != null || !MARKETS.pricedWithForecast()) {
+            return null;
+        }
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("price_market_event".equals(e.path("tool").asText(""))) {
+                return "the report has no dashboard. Pass dashboard.panels holding the "
+                    + "chart_panel that price_market_event returned for each event the "
+                    + "report names.";
+            }
+        }
+        return null;
+    }
+
+    private static String enforceRecipeConsultedImpl() {
         if (recipeConsulted()) {
             return null;
         }
@@ -14429,6 +14743,12 @@ public class McpServer {
         ObjectNode p = MAPPER.createObjectNode();
         p.put("type", type);
         p.put("description", description);
+        return p;
+    }
+
+    private static ObjectNode arrayProp(String itemType, String description) {
+        ObjectNode p = prop("array", description);
+        p.set("items", MAPPER.createObjectNode().put("type", itemType));
         return p;
     }
 
