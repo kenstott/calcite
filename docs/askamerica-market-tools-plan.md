@@ -338,9 +338,9 @@ resumable call with no forecast:
   `cross_venue_pairs_on_two_measurements`. Same station on both venues as of 2026-10-02:
   LAX, MIA, AUS, ATL, SFO, SEA, HOU; different: New York (NYC vs LGA), Chicago (MDW vs ORD),
   Denver (DEN vs BKF), Dallas (DFW vs DAL). The bare `m/m` in `MOM_TEXT` matched
-  "maximum/minimum temperature" and is now word-bounded. Open: scoring the odds needs the
-  history of both records per station; the catalog has the daily maximum
-  (`weather.ghcnd_daily`) and no hourly station readings.
+  "maximum/minimum temperature" and is now word-bounded. The odds are not scored: the
+  catalog has the daily maximum (`weather.ghcnd_daily`) and no sub-daily station readings
+  (govdata-ops #853). The venues' own settled events measure them; see "Where this landed".
 - Size and time: every returned basket carries `size` from its legs' order books
   (`sets_at_best_price`, `binding_leg`, `sets_with_a_positive_floor`, `capital`,
   `floor_profit` in dollars, `stops_because`), `days_to_settlement` to its last event's
@@ -349,6 +349,87 @@ resumable call with no forecast:
   filled 10 sets (about $0.21 on $20) because the Polymarket leg had 10 contracts bid.
 - Follow-ups: the forecast for each event of the top basket first, then the rules diff, then
   the book behind the first two legs. Layout id `basketscan:<n>`.
+
+## Where this landed (2026-10-02)
+
+Findings from the live scans of 2026-10-02 (`scan_market_baskets`, 400 events, both venues)
+and one comparison of settled events. One day of quotes; nothing here was traded.
+
+**Strict locks exist and are too small to matter.** The default scan read 243 events and
+found four locks after fees:
+
+| Lock | Floor | Capital that fills | Locked profit | Days | Annualized |
+|---|---|---|---|---|---|
+| Policy rate, cross-venue, rules verified | 0.17% | $2,936 | $2.53 | 117 | 0.27% |
+| Non-monotone ladder inside one event | 0.49% | $88 | $0.25 | 89 | 1.2% |
+| Non-monotone ladder inside one event | 0.07% | $50 | $0.04 | 89 | 0.29% |
+| CPI, cross-venue, rules verified | 0.06% | $62 | $0.04 | 12 | 1.8% |
+
+Every one earns less than a Treasury bill over the same days. Where two venues price one
+number under verified rules, the quotes agree to within fees.
+
+**Near-locks are small expected-value bets.** Three were found, all on September CPI: the
+best is an expected $8.81 on $249 (4.3% expected yield, 1.0% forecast chance of losing all
+$249, 12 days). The other two are under $0.50 each.
+
+**Unverified gaps are rule differences, not profit.** Two GDP pairs showed floors of 13%
+and 71% and are listed as unverified because the rules text does not establish one
+quantity. A gap that large between venues is evidence the events differ.
+
+**Daily temperature is the most frequent gap and it is priced risk.** With `min_days: 0`
+the scan priced 7 same-station pairs for Oct 3, 5 with a gap after fees: about $900 of
+capital and $76 of profit if the two records agree (Miami $367 → $53.59, Houston $221 →
+$13.78, Seattle $135 → $4.20, Atlanta $69 → $2.79, Austin $111 → $1.72). The default
+`min_days: 1` hides these, since they close within about a day. Read as locks that
+repeat daily, the ceiling would be about $28,000 a year on about $1,800 of revolving
+capital. The settled events do not support that reading:
+
+| City | Station-days | Kalshi's settled temperature inside Polymarket's winning bucket |
+|---|---|---|
+| Miami | 250 | 62.8% |
+| Houston | 190 | 68.9% |
+| Seattle | 259 | 69.5% |
+| Atlanta | 237 | 67.5% |
+| Austin | 189 | 65.6% |
+| All | 1,125 | 66.8% |
+
+Of 373 misses, Polymarket's record was lower on 368 and higher on 5: the official daily
+maximum sits at or above the highest posted reading. On the days whose Polymarket rules
+cite the weather.gov time series (late August 2026 on; Weather Underground before) it is
+135 of 200, 67.5%, every miss in that direction. Today's baskets break even at 81% to 97%
+agreement if every disagreement loses both legs. That is the worst case: depending on where
+the buckets sit a disagreement can also pay both legs, so the comparison rules out the
+lock reading and does not show there is no edge. The comparison is at Polymarket's 2°F
+bucket, was made by a scratch script against the venues' public history (Kalshi
+`expiration_value`, Polymarket `outcomePrices`), and is not engine code.
+
+**Conclusions.**
+
+- For an individual these markets are too thin and too efficient for the lock and near-lock
+  strategies to pay: depth, not capital, is the limit, and the gaps that fill are worth
+  cents to a few dollars.
+- The larger gaps were each explained by something the quotes did not show: different
+  rules, a converted quantity, or two measurements of one event.
+- All sizing assumes crossing the spread on every leg. Resting orders would buy each set
+  for less and could earn the spread, at the cost of unfilled legs and adverse selection.
+  The engine models no resting orders, fill odds or maker fees.
+
+**Not built.**
+
+- Pricing a `two_measurements` pair under the measured offset between the two records
+  (expected value in place of a floor). Needs the offset per station: from settled events
+  at bucket level, or exactly from sub-daily observations (govdata-ops #853).
+- Pricing `linked_drivers` baskets: one market's implied distribution carried through the
+  historical relationship and compared with what the other market implies. Listed on
+  2026-10-02 with 24 h volume: Texas temperature against Kalshi daily ERCOT peak demand
+  (about 640), temperature against natural gas price (about 39,000), storms against
+  gasoline and WTI (about 208,000 and 591,000), drought against state corn yield (under
+  250), monthly US electricity price (about 90). ERCOT peak is the tightest physical link
+  and settles daily; one catalog search found no grid-operator load table and no
+  crop-yield table (not conclusive), and found daily Henry Hub prices
+  (`energy.eia_natural_gas_price`) and weekly gas storage.
+- Resting-order pricing, a per-level ladder in `size`, "suspect" edges in
+  `scan_market_opportunities`, scheduled scans.
 
 ## Phase 5 — verification (lead)
 
