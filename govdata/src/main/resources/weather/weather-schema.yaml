@@ -1410,6 +1410,117 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # ASOS OBSERVATIONS - sub-daily airport surface observations (no auth)
+  # ---------------------------------------------------------------------------
+  - name: asos_observations
+    pattern: "type=asos_observations/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Sub-daily surface observations (one row per METAR report) for the 15 US airport
+      ASOS stations that prediction-market daily-high-temperature contracts settle on:
+      KLAX, KMIA, KAUS, KATL, KSFO, KSEA, KHOU, KLGA, KNYC (Central Park), KMDW, KORD,
+      KDEN, KBKF, KDFW, KDAL. Source is the Iowa Environmental Mesonet ASOS archive
+      (https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py), a university-hosted
+      mirror of NWS/FAA ASOS and MADIS METAR feeds, not an agency endpoint; re-verify
+      if it starts failing. report_type separates three feeds: 'routine' (hourly
+      METAR, ~minute :53), 'special' (SPECI, issued when conditions change), and '5min'
+      (MADIS high-frequency METAR, every 5 minutes, available from about 2016). Years
+      before a feed existed return no rows for it. observation_time_utc is UTC.
+      Temperatures are kept as reported: air_temp_f / air_temp_c are IEM's parse of the
+      METAR body (whole degrees; null on 5min rows), temp_c_tgroup is the exact
+      tenths-of-a-degree Celsius from the METAR remarks T-group (present on most rows,
+      including 5min), and metar is the full raw report text. A 5-minute and a routine report can
+      share one minute, so (station_id, observation_time_utc, report_type) is not unique;
+      add metar for a unique key. -61 C in temp_c_tgroup (METAR 'M61/M61') is the ASOS
+      sensor-missing marker, kept as reported; filter it when taking daily maxima/minima.
+      air_temp_f/air_temp_c occasionally disagree with the raw report, so prefer
+      temp_c_tgroup when precision matters. The daily maximum over
+      observation_time_utc rows differs from the official NWS daily climate-report
+      maximum (ghcnd_daily tmax_c); this table is the record needed to reproduce the
+      highest-observation-of-the-day measure. Use observation_date (UTC day) to group,
+      not local day. No auth needed.
+
+    dimensions:
+      type:
+        - asos_observations
+      year: *ghcnd_year_range
+      station:
+        type: list
+        values: ["LAX", "MIA", "AUS", "ATL", "SFO", "SEA", "HOU", "LGA", "NYC", "MDW", "ORD", "DEN", "BKF", "DFW", "DAL"]
+      report_type:
+        type: list
+        values: ["1", "3", "4"]
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "4-letter ICAO station identifier (e.g., 'KMIA')"
+      - name: observation_time_utc
+        type: string
+        nullable: false
+        comment: "Observation time in UTC, 'YYYY-MM-DD HH:MM'"
+      - name: observation_date
+        type: string
+        nullable: false
+        comment: "UTC calendar date of the observation (YYYY-MM-DD)"
+      - <<: *year_column
+      - name: report_type
+        type: string
+        nullable: false
+        comment: "Feed: 'routine' (hourly METAR), 'special' (SPECI), or '5min' (MADIS 5-minute METAR)"
+      - name: air_temp_f
+        type: double
+        nullable: true
+        comment: "Air temperature in whole degrees F as parsed from the METAR body; null on 5min rows"
+      - name: air_temp_c
+        type: double
+        nullable: true
+        comment: "Air temperature in degrees C as parsed by IEM from the METAR body; null on 5min rows"
+      - name: temp_c_tgroup
+        type: double
+        nullable: true
+        comment: "Air temperature in degrees C to tenths, from the METAR remarks T-group; null when the report has no T-group"
+      - name: metar
+        type: string
+        nullable: true
+        comment: "Full raw METAR report text"
+
+    source:
+      type: http
+      url: "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?station={station}&data=tmpf&data=tmpc&data=metar&sts={year}-01-01T00:00Z&ets={year}-12-31T23:59:59Z&format=onlycomma&latlon=no&missing=empty&trace=T&direct=no&report_type={report_type}"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.AsosObservationTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=asos_observations/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: asos_observations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # VIEWS
 # ============================================================================

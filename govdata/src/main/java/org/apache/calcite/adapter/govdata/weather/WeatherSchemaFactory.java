@@ -66,6 +66,11 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
       new HashSet<>(Collections.singletonList(
           "drought_monitor_weekly"));
 
+  // ASOS sub-daily airport observations (no auth; Iowa Environmental Mesonet archive)
+  private static final Set<String> ASOS_TABLES =
+      new HashSet<>(Collections.singletonList(
+          "asos_observations"));
+
   // HMS Smoke tables (no auth; requires offline geopandas ETL for pre-processed CSV)
   private static final Set<String> HMS_TABLES =
       new HashSet<>(Collections.singletonList(
@@ -109,6 +114,12 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
           isTableEnabled(tableName, "drought", enabledSources));
     }
 
+    // ASOS observations: always enabled (no auth required)
+    for (String tableName : ASOS_TABLES) {
+      builder.isEnabled(tableName, ctx ->
+          isTableEnabled(tableName, "asos", enabledSources));
+    }
+
     // HMS Smoke: always enabled (no auth; data must be pre-processed via offline ETL)
     for (String tableName : HMS_TABLES) {
       builder.isEnabled(tableName, ctx ->
@@ -116,9 +127,10 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     LOGGER.debug("Configured hooks for WEATHER schema: {} NWS, {} CDO, "
-            + "{} GHCND, {} drought, {} HMS",
+            + "{} GHCND, {} drought, {} ASOS, {} HMS",
         NWS_TABLES.size(), CDO_TABLES.size(),
-        GHCND_STATION_TABLES.size(), DROUGHT_TABLES.size(), HMS_TABLES.size());
+        GHCND_STATION_TABLES.size(), DROUGHT_TABLES.size(), ASOS_TABLES.size(),
+        HMS_TABLES.size());
   }
 
   private boolean isTableEnabled(String tableName, String dataSource,

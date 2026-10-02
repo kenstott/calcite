@@ -44,6 +44,7 @@ FROM (
   UNION ALL SELECT 'ghcnd_stations_with_county', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'ghcnd_daily',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'drought_monitor_weekly', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'asos_observations',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'hms_smoke_daily',        COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'hms_smoke_polygons',     COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'climate_normals_monthly',COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly',allow_moved_paths=true) LIMIT 1)
@@ -74,6 +75,7 @@ FROM (
   UNION ALL SELECT 'ghcnd_stations_with_county', COUNT(*),   5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true)
   UNION ALL SELECT 'ghcnd_daily',            COUNT(*),      20000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true)
   UNION ALL SELECT 'drought_monitor_weekly', COUNT(*),      50000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true)
+  UNION ALL SELECT 'asos_observations',      COUNT(*),       5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true)
   UNION ALL SELECT 'hms_smoke_daily',        COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true)
   UNION ALL SELECT 'hms_smoke_polygons',     COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true)
   UNION ALL SELECT 'climate_normals_monthly',COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly',allow_moved_paths=true)
@@ -92,6 +94,7 @@ SELECT 'cdo_annual_summaries'       AS tbl, * FROM iceberg_scan('s3://${GOVDATA_
 SELECT 'ghcnd_stations_with_county' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true) LIMIT 1;
 SELECT 'ghcnd_daily'                AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true) LIMIT 1;
 SELECT 'drought_monitor_weekly'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true) LIMIT 1;
+SELECT 'asos_observations'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true) LIMIT 1;
 SELECT 'hms_smoke_daily'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true) LIMIT 1;
 SELECT 'hms_smoke_polygons'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true) LIMIT 1;
 SELECT 'climate_normals_monthly'    AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly',allow_moved_paths=true) LIMIT 1;
@@ -163,6 +166,14 @@ SELECT 'weather', 'drought_monitor_weekly', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'asos_observations', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true))
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('type');
 
@@ -260,6 +271,15 @@ SELECT 'weather', 'drought_monitor_weekly', 'all_same_value',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
+
+-- asos_observations: station_id/year are constant when the DQ sample covers one station-year.
+INSERT INTO dq_results
+SELECT 'weather', 'asos_observations', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year');
 
 INSERT INTO dq_results
 SELECT 'weather', 'hms_smoke_daily', 'all_same_value',
@@ -495,6 +515,39 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly', allow_moved_paths=true)
 );
 
+-- asos_observations PK: station_id, observation_time_utc, report_type (a 5-minute MADIS report and a
+-- routine METAR can share a minute, so uniqueness is checked on the key plus the raw report text)
+INSERT INTO dq_results
+SELECT 'weather', 'asos_observations', 'pk_nulls',
+  CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(total AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN n1 > 0 THEN 'station_id:' || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'observation_time_utc:' || n2 ELSE NULL END,
+    CASE WHEN n3 > 0 THEN 'report_type:' || n3 ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN station_id IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN observation_time_utc IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN report_type IS NULL THEN 1 ELSE 0 END) AS n3,
+    SUM(CASE WHEN station_id IS NULL OR observation_time_utc IS NULL OR report_type IS NULL THEN 1 ELSE 0 END) AS total
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true)
+);
+
+-- asos_observations: no duplicate report (station_id, observation_time_utc, report_type, metar)
+INSERT INTO dq_results
+SELECT 'weather', 'asos_observations', 'pk_duplicates',
+  CASE WHEN dups > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(dups AS VARCHAR), '0', 'duplicate station/time/report_type/metar rows'
+FROM (
+  SELECT COUNT(*) AS dups FROM (
+    SELECT station_id, observation_time_utc, report_type, metar
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true)
+    GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1
+  )
+);
+
 -- ============================================================
 -- T7: EXPECTED VALUE DISTRIBUTIONS
 -- Dimension columns must fall within known enumerated sets.
@@ -657,6 +710,40 @@ FROM (
   SELECT SUM(CASE WHEN normal_tmax_c < -50 OR normal_tmax_c > 55 THEN 1 ELSE 0 END) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly', allow_moved_paths=true)
   WHERE normal_tmax_c IS NOT NULL
+);
+
+-- asos_observations: temperatures within physical bounds and report_type in the known set.
+-- -61.0 C (METAR 'M61/M61', T-group 1610) is the ASOS sensor-missing marker, kept as reported,
+-- so it is excluded from the range check.
+INSERT INTO dq_results
+SELECT 'weather', 'asos_observations', 'temperature_and_type',
+  CASE WHEN bad_range + bad_type > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad_range + bad_type AS VARCHAR), '0',
+  CONCAT_WS('; ',
+    CASE WHEN bad_range > 0 THEN 'temp out of [-60,60] C:' || bad_range ELSE NULL END,
+    CASE WHEN bad_type > 0 THEN 'unknown report_type:' || bad_type ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN (temp_c_tgroup < -60 AND temp_c_tgroup <> -61.0) OR temp_c_tgroup > 60
+               OR air_temp_c < -60 OR air_temp_c > 60 THEN 1 ELSE 0 END) AS bad_range,
+    SUM(CASE WHEN report_type NOT IN ('routine', 'special', '5min') THEN 1 ELSE 0 END) AS bad_type
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true)
+);
+
+-- asos_observations: the METAR remarks T-group and IEM's body-parsed air_temp_c agree to within 1 C.
+-- IEM's own parse disagrees with the raw report on a handful of rows (e.g. appended bulletin text),
+-- so the check tolerates up to 0.01% of comparable rows.
+INSERT INTO dq_results
+SELECT 'weather', 'asos_observations', 'tgroup_agreement',
+  CASE WHEN bad * 10000 > n THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '<=0.01% of ' || CAST(n AS VARCHAR),
+  'rows where T-group differs from air_temp_c by >1C'
+FROM (
+  SELECT COUNT(*) AS n,
+         COALESCE(SUM(CASE WHEN ABS(temp_c_tgroup - air_temp_c) > 1.0 THEN 1 ELSE 0 END), 0) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true)
+  WHERE temp_c_tgroup IS NOT NULL AND air_temp_c IS NOT NULL
 );
 
 -- ============================================================
