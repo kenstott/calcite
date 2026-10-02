@@ -61,13 +61,14 @@ final class MarketTools {
     private static final Set<String> EVENT_SPEC_KEYS = new HashSet<>(Arrays.asList(
         "source", "event_id", "samples", "samples_sql", "mean", "sd", "lower", "upper",
         "level", "price_median", "cumulative_vol_pct", "round", "conditions", "column",
-        "fee_rate"));
+        "fee_rate", "build_forecast"));
 
     private final PredictionMarkets.Fetcher fetcher;
     private final PredictionMarkets.ListingCache cache;
     private final SqlRunner sql;
     private final Supplier<Instant> clock;
     private final long listingWaitMillis;
+    private final MarketForecasts builder;
     /** Events priced against a forecast by this server process, with how many of their
      *  markets passed {@code min_edge}: what a "find a mispriced event" search has covered. */
     private final Map<String, Integer> forecastPriced = new LinkedHashMap<>();
@@ -85,6 +86,7 @@ final class MarketTools {
         this.sql = sql;
         this.clock = clock;
         this.listingWaitMillis = listingWaitMillis;
+        this.builder = new MarketForecasts(fetcher, sql, clock);
     }
 
     // ─── Arguments ─────────────────────────────────────────────────────────────
@@ -440,10 +442,28 @@ final class MarketTools {
         PredictionMarkets.LiveEvent live =
             PredictionMarkets.fetchEvent(fetcher, source, eventId);
         MarketPricing.Forecast forecast = forecastOf(spec);
+        ObjectNode built = null;
+        if (boolArg(spec, "build_forecast")) {
+            if (forecast != null || has(spec, "round")) {
+                throw new IllegalArgumentException("build_forecast builds the forecast and "
+                    + "its rounding from the rules: give it alone, or give a forecast");
+            }
+            PredictionMarkets.Event ev = live.event;
+            MarketForecasts.Result r = builder.forecast(ev.eventTitle, ev.rules, ev.driver,
+                ev.closeTime, new MarketForecasts.Request());
+            forecast = r.forecast;
+            built = r.json;
+            built.remove("samples");
+            built.remove("next");
+            built.remove("tool");
+        }
         Double feeRate = has(spec, "fee_rate") ? Double.valueOf(doubleArg(spec, "fee_rate"))
             : null;
         MarketPricing.Priced priced = MarketPricing.priceEvent(live, forecast,
             conditionsOf(spec), minEdge, feeRate, bothSides, textArg(spec, "column"));
+        if (built != null) {
+            priced.json.set("forecast_built", built);
+        }
         priced.json.put("quotes_read_at", clock.get().toString());
         return priced;
     }
@@ -499,18 +519,22 @@ final class MarketTools {
         json.set("other_venue", otherVenue(json.get("source").asText(),
             json.hasNonNull("driver") ? json.get("driver").asText() : null,
             json.get("close_time").asText()));
-        if (json.get("forecast").isNull()) {
+        if (json.get("forecast").isNull() && json.has("forecast_built")) {
+            json.put("next", "No forecast was built: the series this event settles on is not "
+                + "in the catalog (forecast_built.flags). You MUST NOT price it against a "
+                + "forecast of another series. Say so, or draw another event.");
+        } else if (json.get("forecast").isNull()) {
             json.put("next", "Quotes only — no forecast was given. Read rules for the exact "
                 + "series, period, rounding and release date. "
                 + (json.hasNonNull("basis")
-                    ? "The settlement series is in govdata_tables: you MUST call describe_table "
-                    + "on each and query it before any web source, and you MUST build the "
-                    + "forecast from those rows ("
+                    ? "Call again with build_forecast=true. When that fails to resolve the "
+                    + "series, the settlement series is in govdata_tables: you MUST call "
+                    + "describe_table on each and query it before any web source, and you "
+                    + "MUST build the forecast from those rows ("
                     + PredictionMarkets.forecastWith(json.get("basis").asText())
                     + "). The web is only for a print newer than the table's last period."
                     : "This event matches no driver: find the series with search_catalog.")
-                + " Call again with the forecast. Markets in markets_without_condition need "
-                + "an entry in conditions.");
+                + " Markets in markets_without_condition need an entry in conditions.");
         } else {
             if (json.get("implied_median") != null && !json.get("implied_median").isNull()) {
                 json.put("check", "Compare forecast.median with implied_median, the market's "

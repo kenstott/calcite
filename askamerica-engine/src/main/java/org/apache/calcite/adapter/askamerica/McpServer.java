@@ -537,7 +537,8 @@ public class McpServer {
             // The market tools read two venues over HTTP for up to a minute; only their
             // samples_sql / scenarios_sql calls touch the DB, and MARKETS takes the lock there.
             "find_market_candidates", "price_market_event", "find_market_baskets",
-            "price_market_basket"));
+            "price_market_basket", "forecast_market_event", "market_price_history",
+            "scan_market_opportunities"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -3179,10 +3180,11 @@ public class McpServer {
             + "returned, and exclude draws again without repeats. A candidate is where to "
             + "look, not a mispricing. Next: price_market_event with no forecast to read the "
             + "rules, forecast the settlement value, then price_market_event with the "
-            + "forecast. For 'find a mispriced event' or 'find N': draw, forecast and price "
-            + "each, count the ones that pass, and draw again with exclude. You MUST keep "
-            + "drawing until N pass (N is 1 for 'a mispriced event') or 8 events have been "
-            + "forecast and priced. A 'spread' or 'gap' of X% in a mispricing question is the "
+            + "forecast. For 'find a mispriced event' or 'find N' you MUST call "
+            + "scan_market_opportunities first and answer from its opportunities. Draw here "
+            + "only for an event the scan could not forecast (its not_forecast): draw, "
+            + "forecast and price each, and draw again with exclude until N pass or 8 events "
+            + "have been forecast and priced. A 'spread' or 'gap' of X% in a mispricing question is the "
             + "edge between forecast fair value and price, not the bid-ask spread. The first call reads about 200 pages from the venues and can return "
             + "status 'loading'. You MUST call again with the same arguments while status is "
             + "'loading'. You MUST cover both venues in the answer, or state that one had no "
@@ -3236,6 +3238,9 @@ public class McpServer {
         mktEventProps.set("column", prop("string",
             "Name of the quantity this event settles on, used as its scenario column in "
             + "price_market_basket (default: the event_id)."));
+        mktEventProps.set("build_forecast", prop("boolean",
+            "true: the engine builds the forecast from the catalog series the rules settle "
+            + "on and prices with it. Give no other forecast form and no round."));
         tools.add(
             tool("price_market_event",
             "Price one Kalshi or Polymarket event against a forecast of the quantity it "
@@ -3245,7 +3250,8 @@ public class McpServer {
             + "forecast), the side to take, price, fee, edge = fair - price - fee in "
             + "probability points, return_on_cost, and a verdict (mispriced, "
             + "within_sampling_error, within_min_edge, no_quote, not_forecast). Give the "
-            + "forecast in exactly one form. mean + sd: arima_forecast's forecast and "
+            + "forecast in exactly one form. build_forecast=true: the engine builds it from "
+            + "the settlement series (forecast_built). mean + sd: arima_forecast's forecast and "
             + "forecast_std_error at the settlement period. mean + lower + upper + level: its "
             + "interval. price_median + cumulative_vol_pct: volatility_forecast's price_band, "
             + "or garch_forecast's cumulative vol (check it with backtest_volatility). "
@@ -3255,7 +3261,8 @@ public class McpServer {
             + "flexible_regression) goes in as mean + sd after cross_validate. other_venue "
             + "lists events on the other venue settling on the same driver within 3 days. "
             + "'Mispriced by more than 10%' means edge >= 0.10 unless return on cost is asked "
-            + "for. You MUST read rules before forecasting. You MUST build the "
+            + "for. You MUST read rules before forecasting. You MUST use build_forecast=true "
+            + "first and state every forecast_built flag. When it fails you MUST build the "
             + "forecast from rows queried from govdata_tables. You MUST forecast the exact "
             + "series, period, units and rounding the rules name. You MUST state whether a "
             + "percentage is edge or return on cost. You MUST price each other_venue "
@@ -3264,6 +3271,9 @@ public class McpServer {
             + "forecast wrong. You MUST NOT price a policy decision without an explicit, "
             + "sourced probability.",
             schema(mktEventProps, new String[]{"source", "event_id"})));
+        tools.add(MarketForecasts.toolDef());
+        tools.add(MarketHistory.toolDef());
+        tools.add(MarketScan.toolDef());
 
         ObjectNode mktBasketProps = MAPPER.createObjectNode();
         mktBasketProps.set("recipe", prop("string",
@@ -3735,13 +3745,22 @@ public class McpServer {
 
     private static final PredictionMarkets.Fetcher MARKET_FETCHER =
         new PredictionMarkets.HttpFetcher();
+    private static final MarketTools.SqlRunner MARKET_SQL = (sql, limit) -> {
+        synchronized (DB_LOCK) {
+            return runSqlRows(DATASETS.expand(sql), limit);
+        }
+    };
+    private static final PredictionMarkets.ListingCache MARKET_LISTING =
+        new PredictionMarkets.ListingCache(MARKET_FETCHER, java.time.Duration.ofMinutes(15));
     private static final MarketTools MARKETS = new MarketTools(MARKET_FETCHER,
-        new PredictionMarkets.ListingCache(MARKET_FETCHER, java.time.Duration.ofMinutes(15)),
-        (sql, limit) -> {
-            synchronized (DB_LOCK) {
-                return runSqlRows(DATASETS.expand(sql), limit);
-            }
-        }, java.time.Instant::now, 40_000L);
+        MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L);
+    private static final MarketScan MARKET_SCAN = new MarketScan(MARKET_FETCHER,
+        MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
+        java.time.Duration.ofMinutes(15));
+    private static final MarketForecasts MARKET_FORECASTS =
+        new MarketForecasts(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
+    private static final MarketHistory MARKET_HISTORY =
+        new MarketHistory(MARKET_FETCHER, java.time.Instant::now);
 
     private static ObjectNode handleToolsCall(JsonNode id, JsonNode params) throws Exception {
         String name = params.path("name").asText();
@@ -3936,6 +3955,25 @@ public class McpServer {
                         + args.path("source").asText("") + " event_id="
                         + args.path("event_id").asText(""));
                     text = MARKETS.priceEvent(args);
+                    break;
+                }
+                case "forecast_market_event": {
+                    log.println("[askamerica-mcp] tool=forecast_market_event source="
+                        + args.path("source").asText("") + " event_id="
+                        + args.path("event_id").asText(""));
+                    text = MARKET_FORECASTS.forecastMarketEvent(args);
+                    break;
+                }
+                case "scan_market_opportunities": {
+                    log.println("[askamerica-mcp] tool=scan_market_opportunities driver="
+                        + args.path("driver").asText(""));
+                    text = MARKET_SCAN.scan(args);
+                    break;
+                }
+                case "market_price_history": {
+                    log.println("[askamerica-mcp] tool=market_price_history source="
+                        + args.path("source").asText(""));
+                    text = MARKET_HISTORY.priceHistoryTool(args);
                     break;
                 }
                 case "find_market_baskets": {

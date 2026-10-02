@@ -767,7 +767,8 @@ final class PredictionMarkets {
     static String forecastWith(String basis) {
         switch (basis) {
             case "release":
-                return "arima_forecast on the settlement series (forecast and "
+                return "forecast_market_event with the series, table and transform given, "
+                    + "or arima_forecast on the settlement series (forecast and "
                     + "forecast_std_error at the settlement period), or samples_sql of "
                     + "historical period-over-period changes applied to the latest level";
             case "climatology":

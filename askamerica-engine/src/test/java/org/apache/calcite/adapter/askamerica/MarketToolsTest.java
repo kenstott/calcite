@@ -675,6 +675,13 @@ class MarketToolsTest {
           name + " must not offer a single-venue filter");
       all.append(description).append(t.get("inputSchema"));
     }
+    for (String name : new String[]{"forecast_market_event", "market_price_history",
+        "scan_market_opportunities"}) {
+      JsonNode t = defs.get(name);
+      assertNotNull(t, name + " is not registered");
+      int length = t.get("description").asText().length();
+      assertTrue(length <= 2048, name + " is " + length);
+    }
     for (String forecaster : new String[]{"arima_forecast", "garch_forecast",
         "volatility_forecast", "backtest_volatility", "fetch_aligned_series",
         "ols_regression", "flexible_regression", "cross_validate", "scenario_sweep",
@@ -691,5 +698,44 @@ class MarketToolsTest {
       assertTrue(RecipeCatalog.find(topic, 5)
           .contains("prediction-market-mispricing-and-arbitrage"), topic);
     }
+  }
+
+  /** CPI rising a steady 0.25% a month, to August 2026: a 12-month rate near 3.04%. */
+  private static ArrayNode cpiRows() {
+    ArrayNode rows = MAPPER.createArrayNode();
+    java.time.YearMonth start = java.time.YearMonth.of(2024, 1);
+    for (int i = 0; i < 32; i++) {
+      java.time.YearMonth ym = start.plusMonths(i);
+      ObjectNode r = rows.addObject();
+      r.put("year", ym.getYear());
+      r.put("period", String.format("M%02d", ym.getMonthValue()));
+      r.put("value", 100 * Math.pow(1.0025, i));
+    }
+    return rows;
+  }
+
+  @Test void buildForecastPricesWithTheEnginesOwnForecast() throws Exception {
+    List<String> queries = new ArrayList<>();
+    MarketTools t = tools(venues(), (q, limit) -> {
+      queries.add(q);
+      return cpiRows();
+    }, 10_000L);
+    JsonNode out = call(t.priceEvent(args(kalshiSpec(",'build_forecast':true"))));
+    JsonNode built = out.get("forecast_built");
+    assertEquals("forecast", built.get("status").asText());
+    assertEquals("CUUR0000SA0", built.get("series").asText());
+    assertEquals("yoy_pct", built.get("transform").asText());
+    assertFalse(built.has("samples"), "samples stay in the engine");
+    assertFalse(queries.isEmpty());
+    assertFalse(out.get("forecast").isNull());
+    assertTrue(out.get("priced_markets").get(0).get("fair").isNumber());
+    assertNotNull(out.get("chart_panel"));
+  }
+
+  @Test void buildForecastTakesNoOtherForecast() {
+    MarketTools t = tools();
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> t.priceEvent(args(kalshiSpec(",'build_forecast':true,'mean':3.0,'sd':0.1"))));
+    assertTrue(e.getMessage().contains("build_forecast"), e.getMessage());
   }
 }
