@@ -6893,7 +6893,21 @@ partitionedTables:
         type: double
         source: DataValue
         nullable: true
-        comment: Income value in thousands of dollars or dollars (depending on metric)
+        comment: >
+          Income value in thousands of dollars or dollars (depending on metric); NULL when BEA
+          published no number for the cell (see value_flag). A real zero is 0.
+      - name: value_flag
+        type: string
+        source: ValueFlag
+        nullable: true
+        comment: >
+          BEA's own marker for a cell with no published number, verbatim; NULL when data_value
+          holds a published number. '(D)' = withheld to avoid disclosing confidential
+          information, with the estimate included in higher-level totals; '(L)' = below BEA's
+          reporting floor but included in totals; '(T)' = suppressed to cover a corresponding
+          estimate elsewhere or below a small-amount threshold; '(NM)' = not meaningful;
+          '(NA)' = not available. data_value is NULL on every flagged row, so filter
+          data_value IS NOT NULL to sum only published numbers.
       # Partition columns - types must match what DuckDB infers when writing
       - name: year
         type: string
@@ -7073,7 +7087,7 @@ partitionedTables:
 
     # Custom hooks for BEA response handling and dimension resolution
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaRegionalResponseTransformer"
       dimensionResolver: "org.apache.calcite.adapter.govdata.econ.BeaDimensionResolver"
 
     # Materialization configuration
