@@ -644,6 +644,56 @@ class MarketToolsTest {
     assertEquals(0, out.get("search").get("kept").asInt());
   }
 
+  @Test void aCrossVenueLockCarriesItsRulesVerdictAndPayoffCurve() throws Exception {
+    JsonNode out = call(tools().priceBasket(args("{'events':["
+        + kalshiSpec(",'column':'cpi'") + "," + polySpec(",'column':'cpi'")
+        + "],'lock':true,'scenario_grid':true,'search':2,'min_yield':0.05}")));
+    // Neither text names a series id or says how revisions are handled.
+    assertEquals("unverified", out.get("rules_match").asText(), out.toString());
+    JsonNode pair = out.get("rules").get(0);
+    assertEquals("kalshi:" + KALSHI_ID, pair.get("a").asText());
+    assertEquals("polymarket:" + POLY_ID, pair.get("b").asText());
+    assertEquals(0, pair.get("differing").size(), pair.toString());
+    Set<String> unknown = new HashSet<>();
+    for (JsonNode d : pair.get("unknown")) {
+      unknown.add(d.asText());
+    }
+    assertTrue(unknown.contains("series") && unknown.contains("revision_handling"),
+        unknown.toString());
+    assertTrue(out.get("next").asText().contains("MUST be reported as not a lock"),
+        out.get("next").asText());
+
+    JsonNode best = out.get("search").get("best").get(0);
+    JsonNode curve = out.get("payoff_curve");
+    assertEquals("search.best[0]", curve.get("of").asText());
+    assertEquals("cpi", curve.get("column").asText());
+    assertEquals(best.get("cost").asDouble(), curve.get("cost").asDouble(), 1e-4);
+    assertEquals(best.get("floor").asDouble(),
+        curve.get("floor_profit_per_cost").asDouble(), 1e-4);
+    assertTrue(curve.get("curve").size() >= 3, curve.toString());
+  }
+
+  @Test void aSearchThatKeepsNothingHasNoPayoffCurve() throws Exception {
+    JsonNode out = call(tools().priceBasket(args("{'events':["
+        + kalshiSpec(",'column':'cpi','fee_rate':0.5") + ","
+        + polySpec(",'column':'cpi','fee_rate':0.5")
+        + "],'lock':true,'scenario_grid':true,'search':2}")));
+    assertFalse(out.has("payoff_curve"));
+    assertTrue(out.get("next").asText().contains("no lock exists"), out.get("next").asText());
+  }
+
+  @Test void aCrossVenueBasketIsProposedWithItsRulesVerdict() throws Exception {
+    JsonNode first = call(tools().findBaskets(args("{}"))).get("shown").get(0);
+    assertEquals("unverified", first.get("rules_match").asText(), first.toString());
+    assertEquals(1, first.get("rules").size());
+  }
+
+  @Test void anEventIsPricedWithItsStructuralLocksNetOfFees() throws Exception {
+    JsonNode out = call(tools().priceEvent(args(kalshiSpec(""))));
+    // YES above 3.0 is asked 0.44 and YES above 3.2 is bid 0.20: no ladder pair locks.
+    assertEquals(0, out.get("structural_locks").size(), out.get("structural_locks").toString());
+  }
+
   @Test void aForecastBasketIsScoredAcrossJointScenarios() throws Exception {
     JsonNode out = call(tools().priceBasket(args("{'events':["
         + kalshiSpec(",'column':'cpi','mean':3.3,'sd':0.1") + ","

@@ -133,6 +133,33 @@ Needs Phase 2 B (size, annualized return apply to legs).
 
 Lead: report gate — a basket reported as a lock must carry `rules_match` and the payoff curve.
 
+Phase 3 as built (2026-10-02):
+
+- `compare_settlement_rules` diffs nine dimensions (source agency, series, settlement
+  period, transform, seasonal adjustment, rounding, release or close date, revision handling,
+  tie handling). `rules_match` is `match` only when every dimension is stated on both sides
+  and agrees; one stated disagreement is `differ`; anything unstated is `unverified`. Close
+  dates within three days count as one release.
+- `find_market_baskets` puts `rules_match` and the per-pair diff on every `cross_venue`
+  basket, over the events it lists. `price_market_basket` puts them on any basket spanning
+  venues, and returns `payoff_curve` (profit per cost by settlement value, fee-inclusive
+  floor, break-evens) when every leg shares one column: of `search.best[0]` when a search
+  ran, of all legs otherwise. With `lock=true` its `next` says a cross-venue lock whose
+  verdict is not `match` is not a lock.
+- First live listing: 12 cross-venue baskets, none `match` (5 `differ`, the rest `unverified`).
+  Venue rule texts rarely name a series id, a seasonal adjustment or a revision policy, and
+  for a rate decision or a storm count those terms do not apply. As built, a cross-venue
+  lock is therefore almost always reported as unverified. Open decision: mark dimensions
+  that cannot apply to a driver as not applicable, so that `match` is reachable.
+- `price_market_event` returns `structural_locks`, net of fees: ladder pairs that still lock
+  after fees, and the event's bucket partition (buy every YES for 1, or every NO for n - 1)
+  with whether the buckets are exclusive and exhaustive. Exhaustiveness needs the settlement
+  grid, taken from `round` or the built forecast's rounding. Polymarket markets carry no
+  strikes, so they count only when `conditions` states them. The scan's `structural` list
+  stays before fees (the listing reads no fee rates) and says so.
+- Recipes `range` and `calendar` are in `find_market_baskets`; `linked_drivers` baskets carry
+  `link_direction`.
+
 Exit test: the "basket that locks in a yield over 10%" prompt returns a basket with a payoff
 curve, a fee-inclusive floor and a rules verdict, or states that none exists.
 

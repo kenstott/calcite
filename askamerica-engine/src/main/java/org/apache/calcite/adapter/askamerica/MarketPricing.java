@@ -156,11 +156,18 @@ final class MarketPricing {
         /** True for samples, whose fair values carry sampling error. */
         final boolean sampled;
         final String form;
+        /** Decimals the values were rounded to, or null when they were not rounded. */
+        final Integer places;
 
         Forecast(double[] values, boolean sampled, String form) {
+            this(values, sampled, form, null);
+        }
+
+        private Forecast(double[] values, boolean sampled, String form, Integer places) {
             this.values = values;
             this.sampled = sampled;
             this.form = form;
+            this.places = places;
         }
 
         /** The forecast rounded to {@code places} decimals, as a settlement source publishes
@@ -171,7 +178,8 @@ final class MarketPricing {
                 out[i] = new BigDecimal(values[i]).setScale(places, RoundingMode.HALF_EVEN)
                     .doubleValue();
             }
-            return new Forecast(out, sampled, form + ", rounded to " + places + " decimals");
+            return new Forecast(out, sampled, form + ", rounded to " + places + " decimals",
+                places);
         }
 
         ObjectNode toJson() {
@@ -294,6 +302,7 @@ final class MarketPricing {
 
     /** An event priced: the report, and the legs a basket can be built from. */
     static final class Priced {
+        PredictionMarkets.Event event;
         ObjectNode json;
         List<Leg> legs = new ArrayList<>();
     }
@@ -483,6 +492,44 @@ final class MarketPricing {
         json.put("legs_basis", bothSides ? "every quoted side"
             : "the better side of each market with edge >= " + minEdge);
         out.json = json;
+        out.event = event;
+        return out;
+    }
+
+    /**
+     * The event's forecast-free locks net of fees: ladder pairs that still lock after fees,
+     * and its bucket partition. A partition that is not a lock is kept without its legs, so
+     * the reason exhaustiveness was not established stays visible.
+     *
+     * @param feeRate the rate for every market, or null to use the rates read from the venue
+     * @param step the grid settlement values fall on, or null when no rounding is known
+     * @param given conditions the caller stated, by market id
+     */
+    static ArrayNode structuralLocks(PredictionMarkets.LiveEvent live, Double feeRate,
+            Double step, Map<String, Condition> given) {
+        PredictionMarkets.Event event = live.event;
+        Map<String, Double> rates = new LinkedHashMap<>(live.feeRates);
+        if (feeRate != null) {
+            for (PredictionMarkets.Market m : event.legs) {
+                rates.put(m.marketId, feeRate);
+            }
+        }
+        ArrayNode out = MAPPER.createArrayNode();
+        for (ObjectNode l : MarketBaskets.ladderLocks(event, rates, given)) {
+            if (l.get("lock_after_fees").asBoolean()) {
+                out.add(l);
+            }
+        }
+        for (ObjectNode p : MarketBaskets.partitionLocks(event, rates, step, given)) {
+            if (!p.get("lock").asBoolean()) {
+                for (String side : new String[]{"buy_all_yes", "buy_all_no"}) {
+                    if (p.hasNonNull(side)) {
+                        ((ObjectNode) p.get(side)).remove("legs");
+                    }
+                }
+            }
+            out.add(p);
+        }
         return out;
     }
 

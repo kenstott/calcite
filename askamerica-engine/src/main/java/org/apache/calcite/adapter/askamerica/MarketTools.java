@@ -507,6 +507,11 @@ final class MarketTools {
                     books, has(spec, "size") ? Double.valueOf(doubleArg(spec, "size")) : null));
             priced.json.put("books_read", books.size());
         }
+        // The grid settlement values fall on, from the stated or the built rounding.
+        Integer places = has(spec, "round") ? Integer.valueOf(intArg(spec, "round", 0))
+            : forecast == null ? null : forecast.places;
+        priced.json.set("structural_locks", MarketPricing.structuralLocks(live, feeRate,
+            places == null ? null : Math.pow(10, -places), conditionsOf(spec)));
         if (built != null) {
             priced.json.set("forecast_built", built);
         }
@@ -960,15 +965,87 @@ final class MarketTools {
         out.put("baskets", baskets.size());
         ArrayNode arr = out.putArray("shown");
         for (int i = 0; i < baskets.size() && (limit <= 0 || i < limit); i++) {
-            arr.add(baskets.get(i).toJson(perBasket));
+            MarketBaskets.Basket b = baskets.get(i);
+            ObjectNode o = b.toJson(perBasket);
+            if (b.name.startsWith("cross_venue:")) {
+                putRules(o, b.listed(perBasket));
+            }
+            arr.add(o);
         }
         out.put("next", "A basket's why is a hypothesis. cross_venue is the simplest "
             + "arbitrage and needs no forecast: price_market_basket with both events, "
             + "lock=true, scenario_grid=true, one shared column, and conditions stating every "
-            + "market in that column's units. Any other recipe: measure the link in the "
+            + "market in that column's units. A cross_venue basket whose rules_match is not "
+            + "'match' MUST NOT be reported as a lock. Any other recipe: measure the link in the "
             + "govdata_tables (correlation_matrix, fetch_aligned_series), forecast each event, "
             + "then price_market_basket with joint scenarios.");
         return MAPPER.writeValueAsString(out);
+    }
+
+    /** Most cross-venue pairs whose settlement rules are compared for one basket. */
+    private static final int RULE_PAIRS = 6;
+
+    /**
+     * Compares the settlement rules of every pair of {@code events} on different venues and
+     * writes {@code rules} and the basket's {@code rules_match}: 'differ' when any pair
+     * differs, else 'unverified' when any is, else 'match'. Writes nothing for one venue.
+     */
+    private static void putRules(ObjectNode out, List<PredictionMarkets.Event> events) {
+        ArrayNode pairs = MAPPER.createArrayNode();
+        Set<String> verdicts = new TreeSet<>();
+        int skipped = 0;
+        for (int i = 0; i < events.size(); i++) {
+            for (int j = i + 1; j < events.size(); j++) {
+                PredictionMarkets.Event a = events.get(i);
+                PredictionMarkets.Event b = events.get(j);
+                if (a.source.equals(b.source)) {
+                    continue;
+                }
+                if (pairs.size() >= RULE_PAIRS) {
+                    skipped++;
+                    continue;
+                }
+                ObjectNode diff = MarketRules.compare(a, b);
+                ObjectNode p = pairs.addObject();
+                p.put("a", a.source + ":" + a.eventId);
+                p.put("b", b.source + ":" + b.eventId);
+                p.set("rules_match", diff.get("rules_match"));
+                p.set("differing", diff.get("differing"));
+                p.set("unknown", diff.get("unknown"));
+                verdicts.add(diff.get("rules_match").asText());
+            }
+        }
+        if (pairs.size() == 0) {
+            return;
+        }
+        out.put("rules_match", verdicts.contains(MarketRules.DIFFER) ? MarketRules.DIFFER
+            : verdicts.contains(MarketRules.UNVERIFIED) || skipped > 0 ? MarketRules.UNVERIFIED
+            : MarketRules.MATCH);
+        out.set("rules", pairs);
+        if (skipped > 0) {
+            out.put("rule_pairs_not_compared", skipped);
+        }
+    }
+
+    /** The legs a score lists, in its order. */
+    private static List<MarketPricing.Leg> legsOf(JsonNode score, List<MarketPricing.Leg> legs) {
+        List<MarketPricing.Leg> out = new ArrayList<>();
+        for (JsonNode ref : score.get("legs")) {
+            List<MarketPricing.Leg> found = new ArrayList<>();
+            for (MarketPricing.Leg l : legs) {
+                if (l.id.equals(ref.get("id").asText())
+                        && l.source.equals(ref.get("source").asText())
+                        && l.side.equals(ref.get("side").asText())) {
+                    found.add(l);
+                }
+            }
+            if (found.size() != 1) {
+                throw new IllegalStateException("leg " + ref + " names " + found.size()
+                    + " of the basket's legs; an event was given more than once");
+            }
+            out.add(found.get(0));
+        }
+        return out;
     }
 
     // ─── price_market_basket ───────────────────────────────────────────────────
@@ -1054,6 +1131,7 @@ final class MarketTools {
         }
         double minEdge = has(args, "min_edge") ? doubleArg(args, "min_edge") : 0.03;
         List<MarketPricing.Leg> legs = new ArrayList<>();
+        List<PredictionMarkets.Event> pricedEvents = new ArrayList<>();
         ObjectNode out = MAPPER.createObjectNode();
         ArrayNode events = out.putArray("events");
         Set<String> venues = new TreeSet<>();
@@ -1076,6 +1154,7 @@ final class MarketTools {
                     + "basket is built from mispriced legs, which need one.");
             }
             legs.addAll(priced.legs);
+            pricedEvents.add(priced.event);
             venues.add(priced.json.get("source").asText());
             ObjectNode e = events.addObject();
             for (String f : new String[]{"source", "event_id", "event_title", "driver",
@@ -1120,6 +1199,35 @@ final class MarketTools {
             has(args, "min_yield") ? Double.valueOf(doubleArg(args, "min_yield")) : null,
             intArg(args, "top", 10));
         out.setAll(score);
+        putRules(out, pricedEvents);
+        if (columns.size() == 1) {
+            // The curve of the best subset the search kept; of every leg when no search ran.
+            JsonNode best = score.path("search").path("best").path(0);
+            boolean searched = score.has("search");
+            if (!searched || !best.isMissingNode()) {
+                List<Map<String, Double>> points = MarketPricing.grid(legs).rows;
+                double[] values = new double[points.size()];
+                String column = columns.iterator().next();
+                for (int i = 0; i < values.length; i++) {
+                    values[i] = points.get(i).get(column);
+                }
+                ObjectNode curve = MarketBaskets.payoffCurve(
+                    searched ? legsOf(best, legs) : legs, values);
+                curve.put("of", searched ? "search.best[0]" : "all_legs");
+                out.set("payoff_curve", curve);
+            }
+        }
+        if (lock) {
+            String rules = out.path("rules_match").asText(null);
+            out.put("next", "A lock MUST be reported with its floor net of fees and its "
+                + "payoff_curve." + (rules == null ? ""
+                : MarketRules.MATCH.equals(rules)
+                    ? " rules_match is 'match': the two venues' rule texts agree."
+                    : " rules_match is '" + rules + "': a lock holding legs on both venues "
+                        + "MUST be reported as not a lock, with the differing and unknown "
+                        + "dimensions in rules.")
+                + " With no subset kept, state that no lock exists at these quotes.");
+        }
         out.put("limits", "Fees are a taker order at the quote. Not modelled: depth behind "
             + "the quote, position limits, cost of capital until settlement, and the two "
             + "venues settling in different currencies on different rule texts. A lock is "

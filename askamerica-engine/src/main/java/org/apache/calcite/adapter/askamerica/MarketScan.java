@@ -497,6 +497,8 @@ final class MarketScan {
             s.put("source", e.source);
             s.put("event_id", e.eventId);
             s.put("event_title", e.eventTitle);
+            s.put("locks_basis", "before fees, from the listing's quotes; price_market_event "
+                + "returns structural_locks net of fees");
             ArrayNode l = s.putArray("locks");
             for (ObjectNode lock : e.locks) {
                 l.add(lock);

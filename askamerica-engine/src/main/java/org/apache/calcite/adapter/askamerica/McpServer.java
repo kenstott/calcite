@@ -539,7 +539,7 @@ public class McpServer {
             "find_market_candidates", "price_market_event", "find_market_baskets",
             "price_market_basket", "forecast_market_event", "market_price_history",
             "scan_market_opportunities", "requote_market_opportunity",
-            "backtest_market_forecast"));
+            "backtest_market_forecast", "compare_settlement_rules"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -3280,6 +3280,7 @@ public class McpServer {
         tools.add(MarketHistory.toolDef());
         tools.add(MarketScan.toolDef());
         tools.add(MarketBacktest.toolDef());
+        tools.add(MarketRules.toolDef());
 
         ObjectNode mktRequoteProps = MAPPER.createObjectNode();
         mktRequoteProps.set("ticket", prop("object",
@@ -3303,7 +3304,8 @@ public class McpServer {
 
         ObjectNode mktBasketProps = MAPPER.createObjectNode();
         mktBasketProps.set("recipe", prop("string",
-            "One of cross_venue, same_place, linked_drivers, series_run. Omit for all."));
+            "One of cross_venue, same_place, linked_drivers, series_run, range, calendar. "
+            + "Omit for all."));
         mktBasketProps.set("match", prop("string",
             "Only baskets whose name contains this text, e.g. a driver, a state, or a link "
             + "name."));
@@ -3334,17 +3336,20 @@ public class McpServer {
             + "on one state or city; linked_drivers, drivers with an economic link (weather, "
             + "crop yield and commodity prices; inflation and Fed policy; labor and growth; "
             + "rates and housing; energy and weather); series_run, consecutive events of one "
-            + "series on one venue. Each basket gives why its events should move together, "
-            + "its venues, the govdata_tables to measure that in, and its events. A basket's "
-            + "why is a hypothesis, not a measurement. For cross_venue: price_market_basket "
-            + "with both events, lock=true, scenario_grid=true and one shared column. For the "
+            + "series on one venue; range, one event's lowest and highest strike (pays most "
+            + "between them); calendar, one quantity at two adjacent close dates. Each basket "
+            + "gives why its events should move together, its venues, the govdata_tables to "
+            + "measure that in, and its events. A cross_venue basket carries rules_match "
+            + "(match, differ, unverified) from compare_settlement_rules. A basket's why is "
+            + "a hypothesis, not a measurement. For cross_venue: price_market_basket with "
+            + "both events, lock=true, scenario_grid=true and one shared column. For the "
             + "others: measure the link with fetch_aligned_series and correlation_matrix, "
             + "forecast each event, then price_market_basket with joint scenarios. Can return "
             + "status 'loading' while the venues are read. You MUST call again with the same "
             + "arguments while status is 'loading'. You MUST check cross_venue first when "
-            + "asked for an arbitrage or a locked yield. You MUST read both events' rules "
-            + "before treating a cross_venue pair as one outcome. You MUST NOT report a "
-            + "basket as an arbitrage before price_market_basket has scored it net of fees.",
+            + "asked for an arbitrage or a locked yield. You MUST NOT report a cross_venue "
+            + "pair as a lock unless rules_match is 'match'. You MUST NOT report a basket as "
+            + "an arbitrage before price_market_basket has scored it net of fees.",
             schema(mktBasketProps, new String[]{})));
 
         ObjectNode mktPriceBasketProps = MAPPER.createObjectNode();
@@ -3400,15 +3405,17 @@ public class McpServer {
             + "a column per event's column, e.g. the query behind fetch_aligned_series; keeps "
             + "the correlation between events); scenarios (inline rows, e.g. from "
             + "scenario_sweep). search=k scores every subset of up to k legs; min_yield=0.10 "
-            + "keeps those yielding over 10%. Fees are a taker order at the quote; depth, "
-            + "position limits and cost of capital are not modelled. Yield is to settlement, "
+            + "keeps those yielding over 10%. Returns payoff_curve (profit per cost by "
+            + "settlement value) when every leg shares one column, and rules_match (match, "
+            + "differ, unverified) when events span venues. Fees are a taker order at the "
+            + "quote; depth and position limits are not modelled. Yield is to settlement, "
             + "not annualized. You MUST give events that settle on the same quantity the same "
             + "column, and state every Polymarket market's condition in that column's units. "
-            + "You MUST read both rules texts before reporting a cross-venue lock. You MUST "
-            + "state the scenario basis and row count: a floor holds only across the "
-            + "scenarios given. You MUST report cost, fees, floor, yield, days to close and "
-            + "volume for every basket reported. You MUST report 'no lock after fees' as the "
-            + "finding when none is kept, with the best floor before it.",
+            + "You MUST report a lock with its payoff_curve and its rules_match. You MUST "
+            + "report a cross-venue lock whose rules_match is not 'match' as not a lock. You "
+            + "MUST state the scenario basis and row count. You MUST report cost, fees, "
+            + "floor, yield, days to close and volume for every basket reported. You MUST "
+            + "report 'no lock after fees' as the finding when none is kept.",
             schema(mktPriceBasketProps, new String[]{"events"})));
 
         ObjectNode xlsxProps = MAPPER.createObjectNode();
@@ -3780,6 +3787,7 @@ public class McpServer {
         new PredictionMarkets.ListingCache(MARKET_FETCHER, java.time.Duration.ofMinutes(15));
     private static final MarketBacktest MARKET_BACKTEST =
         new MarketBacktest(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
+    private static final MarketRules MARKET_RULES = new MarketRules(MARKET_FETCHER);
     private static final MarketTools MARKETS = new MarketTools(MARKET_FETCHER,
         MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, MARKET_BACKTEST);
     private static final MarketScan MARKET_SCAN = new MarketScan(MARKET_FETCHER,
@@ -4003,6 +4011,13 @@ public class McpServer {
                         + args.path("ticket").path("source").asText("") + " market_id="
                         + args.path("ticket").path("market_id").asText(""));
                     text = MARKETS.requote(args);
+                    break;
+                }
+                case "compare_settlement_rules": {
+                    log.println("[askamerica-mcp] tool=compare_settlement_rules a="
+                        + args.path("a").path("event_id").asText("") + " b="
+                        + args.path("b").path("event_id").asText(""));
+                    text = MARKET_RULES.compareSettlementRules(args);
                     break;
                 }
                 case "scan_market_opportunities": {
