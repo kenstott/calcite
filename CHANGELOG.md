@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.105.0](https://github.com/kenstott/calcite/compare/engine-v0.104.1...engine-v0.105.0) (2026-10-02)
+
+
+### Features
+
+* **askamerica-engine:** candlestick and fan charts, reference lines, venue OHLC and forecast fan ([def43b0](https://github.com/kenstott/calcite/commit/def43b0a92bd3f2d1df65fa1063b49676788ffa7))
+* **askamerica-engine:** market dashboard layouts by id, follow-ups and forecast/basket recipes ([0ded649](https://github.com/kenstott/calcite/commit/0ded64982a3df5b58074d0e40424be67efa67e30))
+* **askamerica-engine:** market forecast backtest, sized pricing, order tickets and re-quote ([439f9e0](https://github.com/kenstott/calcite/commit/439f9e006b0efed25623907236bb94061254851a))
+* **askamerica-engine:** market forecast builder, venue history and opportunity scan ([fdc960e](https://github.com/kenstott/calcite/commit/fdc960e62781a5f1b631853f60785cb17fb42a07))
+* **askamerica-engine:** prediction-market mispricing and arbitrage tools ([e47bc7d](https://github.com/kenstott/calcite/commit/e47bc7dbbc995cdf4677f42035c12ffe95d05be4))
+* **askamerica-engine:** scan_market_baskets lists arb-like near-locks scored on the forecast ([1a5d252](https://github.com/kenstott/calcite/commit/1a5d2523dbce932c24071b19a20d31f958ca2903))
+* **askamerica-engine:** scan_market_baskets pairs daily temperature extremes by station and day as two measurements ([eccd089](https://github.com/kenstott/calcite/commit/eccd0891baaea2bd9f17cc0eba5c1a93ab24f80a))
+* **askamerica-engine:** scan_market_baskets prices every quote-only lock in one pass ([534f103](https://github.com/kenstott/calcite/commit/534f10305ad843183fe9ddb13dc1f565f34f91a5))
+* **askamerica-engine:** scan_market_baskets prices FOMC decision pairs on the change in basis points ([e51655e](https://github.com/kenstott/calcite/commit/e51655e17f159f6b2074d8f1dfd9d01ff38c65c9))
+* **askamerica-engine:** scan_market_baskets prices month-over-month against year-over-year CPI pairs as near-locks ([60f200d](https://github.com/kenstott/calcite/commit/60f200df430163f9c14097ba5206b47455b115bb))
+* **askamerica-engine:** scan_market_baskets sizes each lock from its order books ([66869fa](https://github.com/kenstott/calcite/commit/66869fa8a55b6d7520d09f82416149ca91456040))
+* **askamerica-engine:** settlement-rules diff, fee-aware structural locks and basket payoff curve ([3644d57](https://github.com/kenstott/calcite/commit/3644d5720bc1010ca69ba996fa37fb4928ce795a))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** a near-lock leg may not be forecast at over twice what its price implies ([c7c5099](https://github.com/kenstott/calcite/commit/c7c5099495007a3217b2e2ff30587a11e2037331))
+* **govdata/officials:** describe_table reports congress-dimensioned tables as time-varying ([244df25](https://github.com/kenstott/calcite/commit/244df256ac74b22507ce2145bdd66748c9824801))
+* **govdata/sec:** drop only the fact with an undefined unitRef instead of aborting the filing ([#848](https://github.com/kenstott/calcite/issues/848)) ([df3522e](https://github.com/kenstott/calcite/commit/df3522e2ed445abe060d170ef86ed5887291e25c))
+
 ## [0.104.1](https://github.com/kenstott/calcite/compare/engine-v0.104.0...engine-v0.104.1) (2026-10-01)
 
 
