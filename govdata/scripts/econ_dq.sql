@@ -1711,6 +1711,70 @@ GROUP BY tbl
 ORDER BY table_result DESC, tbl;
 
 -- Schema-level summary
+-- ============================================================================
+-- average_prices (BLS AP survey, national dollar retail prices)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'average_prices', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/average_prices', allow_moved_paths := true) LIMIT 1));
+
+-- ~60 national series x 1995-present monthly history = ~28.7k rows in ap.data.0.Current
+-- (confirmed live 2 Oct 2026); floor set well below that.
+INSERT INTO dq_results
+SELECT 'econ', 'average_prices', 'row_count',
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '20000',
+  CASE WHEN n >= 20000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/average_prices', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'average_prices', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/average_prices', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('footnotes');  -- footnotes is legitimately empty on nearly every row
+
+INSERT INTO dq_results
+SELECT 'econ', 'average_prices', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/average_prices', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'footnotes');  -- footnotes is legitimately empty on nearly every row
+
+-- Eggs, grade A large, per dozen (the market settlement series) must be present and plausible
+INSERT INTO dq_results
+SELECT 'econ', 'average_prices', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'APU0000708111 eggs: 0 = at least one priced month and all values between $0.50 and $10.00'
+FROM (SELECT
+        (CASE WHEN COUNT(value) = 0 THEN 1 ELSE 0 END) + COUNT(CASE WHEN value < 0.5 OR value > 10 THEN 1 END) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/average_prices', allow_moved_paths := true)
+      WHERE series = 'APU0000708111');
+
+-- rowFilter keeps only the national area (0000) and the tsv reader must trim the padded series_id
+INSERT INTO dq_results
+SELECT 'econ', 'average_prices', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows whose series is not APU0000... or carries padding whitespace'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/average_prices', allow_moved_paths := true)
+      WHERE series NOT LIKE 'APU0000%' OR series <> trim(series));
+
+INSERT INTO dq_results
+SELECT 'econ', 'average_prices', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  '(series, year, period) triples appearing more than once'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series, year, period, COUNT(*) AS c
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/average_prices', allow_moved_paths := true)
+        GROUP BY series, year, period HAVING COUNT(*) > 1));
+
 SELECT
   'econ'                                                          AS schema_name,
   SUM(CASE WHEN status = 'fail' THEN 1 ELSE 0 END)               AS total_fails,

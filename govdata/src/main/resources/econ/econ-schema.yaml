@@ -1465,6 +1465,118 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- AVERAGE RETAIL PRICES ---
+  - name: average_prices
+    pattern: "type=average_prices/frequency=*/year=*/average_prices.parquet"
+    partitions: *standard_partitions
+    # BLS republishes ap.data.0.Current on every monthly CPI release. A HEAD probe of
+    # Last-Modified re-triggers ingest when the file changes (same as food_cpi). Average prices
+    # are published unadjusted and are not restated after release.
+    freshness:
+      type: last_modified
+    comment: >
+      Monthly BLS Average Price Data (survey AP): dollar retail prices, not index levels, for
+      ~60 food, household-fuel and motor-fuel items, U.S. city average only (area 0000), not
+      seasonally adjusted, 1995 to present. These are the series prediction markets settle on:
+      APU0000708111 (Eggs, grade A, large, per dozen), APU0000703112 (Ground beef, 100% beef,
+      per lb), APU0000709112 (Milk, fresh, whole, per gal), APU0000702111 (Bread, white, pan,
+      per lb), APU000074714 (Gasoline, unleaded regular, per gallon). Also carries bacon,
+      chicken, cheese, butter, coffee, sugar, produce, electricity (APU000072610, per kWh),
+      utility gas (APU000072620, per therm), fuel oil, diesel and other gasoline grades.
+      Series are long-format (one row per series and month): ALWAYS filter on series. Item
+      names and units are in BLS's ap.item/ap.series catalog
+      (https://download.bls.gov/pub/time.series/ap/ap.series). For CPI index levels of the same
+      goods see food_cpi and inflation_metrics. Pre-1995 history (eggs from 1980, gasoline from
+      1976) sits in BLS's per-group files (ap.data.2.Gasoline, ap.data.3.Food) and is not loaded.
+
+    dimensions:
+      type:
+        - average_prices
+      frequency: *monthly_frequency
+
+    # BLS AP-program bulk flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS Average Price series identifier (e.g. APU0000708111 eggs per dozen, APU000074714
+          regular gasoline per gallon). Long-format table: one row per (series, month), so ALWAYS
+          filter on series; the unit differs per series.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 for monthly)
+        source: period
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
+      - name: value
+        type: double
+        nullable: true
+        comment: Average retail price in U.S. dollars; the unit (per lb, per doz, per gal, per kWh, per therm) is given by the series
+          item — see the series column. NULL where BLS reports no price for the month (source value "-")
+        source: value
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
+
+    # Bulk flat-file source — ap.data.0.Current carries every AP series from 1995 forward in one
+    # ~9MB download, versus per-series/per-year API calls.
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/ap/ap.data.0.Current"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      # National U.S. city average only (area 0000); the survey's regional and metro area series
+      # use other area codes and are not loaded.
+      rowFilter:
+        column: series_id
+        pattern: '^APU0000'
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=average_prices/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- REGIONAL FOOD CPI ---
   - name: regional_food_cpi
     # BLS revises the prior 1-2 months on every monthly release and restates the
@@ -9649,6 +9761,12 @@ constraints:
       - year
 
   food_cpi:
+    primaryKey:
+      - type
+      - frequency
+      - year
+
+  average_prices:
     primaryKey:
       - type
       - frequency

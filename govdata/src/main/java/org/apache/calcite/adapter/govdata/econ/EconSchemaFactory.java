@@ -45,7 +45,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Set<String> BLS_TABLES =
       new HashSet<>(
           Arrays.asList("employment_statistics", "inflation_metrics", "regional_cpi", "metro_cpi",
-      "food_cpi", "regional_food_cpi", "metro_food_cpi",
+      "food_cpi", "regional_food_cpi", "metro_food_cpi", "average_prices",
       "state_industry", "state_wages", "national_wages", "metro_industry", "metro_wages",
       "county_qcew", "county_wages", "jolts_regional", "jolts_state", "jolts_industry",
       "wage_growth", "regional_employment"));
