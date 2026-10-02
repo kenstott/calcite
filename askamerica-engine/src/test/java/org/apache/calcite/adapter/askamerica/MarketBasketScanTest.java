@@ -1186,4 +1186,187 @@ class MarketBasketScanTest {
     assertTrue(out.get("not_priced").get(0).get("why").asText().contains("not one quantity"),
         out.toString());
   }
+
+  // ─── One month's change against twelve months' ──────────────────────────────
+
+  /** The index a month-over-month and a year-over-year event share: up 0.2% and 0.3% in turn. */
+  private static double[] turnIndex(int months) {
+    double[] v = new double[months];
+    v[0] = 100;
+    for (int i = 1; i < months; i++) {
+      v[i] = v[i - 1] * (i % 2 == 1 ? 1.002 : 1.003);
+    }
+    return v;
+  }
+
+  /**
+   * A catalog holding one index from 2022-01 for {@code months} months under both its
+   * seasonally adjusted id, by date, and its unadjusted id, by year and period.
+   */
+  private static MarketTools.SqlRunner indexSql(FakeFetcher f, int months) {
+    return (q, limit) -> {
+      f.sqlReads++;
+      double[] v = turnIndex(months);
+      ArrayNode rows = MAPPER.createArrayNode();
+      YearMonth start = YearMonth.of(2022, 1);
+      for (int i = 0; i < months; i++) {
+        YearMonth ym = start.plusMonths(i);
+        ObjectNode r = rows.addObject();
+        if (q.contains("CPIAUCSL")) {
+          r.put("date", ym.atDay(1).toString());
+        } else {
+          r.put("year", ym.getYear());
+          r.put("period", String.format("M%02d", ym.getMonthValue()));
+        }
+        r.put("value", v[i]);
+      }
+      return rows;
+    };
+  }
+
+  /** Polymarket's event on October's one-month change: Above 0.2% at 0.52 and 0.54. */
+  private static ObjectNode polymarketMonthly() {
+    ObjectNode ev = polymarketEvent();
+    polymarketMarket((ArrayNode) ev.get("markets"), "mom", "Above 0.2%", 0.52, 0.54);
+    ((ObjectNode) ev.get("markets").get(0)).put("description", "Resolves on the one-month "
+        + "percent change in the seasonally adjusted BLS CPI-U, one decimal.");
+    return ev;
+  }
+
+  private static JsonNode monthlyRun(int months) throws Exception {
+    FakeFetcher f = venues(polymarketMonthly());
+    MarketBasketScan scan = new MarketBasketScan(f,
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), indexSql(f, months),
+        () -> NOW, 10_000L, 60_000L, Duration.ofMinutes(15));
+    return MAPPER.readTree(scan.scan(args("{'search': 2}")));
+  }
+
+  @Test void aMonthlyChangeAgainstATwelveMonthChangeIsConvertedAndIsNeverALock()
+      throws Exception {
+    // 57 months: the index is published to 2026-09, the month before the events'.
+    JsonNode out = monthlyRun(57);
+
+    assertEquals("complete", out.get("status").asText());
+    JsonNode funnel = out.get("funnel");
+    assertEquals(1, funnel.get("cross_venue_pairs_priced").asInt(), out.toString());
+    assertEquals(1, funnel.get("cross_venue_pairs_converted").asInt());
+    assertEquals(0, funnel.get("cross_venue_pairs_with_a_lock").asInt());
+    assertEquals(0, out.get("baskets").size());
+    assertEquals(1, out.get("near_locks").size(), out.toString());
+    JsonNode near = out.get("near_locks").get(0);
+    assertEquals("near_lock", near.get("type").asText());
+    assertEquals("converted", near.get("same_quantity").asText());
+    assertEquals("CPIAUCSL mom_pct and CUUR0000SA0 yoy_pct, 2026-10",
+        near.get("settles_on").asText());
+
+    double[] v = turnIndex(57);
+    double ratio = v[56] / v[45];
+    JsonNode conversion = near.get("conversion");
+    assertEquals(ratio, conversion.get("index_ratio").asDouble(), 1e-6);
+    assertEquals("CUUR0000SA0 in 2026-09 over 2025-10",
+        conversion.get("index_ratio_is").asText());
+    // Both ids hold one index: nothing between its two one-month changes in any month.
+    assertEquals(0, conversion.get("wedge").asDouble(), 1e-9);
+    assertEquals(0, conversion.get("wedge_error").get("max_abs").asDouble(), 1e-9);
+    assertEquals(44, conversion.get("wedge_error").get("months").asInt());
+
+    // YES above 3.0 on Kalshi at 0.44 plus its fee with NO above 0.2 on Polymarket at
+    // 1 - 0.52. A month up 0.2% makes twelve months 3.0 and one up 0.3% makes them 3.1, so
+    // one leg wins at every draw; a month up 0.21% to 0.25% publishes as 0.2 with twelve
+    // months of 3.1, where both win. No error seen moves that, and the next one may: the
+    // basket is listed as a near-lock with no losing band, never as a lock.
+    double cost = 0.44 + 0.07 * 0.44 * 0.56 + 0.48;
+    assertEquals(cost, near.get("cost").asDouble(), 1e-4);
+    assertEquals(KALSHI_ID + "-T3.0", near.get("legs").get(0).get("market_id").asText());
+    assertEquals("yes", near.get("legs").get(0).get("side").asText());
+    assertEquals("mom", near.get("legs").get(1).get("market_id").asText());
+    assertEquals("no", near.get("legs").get(1).get("side").asText());
+    assertEquals(1 - cost, near.get("worst_profit").asDouble(), 1e-4);
+    assertEquals(2 - cost, near.get("best_profit").asDouble(), 1e-4);
+    assertTrue(near.get("loses_between").isNull());
+    assertNull(near.get("floor_profit"));
+    assertEquals(0, near.get("p_loss").asDouble(), 1e-12);
+    assertEquals(0, near.get("market_p_loss").asDouble(), 1e-12);
+    assertEquals(1 - cost, near.get("expected_profit").asDouble(), 1e-4);
+    assertTrue(near.get("basis").asText().contains("two numbers"));
+    assertTrue(out.get("next").asText().contains("wedge_error"), out.get("next").asText());
+  }
+
+  @Test void aConversionWaitsForTheMonthBeforeToPrint() throws Exception {
+    // 56 months: the index stops at 2026-08, two months before the events'.
+    JsonNode out = monthlyRun(56);
+
+    assertEquals("complete", out.get("status").asText());
+    assertEquals(1, out.get("funnel").get("cross_venue_pairs_converted").asInt());
+    assertEquals(0, out.get("near_locks").size());
+    String why = out.get("near_locks_not_scored").toString();
+    assertTrue(why.contains("were not converted: CUUR0000SA0 has no value for 2026-09 yet"),
+        why);
+  }
+
+  private static MarketForecasts.Quantity quantity(String series,
+      MarketForecasts.Transform transform) {
+    MarketForecasts.Quantity q = new MarketForecasts.Quantity(series + " " + transform.key,
+        series, null);
+    q.transform = transform;
+    return q;
+  }
+
+  @Test void onlyOneIndexInTwoTransformsIsConverted() {
+    MarketForecasts.Quantity m = quantity("CPIAUCSL", MarketForecasts.Transform.MOM);
+    MarketForecasts.Quantity y = quantity("CUUR0000SA0", MarketForecasts.Transform.YOY);
+    MarketForecasts.Quantity core = quantity("CPILFESL", MarketForecasts.Transform.MOM);
+    MarketForecasts.Quantity level = quantity("CPIAUCSL", MarketForecasts.Transform.LEVEL);
+
+    assertTrue(MarketForecasts.convertible(m, y));
+    assertTrue(MarketForecasts.convertible(y, m));
+    assertTrue(MarketForecasts.convertible(core,
+        quantity("CUUR0000SA0L1E", MarketForecasts.Transform.YOY)));
+    assertTrue(MarketForecasts.convertible(m,
+        quantity("CPIAUCSL", MarketForecasts.Transform.YOY)));
+    assertFalse(MarketForecasts.convertible(y, y), "one transform is one quantity");
+    assertFalse(MarketForecasts.convertible(core, y), "core against headline is two indexes");
+    assertFalse(MarketForecasts.convertible(level, y), "a level is not a percent change");
+    assertFalse(MarketForecasts.convertible(new MarketForecasts.Quantity(null, "CPIAUCSL",
+        "no transform"), y), "an unresolved event is not converted");
+  }
+
+  @Test void aConvertedBasketLosesOnlyWhereTheErrorCarriesOneNumberPastTheOther() {
+    // The twelve-month change is 2.8 plus the month's less an error of -0.04, 0 or 0.04.
+    // YES above 3.0 on it at 0.40 with NO above 0.2 on the month's at 0.50.
+    java.util.List<MarketPricing.Leg> legs = java.util.Arrays.asList(
+        leg("kalshi", "k", "yes", 3.0, 0.40), leg("kalshi", "k", "no", 3.0, 0.62),
+        leg("polymarket", "p", "yes", 0.2, 0.52), leg("polymarket", "p", "no", 0.2, 0.50));
+    double[] draws = new double[21];
+    java.util.Arrays.fill(draws, 0, 10, 0.12);
+    java.util.Arrays.fill(draws, 10, 20, 0.38);
+    // Published as 0.3; the twelve months come to 3.03 and publish as 3.0 at an error of 0.04.
+    draws[20] = 0.27;
+    MarketPricing.Joint joint = new MarketPricing.Joint("polymarket", "month", "twelve",
+        draws, new double[]{-0.04, 0, 0.04}, 2.8, 1.0, 1, 1);
+
+    MarketPricing.NearLocks scored = MarketPricing.nearLocks(legs, joint, 2, 2, 0.05, 0.20,
+        2, 5);
+    assertEquals(1, scored.kept.size(), scored.kept.toString());
+    assertEquals(0, scored.overGap + scored.bandLikely + scored.bandUnpriced);
+    JsonNode near = scored.kept.get(0);
+    assertEquals("k", near.get("legs").get(0).get("id").asText());
+    assertEquals("yes", near.get("legs").get(0).get("side").asText());
+    assertEquals("p", near.get("legs").get(1).get("id").asText());
+    assertEquals(1.0 / 63, near.get("p_loss").asDouble(), 1e-4);
+    assertEquals(62.0 / 63 - 0.90, near.get("expected").asDouble(), 1e-4);
+    assertEquals(-0.90, near.get("worst").asDouble(), 1e-9);
+    JsonNode band = near.get("loses_between");
+    assertEquals("twelve", band.get("of").asText());
+    assertEquals(3.0, band.get("low").asDouble(), 1e-12);
+    assertEquals(3.0, band.get("high").asDouble(), 1e-12);
+    assertEquals(0.3, band.get("and").get("low").asDouble(), 1e-12);
+    assertEquals(0.3, band.get("and").get("high").asDouble(), 1e-12);
+    // Kalshi quotes at or under 3.0 at a middle of 0.61, and 1 of the 31 draws there loses;
+    // Polymarket quotes above 0.2 at 0.51, and 1 of the 33 draws there loses.
+    assertEquals(0.61 / 31, near.get("market_p_loss").asDouble(), 1e-4);
+
+    // A cap under the forecast's loss keeps nothing.
+    assertEquals(0, MarketPricing.nearLocks(legs, joint, 2, 2, 0.01, 0.20, 2, 5).kept.size());
+  }
 }

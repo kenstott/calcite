@@ -307,6 +307,25 @@ resumable call with no forecast:
   is a lock, and its `basis` says the step was taken. A decision is priced against the other
   venue's decision of the same meeting only: a rate-level event (KXFED) is `not_priced`, and
   no forecast is built, so a decision pair yields no near-lock.
+- **Month-over-month against year-over-year.** `MarketForecasts.convertible` pairs an event
+  on a month's one-month percent change with one on the same index's twelve-month change
+  (`CPIAUCSL`/`CPIAUCNS`/`CUUR0000SA0`, or `CPILFESL`/`CUUR0000SA0L1E`), and
+  `MarketForecasts.conversion` builds `yoy = ((1 + (mom - wedge - error)/100) * N[t-1]/N[t-12]
+  - 1) * 100`, N the year-over-year series. The wedge (seasonally adjusted less unadjusted
+  one-month change) is taken from the same month a year earlier; `error` is how far that was
+  off in each month of 12 years of catalog history (fewer than 24 months, a month before not
+  yet printed, or a month already printed is a stated reason, never a default).
+  `MarketPricing.nearLocks(legs, Joint, …)` scores outcomes as (monthly change, error): the
+  grid takes every pair of published numbers reachable with the error at its least, zero and
+  most; the forecast is every draw of the monthly change with every error, taken as
+  independent. Each leg is settled on its own venue's rounded number. Such a pair has no
+  strict lock: it is listed only under `near_locks` with `same_quantity: converted`, a
+  `conversion` object, and a two-number `loses_between`; a basket losing at no grid outcome
+  is kept as a near-lock, since past errors do not bound the next one. `market_p_loss` is
+  the larger over venues of the venue's price of each range of its own number times the
+  share of forecast draws in that range that lose. Errors are measured on revised values,
+  while the events settle on first prints. "one-month percent change" and "from the
+  preceding month" now read as month-over-month in both `MarketForecasts` and `MarketRules`.
 - Size and time: every returned basket carries `size` from its legs' order books
   (`sets_at_best_price`, `binding_leg`, `sets_with_a_positive_floor`, `capital`,
   `floor_profit` in dollars, `stops_because`), `days_to_settlement` to its last event's

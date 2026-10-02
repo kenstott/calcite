@@ -75,7 +75,11 @@ final class MarketBasketScan {
     private static final String VERIFIED = "verified";
     private static final String NEAR_RULE = " You MUST NOT report a near_locks entry as a "
         + "lock: state its loses_between, worst_profit, p_loss, market_p_loss and "
-        + "expected_profit, and that p_loss and expected_profit are the engine's forecast.";
+        + "expected_profit, and that p_loss and expected_profit are the engine's forecast. "
+        + "For an entry whose same_quantity is 'converted' you MUST state its conversion's "
+        + "wedge_error and that the two events settle on different numbers.";
+    /** {@code same_quantity} of a pair on two numbers one conversion apart. */
+    static final String CONVERTED = "converted";
     private static final int EXAMPLES_SHOWN = 5;
     private static final int CLOSEST_SHOWN = 3;
     private static final int PER_PAIR = 1;
@@ -128,6 +132,8 @@ final class MarketBasketScan {
         boolean forecastTried;
         /** Null when it was not built; {@link #forecastReason} then says why. */
         MarketPricing.Forecast forecast;
+        /** {@link #forecast} before the rules' rounding. */
+        MarketPricing.Forecast unrounded;
         String forecastReason;
     }
 
@@ -140,6 +146,11 @@ final class MarketBasketScan {
         Instant at;
         /** The one series and transform both events resolve to, or null. */
         String settlesOn;
+        /** Set when one event is a month's month-over-month change and the other the same
+         *  index's year-over-year change: the pair is two numbers, and has no lock. */
+        Row momRow;
+        MarketForecasts.Quantity mom;
+        MarketForecasts.Quantity yoy;
     }
 
     // ─── Arguments ─────────────────────────────────────────────────────────────
@@ -383,18 +394,21 @@ final class MarketBasketScan {
         PredictionMarkets.Event b = p.live.event;
         MarketForecasts.Quantity qa = MarketForecasts.quantityOf(a);
         MarketForecasts.Quantity qb = MarketForecasts.quantityOf(b);
-        if (qa.key != null && qb.key != null && !qa.key.equals(qb.key)) {
+        boolean convert = MarketForecasts.convertible(qa, qb);
+        if (!convert && qa.key != null && qb.key != null && !qa.key.equals(qb.key)) {
             return "the two events settle on different series: " + qa.key + " and " + qb.key;
         }
-        if (qa.series != null && qb.series != null && !qa.series.equals(qb.series)) {
+        if (!convert && qa.series != null && qb.series != null
+                && !qa.series.equals(qb.series)) {
             return "the two events settle on different series: " + qa.series + " and "
                 + qb.series;
         }
         ObjectNode rules = MarketRules.compare(a, b);
         List<String> differing = new ArrayList<>();
         for (String d : QUANTITY) {
+            // A converted pair differs in series and transform by what it is.
             if (MarketRules.DIFFER.equals(rules.get("dimensions").get(d).get("status")
-                    .asText())) {
+                    .asText()) && (!convert || "settlement_period".equals(d))) {
                 differing.add(d);
             }
         }
@@ -426,7 +440,7 @@ final class MarketBasketScan {
         }
         double[] ka = span(sides.get(0));
         double[] pa = span(sides.get(1));
-        if (ka[1] < pa[0] || pa[1] < ka[0]) {
+        if (!convert && (ka[1] < pa[0] || pa[1] < ka[0])) {
             return "the two events' strikes do not overlap, so they are not one quantity in "
                 + "one unit";
         }
@@ -448,6 +462,14 @@ final class MarketBasketScan {
         info.depth = depth;
         info.rules = rules;
         info.at = at;
+        if (convert) {
+            boolean kalshiMom = qa.transform == MarketForecasts.Transform.MOM;
+            info.momRow = kalshiMom ? k : p;
+            info.mom = kalshiMom ? qa : qb;
+            info.yoy = kalshiMom ? qb : qa;
+            info.settlesOn = info.mom.key + " and " + info.yoy.key;
+            return null;
+        }
         info.settlesOn = k.decision != null
             ? "the change of the FOMC target rate at the " + k.decision.meeting
                 + " meeting, basis points"
@@ -545,6 +567,80 @@ final class MarketBasketScan {
             return;
         }
         r.forecast = built.forecast;
+        r.unrounded = built.unrounded;
+    }
+
+    /** What a near-lock says of its loss and its odds, whichever way it was scored. */
+    private static void odds(ObjectNode o, JsonNode best) {
+        o.set("worst_profit", best.get("worst"));
+        o.set("worst", best.get("floor"));
+        o.set("best_profit", best.get("best"));
+        o.set("loses_between", best.get("loses_between"));
+        o.set("p_loss", best.get("p_loss"));
+        o.set("market_p_loss", best.get("market_p_loss"));
+        o.set("p_profit", best.get("p_profit"));
+        o.set("expected_profit", best.get("expected"));
+        o.set("expected_yield", best.get("yield"));
+        o.set("max_quote_gap", best.get("max_quote_gap"));
+        o.set("max_quote_ratio", best.get("max_quote_ratio"));
+    }
+
+    private static String noneOf(MarketPricing.NearLocks scored) {
+        if (scored.bandUnpriced > 0) {
+            return "the forecast favours a basket of the pair, but neither venue's quotes "
+                + "price its losing band";
+        }
+        if (scored.bandLikely > 0) {
+            return "the forecast favours a basket of the pair, but the quotes put more than "
+                + "max_loss_probability on its losing band: a bet on the forecast against "
+                + "the market";
+        }
+        if (scored.overGap > 0) {
+            return "the forecast favours a basket of the pair, but puts a leg's chance of "
+                + "winning more than " + MAX_QUOTE_GAP + " from its price, or its winning "
+                + "or losing at over " + MAX_QUOTE_RATIO + " times what its price implies: a "
+                + "bet on the forecast against the market";
+        }
+        return "no basket of the pair profits in both tails with a positive expected "
+            + "profit and p_loss <= max_loss_probability";
+    }
+
+    /**
+     * The near-locks of a pair that settles on two numbers: one month's month-over-month
+     * change and the same index's year-over-year change. Scored on the forecast of the
+     * monthly change with the conversion's error drawn from its history.
+     */
+    private static List<ObjectNode> converted(String basket, Row k, Row p, Paired info,
+            MarketForecasts.Conversion c, double maxLoss, String[] why) {
+        Row m = info.momRow;
+        MarketPricing.Joint joint = new MarketPricing.Joint(m.live.event.source,
+            info.mom.key, info.yoy.key, m.unrounded.values, c.errors, c.intercept(),
+            c.slope(), info.mom.round, info.yoy.round);
+        MarketPricing.NearLocks scored = MarketPricing.nearLocks(info.legs, joint,
+            info.depth, 2, maxLoss, MAX_QUOTE_GAP, MAX_QUOTE_RATIO, PER_PAIR);
+        why[0] = noneOf(scored);
+        List<ObjectNode> out = new ArrayList<>();
+        for (JsonNode best : scored.kept) {
+            ObjectNode o = entry("near_lock", basket, best, k.live.event, p.live.event, info);
+            odds(o, best);
+            o.set("forecast", m.forecast.toJson());
+            o.put("same_quantity", CONVERTED);
+            o.put("settles_on", info.settlesOn + ", " + c.month);
+            o.set("conversion", c.toJson());
+            o.put("basis", "the two events settle on two numbers: the month's one-month "
+                + "change fixes its twelve-month change up to the conversion's wedge_error "
+                + "and each number's rounding. Loses only where both numbers fall inside "
+                + "loses_between; that band and worst_profit take the error at its least, "
+                + "at zero and at its most in wedge_error's months, which does not bound the "
+                + "next one. p_loss, p_profit and expected_profit are the engine's forecast "
+                + "of the monthly change with the error drawn from those months, not the "
+                + "quotes; market_p_loss is the larger of what the two venues' quotes put on the "
+                + "loss, each venue's price of a range of its own number times the share of "
+                + "the forecast's draws in that range that lose");
+            o.put("quotes_read_at", info.at.toString());
+            out.add(o);
+        }
+        return out;
     }
 
     /**
@@ -556,35 +652,10 @@ final class MarketBasketScan {
         List<ObjectNode> out = new ArrayList<>();
         MarketPricing.NearLocks scored = MarketPricing.nearLocks(info.legs, k.forecast,
             info.depth, 2, maxLoss, MAX_QUOTE_GAP, MAX_QUOTE_RATIO, PER_PAIR);
-        if (scored.bandUnpriced > 0) {
-            why[0] = "the forecast favours a basket of the pair, but neither venue's quotes "
-                + "price its losing band";
-        } else if (scored.bandLikely > 0) {
-            why[0] = "the forecast favours a basket of the pair, but the quotes put more than "
-                + "max_loss_probability on its losing band: a bet on the forecast against "
-                + "the market";
-        } else if (scored.overGap > 0) {
-            why[0] = "the forecast favours a basket of the pair, but puts a leg's chance of "
-                + "winning more than " + MAX_QUOTE_GAP + " from its price, or its winning "
-                + "or losing at over " + MAX_QUOTE_RATIO + " times what its price implies: a "
-                + "bet on the forecast against the market";
-        } else {
-            why[0] = "no basket of the pair profits in both tails with a positive expected "
-                + "profit and p_loss <= max_loss_probability";
-        }
+        why[0] = noneOf(scored);
         for (JsonNode best : scored.kept) {
             ObjectNode o = entry("near_lock", basket, best, k.live.event, p.live.event, info);
-            o.set("worst_profit", best.get("worst"));
-            o.set("worst", best.get("floor"));
-            o.set("best_profit", best.get("best"));
-            o.set("loses_between", best.get("loses_between"));
-            o.set("p_loss", best.get("p_loss"));
-            o.set("market_p_loss", best.get("market_p_loss"));
-            o.set("p_profit", best.get("p_profit"));
-            o.set("expected_profit", best.get("expected"));
-            o.set("expected_yield", best.get("yield"));
-            o.set("max_quote_gap", best.get("max_quote_gap"));
-            o.set("max_quote_ratio", best.get("max_quote_ratio"));
+            odds(o, best);
             o.set("forecast", k.forecast.toJson());
             o.put("same_quantity", VERIFIED);
             o.put("settles_on", info.settlesOn);
@@ -947,6 +1018,9 @@ final class MarketBasketScan {
         int pairs = 0;
         int priced = 0;
         int lockedAcross = 0;
+        int converted = 0;
+        // A Conversion, or why it was not built, per pair of series and month.
+        Map<String, Object> conversions = new LinkedHashMap<>();
         for (MarketBaskets.Basket b : crossVenue) {
             for (PredictionMarkets.Event k : b.events) {
                 for (PredictionMarkets.Event p : b.events) {
@@ -995,22 +1069,56 @@ final class MarketBasketScan {
                     }
                     // No lock in a pair on one number: is there a basket that loses only
                     // where the forecast of that number seldom lands?
-                    if (!rk.forecastTried) {
+                    // A converted pair is scored on its monthly change.
+                    Row rf = info.momRow != null ? info.momRow : rk;
+                    if (info.momRow != null) {
+                        converted++;
+                    }
+                    if (!rf.forecastTried) {
                         if (outOfTime || fresh + forecasts > 0
                                 && (System.nanoTime() - started) / 1_000_000L > budgetMillis) {
                             outOfTime = true;
                             forecastsLeft++;
                             continue;
                         }
-                        forecast(rk);
+                        forecast(rf);
                         forecasts++;
                     }
-                    if (rk.forecast == null) {
-                        count(nearWhy, nearExamples, rk.forecastReason, name);
+                    if (rf.forecast == null) {
+                        count(nearWhy, nearExamples, rf.forecastReason, name);
                         continue;
                     }
                     String[] none = new String[1];
-                    List<ObjectNode> near = nearLocks(b.name, rk, rp, info, maxLoss, none);
+                    List<ObjectNode> near;
+                    if (info.momRow == null) {
+                        near = nearLocks(b.name, rk, rp, info, maxLoss, none);
+                    } else {
+                        String unrounded = info.mom.round == null ? info.mom.key
+                            : info.yoy.round == null ? info.yoy.key : null;
+                        if (unrounded != null) {
+                            count(nearWhy, nearExamples, "the rules of the " + unrounded
+                                + " event do not say how many decimals it is published to, "
+                                + "so its number cannot be placed against the other's", name);
+                            continue;
+                        }
+                        String key = info.settlesOn + " " + info.mom.month + " "
+                            + info.yoy.month;
+                        if (!conversions.containsKey(key)) {
+                            try {
+                                conversions.put(key, builder.conversion(info.mom, info.yoy));
+                            } catch (IllegalStateException | IllegalArgumentException e) {
+                                conversions.put(key, "the month-over-month and year-over-year "
+                                    + "events were not converted: " + brief(e.getMessage()));
+                            }
+                        }
+                        Object conversion = conversions.get(key);
+                        if (conversion instanceof String) {
+                            count(nearWhy, nearExamples, (String) conversion, name);
+                            continue;
+                        }
+                        near = converted(b.name, rk, rp, info,
+                            (MarketForecasts.Conversion) conversion, maxLoss, none);
+                    }
                     if (near.isEmpty()) {
                         count(nearWhy, nearExamples, none[0], name);
                     }
@@ -1045,6 +1153,7 @@ final class MarketBasketScan {
         funnel.put("cross_venue_pairs_with_a_lock", lockedAcross);
         funnel.put("cross_venue_pairs_unverified_with_a_gap", unverified.size());
         funnel.put("locks_found", locks.size());
+        funnel.put("cross_venue_pairs_converted", converted);
         funnel.put("cross_venue_pairs_forecast", forecasts);
         funnel.put("near_locks_found", nears.size());
         ObjectNode other = funnel.putObject("baskets_of_other_recipes_not_priced");
@@ -1075,7 +1184,8 @@ final class MarketBasketScan {
             }
             arbLike.add(nears.get(i));
         }
-        out.put("near_lock_is", "a basket of a verified pair that is not a lock: it profits "
+        out.put("near_lock_is", "a basket of a verified or converted pair that is not a lock: "
+            + "it profits "
             + "at every outcome outside loses_between and loses worst_profit at worst. p_loss, "
             + "p_profit and expected_profit come from the engine's forecast of the number the "
             + "pair settles on, so they are a judgement and not a property of the quotes. "
@@ -1086,6 +1196,10 @@ final class MarketBasketScan {
             + MAX_QUOTE_RATIO + " times what the price implies (max_quote_ratio). A basket "
             + "only the forecast favours is a bet on the forecast "
             + "against the market and is counted in near_locks_not_scored. "
+            + "same_quantity '" + CONVERTED + "' is a pair on two numbers, one month's "
+            + "month-over-month change and the same index's year-over-year change: its "
+            + "conversion, the error of that conversion and what the odds then mean are in "
+            + "conversion and basis. "
             + "size walks the books while a further set still costs less than the forecast "
             + "expects it to pay.");
         ArrayNode nearNot = out.putArray("near_locks_not_scored");

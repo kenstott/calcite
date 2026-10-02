@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -1277,8 +1278,6 @@ final class MarketPricing {
         for (int g = 0; g < points; g++) {
             at[g] = reached.get(g);
         }
-        double[] even = new double[points];
-        Arrays.fill(even, 1.0 / points);
         boolean[][] onGrid = new boolean[n][points];
         boolean[][] onForecast = new boolean[n][draws];
         for (int i = 0; i < n; i++) {
@@ -1290,6 +1289,217 @@ final class MarketPricing {
                 onForecast[i][d] = l.condition.wins(l.side, forecast.values[d]);
             }
         }
+        return nearLocks(legs, onGrid, onForecast, null, null, (loses, first, last) -> {
+            double low = cuts.floor(at[first]);
+            double high = cuts.ceiling(at[last]);
+            ObjectNode band = MAPPER.createObjectNode();
+            band.put("low", low);
+            band.put("low_included", at[first] == low);
+            band.put("high", high);
+            band.put("high_included", at[last] == high);
+            return band;
+        }, search, minVenues, maxLoss, maxGap, maxRatio, top);
+    }
+
+    /** The outcomes a basket loses at, as a near-lock reports them. */
+    private interface Band {
+        ObjectNode of(boolean[] loses, int first, int last);
+    }
+
+    /**
+     * Two published numbers that all but fix each other: {@code second = intercept + slope *
+     * (first - error)} before each is rounded, where the error is known only once both
+     * print. The legs of {@code firstSource} settle on the first number, the rest on the
+     * second.
+     */
+    static final class Joint {
+        final String firstSource;
+        final String first;
+        final String second;
+        /** Equally likely values of the first number, unrounded. */
+        final double[] draws;
+        /** Equally likely values of the error, taken as independent of the first number. */
+        final double[] errors;
+        final double intercept;
+        final double slope;
+        final int firstPlaces;
+        final int secondPlaces;
+
+        Joint(String firstSource, String first, String second, double[] draws,
+                double[] errors, double intercept, double slope, int firstPlaces,
+                int secondPlaces) {
+            if (draws.length < 2 || errors.length < 1 || !(slope > 0)) {
+                throw new IllegalArgumentException("a joint of two numbers needs at least 2 "
+                    + "draws, 1 error and a positive slope");
+            }
+            this.firstSource = firstSource;
+            this.first = first;
+            this.second = second;
+            this.draws = draws;
+            this.errors = errors;
+            this.intercept = intercept;
+            this.slope = slope;
+            this.firstPlaces = firstPlaces;
+            this.secondPlaces = secondPlaces;
+        }
+
+        double second(double first, double error) {
+            return intercept + slope * (first - error);
+        }
+    }
+
+    private static double published(double v, int places) {
+        return new BigDecimal(v).setScale(places, RoundingMode.HALF_EVEN).doubleValue();
+    }
+
+    /**
+     * As {@link #nearLocks(List, Forecast, int, int, double, double, double, int)} for legs
+     * that settle on two numbers a {@link Joint} ties together. An outcome is a value of the
+     * first number and an error; the grid takes every pair of published numbers reachable
+     * with the error at its least, at zero and at its most, and the forecast every draw of
+     * the first number with every error. A basket that loses at no outcome of the grid is
+     * kept too: the errors seen so far do not bound the next one, so it is not a lock.
+     * {@code market_p_loss} is the most any venue's quotes put on the loss, each venue's
+     * price of a value of its own number weighted by the share of the forecast's draws at
+     * that value that lose.
+     */
+    static NearLocks nearLocks(List<Leg> legs, Joint joint, int search, int minVenues,
+            double maxLoss, double maxGap, double maxRatio, int top) {
+        int n = legs.size();
+        double least = 0;
+        double most = 0;
+        for (double e : joint.errors) {
+            least = Math.min(least, e);
+            most = Math.max(most, e);
+        }
+        TreeSet<Double> levels = new TreeSet<>(Arrays.asList(least, 0.0, most));
+        double lo = Double.POSITIVE_INFINITY;
+        double hi = Double.NEGATIVE_INFINITY;
+        for (Leg l : legs) {
+            for (double c : new double[]{l.condition.low, l.condition.high}) {
+                if (joint.firstSource.equals(l.source)) {
+                    lo = Math.min(lo, c);
+                    hi = Math.max(hi, c);
+                } else {
+                    lo = Math.min(lo, (c - joint.intercept) / joint.slope + least);
+                    hi = Math.max(hi, (c - joint.intercept) / joint.slope + most);
+                }
+            }
+        }
+        double stepFirst = Math.pow(10, -joint.firstPlaces);
+        double stepSecond = Math.pow(10, -joint.secondPlaces);
+        // Beyond every threshold by more than a rounding step and any error.
+        lo -= 5 * Math.max(stepFirst, stepSecond / joint.slope);
+        hi += 5 * Math.max(stepFirst, stepSecond / joint.slope);
+        // Where a published number changes: the first's rounding edges, and the second's
+        // carried back to the first at each level of the error.
+        TreeSet<Double> edges = new TreeSet<>();
+        for (long j = (long) Math.floor(lo / stepFirst); (j + 0.5) * stepFirst < hi; j++) {
+            if ((j + 0.5) * stepFirst > lo) {
+                edges.add((j + 0.5) * stepFirst);
+            }
+        }
+        for (double e : levels) {
+            double from = joint.second(lo, e);
+            double to = joint.second(hi, e);
+            for (long k = (long) Math.floor(from / stepSecond); (k + 0.5) * stepSecond < to;
+                    k++) {
+                double edge = ((k + 0.5) * stepSecond - joint.intercept) / joint.slope + e;
+                if (edge > lo && edge < hi) {
+                    edges.add(edge);
+                }
+            }
+        }
+        List<Double> firsts = new ArrayList<>();
+        double previous = lo;
+        for (double edge : edges) {
+            firsts.add((previous + edge) / 2);
+            previous = edge;
+        }
+        firsts.add((previous + hi) / 2);
+        int points = firsts.size() * levels.size();
+        double[] firstAt = new double[points];
+        double[] secondAt = new double[points];
+        int g = 0;
+        for (double first : firsts) {
+            for (double e : levels) {
+                firstAt[g] = published(first, joint.firstPlaces);
+                secondAt[g++] = published(joint.second(first, e), joint.secondPlaces);
+            }
+        }
+        int draws = joint.draws.length * joint.errors.length;
+        boolean[][] onGrid = new boolean[n][points];
+        boolean[][] onForecast = new boolean[n][draws];
+        double[] firstDrawn = new double[draws];
+        double[] secondDrawn = new double[draws];
+        int d = 0;
+        for (double v : joint.draws) {
+            for (double e : joint.errors) {
+                firstDrawn[d] = published(v, joint.firstPlaces);
+                secondDrawn[d++] = published(joint.second(v, e), joint.secondPlaces);
+            }
+        }
+        Map<String, double[]> own = new LinkedHashMap<>();
+        Map<String, double[]> ownDrawn = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) {
+            Leg l = legs.get(i);
+            boolean first = joint.firstSource.equals(l.source);
+            own.put(l.source, first ? firstAt : secondAt);
+            ownDrawn.put(l.source, first ? firstDrawn : secondDrawn);
+            for (g = 0; g < points; g++) {
+                onGrid[i][g] = l.condition.wins(l.side, first ? firstAt[g] : secondAt[g]);
+            }
+            for (d = 0; d < draws; d++) {
+                onForecast[i][d] = l.condition.wins(l.side, first ? firstDrawn[d]
+                    : secondDrawn[d]);
+            }
+        }
+        return nearLocks(legs, onGrid, onForecast, own, ownDrawn, (loses, first, last) -> {
+            double[] f = {Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY};
+            double[] s = {Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY};
+            for (int p = 0; p < loses.length; p++) {
+                if (loses[p]) {
+                    f[0] = Math.min(f[0], firstAt[p]);
+                    f[1] = Math.max(f[1], firstAt[p]);
+                    s[0] = Math.min(s[0], secondAt[p]);
+                    s[1] = Math.max(s[1], secondAt[p]);
+                }
+            }
+            ObjectNode band = MAPPER.createObjectNode();
+            band.put("of", joint.second);
+            band.put("low", s[0]);
+            band.put("low_included", true);
+            band.put("high", s[1]);
+            band.put("high_included", true);
+            ObjectNode and = band.putObject("and");
+            and.put("of", joint.first);
+            and.put("low", f[0]);
+            and.put("low_included", true);
+            and.put("high", f[1]);
+            and.put("high_included", true);
+            return band;
+        }, search, minVenues, maxLoss, maxGap, maxRatio, top);
+    }
+
+    /**
+     * The search both near-lock forms share.
+     *
+     * @param onGrid per leg, whether it wins at each outcome; the first outcome lies below
+     *     every threshold and the last above every one
+     * @param onForecast per leg, whether it wins at each equally likely draw
+     * @param own null when every leg settles on one number; else per venue the number its
+     *     legs settle on at each outcome, and a basket that loses at no outcome is kept
+     * @param ownDrawn with {@code own}, per venue the number its legs settle on at each draw
+     */
+    private static NearLocks nearLocks(List<Leg> legs, boolean[][] onGrid,
+            boolean[][] onForecast, Map<String, double[]> own,
+            Map<String, double[]> ownDrawn, Band bandOf, int search,
+            int minVenues, double maxLoss, double maxGap, double maxRatio, int top) {
+        int n = legs.size();
+        int points = onGrid[0].length;
+        int draws = onForecast[0].length;
+        double[] even = new double[points];
+        Arrays.fill(even, 1.0 / points);
         double[] weights = new double[draws];
         Arrays.fill(weights, 1.0 / draws);
 
@@ -1368,15 +1578,31 @@ final class MarketPricing {
                     boolean tails = first != 0 && last != points - 1
                         && onTail(idx, onGrid, 0) - outcome.cost > EPS
                         && onTail(idx, onGrid, points - 1) - outcome.cost > EPS;
-                    if (tails && outcome.worst <= EPS) {
+                    if (tails && (own != null || outcome.worst <= EPS)) {
                         Score s = score(idx, legs, onForecast, weights);
                         boolean scored = s.pLoss <= maxLoss + EPS && s.expected > EPS;
                         Double quotedLoss = null;
-                        if (scored && first < 0) {
+                        if (scored && first < 0 && s.pLoss <= EPS) {
                             quotedLoss = 0.0;
-                        } else if (scored) {
+                        } else if (scored && own == null) {
                             for (List<Quoted> venue : quoted.values()) {
                                 Double q = quotedOn(venue, loses);
+                                if (q != null && (quotedLoss == null || q > quotedLoss)) {
+                                    quotedLoss = q;
+                                }
+                            }
+                        } else if (scored) {
+                            boolean[] lost = new boolean[draws];
+                            for (int d = 0; d < draws; d++) {
+                                int won = 0;
+                                for (int i : idx) {
+                                    won += onForecast[i][d] ? 1 : 0;
+                                }
+                                lost[d] = won - outcome.cost < -EPS;
+                            }
+                            for (Map.Entry<String, List<Quoted>> venue : quoted.entrySet()) {
+                                Double q = quotedLoss(venue.getValue(), loses, lost,
+                                    own.get(venue.getKey()), ownDrawn.get(venue.getKey()));
                                 if (q != null && (quotedLoss == null || q > quotedLoss)) {
                                     quotedLoss = q;
                                 }
@@ -1405,13 +1631,7 @@ final class MarketPricing {
                             if (first < 0) {
                                 o.putNull("loses_between");
                             } else {
-                                double low = cuts.floor(at[first]);
-                                double high = cuts.ceiling(at[last]);
-                                ObjectNode band = o.putObject("loses_between");
-                                band.put("low", low);
-                                band.put("low_included", at[first] == low);
-                                band.put("high", high);
-                                band.put("high_included", at[last] == high);
+                                o.set("loses_between", bandOf.of(loses, first, last));
                             }
                             kept.add(o);
                         }
@@ -1437,6 +1657,62 @@ final class MarketPricing {
             out.add(kept.get(i));
         }
         return new NearLocks(out, overGap, bandLikely, bandUnpriced);
+    }
+
+    /**
+     * What one venue's quotes put on a loss that takes two numbers to tell. The venue's
+     * quotes split its own number into cells, the values no quote of it tells apart; for
+     * each cell the loss can come with, the venue's price of the cell times the share of
+     * the forecast's draws in the cell that lose. A cell the forecast never draws counts in
+     * full. Null when the venue does not price one of the cells, or a draw that loses lies
+     * off the grid.
+     */
+    private static Double quotedLoss(List<Quoted> venue, boolean[] loses, boolean[] lost,
+            double[] own, double[] ownDrawn) {
+        int points = own.length;
+        Map<Double, String> cellOf = new HashMap<>();
+        Map<String, boolean[]> cells = new LinkedHashMap<>();
+        for (int g = 0; g < points; g++) {
+            StringBuilder cell = new StringBuilder();
+            for (Quoted q : venue) {
+                cell.append(q.at[g] ? '1' : '0');
+            }
+            String key = cell.toString();
+            cellOf.put(own[g], key);
+            cells.computeIfAbsent(key, k -> new boolean[points])[g] = true;
+        }
+        Map<String, int[]> drawn = new HashMap<>();
+        Set<String> losing = new TreeSet<>();
+        for (int g = 0; g < points; g++) {
+            if (loses[g]) {
+                losing.add(cellOf.get(own[g]));
+            }
+        }
+        for (int d = 0; d < lost.length; d++) {
+            String cell = cellOf.get(ownDrawn[d]);
+            if (cell == null) {
+                if (lost[d]) {
+                    return null;
+                }
+                continue;
+            }
+            int[] count = drawn.computeIfAbsent(cell, k -> new int[2]);
+            count[0]++;
+            if (lost[d]) {
+                count[1]++;
+                losing.add(cell);
+            }
+        }
+        double sum = 0;
+        for (String cell : losing) {
+            Double q = quotedOn(venue, cells.get(cell));
+            if (q == null) {
+                return null;
+            }
+            int[] count = drawn.get(cell);
+            sum += q * (count == null ? 1 : (double) count[1] / count[0]);
+        }
+        return Math.min(1, sum);
     }
 
     /** A set of outcomes one venue's quotes put a probability on. */

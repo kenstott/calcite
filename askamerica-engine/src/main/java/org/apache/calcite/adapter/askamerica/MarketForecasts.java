@@ -348,7 +348,8 @@ final class MarketForecasts {
         "seasonally adjusted|\\bsaar\\b|\\bs\\.a\\.");
     private static final Pattern MOM_TEXT = Pattern.compile(
         "month[- ]over[- ]month|m/m|\\bmom\\b|monthly (change|rate|increase|inflation)"
-        + "|(from|compared (to|with)) the (previous|prior) month");
+        + "|(from|compared (to|with)) the (previous|prior|preceding) month"
+        + "|(one|1)[- ]month percent(age)? change");
     private static final Pattern YOY_TEXT = Pattern.compile(
         "year[- ]over[- ]year|\\byoy\\b|12[- ]month|annual (rate|inflation|change)"
         + "|from a year (ago|earlier)|compared (to|with) (the )?same month"
@@ -612,6 +613,8 @@ final class MarketForecasts {
         /** Null when the series is not sourced: there is nothing to price. Already rounded
          *  when a precision applies. */
         MarketPricing.Forecast forecast;
+        /** {@link #forecast} before any rounding. */
+        MarketPricing.Forecast unrounded;
         ObjectNode json;
     }
 
@@ -707,6 +710,12 @@ final class MarketForecasts {
         /** Series id; set without {@link #key} when only the transform is unread. */
         final String series;
         final String reason;
+        /** Set with {@link #key}. */
+        Transform transform;
+        /** The month a monthly event settles on; null when the title and rules name none. */
+        YearMonth month;
+        /** Decimals the rules publish the number to; null when they do not say. */
+        Integer round;
 
         Quantity(String key, String series, String reason) {
             this.key = key;
@@ -741,7 +750,212 @@ final class MarketForecasts {
             return new Quantity(null, spec.notSourcedId,
                 spec.notSourcedLabel + " is not in the catalog");
         }
-        return new Quantity(spec.series.id + " " + spec.transform.key, spec.series.id, null);
+        Quantity q = new Quantity(spec.series.id + " " + spec.transform.key, spec.series.id,
+            null);
+        q.transform = spec.transform;
+        q.month = spec.series.freq == Freq.MONTHLY ? monthOf(title, rules, e.closeTime) : null;
+        q.round = rulesRound((title + " " + rules).toLowerCase(Locale.ROOT));
+        return q;
+    }
+
+    // ─── One month's change against twelve months' ─────────────────────────────
+
+    /** Series that are one index, before and after seasonal adjustment. */
+    private static final String[][] ONE_INDEX = {
+        {"CPIAUCSL", "CPIAUCNS", "CUUR0000SA0"},
+        {"CPILFESL", "CUUR0000SA0L1E"},
+    };
+    /** Years of history the wedge's errors are measured over. */
+    private static final int CONVERSION_YEARS = 12;
+    /** The fewest months a wedge's error may be measured on. */
+    private static final int MIN_WEDGE_ERRORS = 24;
+
+    /**
+     * Whether one event settles on a month's month-over-month percent change and the other on
+     * the same index's year-over-year percent change: two numbers, one of which all but
+     * fixes the other once the month before has printed.
+     */
+    static boolean convertible(Quantity a, Quantity b) {
+        if (a.key == null || b.key == null || a.transform == b.transform
+                || a.transform != Transform.MOM && a.transform != Transform.YOY
+                || b.transform != Transform.MOM && b.transform != Transform.YOY) {
+            return false;
+        }
+        if (a.series.equals(b.series)) {
+            return true;
+        }
+        for (String[] index : ONE_INDEX) {
+            List<String> ids = Arrays.asList(index);
+            if (ids.contains(a.series) && ids.contains(b.series)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * How a month's month-over-month percent change {@code m} of one series fixes the
+     * year-over-year percent change of a series of the same index: with N the year-over-year
+     * series and t the month, {@code yoy = ((1 + n/100) * N[t-1]/N[t-12] - 1) * 100}, where
+     * {@code n = m - wedge} is N's own one-month change. The wedge is what seasonal
+     * adjustment adds to the month's change; it is not known until the month prints, and is
+     * taken to be what it was in the same month a year earlier. {@code errors} holds how far
+     * off that was in each month of the history.
+     */
+    static final class Conversion {
+        String momSeries;
+        String yoySeries;
+        YearMonth month;
+        /** N[t-1] / N[t-12]. */
+        double ratio;
+        double wedge;
+        /** The wedge of a month less the wedge twelve months before it, per month. */
+        double[] errors;
+        String errorsFrom;
+        String errorsTo;
+
+        /** The intercept of {@code yoy = intercept + slope * (m - error)}. */
+        double intercept() {
+            return (ratio - 1) * 100 - ratio * wedge;
+        }
+
+        double slope() {
+            return ratio;
+        }
+
+        ObjectNode toJson() {
+            double[] abs = new double[errors.length];
+            double sum = 0;
+            double squares = 0;
+            for (int i = 0; i < errors.length; i++) {
+                abs[i] = Math.abs(errors[i]);
+                sum += errors[i];
+                squares += errors[i] * errors[i];
+            }
+            Arrays.sort(abs);
+            double mean = sum / errors.length;
+            ObjectNode o = MAPPER.createObjectNode();
+            o.put("month", month.toString());
+            o.put("month_over_month_series", momSeries);
+            o.put("year_over_year_series", yoySeries);
+            o.put("formula", "yoy = ((1 + (mom - wedge - error) / 100) * index_ratio - 1) * 100");
+            o.put("index_ratio", PredictionMarkets.round(ratio, 6));
+            o.put("index_ratio_is", yoySeries + " in " + month.minusMonths(1) + " over "
+                + month.minusMonths(12));
+            o.put("wedge", PredictionMarkets.round(wedge, 4));
+            o.put("wedge_is", momSeries.equals(yoySeries) ? "zero: one series"
+                : "the month-over-month percent change of " + momSeries + " less that of "
+                    + yoySeries + " in " + month.minusMonths(12) + ", taken to repeat in "
+                    + month);
+            ObjectNode e = o.putObject("wedge_error");
+            e.put("months", errors.length);
+            e.put("from", errorsFrom);
+            e.put("to", errorsTo);
+            e.put("mean", PredictionMarkets.round(mean, 4));
+            e.put("sd", PredictionMarkets.round(Math.sqrt(Math.max(0,
+                squares / errors.length - mean * mean)), 4));
+            e.put("p95_abs", PredictionMarkets.round(abs[(int) (0.95 * abs.length)], 4));
+            e.put("max_abs", PredictionMarkets.round(abs[abs.length - 1], 4));
+            e.put("is", "the wedge of each month less the wedge twelve months before it, in "
+                + "percentage points, on the catalog's current (revised) values");
+            return o;
+        }
+    }
+
+    private Map<YearMonth, Double> monthly(String id, LocalDate today) throws Exception {
+        Series s = catalogSeries(id, null);
+        if (s == null) {
+            throw new IllegalStateException(id + " is not in the catalog");
+        }
+        Map<YearMonth, Double> out = new LinkedHashMap<>();
+        for (Obs o : load(s, seriesQuery(s, null, today, CONVERSION_YEARS), null)) {
+            out.put(YearMonth.from(o.date), positive(o.value, id));
+        }
+        return out;
+    }
+
+    private static double needed(Map<YearMonth, Double> v, String id, YearMonth ym) {
+        Double x = v.get(ym);
+        if (x == null) {
+            throw new IllegalStateException("the conversion needs " + id + " for " + ym
+                + ", and the catalog has no value for it");
+        }
+        return x;
+    }
+
+    /** A month's one-month percent change, or null when either end is missing. */
+    private static Double change(Map<YearMonth, Double> v, YearMonth ym) {
+        Double now = v.get(ym);
+        Double before = v.get(ym.minusMonths(1));
+        return now == null || before == null ? null : 100 * (now / before - 1);
+    }
+
+    /**
+     * The conversion between a month-over-month and a year-over-year event of one index and
+     * one month.
+     *
+     * @throws IllegalStateException when the catalog's history cannot support it
+     */
+    Conversion conversion(Quantity mom, Quantity yoy) throws Exception {
+        if (mom.month == null || yoy.month == null) {
+            throw new IllegalStateException("the settlement month of an event is not named");
+        }
+        if (!mom.month.equals(yoy.month)) {
+            throw new IllegalStateException("the two events settle on different months: "
+                + mom.month + " and " + yoy.month);
+        }
+        YearMonth t = mom.month;
+        LocalDate today = clock.get().atZone(ZoneOffset.UTC).toLocalDate();
+        Map<YearMonth, Double> n = monthly(yoy.series, today);
+        boolean one = mom.series.equals(yoy.series);
+        Map<YearMonth, Double> s = one ? n : monthly(mom.series, today);
+        if (n.containsKey(t)) {
+            throw new IllegalStateException(yoy.series + " already has " + t + ": the "
+                + "events' values are in the catalog. Query them instead of pricing them.");
+        }
+        if (!n.containsKey(t.minusMonths(1))) {
+            throw new IllegalStateException(yoy.series + " has no value for "
+                + t.minusMonths(1) + " yet: the month-over-month change of " + t + " fixes "
+                + "its year-over-year change only once the month before has printed");
+        }
+        Conversion c = new Conversion();
+        c.momSeries = mom.series;
+        c.yoySeries = yoy.series;
+        c.month = t;
+        c.ratio = needed(n, yoy.series, t.minusMonths(1))
+            / needed(n, yoy.series, t.minusMonths(12));
+        if (one) {
+            c.wedge = 0;
+            c.errors = new double[]{0};
+            c.errorsFrom = t.toString();
+            c.errorsTo = t.toString();
+            return c;
+        }
+        YearMonth last = t.minusMonths(12);
+        needed(n, yoy.series, last.minusMonths(1));
+        c.wedge = 100 * (needed(s, mom.series, last)
+            / needed(s, mom.series, last.minusMonths(1)) - 1) - change(n, last);
+        List<Double> errors = new ArrayList<>();
+        for (YearMonth ym : n.keySet()) {
+            YearMonth before = ym.minusMonths(12);
+            Double a = change(s, ym);
+            Double b = change(n, ym);
+            Double a0 = change(s, before);
+            Double b0 = change(n, before);
+            if (a != null && b != null && a0 != null && b0 != null) {
+                errors.add((a - b) - (a0 - b0));
+                c.errorsFrom = c.errorsFrom == null ? ym.toString() : c.errorsFrom;
+                c.errorsTo = ym.toString();
+            }
+        }
+        if (errors.size() < MIN_WEDGE_ERRORS) {
+            throw new IllegalStateException("the wedge between " + mom.series + " and "
+                + yoy.series + " can be compared with the one a year before it in only "
+                + errors.size() + " months of the catalog's history; the conversion needs "
+                + MIN_WEDGE_ERRORS);
+        }
+        c.errors = toArray(errors);
+        return c;
     }
 
     private static Spec resolve(String title, String rules, PredictionMarkets.Driver driver,
@@ -1574,6 +1788,7 @@ final class MarketForecasts {
         }
 
         MarketPricing.Forecast f = MarketPricing.samples(samples);
+        result.unrounded = f;
         if (round != null) {
             f = f.rounded(round);
         }
