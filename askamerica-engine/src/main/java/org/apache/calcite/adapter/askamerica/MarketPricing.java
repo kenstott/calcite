@@ -118,7 +118,8 @@ final class MarketPricing {
          * The condition a venue's outcome label states, or null when the label is not one of
          * the forms read: "Above 4.5%", "&lt;0.5%", "&ge;3.0%", "&le;0.0%", "0.5&ndash;1.0%"
          * (both ends included) and a bare "0.3%" (exactly that value). A label of any other
-         * form ("25 bps decrease", "No change") states no number this can price.
+         * form ("25 bps decrease", "No change") states no number this can price;
+         * {@link Decision} reads those of an FOMC decision.
          */
         static Condition ofLabel(String label) {
             if (label == null) {
@@ -443,6 +444,109 @@ final class MarketPricing {
                 ? new Condition(c.kind, c.low, c.high, low, high) : c);
         }
         return out;
+    }
+
+    /**
+     * The decision of one FOMC meeting that an event's markets are the outcomes of. Its
+     * conditions are on the change of the target rate in basis points: a cut is negative.
+     */
+    static final class Decision {
+        /** The change is taken to be a multiple of this many basis points. */
+        static final double STEP = 25;
+        private static final Pattern BY = Pattern.compile(
+            "\\b(hike|cut) rates by (>\\s*)?(\\d+)\\s*bps\\b", Pattern.CASE_INSENSITIVE);
+        private static final Pattern MOVE = Pattern.compile(
+            "(\\d+)(\\+?)\\s*bps (increase|decrease)", Pattern.CASE_INSENSITIVE);
+        private static final Pattern MEETING = Pattern.compile(
+            "\\b(january|february|march|april|may|june|july|august|september|october|november"
+            + "|december) (\\d{4}) meeting\\b", Pattern.CASE_INSENSITIVE);
+
+        /** Conditions by market id. */
+        final Map<String, Condition> conditions;
+        /** The meeting every market names, e.g. "December 2026". */
+        final String meeting;
+
+        private Decision(Map<String, Condition> conditions, String meeting) {
+            this.conditions = conditions;
+            this.meeting = meeting;
+        }
+
+        /**
+         * The change one outcome states, or null when it states none: Kalshi's "Hike rates by
+         * 25bps" and "Cut rates by &gt;25bps" in a market title, Polymarket's "No change",
+         * "25 bps decrease" and "50+ bps increase" as an outcome label.
+         */
+        static Condition outcome(PredictionMarkets.Market m) {
+            double size;
+            boolean up;
+            boolean open;
+            boolean inclusive;
+            if (m.label != null) {
+                String label = m.label.trim();
+                if (label.equalsIgnoreCase("no change")) {
+                    return new Condition("between", 0, 0);
+                }
+                Matcher move = MOVE.matcher(label);
+                if (!move.matches()) {
+                    return null;
+                }
+                size = Double.parseDouble(move.group(1));
+                up = move.group(3).equalsIgnoreCase("increase");
+                open = !move.group(2).isEmpty();
+                inclusive = true;
+            } else {
+                Matcher by = BY.matcher(m.title == null ? "" : m.title);
+                if (!by.find()) {
+                    return null;
+                }
+                size = Double.parseDouble(by.group(3));
+                up = by.group(1).equalsIgnoreCase("hike");
+                open = by.group(2) != null;
+                inclusive = false;
+            }
+            if (size % STEP != 0) {
+                return null;
+            }
+            double v = up || size == 0 ? size : -size;
+            if (!open) {
+                return new Condition("between", v, v);
+            }
+            if (inclusive) {
+                return new Condition(up ? "at_least" : "at_most", v, v);
+            }
+            return new Condition(up ? "above" : "below", v, v);
+        }
+
+        /**
+         * The decision {@code event} is on, or null when it is not one: its driver is the
+         * policy rate, at least two of its markets state a change, and every market that
+         * states one names the same meeting.
+         */
+        static Decision of(PredictionMarkets.Event event) {
+            if (event.driver == null || !"policy_rate".equals(event.driver.name)) {
+                return null;
+            }
+            Map<String, Condition> read = new LinkedHashMap<>();
+            Set<String> meetings = new TreeSet<>();
+            for (PredictionMarkets.Market m : event.legs) {
+                Condition c = outcome(m);
+                if (c == null) {
+                    continue;
+                }
+                Matcher named = MEETING.matcher(m.title == null ? "" : m.title);
+                if (!named.find()) {
+                    return null;
+                }
+                String month = named.group(1).toLowerCase(Locale.ROOT);
+                meetings.add(Character.toUpperCase(month.charAt(0)) + month.substring(1) + " "
+                    + named.group(2));
+                read.put(m.marketId, c);
+            }
+            if (read.size() < 2 || meetings.size() != 1) {
+                return null;
+            }
+            return new Decision(read, meetings.iterator().next());
+        }
     }
 
     /**
@@ -976,6 +1080,15 @@ final class MarketPricing {
      * loses at no value at all.
      */
     static Scenarios grid(List<Leg> legs) {
+        return grid(legs, null);
+    }
+
+    /**
+     * As {@link #grid(List)}, and with {@code step} non-null the settlement value is taken to
+     * fall on a multiple of it: the outcomes are every multiple from one step below the lowest
+     * threshold to one step above the highest, and no value between two of them is scored.
+     */
+    static Scenarios grid(List<Leg> legs, Double step) {
         Set<String> columns = new TreeSet<>();
         TreeSet<Double> cuts = new TreeSet<>();
         for (Leg l : legs) {
@@ -990,16 +1103,28 @@ final class MarketPricing {
         }
         String column = columns.iterator().next();
         List<Double> points = new ArrayList<>();
-        points.add(cuts.first() - 1);
-        Double previous = null;
-        for (Double c : cuts) {
-            if (previous != null) {
-                points.add((previous + c) / 2);
+        if (step != null) {
+            for (Double c : cuts) {
+                if (c % step != 0) {
+                    throw new IllegalArgumentException("threshold " + c + " of '" + column
+                        + "' is not a multiple of the step " + step);
+                }
             }
-            points.add(c);
-            previous = c;
+            for (double v = cuts.first() - step; v <= cuts.last() + step; v += step) {
+                points.add(v);
+            }
+        } else {
+            points.add(cuts.first() - 1);
+            Double previous = null;
+            for (Double c : cuts) {
+                if (previous != null) {
+                    points.add((previous + c) / 2);
+                }
+                points.add(c);
+                previous = c;
+            }
+            points.add(cuts.last() + 1);
         }
-        points.add(cuts.last() + 1);
         List<Map<String, Double>> rows = new ArrayList<>();
         for (Double p : points) {
             Map<String, Double> row = new LinkedHashMap<>();
@@ -1009,9 +1134,11 @@ final class MarketPricing {
         double[] w = new double[rows.size()];
         Arrays.fill(w, 1.0 / w.length);
         return new Scenarios(rows, w, "outcome grid over " + cuts.size() + " thresholds of '"
-            + column + "': every threshold and one value in each interval between, below and "
-            + "above them. Rows are outcomes, not probabilities — only floor, worst and best "
-            + "mean anything.");
+            + column + "': " + (step != null ? "every multiple of " + step + " from one below "
+            + "the lowest to one above the highest"
+            : "every threshold and one value in each interval between, below and above them")
+            + ". Rows are outcomes, not probabilities — only floor, worst and best mean "
+            + "anything.");
     }
 
     private static final class Score {

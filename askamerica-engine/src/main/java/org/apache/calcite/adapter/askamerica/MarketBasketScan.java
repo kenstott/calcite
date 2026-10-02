@@ -86,6 +86,7 @@ final class MarketBasketScan {
      * price implies. The gap alone passes a leg quoted at 0.006 that the forecast puts at 0.17.
      */
     static final double MAX_QUOTE_RATIO = 2;
+    private static final String STEP_TAKEN = "the change to be a multiple of 25 basis points";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -118,6 +119,9 @@ final class MarketBasketScan {
         PredictionMarkets.LiveEvent live;
         String reason;
         Map<String, MarketPricing.Condition> conditions;
+        /** Set when the event is one FOMC meeting's decision; its conditions are then the
+         *  change of the target rate in basis points. */
+        MarketPricing.Decision decision;
         /** Baskets inside the event, locking or not. */
         List<ObjectNode> baskets = new ArrayList<>();
         /** Whether the forecast of the event's quantity was asked for; it is built once. */
@@ -306,8 +310,11 @@ final class MarketBasketScan {
         }
         row.live = live;
         PredictionMarkets.Event e = live.event;
-        row.conditions = MarketPricing.labelConditions(e);
-        for (JsonNode n : MarketPricing.structuralLocks(live, null, null, row.conditions)) {
+        row.decision = MarketPricing.Decision.of(e);
+        row.conditions = row.decision != null ? row.decision.conditions
+            : MarketPricing.labelConditions(e);
+        Double step = row.decision != null ? MarketPricing.Decision.STEP : null;
+        for (JsonNode n : MarketPricing.structuralLocks(live, null, step, row.conditions)) {
             if ("non_monotone_ladder".equals(n.get("type").asText())) {
                 row.baskets.add(within("non_monotone_ladder", e, row.at, n.get("legs"),
                     n.get("cost").asDouble(), n.get("floor_profit").asDouble(),
@@ -319,7 +326,8 @@ final class MarketBasketScan {
                     if (s != null && !s.isNull() && s.get("lock").asBoolean()) {
                         row.baskets.add(within("bucket_partition", e, row.at, s.get("legs"),
                             s.get("cost").asDouble(), s.get("floor_profit").asDouble(),
-                            "the strikes cover every settlement value exactly once: "
+                            "the strikes cover every settlement value exactly once"
+                            + (step == null ? "" : ", taking " + STEP_TAKEN) + ": "
                             + s.get("side").asText() + " on every market pays "
                             + s.get("guaranteed_payout").asInt()));
                     }
@@ -393,6 +401,17 @@ final class MarketBasketScan {
         if (!differing.isEmpty()) {
             return "the rules name different quantities: " + differing + " differ";
         }
+        if ((k.decision == null) != (p.decision == null)) {
+            Row d = k.decision != null ? k : p;
+            return "the " + d.live.event.source + " event is the change the FOMC makes at one "
+                + "meeting and the " + (d == k ? p : k).live.event.source + " event is not: "
+                + "they are not one quantity";
+        }
+        if (k.decision != null && !k.decision.meeting.equals(p.decision.meeting)) {
+            return "the two events are the decisions of different FOMC meetings: "
+                + k.decision.meeting + " and " + p.decision.meeting;
+        }
+        Double step = k.decision != null ? MarketPricing.Decision.STEP : null;
         List<MarketPricing.Leg> legs = new ArrayList<>();
         List<List<MarketPricing.Leg>> sides = new ArrayList<>();
         for (Row r : new Row[]{k, p}) {
@@ -429,8 +448,11 @@ final class MarketBasketScan {
         info.depth = depth;
         info.rules = rules;
         info.at = at;
-        info.settlesOn = qa.key != null && qb.key != null ? qa.key : null;
-        ObjectNode score = MarketPricing.scoreBasket(legs, MarketPricing.grid(legs), true,
+        info.settlesOn = k.decision != null
+            ? "the change of the FOMC target rate at the " + k.decision.meeting
+                + " meeting, basis points"
+            : qa.key != null && qb.key != null ? qa.key : null;
+        ObjectNode score = MarketPricing.scoreBasket(legs, MarketPricing.grid(legs, step), true,
             depth, true, minFloor, PER_PAIR, 2);
         for (JsonNode best : score.get("search").get("best")) {
             ObjectNode o = entry("cross_venue", basket, best, a, b, info);
@@ -447,7 +469,8 @@ final class MarketBasketScan {
                     + (qa.key == null ? qa.reason : qb.reason));
             }
             o.put("basis", "loses at no outcome the two events' conditions can tell apart, "
-                + "taking both to settle on one number");
+                + "taking both to settle on one number"
+                + (step == null ? "" : " and " + STEP_TAKEN));
             o.put("quotes_read_at", at.toString());
             found.add(o);
         }
@@ -963,6 +986,11 @@ final class MarketBasketScan {
                         }
                     }
                     if (info.settlesOn == null || !found.isEmpty()) {
+                        continue;
+                    }
+                    if (rk.decision != null) {
+                        count(nearWhy, nearExamples, "the engine builds no forecast of an "
+                            + "FOMC decision", name);
                         continue;
                     }
                     // No lock in a pair on one number: is there a basket that loses only

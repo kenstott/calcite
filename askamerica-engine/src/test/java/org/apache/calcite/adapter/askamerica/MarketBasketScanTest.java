@@ -974,4 +974,216 @@ class MarketBasketScanTest {
         leg("kalshi", "k", "yes", 3.0, 0.40), leg("polymarket", "p", "no", 3.2, 0.50)),
         forecast, 2, 2, 0.10, 1, 100, 5).kept.size());
   }
+
+  private static final String FED_ID = "KXFEDDECISION-26DEC";
+  private static final String FED_POLY_ID = "9100";
+
+  private static void fedKalshiMarket(ArrayNode markets, String suffix, String move,
+      String month, String bid, String ask) {
+    ObjectNode m = markets.addObject();
+    m.put("ticker", FED_ID + "-" + suffix);
+    m.put("status", "active");
+    m.put("title", "Will the Federal Reserve " + move + " at their " + month
+        + " meeting?");
+    m.put("yes_bid_dollars", bid);
+    m.put("yes_ask_dollars", ask);
+    m.put("last_price_dollars", bid);
+    m.put("volume_fp", "5000.00");
+    m.put("volume_24h_fp", "800.00");
+    m.put("open_interest_fp", "2000.00");
+    m.put("close_time", "2026-12-09T19:00:00Z");
+    m.put("strike_type", "custom");
+    m.put("rules_primary", "Resolves on the change the Federal Reserve makes to the target "
+        + "federal funds rate at the meeting.");
+  }
+
+  /** Kalshi's five outcomes of one meeting; "Hike >25bps" is bid 0.20 and asked 0.22. */
+  private static ObjectNode fedKalshiEvent(String month) {
+    ObjectNode ev = MAPPER.createObjectNode();
+    ev.put("title", "Fed decision in Dec 2026?");
+    ev.put("event_ticker", FED_ID);
+    ev.put("series_ticker", "KXFEDDECISION");
+    ev.put("category", "Economics");
+    ev.put("mutually_exclusive", true);
+    ev.putArray("settlement_sources").addObject().put("name", "Federal Reserve");
+    ArrayNode markets = ev.putArray("markets");
+    fedKalshiMarket(markets, "C26", "Cut rates by >25bps", month, "0.0100", "0.0200");
+    fedKalshiMarket(markets, "C25", "Cut rates by 25bps", month, "0.0200", "0.0300");
+    fedKalshiMarket(markets, "H0", "Hike rates by 0bps", month, "0.2000", "0.2200");
+    fedKalshiMarket(markets, "H25", "Hike rates by 25bps", month, "0.5000", "0.5200");
+    fedKalshiMarket(markets, "H26", "Hike rates by >25bps", month, "0.2000", "0.2200");
+    return ev;
+  }
+
+  private static void fedPolymarketMarket(ArrayNode markets, String id, String label,
+      String question, double bid, double ask) {
+    polymarketMarket(markets, id, label, bid, ask);
+    ObjectNode m = (ObjectNode) markets.get(markets.size() - 1);
+    m.put("question", question);
+    m.put("endDate", "2026-12-09T19:00:00Z");
+    m.put("description", "Resolves on the change of the upper bound of the target federal "
+        + "funds rate at the meeting.");
+  }
+
+  /** Polymarket's five outcomes of the December meeting; "50+ bps increase" is asked
+   *  {@code ask}. */
+  private static ObjectNode fedPolymarketEvent(double ask) {
+    ObjectNode ev = MAPPER.createObjectNode();
+    ev.put("id", FED_POLY_ID);
+    ev.put("title", "Fed Decision in December?");
+    ev.put("slug", "fed-decision-in-december");
+    ev.put("negRisk", true);
+    ev.putArray("tags").addObject().put("label", "Economy");
+    ArrayNode markets = ev.putArray("markets");
+    fedPolymarketMarket(markets, "d50", "50+ bps decrease", "Will the Fed decrease interest "
+        + "rates by 50+ bps after the December 2026 meeting?", 0.01, 0.02);
+    fedPolymarketMarket(markets, "d25", "25 bps decrease", "Will the Fed decrease interest "
+        + "rates by 25 bps after the December 2026 meeting?", 0.02, 0.03);
+    fedPolymarketMarket(markets, "n", "No change", "Will there be no change in Fed interest "
+        + "rates after the December 2026 meeting?", 0.20, 0.22);
+    fedPolymarketMarket(markets, "u25", "25 bps increase", "Will the Fed increase interest "
+        + "rates by 25 bps after the December 2026 meeting?", 0.50, 0.52);
+    fedPolymarketMarket(markets, "u50", "50+ bps increase", "Will the Fed increase interest "
+        + "rates by 50+ bps after the December 2026 meeting?", ask - 0.02, ask);
+    return ev;
+  }
+
+  private static JsonNode fedRun(ObjectNode kalshi, ObjectNode polymarket) throws Exception {
+    FakeFetcher f = new FakeFetcher();
+    ObjectNode series = MAPPER.createObjectNode();
+    series.putObject("series").put("fee_type", "quadratic").put("fee_multiplier", 1);
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/series/", series);
+    String kalshiId = kalshi.get("event_ticker").asText();
+    ObjectNode one = MAPPER.createObjectNode();
+    one.set("event", kalshi);
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/events/" + kalshiId, one);
+    ObjectNode kList = MAPPER.createObjectNode();
+    kList.putArray("events").add(kalshi);
+    kList.put("cursor", "");
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/events?", kList);
+    f.byPrefix.put(PredictionMarkets.POLYMARKET + "/events/" + FED_POLY_ID, polymarket);
+    ObjectNode pList = MAPPER.createObjectNode();
+    pList.putArray("events").add(polymarket);
+    pList.put("next_cursor", "");
+    f.byPrefix.put(PredictionMarkets.POLYMARKET + "/events/keyset?", pList);
+    return MAPPER.readTree(scan(f, 60_000L).scan(args("{}")));
+  }
+
+  @Test void aFedDecisionOutcomeIsReadAsAChangeInBasisPoints() {
+    PredictionMarkets.Market m = new PredictionMarkets.Market();
+    m.title = "Will the Federal Reserve Cut rates by >25bps at their December 2026 meeting?";
+    MarketPricing.Condition c = MarketPricing.Decision.outcome(m);
+    assertEquals("below", c.kind);
+    assertEquals(-25, c.low, 1e-12);
+    m.title = "Will the Federal Reserve Hike rates by 0bps at their December 2026 meeting?";
+    c = MarketPricing.Decision.outcome(m);
+    assertEquals("between", c.kind);
+    assertEquals(0, c.low, 1e-12);
+    assertEquals(0, c.high, 1e-12);
+    m.title = "Will the Federal Reserve hike rates by December 31, 2026?";
+    assertNull(MarketPricing.Decision.outcome(m));
+
+    m.label = "50+ bps decrease";
+    c = MarketPricing.Decision.outcome(m);
+    assertEquals("at_most", c.kind);
+    assertEquals(-50, c.low, 1e-12);
+    m.label = "25 bps increase";
+    c = MarketPricing.Decision.outcome(m);
+    assertEquals("between", c.kind);
+    assertEquals(25, c.low, 1e-12);
+    m.label = "No change";
+    assertEquals(0, MarketPricing.Decision.outcome(m).high, 1e-12);
+    m.label = "30 bps increase";
+    assertNull(MarketPricing.Decision.outcome(m));
+    m.label = "2 (50 bps)";
+    assertNull(MarketPricing.Decision.outcome(m));
+  }
+
+  @Test void aSteppedGridScoresOnlyMultiplesOfTheStep() {
+    java.util.List<MarketPricing.Leg> legs = java.util.Arrays.asList(
+        leg("kalshi", "k", "no", 25, 0.80), leg("polymarket", "p", "yes", 50, 0.10));
+    assertEquals(5, MarketPricing.grid(legs).rows.size());
+    java.util.List<Map<String, Double>> rows = MarketPricing.grid(legs, 25.0).rows;
+    assertEquals(4, rows.size());
+    assertEquals(0.0, rows.get(0).get("v"), 1e-12);
+    assertEquals(75.0, rows.get(3).get("v"), 1e-12);
+    java.util.List<MarketPricing.Leg> off = java.util.Arrays.asList(
+        leg("kalshi", "k", "no", 30, 0.80), leg("polymarket", "p", "yes", 50, 0.10));
+    assertThrows(IllegalArgumentException.class, () -> MarketPricing.grid(off, 25.0));
+  }
+
+  @Test void aFedDecisionPairLocksOnTheChangeAtOneMeeting() throws Exception {
+    // NO on Kalshi's "Hike >25bps" at 0.80 with YES on Polymarket's "50+ bps increase" at
+    // 0.10: one of them pays at every multiple of 25, and both lose only at a change
+    // between 25 and 50 that no meeting makes.
+    JsonNode out = fedRun(fedKalshiEvent("December 2026"), fedPolymarketEvent(0.10));
+
+    JsonNode funnel = out.get("funnel");
+    assertEquals(1, funnel.get("cross_venue_pairs_priced").asInt(), out.toString());
+    assertEquals(1, funnel.get("cross_venue_pairs_with_a_lock").asInt(), out.toString());
+    assertEquals(2, funnel.get("events_with_conditions_read_from_labels").asInt());
+    JsonNode lock = null;
+    for (JsonNode b : out.get("baskets")) {
+      if ("cross_venue".equals(b.get("type").asText()) && lock == null) {
+        lock = b;
+      }
+    }
+    assertNotNull(lock, out.toString());
+    assertEquals("verified", lock.get("same_quantity").asText());
+    assertTrue(lock.get("settles_on").asText().contains("December 2026 meeting"));
+    assertTrue(lock.get("basis").asText().contains("multiple of 25 basis points"));
+    double cost = 0.80 + 0.07 * 0.80 * 0.20 + 0.10;
+    assertEquals(cost, lock.get("cost").asDouble(), 1e-3);
+    assertEquals(1 - cost, lock.get("floor_profit").asDouble(), 1e-3);
+    for (JsonNode leg : lock.get("legs")) {
+      if ("kalshi".equals(leg.get("source").asText())) {
+        assertEquals("no", leg.get("side").asText());
+        assertEquals(25, leg.get("condition").get("above").asDouble(), 1e-12);
+      } else {
+        assertEquals("yes", leg.get("side").asText());
+        assertEquals(50, leg.get("condition").get("at_least").asDouble(), 1e-12);
+      }
+    }
+  }
+
+  @Test void aFedDecisionPairWithNoGapIsPricedAndHoldsNoLock() throws Exception {
+    JsonNode out = fedRun(fedKalshiEvent("December 2026"), fedPolymarketEvent(0.24));
+
+    assertEquals(1, out.get("funnel").get("cross_venue_pairs_priced").asInt(), out.toString());
+    assertEquals(0, out.get("funnel").get("cross_venue_pairs_with_a_lock").asInt());
+    assertTrue(out.get("near_locks_not_scored").toString().contains("no forecast of an FOMC "
+        + "decision"), out.toString());
+  }
+
+  @Test void decisionsOfDifferentMeetingsAreNotPriced() throws Exception {
+    JsonNode out = fedRun(fedKalshiEvent("October 2026"), fedPolymarketEvent(0.10));
+
+    assertEquals(0, out.get("funnel").get("cross_venue_pairs_priced").asInt(), out.toString());
+    assertTrue(out.get("not_priced").get(0).get("why").asText().contains("different FOMC "
+        + "meetings: October 2026 and December 2026"), out.toString());
+  }
+
+  @Test void aRateLevelIsNotPricedAgainstADecision() throws Exception {
+    ObjectNode ev = MAPPER.createObjectNode();
+    ev.put("title", "Fed funds rate after the December 2026 meeting");
+    ev.put("event_ticker", "KXFED-26DEC");
+    ev.put("series_ticker", "KXFED");
+    ev.put("category", "Economics");
+    ev.putArray("settlement_sources").addObject().put("name", "Federal Reserve");
+    ArrayNode markets = ev.putArray("markets");
+    for (double strike : new double[]{0, 25}) {
+      ObjectNode m = kalshiMarket("KXFED-26DEC-T" + strike, strike, "0.4000", "0.4400");
+      m.put("title", "Will the upper bound of the federal funds rate be above " + strike
+          + " after the December 2026 meeting?");
+      m.put("close_time", "2026-12-09T19:00:00Z");
+      m.put("rules_primary", "Resolves on the upper bound of the target federal funds rate "
+          + "after the meeting.");
+      markets.add(m);
+    }
+    JsonNode out = fedRun(ev, fedPolymarketEvent(0.10));
+
+    assertEquals(0, out.get("funnel").get("cross_venue_pairs_priced").asInt(), out.toString());
+    assertTrue(out.get("not_priced").get(0).get("why").asText().contains("not one quantity"),
+        out.toString());
+  }
 }

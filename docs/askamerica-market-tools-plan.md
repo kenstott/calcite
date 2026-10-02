@@ -300,6 +300,13 @@ resumable call with no forecast:
   One per pair, ranked by `expected_yield`, sized from the books while a further set costs
   less than the forecast expects it to pay. Listed under `near_locks`, never `baskets`; a pair
   that yields none is counted under `near_locks_not_scored` with the reason.
+- **FOMC decisions.** `MarketPricing.Decision` reads both venues' outcomes of one meeting as
+  the change of the target rate in basis points (Kalshi "Hike rates by >25bps" in the market
+  title, Polymarket "50+ bps increase" as the outcome label; a cut is negative). The lock grid
+  scores multiples of 25 only, so a basket that would lose only at a change between 25 and 50
+  is a lock, and its `basis` says the step was taken. A decision is priced against the other
+  venue's decision of the same meeting only: a rate-level event (KXFED) is `not_priced`, and
+  no forecast is built, so a decision pair yields no near-lock.
 - Size and time: every returned basket carries `size` from its legs' order books
   (`sets_at_best_price`, `binding_leg`, `sets_with_a_positive_floor`, `capital`,
   `floor_profit` in dollars, `stops_because`), `days_to_settlement` to its last event's
