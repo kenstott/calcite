@@ -205,6 +205,168 @@ class MarketBasketScanTest {
     assertTrue(out.get("next").asText().contains("rules_match"));
   }
 
+  /** Kalshi's book of one market: resting Yes bids and No bids, as price, size pairs. */
+  private static void kalshiBook(FakeFetcher f, String ticker, double[] yes, double[] no) {
+    ObjectNode book = MAPPER.createObjectNode();
+    ObjectNode fp = book.putObject("orderbook_fp");
+    ArrayNode y = fp.putArray("yes_dollars");
+    for (int i = 0; i < yes.length; i += 2) {
+      y.addArray().add(String.valueOf(yes[i])).add(String.valueOf(yes[i + 1]));
+    }
+    ArrayNode n = fp.putArray("no_dollars");
+    for (int i = 0; i < no.length; i += 2) {
+      n.addArray().add(String.valueOf(no[i])).add(String.valueOf(no[i + 1]));
+    }
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/markets/" + ticker + "/orderbook", book);
+  }
+
+  /** Polymarket's market and the book of its Yes token: bids as price, size pairs. */
+  private static void polymarketBook(FakeFetcher f, String id, boolean accepting,
+      double... bids) {
+    ObjectNode m = MAPPER.createObjectNode();
+    m.put("question", "market " + id);
+    m.put("closed", false);
+    m.put("acceptingOrders", accepting);
+    m.put("outcomes", "[\"Yes\",\"No\"]");
+    m.put("clobTokenIds", "[\"yes-" + id + "\",\"no-" + id + "\"]");
+    f.byPrefix.put(PredictionMarkets.POLYMARKET + "/markets/" + id, m);
+    ObjectNode book = MAPPER.createObjectNode();
+    ArrayNode b = book.putArray("bids");
+    for (int i = 0; i < bids.length; i += 2) {
+      b.addObject().put("price", String.valueOf(bids[i]))
+          .put("size", String.valueOf(bids[i + 1]));
+    }
+    book.putArray("asks");
+    f.byPrefix.put(MarketHistory.CLOB + "/book?token_id=yes-" + id, book);
+  }
+
+  private static JsonNode sized(FakeFetcher f) throws Exception {
+    return MAPPER.readTree(scan(f, 60_000L).scan(args("{}"))).get("baskets").get(0);
+  }
+
+  @Test void sizeWalksTheBooksUntilASetCostsWhatItPays() throws Exception {
+    FakeFetcher f = venues(polymarketAbove(0.60));
+    // Yes asks on Kalshi are its No bids: 0.44 x 30, then 0.50 x 100.
+    kalshiBook(f, KALSHI_ID + "-T3.0", new double[] {0.40, 500},
+        new double[] {0.56, 30, 0.50, 100});
+    // No on Polymarket is bought from its Yes bids: 0.40 x 10, 0.45 x 50, then 0.60.
+    polymarketBook(f, "m1", true, 0.60, 10, 0.55, 50, 0.40, 1000);
+    JsonNode best = sized(f);
+
+    double first = 0.44 + 0.07 * 0.44 * 0.56 + 0.40;
+    double second = 0.44 + 0.07 * 0.44 * 0.56 + 0.45;
+    double third = 0.50 + 0.07 * 0.50 * 0.50 + 0.45;
+    double capital = 10 * first + 20 * second + 30 * third;
+    JsonNode size = best.get("size");
+    assertEquals(first, size.get("first_set_cost").asDouble(), 1e-5);
+    assertEquals(10, size.get("sets_at_best_price").asDouble(), 1e-9);
+    assertEquals("m1", size.get("binding_leg").asText());
+    assertEquals(60, size.get("sets_with_a_positive_floor").asDouble(), 1e-9);
+    assertEquals(capital, size.get("capital").asDouble(), 0.005);
+    assertEquals(60 - capital, size.get("floor_profit").asDouble(), 0.005);
+    assertEquals((60 - capital) / capital, size.get("floor").asDouble(), 1e-4);
+    assertEquals((60 - capital) / capital * 365 / 41.5625,
+        size.get("annualized_floor_simple_365d").asDouble(), 1e-3);
+    assertTrue(size.get("annualized_floor_simple_365d").asDouble()
+        < best.get("annualized_floor_simple_365d").asDouble());
+    // The fourth level pairs 0.50 on Kalshi with 0.60 on Polymarket: over 1 after the fee.
+    assertTrue(size.get("stops_because").asText().startsWith("the next set costs 1.1175"),
+        size.get("stops_because").asText());
+    assertEquals(NOW.toString(), size.get("books_read_at").asText());
+    // Cash out at purchase, cash back at settlement: 60 sets each paying at least 1.
+    JsonNode flows = size.get("cashflows");
+    assertEquals(capital, flows.get("paid_at_purchase").asDouble(), 0.005);
+    assertEquals(60, flows.get("received_at_settlement_at_least").asDouble(), 1e-9);
+    assertEquals("2026-11-12T13:30:00Z", flows.get("last_event_closes").asText());
+  }
+
+  @Test void theFloorIsAnnualizedOverTheDaysToTheLastClose() throws Exception {
+    JsonNode best = run(polymarketAbove(0.60), "{}").get("baskets").get(0);
+
+    // Kalshi closes 2026-11-12T13:30Z, Polymarket 12:00Z; the clock reads 2026-10-02T00:00Z.
+    assertEquals(41.5625, best.get("days_to_settlement").asDouble(), 1e-3);
+    assertEquals(best.get("floor").asDouble() * 365 / 41.5625,
+        best.get("annualized_floor_simple_365d").asDouble(), 1e-3);
+    assertNull(best.get("annualized_floor_note"));
+  }
+
+  @Test void aBasketClosingWithinADayIsNotAnnualized() throws Exception {
+    FakeFetcher f = venues(polymarketAbove(0.60));
+    MarketBasketScan soon = new MarketBasketScan(f,
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)),
+        () -> Instant.parse("2026-11-12T00:00:00Z"), 10_000L, 60_000L, Duration.ofMinutes(15));
+    JsonNode best = MAPPER.readTree(soon.scan(args("{'min_days': 0}"))).get("baskets").get(0);
+
+    assertNull(best.get("annualized_floor_simple_365d"));
+    assertTrue(best.get("annualized_floor_note").asText().contains("not annualized"));
+  }
+
+  @Test void sizeStopsWhereALegsBookRunsOut() throws Exception {
+    FakeFetcher f = venues(polymarketAbove(0.60));
+    kalshiBook(f, KALSHI_ID + "-T3.0", new double[] {}, new double[] {0.56, 30});
+    polymarketBook(f, "m1", true, 0.60, 100);
+    JsonNode size = sized(f).get("size");
+
+    assertEquals(30, size.get("sets_with_a_positive_floor").asDouble(), 1e-9);
+    assertEquals(KALSHI_ID + "-T3.0", size.get("binding_leg").asText());
+    assertEquals("the book of leg " + KALSHI_ID + "-T3.0 has no more orders",
+        size.get("stops_because").asText());
+  }
+
+  @Test void booksThatMovedPastTheQuoteFillNoSet() throws Exception {
+    FakeFetcher f = venues(polymarketAbove(0.60));
+    // The Yes ask the listing gave at 0.44 now stands at 0.70.
+    kalshiBook(f, KALSHI_ID + "-T3.0", new double[] {}, new double[] {0.30, 30});
+    polymarketBook(f, "m1", true, 0.60, 100);
+    JsonNode size = sized(f).get("size");
+
+    assertEquals(0, size.get("sets_with_a_positive_floor").asDouble(), 1e-9);
+    assertEquals(0, size.get("capital").asDouble(), 1e-9);
+    assertNull(size.get("floor"));
+    assertTrue(size.get("note").asText().contains("moved"), size.get("note").asText());
+  }
+
+  @Test void aBookThatCannotBeReadIsSaidNotSized() throws Exception {
+    JsonNode best = run(polymarketAbove(0.60), "{}").get("baskets").get(0);
+
+    assertTrue(best.get("size").isNull());
+    assertTrue(best.get("size_note").asText().contains("was not read"),
+        best.get("size_note").asText());
+  }
+
+  @Test void aLegNotTakingOrdersIsSaidNotSized() throws Exception {
+    FakeFetcher f = venues(polymarketAbove(0.60));
+    kalshiBook(f, KALSHI_ID + "-T3.0", new double[] {}, new double[] {0.56, 30});
+    polymarketBook(f, "m1", false, 0.60, 100);
+    JsonNode best = sized(f);
+
+    assertTrue(best.get("size").isNull());
+    assertEquals("leg m1 is not taking orders: not_accepting_orders",
+        best.get("size_note").asText());
+  }
+
+  @Test void anExclusiveSetIsSizedAgainstItsWholePayout() throws Exception {
+    ObjectNode ev = polymarketEvent();
+    ev.put("negRisk", true);
+    ArrayNode markets = (ArrayNode) ev.get("markets");
+    polymarketMarket(markets, "m1", "Rise", 0.50, 0.52);
+    polymarketMarket(markets, "m2", "Fall", 0.40, 0.42);
+    polymarketMarket(markets, "m3", "No change", 0.20, 0.22);
+    FakeFetcher f = venues(ev);
+    polymarketBook(f, "m1", true, 0.50, 40);
+    polymarketBook(f, "m2", true, 0.40, 25, 0.25, 500);
+    polymarketBook(f, "m3", true, 0.20, 60);
+    JsonNode size = sized(f).get("size");
+
+    // 25 sets at 1.90 against a payout of 2; the next would cost 0.50 + 0.75 + 0.80.
+    assertEquals(25, size.get("sets_with_a_positive_floor").asDouble(), 1e-9);
+    assertEquals("m2", size.get("binding_leg").asText());
+    assertEquals(47.5, size.get("capital").asDouble(), 1e-6);
+    assertEquals(2.5, size.get("floor_profit").asDouble(), 1e-6);
+    assertTrue(size.get("stops_because").asText().endsWith("pays 2"),
+        size.get("stops_because").asText());
+  }
+
   @Test void aLockNamesTheSeriesBothEventsSettleOn() throws Exception {
     JsonNode out = run(polymarketAbove(0.60), "{}");
 

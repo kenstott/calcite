@@ -273,6 +273,35 @@ final class MarketLayouts {
         } else {
             panels.add(stat("Best floor", "none", null, "flat", "No basket locks a profit"));
         }
+        if (baskets.size() > 0 && baskets.get(0).hasNonNull("size")) {
+            // What the top basket is worth in dollars, at the books read.
+            JsonNode top = baskets.get(0);
+            JsonNode size = top.get("size");
+            String sat = where + ": baskets[0].size";
+            double sets = requiredNumber(size, "sets_with_a_positive_floor", sat);
+            panels.add(stat("Top basket: sets that fill", String.format(Locale.ROOT, "%,.0f",
+                sets), String.format(Locale.ROOT, "%,.0f at the best price",
+                requiredNumber(size, "sets_at_best_price", sat)), "flat",
+                "One contract of every leg, while a further set still pays more than it "
+                + "costs"));
+            panels.add(stat("Top basket: capital", String.format(Locale.ROOT, "$%,.2f",
+                requiredNumber(size, "capital", sat)), null, "flat",
+                "Paid in full at purchase, returned at settlement"));
+            panels.add(stat("Top basket: locked profit", String.format(Locale.ROOT, "$%,.2f",
+                requiredNumber(size, "floor_profit", sat)), null, sets > 0 ? "up" : "flat",
+                "Worst case on the sets that fill, after fees"));
+            if (top.hasNonNull("annualized_floor_simple_365d")) {
+                panels.add(stat("Top basket: annualized floor", signedPercent(
+                    top.get("annualized_floor_simple_365d").asDouble()), String.format(
+                    Locale.ROOT, "%.1f days", requiredNumber(top, "days_to_settlement",
+                    where + ": baskets[0]")), "flat",
+                    "One-contract floor x 365 / days to settlement, simple; on the capital "
+                    + "that fills only"));
+            } else {
+                panels.add(stat("Top basket: annualized floor", "n/a", null, "flat",
+                    top.path("annualized_floor_note").asText()));
+            }
+        }
 
         List<String> stages = Arrays.asList("Events matched", "Events read",
             "Cross-venue pairs", "Pairs priced", "Locks found");

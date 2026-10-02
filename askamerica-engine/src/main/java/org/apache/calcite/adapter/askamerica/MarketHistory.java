@@ -316,7 +316,7 @@ final class MarketHistory {
     }
 
     /** The levels an order of {@code side} walks, best first, in that side's own price. */
-    private List<Level> levels(Side side) {
+    List<Level> levels(Side side) {
       List<Level> out = new ArrayList<>();
       switch (side) {
       case BUY_YES:

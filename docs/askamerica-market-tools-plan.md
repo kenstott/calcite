@@ -279,7 +279,13 @@ resumable call with no forecast:
   unknown rather than different. One basket per pair (its best floor).
 - Limits: the listing holds only driver-matched, non-sports events, so sports and politics
   are out of reach; outcomes named in words ("25 bps decrease") are not matched across
-  venues; a lock is one contract per leg at top of book, depth unchecked.
+  venues.
+- Size and time: every returned basket carries `size` from its legs' order books
+  (`sets_at_best_price`, `binding_leg`, `sets_with_a_positive_floor`, `capital`,
+  `floor_profit` in dollars, `stops_because`), `days_to_settlement` to its last event's
+  close and `annualized_floor_simple_365d`. The books are walked together, fee at each
+  level's price, until one more set costs what it pays. Found live: a 1.1% floor that
+  filled 10 sets (about $0.21 on $20) because the Polymarket leg had 10 contracts bid.
 - Follow-ups: the forecast for each event of the top basket first, then the rules diff, then
   the book behind the first two legs. Layout id `basketscan:<n>`.
 

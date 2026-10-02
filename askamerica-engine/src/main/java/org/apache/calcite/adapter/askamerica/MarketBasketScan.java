@@ -180,31 +180,32 @@ final class MarketBasketScan {
     }
 
     private static final String DESCRIPTION =
-        "Find baskets of Kalshi and Polymarket contracts that lock a profit after fees, in "
-        + "one call and with no forecast. Reads every matched event live and prices two "
-        + "kinds of basket. Within one event: strikes priced out of order, a bucket partition "
-        + "the strikes prove, and NO on every market of an event the venue states has at most "
-        + "one winner. Across venues: every Kalshi and Polymarket pair that find_market_baskets "
-        + "lists as cross_venue, scored over every outcome the two events' conditions can "
-        + "tell apart, keeping baskets with a leg on each venue that lose at none. A pair is "
+        "Find baskets of Kalshi and Polymarket contracts that lock a profit after fees, "
+        + "with no forecast. Within one event: strikes priced out of order, a bucket partition the strikes prove, and NO on every "
+        + "market of an event the venue states has at most one winner. Across venues: every "
+        + "Kalshi and Polymarket pair find_market_baskets lists as cross_venue, scored over "
+        + "every outcome the two events' conditions can tell apart, keeping baskets with a "
+        + "leg on each venue that lose at none. A pair is "
         + "in baskets only when the engine resolves both events to one settlement series "
         + "and transform (settles_on); a pair it resolves to different series is in "
         + "not_priced; a pair it cannot resolve on one side is in unverified with "
         + "same_quantity_reason. Each "
         + "basket gives its legs with side, price and fee, cost, floor_profit, floor (worst "
         + "case per unit of cost) and, across venues, rules_match with the differing and "
-        + "unknown rule dimensions. funnel counts events read, pairs priced and locks found; "
-        + "not_priced says why a pair was left out; closest lists the exclusive events "
-        + "nearest a lock. A basket is one contract per leg at the top-of-book quote; depth "
-        + "is not checked. Baskets of other recipes (series_run, calendar, linked_drivers, "
+        + "unknown rule dimensions. funnel counts what was read and priced; not_priced "
+        + "says why a pair was left out; closest lists the exclusive events nearest a "
+        + "lock. floor is for one contract per leg at the quote; size reads the "
+        + "legs' order books: sets_at_best_price, the sets that fill at a positive floor, "
+        + "their capital and profit in dollars. Cost is paid in full at purchase; "
+        + "annualized_floor_simple_365d is floor over days_to_settlement. Baskets of other "
+        + "recipes (series_run, calendar, linked_drivers, "
         + "same_place) settle on different quantities and are counted, not priced: "
-        + "price_market_basket takes them with scenarios_sql. Can return status 'loading' "
-        + "or 'scanning'. You MUST call again with the same arguments while status is "
-        + "'loading' or 'scanning'. You MUST use this tool first when asked to find a basket "
+        + "price_market_basket takes them with scenarios_sql. You MUST call again with "
+        + "the same arguments while status is 'loading' or 'scanning'. You MUST use this tool first when asked to find a basket "
         + "that locks a yield or an arbitrage. You MUST report a cross_venue basket as not a "
         + "lock unless its rules_match is 'match', and state the differing and unknown "
-        + "dimensions. You MUST state cost, fees, floor and quotes_read_at for every basket "
-        + "reported. You MUST NOT report an unverified entry as a lock. When baskets is "
+        + "dimensions. You MUST state cost, fees, floor, size and quotes_read_at for every "
+        + "basket reported. You MUST NOT report an unverified entry as a lock. When baskets is "
         + "empty you MUST say none was found and report funnel and not_priced.";
 
     // ─── One event ─────────────────────────────────────────────────────────────
@@ -438,6 +439,169 @@ final class MarketBasketScan {
         return null;
     }
 
+    // ─── Size and time ─────────────────────────────────────────────────────────
+
+    /**
+     * Adds what a basket is worth in dollars: the time to its last event's close with the
+     * floor annualized over it, and {@code size}, the sets its legs' order books fill while
+     * each further set still pays more than it costs.
+     *
+     * <p>A set is one contract of every leg. The books are walked together, best price
+     * first; a set's cost is each leg's price at its current level plus the taker fee at
+     * that price, and the walk stops at the first set that costs what it pays or more, or
+     * when a leg's book has no more orders.
+     */
+    private void size(ObjectNode basket, Instant now) {
+        Instant close = null;
+        for (JsonNode e : basket.get("events")) {
+            if (!e.hasNonNull("close_time")) {
+                close = null;
+                break;
+            }
+            Instant c = PredictionMarkets.closeInstant(e.get("close_time").asText());
+            close = close == null || c.isAfter(close) ? c : close;
+        }
+        if (close == null) {
+            basket.putNull("days_to_settlement");
+            basket.put("annualized_floor_note", "the venue gave no close time for an event");
+        } else {
+            double days = Duration.between(now, close).toMillis() / 86400000.0;
+            basket.put("days_to_settlement", PredictionMarkets.round(days, 3));
+            if (days < 1) {
+                basket.put("annualized_floor_note",
+                    "settlement is under one day away (or past): not annualized");
+            } else {
+                basket.put("annualized_floor_simple_365d", PredictionMarkets.round(
+                    basket.get("floor").asDouble() * 365 / days, 4));
+            }
+        }
+
+        JsonNode legs = basket.get("legs");
+        int n = legs.size();
+        // The floor payout of one set: a whole number of winning contracts.
+        double payout = Math.rint(basket.get("cost").asDouble()
+            + basket.get("floor_profit").asDouble());
+        List<List<MarketHistory.Level>> books = new ArrayList<>();
+        double[] rate = new double[n];
+        for (int i = 0; i < n; i++) {
+            JsonNode l = legs.get(i);
+            String source = l.get("source").asText();
+            String id = l.get("market_id").asText();
+            List<MarketHistory.Level> levels;
+            try {
+                MarketHistory.MarketRef ref;
+                if ("kalshi".equals(source)) {
+                    ref = new MarketHistory.MarketRef();
+                    ref.source = source;
+                    ref.marketId = id;
+                } else {
+                    ref = MarketHistory.resolve(fetcher, source, id, null);
+                    if (!ref.open) {
+                        basket.putNull("size");
+                        basket.put("size_note", "leg " + id + " is not taking orders: "
+                            + ref.status);
+                        return;
+                    }
+                }
+                levels = MarketHistory.orderBook(fetcher, ref).levels(
+                    "yes".equals(l.get("side").asText()) ? MarketHistory.Side.BUY_YES
+                        : MarketHistory.Side.BUY_NO);
+            } catch (IOException e) {
+                basket.putNull("size");
+                basket.put("size_note", "the order book of leg " + id + " was not read: "
+                    + brief(e.getMessage()));
+                return;
+            }
+            if (levels.isEmpty()) {
+                basket.putNull("size");
+                basket.put("size_note", "leg " + id + " has no resting order to buy from");
+                return;
+            }
+            books.add(levels);
+            double p = l.get("price").asDouble();
+            rate[i] = p > 0 && p < 1 ? l.get("fee").asDouble() / (p * (1 - p)) : 0;
+        }
+
+        int[] at = new int[n];
+        double[] left = new double[n];
+        for (int i = 0; i < n; i++) {
+            left[i] = books.get(i).get(0).size;
+        }
+        double sets = 0;
+        double capital = 0;
+        double profit = 0;
+        double atBest = 0;
+        double firstCost = Double.NaN;
+        String binding = null;
+        String stops;
+        while (true) {
+            double marginal = 0;
+            int tight = 0;
+            for (int i = 0; i < n; i++) {
+                double q = books.get(i).get(at[i]).price;
+                marginal += q + rate[i] * q * (1 - q);
+                tight = left[i] < left[tight] ? i : tight;
+            }
+            if (Double.isNaN(firstCost)) {
+                firstCost = marginal;
+                binding = legs.get(tight).get("market_id").asText();
+            }
+            if (marginal >= payout - 1e-9) {
+                stops = "the next set costs " + PredictionMarkets.round(marginal, 4)
+                    + " and pays " + (int) payout;
+                break;
+            }
+            double take = left[tight];
+            atBest = sets == 0 ? take : atBest;
+            sets += take;
+            capital += take * marginal;
+            profit += take * (payout - marginal);
+            String empty = null;
+            for (int i = 0; i < n; i++) {
+                left[i] -= take;
+                if (left[i] <= 1e-9) {
+                    at[i]++;
+                    if (at[i] >= books.get(i).size()) {
+                        empty = legs.get(i).get("market_id").asText();
+                    } else {
+                        left[i] = books.get(i).get(at[i]).size;
+                    }
+                }
+            }
+            if (empty != null) {
+                stops = "the book of leg " + empty + " has no more orders";
+                break;
+            }
+        }
+        ObjectNode size = basket.putObject("size");
+        size.put("books_read_at", clock.get().toString());
+        size.put("first_set_cost", PredictionMarkets.round(firstCost, 5));
+        size.put("sets_at_best_price", PredictionMarkets.round(atBest, 2));
+        size.put("binding_leg", binding);
+        size.put("sets_with_a_positive_floor", PredictionMarkets.round(sets, 2));
+        size.put("capital", PredictionMarkets.round(capital, 2));
+        size.put("floor_profit", PredictionMarkets.round(profit, 2));
+        if (sets > 0) {
+            size.put("floor", PredictionMarkets.round(profit / capital, 4));
+            double days = basket.path("days_to_settlement").asDouble(0);
+            if (days >= 1) {
+                // Lower than the basket's own: later sets fill at worse prices.
+                size.put("annualized_floor_simple_365d", PredictionMarkets.round(
+                    profit / capital * 365 / days, 4));
+            }
+        } else {
+            size.put("note", "no set fills at a positive floor at the books read: the quotes "
+                + "moved since quotes_read_at");
+        }
+        size.put("stops_because", stops);
+        ObjectNode flows = size.putObject("cashflows");
+        flows.put("paid_at_purchase", PredictionMarkets.round(capital, 2));
+        flows.put("received_at_settlement_at_least", PredictionMarkets.round(sets * payout, 2));
+        flows.put("last_event_closes", close == null ? null : close.toString());
+        flows.put("basis", "every leg is paid for in full when bought, fee included; each "
+            + "winning contract pays 1 when its event settles, on or after its close");
+    }
+
     // ─── The scan ──────────────────────────────────────────────────────────────
 
     private static void count(Map<String, Integer> why, Map<String, List<String>> examples,
@@ -667,10 +831,16 @@ final class MarketBasketScan {
         }
         ArrayNode baskets = out.putArray("baskets");
         for (int i = 0; i < locks.size() && i < limit; i++) {
+            if (!outOfTime) {
+                size(locks.get(i), now);
+            }
             baskets.add(locks.get(i));
         }
         ArrayNode maybe = out.putArray("unverified");
         for (int i = 0; i < unverified.size() && i < limit; i++) {
+            if (!outOfTime) {
+                size(unverified.get(i), now);
+            }
             maybe.add(unverified.get(i));
         }
         out.put("unverified_is", "cross-venue pairs whose quotes leave a gap but where the "
@@ -698,7 +868,8 @@ final class MarketBasketScan {
         }
         out.put("lock_is", "one contract per leg bought at the quote read at quotes_read_at, "
             + "net of the venue's taker fee; floor_profit is the worst case and floor is it "
-            + "per unit of cost. The depth behind the quote is not checked.");
+            + "per unit of cost. The whole cost is paid at purchase. size is what the legs' "
+            + "order books fill: capital and floor_profit there are dollars.");
         if (outOfTime) {
             out.put("next", "The scan is unfinished: " + done + " of " + toRead.size()
                 + " events read. You MUST call " + TOOL + " again with the same arguments "
@@ -715,8 +886,8 @@ final class MarketBasketScan {
             out.put("next", "You MUST report a cross_venue basket as not a lock unless its "
                 + "rules_match is 'match', and state rules_differing and rules_unknown. You "
                 + "MUST state cost, fees, floor and quotes_read_at for each basket reported, "
-                + "and that depth behind the quote is not checked: market_price_history "
-                + "returns the book of a leg. price_market_event(source, event_id, "
+                + "and from size the sets that fill, the capital and the dollar profit: the "
+                + "annualized floor applies to that capital only. price_market_event(source, event_id, "
                 + "build_forecast=true) gives the forecast's probability of each outcome of "
                 + "a basket's event.");
         }
