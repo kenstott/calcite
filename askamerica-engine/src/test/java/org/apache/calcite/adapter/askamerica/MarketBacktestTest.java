@@ -122,7 +122,11 @@ class MarketBacktestTest {
       ObjectNode n = c.addObject();
       n.put("end_period_ts", end);
       n.put(historical ? "volume" : "volume_fp", "10.00");
-      n.putObject("price").put(close, String.valueOf(price));
+      String suffix = historical ? "" : "_dollars";
+      n.putObject("price").put(close, String.valueOf(price))
+          .put("open" + suffix, String.valueOf(price))
+          .put("high" + suffix, String.valueOf(price))
+          .put("low" + suffix, String.valueOf(price));
       n.putObject("yes_bid").put(close, String.valueOf(bid));
       n.putObject("yes_ask").put(close, String.valueOf(ask));
     }

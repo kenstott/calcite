@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -458,7 +459,8 @@ final class MarketForecasts {
         + "percent, change, or the maximum of the path to the settlement date), reads the "
         + "rows, and samples past changes of the same transform applied to the latest level. "
         + "Returns median, p05, p95, n, method, series, table, transform, last_period, "
-        + "settlement_period, samples and round, and flags: seasonal_adjustment_mismatch, "
+        + "settlement_period, samples, round, fan (history and interval bands, the input of a "
+        + "render_chart fan chart) and flags: seasonal_adjustment_mismatch, "
         + "last_period_before_settlement, rounding_mismatch, rounding_unverified, "
         + "units_mismatch, history_gap, series_not_sourced. Pass samples and round to "
         + "price_market_event. Any part of the spec can be overridden; when the rules do not "
@@ -1332,17 +1334,26 @@ final class MarketForecasts {
         double[] samples;
         String method;
         double lastValue = last.value;
+        // The series in the forecast's own terms, and its samples at any step short of the
+        // settlement one, for the fan. A one-period change has no path: atStep stays null.
+        double[] hist;
+        IntFunction<double[]> atStep = null;
         switch (t) {
         case LEVEL:
+            hist = v;
+            atStep = k -> levelSamples(v, k, s.ratio, s.id);
             samples = levelSamples(v, h, s.ratio, s.id);
             method = "historical " + h + "-period " + (s.ratio ? "proportional" : "additive")
                 + " changes applied to the latest level";
             break;
         case CHANGE: {
             List<Double> d = new ArrayList<>();
+            hist = new double[len];
+            Arrays.fill(hist, Double.NaN);
             for (int i = 1; i < len; i++) {
                 if (!Double.isNaN(v[i]) && !Double.isNaN(v[i - 1])) {
                     d.add(v[i] - v[i - 1]);
+                    hist[i] = v[i] - v[i - 1];
                 }
             }
             samples = toArray(d);
@@ -1353,12 +1364,16 @@ final class MarketForecasts {
             List<Double> pct = new ArrayList<>();
             boolean align = !Boolean.TRUE.equals(s.seasonallyAdjusted);
             YearMonth target = YearMonth.parse(settlement);
+            hist = new double[len];
+            Arrays.fill(hist, Double.NaN);
             for (int i = 1; i < len; i++) {
-                if (Double.isNaN(v[i]) || Double.isNaN(v[i - 1])
-                        || (align && dates[i].getMonthValue() != target.getMonthValue())) {
+                if (Double.isNaN(v[i]) || Double.isNaN(v[i - 1])) {
                     continue;
                 }
-                pct.add(100 * (positive(v[i], s.id) / positive(v[i - 1], s.id) - 1));
+                hist[i] = 100 * (positive(v[i], s.id) / positive(v[i - 1], s.id) - 1);
+                if (!align || dates[i].getMonthValue() == target.getMonthValue()) {
+                    pct.add(hist[i]);
+                }
             }
             samples = toArray(pct);
             method = "historical month-over-month percent changes"
@@ -1394,13 +1409,10 @@ final class MarketForecasts {
                     + YearMonth.from(dates[len - 13]) + ", and " + s.id + " has no value for "
                     + "it");
             }
-            List<Double> out = new ArrayList<>();
-            for (int i = 0; i + h < len; i++) {
-                if (!Double.isNaN(y[i]) && !Double.isNaN(y[i + h])) {
-                    out.add(lastValue + (y[i + h] - y[i]));
-                }
-            }
-            samples = toArray(out);
+            hist = y;
+            double latest = lastValue;
+            atStep = k -> yoySamples(y, k, latest);
+            samples = yoySamples(y, h, latest);
             method = "historical " + h + "-period changes in the year-over-year percent, "
                 + "applied to the latest year-over-year percent";
             break;
@@ -1415,24 +1427,10 @@ final class MarketForecasts {
                     }
                 }
             }
-            List<Double> out = new ArrayList<>();
-            for (int i = 0; i + h < len; i++) {
-                if (Double.isNaN(v[i])) {
-                    continue;
-                }
-                double max = floor;
-                for (int k = 1; k <= h; k++) {
-                    if (Double.isNaN(v[i + k])) {
-                        continue;
-                    }
-                    double x = s.ratio
-                        ? last.value * positive(v[i + k], s.id) / positive(v[i], s.id)
-                        : last.value + (v[i + k] - v[i]);
-                    max = up ? Math.max(max, x) : Math.min(max, x);
-                }
-                out.add(max);
-            }
-            samples = toArray(out);
+            hist = v;
+            double bound = floor;
+            atStep = k -> pathSamples(v, k, s, last.value, bound, up);
+            samples = pathSamples(v, h, s, last.value, floor, up);
             method = "the " + (up ? "highest" : "lowest") + " value of historical " + h
                 + "-period paths ("
                 + (s.ratio ? "proportional" : "additive") + " moves from the latest level)"
@@ -1442,6 +1440,7 @@ final class MarketForecasts {
             break;
         }
         }
+        double scale = 1;
         if (samples.length < MIN_SAMPLES) {
             throw new IllegalStateException("only " + samples.length + " samples can be built "
                 + "from " + obs.size() + " rows of " + s.id + " (" + MIN_SAMPLES + " needed); "
@@ -1500,6 +1499,7 @@ final class MarketForecasts {
                     samples[i] *= THOUSAND;
                 }
                 lastValue *= THOUSAND;
+                scale = THOUSAND;
                 outUnit = s.countUnit;
             } else {
                 flags.add("units_mismatch", "The rules state no units and " + s.id + " is in "
@@ -1570,6 +1570,8 @@ final class MarketForecasts {
         for (double x : samples) {
             raw.add(x);
         }
+        json.set("fan", fan(hist, dates, s.freq, h, settlement, settleDate, samples, atStep,
+            scale));
         json.set("flags", flags.out);
         json.put("next", "Price the event with price_market_event(source, event_id, "
             + "build_forecast=true) when no override was needed; otherwise with samples and "
@@ -1581,6 +1583,164 @@ final class MarketForecasts {
     }
 
     private static final double THOUSAND = 1000;
+    /** Periods of history a fan shows before the forecast, and forecast steps it shows. */
+    private static final int FAN_HISTORY = 24;
+    private static final int FAN_STEPS = 12;
+
+    /**
+     * The forecast as a fan chart: the series' recent history in the forecast's own terms,
+     * then the median and the 50% and 90% intervals of the samples at each step to settlement.
+     * The fields are those of {@code render_chart} with chart_type=fan.
+     *
+     * <p>A forecast of one period's change has no path to settlement — {@code atStep} is null
+     * — so its intervals stand at the settlement period alone.
+     *
+     * @param samples the samples at the settlement step, already in the output units
+     * @param scale what a value of {@code hist} or {@code atStep} is multiplied by to reach
+     *        those units
+     */
+    private static ObjectNode fan(double[] hist, LocalDate[] dates, Freq freq, int h,
+            String settlement, LocalDate settleDate, double[] samples,
+            IntFunction<double[]> atStep, double scale) {
+        int len = hist.length;
+        int from = Math.max(0, len - FAN_HISTORY);
+        List<String> categories = new ArrayList<>();
+        List<Double> history = new ArrayList<>();
+        for (int i = from; i < len; i++) {
+            categories.add(period(dates[i], freq));
+            history.add(Double.isNaN(hist[i]) ? null : hist[i] * scale);
+        }
+        List<double[]> steps = new ArrayList<>();
+        if (atStep != null) {
+            int stride = (int) Math.ceil(h / (double) FAN_STEPS);
+            for (int k = stride; k < h; k += stride) {
+                LocalDate d = stepDate(dates[len - 1], freq, k);
+                double[] x = atStep.apply(k);
+                // A step whose date reaches the settlement date is the settlement step.
+                if (d.isBefore(settleDate) && x.length >= MIN_SAMPLES) {
+                    for (int i = 0; i < x.length; i++) {
+                        x[i] *= scale;
+                    }
+                    categories.add(period(d, freq));
+                    steps.add(x);
+                }
+            }
+        }
+        categories.add(settlement);
+        steps.add(samples);
+
+        ObjectNode fan = MAPPER.createObjectNode();
+        ArrayNode cats = fan.putArray("categories");
+        for (String c : categories) {
+            cats.add(c);
+        }
+        int past = history.size();
+        // The fan opens from the last value of the history, where there is a path from it.
+        Double anchor = atStep == null ? null : history.get(past - 1);
+        ArrayNode series = fan.putArray("series");
+        ArrayNode hv = series.addObject().put("name", "history").putArray("values");
+        ArrayNode mv = series.addObject().put("name", "median forecast").putArray("values");
+        double[][] quantiles = {{0.25, 0.75}, {0.05, 0.95}};
+        String[] names = {"50% interval", "90% interval"};
+        ArrayNode bands = fan.putArray("bands");
+        ArrayNode[] lows = new ArrayNode[names.length];
+        ArrayNode[] highs = new ArrayNode[names.length];
+        for (int b = 0; b < names.length; b++) {
+            ObjectNode band = bands.addObject().put("name", names[b]);
+            lows[b] = band.putArray("low");
+            highs[b] = band.putArray("high");
+        }
+        for (int i = 0; i < past; i++) {
+            boolean opens = i == past - 1 && anchor != null;
+            fanValue(hv, history.get(i));
+            fanValue(mv, opens ? anchor : null);
+            for (int b = 0; b < names.length; b++) {
+                fanValue(lows[b], opens ? anchor : null);
+                fanValue(highs[b], opens ? anchor : null);
+            }
+        }
+        for (double[] x : steps) {
+            double[] ordered = x.clone();
+            Arrays.sort(ordered);
+            hv.addNull();
+            int n = ordered.length;
+            fanValue(mv, n % 2 == 1 ? ordered[n / 2] : (ordered[n / 2 - 1] + ordered[n / 2]) / 2);
+            for (int b = 0; b < names.length; b++) {
+                fanValue(lows[b], quantile(ordered, quantiles[b][0]));
+                fanValue(highs[b], quantile(ordered, quantiles[b][1]));
+            }
+        }
+        fan.put("note", "render_chart chart_type=fan takes categories, series and bands as "
+            + "they are. The intervals are quantiles of the samples at each step"
+            + (atStep == null ? "; this forecast is of one period's change, so they stand at "
+                + "the settlement period alone" : "") + ". Add each strike as a "
+            + "reference_lines value.");
+        return fan;
+    }
+
+    private static void fanValue(ArrayNode to, Double v) {
+        if (v == null) {
+            to.addNull();
+        } else {
+            to.add(PredictionMarkets.round(v, 4));
+        }
+    }
+
+    /** The same order statistic {@link MarketPricing.Forecast} reports its percentiles by. */
+    private static double quantile(double[] ordered, double q) {
+        return ordered[Math.min(ordered.length - 1, (int) (q * ordered.length))];
+    }
+
+    /** The date {@code k} observations after {@code last}; a daily series skips weekends. */
+    private static LocalDate stepDate(LocalDate last, Freq freq, int k) {
+        if (freq == Freq.MONTHLY) {
+            return YearMonth.from(last).plusMonths(k).atEndOfMonth();
+        }
+        if (freq == Freq.WEEKLY) {
+            return last.plusWeeks(k);
+        }
+        LocalDate d = last;
+        for (int i = 0; i < k; ) {
+            d = d.plusDays(1);
+            if (d.getDayOfWeek().getValue() <= 5) {
+                i++;
+            }
+        }
+        return d;
+    }
+
+    private static double[] yoySamples(double[] y, int h, double latest) {
+        List<Double> out = new ArrayList<>();
+        for (int i = 0; i + h < y.length; i++) {
+            if (!Double.isNaN(y[i]) && !Double.isNaN(y[i + h])) {
+                out.add(latest + (y[i + h] - y[i]));
+            }
+        }
+        return toArray(out);
+    }
+
+    /** The extreme of each historical {@code h}-period path replayed from the latest level. */
+    private static double[] pathSamples(double[] v, int h, Series s, double latest,
+            double floor, boolean up) {
+        List<Double> out = new ArrayList<>();
+        for (int i = 0; i + h < v.length; i++) {
+            if (Double.isNaN(v[i])) {
+                continue;
+            }
+            double max = floor;
+            for (int k = 1; k <= h; k++) {
+                if (Double.isNaN(v[i + k])) {
+                    continue;
+                }
+                double x = s.ratio
+                    ? latest * positive(v[i + k], s.id) / positive(v[i], s.id)
+                    : latest + (v[i + k] - v[i]);
+                max = up ? Math.max(max, x) : Math.min(max, x);
+            }
+            out.add(max);
+        }
+        return toArray(out);
+    }
 
     private static double positive(double v, String id) {
         if (!(v > 0)) {

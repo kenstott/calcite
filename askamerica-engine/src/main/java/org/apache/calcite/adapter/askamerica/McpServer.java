@@ -186,6 +186,63 @@ public class McpServer {
         + "</body></html>\n";
 
     /** One scatter/bubble series, including its optional point labels and highlight groups. */
+    /** An array of numbers in which a JSON null stays null: a gap, never a zero. */
+    private static java.util.List<Double> readNumbers(JsonNode owner, String field,
+            String what) {
+        JsonNode arr = owner.path(field);
+        if (!arr.isArray()) {
+            java.util.List<String> seenKeys = new java.util.ArrayList<>();
+            owner.fieldNames().forEachRemaining(seenKeys::add);
+            throw new IllegalArgumentException(what + " has no '" + field
+                + "' array (saw fields: " + seenKeys + ").");
+        }
+        java.util.List<Double> out = new java.util.ArrayList<>();
+        for (JsonNode v : arr) {
+            out.add(v.isNull() ? null : v.asDouble());
+        }
+        return out;
+    }
+
+    /** The {@code candles} of a candlestick chart; null when the caller gave none. */
+    private static ChartRenderer.Candles readCandles(JsonNode n) {
+        JsonNode c = n.path("candles");
+        if (c.isMissingNode() || c.isNull()) {
+            return null;
+        }
+        if (!c.isObject()) {
+            throw new IllegalArgumentException("candles must be one object: "
+                + "{name, open, high, low, close, volume}, each an array with one value per "
+                + "category.");
+        }
+        return new ChartRenderer.Candles(c.path("name").asText("price"),
+            readNumbers(c, "open", "candles"), readNumbers(c, "high", "candles"),
+            readNumbers(c, "low", "candles"), readNumbers(c, "close", "candles"),
+            c.hasNonNull("volume") ? readNumbers(c, "volume", "candles") : null);
+    }
+
+    /** The {@code bands} of a fan chart; empty when the caller gave none. */
+    private static java.util.List<ChartRenderer.Band> readBands(JsonNode n) {
+        java.util.List<ChartRenderer.Band> out = new java.util.ArrayList<>();
+        for (JsonNode b : n.path("bands")) {
+            String name = b.path("name").asText("band " + (out.size() + 1));
+            out.add(new ChartRenderer.Band(name, readNumbers(b, "low", "band '" + name + "'"),
+                readNumbers(b, "high", "band '" + name + "'")));
+        }
+        return out;
+    }
+
+    /** The {@code reference_lines} of a chart; empty when the caller gave none. */
+    private static java.util.List<ChartRenderer.RefLine> readRefLines(JsonNode n) {
+        java.util.List<ChartRenderer.RefLine> out = new java.util.ArrayList<>();
+        for (JsonNode r : n.path("reference_lines")) {
+            out.add(new ChartRenderer.RefLine(
+                r.hasNonNull("value") ? Double.valueOf(r.get("value").asDouble()) : null,
+                r.hasNonNull("category") ? r.get("category").asText() : null,
+                r.hasNonNull("label") ? r.get("label").asText() : null));
+        }
+        return out;
+    }
+
     private static ChartRenderer.PointSeriesSpec readPointSeries(JsonNode s) {
         java.util.List<Double> x = new java.util.ArrayList<>();
         for (JsonNode v : s.path("x")) {
@@ -2575,9 +2632,12 @@ public class McpServer {
         ObjectNode chartProps = MAPPER.createObjectNode();
         chartProps.set(
             "chart_type", prop("string",
-            "'line', 'bar', 'pie', 'scatter', or 'bubble'. Default 'line'. line/bar/pie use "
-            + "categories+series (a shared category axis); scatter/bubble use points (true "
-            + "numeric x/y axes — there is no category axis to plot against)."));
+            "'line', 'bar', 'pie', 'scatter', 'bubble', 'candlestick' or 'fan'. Default "
+            + "'line'. line/bar/pie use categories+series (a shared category axis); "
+            + "scatter/bubble use points (true numeric x/y axes — there is no category axis "
+            + "to plot against). candlestick uses categories+candles and fan uses "
+            + "categories+series+bands: both take periods in order, fit the y axis to the "
+            + "data rather than anchoring it at zero, and thin the period labels to fit."));
         chartProps.set("title", prop("string", "Chart title."));
         chartProps.set(
             "x_label", prop("string", "X-axis label. Ignored for 'pie'."));
@@ -2646,13 +2706,40 @@ public class McpServer {
             + "group is drawn in its own colour with a legend entry, every other point "
             + "muted; single series only). Labels never overlap.");
         chartProps.set("points", pointsProp);
+        chartProps.set("candles", prop("object",
+            "For 'candlestick' only. One object: name (string), and open, high, low and close "
+            + "(arrays of numbers, one per category, in category order). Optional volume "
+            + "(array, one per category) is drawn as bars along the bottom of the plot. A "
+            + "period with no trade takes null for all four prices and is left as a gap. A "
+            + "candle is green when it closed at or above its open and red when below. "
+            + "series may add lines over the same periods, e.g. a fair value."));
+        ObjectNode bandsProp = MAPPER.createObjectNode();
+        bandsProp.put("type", "array");
+        bandsProp.put("description",
+            "For 'fan' only. The forecast intervals, each an object: name (e.g. \"80% "
+            + "interval\"), low and high (arrays of numbers, one per category; null in both "
+            + "where the band does not apply, i.e. over the history). The widest band is "
+            + "drawn palest and the narrowest darkest, whatever order they are passed in. "
+            + "series carries the lines: the history, with null over the forecast periods, "
+            + "and the central forecast, with null over the history.");
+        chartProps.set("bands", bandsProp);
+        ObjectNode refProp = MAPPER.createObjectNode();
+        refProp.put("type", "array");
+        refProp.put("description",
+            "For 'line', 'fan' and 'candlestick' only. Dashed marker lines, each an object "
+            + "with exactly one of value (a number on the y axis: a strike, a fair value, a "
+            + "floor, zero profit) and category (one of categories: a release date, the "
+            + "forecast origin), plus an optional label. The y axis widens to include every "
+            + "value.");
+        chartProps.set("reference_lines", refProp);
         chartProps.set(
             "width", prop("integer", "Image width in pixels (default 800, max 2000)."));
         chartProps.set(
             "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
         tools.add(
             toolWithChartViewer("render_chart",
-            "Render ONE chart (line, bar, pie, scatter, or bubble). Returns TWO blocks: a PNG "
+            "Render ONE chart (line, bar, pie, scatter, bubble, candlestick or fan). Returns "
+            + "TWO blocks: a PNG "
             + "for the reader, and the same chart as editable SVG for you. PREFER "
             + "compose_dashboard whenever the answer has more than one figure worth showing — "
             + "which is most of the time — and reach for this only when a single bare chart "
@@ -2661,7 +2748,9 @@ public class McpServer {
             + "categories+series against a shared category axis; scatter/bubble plot points "
             + "against true numeric x/y axes (bubble adds a third size dimension) — use "
             + "scatter/bubble for a genuine x-vs-y relationship rather than a trend over "
-            + "categories. Build the arrays from a prior query or fetch_aligned_series result — "
+            + "categories; candlestick plots open/high/low/close per period and fan plots a "
+            + "forecast's interval bands around its lines. Build the arrays from a prior query "
+            + "or fetch_aligned_series result — "
             + "this tool only draws, it does not fetch data. EDIT THE RETURNED SVG rather than "
             + "re-rendering when you need an annotation or callout, direct value labels, one "
             + "category greyed out or otherwise de-emphasised, or reworded titles and labels: "
@@ -2702,7 +2791,9 @@ public class McpServer {
             + "CHART panel: {\"type\":\"chart\", plus the same arguments render_chart takes "
             + "— chart_type, title, x_label, y_label, the bar-only orientation/sort/value_labels, "
             + "value_format, and categories+series (line/bar/pie) or points (scatter/bubble), "
-            + "each series/point series optionally with tooltips}.\n"
+            + "each series/point series optionally with tooltips; categories+candles for "
+            + "candlestick, categories+series+bands for fan, and reference_lines on "
+            + "line/fan/candlestick}.\n"
             + "STAT panel: {\"type\":\"stat\", \"label\":\"Real 10-year rise\", "
             + "\"value\":\"+$19,029\", \"delta\":\"+22.0%\", \"delta_direction\":"
             + "\"up\"|\"down\"|\"flat\"} — a headline number the charts explain.\n"
@@ -5133,9 +5224,27 @@ public class McpServer {
 
                     log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
                         + " categories=" + categories.size() + " series=" + series.size());
-                    ChartScene scene = ChartRenderer.layout(
-                        chartType, title, xLabel, yLabel, categories, series, width, height,
-                        readBarOptions(args, true));
+                    ChartScene scene;
+                    if (ChartRenderer.ORDERED_TYPES.contains(
+                            chartType.toLowerCase(java.util.Locale.ROOT))) {
+                        ChartRenderer.BarOptions fmtOnly = readBarOptions(args, false);
+                        if (!fmtOnly.isDefault()) {
+                            throw new IllegalArgumentException("orientation, sort and "
+                                + "value_labels apply to chart_type 'bar' only, not '"
+                                + chartType + "'.");
+                        }
+                        scene = ChartRenderer.layoutOrdered(chartType, title, xLabel, yLabel,
+                            categories, series, readCandles(args), readBands(args),
+                            readRefLines(args), width, height, fmtOnly.valueFormat, null);
+                    } else {
+                        if (args.hasNonNull("candles") || args.path("bands").size() > 0) {
+                            throw new IllegalArgumentException("candles apply to chart_type "
+                                + "'candlestick' and bands to 'fan', not '" + chartType + "'.");
+                        }
+                        scene = ChartRenderer.layout(
+                            chartType, title, xLabel, yLabel, categories, series, width, height,
+                            readBarOptions(args, true), readRefLines(args));
+                    }
                     chartPng = scene.toPng();
                     chartSvg = scene.toSvg();
                     text = chartSummary(chartType, title,
@@ -8639,7 +8748,8 @@ public class McpServer {
      *  NullPointerException (the panel's kind matched neither branch, so it skipped chart-scene
      *  layout but still tried to render one) instead of a clear, actionable error. */
     private static final java.util.Set<String> CHART_TYPE_VALUES = new java.util.HashSet<>(
-        java.util.Arrays.asList("line", "bar", "pie", "scatter", "bubble"));
+        java.util.Arrays.asList("line", "bar", "pie", "scatter", "bubble", "candlestick",
+            "fan"));
 
     /** The bar-chart arguments shared by render_chart and a dashboard chart panel. */
     private static ChartRenderer.BarOptions readBarOptions(JsonNode n, boolean growHeight) {
@@ -8661,7 +8771,7 @@ public class McpServer {
             String hint = CHART_TYPE_VALUES.contains(p.kind)
                 ? " — did you mean chart_type: \"" + p.kind + "\"? 'type' selects the panel "
                     + "kind ('chart' or 'stat'); 'chart_type' selects the chart's flavor "
-                    + "(line/bar/pie/scatter/bubble)."
+                    + "(line/bar/pie/scatter/bubble/candlestick/fan)."
                 : " — must be 'chart' or 'stat'.";
             throw new IllegalArgumentException(
                 "panel 'type' \"" + p.kind + "\" is not recognized" + hint);
@@ -8723,10 +8833,22 @@ public class McpServer {
             p.series.add(new ChartRenderer.SeriesSpec(sNode.path("name").asText(), vals,
                 parseTooltips(sNode)));
         }
-        if (p.categories.isEmpty() || p.series.isEmpty()) {
+        p.candles = readCandles(pn);
+        p.bands = readBands(pn);
+        p.refLines = readRefLines(pn);
+        boolean ordered = ChartRenderer.ORDERED_TYPES.contains(
+            p.chartType.toLowerCase(java.util.Locale.ROOT));
+        if (!ordered && (p.candles != null || !p.bands.isEmpty())) {
             throw new IllegalArgumentException(
                 "chart panel '" + (p.title == null ? "untitled" : p.title)
-                + "' needs categories + series (line/bar/pie) or points (scatter/bubble)");
+                + "': candles apply to chart_type 'candlestick' and bands to 'fan', not '"
+                + p.chartType + "'.");
+        }
+        if (p.categories.isEmpty() || (p.series.isEmpty() && p.candles == null)) {
+            throw new IllegalArgumentException(
+                "chart panel '" + (p.title == null ? "untitled" : p.title)
+                + "' needs categories + series (line/bar/pie/fan), categories + candles "
+                + "(candlestick) or points (scatter/bubble)");
         }
         return p;
     }

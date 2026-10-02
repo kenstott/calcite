@@ -489,6 +489,56 @@ class MarketHistoryTest {
     assertTrue(url.endsWith("&end_ts=" + NOW.getEpochSecond() + "&period_interval=1440"), url);
   }
 
+  @Test void kalshiCandlesCarryOpenHighAndLowWhereTheyTraded() throws Exception {
+    FakeFetcher f = kalshiFake();
+    MarketHistory.MarketRef ref = MarketHistory.resolve(f, "kalshi", TICKER, null);
+    List<MarketHistory.PricePoint> pts = MarketHistory.priceHistory(f, ref,
+        NOW.minusSeconds(14 * 86400), NOW, MarketHistory.Interval.DAY);
+    assertNull(pts.get(0).open);
+    assertEquals(0.19, pts.get(1).open);
+    assertEquals(0.19, pts.get(1).high);
+    assertEquals(0.16, pts.get(1).low);
+    JsonNode out = MAPPER.readTree(tool(kalshiFake()).priceHistoryTool(
+        args("source", "kalshi", "market_id", TICKER)));
+    assertFalse(out.get("points").get(0).has("open"));
+    assertEquals(0.16, out.get("points").get(2).get("open").asDouble());
+    assertEquals(0.07, out.get("points").get(2).get("low").asDouble());
+    assertTrue(out.get("ohlc").asText().startsWith("venue candlesticks"));
+  }
+
+  @Test void polymarketDailyCandlesAreResampledFromHourlyPoints() throws Exception {
+    long day = 1790899200L;
+    String daily = "{\"history\":[{\"t\":" + (day - 172800) + ",\"p\":0.09},"
+        + "{\"t\":" + (day - 86400) + ",\"p\":0.08},{\"t\":" + day + ",\"p\":0.085},"
+        + "{\"t\":" + (day + 49800) + ",\"p\":0.075}]}";
+    // One hourly point in the first period, four in the second, two in the last.
+    String hourly = "{\"history\":[{\"t\":" + (day - 90000) + ",\"p\":0.5},"
+        + "{\"t\":" + (day - 82800) + ",\"p\":0.08},{\"t\":" + (day - 40000) + ",\"p\":0.1},"
+        + "{\"t\":" + (day - 20000) + ",\"p\":0.06},{\"t\":" + day + ",\"p\":0.085},"
+        + "{\"t\":" + (day + 3600) + ",\"p\":0.09},{\"t\":" + (day + 49800) + ",\"p\":0.075}]}";
+    String url = C + "/prices-history?market=" + YES_TOKEN + "&interval=max&fidelity=";
+    FakeFetcher f = polyFake().override(url + "1440", daily).override(url + "60", hourly);
+    JsonNode out = MAPPER.readTree(tool(f).priceHistoryTool(
+        args("source", "polymarket", "market_id", "609655")));
+    JsonNode pts = out.get("points");
+    assertEquals(4, pts.size());
+    assertFalse(pts.get(0).has("open"));
+    assertFalse(pts.get(1).has("open"), "one hourly point is not a candle");
+    assertEquals(0.08, pts.get(2).get("open").asDouble());
+    assertEquals(0.1, pts.get(2).get("high").asDouble());
+    assertEquals(0.06, pts.get(2).get("low").asDouble());
+    assertEquals(0.085, pts.get(2).get("price").asDouble());
+    assertEquals(0.09, pts.get(3).get("open").asDouble());
+    assertEquals(0.09, pts.get(3).get("high").asDouble());
+    assertEquals(0.075, pts.get(3).get("low").asDouble());
+    assertTrue(out.get("ohlc").asText().contains("2 of 4 points"), out.get("ohlc").asText());
+
+    JsonNode hour = MAPPER.readTree(tool(polyFake()).priceHistoryTool(
+        args("source", "polymarket", "market_id", "609655", "interval", "hour")));
+    assertTrue(hour.get("ohlc").asText().startsWith("none"));
+    assertFalse(hour.get("points").get(0).has("open"));
+  }
+
   @Test void kalshiHourlyWindowOverTheCapIsRejected() throws Exception {
     FakeFetcher f = kalshiFake();
     MarketHistory.MarketRef ref = MarketHistory.resolve(f, "kalshi", TICKER, "KXCPI");

@@ -177,6 +177,13 @@ final class MarketHistory {
     long epochSecond;
     /** Last traded price of Yes in dollars; null in a Kalshi period with no trade. */
     Double price;
+    /**
+     * First, highest and lowest traded price of the period; {@link #price} is its close.
+     * Null where nothing traded and where the venue gives no finer points to take them from.
+     */
+    Double open;
+    Double high;
+    Double low;
     /** Closing Yes bid and ask; Kalshi only. */
     Double yesBid;
     Double yesAsk;
@@ -187,6 +194,11 @@ final class MarketHistory {
       ObjectNode o = MAPPER.createObjectNode();
       o.put("t", Instant.ofEpochSecond(epochSecond).toString());
       PredictionMarkets.putNumber(o, "price", price);
+      if (open != null) {
+        o.put("open", open);
+        o.put("high", high);
+        o.put("low", low);
+      }
       PredictionMarkets.putNumber(o, "yes_bid", yesBid);
       PredictionMarkets.putNumber(o, "yes_ask", yesAsk);
       PredictionMarkets.putNumber(o, "volume", volume);
@@ -618,6 +630,56 @@ final class MarketHistory {
     return out;
   }
 
+  /**
+   * Gives Polymarket daily points their open, high and low, taken from the venue's hourly
+   * points; returns how many points got them.
+   *
+   * <p>Polymarket publishes one price per period and no candles. A daily point at {@code t}
+   * closes the period since the daily point before it, so its candle is the hourly points in
+   * that period: the first is the open, and the extremes — the close among them — are the
+   * high and low. The venue keeps about thirty days of hourly points, so older daily points,
+   * and any with fewer than two hourly points behind them, keep a close only.
+   */
+  static int addPolymarketOhlc(PredictionMarkets.Fetcher fetcher, MarketRef ref,
+      List<PricePoint> daily) throws IOException {
+    JsonNode doc = fetcher.get(CLOB + "/prices-history?market=" + enc(ref.yesTokenId)
+        + "&interval=max&fidelity=" + Interval.HOUR.minutes);
+    List<double[]> hourly = new ArrayList<>();
+    for (JsonNode p : required(doc, "history", "Polymarket prices-history response")) {
+      hourly.add(new double[] {required(p, "t", "Polymarket price point").asLong(),
+          number(required(p, "p", "Polymarket price point"), "price point p")});
+    }
+    hourly.sort(Comparator.comparingDouble(h -> h[0]));
+    int filled = 0;
+    int at = 0;
+    for (int i = 1; i < daily.size(); i++) {
+      PricePoint d = daily.get(i);
+      long from = daily.get(i - 1).epochSecond;
+      while (at < hourly.size() && hourly.get(at)[0] <= from) {
+        at++;
+      }
+      int count = 0;
+      Double open = null;
+      double high = d.price;
+      double low = d.price;
+      while (at < hourly.size() && hourly.get(at)[0] <= d.epochSecond) {
+        double price = hourly.get(at)[1];
+        open = open == null ? Double.valueOf(price) : open;
+        high = Math.max(high, price);
+        low = Math.min(low, price);
+        count++;
+        at++;
+      }
+      if (count >= 2) {
+        d.open = open;
+        d.high = high;
+        d.low = low;
+        filled++;
+      }
+    }
+    return filled;
+  }
+
   /** The historical tier names a candle's fields without the live tier's unit suffixes. */
   private static PricePoint kalshiPoint(JsonNode c, String ticker, boolean historical) {
     String what = "Kalshi candlestick of " + ticker;
@@ -626,7 +688,14 @@ final class MarketHistory {
     PricePoint p = new PricePoint();
     p.epochSecond = required(c, "end_period_ts", what).asLong();
     p.volume = number(required(c, volume, what), what + " " + volume);
-    p.price = tradePrice(required(c, "price", what), close, what + " price");
+    JsonNode price = required(c, "price", what);
+    p.price = tradePrice(price, close, what + " price");
+    if (p.price != null) {
+      String suffix = historical ? "" : "_dollars";
+      p.open = dollars(required(price, "open" + suffix, what + " price"), what + " price.open");
+      p.high = dollars(required(price, "high" + suffix, what + " price"), what + " price.high");
+      p.low = dollars(required(price, "low" + suffix, what + " price"), what + " price.low");
+    }
     p.yesBid = candleClose(required(c, "yes_bid", what), close, what + " yes_bid");
     p.yesAsk = candleClose(required(c, "yes_ask", what), close, what + " yes_ask");
     return p;
@@ -744,8 +813,10 @@ final class MarketHistory {
     ObjectNode t = MAPPER.createObjectNode();
     t.put("name", "market_price_history");
     t.put("description", "Price history of one Kalshi or Polymarket market, with the order "
-        + "book as it stands now. Returns the price series (Yes price in dollars; Kalshi "
-        + "adds closing bid, ask and volume per period), first, last, min and max price, "
+        + "book as it stands now. Returns the price series (Yes price in dollars, with the "
+        + "period's open, high and low where the venue has them — the candles of a "
+        + "render_chart candlestick; Kalshi adds closing bid, ask and volume per period), "
+        + "first, last, min and max price, "
         + "and the book's top: best bid and ask with sizes and the spread. A market no "
         + "longer taking orders returns order_book null with the reason. Use it to see "
         + "whether a quoted price is new or long-standing, how it moved into a release, and "
@@ -806,6 +877,18 @@ final class MarketHistory {
     out.put("window_days", days);
     out.put("read_at", end.toString());
     summarize(out, points);
+    if ("kalshi".equals(source)) {
+      out.put("ohlc", "venue candlesticks: each traded period carries open, high and low, "
+          + "and price is its close");
+    } else if (interval == Interval.DAY) {
+      int filled = addPolymarketOhlc(fetcher, ref, points);
+      out.put("ohlc", "resampled from the venue's hourly points, which it keeps for about "
+          + "30 days: " + filled + " of " + points.size() + " points carry open, high and "
+          + "low; the rest have a close only");
+    } else {
+      out.put("ohlc", "none: Polymarket publishes one price per period, and hourly is its "
+          + "finest; use interval=day for candles");
+    }
     ArrayNode series2 = out.putArray("points");
     for (PricePoint p : points) {
       series2.add(p.toJson());

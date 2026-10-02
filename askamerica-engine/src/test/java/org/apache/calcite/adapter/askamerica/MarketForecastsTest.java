@@ -329,6 +329,109 @@ class MarketForecastsTest {
     assertEquals(0, out.get("flags").size());
   }
 
+  // ─── Fan ───────────────────────────────────────────────────────────────────
+
+  private static List<Double> numbers(JsonNode array) {
+    List<Double> out = new ArrayList<>();
+    for (JsonNode v : array) {
+      out.add(v.isNull() ? null : v.asDouble());
+    }
+    return out;
+  }
+
+  /** The fan block must be a fan chart as it stands: this lays it out, which validates it. */
+  private static void assertRendersAsFan(JsonNode fan) {
+    List<String> categories = new ArrayList<>();
+    for (JsonNode c : fan.get("categories")) {
+      categories.add(c.asText());
+    }
+    List<ChartRenderer.SeriesSpec> series = new ArrayList<>();
+    for (JsonNode s : fan.get("series")) {
+      series.add(new ChartRenderer.SeriesSpec(s.get("name").asText(),
+          numbers(s.get("values"))));
+    }
+    List<ChartRenderer.Band> bands = new ArrayList<>();
+    for (JsonNode b : fan.get("bands")) {
+      bands.add(new ChartRenderer.Band(b.get("name").asText(), numbers(b.get("low")),
+          numbers(b.get("high"))));
+    }
+    String svg = ChartRenderer.layoutOrdered("fan", "Forecast", null, null, categories, series,
+        null, bands, java.util.Collections.<ChartRenderer.RefLine>emptyList(), 800, 400, null,
+        null).toSvg();
+    assertTrue(svg.contains("class=\"band\""));
+  }
+
+  /** One step ahead: the fan opens from the last level, 4.1, onto the settlement month. */
+  @Test void theFanOpensFromTheLastLevelOntoTheSettlementPeriod() throws Exception {
+    JsonNode fan = unemploymentRun("").get("fan");
+    assertEquals(21, fan.get("categories").size());
+    assertEquals("2025-01", fan.get("categories").get(0).asText());
+    assertEquals("2026-09", fan.get("categories").get(20).asText());
+    List<Double> history = numbers(fan.get("series").get(0).get("values"));
+    List<Double> median = numbers(fan.get("series").get(1).get("values"));
+    assertEquals(4.1, history.get(19), EPS);
+    assertNull(history.get(20));
+    assertNull(median.get(18));
+    assertEquals(4.1, median.get(19), EPS);
+    assertEquals(4.2, median.get(20), EPS);
+    JsonNode wide = fan.get("bands").get(1);
+    assertEquals("90% interval", wide.get("name").asText());
+    assertTrue(wide.get("low").get(18).isNull());
+    assertEquals(4.1, wide.get("low").get(19).asDouble(), EPS);
+    assertEquals(3.9, wide.get("low").get(20).asDouble(), EPS);
+    assertEquals(4.2, wide.get("high").get(20).asDouble(), EPS);
+    assertRendersAsFan(fan);
+  }
+
+  /**
+   * Ten trading steps from Wednesday 2026-09-30: nine dated steps, weekends skipped, then the
+   * settlement date. One step out, a path from 100 reaches 102.01 and one from 101 stays at
+   * the latest level, so the interval is already as wide as at settlement.
+   */
+  @Test void theFanOfAPathForecastHasAStepForEachTradingDay() throws Exception {
+    JsonNode out = run(oilVenue(), oil(), "");
+    JsonNode fan = out.get("fan");
+    assertEquals(24 + 10, fan.get("categories").size());
+    assertEquals("2026-09-30", fan.get("categories").get(23).asText());
+    assertEquals("2026-10-01", fan.get("categories").get(24).asText());
+    assertEquals("2026-10-05", fan.get("categories").get(26).asText());
+    assertEquals("2026-10-13", fan.get("categories").get(32).asText());
+    assertEquals("2026-10-14", fan.get("categories").get(33).asText());
+    List<Double> median = numbers(fan.get("series").get(1).get("values"));
+    assertEquals(101.0, median.get(23), EPS);
+    assertEquals(out.get("median").asDouble(), median.get(33), EPS);
+    JsonNode wide = fan.get("bands").get(1);
+    assertEquals(101.0, wide.get("low").get(24).asDouble(), EPS);
+    assertEquals(102.01, wide.get("high").get(24).asDouble(), EPS);
+    assertEquals(out.get("p95").asDouble(), wide.get("high").get(33).asDouble(), EPS);
+    assertRendersAsFan(fan);
+  }
+
+  /** A one-period change has no path: the intervals stand at the settlement month alone. */
+  @Test void theFanOfAChangeForecastStandsAtTheSettlementPeriodAlone() throws Exception {
+    double[] v = new double[20];
+    for (int t = 0; t < v.length; t++) {
+      v[t] = 159000 + 100.0 * t + (t % 2 == 0 ? 0 : 50);
+    }
+    FakeSql sql = new FakeSql().on("CES0000000001", blsRows(YearMonth.of(2025, 1), v));
+    JsonNode fan = run(venue("Jobs added in September 2026",
+        "Total nonfarm payrolls change, in thousands, seasonally adjusted, no decimals.",
+        CLOSE, 100), sql, "").get("fan");
+    List<Double> history = numbers(fan.get("series").get(0).get("values"));
+    assertNull(history.get(0));
+    assertEquals(150, history.get(1), EPS);
+    assertEquals(50, history.get(2), EPS);
+    List<Double> median = numbers(fan.get("series").get(1).get("values"));
+    assertNull(median.get(19));
+    assertEquals(150, median.get(20), EPS);
+    JsonNode wide = fan.get("bands").get(1);
+    assertTrue(wide.get("low").get(19).isNull());
+    assertEquals(50, wide.get("low").get(20).asDouble(), EPS);
+    assertEquals(150, wide.get("high").get(20).asDouble(), EPS);
+    assertTrue(fan.get("note").asText().contains("settlement period alone"));
+    assertRendersAsFan(fan);
+  }
+
   /** WTI alternates 100 and 101 daily, last 101; 14 days to close is 10 trading steps. */
   private static FakeSql oil(double... overrides) {
     double[] v = new double[30];
