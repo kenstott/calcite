@@ -101,6 +101,21 @@ class RecentCallLogSnapshotTest {
         assertSame(newSearch, snap.get(0));
     }
 
+    @Test void successfulReportArtifactIsABoundary() throws Exception {
+        ObjectNode staleQuery = entry("query", null);
+        ObjectNode successfulArtifact = entry("create_report_artifact", null);
+        ObjectNode newSearch = entry("search_catalog", null);
+        callLog().add(staleQuery);
+        callLog().add(successfulArtifact);
+        callLog().add(newSearch);
+
+        List<ObjectNode> snap = snapshot();
+
+        assertEquals(1, snap.size(),
+            "a successful create_report_artifact concludes a report exactly as preview_report does");
+        assertSame(newSearch, snap.get(0));
+    }
+
     @Test void multipleRejectedAttemptsAllStayVisible() throws Exception {
         ObjectNode query = entry("query", null);
         ObjectNode rejected1 = entry("preview_report", "issue 1");

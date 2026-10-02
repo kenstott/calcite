@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,6 +37,48 @@ final class ReportArtifact {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ReportArtifact() {
+    }
+
+    /**
+     * A validation as data: the article under review and its claims sorted into the blocks
+     * {@link ClaimScoring} scores them in — the author's own claims, each speaker's, then the
+     * unscored audit of the sources the piece relays. A scored block carries its honesty and
+     * bias scores, computed from its own claims, and lists the claims that held up least first.
+     * Claims keep the number they have in the order given, so a block's table and the saved
+     * page agree.
+     */
+    static ObjectNode validation(String sourceUrl, JsonNode claims) {
+        ObjectNode out = MAPPER.createObjectNode();
+        putIfPresent(out, "source_url", sourceUrl);
+        out.put("scope", "this article only");
+        ArrayNode groups = out.putArray("groups");
+        for (String b : ClaimScoring.blocks(claims)) {
+            ObjectNode tally = MAPPER.createObjectNode();
+            ArrayNode inBlock = MAPPER.createArrayNode();
+            for (Integer number : ClaimScoring.order(claims, b)) {
+                int n = number.intValue();
+                JsonNode claim = claims.get(n - 1);
+                String verdict = claim.path("verdict").asText("").trim()
+                    .toLowerCase(java.util.Locale.ROOT);
+                tally.put(verdict, tally.path(verdict).asInt(0) + 1);
+                ObjectNode numbered = MAPPER.createObjectNode();
+                numbered.put("n", n);
+                numbered.setAll((ObjectNode) claim);
+                inBlock.add(numbered);
+            }
+            ObjectNode group = groups.addObject();
+            if (!b.isEmpty()) {
+                group.put("group", ClaimScoring.group(inBlock.get(0)));
+                putIfPresent(group, "speaker", ClaimScoring.blockSpeaker(b));
+                group.put("label", ClaimScoring.label(b));
+            }
+            if (ClaimScoring.isScored(b)) {
+                group.set("score", ClaimScoring.score(claims, b));
+            }
+            group.set("tally", tally);
+            group.set("claims", inBlock);
+        }
+        return out;
     }
 
     /** Builds the payload; {@code sections}, {@code sources} and {@code panels} may be empty,

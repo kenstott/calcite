@@ -78,4 +78,21 @@ class PgwireGovDataConnectorCredentialExpiryTest {
     writeExpiry("not-a-number");
     assertTrue(PgwireGovDataConnector.serverCredentialsExpired());
   }
+
+  /** The pid on file is the launcher; the server is its child, and must not outlive it. */
+  @Test void aForcedKillTakesTheLaunchersChildrenWithIt() throws Exception {
+    Process launcher = new ProcessBuilder("sh", "-c", "sleep 300 & wait").start();
+    ProcessHandle child = null;
+    for (int i = 0; i < 100 && child == null; i++) {
+      child = launcher.toHandle().children().findFirst().orElse(null);
+      if (child == null) {
+        Thread.sleep(50);
+      }
+    }
+    assertTrue(child != null, "the launcher never started its child");
+
+    assertTrue(PgwireGovDataConnector.killTree(launcher.toHandle(), 10));
+    assertFalse(launcher.isAlive());
+    assertFalse(child.isAlive());
+  }
 }
