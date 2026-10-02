@@ -1369,4 +1369,192 @@ class MarketBasketScanTest {
     // A cap under the forecast's loss keeps nothing.
     assertEquals(0, MarketPricing.nearLocks(legs, joint, 2, 2, 0.01, 0.20, 2, 5).kept.size());
   }
+
+  // ─── Daily temperature extremes ────────────────────────────────────────────
+
+  private static ObjectNode temperatureMarket(String ticker, String type, Double floor,
+      Double cap, String ask, String place, String report) {
+    ObjectNode m = MAPPER.createObjectNode();
+    m.put("ticker", ticker);
+    m.put("status", "active");
+    m.put("title", "Will the maximum temperature be in this range on Oct 4, 2026?");
+    m.put("yes_bid_dollars", ask);
+    m.put("yes_ask_dollars", ask);
+    m.put("last_price_dollars", ask);
+    m.put("volume_fp", "5000.00");
+    m.put("volume_24h_fp", "800.00");
+    m.put("open_interest_fp", "2000.00");
+    m.put("close_time", "2026-10-05T08:00:00Z");
+    m.put("strike_type", type);
+    if (floor != null) {
+      m.put("floor_strike", floor);
+    }
+    if (cap != null) {
+      m.put("cap_strike", cap);
+    }
+    m.put("rules_primary", "If the maximum temperature recorded at " + place + " (" + report
+        + ") for Oct 4, 2026, is in this range in degrees fahrenheit according to The Weather "
+        + "Company, then the market resolves to Yes.");
+    m.put("rules_secondary", "The official and final value used to determine this market is "
+        + "the maximum/minimum temperature as reported by the Weather Company.");
+    return m;
+  }
+
+  /** Kalshi's high for 4 Oct 2026: under 87 at 0.20, 87 to 88 at 0.44, over 88 at 0.34. */
+  private static ObjectNode kalshiHigh(String id, String place, String report) {
+    ObjectNode ev = MAPPER.createObjectNode();
+    ev.put("title", "Highest temperature in " + place + " on Oct 4, 2026?");
+    ev.put("event_ticker", id);
+    ev.put("series_ticker", "KXHIGHLAX");
+    ev.put("category", "Climate and Weather");
+    ev.putArray("settlement_sources").addObject().put("name", "The Weather Company");
+    ArrayNode markets = ev.putArray("markets");
+    markets.add(temperatureMarket(id + "-T87", "less", null, 87.0, "0.2000", place, report));
+    markets.add(temperatureMarket(id + "-B87.5", "between", 87.0, 88.0, "0.4400", place,
+        report));
+    markets.add(temperatureMarket(id + "-T88", "greater", 88.0, null, "0.3400", place,
+        report));
+    return ev;
+  }
+
+  /** Polymarket's event on one day's temperature: "89°F or higher" bid 0.60, and one range. */
+  private static ObjectNode polymarketTemperature(String kind, String place, String date,
+      String site) {
+    ObjectNode ev = MAPPER.createObjectNode();
+    ev.put("id", POLY_ID);
+    ev.put("title", kind + " temperature in " + place + " on " + date + "?");
+    ev.put("slug", "highest-temperature");
+    ev.putArray("tags").addObject().put("label", "Weather");
+    ArrayNode markets = ev.putArray("markets");
+    polymarketMarket(markets, "m1", "89°F or higher", 0.60, 0.62);
+    polymarketMarket(markets, "m2", "87-88°F", 0.25, 0.27);
+    for (JsonNode m : markets) {
+      ((ObjectNode) m).put("endDate", "2026-10-04T12:00:00Z");
+      ((ObjectNode) m).put("description", "This market will resolve to the temperature range "
+          + "that contains the highest temperature recorded by NOAA at the station in degrees "
+          + "Fahrenheit on 4 Oct '26. The resolution source will be the highest reading under "
+          + "the \"Temp\" column, available here: "
+          + "https://www.weather.gov/wrh/timeseries?site=" + site + " . The resolution source "
+          + "measures temperatures to whole degrees Fahrenheit (eg, 21°F).");
+    }
+    return ev;
+  }
+
+  private static JsonNode temperatures(ObjectNode kalshi, ObjectNode polymarket)
+      throws Exception {
+    FakeFetcher f = new FakeFetcher();
+    ObjectNode series = MAPPER.createObjectNode();
+    series.putObject("series").put("fee_type", "quadratic").put("fee_multiplier", 1);
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/series/KXHIGHLAX", series);
+    ObjectNode one = MAPPER.createObjectNode();
+    one.set("event", kalshi);
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/events/"
+        + kalshi.get("event_ticker").asText(), one);
+    ObjectNode kList = MAPPER.createObjectNode();
+    kList.putArray("events").add(kalshi);
+    kList.put("cursor", "");
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/events?", kList);
+    f.byPrefix.put(PredictionMarkets.POLYMARKET + "/events/" + POLY_ID, polymarket);
+    ObjectNode pList = MAPPER.createObjectNode();
+    pList.putArray("events").add(polymarket);
+    pList.put("next_cursor", "");
+    f.byPrefix.put(PredictionMarkets.POLYMARKET + "/events/keyset?", pList);
+    return MAPPER.readTree(scan(f, 60_000L).scan(args("{}")));
+  }
+
+  @Test void oneStationsHighOnOneDayIsPricedAsTwoMeasurementsAndIsNeverALock()
+      throws Exception {
+    JsonNode out = temperatures(kalshiHigh("KXHIGHLAX-26OCT04", "Los Angeles", "CLILAX"),
+        polymarketTemperature("Highest", "Los Angeles", "October 4", "klax"));
+
+    JsonNode funnel = out.get("funnel");
+    assertEquals(1, funnel.get("cross_venue_pairs").asInt(), out.toString());
+    assertEquals(1, funnel.get("cross_venue_pairs_priced").asInt(), out.toString());
+    assertEquals(1, funnel.get("cross_venue_pairs_on_two_measurements").asInt());
+    assertEquals(0, funnel.get("cross_venue_pairs_with_a_lock").asInt());
+    assertEquals(0, funnel.get("cross_venue_pairs_forecast").asInt());
+    assertEquals(0, out.get("near_locks").size());
+    for (JsonNode b : out.get("baskets")) {
+      assertFalse("cross_venue".equals(b.get("type").asText()), b.toString());
+    }
+
+    assertEquals(1, out.get("unverified").size());
+    JsonNode gap = out.get("unverified").get(0);
+    assertEquals("two_measurements", gap.get("same_quantity").asText());
+    assertNull(gap.get("settles_on"));
+    String reason = gap.get("same_quantity_reason").asText();
+    assertTrue(reason.contains("highest temperature at LAX on 2026-10-04"), reason);
+    assertTrue(reason.contains("the daily climate report CLILAX as The Weather Company "
+        + "reports it"), reason);
+    assertTrue(reason.contains("the highest reading of the weather.gov time series at KLAX"),
+        reason);
+    assertTrue(gap.get("basis").asText().contains("whole number of degrees"));
+    // YES over 88 on Kalshi at 0.34 plus its fee 0.07 x 0.34 x 0.66, NO on "89 or higher" at
+    // 0.40: in whole degrees over 88 is 89 or higher, so one of the two pays.
+    double cost = 0.34 + 0.07 * 0.34 * 0.66 + 0.40;
+    assertEquals(cost, gap.get("cost").asDouble(), 1e-3);
+    assertEquals(1 - cost, gap.get("floor_profit").asDouble(), 1e-3);
+    assertTrue(out.get("unverified_is").asText().contains("two_measurements"));
+  }
+
+  @Test void temperaturesAtDifferentStationsOfOneCityAreNotPriced() throws Exception {
+    JsonNode out = temperatures(kalshiHigh("KXHIGHNY-26OCT04", "New York City", "CLINYC"),
+        polymarketTemperature("Highest", "NYC", "October 4", "klga"));
+
+    assertEquals(1, out.get("funnel").get("cross_venue_pairs").asInt(), out.toString());
+    assertEquals(0, out.get("funnel").get("cross_venue_pairs_priced").asInt());
+    assertEquals(0, out.get("unverified").size());
+    assertTrue(out.get("not_priced").get(0).get("why").asText().contains(
+        "different stations: NYC and LGA"), out.get("not_priced").toString());
+  }
+
+  @Test void temperaturesInDifferentCitiesOrOnDifferentDaysAreNotPaired() throws Exception {
+    ObjectNode lax = kalshiHigh("KXHIGHLAX-26OCT04", "Los Angeles", "CLILAX");
+    assertEquals(0, temperatures(lax, polymarketTemperature("Highest", "Miami", "October 4",
+        "kmia")).get("funnel").get("cross_venue_pairs").asInt());
+    assertEquals(0, temperatures(lax, polymarketTemperature("Highest", "Los Angeles",
+        "October 5", "klax")).get("funnel").get("cross_venue_pairs").asInt());
+    assertEquals(0, temperatures(lax, polymarketTemperature("Lowest", "Los Angeles",
+        "October 4", "klax")).get("funnel").get("cross_venue_pairs").asInt());
+  }
+
+  @Test void maximumMinimumTemperatureIsNotReadAsMonthOverMonth() throws Exception {
+    FakeFetcher f = new FakeFetcher();
+    ObjectNode one = MAPPER.createObjectNode();
+    one.set("event", kalshiHigh("KXHIGHLAX-26OCT04", "Los Angeles", "CLILAX"));
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/events/KXHIGHLAX-26OCT04", one);
+    ObjectNode series = MAPPER.createObjectNode();
+    series.putObject("series").put("fee_type", "quadratic").put("fee_multiplier", 1);
+    f.byPrefix.put(PredictionMarkets.KALSHI + "/series/KXHIGHLAX", series);
+    PredictionMarkets.Event e =
+        PredictionMarkets.fetchEvent(f, "kalshi", "KXHIGHLAX-26OCT04").event;
+
+    assertTrue(e.rules.contains("maximum/minimum"), e.rules);
+    assertFalse(MarketForecasts.Transform.MOM == MarketForecasts.quantityOf(e).transform);
+    JsonNode transform = MarketRules.compare(e, e).get("dimensions").get("transform");
+    assertFalse(transform.toString().contains("month-over-month"), transform.toString());
+  }
+
+  @Test void aTemperatureOutcomeIsReadInWholeDegrees() {
+    MarketPricing.Condition range = MarketPricing.DailyExtreme.outcome("86-87°F");
+    assertEquals("between", range.kind);
+    assertEquals(86, range.low, 1e-12);
+    assertEquals(87, range.high, 1e-12);
+    MarketPricing.Condition top = MarketPricing.DailyExtreme.outcome("94°F or higher");
+    assertEquals("at_least", top.kind);
+    assertEquals(94, top.low, 1e-12);
+    MarketPricing.Condition bottom = MarketPricing.DailyExtreme.outcome(
+        "Will the highest temperature in Los Angeles be 75°F or below on October 2?");
+    assertEquals("at_most", bottom.kind);
+    assertEquals(75, bottom.low, 1e-12);
+    MarketPricing.Condition exact = MarketPricing.DailyExtreme.outcome(
+        "Will the highest temperature in Tokyo be 23°C on October 2?");
+    assertEquals("between", exact.kind);
+    assertEquals(23, exact.low, 1e-12);
+    assertEquals(23, exact.high, 1e-12);
+    assertEquals(-5, MarketPricing.DailyExtreme.outcome("-5°C or below").low, 1e-12);
+
+    assertNull(MarketPricing.DailyExtreme.outcome("Will it be hot on October 2?"));
+    assertNull(MarketPricing.DailyExtreme.outcome(null));
+  }
 }

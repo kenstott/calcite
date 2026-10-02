@@ -326,6 +326,21 @@ resumable call with no forecast:
   share of forecast draws in that range that lose. Errors are measured on revised values,
   while the events settle on first prints. "one-month percent change" and "from the
   preceding month" now read as month-over-month in both `MarketForecasts` and `MarketRules`.
+- Daily temperature extremes (`MarketPricing.DailyExtreme`): Kalshi `KXHIGH*`/`KXLOWT*` and
+  Polymarket "Highest/Lowest temperature in <city> on <day>" are read as kind, place, day,
+  station, unit and whole-degree conditions ("86-87°F", "94°F or higher"). `crossVenue`
+  groups them by kind, place and day instead of the 3-day close chain, which had paired
+  every city with every other. A pair is priced only when both rules name one station
+  (Kalshi `(CLILAX)`, Polymarket `site=klax` → LAX) in one unit, on a whole-degree grid, and
+  a gap is listed only under `unverified` with `same_quantity: two_measurements`: Kalshi
+  settles on the climate report, Polymarket on the highest reading of the weather.gov time
+  series, so both legs can lose. No forecast, no near-lock search. Funnel:
+  `cross_venue_pairs_on_two_measurements`. Same station on both venues as of 2026-10-02:
+  LAX, MIA, AUS, ATL, SFO, SEA, HOU; different: New York (NYC vs LGA), Chicago (MDW vs ORD),
+  Denver (DEN vs BKF), Dallas (DFW vs DAL). The bare `m/m` in `MOM_TEXT` matched
+  "maximum/minimum temperature" and is now word-bounded. Open: scoring the odds needs the
+  history of both records per station; the catalog has the daily maximum
+  (`weather.ghcnd_daily`) and no hourly station readings.
 - Size and time: every returned basket carries `size` from its legs' order books
   (`sets_at_best_price`, `binding_leg`, `sets_with_a_positive_floor`, `capital`,
   `floor_profit` in dollars, `stops_because`), `days_to_settlement` to its last event's

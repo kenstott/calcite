@@ -97,7 +97,7 @@ final class MarketRules {
     private static final Pattern QUARTER = Pattern.compile(
         "\\b(?:q([1-4])|(first|second|third|fourth) quarter)\\b[ ,]*(?:of )?(\\d{4})?");
     private static final Pattern MOM_TEXT = Pattern.compile(
-        "month[- ]over[- ]month|m/m|\\bmom\\b|monthly (change|rate|increase|inflation)"
+        "month[- ]over[- ]month|\\bm/m\\b|\\bmom\\b|monthly (change|rate|increase|inflation)"
         + "|(from|compared (to|with)) the (previous|prior|preceding) month"
         + "|(one|1)[- ]month percent(age)? change");
     private static final Pattern YOY_TEXT = Pattern.compile(

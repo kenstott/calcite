@@ -223,15 +223,33 @@ final class MarketBaskets {
 
     /**
      * One driver quoted on both venues, closing within days of each other: two prices for
-     * what is very nearly one outcome. The simplest arbitrage — it needs no forecast, only
+     * what is very nearly one outcome. A {@link MarketPricing.DailyExtreme} is grouped by its
+     * place and day instead. The simplest arbitrage — it needs no forecast, only
      * both rule texts read and both sets of quotes.
      */
     static List<Basket> crossVenue(List<PredictionMarkets.Event> events) {
         Map<String, List<PredictionMarkets.Event>> byDriver = new TreeMap<>();
+        // One day's highest or lowest temperature is one quantity only in one place on one
+        // day: a run of closes within days would hold every city.
+        Map<String, List<PredictionMarkets.Event>> byExtreme = new TreeMap<>();
         for (PredictionMarkets.Event e : events) {
-            byDriver.computeIfAbsent(e.driver.name, k -> new ArrayList<>()).add(e);
+            MarketPricing.DailyExtreme x = MarketPricing.DailyExtreme.of(e);
+            if (x != null) {
+                byExtreme.computeIfAbsent(x.kind + "_in_" + x.place.replace(' ', '_') + ":"
+                    + x.day, k -> new ArrayList<>()).add(e);
+            } else {
+                byDriver.computeIfAbsent(e.driver.name, k -> new ArrayList<>()).add(e);
+            }
         }
         List<Basket> out = new ArrayList<>();
+        for (Map.Entry<String, List<PredictionMarkets.Event>> en : byExtreme.entrySet()) {
+            Basket b = new Basket("cross_venue:temperature:" + en.getKey(),
+                "Kalshi and Polymarket both price this place's temperature on this day",
+                en.getValue());
+            if (b.venues().size() > 1) {
+                out.add(b);
+            }
+        }
         for (Map.Entry<String, List<PredictionMarkets.Event>> en : byDriver.entrySet()) {
             List<PredictionMarkets.Event> sorted = new ArrayList<>(en.getValue());
             sorted.sort(Comparator.comparing(MarketBaskets::day));

@@ -91,6 +91,10 @@ final class MarketBasketScan {
      */
     static final double MAX_QUOTE_RATIO = 2;
     private static final String STEP_TAKEN = "the change to be a multiple of 25 basis points";
+    private static final String DEGREE_TAKEN = "the temperature to be a whole number of degrees";
+    /** {@code same_quantity} of a pair on one station's temperature on one day, which each
+     *  venue reads from a different record. */
+    static final String TWO_MEASUREMENTS = "two_measurements";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -126,6 +130,8 @@ final class MarketBasketScan {
         /** Set when the event is one FOMC meeting's decision; its conditions are then the
          *  change of the target rate in basis points. */
         MarketPricing.Decision decision;
+        /** Set when the event is one day's highest or lowest temperature in one place. */
+        MarketPricing.DailyExtreme extreme;
         /** Baskets inside the event, locking or not. */
         List<ObjectNode> baskets = new ArrayList<>();
         /** Whether the forecast of the event's quantity was asked for; it is built once. */
@@ -322,7 +328,9 @@ final class MarketBasketScan {
         row.live = live;
         PredictionMarkets.Event e = live.event;
         row.decision = MarketPricing.Decision.of(e);
+        row.extreme = MarketPricing.DailyExtreme.of(e);
         row.conditions = row.decision != null ? row.decision.conditions
+            : row.extreme != null ? row.extreme.conditions
             : MarketPricing.labelConditions(e);
         Double step = row.decision != null ? MarketPricing.Decision.STEP : null;
         for (JsonNode n : MarketPricing.structuralLocks(live, null, step, row.conditions)) {
@@ -403,6 +411,18 @@ final class MarketBasketScan {
             return "the two events settle on different series: " + qa.series + " and "
                 + qb.series;
         }
+        if ((k.extreme == null) != (p.extreme == null)) {
+            Row x = k.extreme != null ? k : p;
+            return "the " + x.live.event.source + " event is one day's " + x.extreme.kind
+                + " temperature and the " + (x == k ? p : k).live.event.source
+                + " event is not: they are not one quantity";
+        }
+        if (k.extreme != null) {
+            String apart = apart(k, p);
+            if (apart != null) {
+                return apart;
+            }
+        }
         ObjectNode rules = MarketRules.compare(a, b);
         List<String> differing = new ArrayList<>();
         for (String d : QUANTITY) {
@@ -425,7 +445,8 @@ final class MarketBasketScan {
             return "the two events are the decisions of different FOMC meetings: "
                 + k.decision.meeting + " and " + p.decision.meeting;
         }
-        Double step = k.decision != null ? MarketPricing.Decision.STEP : null;
+        Double step = k.decision != null ? Double.valueOf(MarketPricing.Decision.STEP)
+            : k.extreme != null ? Double.valueOf(MarketPricing.DailyExtreme.STEP) : null;
         List<MarketPricing.Leg> legs = new ArrayList<>();
         List<List<MarketPricing.Leg>> sides = new ArrayList<>();
         for (Row r : new Row[]{k, p}) {
@@ -434,6 +455,14 @@ final class MarketBasketScan {
             if (own.isEmpty()) {
                 return "no market of the " + r.live.event.source + " event states a number "
                     + "the engine can read, e.g. " + labels(r.live.event);
+            }
+            if (k.extreme != null) {
+                for (MarketPricing.Leg l : own) {
+                    if (l.condition.low % step != 0 || l.condition.high % step != 0) {
+                        return "a strike of the " + r.live.event.source + " event is not a "
+                            + "whole number of degrees";
+                    }
+                }
             }
             sides.add(own);
             legs.addAll(own);
@@ -484,6 +513,13 @@ final class MarketBasketScan {
             if (info.settlesOn != null) {
                 o.put("same_quantity", VERIFIED);
                 o.put("settles_on", info.settlesOn);
+            } else if (k.extreme != null) {
+                o.put("same_quantity", TWO_MEASUREMENTS);
+                o.put("same_quantity_reason", "both events are the " + k.extreme.kind
+                    + " temperature at " + k.extreme.station + " on " + k.extreme.day
+                    + ", but " + a.source + " settles on " + k.extreme.measured + " and "
+                    + b.source + " on " + p.extreme.measured + ": the two records can differ, "
+                    + "and where they do both legs can lose");
             } else {
                 o.put("same_quantity", "unverified");
                 o.put("same_quantity_reason", "the settlement series of the "
@@ -492,9 +528,46 @@ final class MarketBasketScan {
             }
             o.put("basis", "loses at no outcome the two events' conditions can tell apart, "
                 + "taking both to settle on one number"
-                + (step == null ? "" : " and " + STEP_TAKEN));
+                + (step == null ? "" : " and "
+                    + (k.extreme != null ? DEGREE_TAKEN : STEP_TAKEN)));
             o.put("quotes_read_at", at.toString());
             found.add(o);
+        }
+        return null;
+    }
+
+    /**
+     * Why two daily temperature extremes are not one station's temperature on one day in one
+     * unit, or null when they are.
+     */
+    private static String apart(Row k, Row p) {
+        MarketPricing.DailyExtreme x = k.extreme;
+        MarketPricing.DailyExtreme y = p.extreme;
+        if (!x.kind.equals(y.kind)) {
+            return "one event is the highest temperature of the day and the other the lowest";
+        }
+        if (!x.day.equals(y.day)) {
+            return "the two events are the temperature on different days: " + x.day + " and "
+                + y.day;
+        }
+        for (Row r : new Row[]{k, p}) {
+            if (r.extreme.station == null) {
+                return "the rules of the " + r.live.event.source + " temperature event name "
+                    + "no station the engine can read";
+            }
+        }
+        if (!x.station.equals(y.station)) {
+            return "the two events are the temperature at different stations: " + x.station
+                + " and " + y.station;
+        }
+        for (Row r : new Row[]{k, p}) {
+            if (r.extreme.unit == null) {
+                return "the rules of the " + r.live.event.source + " temperature event do "
+                    + "not say Fahrenheit or Celsius";
+            }
+        }
+        if (!x.unit.equals(y.unit)) {
+            return "the two events are in different units: " + x.unit + " and " + y.unit;
         }
         return null;
     }
@@ -1019,6 +1092,7 @@ final class MarketBasketScan {
         int priced = 0;
         int lockedAcross = 0;
         int converted = 0;
+        int twoMeasurements = 0;
         // A Conversion, or why it was not built, per pair of series and month.
         Map<String, Object> conversions = new LinkedHashMap<>();
         for (MarketBaskets.Basket b : crossVenue) {
@@ -1051,6 +1125,9 @@ final class MarketBasketScan {
                         continue;
                     }
                     priced++;
+                    if (rk.extreme != null) {
+                        twoMeasurements++;
+                    }
                     for (ObjectNode f : found) {
                         if (VERIFIED.equals(f.get("same_quantity").asText())) {
                             lockedAcross++;
@@ -1151,6 +1228,7 @@ final class MarketBasketScan {
         funnel.put("cross_venue_pairs", pairs);
         funnel.put("cross_venue_pairs_priced", priced);
         funnel.put("cross_venue_pairs_with_a_lock", lockedAcross);
+        funnel.put("cross_venue_pairs_on_two_measurements", twoMeasurements);
         funnel.put("cross_venue_pairs_unverified_with_a_gap", unverified.size());
         funnel.put("locks_found", locks.size());
         funnel.put("cross_venue_pairs_converted", converted);
@@ -1176,7 +1254,11 @@ final class MarketBasketScan {
         }
         out.put("unverified_is", "cross-venue pairs whose quotes leave a gap but where the "
             + "engine could not establish that both events settle on one series. A gap "
-            + "between two different quantities is not a lock.");
+            + "between two different quantities is not a lock. same_quantity '"
+            + TWO_MEASUREMENTS + "' is a pair on one station's highest or lowest temperature "
+            + "on one day that each venue reads from a different record (same_quantity_reason "
+            + "names both): its floor holds only where the two records give the same whole "
+            + "degree, and the engine has no history of how often they do.");
         ArrayNode arbLike = out.putArray("near_locks");
         for (int i = 0; i < nears.size() && i < limit; i++) {
             if (!outOfTime) {

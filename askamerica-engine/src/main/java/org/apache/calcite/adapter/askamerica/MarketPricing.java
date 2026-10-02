@@ -19,8 +19,12 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Year;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -547,6 +551,188 @@ final class MarketPricing {
                 return null;
             }
             return new Decision(read, meetings.iterator().next());
+        }
+    }
+
+    /**
+     * One day's highest or lowest temperature at one place, which an event's markets are the
+     * outcomes of: Kalshi's "Highest temperature in Los Angeles on Oct 2, 2026?" and
+     * Polymarket's "Highest temperature in Los Angeles on October 2?". Its conditions are in
+     * whole degrees.
+     */
+    static final class DailyExtreme {
+        /** Both venues' sources report whole degrees. */
+        static final double STEP = 1;
+        private static final Pattern TITLE = Pattern.compile(
+            "\\b(highest|lowest) temperature in (.+?) on ([a-z]{3,9})\\.? (\\d{1,2})"
+            + "(?:, (\\d{4}))?(?!\\d)", Pattern.CASE_INSENSITIVE);
+        private static final List<String> MONTHS = Arrays.asList("jan", "feb", "mar", "apr",
+            "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec");
+        private static final Pattern CLIMATE_REPORT = Pattern.compile("\\(CLI([A-Z]{3})\\)");
+        private static final Pattern TIME_SERIES = Pattern.compile(
+            "weather\\.gov/\\S*[?&]site=([A-Za-z]{4})\\b");
+        private static final Pattern UNDERGROUND = Pattern.compile(
+            "wunderground\\.com/history/daily/\\S*/([A-Z]{4})\\b");
+        private static final Pattern UNIT = Pattern.compile("\\b(fahrenheit|celsius)\\b",
+            Pattern.CASE_INSENSITIVE);
+        private static final String DEGREES = "(-?\\d+)\\s*°\\s*[FC]?";
+        private static final Pattern OR_HIGHER = Pattern.compile(
+            DEGREES + "\\s+or\\s+(?:higher|above)", Pattern.CASE_INSENSITIVE);
+        private static final Pattern OR_BELOW = Pattern.compile(
+            DEGREES + "\\s+or\\s+(?:below|lower)", Pattern.CASE_INSENSITIVE);
+        private static final Pattern RANGE = Pattern.compile(
+            "(?<![\\d-])(-?\\d+)\\s*-\\s*" + DEGREES);
+        private static final Pattern EXACT = Pattern.compile("(?<![\\d-])" + DEGREES);
+
+        /** "highest" or "lowest". */
+        final String kind;
+        /** The place the title names, lower case, e.g. "los angeles". */
+        final String place;
+        final LocalDate day;
+        /** The station the rules name without a leading K, e.g. "LAX"; null when they name
+         *  none. */
+        final String station;
+        /** What the rules read the temperature from; null when {@link #station} is. */
+        final String measured;
+        /** "fahrenheit" or "celsius"; null when the rules state neither. */
+        final String unit;
+        /** Conditions by market id, for the markets whose venue gives no strike. */
+        final Map<String, Condition> conditions;
+
+        private DailyExtreme(String kind, String place, LocalDate day, String station,
+                String measured, String unit, Map<String, Condition> conditions) {
+            this.kind = kind;
+            this.place = place;
+            this.day = day;
+            this.station = station;
+            this.measured = measured;
+            this.unit = unit;
+            this.conditions = conditions;
+        }
+
+        /**
+         * The temperature one outcome states, or null when it states none: "86-87°F"
+         * (both ends included), "94°F or higher", "75°F or below" and a bare
+         * "23°C".
+         */
+        static Condition outcome(String text) {
+            if (text == null) {
+                return null;
+            }
+            Matcher m = OR_HIGHER.matcher(text);
+            if (m.find()) {
+                double v = Double.parseDouble(m.group(1));
+                return new Condition("at_least", v, v);
+            }
+            m = OR_BELOW.matcher(text);
+            if (m.find()) {
+                double v = Double.parseDouble(m.group(1));
+                return new Condition("at_most", v, v);
+            }
+            m = RANGE.matcher(text);
+            if (m.find()) {
+                double low = Double.parseDouble(m.group(1));
+                double high = Double.parseDouble(m.group(2));
+                return low < high ? new Condition("between", low, high) : null;
+            }
+            m = EXACT.matcher(text);
+            if (m.find()) {
+                double v = Double.parseDouble(m.group(1));
+                return new Condition("between", v, v);
+            }
+            return null;
+        }
+
+        /**
+         * The daily extreme {@code event} is on, or null when it is not one: its driver is
+         * temperature and its title names the highest or lowest temperature in one place on
+         * one day. A title without a year takes the year that puts the day nearest the close.
+         */
+        static DailyExtreme of(PredictionMarkets.Event event) {
+            if (event.driver == null || !"temperature".equals(event.driver.name)
+                    || event.eventTitle == null) {
+                return null;
+            }
+            Matcher t = TITLE.matcher(event.eventTitle);
+            if (!t.find() || t.group(3).length() < 3) {
+                return null;
+            }
+            int month = MONTHS.indexOf(t.group(3).substring(0, 3).toLowerCase(Locale.ROOT)) + 1;
+            int dayOfMonth = Integer.parseInt(t.group(4));
+            if (month == 0) {
+                return null;
+            }
+            LocalDate day;
+            try {
+                if (t.group(5) != null) {
+                    day = LocalDate.of(Integer.parseInt(t.group(5)), month, dayOfMonth);
+                } else {
+                    LocalDate close = LocalDate.parse(event.closeTime.substring(0, 10));
+                    day = null;
+                    for (int y = close.getYear() - 1; y <= close.getYear() + 1; y++) {
+                        if (dayOfMonth == 29 && month == 2 && !Year.isLeap(y)) {
+                            continue;
+                        }
+                        LocalDate d = LocalDate.of(y, month, dayOfMonth);
+                        if (day == null || Math.abs(ChronoUnit.DAYS.between(close, d))
+                                < Math.abs(ChronoUnit.DAYS.between(close, day))) {
+                            day = d;
+                        }
+                    }
+                }
+            } catch (DateTimeException e) {
+                return null;
+            }
+            if (day == null) {
+                return null;
+            }
+            String place = t.group(2).trim().toLowerCase(Locale.ROOT);
+            if ("nyc".equals(place)) {
+                place = "new york city";
+            }
+            StringBuilder text = new StringBuilder(event.rules == null ? "" : event.rules);
+            if (event.settlementSources != null) {
+                for (String s : event.settlementSources) {
+                    text.append(' ').append(s);
+                }
+            }
+            String station = null;
+            String measured = null;
+            Matcher report = CLIMATE_REPORT.matcher(text);
+            Matcher series = TIME_SERIES.matcher(text);
+            Matcher history = UNDERGROUND.matcher(text);
+            if (report.find()) {
+                station = report.group(1);
+                measured = "the daily climate report CLI" + station
+                    + (text.toString().toLowerCase(Locale.ROOT).contains("weather company")
+                        ? " as The Weather Company reports it" : "");
+            } else if (series.find()) {
+                String id = series.group(1).toUpperCase(Locale.ROOT);
+                station = id.startsWith("K") ? id.substring(1) : id;
+                measured = "the " + t.group(1).toLowerCase(Locale.ROOT) + " reading of the "
+                    + "weather.gov time series at " + id;
+            } else if (history.find()) {
+                String id = history.group(1);
+                station = id.startsWith("K") ? id.substring(1) : id;
+                measured = "the Weather Underground daily history at " + id;
+            }
+            Matcher u = UNIT.matcher(text);
+            String unit = u.find() ? u.group(1).toLowerCase(Locale.ROOT) : null;
+            Map<String, Condition> read = new LinkedHashMap<>();
+            for (PredictionMarkets.Market m : event.legs) {
+                if (Condition.ofStrike(m) != null) {
+                    continue;
+                }
+                Condition c = outcome(m.label);
+                if (c == null) {
+                    c = outcome(m.title);
+                }
+                if (c != null) {
+                    read.put(m.marketId, c);
+                }
+            }
+            return new DailyExtreme(t.group(1).toLowerCase(Locale.ROOT), place, day, station,
+                measured, unit, read);
         }
     }
 
