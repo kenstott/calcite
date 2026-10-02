@@ -38,7 +38,7 @@ import java.util.TreeSet;
 import java.util.function.Supplier;
 
 /**
- * Prices every basket the quotes alone can settle, in one pass and with no forecast.
+ * Prices every basket the quotes alone can settle, in one pass, and lists the arb-like ones.
  *
  * <p>Two tiers. Within one event: a ladder whose strikes are priced out of order, a bucket
  * partition the strikes prove, and a set of markets the venue states has at most one winner.
@@ -48,13 +48,21 @@ import java.util.function.Supplier;
  * from both events; a pair it reads differently is not priced, and a pair it cannot read on
  * one side is priced and listed apart as unverified.
  *
+ * <p>A verified pair with no lock is then scored against the forecast of the number it settles
+ * on: a near-lock is a basket of it that profits in both tails, loses only between two strikes,
+ * and that the forecast expects to pay more than it costs with a loss no likelier than
+ * {@code max_loss_probability}. Locks need no forecast; near-locks are a judgement of one,
+ * kept only while the quotes agree: they too put the losing band under the cap, and the
+ * forecast puts every leg within {@link #MAX_QUOTE_GAP} of its quote.
+ *
  * <p>An event is read once and kept for the listing's lifetime, so a scan that runs out of its
  * time budget resumes where it stopped on the next call.
  */
 final class MarketBasketScan {
     static final String TOOL = "scan_market_baskets";
     static final Set<String> KEYS = new TreeSet<>(Arrays.asList("driver", "within", "min_days",
-        "min_volume", "max_spread", "min_floor", "search", "limit", "max_events", "refresh"));
+        "min_volume", "max_spread", "min_floor", "max_loss_probability", "search", "limit",
+        "max_events", "refresh"));
     /** The status of a scan that read every event it chose. */
     static final String COMPLETE = "complete";
     /** Rule dimensions that say what number an event settles on. */
@@ -64,14 +72,20 @@ final class MarketBasketScan {
         new TreeSet<>(Arrays.asList("release", "climatology", "policy"));
     private static final String COLUMN = "v";
     private static final String VERIFIED = "verified";
+    private static final String NEAR_RULE = " You MUST NOT report a near_locks entry as a "
+        + "lock: state its loses_between, worst_profit, p_loss, market_p_loss and "
+        + "expected_profit, and that p_loss and expected_profit are the engine's forecast.";
     private static final int EXAMPLES_SHOWN = 5;
     private static final int CLOSEST_SHOWN = 3;
     private static final int PER_PAIR = 1;
+    /** The furthest the forecast may put a near-lock leg's chance of winning from its price. */
+    static final double MAX_QUOTE_GAP = 0.20;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final PredictionMarkets.Fetcher fetcher;
     private final PredictionMarkets.ListingCache cache;
+    private final MarketForecasts builder;
     private final Supplier<Instant> clock;
     private final long listingWaitMillis;
     private final long budgetMillis;
@@ -80,9 +94,11 @@ final class MarketBasketScan {
     private final Map<String, Row> rows = new LinkedHashMap<>();
 
     MarketBasketScan(PredictionMarkets.Fetcher fetcher, PredictionMarkets.ListingCache cache,
-            Supplier<Instant> clock, long listingWaitMillis, long budgetMillis, Duration ttl) {
+            MarketTools.SqlRunner sql, Supplier<Instant> clock, long listingWaitMillis,
+            long budgetMillis, Duration ttl) {
         this.fetcher = fetcher;
         this.cache = cache;
+        this.builder = new MarketForecasts(fetcher, sql, clock);
         this.clock = clock;
         this.listingWaitMillis = listingWaitMillis;
         this.budgetMillis = budgetMillis;
@@ -98,6 +114,22 @@ final class MarketBasketScan {
         Map<String, MarketPricing.Condition> conditions;
         /** Baskets inside the event, locking or not. */
         List<ObjectNode> baskets = new ArrayList<>();
+        /** Whether the forecast of the event's quantity was asked for; it is built once. */
+        boolean forecastTried;
+        /** Null when it was not built; {@link #forecastReason} then says why. */
+        MarketPricing.Forecast forecast;
+        String forecastReason;
+    }
+
+    /** What pricing a pair leaves for the near-lock search. */
+    private static final class Paired {
+        List<MarketPricing.Leg> legs;
+        Map<String, MarketPricing.Leg> byKey;
+        int depth;
+        ObjectNode rules;
+        Instant at;
+        /** The one series and transform both events resolve to, or null. */
+        String settlesOn;
     }
 
     // ─── Arguments ─────────────────────────────────────────────────────────────
@@ -162,6 +194,8 @@ final class MarketBasketScan {
             + "across venues (default 0.10)."));
         props.set("min_floor", prop("number", "Smallest worst-case profit per unit of cost, "
             + "after fees, to list (default 0: any lock)."));
+        props.set("max_loss_probability", prop("number", "Largest probability of a loss, "
+            + "on the forecast and on the quotes, for a near_locks entry (default 0.10)."));
         props.set("search", prop("integer", "Most legs in a cross-venue basket, 2 to 4 "
             + "(default 3)."));
         props.set("limit", prop("integer", "Baskets to return (default 5)."));
@@ -180,33 +214,33 @@ final class MarketBasketScan {
     }
 
     private static final String DESCRIPTION =
-        "Find baskets of Kalshi and Polymarket contracts that lock a profit after fees, "
-        + "with no forecast. Within one event: strikes priced out of order, a bucket partition the strikes prove, and NO on every "
-        + "market of an event the venue states has at most one winner. Across venues: every "
-        + "Kalshi and Polymarket pair find_market_baskets lists as cross_venue, scored over "
-        + "every outcome the two events' conditions can tell apart, keeping baskets with a "
-        + "leg on each venue that lose at none. A pair is "
-        + "in baskets only when the engine resolves both events to one settlement series "
-        + "and transform (settles_on); a pair it resolves to different series is in "
-        + "not_priced; a pair it cannot resolve on one side is in unverified with "
-        + "same_quantity_reason. Each "
-        + "basket gives its legs with side, price and fee, cost, floor_profit, floor (worst "
-        + "case per unit of cost) and, across venues, rules_match with the differing and "
-        + "unknown rule dimensions. funnel counts what was read and priced; not_priced "
-        + "says why a pair was left out; closest lists the exclusive events nearest a "
-        + "lock. floor is for one contract per leg at the quote; size reads the "
-        + "legs' order books: sets_at_best_price, the sets that fill at a positive floor, "
-        + "their capital and profit in dollars. Cost is paid in full at purchase; "
-        + "annualized_floor_simple_365d is floor over days_to_settlement. Baskets of other "
-        + "recipes (series_run, calendar, linked_drivers, "
-        + "same_place) settle on different quantities and are counted, not priced: "
+        "Find baskets of Kalshi and Polymarket contracts that lock a profit after fees,"
+        + " from the quotes alone. Within one event: strikes priced out of order, a "
+        + "bucket partition the strikes prove, and NO on every market of an event the "
+        + "venue states has at most one winner. Across venues: every Kalshi and "
+        + "Polymarket pair find_market_baskets lists as cross_venue, scored over every "
+        + "outcome their conditions can tell apart, keeping baskets with a leg on each "
+        + "venue that lose at none. A pair is in baskets only when the engine resolves "
+        + "both events to one settlement series and transform (settles_on); one it "
+        + "resolves to different series is in not_priced; one it cannot resolve on one "
+        + "side is in unverified with same_quantity_reason. Each basket gives its legs, "
+        + "cost, floor_profit, floor (worst case per unit of cost) and, across venues, "
+        + "rules_match. near_locks are arb-like bets, not locks: baskets of a verified "
+        + "pair with no lock that profit outside loses_between, with worst_profit and, "
+        + "from the engine's forecast, p_loss (at most max_loss_probability) and "
+        + "expected_profit. funnel counts what was read; not_priced says why a pair was "
+        + "left out; closest lists the exclusive events nearest a lock. size reads the "
+        + "legs' order books: the sets that fill, their capital and profit in dollars. "
+        + "Cost is paid at purchase; the annualized rate is over days_to_settlement. "
+        + "Other recipes settle on different quantities and are counted, not priced: "
         + "price_market_basket takes them with scenarios_sql. You MUST call again with "
-        + "the same arguments while status is 'loading' or 'scanning'. You MUST use this tool first when asked to find a basket "
-        + "that locks a yield or an arbitrage. You MUST report a cross_venue basket as not a "
-        + "lock unless its rules_match is 'match', and state the differing and unknown "
-        + "dimensions. You MUST state cost, fees, floor, size and quotes_read_at for every "
-        + "basket reported. You MUST NOT report an unverified entry as a lock. When baskets is "
-        + "empty you MUST say none was found and report funnel and not_priced.";
+        + "the same arguments while status is 'loading' or 'scanning'. You MUST use this "
+        + "tool first when asked to find a basket that locks a yield, an arbitrage or an "
+        + "arb-like bet. You MUST report a cross_venue basket as not a lock unless its "
+        + "rules_match is 'match', and state rules_differing and rules_unknown. You MUST "
+        + "state cost, fees, floor, size and quotes_read_at for every basket reported. "
+        + "You MUST NOT report an unverified or near_locks entry as a lock. When baskets "
+        + "is empty you MUST say none was found and report funnel and not_priced.";
 
     // ─── One event ─────────────────────────────────────────────────────────────
 
@@ -326,10 +360,11 @@ final class MarketBasketScan {
      *
      * @param found the baskets that lose at no outcome are added here; each carries
      *     {@code same_quantity}, {@code verified} only when both events resolve to one series
+     * @param info filled when the pair is priced
      * @return why the pair was not priced, or null when it was
      */
     private static String pair(String basket, Row k, Row p, int search, Double minFloor,
-            List<ObjectNode> found) {
+            List<ObjectNode> found, Paired info) {
         PredictionMarkets.Event a = k.live.event;
         PredictionMarkets.Event b = p.live.event;
         MarketForecasts.Quantity qa = MarketForecasts.quantityOf(a);
@@ -382,49 +417,23 @@ final class MarketBasketScan {
         for (MarketPricing.Leg l : legs) {
             byKey.put(l.source + ":" + l.key(), l);
         }
+        Instant at = k.at.isBefore(p.at) ? k.at : p.at;
+        info.legs = legs;
+        info.byKey = byKey;
+        info.depth = depth;
+        info.rules = rules;
+        info.at = at;
+        info.settlesOn = qa.key != null && qb.key != null ? qa.key : null;
         ObjectNode score = MarketPricing.scoreBasket(legs, MarketPricing.grid(legs), true,
             depth, true, minFloor, PER_PAIR, 2);
-        Instant at = k.at.isBefore(p.at) ? k.at : p.at;
         for (JsonNode best : score.get("search").get("best")) {
-            ObjectNode o = MAPPER.createObjectNode();
-            o.put("type", "cross_venue");
-            o.put("basket", basket);
-            o.set("venues", best.get("venues"));
-            o.putArray("events").add(ref(a)).add(ref(b));
-            ArrayNode out = o.putArray("legs");
-            for (JsonNode l : best.get("legs")) {
-                ObjectNode leg = out.addObject();
-                leg.put("market_id", l.get("id").asText());
-                leg.set("title", l.get("title"));
-                leg.set("source", l.get("source"));
-                leg.set("side", l.get("side"));
-                leg.set("price", l.get("price"));
-                leg.set("fee", l.get("fee"));
-                MarketPricing.Condition c = byKey.get(l.get("source").asText() + ":"
-                    + l.get("id").asText() + ":" + l.get("side").asText()).condition;
-                leg.set("condition", c.toJson());
-                if (c.lowUnsure || c.highUnsure) {
-                    // The label shares this end with the next range: scored as a loss there.
-                    ArrayNode ends = leg.putArray("counted_as_a_loss_at");
-                    if (c.lowUnsure) {
-                        ends.add(c.low);
-                    }
-                    if (c.highUnsure) {
-                        ends.add(c.high);
-                    }
-                }
-            }
-            o.set("cost", best.get("cost"));
+            ObjectNode o = entry("cross_venue", basket, best, a, b, info);
             o.set("floor_profit", best.get("worst"));
             o.set("floor", best.get("floor"));
             o.set("best_profit", best.get("best"));
-            o.put("legs_searched", depth);
-            o.set("rules_match", rules.get("rules_match"));
-            o.set("rules_differing", rules.get("differing"));
-            o.set("rules_unknown", rules.get("unknown"));
-            if (qa.key != null && qb.key != null) {
+            if (info.settlesOn != null) {
                 o.put("same_quantity", VERIFIED);
-                o.put("settles_on", qa.key);
+                o.put("settles_on", info.settlesOn);
             } else {
                 o.put("same_quantity", "unverified");
                 o.put("same_quantity_reason", "the settlement series of the "
@@ -439,6 +448,124 @@ final class MarketBasketScan {
         return null;
     }
 
+    /** What a lock and a near-lock of one pair say alike: events, legs, cost and rules. */
+    private static ObjectNode entry(String type, String basket, JsonNode best,
+            PredictionMarkets.Event a, PredictionMarkets.Event b, Paired info) {
+        ObjectNode o = MAPPER.createObjectNode();
+        o.put("type", type);
+        o.put("basket", basket);
+        o.set("venues", best.get("venues"));
+        o.putArray("events").add(ref(a)).add(ref(b));
+        ArrayNode out = o.putArray("legs");
+        for (JsonNode l : best.get("legs")) {
+            ObjectNode leg = out.addObject();
+            leg.put("market_id", l.get("id").asText());
+            leg.set("title", l.get("title"));
+            leg.set("source", l.get("source"));
+            leg.set("side", l.get("side"));
+            leg.set("price", l.get("price"));
+            leg.set("fee", l.get("fee"));
+            if (l.has("forecast_p_win")) {
+                leg.set("forecast_p_win", l.get("forecast_p_win"));
+            }
+            MarketPricing.Condition c = info.byKey.get(l.get("source").asText() + ":"
+                + l.get("id").asText() + ":" + l.get("side").asText()).condition;
+            leg.set("condition", c.toJson());
+            if (c.lowUnsure || c.highUnsure) {
+                // The label shares this end with the next range: scored as a loss there.
+                ArrayNode ends = leg.putArray("counted_as_a_loss_at");
+                if (c.lowUnsure) {
+                    ends.add(c.low);
+                }
+                if (c.highUnsure) {
+                    ends.add(c.high);
+                }
+            }
+        }
+        o.set("cost", best.get("cost"));
+        o.put("legs_searched", info.depth);
+        o.set("rules_match", info.rules.get("rules_match"));
+        o.set("rules_differing", info.rules.get("differing"));
+        o.set("rules_unknown", info.rules.get("unknown"));
+        return o;
+    }
+
+    // ─── Near-locks ────────────────────────────────────────────────────────────
+
+    /** Builds, once, the forecast of the quantity an event settles on. */
+    private void forecast(Row r) {
+        r.forecastTried = true;
+        PredictionMarkets.Event ev = r.live.event;
+        MarketForecasts.Result built;
+        try {
+            built = builder.forecast(ev.eventTitle, ev.rules, ev.driver, ev.closeTime,
+                new MarketForecasts.Request());
+        } catch (IllegalArgumentException e) {
+            r.forecastReason = "the forecast of the pair's quantity was not resolved: "
+                + brief(e.getMessage());
+            return;
+        } catch (Exception e) {
+            // A lock needs no forecast: the scan still reports them, and says this.
+            r.forecastReason = "the forecast of the pair's quantity could not be built: "
+                + brief(e.getMessage());
+            return;
+        }
+        if (built.forecast == null) {
+            r.forecastReason = "the pair's series is not in the catalog: "
+                + built.json.path("series_named").asText("not named");
+            return;
+        }
+        r.forecast = built.forecast;
+    }
+
+    /**
+     * The baskets of a verified pair that lose only inside a band the forecast gives at most
+     * {@code maxLoss}, with a positive expected profit.
+     */
+    private static List<ObjectNode> nearLocks(String basket, Row k, Row p, Paired info,
+            double maxLoss, String[] why) {
+        List<ObjectNode> out = new ArrayList<>();
+        MarketPricing.NearLocks scored = MarketPricing.nearLocks(info.legs, k.forecast,
+            info.depth, 2, maxLoss, MAX_QUOTE_GAP, PER_PAIR);
+        if (scored.bandUnpriced > 0) {
+            why[0] = "the forecast favours a basket of the pair, but neither venue's quotes "
+                + "price its losing band";
+        } else if (scored.bandLikely > 0) {
+            why[0] = "the forecast favours a basket of the pair, but the quotes put more than "
+                + "max_loss_probability on its losing band: a bet on the forecast against "
+                + "the market";
+        } else if (scored.overGap > 0) {
+            why[0] = "the forecast favours a basket of the pair, but puts a leg's chance of "
+                + "winning more than " + MAX_QUOTE_GAP + " from its price: a bet on the "
+                + "forecast against the market";
+        } else {
+            why[0] = "no basket of the pair profits in both tails with a positive expected "
+                + "profit and p_loss <= max_loss_probability";
+        }
+        for (JsonNode best : scored.kept) {
+            ObjectNode o = entry("near_lock", basket, best, k.live.event, p.live.event, info);
+            o.set("worst_profit", best.get("worst"));
+            o.set("worst", best.get("floor"));
+            o.set("best_profit", best.get("best"));
+            o.set("loses_between", best.get("loses_between"));
+            o.set("p_loss", best.get("p_loss"));
+            o.set("market_p_loss", best.get("market_p_loss"));
+            o.set("p_profit", best.get("p_profit"));
+            o.set("expected_profit", best.get("expected"));
+            o.set("expected_yield", best.get("yield"));
+            o.set("max_quote_gap", best.get("max_quote_gap"));
+            o.set("forecast", k.forecast.toJson());
+            o.put("same_quantity", VERIFIED);
+            o.put("settles_on", info.settlesOn);
+            o.put("basis", "profits at every outcome outside loses_between, taking both "
+                + "events to settle on one number; p_loss, p_profit and expected_profit are "
+                + "the engine's forecast of that number, not the quotes");
+            o.put("quotes_read_at", info.at.toString());
+            out.add(o);
+        }
+        return out;
+    }
+
     // ─── Size and time ─────────────────────────────────────────────────────────
 
     /**
@@ -450,8 +577,16 @@ final class MarketBasketScan {
      * first; a set's cost is each leg's price at its current level plus the taker fee at
      * that price, and the walk stops at the first set that costs what it pays or more, or
      * when a leg's book has no more orders.
+     *
+     * <p>A near-lock has no floor to pay: its sets are walked against the payout the forecast
+     * expects of one set, and its rate is the expected yield.
      */
     private void size(ObjectNode basket, Instant now) {
+        boolean lock = basket.has("floor_profit");
+        String rateOf = lock ? "floor" : "expected_yield";
+        String annualized = lock ? "annualized_floor_simple_365d"
+            : "annualized_expected_simple_365d";
+        String note = lock ? "annualized_floor_note" : "annualized_expected_note";
         Instant close = null;
         for (JsonNode e : basket.get("events")) {
             if (!e.hasNonNull("close_time")) {
@@ -463,24 +598,26 @@ final class MarketBasketScan {
         }
         if (close == null) {
             basket.putNull("days_to_settlement");
-            basket.put("annualized_floor_note", "the venue gave no close time for an event");
+            basket.put(note, "the venue gave no close time for an event");
         } else {
             double days = Duration.between(now, close).toMillis() / 86400000.0;
             basket.put("days_to_settlement", PredictionMarkets.round(days, 3));
             if (days < 1) {
-                basket.put("annualized_floor_note",
-                    "settlement is under one day away (or past): not annualized");
+                basket.put(note, "settlement is under one day away (or past): not annualized");
             } else {
-                basket.put("annualized_floor_simple_365d", PredictionMarkets.round(
-                    basket.get("floor").asDouble() * 365 / days, 4));
+                basket.put(annualized, PredictionMarkets.round(
+                    basket.get(rateOf).asDouble() * 365 / days, 4));
             }
         }
 
         JsonNode legs = basket.get("legs");
         int n = legs.size();
-        // The floor payout of one set: a whole number of winning contracts.
-        double payout = Math.rint(basket.get("cost").asDouble()
-            + basket.get("floor_profit").asDouble());
+        // The least one set pays: a whole number of winning contracts.
+        double least = Math.rint(basket.get("cost").asDouble()
+            + basket.get(lock ? "floor_profit" : "worst_profit").asDouble());
+        // What a set is bought against: its floor, or the payout the forecast expects.
+        double payout = lock ? least : basket.get("cost").asDouble()
+            + basket.get("expected_profit").asDouble();
         List<List<MarketHistory.Level>> books = new ArrayList<>();
         double[] rate = new double[n];
         for (int i = 0; i < n; i++) {
@@ -548,7 +685,8 @@ final class MarketBasketScan {
             }
             if (marginal >= payout - 1e-9) {
                 stops = "the next set costs " + PredictionMarkets.round(marginal, 4)
-                    + " and pays " + (int) payout;
+                    + (lock ? " and pays " + (int) payout
+                        : " and is expected to pay " + PredictionMarkets.round(payout, 4));
                 break;
             }
             double take = left[tight];
@@ -578,25 +716,32 @@ final class MarketBasketScan {
         size.put("first_set_cost", PredictionMarkets.round(firstCost, 5));
         size.put("sets_at_best_price", PredictionMarkets.round(atBest, 2));
         size.put("binding_leg", binding);
-        size.put("sets_with_a_positive_floor", PredictionMarkets.round(sets, 2));
+        size.put(lock ? "sets_with_a_positive_floor" : "sets_with_a_positive_expected_profit",
+            PredictionMarkets.round(sets, 2));
         size.put("capital", PredictionMarkets.round(capital, 2));
-        size.put("floor_profit", PredictionMarkets.round(profit, 2));
+        size.put(lock ? "floor_profit" : "expected_profit", PredictionMarkets.round(profit, 2));
+        if (!lock) {
+            size.put("worst_profit", PredictionMarkets.round(sets * least - capital, 2));
+        }
         if (sets > 0) {
-            size.put("floor", PredictionMarkets.round(profit / capital, 4));
+            size.put(rateOf, PredictionMarkets.round(profit / capital, 4));
             double days = basket.path("days_to_settlement").asDouble(0);
             if (days >= 1) {
                 // Lower than the basket's own: later sets fill at worse prices.
-                size.put("annualized_floor_simple_365d", PredictionMarkets.round(
-                    profit / capital * 365 / days, 4));
+                size.put(annualized, PredictionMarkets.round(profit / capital * 365 / days, 4));
             }
         } else {
-            size.put("note", "no set fills at a positive floor at the books read: the quotes "
-                + "moved since quotes_read_at");
+            size.put("note", "no set fills at a positive " + (lock ? "floor" : "expected profit")
+                + " at the books read: the quotes moved since quotes_read_at");
         }
         size.put("stops_because", stops);
         ObjectNode flows = size.putObject("cashflows");
         flows.put("paid_at_purchase", PredictionMarkets.round(capital, 2));
-        flows.put("received_at_settlement_at_least", PredictionMarkets.round(sets * payout, 2));
+        flows.put("received_at_settlement_at_least", PredictionMarkets.round(sets * least, 2));
+        if (!lock) {
+            flows.put("received_at_settlement_expected",
+                PredictionMarkets.round(capital + profit, 2));
+        }
         flows.put("last_event_closes", close == null ? null : close.toString());
         flows.put("basis", "every leg is paid for in full when bought, fee included; each "
             + "winning contract pays 1 when its event settles, on or after its close");
@@ -634,6 +779,11 @@ final class MarketBasketScan {
         double minFloor = doubleArg(args, "min_floor", 0);
         if (minFloor < 0) {
             throw new IllegalArgumentException("min_floor must be 0 or more, got " + minFloor);
+        }
+        double maxLoss = doubleArg(args, "max_loss_probability", 0.10);
+        if (maxLoss < 0 || maxLoss >= 0.5) {
+            throw new IllegalArgumentException("max_loss_probability must be at least 0 and "
+                + "under 0.5, got " + maxLoss);
         }
         int search = intArg(args, "search", 3);
         if (search < 2 || search > 4) {
@@ -724,6 +874,11 @@ final class MarketBasketScan {
         List<ObjectNode> locks = new ArrayList<>();
         List<ObjectNode> unverified = new ArrayList<>();
         List<ObjectNode> closest = new ArrayList<>();
+        List<ObjectNode> nears = new ArrayList<>();
+        Map<String, Integer> nearWhy = new TreeMap<>();
+        Map<String, List<String>> nearExamples = new TreeMap<>();
+        int forecasts = 0;
+        int forecastsLeft = 0;
         int read = 0;
         int exclusive = 0;
         int labelled = 0;
@@ -783,8 +938,9 @@ final class MarketBasketScan {
                         continue;
                     }
                     List<ObjectNode> found = new ArrayList<>();
+                    Paired info = new Paired();
                     String reason = pair(b.name, rk, rp, search, minFloor > 0 ? minFloor : null,
-                        found);
+                        found, info);
                     if (reason != null) {
                         count(why, examples, reason, name);
                         continue;
@@ -798,6 +954,31 @@ final class MarketBasketScan {
                             unverified.add(f);
                         }
                     }
+                    if (info.settlesOn == null || !found.isEmpty()) {
+                        continue;
+                    }
+                    // No lock in a pair on one number: is there a basket that loses only
+                    // where the forecast of that number seldom lands?
+                    if (!rk.forecastTried) {
+                        if (outOfTime || fresh + forecasts > 0
+                                && (System.nanoTime() - started) / 1_000_000L > budgetMillis) {
+                            outOfTime = true;
+                            forecastsLeft++;
+                            continue;
+                        }
+                        forecast(rk);
+                        forecasts++;
+                    }
+                    if (rk.forecast == null) {
+                        count(nearWhy, nearExamples, rk.forecastReason, name);
+                        continue;
+                    }
+                    String[] none = new String[1];
+                    List<ObjectNode> near = nearLocks(b.name, rk, rp, info, maxLoss, none);
+                    if (near.isEmpty()) {
+                        count(nearWhy, nearExamples, none[0], name);
+                    }
+                    nears.addAll(near);
                 }
             }
         }
@@ -807,11 +988,14 @@ final class MarketBasketScan {
         unverified.sort(byFloor);
         closest.sort(Comparator.comparingDouble(
             (ObjectNode b) -> b.get("floor_profit").asDouble()).reversed());
+        nears.sort(Comparator.comparingDouble(
+            (ObjectNode b) -> b.get("expected_yield").asDouble()).reversed());
 
         ObjectNode out = MAPPER.createObjectNode();
         out.put("status", outOfTime ? "scanning" : COMPLETE);
         out.put("listing_read_at", listing.fetchedAt.toString());
         out.put("min_floor", minFloor);
+        out.put("max_loss_probability", maxLoss);
         ObjectNode funnel = out.putObject("funnel");
         funnel.put("events_matched", matched.size());
         funnel.put("events_to_read", toRead.size());
@@ -825,6 +1009,8 @@ final class MarketBasketScan {
         funnel.put("cross_venue_pairs_with_a_lock", lockedAcross);
         funnel.put("cross_venue_pairs_unverified_with_a_gap", unverified.size());
         funnel.put("locks_found", locks.size());
+        funnel.put("cross_venue_pairs_forecast", forecasts);
+        funnel.put("near_locks_found", nears.size());
         ObjectNode other = funnel.putObject("baskets_of_other_recipes_not_priced");
         for (Map.Entry<String, Integer> e : otherRecipes.entrySet()) {
             other.put(e.getKey(), e.getValue());
@@ -846,6 +1032,34 @@ final class MarketBasketScan {
         out.put("unverified_is", "cross-venue pairs whose quotes leave a gap but where the "
             + "engine could not establish that both events settle on one series. A gap "
             + "between two different quantities is not a lock.");
+        ArrayNode arbLike = out.putArray("near_locks");
+        for (int i = 0; i < nears.size() && i < limit; i++) {
+            if (!outOfTime) {
+                size(nears.get(i), now);
+            }
+            arbLike.add(nears.get(i));
+        }
+        out.put("near_lock_is", "a basket of a verified pair that is not a lock: it profits "
+            + "at every outcome outside loses_between and loses worst_profit at worst. p_loss, "
+            + "p_profit and expected_profit come from the engine's forecast of the number the "
+            + "pair settles on, so they are a judgement and not a property of the quotes. "
+            + "The quotes agree the loss is unlikely: market_p_loss, what a venue's quotes "
+            + "put on the losing band, is at most max_loss_probability too, and the forecast "
+            + "puts each leg's chance of winning (forecast_p_win) within " + MAX_QUOTE_GAP
+            + " of its price. A basket only the forecast favours is a bet on the forecast "
+            + "against the market and is counted in near_locks_not_scored. "
+            + "size walks the books while a further set still costs less than the forecast "
+            + "expects it to pay.");
+        ArrayNode nearNot = out.putArray("near_locks_not_scored");
+        for (Map.Entry<String, Integer> e : nearWhy.entrySet()) {
+            ObjectNode n = nearNot.addObject();
+            n.put("why", e.getKey());
+            n.put("count", e.getValue());
+            ArrayNode ex = n.putArray("examples");
+            for (String id : nearExamples.get(e.getKey())) {
+                ex.add(id);
+            }
+        }
         ArrayNode near = out.putArray("closest");
         for (int i = 0; i < closest.size() && i < CLOSEST_SHOWN; i++) {
             ObjectNode b = closest.get(i);
@@ -872,7 +1086,8 @@ final class MarketBasketScan {
             + "order books fill: capital and floor_profit there are dollars.");
         if (outOfTime) {
             out.put("next", "The scan is unfinished: " + done + " of " + toRead.size()
-                + " events read. You MUST call " + TOOL + " again with the same arguments "
+                + " events read" + (forecastsLeft > 0 ? ", " + forecastsLeft + " pairs still "
+                    + "to forecast" : "") + ". You MUST call " + TOOL + " again with the same arguments "
                 + "before answering.");
         } else if (locks.isEmpty()) {
             out.put("next", "No basket locks a profit after fees"
@@ -881,6 +1096,7 @@ final class MarketBasketScan {
                 + (unverified.isEmpty() ? "" : " You MUST NOT report an unverified entry as "
                     + "a lock: read both events' rules with compare_settlement_rules and "
                     + "state same_quantity_reason.")
+                + (nears.isEmpty() ? "" : NEAR_RULE)
                 + " scan_market_opportunities prices single events against a forecast.");
         } else {
             out.put("next", "You MUST report a cross_venue basket as not a lock unless its "
@@ -889,7 +1105,7 @@ final class MarketBasketScan {
                 + "and from size the sets that fill, the capital and the dollar profit: the "
                 + "annualized floor applies to that capital only. price_market_event(source, event_id, "
                 + "build_forecast=true) gives the forecast's probability of each outcome of "
-                + "a basket's event.");
+                + "a basket's event." + (nears.isEmpty() ? "" : NEAR_RULE));
         }
         return MAPPER.writeValueAsString(out);
     }

@@ -179,11 +179,14 @@ final class MarketFollowUps {
         JsonNode baskets = array(scan, "baskets", "basket scan");
         JsonNode unverified = array(scan, "unverified", "basket scan");
         ArrayNode out = MAPPER.createArrayNode();
-        if (baskets.size() == 0 && unverified.size() == 0) {
+        JsonNode nears = array(scan, "near_locks", "basket scan");
+        if (baskets.size() == 0 && unverified.size() == 0 && nears.size() == 0) {
             return out;
         }
-        // With no lock, the nearest thing to one is a gap whose two series are unverified.
-        JsonNode top = baskets.size() > 0 ? baskets.get(0) : unverified.get(0);
+        // With no lock, the nearest thing to one is a near-lock on one verified number, then
+        // a gap whose two series are unverified.
+        JsonNode top = baskets.size() > 0 ? baskets.get(0)
+            : nears.size() > 0 ? nears.get(0) : unverified.get(0);
         JsonNode events = array(top, "events", "baskets entry");
         for (JsonNode e : events) {
             String eventId = text(e, "event_id", "baskets entry events entry");

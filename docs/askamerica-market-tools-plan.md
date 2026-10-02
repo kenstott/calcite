@@ -280,6 +280,23 @@ resumable call with no forecast:
 - Limits: the listing holds only driver-matched, non-sports events, so sports and politics
   are out of reach; outcomes named in words ("25 bps decrease") are not matched across
   venues.
+- Near-locks (arb-like bets): a verified pair with no lock is scored against the forecast of
+  its settlement number (`MarketPricing.nearLocks`, the forecast built once per Kalshi event
+  inside the scan's time budget). Kept: a cross-venue subset that profits below every strike
+  and above every strike, loses only between two of them (`loses_between`, `worst_profit`),
+  and has forecast `p_loss <= max_loss_probability` (default 0.10) and `expected_profit > 0`.
+  The quotes must agree: a venue's own quotes put at most `max_loss_probability` on the
+  losing band (`market_p_loss`, read from a market that wins exactly there, a difference of
+  two strikes, or ranges that add up to it), and the forecast puts every leg's chance of
+  winning (`forecast_p_win`) within 0.20 of its price (`max_quote_gap`). By no-arbitrage a
+  near-lock's expected profit is exactly the forecast disagreeing with the quotes; past those
+  limits it is a bet on the forecast, not on the basket. Found live: the first scan ranked a
+  "217% expected yield" basket whose forecast put 50% on a leg quoted at 3%, and with only
+  the leg gate a basket losing at exactly 3.7, which Polymarket quoted at 25% and the
+  forecast at 6%. Outcomes between two strikes one rounding step apart are not scored.
+  One per pair, ranked by `expected_yield`, sized from the books while a further set costs
+  less than the forecast expects it to pay. Listed under `near_locks`, never `baskets`; a pair
+  that yields none is counted under `near_locks_not_scored` with the reason.
 - Size and time: every returned basket carries `size` from its legs' order books
   (`sets_at_best_price`, `binding_leg`, `sets_with_a_positive_floor`, `capital`,
   `floor_profit` in dollars, `stops_because`), `days_to_settlement` to its last event's

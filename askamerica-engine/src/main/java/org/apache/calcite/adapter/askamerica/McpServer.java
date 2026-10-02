@@ -3891,7 +3891,7 @@ public class McpServer {
         MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
         java.time.Duration.ofMinutes(15), MARKET_BACKTEST);
     private static final MarketBasketScan MARKET_BASKET_SCAN = new MarketBasketScan(
-        MARKET_FETCHER, MARKET_LISTING, java.time.Instant::now, 40_000L, 35_000L,
+        MARKET_FETCHER, MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
         java.time.Duration.ofMinutes(15));
     private static final MarketPresentation MARKET_VIEW = new MarketPresentation();
     private static final MarketForecasts MARKET_FORECASTS =

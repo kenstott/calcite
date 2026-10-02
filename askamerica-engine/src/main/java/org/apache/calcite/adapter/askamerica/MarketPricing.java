@@ -1108,6 +1108,291 @@ final class MarketPricing {
     }
 
     /**
+     * Baskets that are not locks but lose only inside a bounded band of outcomes: subsets of
+     * 2..search legs, all settling on one quantity, that profit at every outcome below the
+     * lowest threshold and above the highest. Each is scored against a forecast of that
+     * quantity, and kept when the forecast puts at most {@code maxLoss} on a loss and its
+     * expected profit is positive, and the quotes agree: the forecast puts every leg's chance
+     * of winning within {@code maxGap} of its price, and a venue's own quotes put at most
+     * {@code maxLoss} on the losing band. A subset the forecast alone favours is a bet on the
+     * forecast against the market, not on the basket, and is counted, not kept.
+     *
+     * @return the kept subsets by yield, at most {@code top}; {@code worst} and {@code best}
+     *     are over every outcome the conditions can tell apart, {@code loses_between} the
+     *     thresholds that enclose every losing outcome (null when the worst case breaks even)
+     */
+    static NearLocks nearLocks(List<Leg> legs, Forecast forecast, int search, int minVenues,
+            double maxLoss, double maxGap, int top) {
+        Scenarios grid = grid(legs);
+        String column = legs.get(0).column;
+        TreeSet<Double> cuts = new TreeSet<>();
+        for (Leg l : legs) {
+            cuts.add(l.condition.low);
+            cuts.add(l.condition.high);
+        }
+        int n = legs.size();
+        // A value between two thresholds one rounding step apart is never published.
+        double step = forecast.places == null ? 0 : Math.pow(10, -forecast.places);
+        List<Double> reached = new ArrayList<>();
+        for (Map<String, Double> row : grid.rows) {
+            double v = row.get(column);
+            Double below = cuts.lower(v);
+            Double above = cuts.higher(v);
+            if (cuts.contains(v) || below == null || above == null
+                    || above - below > step + EPS) {
+                reached.add(v);
+            }
+        }
+        int points = reached.size();
+        int draws = forecast.values.length;
+        double[] at = new double[points];
+        for (int g = 0; g < points; g++) {
+            at[g] = reached.get(g);
+        }
+        double[] even = new double[points];
+        Arrays.fill(even, 1.0 / points);
+        boolean[][] onGrid = new boolean[n][points];
+        boolean[][] onForecast = new boolean[n][draws];
+        for (int i = 0; i < n; i++) {
+            Leg l = legs.get(i);
+            for (int g = 0; g < points; g++) {
+                onGrid[i][g] = l.condition.wins(l.side, at[g]);
+            }
+            for (int d = 0; d < draws; d++) {
+                onForecast[i][d] = l.condition.wins(l.side, forecast.values[d]);
+            }
+        }
+        double[] weights = new double[draws];
+        Arrays.fill(weights, 1.0 / draws);
+
+        double[] pWin = new double[n];
+        for (int i = 0; i < n; i++) {
+            int won = 0;
+            for (int d = 0; d < draws; d++) {
+                won += onForecast[i][d] ? 1 : 0;
+            }
+            pWin[i] = (double) won / draws;
+        }
+
+        // What each venue's quotes say: where YES wins on a market quoted on both sides, at
+        // the middle of its two asks, and where it does not, at the rest.
+        Map<String, int[]> sides = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) {
+            Leg l = legs.get(i);
+            int[] pair = sides.computeIfAbsent(l.source + "\n" + l.id, k -> new int[] {-1, -1});
+            pair["yes".equals(l.side) ? 0 : 1] = i;
+        }
+        Map<String, List<Quoted>> quoted = new LinkedHashMap<>();
+        for (int[] pair : sides.values()) {
+            if (pair[0] < 0 || pair[1] < 0) {
+                continue;
+            }
+            double mid = (legs.get(pair[0]).price + 1 - legs.get(pair[1]).price) / 2;
+            List<Quoted> of = quoted.computeIfAbsent(legs.get(pair[0]).source,
+                k -> new ArrayList<>());
+            of.add(new Quoted(onGrid[pair[0]], mid, true));
+            boolean[] rest = new boolean[points];
+            for (int g = 0; g < points; g++) {
+                rest[g] = !onGrid[pair[0]][g];
+            }
+            of.add(new Quoted(rest, 1 - mid, false));
+        }
+
+        List<ObjectNode> kept = new ArrayList<>();
+        int overGap = 0;
+        int bandLikely = 0;
+        int bandUnpriced = 0;
+        for (int size = 2; size <= Math.min(search, n); size++) {
+            int[] idx = new int[size];
+            for (int i = 0; i < size; i++) {
+                idx[i] = i;
+            }
+            while (true) {
+                Set<String> venues = new HashSet<>();
+                double gap = 0;
+                for (int i : idx) {
+                    venues.add(legs.get(i).source);
+                    gap = Math.max(gap, Math.abs(pWin[i] - legs.get(i).price));
+                }
+                if (venues.size() >= minVenues) {
+                    Score outcome = score(idx, legs, onGrid, even);
+                    int first = -1;
+                    int last = -1;
+                    boolean[] loses = new boolean[points];
+                    for (int g = 0; g < points; g++) {
+                        int won = 0;
+                        for (int i : idx) {
+                            won += onGrid[i][g] ? 1 : 0;
+                        }
+                        if (won - outcome.cost < -EPS) {
+                            first = first < 0 ? g : first;
+                            last = g;
+                            loses[g] = true;
+                        }
+                    }
+                    // Not a lock, and a profit in both tails: index 0 lies below every
+                    // threshold and the last index above every one.
+                    boolean tails = first != 0 && last != points - 1
+                        && onTail(idx, onGrid, 0) - outcome.cost > EPS
+                        && onTail(idx, onGrid, points - 1) - outcome.cost > EPS;
+                    if (tails && outcome.worst <= EPS) {
+                        Score s = score(idx, legs, onForecast, weights);
+                        boolean scored = s.pLoss <= maxLoss + EPS && s.expected > EPS;
+                        Double quotedLoss = null;
+                        if (scored && first < 0) {
+                            quotedLoss = 0.0;
+                        } else if (scored) {
+                            for (List<Quoted> venue : quoted.values()) {
+                                Double q = quotedOn(venue, loses);
+                                if (q != null && (quotedLoss == null || q > quotedLoss)) {
+                                    quotedLoss = q;
+                                }
+                            }
+                        }
+                        if (!scored) {
+                            // Not a near-lock on the forecast.
+                        } else if (gap > maxGap + EPS) {
+                            overGap++;
+                        } else if (quotedLoss == null) {
+                            bandUnpriced++;
+                        } else if (quotedLoss > maxLoss + EPS) {
+                            bandLikely++;
+                        } else {
+                            ObjectNode o = scoreJson(idx, legs, s, false);
+                            o.put("market_p_loss", PredictionMarkets.round(quotedLoss, 4));
+                            for (int i = 0; i < idx.length; i++) {
+                                ((ObjectNode) o.get("legs").get(i)).put("forecast_p_win",
+                                    PredictionMarkets.round(pWin[idx[i]], 4));
+                            }
+                            o.put("max_quote_gap", PredictionMarkets.round(gap, 4));
+                            o.put("floor", PredictionMarkets.round(outcome.floor(), 4));
+                            o.put("worst", PredictionMarkets.round(outcome.worst, 5));
+                            o.put("best", PredictionMarkets.round(outcome.best, 5));
+                            if (first < 0) {
+                                o.putNull("loses_between");
+                            } else {
+                                double low = cuts.floor(at[first]);
+                                double high = cuts.ceiling(at[last]);
+                                ObjectNode band = o.putObject("loses_between");
+                                band.put("low", low);
+                                band.put("low_included", at[first] == low);
+                                band.put("high", high);
+                                band.put("high_included", at[last] == high);
+                            }
+                            kept.add(o);
+                        }
+                    }
+                }
+                int pos = size - 1;
+                while (pos >= 0 && idx[pos] == n - size + pos) {
+                    pos--;
+                }
+                if (pos < 0) {
+                    break;
+                }
+                idx[pos]++;
+                for (int j = pos + 1; j < size; j++) {
+                    idx[j] = idx[j - 1] + 1;
+                }
+            }
+        }
+        kept.sort(Comparator.comparingDouble(
+            (ObjectNode o) -> o.get("yield").asDouble()).reversed());
+        ArrayNode out = MAPPER.createArrayNode();
+        for (int i = 0; i < kept.size() && i < top; i++) {
+            out.add(kept.get(i));
+        }
+        return new NearLocks(out, overGap, bandLikely, bandUnpriced);
+    }
+
+    /** A set of outcomes one venue's quotes put a probability on. */
+    private static final class Quoted {
+        final boolean[] at;
+        final double p;
+        /** True where a market's YES wins, false for the rest of the outcomes. */
+        final boolean yes;
+
+        Quoted(boolean[] at, double p, boolean yes) {
+            this.at = at;
+            this.p = p;
+            this.yes = yes;
+        }
+    }
+
+    /**
+     * The probability one venue's quotes put on a set of outcomes: a market that wins exactly
+     * there, one such set less another inside it, or ranges that add up to it. Null when the
+     * venue's markets do not single the set out.
+     */
+    private static Double quotedOn(List<Quoted> venue, boolean[] set) {
+        int points = set.length;
+        for (Quoted q : venue) {
+            if (Arrays.equals(q.at, set)) {
+                return Math.max(0, Math.min(1, q.p));
+            }
+        }
+        for (Quoted outer : venue) {
+            for (Quoted inner : venue) {
+                boolean match = true;
+                for (int g = 0; g < points && match; g++) {
+                    match = (!inner.at[g] || outer.at[g])
+                        && set[g] == (outer.at[g] && !inner.at[g]);
+                }
+                if (match) {
+                    return Math.max(0, Math.min(1, outer.p - inner.p));
+                }
+            }
+        }
+        int[] covered = new int[points];
+        double sum = 0;
+        for (Quoted q : venue) {
+            boolean inside = q.yes;
+            for (int g = 0; g < points && inside; g++) {
+                inside = !q.at[g] || set[g];
+            }
+            if (inside) {
+                sum += q.p;
+                for (int g = 0; g < points; g++) {
+                    covered[g] += q.at[g] ? 1 : 0;
+                }
+            }
+        }
+        for (int g = 0; g < points; g++) {
+            if (covered[g] != (set[g] ? 1 : 0)) {
+                return null;
+            }
+        }
+        return Math.max(0, Math.min(1, sum));
+    }
+
+    /** The near-locks kept, and how many more qualified on the forecast but not the quotes. */
+    static final class NearLocks {
+        final ArrayNode kept;
+        /** Baskets with a leg the forecast puts over the gap from its price. */
+        final int overGap;
+        /** Baskets whose losing band a venue's quotes put over the cap. */
+        final int bandLikely;
+        /** Baskets whose losing band neither venue's quotes single out. */
+        final int bandUnpriced;
+
+        NearLocks(ArrayNode kept, int overGap, int bandLikely, int bandUnpriced) {
+            this.kept = kept;
+            this.overGap = overGap;
+            this.bandLikely = bandLikely;
+            this.bandUnpriced = bandUnpriced;
+        }
+    }
+
+    /** The contracts of a subset that win at one outcome. */
+    private static int onTail(int[] idx, boolean[][] wins, int outcome) {
+        int won = 0;
+        for (int i : idx) {
+            won += wins[i][outcome] ? 1 : 0;
+        }
+        return won;
+    }
+
+    /**
      * Scores a basket of legs against joint scenarios: each leg alone, all of them together,
      * and with {@code search} at least 2 every subset of 2..search legs.
      *

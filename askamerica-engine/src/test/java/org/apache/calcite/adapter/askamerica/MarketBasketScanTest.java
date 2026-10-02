@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.YearMonth;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -49,6 +50,7 @@ class MarketBasketScanTest {
   private static final class FakeFetcher implements PredictionMarkets.Fetcher {
     final Map<String, JsonNode> byPrefix = new LinkedHashMap<>();
     int eventReads;
+    int sqlReads;
 
     @Override public JsonNode get(String url) throws IOException {
       if (url.startsWith(PredictionMarkets.KALSHI + "/events/")
@@ -155,10 +157,31 @@ class MarketBasketScanTest {
     return f;
   }
 
+  /** Monthly index rows from 2024-01 to 2026-08, the latest print at NOW: 3.0% a year. */
+  private static ArrayNode cpiRows() {
+    ArrayNode rows = MAPPER.createArrayNode();
+    YearMonth start = YearMonth.of(2024, 1);
+    for (int i = 0; i < 32; i++) {
+      YearMonth ym = start.plusMonths(i);
+      ObjectNode r = rows.addObject();
+      r.put("year", ym.getYear());
+      r.put("period", String.format("M%02d", ym.getMonthValue()));
+      r.put("value", 100 * Math.pow(1.0025, i));
+    }
+    return rows;
+  }
+
+  private static MarketTools.SqlRunner sql(FakeFetcher f) {
+    return (q, limit) -> {
+      f.sqlReads++;
+      return cpiRows();
+    };
+  }
+
   private static MarketBasketScan scan(FakeFetcher f, long budgetMillis) {
     return new MarketBasketScan(f,
-        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), () -> NOW, 10_000L,
-        budgetMillis, Duration.ofMinutes(15));
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), sql(f), () -> NOW,
+        10_000L, budgetMillis, Duration.ofMinutes(15));
   }
 
   private static JsonNode args(String json) throws Exception {
@@ -293,7 +316,7 @@ class MarketBasketScanTest {
   @Test void aBasketClosingWithinADayIsNotAnnualized() throws Exception {
     FakeFetcher f = venues(polymarketAbove(0.60));
     MarketBasketScan soon = new MarketBasketScan(f,
-        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)),
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), sql(f),
         () -> Instant.parse("2026-11-12T00:00:00Z"), 10_000L, 60_000L, Duration.ofMinutes(15));
     JsonNode best = MAPPER.readTree(soon.scan(args("{'min_days': 0}"))).get("baskets").get(0);
 
@@ -626,5 +649,321 @@ class MarketBasketScanTest {
     String raw = scan(venues(polymarketAbove(0.60)), -1L).scan(args("{}"));
 
     assertEquals(raw, new MarketPresentation().basketScan(raw));
+  }
+
+  /**
+   * Polymarket strikes either side of Kalshi's: no lock, and baskets that lose in between.
+   * Above 3.2 is quoted at {@code bid} and {@code ask}; Above 3.5 at 0.10 and 0.12.
+   */
+  private static ObjectNode polymarketWide(double bid, double ask) {
+    ObjectNode ev = polymarketEvent();
+    polymarketMarket((ArrayNode) ev.get("markets"), "lo", "Above 2.9%", 0.72, 0.74);
+    polymarketMarket((ArrayNode) ev.get("markets"), "mid", "Above 3.2%", bid, ask);
+    polymarketMarket((ArrayNode) ev.get("markets"), "hi", "Above 3.5%", 0.10, 0.12);
+    return ev;
+  }
+
+  /** Polymarket's quotes put 0.20 - 0.11 = 0.09 on CPI above 3.2 and at or under 3.5. */
+  private static ObjectNode polymarketWide() {
+    return polymarketWide(0.18, 0.22);
+  }
+
+  @Test void aPairWithNoLockYieldsANearLockThatLosesOnlyInsideABand() throws Exception {
+    FakeFetcher f = venues(polymarketWide());
+    JsonNode out = MAPPER.readTree(scan(f, 60_000L).scan(args("{'search': 2}")));
+
+    assertEquals("complete", out.get("status").asText());
+    assertEquals(0, out.get("baskets").size());
+    assertEquals(1, out.get("funnel").get("near_locks_found").asInt());
+    assertEquals(1, out.get("funnel").get("cross_venue_pairs_forecast").asInt());
+    assertTrue(f.sqlReads > 0);
+    JsonNode near = out.get("near_locks").get(0);
+    assertEquals("near_lock", near.get("type").asText());
+    assertEquals(2, near.get("venues").size());
+    // NO above 3.2 on Kalshi at 0.80 plus its fee, YES above 3.5 on Polymarket at 0.12: one
+    // of them wins unless CPI lands above 3.2 and at or under 3.5, where both lose. NO above
+    // 3.0 at 0.60 is cheaper but the forecast puts it at 1: further than 0.20 from its quote.
+    double cost = 0.80 + 0.07 * 0.80 * 0.20 + 0.12;
+    assertEquals(cost, near.get("cost").asDouble(), 1e-4);
+    assertEquals("no", near.get("legs").get(0).get("side").asText());
+    assertEquals(KALSHI_ID + "-T3.2", near.get("legs").get(0).get("market_id").asText());
+    assertEquals("hi", near.get("legs").get(1).get("market_id").asText());
+    assertEquals(1, near.get("legs").get(0).get("forecast_p_win").asDouble(), 1e-12);
+    assertEquals(0, near.get("legs").get(1).get("forecast_p_win").asDouble(), 1e-12);
+    assertEquals(0.20, near.get("max_quote_gap").asDouble(), 1e-9);
+    assertEquals(-cost, near.get("worst_profit").asDouble(), 1e-4);
+    assertEquals(1 - cost, near.get("best_profit").asDouble(), 1e-4);
+    JsonNode band = near.get("loses_between");
+    assertEquals(3.2, band.get("low").asDouble(), 1e-12);
+    assertFalse(band.get("low_included").asBoolean());
+    assertEquals(3.5, band.get("high").asDouble(), 1e-12);
+    assertTrue(band.get("high_included").asBoolean());
+    // The index grows 3.0% a year without noise: every draw of the forecast rounds to 3.0.
+    assertEquals(3.0, near.get("forecast").get("median").asDouble(), 1e-12);
+    assertEquals(0, near.get("p_loss").asDouble(), 1e-12);
+    // Polymarket's own quotes on the band: the middle of Above 3.2 less that of Above 3.5.
+    assertEquals(0.09, near.get("market_p_loss").asDouble(), 1e-9);
+    assertEquals(1 - cost, near.get("expected_profit").asDouble(), 1e-4);
+    assertEquals((1 - cost) / cost, near.get("expected_yield").asDouble(), 1e-4);
+    assertEquals((1 - cost) / cost * 365 / 41.5625,
+        near.get("annualized_expected_simple_365d").asDouble(), 1e-2);
+    assertEquals("verified", near.get("same_quantity").asText());
+    assertEquals("CUUR0000SA0 yoy_pct", near.get("settles_on").asText());
+    assertNull(near.get("floor_profit"));
+    assertTrue(out.get("next").asText().contains("MUST NOT report a near_locks entry as a "
+        + "lock"), out.get("next").asText());
+  }
+
+  @Test void aNearLockIsSizedWhileASetIsExpectedToPayMoreThanItCosts() throws Exception {
+    FakeFetcher f = venues(polymarketWide());
+    // No on Kalshi is bought from its Yes bids: 0.80 x 20, then 0.85 x 100.
+    kalshiBook(f, KALSHI_ID + "-T3.2", new double[] {0.20, 20, 0.15, 100},
+        new double[] {0.24, 30});
+    polymarketBook(f, "hi", true, 0.10, 500);
+    ArrayNode asks = (ArrayNode) f.byPrefix.get(MarketHistory.CLOB + "/book?token_id=yes-hi")
+        .get("asks");
+    asks.addObject().put("price", "0.12").put("size", "50");
+    asks.addObject().put("price", "0.30").put("size", "100");
+    JsonNode near = MAPPER.readTree(scan(f, 60_000L).scan(args("{'search': 2}")))
+        .get("near_locks").get(0);
+
+    double first = 0.80 + 0.07 * 0.80 * 0.20 + 0.12;
+    double second = 0.85 + 0.07 * 0.85 * 0.15 + 0.12;
+    double capital = 20 * first + 30 * second;
+    JsonNode size = near.get("size");
+    assertEquals(20, size.get("sets_at_best_price").asDouble(), 1e-9);
+    assertEquals(50, size.get("sets_with_a_positive_expected_profit").asDouble(), 1e-9);
+    assertEquals(capital, size.get("capital").asDouble(), 0.005);
+    assertEquals(50 - capital, size.get("expected_profit").asDouble(), 0.005);
+    assertEquals(-capital, size.get("worst_profit").asDouble(), 0.005);
+    assertEquals((50 - capital) / capital, size.get("expected_yield").asDouble(), 1e-4);
+    assertNull(size.get("floor_profit"));
+    // The third level pairs 0.85 on Kalshi with 0.30 on Polymarket: over the 1 expected.
+    assertTrue(size.get("stops_because").asText().startsWith("the next set costs 1.1589 and "
+        + "is expected to pay 1"), size.get("stops_because").asText());
+    JsonNode flows = size.get("cashflows");
+    assertEquals(capital, flows.get("paid_at_purchase").asDouble(), 0.005);
+    assertEquals(0, flows.get("received_at_settlement_at_least").asDouble(), 1e-9);
+    assertEquals(50, flows.get("received_at_settlement_expected").asDouble(), 0.005);
+  }
+
+  @Test void aBandTheForecastLandsInIsNotANearLock() throws Exception {
+    ObjectNode ev = polymarketEvent();
+    polymarketMarket((ArrayNode) ev.get("markets"), "lo", "Above 2.9%", 0.72, 0.74);
+    JsonNode out = run(ev, "{'search': 2}");
+
+    // YES above 3.0 on Kalshi with NO above 2.9 on Polymarket costs 0.737 and loses only at
+    // 3.0 exactly, which is where the forecast lands.
+    assertEquals(0, out.get("near_locks").size());
+    JsonNode not = out.get("near_locks_not_scored").get(0);
+    assertTrue(not.get("why").asText().startsWith("no basket of the pair profits in both "
+        + "tails"), not.get("why").asText());
+    assertEquals(1, not.get("count").asInt());
+    assertFalse(out.get("next").asText().contains("near_locks"));
+  }
+
+  @Test void aBasketThatNeedsTheForecastAgainstAQuoteIsNotANearLock() throws Exception {
+    ObjectNode ev = polymarketEvent();
+    polymarketMarket((ArrayNode) ev.get("markets"), "lo", "Above 2.9%", 0.72, 0.74);
+    polymarketMarket((ArrayNode) ev.get("markets"), "hi", "Above 3.3%", 0.24, 0.30);
+    JsonNode out = run(ev, "{'search': 2}");
+
+    // NO above 3.0 on Kalshi at 0.60 with YES above 3.3 on Polymarket at 0.30 loses only
+    // between them and never on the forecast, which puts the first at 1 and the second at 0.
+    assertEquals(0, out.get("near_locks").size());
+    JsonNode not = out.get("near_locks_not_scored").get(0);
+    assertTrue(not.get("why").asText().startsWith("the forecast favours a basket of the "
+        + "pair, but puts a leg's chance of winning more than 0.2 from its price"),
+        not.get("why").asText());
+    assertEquals(1, not.get("count").asInt());
+  }
+
+  @Test void aBandTheQuotesCallLikelyIsNotANearLock() throws Exception {
+    // Polymarket's quotes put 0.295 - 0.11 on the band the forecast never lands in.
+    JsonNode out = run(polymarketWide(0.25, 0.34), "{'search': 2}");
+
+    assertEquals(0, out.get("baskets").size());
+    assertEquals(0, out.get("near_locks").size());
+    JsonNode not = out.get("near_locks_not_scored").get(0);
+    assertTrue(not.get("why").asText().startsWith("the forecast favours a basket of the "
+        + "pair, but the quotes put more than max_loss_probability on its losing band"),
+        not.get("why").asText());
+  }
+
+  @Test void aBandNoVenueQuotesIsNotANearLock() throws Exception {
+    ObjectNode ev = polymarketEvent();
+    polymarketMarket((ArrayNode) ev.get("markets"), "lo", "Above 2.9%", 0.72, 0.74);
+    polymarketMarket((ArrayNode) ev.get("markets"), "hi", "Above 3.5%", 0.10, 0.12);
+    // NO above 3.2 on Kalshi with YES above 3.5 on Polymarket: Kalshi lists no 3.5 and
+    // Polymarket no 3.2, so neither says how likely the band between them is.
+    JsonNode out = run(ev, "{'search': 2}");
+
+    assertEquals(0, out.get("near_locks").size());
+    JsonNode not = out.get("near_locks_not_scored").get(0);
+    assertTrue(not.get("why").asText().startsWith("the forecast favours a basket of the "
+        + "pair, but neither venue's quotes price its losing band"), not.get("why").asText());
+  }
+
+  @Test void aPairWithALockIsNotForecast() throws Exception {
+    FakeFetcher f = venues(polymarketAbove(0.60));
+    JsonNode out = MAPPER.readTree(scan(f, 60_000L).scan(args("{}")));
+
+    assertEquals(1, out.get("baskets").size());
+    assertEquals(0, out.get("near_locks").size());
+    assertEquals(0, out.get("funnel").get("cross_venue_pairs_forecast").asInt());
+    assertEquals(0, f.sqlReads);
+  }
+
+  @Test void aForecastThatCannotBeBuiltIsSaidAndLeavesTheScanComplete() throws Exception {
+    FakeFetcher f = venues(polymarketWide());
+    MarketBasketScan s = new MarketBasketScan(f,
+        new PredictionMarkets.ListingCache(f, Duration.ofMinutes(15)), (q, limit) -> {
+          throw new IllegalStateException("warehouse is down");
+        }, () -> NOW, 10_000L, 60_000L, Duration.ofMinutes(15));
+    JsonNode out = MAPPER.readTree(s.scan(args("{'search': 2}")));
+
+    assertEquals("complete", out.get("status").asText());
+    assertEquals(0, out.get("near_locks").size());
+    JsonNode not = out.get("near_locks_not_scored").get(0);
+    assertTrue(not.get("why").asText().startsWith("the forecast of the pair's quantity could "
+        + "not be built: warehouse is down"), not.get("why").asText());
+    assertEquals(KALSHI_ID, not.get("examples").get(0).asText().substring(7, 7
+        + KALSHI_ID.length()));
+  }
+
+  @Test void forecastsWaitForTheNextCallOnceTheBudgetIsSpent() throws Exception {
+    FakeFetcher f = venues(polymarketWide());
+    MarketBasketScan s = scan(f, -1L);
+    // The first call reads one event, the second the other: neither has time for a forecast.
+    assertEquals("scanning", MAPPER.readTree(s.scan(args("{'search': 2}"))).get("status")
+        .asText());
+    JsonNode second = MAPPER.readTree(s.scan(args("{'search': 2}")));
+    assertEquals("scanning", second.get("status").asText());
+    assertEquals(0, f.sqlReads);
+    assertTrue(second.get("next").asText().contains("1 pairs still to forecast"),
+        second.get("next").asText());
+    // With both events kept, the third call builds the forecast.
+    JsonNode third = MAPPER.readTree(s.scan(args("{'search': 2}")));
+    assertEquals("complete", third.get("status").asText());
+    assertEquals(1, third.get("near_locks").size());
+  }
+
+  @Test void maxLossProbabilityMustBeUnderOneHalf() {
+    assertThrows(IllegalArgumentException.class,
+        () -> run(polymarketWide(), "{'max_loss_probability': 0.5}"));
+  }
+
+  @Test void aNearLockScanCarriesItsPanelsAndFollowsUpItsTopBasket() throws Exception {
+    String raw = scan(venues(polymarketWide()), 60_000L).scan(args("{'search': 2}"));
+    MarketPresentation shown = new MarketPresentation();
+    JsonNode out = MAPPER.readTree(shown.basketScan(raw));
+
+    boolean tile = false;
+    boolean ranked = false;
+    for (JsonNode title : out.get("dashboard_panels")) {
+      tile |= "Near-locks found".equals(title.asText());
+      ranked |= title.asText().startsWith("Near-locks by expected yield");
+    }
+    assertTrue(tile && ranked, out.get("dashboard_panels").toString());
+    ObjectNode board = MAPPER.createObjectNode().put("layout",
+        out.get("dashboard_layout").asText());
+    assertTrue(shown.resolve(board));
+    boolean quoted = false;
+    for (JsonNode panel : board.get("panels")) {
+      quoted |= "loss: 0.0% forecast, 9.0% quoted".equals(panel.path("delta").asText());
+    }
+    assertTrue(quoted, board.get("panels").toString());
+    JsonNode followUps = out.get("follow_ups");
+    assertEquals("price_market_event", followUps.get(0).get("tool").asText());
+    assertEquals(KALSHI_ID, followUps.get(0).get("arguments").get("event_id").asText());
+  }
+
+  private static MarketPricing.Leg leg(String source, String id, String side, double strike,
+      double price) {
+    MarketPricing.Leg l = new MarketPricing.Leg();
+    l.source = source;
+    l.eventId = source + "-event";
+    l.id = id;
+    l.title = id;
+    l.side = side;
+    l.price = price;
+    l.fee = 0;
+    l.column = "v";
+    l.condition = new MarketPricing.Condition("above", strike, strike);
+    return l;
+  }
+
+  /** Kalshi above 3.0, Polymarket above 3.2 and above 3.0, each on both sides. */
+  private static java.util.List<MarketPricing.Leg> nearLegs(double yes, double no) {
+    return java.util.Arrays.asList(
+        leg("kalshi", "k", "no", 3.0, 0.60), leg("kalshi", "k", "yes", 3.0, 0.42),
+        leg("polymarket", "p", "yes", 3.2, 0.25), leg("polymarket", "p", "no", 3.2, 0.77),
+        leg("polymarket", "p0", "yes", 3.0, yes), leg("polymarket", "p0", "no", 3.0, no));
+  }
+
+  @Test void aNearLockIsKeptOnlyWhileTheForecastsLossIsUnderTheCap() {
+    // NO above 3.0 at 0.60 with YES above 3.2 at 0.25: both lose at 3.1 and 3.2 only. The
+    // forecast puts the first at 0.90, 0.30 over its price, and the second at 0.05.
+    // Polymarket quotes above 3.0 at a middle of 0.29 and above 3.2 at 0.24: 0.05 between.
+    java.util.List<MarketPricing.Leg> legs = nearLegs(0.30, 0.72);
+    double[] draws = new double[20];
+    java.util.Arrays.fill(draws, 3.0);
+    draws[0] = 3.1;
+    draws[1] = 3.3;
+    MarketPricing.Forecast forecast = MarketPricing.samples(draws);
+
+    MarketPricing.NearLocks scored = MarketPricing.nearLocks(legs, forecast, 2, 2, 0.05,
+        0.30, 5);
+    assertEquals(1, scored.kept.size());
+    assertEquals(0, scored.overGap + scored.bandLikely + scored.bandUnpriced);
+    JsonNode near = scored.kept.get(0);
+    assertEquals("k", near.get("legs").get(0).get("id").asText());
+    assertEquals("p", near.get("legs").get(1).get("id").asText());
+    assertEquals(0.05, near.get("market_p_loss").asDouble(), 1e-9);
+    assertEquals(0.90, near.get("legs").get(0).get("forecast_p_win").asDouble(), 1e-9);
+    assertEquals(0.05, near.get("legs").get(1).get("forecast_p_win").asDouble(), 1e-9);
+    assertEquals(0.30, near.get("max_quote_gap").asDouble(), 1e-9);
+    assertEquals(0.05, near.get("p_loss").asDouble(), 1e-9);
+    assertEquals(0.95, near.get("p_profit").asDouble(), 1e-9);
+    assertEquals(0.95 - 0.85, near.get("expected").asDouble(), 1e-9);
+    assertEquals(-0.85, near.get("worst").asDouble(), 1e-9);
+    assertEquals(0.15, near.get("best").asDouble(), 1e-9);
+    assertEquals(3.0, near.get("loses_between").get("low").asDouble(), 1e-12);
+    assertFalse(near.get("loses_between").get("low_included").asBoolean());
+    assertEquals(3.2, near.get("loses_between").get("high").asDouble(), 1e-12);
+    assertTrue(near.get("loses_between").get("high_included").asBoolean());
+
+    MarketPricing.NearLocks risky = MarketPricing.nearLocks(legs, forecast, 2, 2, 0.04,
+        0.30, 5);
+    assertEquals(0, risky.kept.size());
+    assertEquals(0, risky.overGap + risky.bandLikely + risky.bandUnpriced);
+    MarketPricing.NearLocks disputed = MarketPricing.nearLocks(legs, forecast, 2, 2, 0.05,
+        0.20, 5);
+    assertEquals(0, disputed.kept.size());
+    assertEquals(1, disputed.overGap);
+    // Above 3.0 quoted at a middle of 0.39 on Polymarket: 0.15 on the band, over the cap.
+    MarketPricing.NearLocks likely = MarketPricing.nearLocks(nearLegs(0.40, 0.62), forecast,
+        2, 2, 0.05, 0.30, 5);
+    assertEquals(0, likely.kept.size());
+    assertEquals(1, likely.bandLikely);
+    // Without Polymarket's market above 3.0 no venue quotes the band.
+    MarketPricing.NearLocks unpriced = MarketPricing.nearLocks(nearLegs(0.40, 0.62)
+        .subList(0, 4), forecast, 2, 2, 0.05, 0.30, 5);
+    assertEquals(0, unpriced.kept.size());
+    assertEquals(1, unpriced.bandUnpriced);
+  }
+
+  @Test void aBasketThatLosesInATailOrLocksIsNotANearLock() {
+    double[] draws = new double[20];
+    java.util.Arrays.fill(draws, 3.0);
+    MarketPricing.Forecast forecast = MarketPricing.samples(draws);
+    // Two legs that both need a low print: nothing wins above 3.2.
+    assertEquals(0, MarketPricing.nearLocks(java.util.Arrays.asList(
+        leg("kalshi", "k", "no", 3.0, 0.40), leg("polymarket", "p", "no", 3.2, 0.45)),
+        forecast, 2, 2, 0.10, 1, 5).kept.size());
+    // YES above 3.0 with NO above 3.2 pays 1 at every outcome and costs 0.90: a lock.
+    assertEquals(0, MarketPricing.nearLocks(java.util.Arrays.asList(
+        leg("kalshi", "k", "yes", 3.0, 0.40), leg("polymarket", "p", "no", 3.2, 0.50)),
+        forecast, 2, 2, 0.10, 1, 5).kept.size());
   }
 }

@@ -324,6 +324,59 @@ final class MarketLayouts {
             addSeries(ranked, "Floor", floors);
             panels.add(ranked);
         }
+
+        JsonNode nears = requiredArray(scan, "near_locks", where);
+        if (nears.size() > 0) {
+            // Arb-like bets: not locks, and their odds are the engine's forecast.
+            List<String> nearNames = new ArrayList<>();
+            ArrayNode yields = MAPPER.createArrayNode();
+            for (int i = 0; i < nears.size(); i++) {
+                JsonNode b = nears.get(i);
+                String bat = where + ": near_locks[" + i + "]";
+                JsonNode events = requiredArray(b, "events", bat);
+                if (events.size() == 0) {
+                    throw new IllegalArgumentException(bat + ".events is empty");
+                }
+                nearNames.add(shorten((i + 1) + ". " + requiredText(events.get(0),
+                    "event_title", bat + ".events[0]")));
+                yields.add(requiredNumber(b, "expected_yield", bat));
+            }
+            JsonNode top = nears.get(0);
+            String tat = where + ": near_locks[0]";
+            panels.add(stat("Near-locks found", String.valueOf(nears.size()), null, "flat",
+                "Not locks: baskets that lose only inside a band of outcomes"));
+            panels.add(stat("Top near-lock: expected yield", signedPercent(requiredNumber(top,
+                "expected_yield", tat)), String.format(Locale.ROOT, "loss: %.1f%% forecast, "
+                + "%.1f%% quoted", 100 * requiredNumber(top, "p_loss", tat),
+                100 * requiredNumber(top, "market_p_loss", tat)), "up",
+                "On the engine's forecast, per unit of cost, after fees"));
+            JsonNode band = required(top, "loses_between", tat);
+            panels.add(stat("Top near-lock: loses between", band.isNull() ? "nowhere"
+                : String.format(Locale.ROOT, "%s and %s", band.get("low").asText(),
+                    band.get("high").asText()), String.format(Locale.ROOT, "%+.3f at worst",
+                requiredNumber(top, "worst_profit", tat)), "flat",
+                "Profits at every outcome outside this band; worst case per set"));
+            if (top.hasNonNull("size")) {
+                JsonNode size = top.get("size");
+                String sat = tat + ".size";
+                panels.add(stat("Top near-lock: expected profit", String.format(Locale.ROOT,
+                    "$%,.2f", requiredNumber(size, "expected_profit", sat)), String.format(
+                    Locale.ROOT, "$%,.2f capital", requiredNumber(size, "capital", sat)),
+                    "flat", "On the sets that fill while a further set is still expected to "
+                    + "pay more than it costs"));
+            } else {
+                panels.add(stat("Top near-lock: expected profit", "n/a", null, "flat",
+                    top.path("size_note").asText()));
+            }
+            ObjectNode rankedNear = chart("bar", "Near-locks by expected yield (forecast)",
+                nearNames, 4);
+            rankedNear.put("orientation", "horizontal");
+            rankedNear.put("sort", "desc");
+            rankedNear.put("value_labels", true);
+            rankedNear.put("value_format", ".1%");
+            addSeries(rankedNear, "Expected yield", yields);
+            panels.add(rankedNear);
+        }
         return out;
     }
 
