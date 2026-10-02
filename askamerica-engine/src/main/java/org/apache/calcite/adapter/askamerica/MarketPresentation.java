@@ -84,6 +84,20 @@ final class MarketPresentation {
         return MAPPER.writeValueAsString(json);
     }
 
+    /** Adds the board and the follow-ups to a finished basket scan's result. */
+    synchronized String basketScan(String result) throws Exception {
+        ObjectNode json = (ObjectNode) MAPPER.readTree(result);
+        if (!MarketBasketScan.COMPLETE.equals(json.path("status").asText())) {
+            return result;
+        }
+        String id = "basketscan:" + ++sequence;
+        keep(json, id, MarketLayouts.basketScanBoard(json), "You MUST pass dashboard: "
+            + "{\"layout\": \"" + id + "\"} to " + REPORT_TOOL + " for a report on this "
+            + "scan.");
+        followUps(json, MarketFollowUps.forBasketScan(json));
+        return MAPPER.writeValueAsString(json);
+    }
+
     /** Adds the basket sheet and the follow-ups to a {@code price_market_basket} result. */
     synchronized String basket(String result) throws Exception {
         ObjectNode json = (ObjectNode) MAPPER.readTree(result);

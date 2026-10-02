@@ -319,6 +319,15 @@ class MarketToolsTest {
     assertEquals(3, MarketTools.balanced(ordered.subList(0, 3), 9).size());
   }
 
+  @Test void aBetweenConditionNeedsItsLowBoundFirst() throws Exception {
+    ObjectMapper mapper = new ObjectMapper();
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> MarketPricing.Condition.parse(mapper.readTree("{\"between\":[3.6,3.5]}")));
+    assertTrue(e.getMessage().contains("low <= high"), e.getMessage());
+    assertTrue(MarketPricing.Condition.parse(mapper.readTree("{\"between\":[3.0,3.0]}"))
+        .holds(3.0));
+  }
+
   @Test void candidateFiltersAreValidated() {
     assertThrows(IllegalArgumentException.class,
         () -> tools().findCandidates(args("{'driver':'cpi'}")));

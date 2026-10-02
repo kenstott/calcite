@@ -135,9 +135,14 @@ final class MarketForecasts {
                 + "got '" + key + "'");
         }
 
-        /** Default history window, in years: enough rows to sample, under the row cap. */
+        /**
+         * Default history window, in years: enough rows to sample, under the row cap. Monthly
+         * is 5: backtested on four Kalshi series against 3, 8 and 15 years, a window that
+         * reaches back past the current regime scored worse on payrolls and no better on the
+         * rest, and 3 years leaves too few rows for the tails.
+         */
         int defaultYears() {
-            return this == MONTHLY ? 15 : this == WEEKLY ? 10 : 5;
+            return this == MONTHLY ? 5 : this == WEEKLY ? 10 : 5;
         }
     }
 
@@ -437,7 +442,7 @@ final class MarketForecasts {
         props.set("round", prop("integer",
             "Decimals the rules settle on; read from the rules when they say."));
         props.set("years", prop("integer",
-            "Years of history to sample (default 15 monthly, 10 weekly, 5 daily)."));
+            "Years of history to sample (default 5 monthly, 10 weekly, 5 daily)."));
         ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
         schema.set("properties", props);
@@ -694,7 +699,52 @@ final class MarketForecasts {
         return t.isEmpty() ? null : t.get(0);
     }
 
-    private Spec resolve(String title, String rules, PredictionMarkets.Driver driver,
+    /** The series and transform an event settles on, as the builder reads its title and
+     *  rules; or why it reads none. */
+    static final class Quantity {
+        /** Series id and transform, e.g. "CUUR0000SA0 yoy_pct"; null when not resolved. */
+        final String key;
+        /** Series id; set without {@link #key} when only the transform is unread. */
+        final String series;
+        final String reason;
+
+        Quantity(String key, String series, String reason) {
+            this.key = key;
+            this.series = series;
+            this.reason = reason;
+        }
+    }
+
+    /** The series is read and the rules do not say how it is transformed. */
+    private static final class TransformMissing extends IllegalArgumentException {
+        final String series;
+
+        TransformMissing(String series, String message) {
+            super(message);
+            this.series = series;
+        }
+    }
+
+    static Quantity quantityOf(PredictionMarkets.Event e) {
+        String title = e.eventTitle == null ? "" : e.eventTitle;
+        String rules = e.rules == null ? "" : e.rules;
+        Spec spec;
+        try {
+            spec = resolve(title, rules, e.driver, new Request(),
+                rulesSeasonal((title + " " + rules).toLowerCase(Locale.ROOT)));
+        } catch (TransformMissing x) {
+            return new Quantity(null, x.series, x.getMessage());
+        } catch (IllegalArgumentException x) {
+            return new Quantity(null, null, x.getMessage());
+        }
+        if (spec.notSourcedId != null) {
+            return new Quantity(null, spec.notSourcedId,
+                spec.notSourcedLabel + " is not in the catalog");
+        }
+        return new Quantity(spec.series.id + " " + spec.transform.key, spec.series.id, null);
+    }
+
+    private static Spec resolve(String title, String rules, PredictionMarkets.Driver driver,
             Request req, Boolean rulesSa) {
         Spec spec = new Spec();
         String text = (title + " " + rules).toLowerCase(Locale.ROOT);
@@ -746,10 +796,10 @@ final class MarketForecasts {
             spec.transform = spec.series.defaultTransform;
             spec.transformSource = "series_default";
         } else {
-            throw new IllegalArgumentException("transform is missing: the rules do not say "
-                + "whether " + spec.series.id + " settles on its level, month-over-month "
-                + "change or year-over-year change. Pass transform (level, mom_pct, yoy_pct, "
-                + "change, max_path, min_path)");
+            throw new TransformMissing(spec.series.id, "transform is missing: the rules do "
+                + "not say whether " + spec.series.id + " settles on its level, "
+                + "month-over-month change or year-over-year change. Pass transform (level, "
+                + "mom_pct, yoy_pct, change, max_path, min_path)");
         }
         return spec;
     }
@@ -758,7 +808,8 @@ final class MarketForecasts {
      * The catalog series for a driver and the rules text, or null in {@code spec.series}
      * with the reason as the return value.
      */
-    private String driverSeries(String driver, String text, Boolean rulesSa, Transform hint,
+    private static String driverSeries(String driver, String text, Boolean rulesSa,
+            Transform hint,
             Spec spec) {
         switch (driver) {
         case "inflation": {

@@ -247,6 +247,42 @@ Known limit, seen live: the baseline forecast draws on every past change of the 
 payrolls that includes 2020-2022, giving a 90% range of -70,000 to 942,000 jobs and a 55-point
 "edge" at confidence `weak`. The backtest follow-up is what catches it; the scan does not.
 
+### Forecast history window (2026-10-02)
+
+Monthly default is 5 years (was 15). Baseline Brier over 12 settled events per Kalshi series,
+by window (15 / 3 / 5 / 8 years): KXCPI 0.162 / 0.161 / 0.160 / 0.155; KXPAYROLLS 0.300 /
+0.248 / 0.285 / 0.286; KXU3 0.069 / 0.067 / 0.068 / 0.072; KXCPIYOY 0.160 / 0.170 / 0.162 /
+0.160. Only payrolls moves by more than noise, and it favours the shorter window; no window
+changes a verdict (the price beats the baseline on both CPI series at every window). 3 years
+scored best in total but leaves 36 rows for the tails. Weekly and daily defaults were not
+tested and are unchanged.
+
+### Basket scan (2026-10-02)
+
+`scan_market_baskets` (`MarketBasketScan`) prices every basket the quotes alone settle, in one
+resumable call with no forecast:
+
+- Within one event: `non_monotone_ladder` and `bucket_partition` (as `price_market_event`
+  finds them) and `exclusive_set` — NO on every market of an event the venue states has at
+  most one winner (Kalshi `mutually_exclusive`, Polymarket `negRisk`), which locks when the
+  YES bids less fees sum to more than 1.
+- Across venues: every Kalshi × Polymarket pair of a `cross_venue` basket, scored over the
+  scenario grid, keeping subsets with a leg on each venue. Polymarket conditions come from
+  `groupItemTitle` (`Condition.ofLabel`); a value two labelled ranges both claim counts as a
+  loss for both. A pair is not priced when its rules differ on series, settlement period or
+  transform, when its strike ranges do not overlap, or when no label states a number.
+- Same-quantity guard: the forecast builder's resolver (`MarketForecasts.quantityOf`) reads
+  the settlement series and transform of both events. Different → not priced. Same → a lock
+  (`same_quantity: verified`, `settles_on`). One side unresolved → listed under `unverified`,
+  never under `baskets`. Found live: without it the scan paired Kalshi core CPI with
+  Polymarket headline CPI and reported a 61x floor, because the rules diff called `series`
+  unknown rather than different. One basket per pair (its best floor).
+- Limits: the listing holds only driver-matched, non-sports events, so sports and politics
+  are out of reach; outcomes named in words ("25 bps decrease") are not matched across
+  venues; a lock is one contract per leg at top of book, depth unchecked.
+- Follow-ups: the forecast for each event of the top basket first, then the rules diff, then
+  the book behind the first two legs. Layout id `basketscan:<n>`.
+
 ## Phase 5 — verification (lead)
 
 - Run the three prompts through `askamerica-desktop`, one at a time; audit calls from the

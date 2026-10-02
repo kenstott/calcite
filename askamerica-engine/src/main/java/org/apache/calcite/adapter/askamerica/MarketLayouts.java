@@ -224,6 +224,80 @@ final class MarketLayouts {
      *
      * @param scan the output of {@code scan_market_opportunities}
      */
+    /** The board of a {@code scan_market_baskets} result: what was read, what was priced,
+     *  and the locks found by floor. */
+    static ObjectNode basketScanBoard(JsonNode scan) {
+        String where = "scan_market_baskets output";
+        JsonNode funnel = required(scan, "funnel", where);
+        String at = where + ": funnel";
+        int matched = (int) requiredNumber(funnel, "events_matched", at);
+        int read = (int) requiredNumber(funnel, "events_read", at);
+        int pairs = (int) requiredNumber(funnel, "cross_venue_pairs", at);
+        int priced = (int) requiredNumber(funnel, "cross_venue_pairs_priced", at);
+        int found = (int) requiredNumber(funnel, "locks_found", at);
+        JsonNode baskets = requiredArray(scan, "baskets", where);
+
+        List<String> names = new ArrayList<>();
+        ArrayNode floors = MAPPER.createArrayNode();
+        double best = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < baskets.size(); i++) {
+            JsonNode b = baskets.get(i);
+            String bat = where + ": baskets[" + i + "]";
+            JsonNode events = requiredArray(b, "events", bat);
+            if (events.size() == 0) {
+                throw new IllegalArgumentException(bat + ".events is empty");
+            }
+            double floor = requiredNumber(b, "floor", bat);
+            names.add(shorten((i + 1) + ". " + requiredText(b, "type", bat) + ": "
+                + requiredText(events.get(0), "event_title", bat + ".events[0]")));
+            floors.add(floor);
+            best = Math.max(best, floor);
+        }
+
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("title", "Prediction-market basket scan: locks in the quotes alone");
+        out.put("subtitle", "Scan complete; listing read "
+            + requiredText(scan, "listing_read_at", where));
+        out.put("footnote", requiredText(scan, "lock_is", where));
+        out.put("columns", 4);
+        ArrayNode panels = out.putArray("panels");
+        panels.add(stat("Events read", String.valueOf(read), matched + " matched", "flat",
+            null));
+        panels.add(stat("Cross-venue pairs priced", String.valueOf(priced), pairs + " pairs",
+            "flat", null));
+        panels.add(stat("Locks found", String.valueOf(found), null, found > 0 ? "up" : "flat",
+            "Baskets that lose at no outcome, after fees"));
+        if (baskets.size() > 0) {
+            panels.add(stat("Best floor", signedPercent(best), null, "up",
+                "Worst-case profit per unit of cost"));
+        } else {
+            panels.add(stat("Best floor", "none", null, "flat", "No basket locks a profit"));
+        }
+
+        List<String> stages = Arrays.asList("Events matched", "Events read",
+            "Cross-venue pairs", "Pairs priced", "Locks found");
+        ObjectNode funnelPanel = chart("bar", "From matched events to locks", stages,
+            baskets.size() > 0 ? 2 : 4);
+        funnelPanel.put("orientation", "horizontal");
+        funnelPanel.put("value_labels", true);
+        funnelPanel.put("value_format", ",.0f");
+        ArrayNode counts = MAPPER.createArrayNode();
+        counts.add(matched).add(read).add(pairs).add(priced).add(found);
+        addSeries(funnelPanel, "Count", counts);
+        panels.add(funnelPanel);
+
+        if (baskets.size() > 0) {
+            ObjectNode ranked = chart("bar", "Baskets by floor after fees", names, 2);
+            ranked.put("orientation", "horizontal");
+            ranked.put("sort", "desc");
+            ranked.put("value_labels", true);
+            ranked.put("value_format", ".1%");
+            addSeries(ranked, "Floor", floors);
+            panels.add(ranked);
+        }
+        return out;
+    }
+
     static ObjectNode scanBoard(JsonNode scan) {
         String where = "scan_market_opportunities output";
         String status = requiredText(scan, "status", where);

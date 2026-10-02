@@ -170,6 +170,47 @@ final class MarketFollowUps {
      * of the best subset (all legs when no search ran); the engine's forecast for the first
      * event when it was priced with none.
      */
+    /**
+     * Follow-ups for a {@code scan_market_baskets} result, in order: the engine's forecast
+     * for each event of the top basket; the rules diff of its pair when it spans two venues
+     * and the verdict is not {@code match}; the book behind its first two legs.
+     */
+    static ArrayNode forBasketScan(JsonNode scan) {
+        JsonNode baskets = array(scan, "baskets", "basket scan");
+        JsonNode unverified = array(scan, "unverified", "basket scan");
+        ArrayNode out = MAPPER.createArrayNode();
+        if (baskets.size() == 0 && unverified.size() == 0) {
+            return out;
+        }
+        // With no lock, the nearest thing to one is a gap whose two series are unverified.
+        JsonNode top = baskets.size() > 0 ? baskets.get(0) : unverified.get(0);
+        JsonNode events = array(top, "events", "baskets entry");
+        for (JsonNode e : events) {
+            String eventId = text(e, "event_id", "baskets entry events entry");
+            ObjectNode a = event(text(e, "source", "baskets entry events entry"), eventId);
+            a.put("build_forecast", true);
+            add(out, "How likely is each outcome of " + eventId + " on the engine's forecast?",
+                "price_market_event", a);
+        }
+        if (events.size() == 2 && !MATCH.equals(text(top, "rules_match", "baskets entry"))) {
+            ObjectNode pair = MAPPER.createObjectNode();
+            pair.set("a", event(events.get(0).get("source").asText(),
+                events.get(0).get("event_id").asText()));
+            pair.set("b", event(events.get(1).get("source").asText(),
+                events.get(1).get("event_id").asText()));
+            add(out, "Do the two venues settle on the same number?",
+                "compare_settlement_rules", pair);
+        }
+        JsonNode legs = array(top, "legs", "baskets entry");
+        for (int i = 0; i < legs.size() && i < 2; i++) {
+            JsonNode leg = legs.get(i);
+            String marketId = text(leg, "market_id", "baskets entry leg");
+            add(out, "How deep is the book behind leg " + marketId + "?", "market_price_history",
+                market(text(leg, "source", "baskets entry leg"), marketId));
+        }
+        return capped(out);
+    }
+
     static ArrayNode forBasket(JsonNode basket) {
         JsonNode events = array(basket, "events", "basket");
         if (events.size() == 0) {

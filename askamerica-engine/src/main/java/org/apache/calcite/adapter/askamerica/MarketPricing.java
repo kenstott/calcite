@@ -28,9 +28,12 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Prices prediction-market contracts against a forecast, and baskets of them against joint
@@ -63,11 +66,97 @@ final class MarketPricing {
         final double low;
         /** Used by {@code between} only. */
         final double high;
+        /** A range read from a venue label shares this end with the next range of its event,
+         *  and the label does not say which of the two holds the shared value. */
+        final boolean lowUnsure;
+        final boolean highUnsure;
 
         Condition(String kind, double low, double high) {
+            this(kind, low, high, false, false);
+        }
+
+        Condition(String kind, double low, double high, boolean lowUnsure,
+                boolean highUnsure) {
+            if (high < low) {
+                throw new IllegalArgumentException(kind + " needs low <= high, got [" + low
+                    + ", " + high + "]");
+            }
             this.kind = kind;
             this.low = low;
             this.high = high;
+            this.lowUnsure = lowUnsure;
+            this.highUnsure = highUnsure;
+        }
+
+        private static final String NUM =
+            "([-\u2212+]?)\\$?(\\d[\\d,]*(?:\\.\\d+)?|\\.\\d+)\\s*([kKmMbB]?)\\s*%?";
+        private static final Pattern LABEL_ABOVE = Pattern.compile(
+            "(?:above|over|more than|greater than|>)\\s*" + NUM, Pattern.CASE_INSENSITIVE);
+        private static final Pattern LABEL_BELOW = Pattern.compile(
+            "(?:below|under|less than|<)\\s*" + NUM, Pattern.CASE_INSENSITIVE);
+        private static final Pattern LABEL_AT_LEAST = Pattern.compile(
+            "(?:\u2265|>=|at least)\\s*" + NUM, Pattern.CASE_INSENSITIVE);
+        private static final Pattern LABEL_AT_MOST = Pattern.compile(
+            "(?:\u2264|<=|at most)\\s*" + NUM, Pattern.CASE_INSENSITIVE);
+        private static final Pattern LABEL_RANGE = Pattern.compile(
+            NUM + "\\s*(?:\u2013|\u2014|-|to)\\s*" + NUM, Pattern.CASE_INSENSITIVE);
+        private static final Pattern LABEL_EXACT = Pattern.compile(NUM);
+
+        private static double labelNumber(Matcher m, int group) {
+            double v = Double.parseDouble(m.group(group + 1).replace(",", ""));
+            switch (m.group(group + 2).toLowerCase(Locale.ROOT)) {
+                case "k": v *= 1e3; break;
+                case "m": v *= 1e6; break;
+                case "b": v *= 1e9; break;
+                default: break;
+            }
+            String sign = m.group(group);
+            return "-".equals(sign) || "\u2212".equals(sign) ? -v : v;
+        }
+
+        /**
+         * The condition a venue's outcome label states, or null when the label is not one of
+         * the forms read: "Above 4.5%", "&lt;0.5%", "&ge;3.0%", "&le;0.0%", "0.5&ndash;1.0%"
+         * (both ends included) and a bare "0.3%" (exactly that value). A label of any other
+         * form ("25 bps decrease", "No change") states no number this can price.
+         */
+        static Condition ofLabel(String label) {
+            if (label == null) {
+                return null;
+            }
+            String text = label.trim();
+            Matcher m = LABEL_AT_LEAST.matcher(text);
+            if (m.matches()) {
+                double v = labelNumber(m, 1);
+                return new Condition("at_least", v, v);
+            }
+            m = LABEL_AT_MOST.matcher(text);
+            if (m.matches()) {
+                double v = labelNumber(m, 1);
+                return new Condition("at_most", v, v);
+            }
+            m = LABEL_ABOVE.matcher(text);
+            if (m.matches()) {
+                double v = labelNumber(m, 1);
+                return new Condition("above", v, v);
+            }
+            m = LABEL_BELOW.matcher(text);
+            if (m.matches()) {
+                double v = labelNumber(m, 1);
+                return new Condition("below", v, v);
+            }
+            m = LABEL_EXACT.matcher(text);
+            if (m.matches()) {
+                double v = labelNumber(m, 1);
+                return new Condition("between", v, v);
+            }
+            m = LABEL_RANGE.matcher(text);
+            if (m.matches() && m.group(3).equalsIgnoreCase(m.group(6))) {
+                double low = labelNumber(m, 1);
+                double high = labelNumber(m, 4);
+                return low < high ? new Condition("between", low, high) : null;
+            }
+            return null;
         }
 
         /** Parses {@code {"above": 3.6}} or {@code {"between": [3.5, 3.6]}}. */
@@ -119,6 +208,17 @@ final class MarketPricing {
                 return new Condition("between", m.floorStrike, m.capStrike);
             }
             return null;
+        }
+
+        /**
+         * Whether a contract on {@code side} is sure to pay at {@code v}. At an end a label
+         * left unsure neither side is: a lock must not rest on a value two ranges both claim.
+         */
+        boolean wins(String side, double v) {
+            if (lowUnsure && v == low || highUnsure && v == high) {
+                return false;
+            }
+            return "yes".equals(side) == holds(v);
         }
 
         boolean holds(double v) {
@@ -309,6 +409,40 @@ final class MarketPricing {
 
     private static Double rounded(Double v, int places) {
         return v == null ? null : PredictionMarkets.round(v, places);
+    }
+
+    /**
+     * The conditions an event's outcome labels state, by market id, for markets whose venue
+     * gives no strike. Two ranges that share an end ("0.5&ndash;1.0%" and "1.0&ndash;1.5%")
+     * are each marked unsure at it.
+     */
+    static Map<String, Condition> labelConditions(PredictionMarkets.Event event) {
+        Map<String, Condition> read = new LinkedHashMap<>();
+        for (PredictionMarkets.Market m : event.legs) {
+            if (Condition.ofStrike(m) == null) {
+                Condition c = Condition.ofLabel(m.label);
+                if (c != null) {
+                    read.put(m.marketId, c);
+                }
+            }
+        }
+        Map<String, Condition> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Condition> e : read.entrySet()) {
+            Condition c = e.getValue();
+            boolean low = false;
+            boolean high = false;
+            if ("between".equals(c.kind) && c.low < c.high) {
+                for (Condition o : read.values()) {
+                    if (o != c && "between".equals(o.kind) && o.low < o.high) {
+                        low |= o.high == c.low;
+                        high |= o.low == c.high;
+                    }
+                }
+            }
+            out.put(e.getKey(), low || high
+                ? new Condition(c.kind, c.low, c.high, low, high) : c);
+        }
+        return out;
     }
 
     /**
@@ -986,6 +1120,13 @@ final class MarketPricing {
      */
     static ObjectNode scoreBasket(List<Leg> legs, Scenarios scenarios, boolean outcomes,
             int search, boolean lock, Double minYield, int top) {
+        return scoreBasket(legs, scenarios, outcomes, search, lock, minYield, top, 1);
+    }
+
+    /** As the overload without {@code minVenues}, keeping only subsets whose legs are on at
+     *  least that many venues. */
+    static ObjectNode scoreBasket(List<Leg> legs, Scenarios scenarios, boolean outcomes,
+            int search, boolean lock, Double minYield, int top, int minVenues) {
         if (legs.isEmpty()) {
             throw new IllegalArgumentException("the basket has no legs: no market of the given "
                 + "events had a side to buy");
@@ -1012,8 +1153,7 @@ final class MarketPricing {
                         + " has no value for column '" + l.column + "' (leg " + l.id
                         + "); columns there: " + scenarios.rows.get(sc).keySet());
                 }
-                boolean yes = l.condition.holds(v);
-                wins[i][sc] = "yes".equals(l.side) ? yes : !yes;
+                wins[i][sc] = l.condition.wins(l.side, v);
             }
         }
         ObjectNode out = MAPPER.createObjectNode();
@@ -1053,10 +1193,12 @@ final class MarketPricing {
                 }
                 while (true) {
                     Set<String> events = new HashSet<>();
+                    Set<String> venues = new HashSet<>();
                     for (int i : idx) {
                         events.add(legs.get(i).source + ":" + legs.get(i).eventId);
+                        venues.add(legs.get(i).source);
                     }
-                    if (lock || events.size() >= 2) {
+                    if ((lock || events.size() >= 2) && venues.size() >= minVenues) {
                         Score s = score(idx, legs, wins, scenarios.weights);
                         boolean keep = !lock || s.worst > EPS;
                         if (keep && minYield != null) {

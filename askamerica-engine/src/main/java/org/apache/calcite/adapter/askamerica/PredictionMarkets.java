@@ -311,6 +311,11 @@ final class PredictionMarkets {
         String series;
         String rules;
         String url;
+        /** The venue's short name for this outcome within its event (Polymarket's
+         *  groupItemTitle, "Above 4.5%"); null where the venue gives none. */
+        String label;
+        /** The venue states that at most one market of this market's event resolves YES. */
+        boolean exclusive;
 
         ObjectNode toJson() {
             ObjectNode o = MAPPER.createObjectNode();
@@ -382,6 +387,7 @@ final class PredictionMarkets {
         String eventId = required(ev, "event_ticker", "Kalshi event").asText();
         String series = textOrNull(ev, "series_ticker");
         String category = ev.path("category").asText("");
+        boolean exclusive = ev.path("mutually_exclusive").asBoolean(false);
         List<String> sources = new ArrayList<>();
         for (JsonNode s : ev.path("settlement_sources")) {
             // A settlement source is {name, url}; a few carry only the url.
@@ -411,6 +417,7 @@ final class PredictionMarkets {
             row.floorStrike = num(m.get("floor_strike"));
             row.capStrike = num(m.get("cap_strike"));
             row.settlementSources = sources;
+            row.exclusive = exclusive;
             row.eventId = eventId;
             row.marketId = required(m, "ticker", "Kalshi market").asText();
             row.series = series;
@@ -481,6 +488,9 @@ final class PredictionMarkets {
             }
             row.eventId = eventId;
             row.marketId = id;
+            row.label = textOrNull(m, "groupItemTitle");
+            // A negative-risk event is one the venue settles with a single winning outcome.
+            row.exclusive = ev.path("negRisk").asBoolean(false);
             row.series = textOrNull(ev, "seriesSlug");
             String description = textOrNull(m, "description");
             row.rules = description == null ? "" : description;
@@ -709,6 +719,8 @@ final class PredictionMarkets {
         long volume24h;
         Double medianSpread;
         Double impliedMedian;
+        /** The venue states that at most one of the event's markets resolves YES. */
+        boolean exclusive;
         List<ObjectNode> locks = new ArrayList<>();
         /** Every priced market, most traded first. */
         List<Market> legs = new ArrayList<>();
@@ -865,6 +877,7 @@ final class PredictionMarkets {
         ev.driver = driver;
         ev.settlementSources = first.settlementSources;
         ev.rules = first.rules;
+        ev.exclusive = first.exclusive;
         double volume = 0;
         double volume24h = 0;
         List<Double> spreads = new ArrayList<>();

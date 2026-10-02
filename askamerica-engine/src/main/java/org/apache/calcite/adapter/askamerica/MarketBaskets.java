@@ -700,6 +700,45 @@ final class MarketBaskets {
         return out;
     }
 
+    /**
+     * The lock of an event the venue settles with at most one winning market: one contract
+     * on NO of each of n quoted markets pays at least n - 1, so the basket locks when the
+     * bids, each less its fee, sum to more than 1. Null when the venue does not state the
+     * event exclusive or fewer than two markets carry a bid. Buying every YES is not offered:
+     * the venue's statement does not say one market must win.
+     */
+    static ObjectNode exclusiveLock(PredictionMarkets.Event event,
+            Map<String, Double> feeRates) {
+        if (!event.exclusive) {
+            return null;
+        }
+        List<PredictionMarkets.Market> markets = new ArrayList<>();
+        double bids = 0;
+        for (PredictionMarkets.Market m : event.legs) {
+            if (quoted(m.yesBid)) {
+                markets.add(m);
+                bids += m.yesBid;
+            }
+        }
+        if (markets.size() < 2) {
+            return null;
+        }
+        ObjectNode no = sideBasket(markets, "no", markets.size() - 1, feeRates);
+        ObjectNode node = MAPPER.createObjectNode();
+        node.put("type", "exclusive_set");
+        node.put("source", event.source);
+        node.put("event_id", event.eventId);
+        node.put("markets", markets.size());
+        node.put("yes_bids_sum", PredictionMarkets.round(bids, 4));
+        node.put("basis", "the venue states that at most one market of the event resolves "
+            + "YES, so NO on each of " + markets.size() + " markets pays at least "
+            + (markets.size() - 1));
+        node.put("fee_basis", FEE_BASIS);
+        node.set("buy_all_no", no);
+        node.put("lock", no.get("lock").asBoolean());
+        return node;
+    }
+
     // ─── Payoff curve ──────────────────────────────────────────────────────────
 
     /**

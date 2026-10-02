@@ -596,7 +596,7 @@ public class McpServer {
             "find_market_candidates", "price_market_event", "find_market_baskets",
             "price_market_basket", "forecast_market_event", "market_price_history",
             "scan_market_opportunities", "requote_market_opportunity",
-            "backtest_market_forecast", "compare_settlement_rules"));
+            "backtest_market_forecast", "compare_settlement_rules", "scan_market_baskets"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -3375,6 +3375,7 @@ public class McpServer {
         tools.add(MarketForecasts.toolDef());
         tools.add(MarketHistory.toolDef());
         tools.add(MarketScan.toolDef());
+        tools.add(MarketBasketScan.toolDef());
         tools.add(MarketBacktest.toolDef());
         tools.add(MarketRules.toolDef());
 
@@ -3889,6 +3890,9 @@ public class McpServer {
     private static final MarketScan MARKET_SCAN = new MarketScan(MARKET_FETCHER,
         MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
         java.time.Duration.ofMinutes(15), MARKET_BACKTEST);
+    private static final MarketBasketScan MARKET_BASKET_SCAN = new MarketBasketScan(
+        MARKET_FETCHER, MARKET_LISTING, java.time.Instant::now, 40_000L, 35_000L,
+        java.time.Duration.ofMinutes(15));
     private static final MarketPresentation MARKET_VIEW = new MarketPresentation();
     private static final MarketForecasts MARKET_FORECASTS =
         new MarketForecasts(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
@@ -4121,6 +4125,12 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=scan_market_opportunities driver="
                         + args.path("driver").asText(""));
                     text = MARKET_VIEW.scan(MARKET_SCAN.scan(args));
+                    break;
+                }
+                case "scan_market_baskets": {
+                    log.println("[askamerica-mcp] tool=scan_market_baskets driver="
+                        + args.path("driver").asText(""));
+                    text = MARKET_VIEW.basketScan(MARKET_BASKET_SCAN.scan(args));
                     break;
                 }
                 case "market_price_history": {
@@ -7448,7 +7458,8 @@ public class McpServer {
         for (ObjectNode e : recentCallLogSnapshot()) {
             String tool = e.path("tool").asText("");
             if ("price_market_event".equals(tool) || "scan_market_opportunities".equals(tool)
-                    || "price_market_basket".equals(tool)) {
+                    || "price_market_basket".equals(tool)
+                    || "scan_market_baskets".equals(tool)) {
                 return MARKET_VIEW.gate(resolved);
             }
         }
@@ -7492,7 +7503,7 @@ public class McpServer {
     /** The market tools whose result is itself the engine's data on the question. */
     private static final java.util.Set<String> MARKET_PRICING_TOOLS = java.util.Set.of(
         "price_market_event", "price_market_basket", "scan_market_opportunities",
-        "backtest_market_forecast");
+        "backtest_market_forecast", "scan_market_baskets");
 
     /**
      * A "pure web fallback" report -- no {@code query} call anywhere this session returned any
