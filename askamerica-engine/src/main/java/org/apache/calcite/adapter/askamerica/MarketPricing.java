@@ -1113,7 +1113,8 @@ final class MarketPricing {
      * lowest threshold and above the highest. Each is scored against a forecast of that
      * quantity, and kept when the forecast puts at most {@code maxLoss} on a loss and its
      * expected profit is positive, and the quotes agree: the forecast puts every leg's chance
-     * of winning within {@code maxGap} of its price, and a venue's own quotes put at most
+     * of winning within {@code maxGap} of its price and neither its winning nor its losing
+     * at over {@code maxRatio} times what the price implies, and a venue's own quotes put at most
      * {@code maxLoss} on the losing band. A subset the forecast alone favours is a bet on the
      * forecast against the market, not on the basket, and is counted, not kept.
      *
@@ -1122,7 +1123,7 @@ final class MarketPricing {
      *     thresholds that enclose every losing outcome (null when the worst case breaks even)
      */
     static NearLocks nearLocks(List<Leg> legs, Forecast forecast, int search, int minVenues,
-            double maxLoss, double maxGap, int top) {
+            double maxLoss, double maxGap, double maxRatio, int top) {
         Scenarios grid = grid(legs);
         String column = legs.get(0).column;
         TreeSet<Double> cuts = new TreeSet<>();
@@ -1210,9 +1211,14 @@ final class MarketPricing {
             while (true) {
                 Set<String> venues = new HashSet<>();
                 double gap = 0;
+                double ratio = 0;
                 for (int i : idx) {
+                    double price = legs.get(i).price;
                     venues.add(legs.get(i).source);
-                    gap = Math.max(gap, Math.abs(pWin[i] - legs.get(i).price));
+                    gap = Math.max(gap, Math.abs(pWin[i] - price));
+                    // A cheap leg the forecast calls likely is a small gap and a large ratio.
+                    ratio = Math.max(ratio, Math.max(pWin[i] / price,
+                        (1 - pWin[i]) / (1 - price)));
                 }
                 if (venues.size() >= minVenues) {
                     Score outcome = score(idx, legs, onGrid, even);
@@ -1251,7 +1257,7 @@ final class MarketPricing {
                         }
                         if (!scored) {
                             // Not a near-lock on the forecast.
-                        } else if (gap > maxGap + EPS) {
+                        } else if (gap > maxGap + EPS || ratio > maxRatio + EPS) {
                             overGap++;
                         } else if (quotedLoss == null) {
                             bandUnpriced++;
@@ -1265,6 +1271,7 @@ final class MarketPricing {
                                     PredictionMarkets.round(pWin[idx[i]], 4));
                             }
                             o.put("max_quote_gap", PredictionMarkets.round(gap, 4));
+                            o.put("max_quote_ratio", PredictionMarkets.round(ratio, 4));
                             o.put("floor", PredictionMarkets.round(outcome.floor(), 4));
                             o.put("worst", PredictionMarkets.round(outcome.worst, 5));
                             o.put("best", PredictionMarkets.round(outcome.best, 5));
@@ -1368,7 +1375,7 @@ final class MarketPricing {
     /** The near-locks kept, and how many more qualified on the forecast but not the quotes. */
     static final class NearLocks {
         final ArrayNode kept;
-        /** Baskets with a leg the forecast puts over the gap from its price. */
+        /** Baskets with a leg the forecast puts over the gap or the ratio from its price. */
         final int overGap;
         /** Baskets whose losing band a venue's quotes put over the cap. */
         final int bandLikely;

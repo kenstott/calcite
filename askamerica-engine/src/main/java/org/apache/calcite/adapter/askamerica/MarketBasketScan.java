@@ -53,7 +53,8 @@ import java.util.function.Supplier;
  * and that the forecast expects to pay more than it costs with a loss no likelier than
  * {@code max_loss_probability}. Locks need no forecast; near-locks are a judgement of one,
  * kept only while the quotes agree: they too put the losing band under the cap, and the
- * forecast puts every leg within {@link #MAX_QUOTE_GAP} of its quote.
+ * forecast puts every leg within {@link #MAX_QUOTE_GAP} and {@link #MAX_QUOTE_RATIO} of its
+ * quote.
  *
  * <p>An event is read once and kept for the listing's lifetime, so a scan that runs out of its
  * time budget resumes where it stopped on the next call.
@@ -80,6 +81,11 @@ final class MarketBasketScan {
     private static final int PER_PAIR = 1;
     /** The furthest the forecast may put a near-lock leg's chance of winning from its price. */
     static final double MAX_QUOTE_GAP = 0.20;
+    /**
+     * The most the forecast may put a near-lock leg's winning, or its losing, over what the
+     * price implies. The gap alone passes a leg quoted at 0.006 that the forecast puts at 0.17.
+     */
+    static final double MAX_QUOTE_RATIO = 2;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -526,7 +532,7 @@ final class MarketBasketScan {
             double maxLoss, String[] why) {
         List<ObjectNode> out = new ArrayList<>();
         MarketPricing.NearLocks scored = MarketPricing.nearLocks(info.legs, k.forecast,
-            info.depth, 2, maxLoss, MAX_QUOTE_GAP, PER_PAIR);
+            info.depth, 2, maxLoss, MAX_QUOTE_GAP, MAX_QUOTE_RATIO, PER_PAIR);
         if (scored.bandUnpriced > 0) {
             why[0] = "the forecast favours a basket of the pair, but neither venue's quotes "
                 + "price its losing band";
@@ -536,8 +542,9 @@ final class MarketBasketScan {
                 + "the market";
         } else if (scored.overGap > 0) {
             why[0] = "the forecast favours a basket of the pair, but puts a leg's chance of "
-                + "winning more than " + MAX_QUOTE_GAP + " from its price: a bet on the "
-                + "forecast against the market";
+                + "winning more than " + MAX_QUOTE_GAP + " from its price, or its winning "
+                + "or losing at over " + MAX_QUOTE_RATIO + " times what its price implies: a "
+                + "bet on the forecast against the market";
         } else {
             why[0] = "no basket of the pair profits in both tails with a positive expected "
                 + "profit and p_loss <= max_loss_probability";
@@ -554,6 +561,7 @@ final class MarketBasketScan {
             o.set("expected_profit", best.get("expected"));
             o.set("expected_yield", best.get("yield"));
             o.set("max_quote_gap", best.get("max_quote_gap"));
+            o.set("max_quote_ratio", best.get("max_quote_ratio"));
             o.set("forecast", k.forecast.toJson());
             o.put("same_quantity", VERIFIED);
             o.put("settles_on", info.settlesOn);
@@ -1046,7 +1054,9 @@ final class MarketBasketScan {
             + "The quotes agree the loss is unlikely: market_p_loss, what a venue's quotes "
             + "put on the losing band, is at most max_loss_probability too, and the forecast "
             + "puts each leg's chance of winning (forecast_p_win) within " + MAX_QUOTE_GAP
-            + " of its price. A basket only the forecast favours is a bet on the forecast "
+            + " of its price, and neither its winning nor its losing at over "
+            + MAX_QUOTE_RATIO + " times what the price implies (max_quote_ratio). A basket "
+            + "only the forecast favours is a bet on the forecast "
             + "against the market and is counted in near_locks_not_scored. "
             + "size walks the books while a further set still costs less than the forecast "
             + "expects it to pay.");

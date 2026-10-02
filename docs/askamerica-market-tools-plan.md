@@ -294,6 +294,9 @@ resumable call with no forecast:
   "217% expected yield" basket whose forecast put 50% on a leg quoted at 3%, and with only
   the leg gate a basket losing at exactly 3.7, which Polymarket quoted at 25% and the
   forecast at 6%. Outcomes between two strikes one rounding step apart are not scored.
+  The 0.20 gap alone still passed a leg quoted at 0.006 that the forecast put at 0.17, which
+  supplied most of that basket's expected profit, so the forecast may also put neither a
+  leg's winning nor its losing at over twice what its price implies (`max_quote_ratio`).
   One per pair, ranked by `expected_yield`, sized from the books while a further set costs
   less than the forecast expects it to pay. Listed under `near_locks`, never `baskets`; a pair
   that yields none is counted under `near_locks_not_scored` with the reason.

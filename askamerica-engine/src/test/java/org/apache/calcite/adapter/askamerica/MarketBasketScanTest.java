@@ -691,6 +691,8 @@ class MarketBasketScanTest {
     assertEquals(1, near.get("legs").get(0).get("forecast_p_win").asDouble(), 1e-12);
     assertEquals(0, near.get("legs").get(1).get("forecast_p_win").asDouble(), 1e-12);
     assertEquals(0.20, near.get("max_quote_gap").asDouble(), 1e-9);
+    // The forecast puts the Kalshi leg at 1 where its price says 0.80.
+    assertEquals(1.25, near.get("max_quote_ratio").asDouble(), 1e-9);
     assertEquals(-cost, near.get("worst_profit").asDouble(), 1e-4);
     assertEquals(1 - cost, near.get("best_profit").asDouble(), 1e-4);
     JsonNode band = near.get("loses_between");
@@ -913,7 +915,7 @@ class MarketBasketScanTest {
     MarketPricing.Forecast forecast = MarketPricing.samples(draws);
 
     MarketPricing.NearLocks scored = MarketPricing.nearLocks(legs, forecast, 2, 2, 0.05,
-        0.30, 5);
+        0.30, 2, 5);
     assertEquals(1, scored.kept.size());
     assertEquals(0, scored.overGap + scored.bandLikely + scored.bandUnpriced);
     JsonNode near = scored.kept.get(0);
@@ -923,6 +925,7 @@ class MarketBasketScanTest {
     assertEquals(0.90, near.get("legs").get(0).get("forecast_p_win").asDouble(), 1e-9);
     assertEquals(0.05, near.get("legs").get(1).get("forecast_p_win").asDouble(), 1e-9);
     assertEquals(0.30, near.get("max_quote_gap").asDouble(), 1e-9);
+    assertEquals(1.5, near.get("max_quote_ratio").asDouble(), 1e-9);
     assertEquals(0.05, near.get("p_loss").asDouble(), 1e-9);
     assertEquals(0.95, near.get("p_profit").asDouble(), 1e-9);
     assertEquals(0.95 - 0.85, near.get("expected").asDouble(), 1e-9);
@@ -934,21 +937,26 @@ class MarketBasketScanTest {
     assertTrue(near.get("loses_between").get("high_included").asBoolean());
 
     MarketPricing.NearLocks risky = MarketPricing.nearLocks(legs, forecast, 2, 2, 0.04,
-        0.30, 5);
+        0.30, 2, 5);
     assertEquals(0, risky.kept.size());
     assertEquals(0, risky.overGap + risky.bandLikely + risky.bandUnpriced);
     MarketPricing.NearLocks disputed = MarketPricing.nearLocks(legs, forecast, 2, 2, 0.05,
-        0.20, 5);
+        0.20, 2, 5);
     assertEquals(0, disputed.kept.size());
     assertEquals(1, disputed.overGap);
+    // The forecast puts the Kalshi leg at 0.90 where its price says 0.60: 1.5 times.
+    MarketPricing.NearLocks stretched = MarketPricing.nearLocks(legs, forecast, 2, 2, 0.05,
+        0.30, 1.4, 5);
+    assertEquals(0, stretched.kept.size());
+    assertEquals(1, stretched.overGap);
     // Above 3.0 quoted at a middle of 0.39 on Polymarket: 0.15 on the band, over the cap.
     MarketPricing.NearLocks likely = MarketPricing.nearLocks(nearLegs(0.40, 0.62), forecast,
-        2, 2, 0.05, 0.30, 5);
+        2, 2, 0.05, 0.30, 2, 5);
     assertEquals(0, likely.kept.size());
     assertEquals(1, likely.bandLikely);
     // Without Polymarket's market above 3.0 no venue quotes the band.
     MarketPricing.NearLocks unpriced = MarketPricing.nearLocks(nearLegs(0.40, 0.62)
-        .subList(0, 4), forecast, 2, 2, 0.05, 0.30, 5);
+        .subList(0, 4), forecast, 2, 2, 0.05, 0.30, 2, 5);
     assertEquals(0, unpriced.kept.size());
     assertEquals(1, unpriced.bandUnpriced);
   }
@@ -960,10 +968,10 @@ class MarketBasketScanTest {
     // Two legs that both need a low print: nothing wins above 3.2.
     assertEquals(0, MarketPricing.nearLocks(java.util.Arrays.asList(
         leg("kalshi", "k", "no", 3.0, 0.40), leg("polymarket", "p", "no", 3.2, 0.45)),
-        forecast, 2, 2, 0.10, 1, 5).kept.size());
+        forecast, 2, 2, 0.10, 1, 100, 5).kept.size());
     // YES above 3.0 with NO above 3.2 pays 1 at every outcome and costs 0.90: a lock.
     assertEquals(0, MarketPricing.nearLocks(java.util.Arrays.asList(
         leg("kalshi", "k", "yes", 3.0, 0.40), leg("polymarket", "p", "no", 3.2, 0.50)),
-        forecast, 2, 2, 0.10, 1, 5).kept.size());
+        forecast, 2, 2, 0.10, 1, 100, 5).kept.size());
   }
 }
