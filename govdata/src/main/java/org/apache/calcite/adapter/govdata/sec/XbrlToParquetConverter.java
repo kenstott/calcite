@@ -1129,8 +1129,11 @@ public class XbrlToParquetConverter implements FileConverter {
         if (unitRefRaw != null) {
           unitLabel = unitLabels.get(unitRefRaw);
           if (unitLabel == null) {
-            throw new IllegalStateException("Fact " + concept + " in accession " + accession
-                + " references unit '" + unitRefRaw + "' that the filing does not define");
+            // The unit is the filer's own undeclared reference, so the fact's unit cannot be
+            // determined. Drop only this fact (visibly) rather than aborting every other fact.
+            LOGGER.warn("Dropping fact {} in accession {}: references unit '{}' that the filing"
+                + " does not define", concept, accession, unitRefRaw);
+            continue;
           }
         }
         data.put("unit_ref_normalized", unitLabel);
