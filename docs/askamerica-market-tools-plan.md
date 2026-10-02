@@ -193,6 +193,60 @@ Lead: report gate requires the layout that matches the question (one event, N ev
 Exit test: all three prompts — one random event, five random events, a locking basket —
 publish on the first attempt with the matching layout and follow-ups.
 
+### Phase 4 as built — chart marks and their data (2026-10-02, `def43b0a9`)
+
+| Chart in the table above | State | How it is drawn |
+|---|---|---|
+| Candlestick with volume bars | built | `render_chart` / dashboard panel `chart_type: candlestick`, `candles{open, high, low, close, volume?}` |
+| Fan chart | built, 50% and 90% bands | `chart_type: fan`, `series` + `bands[{name, low, high}]` |
+| Payoff diagram | built | `line` chart with `reference_lines` for the floor |
+| Fair-versus-ask ladder, Brier by event | no new mark needed | grouped `bar` |
+| Distribution overlay, calibration plot, edge decay | no new mark needed | `bar` / `scatter` / `line` with `reference_lines` |
+| Depth chart | not built | needs a step line, and the tools return a depth summary at the ticket's limit, not the book's levels |
+
+- `reference_lines[{value | category, label?}]` is accepted on line, fan and candlestick only.
+- Both ordered types fit the y axis to the data (zero is not forced) and thin the period labels.
+- `market_price_history` returns `open`, `high`, `low` per point and an `ohlc` line saying where
+  they came from. Kalshi: the venue's own candles. Polymarket: daily points resampled from its
+  hourly points, which the venue keeps for about 30 days, so older days carry a close only;
+  hourly points have no candle at all.
+- `forecast_market_event` returns `fan`: 24 periods of history, then the median and the 50% and
+  90% intervals at up to 12 steps to settlement. One-period transforms (change, month-over-month)
+  have no path, so their intervals stand at the settlement period alone. The 80/95% bands in the
+  table were replaced by 50/90% to match the p05/p95 the tool already reports.
+
+### Phase 4 as built — layouts, follow-ups, recipes (2026-10-02)
+
+| Planned | Built |
+|---|---|
+| Standard layouts returned as dashboard JSON | `MarketLayouts` builds an opportunity card, a scan board and a basket sheet from the tool's own output. The result carries only `dashboard_layout` (an id: `event:<source>:<event_id>`, `scan:<n>`, `basket:<n>`) and `dashboard_panels` (the panel titles). `MarketPresentation` keeps the last 40 layouts; `compose_dashboard` and the report's `dashboard` take `{"layout": id}` or a list of ids, and panels given beside it are placed after. The model never echoes chart data. |
+| Report gate on the chart panel | Replaced: once a market tool has returned a layout, a report with no `layout` is refused, naming the ids returned since the last report. `chart_panel` and `chart_panel_use` are gone from `price_market_event`. |
+| Several events on one board | A list of ids: each layout opens with a heading tile (`1 of 2`, the event title, its forecast line); the board takes its own title and the distinct footnotes. |
+| Refinement prompts | `MarketFollowUps`: at most 5 `follow_ups` per result, each `{question, tool, arguments}` checked against the tool's schema in tests. `follow_ups_use` tells the model to end the answer with them. |
+| Recipes | 13 added to `recipes.json` (6 forecast-by-driver, 6 basket structures, 1 on capturing a point-in-time opportunity). Every claim was checked against the code by a separate reader; 16 sentences were corrected. |
+
+Card panels: best edge, fair value against price, confidence, days to settlement; edge after
+fees by strike; forecast probability against the YES bid and ask by strike; the fan, with the
+best market's strike as its one reference line (a line per strike hid the fan). A market the
+forecast does not price is left off; one quoted on neither side has no edge bar.
+
+Gates, as changed after review and the three exit runs (q9011-q9013):
+
+- The layout gate applies only when a market pricing call belongs to the report being
+  published (the recent-call window the other gates use), so a layout from earlier work does
+  not block an unrelated report.
+- The pure-web-fallback gate counts a market pricing call that returned as the engine's own
+  data. Both q9011 and q9012 were refused once for "no query call" and ran a query only to pass.
+- A report's board is kept for `deliver_report` in eval mode; q9013 published through
+  `create_report_artifact` and saved no `dashboard.png`.
+
+Not built: a per-strike market-implied probability series (the output holds `implied_median`
+only), so the line panel compares the forecast with the quote itself.
+
+Known limit, seen live: the baseline forecast draws on every past change of the series. For
+payrolls that includes 2020-2022, giving a 90% range of -70,000 to 942,000 jobs and a 55-point
+"edge" at confidence `weak`. The backtest follow-up is what catches it; the scan does not.
+
 ## Phase 5 — verification (lead)
 
 - Run the three prompts through `askamerica-desktop`, one at a time; audit calls from the

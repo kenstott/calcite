@@ -933,6 +933,7 @@ final class MarketPricing {
             Leg l = legs.get(i);
             ObjectNode li = ids.addObject();
             li.put("id", l.id);
+            li.put("title", l.title);
             li.put("source", l.source);
             li.put("side", l.side);
             li.put("price", l.price);

@@ -2804,6 +2804,11 @@ public class McpServer {
             + "its own axis, so the taller bar can be the smaller number and nothing on either "
             + "panel looks wrong.");
         dashProps.set("panels", panelsProp);
+        ObjectNode layoutProp = MAPPER.createObjectNode();
+        layoutProp.put("description", "The dashboard_layout id a market tool returned, or a "
+            + "list of them: its panels, title and footnote are filled in, and panels given "
+            + "here are placed after them.");
+        dashProps.set(MarketPresentation.LAYOUT, layoutProp);
         tools.add(
             toolWithChartViewer("compose_dashboard",
             "THE DEFAULT WAY TO VISUALISE AN ANSWER. Composes charts and headline numbers into "
@@ -2821,7 +2826,7 @@ public class McpServer {
             + "sentence — build the full report now, without asking first: pass these same "
             + "panels via create_report_artifact's dashboard argument, and it composes the "
             + "board and inlines it under your prose in one page.",
-            schema(dashProps, new String[]{"panels"})));
+            schema(dashProps, new String[]{})));
 
         ObjectNode pubProps = MAPPER.createObjectNode();
         pubProps.set("title", prop("string", "The finding, as a sentence a reader could quote. "
@@ -2851,7 +2856,7 @@ public class McpServer {
         dashProp.put("type", "object");
         dashProp.put("description",
             "Optional. The same arguments compose_dashboard takes (title, subtitle, columns, "
-            + "panels, footnote, byline). The board is composed and inlined at the top of the "
+            + "panels, layout, footnote, byline). The board is composed and inlined at the top of the "
             + "report, so one call produces the whole deliverable.");
         pubProps.set("dashboard", dashProp);
         ObjectNode coverageProp = MAPPER.createObjectNode();
@@ -3884,6 +3889,7 @@ public class McpServer {
     private static final MarketScan MARKET_SCAN = new MarketScan(MARKET_FETCHER,
         MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
         java.time.Duration.ofMinutes(15), MARKET_BACKTEST);
+    private static final MarketPresentation MARKET_VIEW = new MarketPresentation();
     private static final MarketForecasts MARKET_FORECASTS =
         new MarketForecasts(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
     private static final MarketHistory MARKET_HISTORY =
@@ -4081,7 +4087,7 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=price_market_event source="
                         + args.path("source").asText("") + " event_id="
                         + args.path("event_id").asText(""));
-                    text = MARKETS.priceEvent(args);
+                    text = MARKET_VIEW.event(MARKETS.priceEvent(args));
                     break;
                 }
                 case "forecast_market_event": {
@@ -4114,7 +4120,7 @@ public class McpServer {
                 case "scan_market_opportunities": {
                     log.println("[askamerica-mcp] tool=scan_market_opportunities driver="
                         + args.path("driver").asText(""));
-                    text = MARKET_SCAN.scan(args);
+                    text = MARKET_VIEW.scan(MARKET_SCAN.scan(args));
                     break;
                 }
                 case "market_price_history": {
@@ -4132,7 +4138,7 @@ public class McpServer {
                 case "price_market_basket": {
                     log.println("[askamerica-mcp] tool=price_market_basket events="
                         + args.path("events").size());
-                    text = MARKETS.priceBasket(args);
+                    text = MARKET_VIEW.basket(MARKETS.priceBasket(args));
                     break;
                 }
                 case "set_telemetry": {
@@ -4789,6 +4795,8 @@ public class McpServer {
                     JsonNode dash = args.path("dashboard");
                     java.util.List<DashboardLayout.Panel> ps = new java.util.ArrayList<>();
                     int c = 2;
+                    boolean marketLayout = dash.isObject()
+                        && MARKET_VIEW.resolve((ObjectNode) dash);
                     if (dash.isObject() && dash.has("panels")) {
                         for (JsonNode pn : dash.path("panels")) {
                             ps.add(readPanel(pn));
@@ -4811,6 +4819,9 @@ public class McpServer {
                         // link" and one that answers the question at a glance. Roughly an
                         // eighth of a full-size board's image tokens either way.
                         thumb = board.toPng(0.40);
+                        if (EVAL_MODE) {
+                            LAST_DASHBOARD_PNG = board.toPng(2.0);
+                        }
                     }
                     // The artifact path draws its own charts from the panel data; a thumbnail
                     // of AskAmerica's board would only spend image tokens on a second copy.
@@ -4857,7 +4868,7 @@ public class McpServer {
                     addIfPresent(gateProblems, enforceRecurringEventRecency(rTitle, rSub, secs));
                     addIfPresent(gateProblems, enforceRecipeConsulted());
                     addIfPresent(gateProblems, enforceMarketSearchFinished());
-                    addIfPresent(gateProblems, enforceMarketChart(boardSvg));
+                    addIfPresent(gateProblems, enforceMarketLayout(marketLayout));
                     addIfPresent(gateProblems, enforceResearchDepthOnGap());
                     if (!gateProblems.isEmpty()) {
                         StringBuilder combined = new StringBuilder(
@@ -4871,6 +4882,7 @@ public class McpServer {
                         throw new IllegalArgumentException(combined.toString());
                     }
                     MARKETS.resetSearch();
+                    MARKET_VIEW.reset();
                     ReportPage.Section appendix = queryAppendix();
                     if (appendix != null) {
                         secs.add(appendix);
@@ -5077,6 +5089,9 @@ public class McpServer {
                     break;
                 }
                 case "compose_dashboard": {
+                    if (args.isObject()) {
+                        MARKET_VIEW.resolve((ObjectNode) args);
+                    }
                     java.util.List<DashboardLayout.Panel> panels = new java.util.ArrayList<>();
                     for (JsonNode pn : args.path("panels")) {
                         panels.add(readPanel(pn));
@@ -6663,7 +6678,7 @@ public class McpServer {
     private static volatile boolean CHART_RENDERED;
 
     /**
-     * The most recent {@code compose_dashboard} render at 2x, kept separately from
+     * The most recent {@code compose_dashboard} render or report board at 2x, kept separately from
      * {@link #LAST_CHART_PNG}: preview_report returns a 40% thumbnail of its board as the
      * call's image, and "the last image this process produced" was therefore a 352x258
      * picture that no reader could use. The saved dashboard.png is this one when it exists.
@@ -7428,16 +7443,13 @@ public class McpServer {
         return null;
     }
 
-    /** A report on events priced against a forecast carries the chart the pricing returned. */
-    private static String enforceMarketChart(String boardSvg) {
-        if (boardSvg != null || !MARKETS.pricedWithForecast()) {
-            return null;
-        }
+    /** A layout is owed only by market work done for this report, not by an earlier one. */
+    private static String enforceMarketLayout(boolean resolved) {
         for (ObjectNode e : recentCallLogSnapshot()) {
-            if ("price_market_event".equals(e.path("tool").asText(""))) {
-                return "the report has no dashboard. Pass dashboard.panels holding the "
-                    + "chart_panel that price_market_event returned for each event the "
-                    + "report names.";
+            String tool = e.path("tool").asText("");
+            if ("price_market_event".equals(tool) || "scan_market_opportunities".equals(tool)
+                    || "price_market_basket".equals(tool)) {
+                return MARKET_VIEW.gate(resolved);
             }
         }
         return null;
@@ -7477,6 +7489,11 @@ public class McpServer {
      *  not a guess at what "enough" looks like in the abstract. */
     private static final int MIN_FETCHES_ON_PURE_FALLBACK = 5;
 
+    /** The market tools whose result is itself the engine's data on the question. */
+    private static final java.util.Set<String> MARKET_PRICING_TOOLS = java.util.Set.of(
+        "price_market_event", "price_market_basket", "scan_market_opportunities",
+        "backtest_market_forecast");
+
     /**
      * A "pure web fallback" report -- no {@code query} call anywhere this session returned any
      * rows, meaning askamerica's own data had nothing to contribute to this question -- gets
@@ -7499,7 +7516,8 @@ public class McpServer {
      * <p>Only engages when askamerica genuinely had nothing: any {@code query} call this
      * session that returned at least one row means real warehouse data fed the report, and
      * this gate does not apply, however many or few URLs were fetched or catalog calls made
-     * alongside it -- a hybrid report is not the failure mode this catches.
+     * alongside it -- a hybrid report is not the failure mode this catches. A market pricing
+     * tool that returned counts the same way: its quotes and forecast are the engine's own.
      */
     private static String enforceResearchDepthOnGap() {
         java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
@@ -7509,6 +7527,9 @@ public class McpServer {
         for (ObjectNode e : snapshot) {
             String tool = e.path("tool").asText("");
             if ("query".equals(tool) && e.path("rows").asInt(0) > 0) {
+                productiveQuery = true;
+            }
+            if (MARKET_PRICING_TOOLS.contains(tool) && !e.has("error")) {
                 productiveQuery = true;
             }
             if ("search_catalog".equals(tool) || "list_tables".equals(tool)
@@ -8764,7 +8785,7 @@ public class McpServer {
         return growHeight ? o.growing() : o;
     }
 
-    private static DashboardLayout.Panel readPanel(JsonNode pn) {
+    static DashboardLayout.Panel readPanel(JsonNode pn) {
         DashboardLayout.Panel p = new DashboardLayout.Panel();
         p.kind = pn.path("type").asText("chart");
         if (!"chart".equals(p.kind) && !"stat".equals(p.kind)) {

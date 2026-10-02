@@ -594,9 +594,6 @@ final class MarketTools {
                     + "own median. A large gap is more often a misread rule or a table that "
                     + "stops before the settlement period than an edge.");
             }
-            json.set("chart_panel", chartPanel(json));
-            json.put("chart_panel_use", "You MUST pass chart_panel in dashboard.panels of "
-                + "the report for each event the report names.");
             json.set("search", searchProgress(json, minEdge));
             String source = json.get("source").asText();
             String series = json.hasNonNull("venue_series")
@@ -848,47 +845,6 @@ final class MarketTools {
             }
         }
         return owed.isEmpty() ? null : String.join("; ", owed);
-    }
-
-    /** Whether an event has been priced against a forecast since the last report. */
-    boolean pricedWithForecast() {
-        synchronized (forecastPriced) {
-            return !forecastPriced.isEmpty();
-        }
-    }
-
-    /**
-     * A dashboard panel for one priced event: forecast fair value beside the YES ask, market
-     * by market. Returned ready to pass on because a search that ends in a table of edges
-     * was, measured live (2026-10-02, five runs), never once charted.
-     */
-    private static ObjectNode chartPanel(ObjectNode json) {
-        ObjectNode p = MAPPER.createObjectNode();
-        p.put("type", "chart");
-        p.put("chart_type", "bar");
-        p.put("title", json.path("event_title").asText(json.path("event_id").asText())
-            + " (" + json.path("source").asText() + "): forecast fair value vs. YES ask");
-        p.put("y_label", "probability of YES");
-        ArrayNode categories = p.putArray("categories");
-        ArrayNode fair = MAPPER.createArrayNode();
-        ArrayNode ask = MAPPER.createArrayNode();
-        for (JsonNode m : json.path("priced_markets")) {
-            if (!m.hasNonNull("fair")) {
-                continue;
-            }
-            String t = m.path("title").asText(m.path("market_id").asText());
-            categories.add(t.length() > 28 ? t.substring(0, 27) + "…" : t);
-            fair.add(m.get("fair").asDouble());
-            if (m.hasNonNull("yes_ask")) {
-                ask.add(m.get("yes_ask").asDouble());
-            } else {
-                ask.addNull();
-            }
-        }
-        ArrayNode series = p.putArray("series");
-        series.addObject().put("name", "Forecast fair value").set("values", fair);
-        series.addObject().put("name", "YES ask").set("values", ask);
-        return p;
     }
 
     /** Starts the next search from nothing: called once a report has cleared the gates. */

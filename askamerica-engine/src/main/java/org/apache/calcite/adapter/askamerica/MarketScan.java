@@ -57,6 +57,9 @@ final class MarketScan {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** The status of a scan that evaluated every event it chose. */
+    static final String COMPLETE = "complete";
+
     private final PredictionMarkets.Fetcher fetcher;
     private final PredictionMarkets.ListingCache cache;
     private final MarketForecasts builder;
@@ -389,7 +392,7 @@ final class MarketScan {
         }
 
         ObjectNode out = MAPPER.createObjectNode();
-        out.put("status", outOfTime ? "scanning" : "complete");
+        out.put("status", outOfTime ? "scanning" : COMPLETE);
         out.put("listing_read_at", listing.fetchedAt.toString());
         out.put("min_edge", minEdge);
         Map<String, Integer> why = new TreeMap<>();

@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -414,24 +415,169 @@ class MarketToolsTest {
     assertFalse(call(t.priceEvent(args(kalshiSpec("")))).has("search"));
   }
 
-  @Test void aForecastPricingReturnsItsChartPanel() throws Exception {
-    MarketTools t = tools();
-    assertFalse(t.pricedWithForecast());
-    assertFalse(call(t.priceEvent(args(kalshiSpec("")))).has("chart_panel"));
-    assertFalse(t.pricedWithForecast());
+  /** Composes a resolved dashboard, as the report tool does: a layout it rejects fails here. */
+  private static String render(JsonNode dashboard) {
+    List<DashboardLayout.Panel> panels = new ArrayList<>();
+    for (JsonNode p : dashboard.get("panels")) {
+      panels.add(McpServer.readPanel(p));
+    }
+    int columns = dashboard.get("columns").asInt();
+    int[] size = DashboardLayout.defaultSize(panels, columns);
+    return DashboardLayout.compose(dashboard.get("title").asText(),
+        dashboard.get("subtitle").asText(), dashboard.get("footnote").asText(), panels,
+        columns, size[0], size[1]).toSvg();
+  }
 
-    JsonNode out = call(t.priceEvent(args(kalshiSpec(",'mean':3.0,'sd':0.1"))));
-    assertTrue(t.pricedWithForecast());
-    JsonNode panel = out.get("chart_panel");
-    assertEquals("chart", panel.get("type").asText());
-    assertEquals("bar", panel.get("chart_type").asText());
-    assertEquals(2, panel.get("categories").size());
-    assertEquals("Forecast fair value", panel.get("series").get(0).get("name").asText());
+  private static ObjectNode layoutArg(JsonNode out) {
+    ObjectNode dash = MAPPER.createObjectNode();
+    dash.set(MarketPresentation.LAYOUT, out.get(MarketPresentation.LAYOUT_FIELD));
+    return dash;
+  }
+
+  @Test void aForecastPricingReturnsItsCardAndTheReportOwesIt() throws Exception {
+    MarketTools t = tools();
+    MarketPresentation view = new MarketPresentation();
+    JsonNode quotes = call(view.event(t.priceEvent(args(kalshiSpec("")))));
+    assertFalse(quotes.has(MarketPresentation.LAYOUT_FIELD));
+    assertNull(view.gate(false));
+
+    JsonNode out = call(view.event(t.priceEvent(args(kalshiSpec(",'mean':3.0,'sd':0.1")))));
+    assertFalse(out.has("chart_panel"));
+    String id = "event:kalshi:" + KALSHI_ID;
+    assertEquals(id, out.get(MarketPresentation.LAYOUT_FIELD).asText());
+    assertTrue(out.get("dashboard_use").asText().contains("{\"layout\": \"" + id + "\"}"));
+    assertTrue(out.get("dashboard_panels").size() >= 6, out.get("dashboard_panels").toString());
+    assertTrue(view.gate(false).contains(id), view.gate(false));
+    assertNull(view.gate(true));
+
+    ObjectNode dash = layoutArg(out);
+    assertTrue(view.resolve(dash));
+    assertFalse(dash.has(MarketPresentation.LAYOUT));
+    assertEquals(out.get("dashboard_panels").size(), dash.get("panels").size());
+    // The quote panel: fair value of each market beside the venue's ask.
+    JsonNode quote = null;
+    for (JsonNode p : dash.get("panels")) {
+      if ("line".equals(p.path("chart_type").asText())) {
+        quote = p;
+      }
+    }
+    assertNotNull(quote, dash.toString());
+    assertEquals(2, quote.get("categories").size());
     assertEquals(out.get("priced_markets").get(0).get("fair").asDouble(),
-        panel.get("series").get(0).get("values").get(0).asDouble(), 1e-9);
-    assertEquals(0.44, panel.get("series").get(1).get("values").get(0).asDouble(), 1e-9);
-    assertEquals(0.24, panel.get("series").get(1).get("values").get(1).asDouble(), 1e-9);
-    assertTrue(out.get("chart_panel_use").asText().contains("dashboard.panels"));
+        quote.get("series").get(0).get("values").get(0).asDouble(), 1e-9);
+    assertEquals(0.44, quote.get("series").get(1).get("values").get(0).asDouble(), 1e-9);
+    assertEquals(0.24, quote.get("series").get(1).get("values").get(1).asDouble(), 1e-9);
+    assertTrue(render(dash).contains("<svg"));
+
+    view.reset();
+    assertNull(view.gate(false));
+    // A published report does not forget the layout: the same id still resolves.
+    assertTrue(view.resolve(layoutArg(out)));
+  }
+
+  @Test void aLayoutArgumentIsResolvedOrRefused() throws Exception {
+    MarketTools t = tools();
+    MarketPresentation view = new MarketPresentation();
+    ObjectNode none = MAPPER.createObjectNode();
+    none.putArray("panels");
+    assertFalse(view.resolve(none));
+    ObjectNode unknown = MAPPER.createObjectNode().put(MarketPresentation.LAYOUT, "event:x:y");
+    IllegalArgumentException e =
+        assertThrows(IllegalArgumentException.class, () -> view.resolve(unknown));
+    assertTrue(e.getMessage().contains("none has been returned"), e.getMessage());
+
+    JsonNode out = call(view.event(t.priceEvent(args(kalshiSpec(",'mean':3.0,'sd':0.1")))));
+    int n = out.get("dashboard_panels").size();
+    ObjectNode dash = MAPPER.createObjectNode();
+    dash.putArray(MarketPresentation.LAYOUT).add(out.get(MarketPresentation.LAYOUT_FIELD))
+        .add(out.get(MarketPresentation.LAYOUT_FIELD));
+    dash.put("title", "Two cards");
+    dash.putArray("panels").addObject().put("type", "stat").put("label", "Mine")
+        .put("value", "1");
+    assertTrue(view.resolve(dash));
+    // Each layout opens with a heading tile; the caller's panel comes last.
+    assertEquals(2 * (n + 1) + 1, dash.get("panels").size());
+    assertEquals("1 of 2", dash.get("panels").get(0).get("label").asText());
+    assertEquals("2 of 2", dash.get("panels").get(n + 1).get("label").asText());
+    assertTrue(dash.get("panels").get(0).get("value").asText().contains("kalshi"),
+        dash.get("panels").get(0).toString());
+    assertEquals("Mine", dash.get("panels").get(2 * n + 2).get("label").asText());
+    assertEquals("Two cards", dash.get("title").asText());
+    assertFalse(dash.get("subtitle").asText().contains("Forecast median"));
+    assertEquals(4, dash.get("columns").asInt());
+    assertTrue(render(dash).contains("<svg"));
+    assertThrows(IllegalArgumentException.class,
+        () -> view.resolve(MAPPER.createObjectNode().put(MarketPresentation.LAYOUT, 3)));
+  }
+
+  @Test void everyPricedEventCarriesFollowUpsItsToolsAccept() throws Exception {
+    MarketPresentation view = new MarketPresentation();
+    for (String spec : new String[] {kalshiSpec(""), kalshiSpec(",'mean':3.0,'sd':0.1"),
+        polySpec(""), polySpec(",'mean':3.0,'sd':0.1")}) {
+      JsonNode out = call(view.event(tools().priceEvent(args(spec))));
+      assertTrue(out.get("follow_ups").size() >= 1, out.toString());
+      assertTrue(out.get("follow_ups").size() <= 5);
+      assertTrue(out.get("follow_ups_use").asText().startsWith("You MUST end the answer"));
+      for (JsonNode f : out.get("follow_ups")) {
+        assertToolAccepts(f);
+      }
+    }
+  }
+
+  /** A follow-up names a registered tool and only arguments its schema defines. */
+  static void assertToolAccepts(JsonNode followUp) {
+    String tool = followUp.get("tool").asText();
+    JsonNode def = null;
+    for (JsonNode d : McpServer.toolDefs()) {
+      if (tool.equals(d.get("name").asText())) {
+        def = d;
+      }
+    }
+    assertNotNull(def, tool);
+    assertFalse(followUp.get("question").asText().isEmpty());
+    Iterator<String> names = followUp.get("arguments").fieldNames();
+    while (names.hasNext()) {
+      String name = names.next();
+      assertTrue(def.get("inputSchema").get("properties").has(name), tool + "." + name);
+    }
+    for (JsonNode r : def.get("inputSchema").path("required")) {
+      assertTrue(followUp.get("arguments").has(r.asText()), tool + " needs " + r.asText());
+    }
+  }
+
+  @Test void aLockCarriesItsBasketSheetAndABasketWithNoLockDoesNot() throws Exception {
+    MarketPresentation view = new MarketPresentation();
+    JsonNode out = call(view.basket(tools().priceBasket(args("{'events':["
+        + kalshiSpec(",'column':'cpi'") + "," + polySpec(",'column':'cpi'")
+        + "],'lock':true,'scenario_grid':true,'search':2,'min_yield':0.05}"))));
+    assertEquals("basket:1", out.get(MarketPresentation.LAYOUT_FIELD).asText());
+    ObjectNode dash = layoutArg(out);
+    assertTrue(view.resolve(dash));
+    List<String> titles = new ArrayList<>();
+    for (JsonNode p : dash.get("panels")) {
+      titles.add(p.path("title").asText(p.path("label").asText()));
+    }
+    assertTrue(titles.contains("Profit by settlement value"), titles.toString());
+    assertTrue(titles.contains("Rules verdict"), titles.toString());
+    assertTrue(render(dash).contains("<svg"));
+    for (JsonNode f : out.get("follow_ups")) {
+      assertToolAccepts(f);
+    }
+    assertEquals("compare_settlement_rules", out.get("follow_ups").get(0).get("tool").asText());
+
+    JsonNode none = call(view.basket(tools().priceBasket(args("{'events':["
+        + kalshiSpec(",'column':'cpi','fee_rate':0.5") + ","
+        + polySpec(",'column':'cpi','fee_rate':0.5")
+        + "],'lock':true,'scenario_grid':true,'search':2}"))));
+    assertFalse(none.has(MarketPresentation.LAYOUT_FIELD));
+
+    JsonNode scored = call(view.basket(tools().priceBasket(args("{'events':["
+        + kalshiSpec(",'column':'cpi','mean':3.3,'sd':0.1") + ","
+        + polySpec(",'column':'cpi','mean':3.3,'sd':0.1")
+        + "],'scenarios':[{'CPI':3.3},{'CPI':3.1},{'CPI':2.9}]}"))));
+    ObjectNode sheet = layoutArg(scored);
+    assertTrue(view.resolve(sheet));
+    assertTrue(render(sheet).contains("<svg"));
   }
 
   @Test void aRandomSearchCannotReportUntilItIsFinished() throws Exception {
@@ -792,6 +938,34 @@ class MarketToolsTest {
     }
   }
 
+  @Test void eachForecastAndBasketRecipeIsFoundByAQuestionOfItsOwn() {
+    String[][] asked = {
+        {"forecast the cpi event on kalshi", "prediction-market-forecast-cpi-pce-food-prices"},
+        {"nonfarm payrolls event on a prediction market",
+            "prediction-market-forecast-jobs-unemployment-claims"},
+        {"gdp growth market on polymarket", "prediction-market-forecast-gdp-and-output"},
+        {"30-year mortgage rate market",
+            "prediction-market-forecast-mortgage-rate-and-housing"},
+        {"highest temperature event on kalshi",
+            "prediction-market-forecast-weather-and-climatology"},
+        {"will wti crude touch a price at any time, an oil price barrier market",
+            "prediction-market-forecast-oil-price-barrier"},
+        {"the same event on kalshi and polymarket, a cross venue basket",
+            "prediction-market-basket-cross-venue"},
+        {"a basket of events in one state, same place basket",
+            "prediction-market-basket-same-place"},
+        {"linked drivers basket of inflation and fed policy",
+            "prediction-market-basket-linked-drivers"},
+        {"series run basket of consecutive cpi events", "prediction-market-basket-series-run"},
+        {"range basket on a strike ladder", "prediction-market-basket-range"},
+        {"calendar basket of two adjacent close dates", "prediction-market-basket-calendar"},
+        {"is the mispricing still there, requote the opportunity",
+            "prediction-market-capture-a-point-in-time-opportunity"}};
+    for (String[] q : asked) {
+      assertTrue(RecipeCatalog.find(q[0], 5).contains(q[1]), q[0]);
+    }
+  }
+
   /** CPI rising a steady 0.25% a month, to August 2026: a 12-month rate near 3.04%. */
   private static ArrayNode cpiRows() {
     return cpiRows(32);
@@ -825,7 +999,17 @@ class MarketToolsTest {
     assertFalse(queries.isEmpty());
     assertFalse(out.get("forecast").isNull());
     assertTrue(out.get("priced_markets").get(0).get("fair").isNumber());
-    assertNotNull(out.get("chart_panel"));
+    JsonNode shown = call(new MarketPresentation().event(MAPPER.writeValueAsString(out)));
+    MarketPresentation view = new MarketPresentation();
+    JsonNode again = call(view.event(MAPPER.writeValueAsString(out)));
+    ObjectNode dash = layoutArg(again);
+    assertTrue(view.resolve(dash));
+    assertEquals(shown.get("dashboard_panels"), again.get("dashboard_panels"));
+    // Built by the engine, the forecast brings its history: the card ends with the fan.
+    JsonNode fan = dash.get("panels").get(dash.get("panels").size() - 1);
+    assertEquals("fan", fan.get("chart_type").asText());
+    assertTrue(fan.get("reference_lines").size() >= 1);
+    assertTrue(render(dash).contains("class=\"band\""));
   }
 
   // ─── Tickets and re-quotes ─────────────────────────────────────────────────

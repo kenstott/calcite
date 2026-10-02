@@ -33,6 +33,7 @@ import java.util.concurrent.CountDownLatch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -271,6 +272,43 @@ class MarketScanTest {
     assertEquals(1, not.size(), not.toString());
     assertEquals("polymarket:" + POLY_ID, not.get(0).get("examples").get(0).asText());
     assertTrue(out.get("next").asText().startsWith("Vet at most 3"), out.get("next").asText());
+  }
+
+  @Test void aFinishedScanCarriesItsBoardAndFollowUps() throws Exception {
+    MarketPresentation view = new MarketPresentation();
+    JsonNode out = MAPPER.readTree(view.scan(scan(60_000L).scan(args("{'within':90}"))));
+    assertEquals("scan:1", out.get(MarketPresentation.LAYOUT_FIELD).asText());
+    ObjectNode dash = MAPPER.createObjectNode();
+    dash.put(MarketPresentation.LAYOUT, "scan:1");
+    assertTrue(view.resolve(dash));
+    List<DashboardLayout.Panel> panels = new ArrayList<>();
+    for (JsonNode p : dash.get("panels")) {
+      panels.add(McpServer.readPanel(p));
+    }
+    // Four stats, the funnel, the ranking and the edge-against-error scatter.
+    assertEquals(7, panels.size(), out.get("dashboard_panels").toString());
+    int[] size = DashboardLayout.defaultSize(panels, 4);
+    assertTrue(DashboardLayout.compose(dash.get("title").asText(),
+        dash.get("subtitle").asText(), dash.get("footnote").asText(), panels, 4, size[0],
+        size[1]).toSvg().contains("<svg"));
+    assertEquals("price_market_event", out.get("follow_ups").get(0).get("tool").asText());
+    for (JsonNode f : out.get("follow_ups")) {
+      MarketToolsTest.assertToolAccepts(f);
+    }
+
+    JsonNode empty = MAPPER.readTree(
+        view.scan(scan(60_000L).scan(args("{'within':90,'min_edge':0.9}"))));
+    assertEquals("scan:2", empty.get(MarketPresentation.LAYOUT_FIELD).asText());
+    assertEquals(5, empty.get("dashboard_panels").size());
+  }
+
+  @Test void anUnfinishedScanHasNoBoardYet() throws Exception {
+    MarketPresentation view = new MarketPresentation();
+    JsonNode first = MAPPER.readTree(view.scan(scan(-1L).scan(args("{'within':90}"))));
+    assertEquals("scanning", first.get("status").asText());
+    assertFalse(first.has(MarketPresentation.LAYOUT_FIELD));
+    assertFalse(first.has("follow_ups"));
+    assertNull(view.gate(false));
   }
 
   @Test void aMinEdgeNothingReachesLeavesNoOpportunityAndSaysSo() throws Exception {
