@@ -13,7 +13,9 @@ package org.apache.calcite.adapter.askamerica;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -103,6 +105,59 @@ final class ChartRenderer {
 
 
     /**
+     * Open, high, low and close per category, and optionally the volume traded — for
+     * candlestick. A category with no trade has all four prices null and is drawn as a gap.
+     */
+    static final class Candles {
+        final String name;
+        final List<Double> open;
+        final List<Double> high;
+        final List<Double> low;
+        final List<Double> close;
+        /** One volume per category, or null when the caller gave none. */
+        final List<Double> volume;
+
+        Candles(String name, List<Double> open, List<Double> high, List<Double> low,
+                List<Double> close, List<Double> volume) {
+            this.name = name;
+            this.open = open;
+            this.high = high;
+            this.low = low;
+            this.close = close;
+            this.volume = volume;
+        }
+    }
+
+    /** A shaded interval per category — for fan. Null on both sides where it does not apply. */
+    static final class Band {
+        final String name;
+        final List<Double> low;
+        final List<Double> high;
+
+        Band(String name, List<Double> low, List<Double> high) {
+            this.name = name;
+            this.low = low;
+            this.high = high;
+        }
+    }
+
+    /** A marker line: at a value on the y axis, or at a category on the x axis. */
+    static final class RefLine {
+        final Double value;
+        final String category;
+        final String label;
+
+        RefLine(Double value, String category, String label) {
+            this.value = value;
+            this.category = category;
+            this.label = label;
+        }
+    }
+
+    /** Chart types drawn over an ordered axis, whose labels may be thinned. */
+    static final List<String> ORDERED_TYPES = Arrays.asList("candlestick", "fan");
+
+    /**
      * How a bar chart is oriented, ordered and annotated. Meaningless for every other chart
      * type, which {@link #layout} rejects rather than ignoring so a caller is never told a
      * line chart was sorted.
@@ -168,6 +223,14 @@ final class ChartRenderer {
     static ChartScene layout(String chartType, String title, String xLabel, String yLabel,
             List<String> categories, List<SeriesSpec> series, int width, int height,
             BarOptions bar) {
+        return layout(chartType, title, xLabel, yLabel, categories, series, width, height, bar,
+            Collections.<RefLine>emptyList());
+    }
+
+    /** As above, with reference lines, which a line chart alone takes here. */
+    static ChartScene layout(String chartType, String title, String xLabel, String yLabel,
+            List<String> categories, List<SeriesSpec> series, int width, int height,
+            BarOptions bar, List<RefLine> refLines) {
         if (categories.isEmpty()) {
             throw new IllegalArgumentException("categories must not be empty");
         }
@@ -190,16 +253,170 @@ final class ChartRenderer {
                 "orientation, sort and value_labels apply to chart_type 'bar' only, "
                 + "not '" + type + "'.");
         }
+        if (!refLines.isEmpty() && !"line".equals(type)) {
+            throw new IllegalArgumentException(
+                "reference_lines apply to chart_type 'line', 'fan' and 'candlestick' only, "
+                + "not '" + type + "'.");
+        }
+        checkRefLines(refLines, categories);
         if ("pie".equals(type)) {
             return ChartLayout.pieChart(title, categories, series.get(0).values,
                 series.get(0).tooltips, fmt, width, height);
         }
         if (!"bar".equals(type) && !"line".equals(type)) {
             throw new IllegalArgumentException(
-                "Unknown chart_type: " + type + " — use line, bar, pie, scatter, or bubble.");
+                "Unknown chart_type: " + type + " — use line, bar, pie, scatter, bubble, "
+                + "candlestick, or fan.");
         }
         return ChartLayout.categoryChart(type, title, xLabel, yLabel, categories, series,
-            width, height, null, bar);
+            width, height, null, bar, refLines);
+    }
+
+    /**
+     * Lays out a candlestick or fan chart over an ordered category axis.
+     *
+     * <p>A candlestick takes {@code candles} and no bands; a fan takes bands and at least one
+     * line. Either may carry further lines over the same categories, and reference lines.
+     *
+     * @param forcedDomain a y-axis domain to include, or null
+     */
+    static ChartScene layoutOrdered(String chartType, String title, String xLabel,
+            String yLabel, List<String> categories, List<SeriesSpec> series, Candles candles,
+            List<Band> bands, List<RefLine> refLines, int width, int height,
+            ValueFormat valueFormat, double[] forcedDomain) {
+        String type = normalizeType(chartType);
+        if (!ORDERED_TYPES.contains(type)) {
+            throw new IllegalArgumentException(
+                "chart_type '" + type + "' is not candlestick or fan.");
+        }
+        if (categories.isEmpty()) {
+            throw new IllegalArgumentException("categories must not be empty");
+        }
+        int n = categories.size();
+        for (SeriesSpec s : series) {
+            if (s.values.size() != n) {
+                throw new IllegalArgumentException(
+                    "series '" + s.name + "' has " + s.values.size()
+                    + " values but there are " + n + " categories");
+            }
+            checkTooltips("series '" + s.name + "'", s.tooltips, s.values.size());
+        }
+        if ("candlestick".equals(type)) {
+            if (candles == null) {
+                throw new IllegalArgumentException("chart_type 'candlestick' needs candles: "
+                    + "{open, high, low, close} arrays, one value per category.");
+            }
+            if (!bands.isEmpty()) {
+                throw new IllegalArgumentException(
+                    "bands apply to chart_type 'fan' only, not 'candlestick'.");
+            }
+            checkCandles(candles, categories);
+        } else {
+            if (candles != null) {
+                throw new IllegalArgumentException(
+                    "candles apply to chart_type 'candlestick' only, not 'fan'.");
+            }
+            if (bands.isEmpty()) {
+                throw new IllegalArgumentException("chart_type 'fan' needs bands: "
+                    + "[{name, low, high}], one low and one high per category.");
+            }
+            if (series.isEmpty()) {
+                throw new IllegalArgumentException("chart_type 'fan' needs at least one "
+                    + "series: the history, the central forecast, or both.");
+            }
+            for (Band b : bands) {
+                checkBand(b, categories);
+            }
+        }
+        checkRefLines(refLines, categories);
+        return ChartLayout.orderedChart(title, xLabel, yLabel, categories, series, candles,
+            bands, refLines, width, height, valueFormat, forcedDomain);
+    }
+
+    private static void checkCandles(Candles c, List<String> categories) {
+        int n = categories.size();
+        if (c.open.size() != n || c.high.size() != n || c.low.size() != n
+                || c.close.size() != n) {
+            throw new IllegalArgumentException("candles has " + c.open.size() + " open, "
+                + c.high.size() + " high, " + c.low.size() + " low and " + c.close.size()
+                + " close values but there are " + n + " categories");
+        }
+        if (c.volume != null && c.volume.size() != n) {
+            throw new IllegalArgumentException("candles has " + c.volume.size()
+                + " volume values but there are " + n + " categories");
+        }
+        boolean any = false;
+        for (int i = 0; i < n; i++) {
+            Double o = c.open.get(i);
+            Double h = c.high.get(i);
+            Double l = c.low.get(i);
+            Double cl = c.close.get(i);
+            int given = (o == null ? 0 : 1) + (h == null ? 0 : 1) + (l == null ? 0 : 1)
+                + (cl == null ? 0 : 1);
+            if (given == 0) {
+                continue;
+            }
+            if (given != 4) {
+                throw new IllegalArgumentException("candle '" + categories.get(i)
+                    + "' has some of open, high, low and close but not all — pass all four, "
+                    + "or null for all four where nothing traded.");
+            }
+            if (h < Math.max(o, cl) || l > Math.min(o, cl)) {
+                throw new IllegalArgumentException("candle '" + categories.get(i)
+                    + "' has open " + o + ", high " + h + ", low " + l + ", close " + cl
+                    + " — the high must be the largest and the low the smallest.");
+            }
+            if (c.volume != null && c.volume.get(i) != null && c.volume.get(i) < 0) {
+                throw new IllegalArgumentException("candle '" + categories.get(i)
+                    + "' has a negative volume");
+            }
+            any = true;
+        }
+        if (!any) {
+            throw new IllegalArgumentException("candles has no category with prices");
+        }
+    }
+
+    private static void checkBand(Band b, List<String> categories) {
+        int n = categories.size();
+        if (b.low.size() != n || b.high.size() != n) {
+            throw new IllegalArgumentException("band '" + b.name + "' has " + b.low.size()
+                + " low and " + b.high.size() + " high values but there are " + n
+                + " categories");
+        }
+        boolean any = false;
+        for (int i = 0; i < n; i++) {
+            Double lo = b.low.get(i);
+            Double hi = b.high.get(i);
+            if (lo == null && hi == null) {
+                continue;
+            }
+            if (lo == null || hi == null) {
+                throw new IllegalArgumentException("band '" + b.name + "' at '"
+                    + categories.get(i) + "' has one of low and high but not the other");
+            }
+            if (lo > hi) {
+                throw new IllegalArgumentException("band '" + b.name + "' at '"
+                    + categories.get(i) + "' has low " + lo + " above high " + hi);
+            }
+            any = true;
+        }
+        if (!any) {
+            throw new IllegalArgumentException("band '" + b.name + "' has no values");
+        }
+    }
+
+    private static void checkRefLines(List<RefLine> refLines, List<String> categories) {
+        for (RefLine r : refLines) {
+            if ((r.value == null) == (r.category == null)) {
+                throw new IllegalArgumentException("a reference line needs exactly one of "
+                    + "value (a y-axis value) and category (an x-axis category).");
+            }
+            if (r.category != null && !categories.contains(r.category)) {
+                throw new IllegalArgumentException("reference line category '" + r.category
+                    + "' is not in categories");
+            }
+        }
     }
 
     /** Lays out a true numeric-axis scatter or bubble chart from (x, y[, size]) points. */

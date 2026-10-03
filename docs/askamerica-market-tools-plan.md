@@ -1,0 +1,454 @@
+# AskAmerica market tools: phased plan
+
+Goal: make "find a mispriced event" and "find a basket that locks in a yield" results a user
+can trust and act on. Baseline is commit `e47bc7dbb` (four tools: `find_market_candidates`,
+`price_market_event`, `find_market_baskets`, `price_market_basket`).
+
+Package: `askamerica-engine/src/main/java/org/apache/calcite/adapter/askamerica/` (Java 21).
+
+## Rules for every phase
+
+- At most two teammates run at once. Both are `data-engine-dev`. A `code-reviewer` pass runs
+  after they finish, never alongside them.
+- Teammates own disjoint files (listed per phase). `McpServer.java` is lead-only: a teammate
+  exposes `toolDef()` and a handler in their own class; the lead registers them.
+- Teammates run only their own test class
+  (`./gradlew :askamerica-engine:test '-PincludeTags=!integration' --tests "*Name*"`).
+  The lead runs the full suite once per phase. Never a bare `:askamerica-engine:test`.
+- Venue calls go through the existing `Fetcher`; unit tests use `FakeFetcher`. No live calls
+  in unit tests. One `@Tag("integration")` live test per new endpoint.
+- No fallback values. A missing series, period or quote is an error or an explicit flag.
+- Phase exit: full suite green, eval jar installed by atomic `mv`, one `askamerica-desktop`
+  run (sonnet) per affected prompt, commit and push. Release only on the user's word.
+
+## Phase 0 — feasibility (done, 2026-10-02)
+
+Public endpoints answered 200 with the data each later phase needs:
+
+| Need | Kalshi | Polymarket |
+|---|---|---|
+| Settled events | `/markets?status=settled` (`result`, `expiration_value`) | gamma `/events?closed=true` |
+| Order book | `/markets/{ticker}/orderbook` | clob `/book?token_id=` |
+| Price history | `/series/{s}/markets/{ticker}/candlesticks` | clob `/prices-history?market=` |
+
+## Phase 1 — forecast builder and venue history
+
+Prerequisite for everything after: no later result is credible on a hand-rolled forecast.
+
+| Teammate | Delivers | Files owned |
+|---|---|---|
+| A | `forecast_market_event`: from an event's rules and driver, pick settlement series, table and transform (level, MoM, YoY, max-of-path), build the distribution from catalog rows, accept `as_of` to cut history off at a date. Returns mismatch flags: seasonal adjustment, last period vs settlement period, rounding, units. | `MarketForecasts.java`, `MarketForecastsTest.java` |
+| B | Venue history layer: settled events with outcome and settlement value, price history, order book, for both venues. Tool `market_price_history`. | `MarketHistory.java`, `MarketHistoryTest.java`, `MarketHistoryLiveIntegrationTest.java` |
+
+Lead: register both tools; make `price_market_event` accept the builder's output directly;
+point `next` at `forecast_market_event` instead of hand-entered samples.
+
+Exit test: the "random mispriced event" prompt forecasts through the builder, and a report
+states any mismatch flag the builder raised.
+
+## Phase 2 — calibration and tradability
+
+Needs Phase 1 A (`as_of`) and Phase 1 B (settled events, order book).
+
+| Teammate | Delivers | Files owned |
+|---|---|---|
+| A | `backtest_market_forecast`: run the builder as of each past settled event of a series; report hit rate, Brier score, and the same for the venue's closing price. | `MarketBacktest.java`, `MarketBacktestTest.java` |
+| B | Size-aware pricing: `size` argument walks the order book for the fill price; output adds dollars available at `min_edge`, days to settlement, annualized return, and the breakeven fair value at which the edge is zero. | `MarketPricing.java`, `MarketPricingSizeTest.java` |
+
+Lead: wire a confidence tier into `price_market_event` output (lock / backtested / weak)
+from the backtest and the mismatch flags.
+
+Lead, as soon as Phase 1 lands and before Phase 2 A and B — bound the search (approved by
+the user 2026-10-02). Files: `MarketScan.java`, `MarketScanTest.java`. The model vets at most
+three shortlisted events per question; the draw-and-price loop stays only for events the
+builder cannot resolve. The backtest filter joins when Phase 2 A lands.
+`scan_market_opportunities` runs the forecast builder and pricing over every matched event
+inside the engine and returns a ranked shortlist, cached like the listing. The model vets
+the top few instead of drawing and forecasting one event at a time. The scan universe is
+narrowed by: forecast-free signals first (structural locks, cross-venue disagreement on
+matching rules), drivers where the backtest beat the closing price, no mismatch flag,
+settlement within a stated number of days, and a minimum dollar capacity.
+
+Scan, first live run (2026-10-02): 113 events matched, 60 evaluated, 10 forecast, 8 past
+a 0.10 edge. Findings that set the next work:
+
+- The largest edges are baseline-versus-market disagreements in heavily traded markets
+  (monthly CPI: baseline median 0.2, market 0.52), not mispricings. Each opportunity now
+  carries `market_implied_median` and `baseline_vs_market`. The backtest (Phase 2 A) is what
+  decides whether the baseline has any skill against the closing price for a series; until
+  it lands the scan's shortlist is a list of places to look, and says so.
+- Catalog series behind the market produce false edges (WTI and the 30-year mortgage rate
+  were 8 to 10 days old). The builder raises `history_stale`; the scan leaves those out.
+- Markets with a few dozen contracts of volume are not counted (`min_market_volume`).
+- 50 of 60 events were not forecast. By driver: treasury_yield 17, precipitation 12,
+  energy prices other than WTI 5, temperature 4, policy_rate 3. Resolvers for these are
+  coverage work for the builder, most valuable first.
+
+Lead — order ticket and re-quote (added 2026-10-02). Every opportunity carries a ticket:
+side, limit price (the most one can pay and still clear `min_edge` after fees), contracts
+available at or under that limit, quote time, and void conditions (next release of the
+settlement series, settlement date). A basket ticket adds a maximum total cost, per-leg
+limits and the leg to execute first. `requote_market_opportunity` takes a ticket and
+returns open / partly open (size left) / gone, the current ask and edge, and whether a
+release has printed since the quote. One venue call per leg, no forecast rerun.
+
+Phase 2 as built (2026-10-02):
+
+- Confidence tier is `backtested` or `weak`, on every forecast edge from `price_market_event`
+  and every scan opportunity. `backtested` needs an engine-built forecast, no blocking flag
+  (seasonal adjustment, units, rounding, stale history) and a series record whose verdict is
+  `baseline_beats_market`. The record is kept per series for the life of the process, written
+  only by a backtest of the engine's own forecast (no `forecast_args` override). The scan
+  leaves out a series whose record says the price beat the baseline. The `lock` tier is
+  deferred to Phase 3, where baskets get `rules_match`.
+- Publication lag. `as_of` used to keep every month that had ended; a monthly row now counts
+  as known only once its release has printed (CPI 16 days after month end, jobs 10, PCE 31,
+  fed funds 4, housing starts and permits 21, Case-Shiller 62). Without this the backtest
+  read the settlement month's own value.
+- Kalshi serves settled markets from two tiers. `/markets?status=settled` holds only those
+  settled after the venue's cutoff (`/historical/cutoff`, about two months back);
+  `/historical/markets?series_ticker=` holds the rest, and their candles are at
+  `/historical/markets/{ticker}/candlesticks`, whose fields drop the `_dollars` and `_fp`
+  suffixes. Reading only the live tier gave 2 events per series and an `inconclusive`
+  verdict every time. Both tiers are read now.
+- Column names in the builder's series query are quoted. Unquoted `date` cost about 160 s on
+  the first query of a process against 4 to 10 s quoted. The engine behaviour behind it
+  (an unquoted keyword-named column triggering a load of every schema) affects any query and
+  is not fixed here.
+- Ticket depth is read for the three largest edges of an event (one book call each).
+  `contracts_left` on a re-quote is what still rests at or under the limit, not the unfilled
+  part of the ticket.
+
+Exit test: a reported opportunity carries a backtest record, a dollar capacity, an
+annualized return and an order ticket; re-quoting it returns its current status.
+
+## Phase 3 — lock integrity and basket structures
+
+Needs Phase 2 B (size, annualized return apply to legs).
+
+| Teammate | Delivers | Files owned |
+|---|---|---|
+| A | `compare_settlement_rules`: structured diff of two events' source, series, period, rounding, release date and tie handling. `cross_venue` baskets carry `rules_match`; a lock on unmatched rules is reported as not a lock. | `MarketRules.java`, `MarketRulesTest.java` |
+| B | Forecast-free structural locks within a venue (bucket asks summing under 1, non-monotone ladders). Basket recipes `range` (the collar analogue), `calendar`, `linked_drivers` refinements. Payoff curve by settlement value from `price_market_basket`. | `MarketBaskets.java`, `MarketBasketsTest.java` |
+
+Lead: report gate — a basket reported as a lock must carry `rules_match` and the payoff curve.
+
+Phase 3 as built (2026-10-02):
+
+- `compare_settlement_rules` diffs nine dimensions (source agency, series, settlement
+  period, transform, seasonal adjustment, rounding, release or close date, revision handling,
+  tie handling). `rules_match` is `match` only when every dimension is stated on both sides
+  and agrees; one stated disagreement is `differ`; anything unstated is `unverified`. Close
+  dates within three days count as one release.
+- `find_market_baskets` puts `rules_match` and the per-pair diff on every `cross_venue`
+  basket, over the events it lists. `price_market_basket` puts them on any basket spanning
+  venues, and returns `payoff_curve` (profit per cost by settlement value, fee-inclusive
+  floor, break-evens) when every leg shares one column: of `search.best[0]` when a search
+  ran, of all legs otherwise. With `lock=true` its `next` says a cross-venue lock whose
+  verdict is not `match` is not a lock.
+- First live listing: 12 cross-venue baskets, none `match` (5 `differ`, the rest `unverified`).
+  Venue rule texts rarely name a series id, a seasonal adjustment or a revision policy, and
+  for a rate decision or a storm count those terms do not apply. As built, a cross-venue
+  lock is therefore almost always reported as unverified. Open decision: mark dimensions
+  that cannot apply to a driver as not applicable, so that `match` is reachable.
+- `price_market_event` returns `structural_locks`, net of fees: ladder pairs that still lock
+  after fees, and the event's bucket partition (buy every YES for 1, or every NO for n - 1)
+  with whether the buckets are exclusive and exhaustive. Exhaustiveness needs the settlement
+  grid, taken from `round` or the built forecast's rounding. Polymarket markets carry no
+  strikes, so they count only when `conditions` states them. The scan's `structural` list
+  stays before fees (the listing reads no fee rates) and says so.
+- Recipes `range` and `calendar` are in `find_market_baskets`; `linked_drivers` baskets carry
+  `link_direction`.
+
+Exit test: the "basket that locks in a yield over 10%" prompt returns a basket with a payoff
+curve, a fee-inclusive floor and a rules verdict, or states that none exists.
+
+## Phase 4 — standard layouts, recipes, refinement prompts
+
+Needs the fields from Phases 1–3.
+
+| Teammate | Delivers | Files owned |
+|---|---|---|
+| A | Three ready-made dashboards returned by the tools, as `chart_panel` is today: opportunity card (stat row, fair-vs-ask ladder, forecast vs market-implied distribution, series history with forecast fan), scan board (drawn → forecast → passed funnel, ranked table, edge vs standard error), basket sheet (legs, payoff diagram, fee waterfall, what breaks the lock). | `MarketLayouts.java`, `MarketLayoutsTest.java` |
+| B | Per-driver forecasting recipes (CPI, jobs, GDP, mortgage rate, weather, oil barrier) and the structure recipes, in the recipe catalog. `follow_ups` in tool output: size it, breakeven, hedge leg on the other venue, re-quote, settle-within-N-days. | `recipes.json`, `MarketFollowUps.java`, `MarketFollowUpsTest.java` |
+
+Chart types (asked for by the user 2026-10-02: candlesticks and what forecasting charts
+use). `render_chart` draws line, bar, pie, scatter and bubble only, so these are new marks in
+`ChartRenderer`, done before teammate A's layouts and owned by the lead (shared file):
+
+| Chart | Shows | Data it needs |
+|---|---|---|
+| Candlestick with volume bars | venue price of one market over time | open, high, low, close per period — `PricePoint` keeps only the close today |
+| Fan chart | series history, then the forecast's median and 50/80/95% bands | quantiles of the builder's samples per horizon |
+| Distribution overlay | forecast density against the market-implied distribution, strikes marked | builder samples; implied probabilities per strike |
+| Fair-versus-ask ladder | per strike: fair value, bid, ask, edge after fees | `price_market_event` rows |
+| Calibration (reliability) plot | predicted probability against realised frequency, baseline and price | per-market rows of the backtest |
+| Brier by event | baseline and price score per settled event, in time order | backtest `events` |
+| Depth chart | cumulative contracts by price, the ticket's limit marked | order book |
+| Payoff diagram | basket profit by settlement value, fee-inclusive floor marked | `price_market_basket` (Phase 3 B) |
+| Edge decay | edge of an opportunity from quote to re-quote | ticket and re-quotes |
+
+Lead: report gate requires the layout that matches the question (one event, N events, basket).
+
+Exit test: all three prompts — one random event, five random events, a locking basket —
+publish on the first attempt with the matching layout and follow-ups.
+
+### Phase 4 as built — chart marks and their data (2026-10-02, `def43b0a9`)
+
+| Chart in the table above | State | How it is drawn |
+|---|---|---|
+| Candlestick with volume bars | built | `render_chart` / dashboard panel `chart_type: candlestick`, `candles{open, high, low, close, volume?}` |
+| Fan chart | built, 50% and 90% bands | `chart_type: fan`, `series` + `bands[{name, low, high}]` |
+| Payoff diagram | built | `line` chart with `reference_lines` for the floor |
+| Fair-versus-ask ladder, Brier by event | no new mark needed | grouped `bar` |
+| Distribution overlay, calibration plot, edge decay | no new mark needed | `bar` / `scatter` / `line` with `reference_lines` |
+| Depth chart | not built | needs a step line, and the tools return a depth summary at the ticket's limit, not the book's levels |
+
+- `reference_lines[{value | category, label?}]` is accepted on line, fan and candlestick only.
+- Both ordered types fit the y axis to the data (zero is not forced) and thin the period labels.
+- `market_price_history` returns `open`, `high`, `low` per point and an `ohlc` line saying where
+  they came from. Kalshi: the venue's own candles. Polymarket: daily points resampled from its
+  hourly points, which the venue keeps for about 30 days, so older days carry a close only;
+  hourly points have no candle at all.
+- `forecast_market_event` returns `fan`: 24 periods of history, then the median and the 50% and
+  90% intervals at up to 12 steps to settlement. One-period transforms (change, month-over-month)
+  have no path, so their intervals stand at the settlement period alone. The 80/95% bands in the
+  table were replaced by 50/90% to match the p05/p95 the tool already reports.
+
+### Phase 4 as built — layouts, follow-ups, recipes (2026-10-02)
+
+| Planned | Built |
+|---|---|
+| Standard layouts returned as dashboard JSON | `MarketLayouts` builds an opportunity card, a scan board and a basket sheet from the tool's own output. The result carries only `dashboard_layout` (an id: `event:<source>:<event_id>`, `scan:<n>`, `basket:<n>`) and `dashboard_panels` (the panel titles). `MarketPresentation` keeps the last 40 layouts; `compose_dashboard` and the report's `dashboard` take `{"layout": id}` or a list of ids, and panels given beside it are placed after. The model never echoes chart data. |
+| Report gate on the chart panel | Replaced: once a market tool has returned a layout, a report with no `layout` is refused, naming the ids returned since the last report. `chart_panel` and `chart_panel_use` are gone from `price_market_event`. |
+| Several events on one board | A list of ids: each layout opens with a heading tile (`1 of 2`, the event title, its forecast line); the board takes its own title and the distinct footnotes. |
+| Refinement prompts | `MarketFollowUps`: at most 5 `follow_ups` per result, each `{question, tool, arguments}` checked against the tool's schema in tests. `follow_ups_use` tells the model to end the answer with them. |
+| Recipes | 13 added to `recipes.json` (6 forecast-by-driver, 6 basket structures, 1 on capturing a point-in-time opportunity). Every claim was checked against the code by a separate reader; 16 sentences were corrected. |
+
+Card panels: best edge, fair value against price, confidence, days to settlement; edge after
+fees by strike; forecast probability against the YES bid and ask by strike; the fan, with the
+best market's strike as its one reference line (a line per strike hid the fan). A market the
+forecast does not price is left off; one quoted on neither side has no edge bar.
+
+Gates, as changed after review and the three exit runs (q9011-q9013):
+
+- The layout gate applies only when a market pricing call belongs to the report being
+  published (the recent-call window the other gates use), so a layout from earlier work does
+  not block an unrelated report.
+- The pure-web-fallback gate counts a market pricing call that returned as the engine's own
+  data. Both q9011 and q9012 were refused once for "no query call" and ran a query only to pass.
+- A report's board is kept for `deliver_report` in eval mode; q9013 published through
+  `create_report_artifact` and saved no `dashboard.png`.
+
+Not built: a per-strike market-implied probability series (the output holds `implied_median`
+only), so the line panel compares the forecast with the quote itself.
+
+Known limit, seen live: the baseline forecast draws on every past change of the series. For
+payrolls that includes 2020-2022, giving a 90% range of -70,000 to 942,000 jobs and a 55-point
+"edge" at confidence `weak`. The backtest follow-up is what catches it; the scan does not.
+
+### Forecast history window (2026-10-02)
+
+Monthly default is 5 years (was 15). Baseline Brier over 12 settled events per Kalshi series,
+by window (15 / 3 / 5 / 8 years): KXCPI 0.162 / 0.161 / 0.160 / 0.155; KXPAYROLLS 0.300 /
+0.248 / 0.285 / 0.286; KXU3 0.069 / 0.067 / 0.068 / 0.072; KXCPIYOY 0.160 / 0.170 / 0.162 /
+0.160. Only payrolls moves by more than noise, and it favours the shorter window; no window
+changes a verdict (the price beats the baseline on both CPI series at every window). 3 years
+scored best in total but leaves 36 rows for the tails. Weekly and daily defaults were not
+tested and are unchanged.
+
+### Basket scan (2026-10-02)
+
+`scan_market_baskets` (`MarketBasketScan`) prices every basket the quotes alone settle, in one
+resumable call with no forecast:
+
+- Within one event: `non_monotone_ladder` and `bucket_partition` (as `price_market_event`
+  finds them) and `exclusive_set` — NO on every market of an event the venue states has at
+  most one winner (Kalshi `mutually_exclusive`, Polymarket `negRisk`), which locks when the
+  YES bids less fees sum to more than 1.
+- Across venues: every Kalshi × Polymarket pair of a `cross_venue` basket, scored over the
+  scenario grid, keeping subsets with a leg on each venue. Polymarket conditions come from
+  `groupItemTitle` (`Condition.ofLabel`); a value two labelled ranges both claim counts as a
+  loss for both. A pair is not priced when its rules differ on series, settlement period or
+  transform, when its strike ranges do not overlap, or when no label states a number.
+- Same-quantity guard: the forecast builder's resolver (`MarketForecasts.quantityOf`) reads
+  the settlement series and transform of both events. Different → not priced. Same → a lock
+  (`same_quantity: verified`, `settles_on`). One side unresolved → listed under `unverified`,
+  never under `baskets`. Found live: without it the scan paired Kalshi core CPI with
+  Polymarket headline CPI and reported a 61x floor, because the rules diff called `series`
+  unknown rather than different. One basket per pair (its best floor).
+- Limits: the listing holds only driver-matched, non-sports events, so sports and politics
+  are out of reach; outcomes named in words ("25 bps decrease") are not matched across
+  venues.
+- Near-locks (arb-like bets): a verified pair with no lock is scored against the forecast of
+  its settlement number (`MarketPricing.nearLocks`, the forecast built once per Kalshi event
+  inside the scan's time budget). Kept: a cross-venue subset that profits below every strike
+  and above every strike, loses only between two of them (`loses_between`, `worst_profit`),
+  and has forecast `p_loss <= max_loss_probability` (default 0.10) and `expected_profit > 0`.
+  The quotes must agree: a venue's own quotes put at most `max_loss_probability` on the
+  losing band (`market_p_loss`, read from a market that wins exactly there, a difference of
+  two strikes, or ranges that add up to it), and the forecast puts every leg's chance of
+  winning (`forecast_p_win`) within 0.20 of its price (`max_quote_gap`). By no-arbitrage a
+  near-lock's expected profit is exactly the forecast disagreeing with the quotes; past those
+  limits it is a bet on the forecast, not on the basket. Found live: the first scan ranked a
+  "217% expected yield" basket whose forecast put 50% on a leg quoted at 3%, and with only
+  the leg gate a basket losing at exactly 3.7, which Polymarket quoted at 25% and the
+  forecast at 6%. Outcomes between two strikes one rounding step apart are not scored.
+  The 0.20 gap alone still passed a leg quoted at 0.006 that the forecast put at 0.17, which
+  supplied most of that basket's expected profit, so the forecast may also put neither a
+  leg's winning nor its losing at over twice what its price implies (`max_quote_ratio`).
+  One per pair, ranked by `expected_yield`, sized from the books while a further set costs
+  less than the forecast expects it to pay. Listed under `near_locks`, never `baskets`; a pair
+  that yields none is counted under `near_locks_not_scored` with the reason.
+- **FOMC decisions.** `MarketPricing.Decision` reads both venues' outcomes of one meeting as
+  the change of the target rate in basis points (Kalshi "Hike rates by >25bps" in the market
+  title, Polymarket "50+ bps increase" as the outcome label; a cut is negative). The lock grid
+  scores multiples of 25 only, so a basket that would lose only at a change between 25 and 50
+  is a lock, and its `basis` says the step was taken. A decision is priced against the other
+  venue's decision of the same meeting only: a rate-level event (KXFED) is `not_priced`, and
+  no forecast is built, so a decision pair yields no near-lock.
+- **Month-over-month against year-over-year.** `MarketForecasts.convertible` pairs an event
+  on a month's one-month percent change with one on the same index's twelve-month change
+  (`CPIAUCSL`/`CPIAUCNS`/`CUUR0000SA0`, or `CPILFESL`/`CUUR0000SA0L1E`), and
+  `MarketForecasts.conversion` builds `yoy = ((1 + (mom - wedge - error)/100) * N[t-1]/N[t-12]
+  - 1) * 100`, N the year-over-year series. The wedge (seasonally adjusted less unadjusted
+  one-month change) is taken from the same month a year earlier; `error` is how far that was
+  off in each month of 12 years of catalog history (fewer than 24 months, a month before not
+  yet printed, or a month already printed is a stated reason, never a default).
+  `MarketPricing.nearLocks(legs, Joint, …)` scores outcomes as (monthly change, error): the
+  grid takes every pair of published numbers reachable with the error at its least, zero and
+  most; the forecast is every draw of the monthly change with every error, taken as
+  independent. Each leg is settled on its own venue's rounded number. Such a pair has no
+  strict lock: it is listed only under `near_locks` with `same_quantity: converted`, a
+  `conversion` object, and a two-number `loses_between`; a basket losing at no grid outcome
+  is kept as a near-lock, since past errors do not bound the next one. `market_p_loss` is
+  the larger over venues of the venue's price of each range of its own number times the
+  share of forecast draws in that range that lose. Errors are measured on revised values,
+  while the events settle on first prints. "one-month percent change" and "from the
+  preceding month" now read as month-over-month in both `MarketForecasts` and `MarketRules`.
+- Daily temperature extremes (`MarketPricing.DailyExtreme`): Kalshi `KXHIGH*`/`KXLOWT*` and
+  Polymarket "Highest/Lowest temperature in <city> on <day>" are read as kind, place, day,
+  station, unit and whole-degree conditions ("86-87°F", "94°F or higher"). `crossVenue`
+  groups them by kind, place and day instead of the 3-day close chain, which had paired
+  every city with every other. A pair is priced only when both rules name one station
+  (Kalshi `(CLILAX)`, Polymarket `site=klax` → LAX) in one unit, on a whole-degree grid, and
+  a gap is listed only under `unverified` with `same_quantity: two_measurements`: Kalshi
+  settles on the climate report, Polymarket on the highest reading of the weather.gov time
+  series, so both legs can lose. No forecast, no near-lock search. Funnel:
+  `cross_venue_pairs_on_two_measurements`. Same station on both venues as of 2026-10-02:
+  LAX, MIA, AUS, ATL, SFO, SEA, HOU; different: New York (NYC vs LGA), Chicago (MDW vs ORD),
+  Denver (DEN vs BKF), Dallas (DFW vs DAL). The bare `m/m` in `MOM_TEXT` matched
+  "maximum/minimum temperature" and is now word-bounded. The odds are not scored: the
+  catalog has the daily maximum (`weather.ghcnd_daily`) and no sub-daily station readings
+  (govdata-ops #853). The venues' own settled events measure them; see "Where this landed".
+- Size and time: every returned basket carries `size` from its legs' order books
+  (`sets_at_best_price`, `binding_leg`, `sets_with_a_positive_floor`, `capital`,
+  `floor_profit` in dollars, `stops_because`), `days_to_settlement` to its last event's
+  close and `annualized_floor_simple_365d`. The books are walked together, fee at each
+  level's price, until one more set costs what it pays. Found live: a 1.1% floor that
+  filled 10 sets (about $0.21 on $20) because the Polymarket leg had 10 contracts bid.
+- Follow-ups: the forecast for each event of the top basket first, then the rules diff, then
+  the book behind the first two legs. Layout id `basketscan:<n>`.
+
+## Where this landed (2026-10-02)
+
+Findings from the live scans of 2026-10-02 (`scan_market_baskets`, 400 events, both venues)
+and one comparison of settled events. One day of quotes; nothing here was traded.
+
+**Strict locks exist and are too small to matter.** The default scan read 243 events and
+found four locks after fees:
+
+| Lock | Floor | Capital that fills | Locked profit | Days | Annualized |
+|---|---|---|---|---|---|
+| Policy rate, cross-venue, rules verified | 0.17% | $2,936 | $2.53 | 117 | 0.27% |
+| Non-monotone ladder inside one event | 0.49% | $88 | $0.25 | 89 | 1.2% |
+| Non-monotone ladder inside one event | 0.07% | $50 | $0.04 | 89 | 0.29% |
+| CPI, cross-venue, rules verified | 0.06% | $62 | $0.04 | 12 | 1.8% |
+
+Every one earns less than a Treasury bill over the same days. Where two venues price one
+number under verified rules, the quotes agree to within fees.
+
+**Near-locks are small expected-value bets.** Three were found, all on September CPI: the
+best is an expected $8.81 on $249 (4.3% expected yield, 1.0% forecast chance of losing all
+$249, 12 days). The other two are under $0.50 each.
+
+**Unverified gaps are rule differences, not profit.** Two GDP pairs showed floors of 13%
+and 71% and are listed as unverified because the rules text does not establish one
+quantity. A gap that large between venues is evidence the events differ.
+
+**Daily temperature is the most frequent gap and it is priced risk.** With `min_days: 0`
+the scan priced 7 same-station pairs for Oct 3, 5 with a gap after fees: about $900 of
+capital and $76 of profit if the two records agree (Miami $367 → $53.59, Houston $221 →
+$13.78, Seattle $135 → $4.20, Atlanta $69 → $2.79, Austin $111 → $1.72). The default
+`min_days: 1` hides these, since they close within about a day. Read as locks that
+repeat daily, the ceiling would be about $28,000 a year on about $1,800 of revolving
+capital. The settled events do not support that reading:
+
+| City | Station-days | Kalshi's settled temperature inside Polymarket's winning bucket |
+|---|---|---|
+| Miami | 250 | 62.8% |
+| Houston | 190 | 68.9% |
+| Seattle | 259 | 69.5% |
+| Atlanta | 237 | 67.5% |
+| Austin | 189 | 65.6% |
+| All | 1,125 | 66.8% |
+
+Of 373 misses, Polymarket's record was lower on 368 and higher on 5: the official daily
+maximum sits at or above the highest posted reading. On the days whose Polymarket rules
+cite the weather.gov time series (late August 2026 on; Weather Underground before) it is
+135 of 200, 67.5%, every miss in that direction. Today's baskets break even at 81% to 97%
+agreement if every disagreement loses both legs. That is the worst case: depending on where
+the buckets sit a disagreement can also pay both legs, so the comparison rules out the
+lock reading and does not show there is no edge. The comparison is at Polymarket's 2°F
+bucket, was made by a scratch script against the venues' public history (Kalshi
+`expiration_value`, Polymarket `outcomePrices`), and is not engine code.
+
+**Conclusions.**
+
+- For an individual these markets are too thin and too efficient for the lock and near-lock
+  strategies to pay: depth, not capital, is the limit, and the gaps that fill are worth
+  cents to a few dollars.
+- The larger gaps were each explained by something the quotes did not show: different
+  rules, a converted quantity, or two measurements of one event.
+- All sizing assumes crossing the spread on every leg. Resting orders would buy each set
+  for less and could earn the spread, at the cost of unfilled legs and adverse selection.
+  The engine models no resting orders, fill odds or maker fees.
+
+**Not built.**
+
+- Pricing a `two_measurements` pair under the measured offset between the two records
+  (expected value in place of a floor). Needs the offset per station: from settled events
+  at bucket level, or exactly from sub-daily observations (govdata-ops #853).
+- Pricing `linked_drivers` baskets: one market's implied distribution carried through the
+  historical relationship and compared with what the other market implies. Listed on
+  2026-10-02 with 24 h volume: Texas temperature against Kalshi daily ERCOT peak demand
+  (about 640), temperature against natural gas price (about 39,000), storms against
+  gasoline and WTI (about 208,000 and 591,000), drought against state corn yield (under
+  250), monthly US electricity price (about 90). ERCOT peak is the tightest physical link
+  and settles daily; one catalog search found no grid-operator load table and no
+  crop-yield table (not conclusive), and found daily Henry Hub prices
+  (`energy.eia_natural_gas_price`) and weekly gas storage.
+- Resting-order pricing, a per-level ladder in `size`, "suspect" edges in
+  `scan_market_opportunities`, scheduled scans.
+
+## Phase 5 — verification (lead)
+
+- Run the three prompts through `askamerica-desktop`, one at a time; audit calls from the
+  task transcript.
+- `code-reviewer` pass over the whole package; `test-strategist` pass for edge cases
+  (empty book, one-sided quotes, unsettled history, series ending before settlement).
+- File any catalog gap found on the way to `kenstott/govdata-ops`, verified live.
+
+## Order and dependencies
+
+```
+Phase 1  A forecast builder ─┬─> Phase 2  A backtest ───────────┐
+         B venue history  ───┴─> Phase 2  B size + annualized ──┼─> Phase 3 A rules diff
+                                                                └─> Phase 3 B structures + payoff
+                                                    Phases 1–3 ───> Phase 4 A layouts, B recipes + follow-ups
+                                                                    Phase 5 verification
+```
+
+Known data gap that limits Phase 1: BLS average-price series are not in the catalog
+(govdata-ops #851), so price-level events on those series return a "series not sourced"
+flag rather than a forecast.

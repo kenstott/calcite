@@ -251,6 +251,10 @@ final class DashboardLayout {
         List<String> categories;
         List<ChartRenderer.SeriesSpec> series;
         List<ChartRenderer.PointSeriesSpec> points;
+        /** A candlestick panel's prices; null on every other chart. */
+        ChartRenderer.Candles candles;
+        List<ChartRenderer.Band> bands = new ArrayList<>();
+        List<ChartRenderer.RefLine> refLines = new ArrayList<>();
         // stat
         String label;
         String value;
@@ -606,8 +610,20 @@ final class DashboardLayout {
                 d = new double[]{Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY};
                 domains.put(p.scaleGroup, d);
             }
+            List<List<Double>> extents = new ArrayList<>();
             for (ChartRenderer.SeriesSpec s : p.series) {
-                for (Double v : s.values) {
+                extents.add(s.values);
+            }
+            for (ChartRenderer.Band b : p.bands) {
+                extents.add(b.low);
+                extents.add(b.high);
+            }
+            if (p.candles != null) {
+                extents.add(p.candles.low);
+                extents.add(p.candles.high);
+            }
+            for (List<Double> values : extents) {
+                for (Double v : values) {
                     if (v != null) {
                         d[0] = Math.min(d[0], v);
                         d[1] = Math.max(d[1], v);
@@ -696,7 +712,24 @@ final class DashboardLayout {
             if (p.points != null && !p.points.isEmpty()) {
                 p.scene = ChartRenderer.layoutPoints(p.chartType, p.title, p.xLabel, p.yLabel,
                     p.points, w, h, p.bar.valueFormat);
+            } else if (p.chartType != null && ChartRenderer.ORDERED_TYPES.contains(
+                    p.chartType.toLowerCase(java.util.Locale.ROOT))) {
+                if (!p.bar.isDefault()) {
+                    throw new IllegalArgumentException(
+                        "chart panel '" + (p.title == null ? "untitled" : p.title)
+                        + "': orientation, sort and value_labels apply to "
+                        + "chart_type 'bar' only, not '" + p.chartType + "'.");
+                }
+                p.scene = ChartRenderer.layoutOrdered(p.chartType, p.title, p.xLabel, p.yLabel,
+                    p.categories, p.series, p.candles, p.bands, p.refLines, w, h,
+                    p.bar.valueFormat, forced);
             } else if ("pie".equals(p.chartType)) {
+                if (!p.refLines.isEmpty()) {
+                    throw new IllegalArgumentException(
+                        "chart panel '" + (p.title == null ? "untitled" : p.title)
+                        + "': reference_lines apply to chart_type 'line', 'fan' and "
+                        + "'candlestick' only, not 'pie'.");
+                }
                 p.scene = ChartLayout.pieChart(p.title, p.categories, p.series.get(0).values,
                     p.series.get(0).tooltips, p.bar.valueFormat, w, h);
             } else {
@@ -707,8 +740,14 @@ final class DashboardLayout {
                         + "': orientation, sort and value_labels apply to "
                         + "chart_type 'bar' only, not '" + chartType + "'.");
                 }
+                if (!p.refLines.isEmpty() && !"line".equals(chartType)) {
+                    throw new IllegalArgumentException(
+                        "chart panel '" + (p.title == null ? "untitled" : p.title)
+                        + "': reference_lines apply to chart_type 'line', 'fan' and "
+                        + "'candlestick' only, not '" + chartType + "'.");
+                }
                 p.scene = ChartLayout.categoryChart(chartType, p.title, p.xLabel, p.yLabel,
-                    p.categories, p.series, w, h, forced, p.bar);
+                    p.categories, p.series, w, h, forced, p.bar, p.refLines);
             }
             }
         }

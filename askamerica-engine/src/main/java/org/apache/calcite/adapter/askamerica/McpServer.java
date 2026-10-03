@@ -186,6 +186,63 @@ public class McpServer {
         + "</body></html>\n";
 
     /** One scatter/bubble series, including its optional point labels and highlight groups. */
+    /** An array of numbers in which a JSON null stays null: a gap, never a zero. */
+    private static java.util.List<Double> readNumbers(JsonNode owner, String field,
+            String what) {
+        JsonNode arr = owner.path(field);
+        if (!arr.isArray()) {
+            java.util.List<String> seenKeys = new java.util.ArrayList<>();
+            owner.fieldNames().forEachRemaining(seenKeys::add);
+            throw new IllegalArgumentException(what + " has no '" + field
+                + "' array (saw fields: " + seenKeys + ").");
+        }
+        java.util.List<Double> out = new java.util.ArrayList<>();
+        for (JsonNode v : arr) {
+            out.add(v.isNull() ? null : v.asDouble());
+        }
+        return out;
+    }
+
+    /** The {@code candles} of a candlestick chart; null when the caller gave none. */
+    private static ChartRenderer.Candles readCandles(JsonNode n) {
+        JsonNode c = n.path("candles");
+        if (c.isMissingNode() || c.isNull()) {
+            return null;
+        }
+        if (!c.isObject()) {
+            throw new IllegalArgumentException("candles must be one object: "
+                + "{name, open, high, low, close, volume}, each an array with one value per "
+                + "category.");
+        }
+        return new ChartRenderer.Candles(c.path("name").asText("price"),
+            readNumbers(c, "open", "candles"), readNumbers(c, "high", "candles"),
+            readNumbers(c, "low", "candles"), readNumbers(c, "close", "candles"),
+            c.hasNonNull("volume") ? readNumbers(c, "volume", "candles") : null);
+    }
+
+    /** The {@code bands} of a fan chart; empty when the caller gave none. */
+    private static java.util.List<ChartRenderer.Band> readBands(JsonNode n) {
+        java.util.List<ChartRenderer.Band> out = new java.util.ArrayList<>();
+        for (JsonNode b : n.path("bands")) {
+            String name = b.path("name").asText("band " + (out.size() + 1));
+            out.add(new ChartRenderer.Band(name, readNumbers(b, "low", "band '" + name + "'"),
+                readNumbers(b, "high", "band '" + name + "'")));
+        }
+        return out;
+    }
+
+    /** The {@code reference_lines} of a chart; empty when the caller gave none. */
+    private static java.util.List<ChartRenderer.RefLine> readRefLines(JsonNode n) {
+        java.util.List<ChartRenderer.RefLine> out = new java.util.ArrayList<>();
+        for (JsonNode r : n.path("reference_lines")) {
+            out.add(new ChartRenderer.RefLine(
+                r.hasNonNull("value") ? Double.valueOf(r.get("value").asDouble()) : null,
+                r.hasNonNull("category") ? r.get("category").asText() : null,
+                r.hasNonNull("label") ? r.get("label").asText() : null));
+        }
+        return out;
+    }
+
     private static ChartRenderer.PointSeriesSpec readPointSeries(JsonNode s) {
         java.util.List<Double> x = new java.util.ArrayList<>();
         for (JsonNode v : s.path("x")) {
@@ -533,7 +590,13 @@ public class McpServer {
     private static final java.util.Set<String> LOCK_FREE_TOOLS =
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue", "find_recipe",
-            "web_fetch", "register", "publish_report", "restore_report", "mysite"));
+            "web_fetch", "register", "publish_report", "restore_report", "mysite",
+            // The market tools read two venues over HTTP for up to a minute; only their
+            // samples_sql / scenarios_sql calls touch the DB, and MARKETS takes the lock there.
+            "find_market_candidates", "price_market_event", "find_market_baskets",
+            "price_market_basket", "forecast_market_event", "market_price_history",
+            "scan_market_opportunities", "requote_market_opportunity",
+            "backtest_market_forecast", "compare_settlement_rules", "scan_market_baskets"));
 
     /**
      * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
@@ -2569,9 +2632,12 @@ public class McpServer {
         ObjectNode chartProps = MAPPER.createObjectNode();
         chartProps.set(
             "chart_type", prop("string",
-            "'line', 'bar', 'pie', 'scatter', or 'bubble'. Default 'line'. line/bar/pie use "
-            + "categories+series (a shared category axis); scatter/bubble use points (true "
-            + "numeric x/y axes — there is no category axis to plot against)."));
+            "'line', 'bar', 'pie', 'scatter', 'bubble', 'candlestick' or 'fan'. Default "
+            + "'line'. line/bar/pie use categories+series (a shared category axis); "
+            + "scatter/bubble use points (true numeric x/y axes — there is no category axis "
+            + "to plot against). candlestick uses categories+candles and fan uses "
+            + "categories+series+bands: both take periods in order, fit the y axis to the "
+            + "data rather than anchoring it at zero, and thin the period labels to fit."));
         chartProps.set("title", prop("string", "Chart title."));
         chartProps.set(
             "x_label", prop("string", "X-axis label. Ignored for 'pie'."));
@@ -2640,13 +2706,40 @@ public class McpServer {
             + "group is drawn in its own colour with a legend entry, every other point "
             + "muted; single series only). Labels never overlap.");
         chartProps.set("points", pointsProp);
+        chartProps.set("candles", prop("object",
+            "For 'candlestick' only. One object: name (string), and open, high, low and close "
+            + "(arrays of numbers, one per category, in category order). Optional volume "
+            + "(array, one per category) is drawn as bars along the bottom of the plot. A "
+            + "period with no trade takes null for all four prices and is left as a gap. A "
+            + "candle is green when it closed at or above its open and red when below. "
+            + "series may add lines over the same periods, e.g. a fair value."));
+        ObjectNode bandsProp = MAPPER.createObjectNode();
+        bandsProp.put("type", "array");
+        bandsProp.put("description",
+            "For 'fan' only. The forecast intervals, each an object: name (e.g. \"80% "
+            + "interval\"), low and high (arrays of numbers, one per category; null in both "
+            + "where the band does not apply, i.e. over the history). The widest band is "
+            + "drawn palest and the narrowest darkest, whatever order they are passed in. "
+            + "series carries the lines: the history, with null over the forecast periods, "
+            + "and the central forecast, with null over the history.");
+        chartProps.set("bands", bandsProp);
+        ObjectNode refProp = MAPPER.createObjectNode();
+        refProp.put("type", "array");
+        refProp.put("description",
+            "For 'line', 'fan' and 'candlestick' only. Dashed marker lines, each an object "
+            + "with exactly one of value (a number on the y axis: a strike, a fair value, a "
+            + "floor, zero profit) and category (one of categories: a release date, the "
+            + "forecast origin), plus an optional label. The y axis widens to include every "
+            + "value.");
+        chartProps.set("reference_lines", refProp);
         chartProps.set(
             "width", prop("integer", "Image width in pixels (default 800, max 2000)."));
         chartProps.set(
             "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
         tools.add(
             toolWithChartViewer("render_chart",
-            "Render ONE chart (line, bar, pie, scatter, or bubble). Returns TWO blocks: a PNG "
+            "Render ONE chart (line, bar, pie, scatter, bubble, candlestick or fan). Returns "
+            + "TWO blocks: a PNG "
             + "for the reader, and the same chart as editable SVG for you. PREFER "
             + "compose_dashboard whenever the answer has more than one figure worth showing — "
             + "which is most of the time — and reach for this only when a single bare chart "
@@ -2655,7 +2748,9 @@ public class McpServer {
             + "categories+series against a shared category axis; scatter/bubble plot points "
             + "against true numeric x/y axes (bubble adds a third size dimension) — use "
             + "scatter/bubble for a genuine x-vs-y relationship rather than a trend over "
-            + "categories. Build the arrays from a prior query or fetch_aligned_series result — "
+            + "categories; candlestick plots open/high/low/close per period and fan plots a "
+            + "forecast's interval bands around its lines. Build the arrays from a prior query "
+            + "or fetch_aligned_series result — "
             + "this tool only draws, it does not fetch data. EDIT THE RETURNED SVG rather than "
             + "re-rendering when you need an annotation or callout, direct value labels, one "
             + "category greyed out or otherwise de-emphasised, or reworded titles and labels: "
@@ -2696,7 +2791,9 @@ public class McpServer {
             + "CHART panel: {\"type\":\"chart\", plus the same arguments render_chart takes "
             + "— chart_type, title, x_label, y_label, the bar-only orientation/sort/value_labels, "
             + "value_format, and categories+series (line/bar/pie) or points (scatter/bubble), "
-            + "each series/point series optionally with tooltips}.\n"
+            + "each series/point series optionally with tooltips; categories+candles for "
+            + "candlestick, categories+series+bands for fan, and reference_lines on "
+            + "line/fan/candlestick}.\n"
             + "STAT panel: {\"type\":\"stat\", \"label\":\"Real 10-year rise\", "
             + "\"value\":\"+$19,029\", \"delta\":\"+22.0%\", \"delta_direction\":"
             + "\"up\"|\"down\"|\"flat\"} — a headline number the charts explain.\n"
@@ -2707,6 +2804,11 @@ public class McpServer {
             + "its own axis, so the taller bar can be the smaller number and nothing on either "
             + "panel looks wrong.");
         dashProps.set("panels", panelsProp);
+        ObjectNode layoutProp = MAPPER.createObjectNode();
+        layoutProp.put("description", "The dashboard_layout id a market tool returned, or a "
+            + "list of them: its panels, title and footnote are filled in, and panels given "
+            + "here are placed after them.");
+        dashProps.set(MarketPresentation.LAYOUT, layoutProp);
         tools.add(
             toolWithChartViewer("compose_dashboard",
             "THE DEFAULT WAY TO VISUALISE AN ANSWER. Composes charts and headline numbers into "
@@ -2724,7 +2826,7 @@ public class McpServer {
             + "sentence — build the full report now, without asking first: pass these same "
             + "panels via create_report_artifact's dashboard argument, and it composes the "
             + "board and inlines it under your prose in one page.",
-            schema(dashProps, new String[]{"panels"})));
+            schema(dashProps, new String[]{})));
 
         ObjectNode pubProps = MAPPER.createObjectNode();
         pubProps.set("title", prop("string", "The finding, as a sentence a reader could quote. "
@@ -2754,7 +2856,7 @@ public class McpServer {
         dashProp.put("type", "object");
         dashProp.put("description",
             "Optional. The same arguments compose_dashboard takes (title, subtitle, columns, "
-            + "panels, footnote, byline). The board is composed and inlined at the top of the "
+            + "panels, layout, footnote, byline). The board is composed and inlined at the top of the "
             + "report, so one call produces the whole deliverable.");
         pubProps.set("dashboard", dashProp);
         ObjectNode coverageProp = MAPPER.createObjectNode();
@@ -3134,6 +3236,285 @@ public class McpServer {
             + "hasn't covered this yet, not that your plan is fine.",
             schema(recipeProps, new String[]{})));
 
+        ObjectNode mktCandProps = MAPPER.createObjectNode();
+        mktCandProps.set("driver", prop("string",
+            "Only this driver, e.g. inflation, policy_rate, payrolls, unemployment, output, "
+            + "temperature, precipitation, storms, crop_yield, tariffs. An unknown name returns "
+            + "the full list."));
+        mktCandProps.set("basis", prop("string",
+            "Only this basis: release (a federal statistic), climatology (a weather "
+            + "reading), policy (a decision), market_price (a traded price)."));
+        mktCandProps.set("limit", prop("integer",
+            "Events to show, alternating venues (default 20)."));
+        mktCandProps.set("sample", prop("integer",
+            "Draw this many at random instead of the top by volume."));
+        mktCandProps.set("seed", prop("integer",
+            "Seed for sample; the one used is returned."));
+        mktCandProps.set("exclude", arrayProp("string",
+            "event_ids to leave out — the ones already drawn, to draw again."));
+        mktCandProps.set("detail", prop("boolean",
+            "Include every market's quotes and the rules text per event."));
+        mktCandProps.set("within", prop("integer",
+            "Only events closing within this many days (default 180)."));
+        mktCandProps.set("min_days", prop("integer",
+            "Only events closing at least this many days out (default 1)."));
+        mktCandProps.set("min_volume", prop("number",
+            "Minimum event volume (default 1000; contracts on Kalshi, dollars on "
+            + "Polymarket)."));
+        mktCandProps.set("refresh", prop("boolean",
+            "Re-read both venues instead of using the listing kept for 15 minutes."));
+        tools.add(
+            tool("find_market_candidates",
+            "List open prediction-market events on Kalshi AND Polymarket that settle on a "
+            + "quantity this catalog can forecast: a federal release (CPI, payrolls, GDP, "
+            + "rates), a weather reading, a policy decision, a traded price. Both venues are "
+            + "read on every call and the list alternates between them; matched_by_venue says "
+            + "what each had. Each event carries its driver, the govdata_tables holding the "
+            + "settlement series, forecast_with (the forecasting tool that fits its basis: "
+            + "arima_forecast, volatility_forecast / garch_forecast, or a samples_sql "
+            + "climatology), its median bid-ask spread, the market's own implied_median, and "
+            + "any locks visible in the quotes alone. sample=N draws N at random; the seed is "
+            + "returned, and exclude draws again without repeats. A candidate is where to "
+            + "look, not a mispricing. Next: price_market_event with no forecast to read the "
+            + "rules, forecast the settlement value, then price_market_event with the "
+            + "forecast. For 'find a mispriced event' or 'find N' you MUST call "
+            + "scan_market_opportunities first and answer from its opportunities. Draw here "
+            + "only for an event the scan could not forecast (its not_forecast): draw, "
+            + "forecast and price each, and draw again with exclude until N pass or 8 events "
+            + "have been forecast and priced. A 'spread' or 'gap' of X% in a mispricing question is the "
+            + "edge between forecast fair value and price, not the bid-ask spread. The first call reads about 200 pages from the venues and can return "
+            + "status 'loading'. You MUST call again with the same arguments while status is "
+            + "'loading'. You MUST cover both venues in the answer, or state that one had no "
+            + "matching event. You MUST NOT call an event mispriced before price_market_event "
+            + "has scored it against a forecast. You MUST NOT fill a requested count with "
+            + "events you did not forecast.",
+            schema(mktCandProps, new String[]{})));
+
+        ObjectNode mktEventProps = MAPPER.createObjectNode();
+        mktEventProps.set("source", prop("string",
+            "kalshi or polymarket."));
+        mktEventProps.set("event_id", prop("string",
+            "The event_id from find_market_candidates (Kalshi event ticker, Polymarket "
+            + "event id)."));
+        mktEventProps.set("mean", prop("number",
+            "Forecast mean of the settlement value. With sd: arima_forecast's forecast[h-1] "
+            + "and forecast_std_error[h-1]. With lower, upper and level: its interval."));
+        mktEventProps.set("sd", prop("number",
+            "Standard error of the forecast, with mean."));
+        mktEventProps.set("lower", prop("number",
+            "Lower interval bound, with mean and upper."));
+        mktEventProps.set("upper", prop("number",
+            "Upper interval bound, with mean and lower."));
+        mktEventProps.set("level", prop("number",
+            "Coverage of lower..upper (default 0.95)."));
+        mktEventProps.set("price_median", prop("number",
+            "volatility_forecast price_band.price_median, with cumulative_vol_pct: a "
+            + "lognormal band around a price."));
+        mktEventProps.set("cumulative_vol_pct", prop("number",
+            "price_band.cumulative_vol_pct from volatility_forecast, or garch_forecast's "
+            + "forecast_cumulative_vol_pct at the horizon, in percent."));
+        mktEventProps.set("samples", arrayProp("number",
+            "An empirical distribution of the settlement value, as numbers."));
+        mktEventProps.set("samples_sql", prop("string",
+            "A query whose first column is that distribution, one row per sample, no NULLs, "
+            + "under 5000 rows. E.g. the same station and calendar window in every past year."));
+        mktEventProps.set("round", prop("integer",
+            "Decimals the rules settle on; the forecast is rounded to it before it is "
+            + "compared with strikes."));
+        mktEventProps.set("conditions", prop("object",
+            "Strike condition per market_id, in the units of the forecast, for markets the "
+            + "venue gives no structured strike (every Polymarket market): {\"<market_id>\": "
+            + "{\"above\": 3.6}}. Kinds: above, at_least, below, at_most, between [low, high]."));
+        mktEventProps.set("fee_rate", prop("number",
+            "Override the taker fee rate read from the venue."));
+        mktEventProps.set("min_edge", prop("number",
+            "Smallest edge, in probability points after fees, reported as mispriced "
+            + "(default 0.03). Use 0.10 for 'mispriced by more than 10%'."));
+        mktEventProps.set("both_sides", prop("boolean",
+            "Return a leg for both sides of every market, not only the mispriced side."));
+        mktEventProps.set("column", prop("string",
+            "Name of the quantity this event settles on, used as its scenario column in "
+            + "price_market_basket (default: the event_id)."));
+        mktEventProps.set("build_forecast", prop("boolean",
+            "true: the engine builds the forecast from the catalog series the rules settle "
+            + "on and prices with it. Give no other forecast form and no round."));
+        mktEventProps.set("size", prop("number",
+            "Contracts to buy. Each mispriced market's depth then gives the average fill "
+            + "price, fee and edge for that size from its order book."));
+        tools.add(
+            tool("price_market_event",
+            "Price one Kalshi or Polymarket event against a forecast of the quantity it "
+            + "settles on, net of the venue's taker fee. With no forecast it returns the live "
+            + "quotes, the settlement rules text, the fee rates and each market's strike "
+            + "condition. With a forecast it returns per market: fair (probability under the "
+            + "forecast), the side to take, price, fee, edge = fair - price - fee in "
+            + "probability points, return_on_cost, and a verdict (mispriced, "
+            + "within_sampling_error, within_min_edge, no_quote, not_forecast). Give the "
+            + "forecast in exactly one form. build_forecast=true: the engine builds it from "
+            + "the settlement series (forecast_built). mean + sd: arima_forecast's forecast and "
+            + "forecast_std_error at the settlement period. mean + lower + upper + level: its "
+            + "interval. price_median + cumulative_vol_pct: volatility_forecast's price_band, "
+            + "or garch_forecast's cumulative vol (check it with backtest_volatility). "
+            + "samples or samples_sql: an empirical distribution, such as the same station "
+            + "and calendar window in every past year, or historical period-over-period "
+            + "changes applied to the latest level. A regression forecast (ols_regression, "
+            + "flexible_regression) goes in as mean + sd after cross_validate. other_venue "
+            + "lists other-venue events settling on the same driver within 3 days. "
+            + "A mispriced market carries a ticket: limit price, depth, void conditions. "
+            + "'Mispriced by more than 10%' means edge >= 0.10 unless return on cost is asked "
+            + "for. You MUST read rules before forecasting. You MUST use build_forecast=true "
+            + "first and state every forecast_built flag. When it fails you MUST build the "
+            + "forecast from rows queried from govdata_tables. You MUST forecast the exact "
+            + "series, period, units and rounding the rules name. You MUST state whether a "
+            + "percentage is edge or return on cost. You MUST price each other_venue "
+            + "counterpart with the same forecast. You MUST report the forecast's source "
+            + "table and last period, fair, price, fee, edge, volume, and what would make the "
+            + "forecast wrong. You MUST NOT price a policy decision without an explicit, "
+            + "sourced probability.",
+            schema(mktEventProps, new String[]{"source", "event_id"})));
+        tools.add(MarketForecasts.toolDef());
+        tools.add(MarketHistory.toolDef());
+        tools.add(MarketScan.toolDef());
+        tools.add(MarketBasketScan.toolDef());
+        tools.add(MarketBacktest.toolDef());
+        tools.add(MarketRules.toolDef());
+
+        ObjectNode mktRequoteProps = MAPPER.createObjectNode();
+        mktRequoteProps.set("ticket", prop("object",
+            "The ticket object of one mispriced market, exactly as price_market_event "
+            + "returned it."));
+        tools.add(
+            tool("requote_market_opportunity",
+            "Check whether an opportunity price_market_event reported can still be taken. "
+            + "Takes the ticket of one mispriced market and reads that market's order book "
+            + "now. Returns status: open (the ticket's size, or at least one contract, rests "
+            + "at or under limit_price), partly_open (with contracts_left), gone (nothing "
+            + "rests at or under limit_price, or the market closed), or void (a void "
+            + "condition occurred: the market closed, or the settlement series has printed a "
+            + "period after the one the forecast started from). Also returns "
+            + "current_best_price, edge_at_current_best against the ticket's fair value, "
+            + "release_since_quote and voided_by. The fair value is the ticket's: no "
+            + "forecast is rerun. You MUST call this before saying a previously reported "
+            + "opportunity is still available. You MUST NOT report a void ticket as "
+            + "available. You MUST state requoted_at.",
+            schema(mktRequoteProps, new String[]{"ticket"})));
+
+        ObjectNode mktBasketProps = MAPPER.createObjectNode();
+        mktBasketProps.set("recipe", prop("string",
+            "One of cross_venue, same_place, linked_drivers, series_run, range, calendar. "
+            + "Omit for all."));
+        mktBasketProps.set("match", prop("string",
+            "Only baskets whose name contains this text, e.g. a driver, a state, or a link "
+            + "name."));
+        mktBasketProps.set("basis", arrayProp("string",
+            "Bases to keep (default release, climatology, policy; add market_price for "
+            + "traded prices)."));
+        mktBasketProps.set("max_spread", prop("number",
+            "Drop events whose median bid-ask spread exceeds this (default 0.10)."));
+        mktBasketProps.set("limit", prop("integer",
+            "Baskets to show (default 10)."));
+        mktBasketProps.set("events_per_basket", prop("integer",
+            "Events listed per basket, alternating venues (default 8)."));
+        mktBasketProps.set("within", prop("integer",
+            "Only events closing within this many days (default 180)."));
+        mktBasketProps.set("min_days", prop("integer",
+            "Only events closing at least this many days out (default 1)."));
+        mktBasketProps.set("min_volume", prop("number",
+            "Minimum event volume (default 1000; contracts on Kalshi, dollars on "
+            + "Polymarket)."));
+        mktBasketProps.set("refresh", prop("boolean",
+            "Re-read both venues instead of using the listing kept for 15 minutes."));
+        tools.add(
+            tool("find_market_baskets",
+            "Propose baskets of correlated Kalshi and Polymarket events — arbitrage "
+            + "candidates — from the open events this catalog can forecast. Recipes, in "
+            + "order: cross_venue, the same quantity quoted on both venues and closing within "
+            + "3 days — the simplest arbitrage, testable with no forecast; same_place, events "
+            + "on one state or city; linked_drivers, drivers with an economic link (weather, "
+            + "crop yield and commodity prices; inflation and Fed policy; labor and growth; "
+            + "rates and housing; energy and weather); series_run, consecutive events of one "
+            + "series on one venue; range, one event's lowest and highest strike (pays most "
+            + "between them); calendar, one quantity at two adjacent close dates. Each basket "
+            + "gives why its events should move together, its venues, the govdata_tables to "
+            + "measure that in, and its events. A cross_venue basket carries rules_match "
+            + "(match, differ, unverified) from compare_settlement_rules. A basket's why is "
+            + "a hypothesis, not a measurement. For cross_venue: price_market_basket with "
+            + "both events, lock=true, scenario_grid=true and one shared column. For the "
+            + "others: measure the link with fetch_aligned_series and correlation_matrix, "
+            + "forecast each event, then price_market_basket with joint scenarios. Can return "
+            + "status 'loading' while the venues are read. You MUST call again with the same "
+            + "arguments while status is 'loading'. You MUST check cross_venue first when "
+            + "asked for an arbitrage or a locked yield. You MUST NOT report a cross_venue "
+            + "pair as a lock unless rules_match is 'match'. You MUST NOT report a basket as "
+            + "an arbitrage before price_market_basket has scored it net of fees.",
+            schema(mktBasketProps, new String[]{})));
+
+        ObjectNode mktPriceBasketProps = MAPPER.createObjectNode();
+        ObjectNode mktEventsProp = MAPPER.createObjectNode();
+        mktEventsProp.put("type", "array");
+        mktEventsProp.put("description",
+            "Event specs, one object per event, each with price_market_event's arguments: "
+            + "source, event_id, a forecast (not needed when lock=true), conditions, column, "
+            + "round, fee_rate. Give events that settle on the same quantity the same column.");
+        mktEventsProp.set("items", MAPPER.createObjectNode().put("type", "object"));
+        mktPriceBasketProps.set("events", mktEventsProp);
+        ObjectNode mktScenariosProp = MAPPER.createObjectNode();
+        mktScenariosProp.put("type", "array");
+        mktScenariosProp.put("description",
+            "Joint scenarios inline: one object per scenario with a number for every "
+            + "event's column, and optionally p, its probability (all p sum to 1; equal "
+            + "weights otherwise). E.g. the rows of a scenario_sweep.");
+        mktScenariosProp.set("items", MAPPER.createObjectNode().put("type", "object"));
+        mktPriceBasketProps.set("scenarios", mktScenariosProp);
+        mktPriceBasketProps.set("scenarios_sql", prop("string",
+            "Joint scenarios from the catalog: one row per scenario, one numeric column "
+            + "named for each event's column, no NULLs, under 5000 rows. Historical periods "
+            + "of the aligned series keep the correlation between them."));
+        mktPriceBasketProps.set("scenario_grid", prop("boolean",
+            "With lock=true and one shared column: every distinct outcome of that quantity "
+            + "— each strike and a value in every gap between, below and above them. The "
+            + "cross-venue lock test."));
+        mktPriceBasketProps.set("lock", prop("boolean",
+            "Use both sides of every quoted market and keep only baskets whose worst-case "
+            + "payout exceeds cost after fees."));
+        mktPriceBasketProps.set("search", prop("integer",
+            "Score every subset of up to this many legs and rank them (default 0: score the "
+            + "basket as given)."));
+        mktPriceBasketProps.set("min_yield", prop("number",
+            "Keep only baskets whose floor (when lock) or yield (expected / cost) is at "
+            + "least this, e.g. 0.10."));
+        mktPriceBasketProps.set("top", prop("integer",
+            "Ranked baskets to return (default 10)."));
+        mktPriceBasketProps.set("min_edge", prop("number",
+            "Edge a market needs to become a leg when lock is false (default 0.03)."));
+        tools.add(
+            tool("price_market_basket",
+            "Score a basket of Kalshi and Polymarket events as one position, net of each "
+            + "venue's taker fee, across joint scenarios: cost, worst case (lowest payout "
+            + "minus cost), floor (worst case / cost), best case, and — when scenarios carry probabilities — probability "
+            + "of profit, expected value and yield. Each entry of events is priced as "
+            + "price_market_event prices it. Without lock, the legs are each event's "
+            + "mispriced markets, so every event needs a forecast. With lock=true the legs "
+            + "are both sides of every quoted market and only baskets with a positive floor "
+            + "are kept: a lock, which needs no forecast. Scenarios, exactly one of: "
+            + "scenario_grid=true (lock only; every outcome of one shared column — how a "
+            + "cross-venue pair is tested); scenarios_sql (one row per historical period with "
+            + "a column per event's column, e.g. the query behind fetch_aligned_series; keeps "
+            + "the correlation between events); scenarios (inline rows, e.g. from "
+            + "scenario_sweep). search=k scores every subset of up to k legs; min_yield=0.10 "
+            + "keeps those yielding over 10%. Returns payoff_curve (profit per cost by "
+            + "settlement value) when every leg shares one column, and rules_match (match, "
+            + "differ, unverified) when events span venues. Fees are a taker order at the "
+            + "quote; depth and position limits are not modelled. Yield is to settlement, "
+            + "not annualized. You MUST give events that settle on the same quantity the same "
+            + "column, and state every Polymarket market's condition in that column's units. "
+            + "You MUST report a lock with its payoff_curve and its rules_match. You MUST "
+            + "report a cross-venue lock whose rules_match is not 'match' as not a lock. You "
+            + "MUST state the scenario basis and row count. You MUST report cost, fees, "
+            + "floor, yield, days to close and volume for every basket reported. You MUST "
+            + "report 'no lock after fees' as the finding when none is kept.",
+            schema(mktPriceBasketProps, new String[]{"events"})));
+
         ObjectNode xlsxProps = MAPPER.createObjectNode();
         ObjectNode webFetchProps = MAPPER.createObjectNode();
         webFetchProps.set(
@@ -3492,6 +3873,32 @@ public class McpServer {
 
     private static final DatasetRegistry DATASETS = new DatasetRegistry();
 
+    private static final PredictionMarkets.Fetcher MARKET_FETCHER =
+        new PredictionMarkets.HttpFetcher();
+    private static final MarketTools.SqlRunner MARKET_SQL = (sql, limit) -> {
+        synchronized (DB_LOCK) {
+            return runSqlRows(DATASETS.expand(sql), limit);
+        }
+    };
+    private static final PredictionMarkets.ListingCache MARKET_LISTING =
+        new PredictionMarkets.ListingCache(MARKET_FETCHER, java.time.Duration.ofMinutes(15));
+    private static final MarketBacktest MARKET_BACKTEST =
+        new MarketBacktest(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
+    private static final MarketRules MARKET_RULES = new MarketRules(MARKET_FETCHER);
+    private static final MarketTools MARKETS = new MarketTools(MARKET_FETCHER,
+        MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, MARKET_BACKTEST);
+    private static final MarketScan MARKET_SCAN = new MarketScan(MARKET_FETCHER,
+        MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
+        java.time.Duration.ofMinutes(15), MARKET_BACKTEST);
+    private static final MarketBasketScan MARKET_BASKET_SCAN = new MarketBasketScan(
+        MARKET_FETCHER, MARKET_LISTING, MARKET_SQL, java.time.Instant::now, 40_000L, 35_000L,
+        java.time.Duration.ofMinutes(15));
+    private static final MarketPresentation MARKET_VIEW = new MarketPresentation();
+    private static final MarketForecasts MARKET_FORECASTS =
+        new MarketForecasts(MARKET_FETCHER, MARKET_SQL, java.time.Instant::now);
+    private static final MarketHistory MARKET_HISTORY =
+        new MarketHistory(MARKET_FETCHER, java.time.Instant::now);
+
     private static ObjectNode handleToolsCall(JsonNode id, JsonNode params) throws Exception {
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
@@ -3671,6 +4078,77 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=find_recipe topic=" + topic);
                     markRecipeConsulted();
                     text = RecipeCatalog.find(topic, lim);
+                    break;
+                }
+                case "find_market_candidates": {
+                    log.println("[askamerica-mcp] tool=find_market_candidates driver="
+                        + args.path("driver").asText("") + " sample="
+                        + args.path("sample").asInt(0));
+                    text = MARKETS.findCandidates(args);
+                    break;
+                }
+                case "price_market_event": {
+                    log.println("[askamerica-mcp] tool=price_market_event source="
+                        + args.path("source").asText("") + " event_id="
+                        + args.path("event_id").asText(""));
+                    text = MARKET_VIEW.event(MARKETS.priceEvent(args));
+                    break;
+                }
+                case "forecast_market_event": {
+                    log.println("[askamerica-mcp] tool=forecast_market_event source="
+                        + args.path("source").asText("") + " event_id="
+                        + args.path("event_id").asText(""));
+                    text = MARKET_FORECASTS.forecastMarketEvent(args);
+                    break;
+                }
+                case "backtest_market_forecast": {
+                    log.println("[askamerica-mcp] tool=backtest_market_forecast series="
+                        + args.path("series").asText(""));
+                    text = MARKET_BACKTEST.backtestTool(args);
+                    break;
+                }
+                case "requote_market_opportunity": {
+                    log.println("[askamerica-mcp] tool=requote_market_opportunity source="
+                        + args.path("ticket").path("source").asText("") + " market_id="
+                        + args.path("ticket").path("market_id").asText(""));
+                    text = MARKETS.requote(args);
+                    break;
+                }
+                case "compare_settlement_rules": {
+                    log.println("[askamerica-mcp] tool=compare_settlement_rules a="
+                        + args.path("a").path("event_id").asText("") + " b="
+                        + args.path("b").path("event_id").asText(""));
+                    text = MARKET_RULES.compareSettlementRules(args);
+                    break;
+                }
+                case "scan_market_opportunities": {
+                    log.println("[askamerica-mcp] tool=scan_market_opportunities driver="
+                        + args.path("driver").asText(""));
+                    text = MARKET_VIEW.scan(MARKET_SCAN.scan(args));
+                    break;
+                }
+                case "scan_market_baskets": {
+                    log.println("[askamerica-mcp] tool=scan_market_baskets driver="
+                        + args.path("driver").asText(""));
+                    text = MARKET_VIEW.basketScan(MARKET_BASKET_SCAN.scan(args));
+                    break;
+                }
+                case "market_price_history": {
+                    log.println("[askamerica-mcp] tool=market_price_history source="
+                        + args.path("source").asText(""));
+                    text = MARKET_HISTORY.priceHistoryTool(args);
+                    break;
+                }
+                case "find_market_baskets": {
+                    log.println("[askamerica-mcp] tool=find_market_baskets recipe="
+                        + args.path("recipe").asText(""));
+                    text = MARKETS.findBaskets(args);
+                    break;
+                }
+                case "price_market_basket": {
+                    log.println("[askamerica-mcp] tool=price_market_basket events="
+                        + args.path("events").size());
+                    text = MARKET_VIEW.basket(MARKETS.priceBasket(args));
                     break;
                 }
                 case "set_telemetry": {
@@ -4327,6 +4805,8 @@ public class McpServer {
                     JsonNode dash = args.path("dashboard");
                     java.util.List<DashboardLayout.Panel> ps = new java.util.ArrayList<>();
                     int c = 2;
+                    boolean marketLayout = dash.isObject()
+                        && MARKET_VIEW.resolve((ObjectNode) dash);
                     if (dash.isObject() && dash.has("panels")) {
                         for (JsonNode pn : dash.path("panels")) {
                             ps.add(readPanel(pn));
@@ -4349,6 +4829,9 @@ public class McpServer {
                         // link" and one that answers the question at a glance. Roughly an
                         // eighth of a full-size board's image tokens either way.
                         thumb = board.toPng(0.40);
+                        if (EVAL_MODE) {
+                            LAST_DASHBOARD_PNG = board.toPng(2.0);
+                        }
                     }
                     // The artifact path draws its own charts from the panel data; a thumbnail
                     // of AskAmerica's board would only spend image tokens on a second copy.
@@ -4394,6 +4877,8 @@ public class McpServer {
                     addIfPresent(gateProblems, enforceStatisticalProvenance(secs));
                     addIfPresent(gateProblems, enforceRecurringEventRecency(rTitle, rSub, secs));
                     addIfPresent(gateProblems, enforceRecipeConsulted());
+                    addIfPresent(gateProblems, enforceMarketSearchFinished());
+                    addIfPresent(gateProblems, enforceMarketLayout(marketLayout));
                     addIfPresent(gateProblems, enforceResearchDepthOnGap());
                     if (!gateProblems.isEmpty()) {
                         StringBuilder combined = new StringBuilder(
@@ -4406,6 +4891,8 @@ public class McpServer {
                         }
                         throw new IllegalArgumentException(combined.toString());
                     }
+                    MARKETS.resetSearch();
+                    MARKET_VIEW.reset();
                     ReportPage.Section appendix = queryAppendix();
                     if (appendix != null) {
                         secs.add(appendix);
@@ -4612,6 +5099,9 @@ public class McpServer {
                     break;
                 }
                 case "compose_dashboard": {
+                    if (args.isObject()) {
+                        MARKET_VIEW.resolve((ObjectNode) args);
+                    }
                     java.util.List<DashboardLayout.Panel> panels = new java.util.ArrayList<>();
                     for (JsonNode pn : args.path("panels")) {
                         panels.add(readPanel(pn));
@@ -4759,9 +5249,27 @@ public class McpServer {
 
                     log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
                         + " categories=" + categories.size() + " series=" + series.size());
-                    ChartScene scene = ChartRenderer.layout(
-                        chartType, title, xLabel, yLabel, categories, series, width, height,
-                        readBarOptions(args, true));
+                    ChartScene scene;
+                    if (ChartRenderer.ORDERED_TYPES.contains(
+                            chartType.toLowerCase(java.util.Locale.ROOT))) {
+                        ChartRenderer.BarOptions fmtOnly = readBarOptions(args, false);
+                        if (!fmtOnly.isDefault()) {
+                            throw new IllegalArgumentException("orientation, sort and "
+                                + "value_labels apply to chart_type 'bar' only, not '"
+                                + chartType + "'.");
+                        }
+                        scene = ChartRenderer.layoutOrdered(chartType, title, xLabel, yLabel,
+                            categories, series, readCandles(args), readBands(args),
+                            readRefLines(args), width, height, fmtOnly.valueFormat, null);
+                    } else {
+                        if (args.hasNonNull("candles") || args.path("bands").size() > 0) {
+                            throw new IllegalArgumentException("candles apply to chart_type "
+                                + "'candlestick' and bands to 'fan', not '" + chartType + "'.");
+                        }
+                        scene = ChartRenderer.layout(
+                            chartType, title, xLabel, yLabel, categories, series, width, height,
+                            readBarOptions(args, true), readRefLines(args));
+                    }
                     chartPng = scene.toPng();
                     chartSvg = scene.toSvg();
                     text = chartSummary(chartType, title,
@@ -6180,7 +6688,7 @@ public class McpServer {
     private static volatile boolean CHART_RENDERED;
 
     /**
-     * The most recent {@code compose_dashboard} render at 2x, kept separately from
+     * The most recent {@code compose_dashboard} render or report board at 2x, kept separately from
      * {@link #LAST_CHART_PNG}: preview_report returns a 40% thumbnail of its board as the
      * call's image, and "the last image this process produced" was therefore a 352x258
      * picture that no reader could use. The saved dashboard.png is this one when it exists.
@@ -6927,6 +7435,38 @@ public class McpServer {
      * that never checked.
      */
     private static String enforceRecipeConsulted() {
+        return enforceRecipeConsultedImpl();
+    }
+
+    /**
+     * Holds a report back while a random search for mispriced market events is unfinished —
+     * see {@link MarketTools#searchGate()}. Scoped to the calls since the last published
+     * report, so a search abandoned for another question never blocks that question's report.
+     */
+    private static String enforceMarketSearchFinished() {
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            String tool = e.path("tool").asText("");
+            if ("find_market_candidates".equals(tool) || "price_market_event".equals(tool)) {
+                return MARKETS.searchGate();
+            }
+        }
+        return null;
+    }
+
+    /** A layout is owed only by market work done for this report, not by an earlier one. */
+    private static String enforceMarketLayout(boolean resolved) {
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            String tool = e.path("tool").asText("");
+            if ("price_market_event".equals(tool) || "scan_market_opportunities".equals(tool)
+                    || "price_market_basket".equals(tool)
+                    || "scan_market_baskets".equals(tool)) {
+                return MARKET_VIEW.gate(resolved);
+            }
+        }
+        return null;
+    }
+
+    private static String enforceRecipeConsultedImpl() {
         if (recipeConsulted()) {
             return null;
         }
@@ -6960,6 +7500,11 @@ public class McpServer {
      *  not a guess at what "enough" looks like in the abstract. */
     private static final int MIN_FETCHES_ON_PURE_FALLBACK = 5;
 
+    /** The market tools whose result is itself the engine's data on the question. */
+    private static final java.util.Set<String> MARKET_PRICING_TOOLS = java.util.Set.of(
+        "price_market_event", "price_market_basket", "scan_market_opportunities",
+        "backtest_market_forecast", "scan_market_baskets");
+
     /**
      * A "pure web fallback" report -- no {@code query} call anywhere this session returned any
      * rows, meaning askamerica's own data had nothing to contribute to this question -- gets
@@ -6982,7 +7527,8 @@ public class McpServer {
      * <p>Only engages when askamerica genuinely had nothing: any {@code query} call this
      * session that returned at least one row means real warehouse data fed the report, and
      * this gate does not apply, however many or few URLs were fetched or catalog calls made
-     * alongside it -- a hybrid report is not the failure mode this catches.
+     * alongside it -- a hybrid report is not the failure mode this catches. A market pricing
+     * tool that returned counts the same way: its quotes and forecast are the engine's own.
      */
     private static String enforceResearchDepthOnGap() {
         java.util.List<ObjectNode> snapshot = recentCallLogSnapshot();
@@ -6992,6 +7538,9 @@ public class McpServer {
         for (ObjectNode e : snapshot) {
             String tool = e.path("tool").asText("");
             if ("query".equals(tool) && e.path("rows").asInt(0) > 0) {
+                productiveQuery = true;
+            }
+            if (MARKET_PRICING_TOOLS.contains(tool) && !e.has("error")) {
                 productiveQuery = true;
             }
             if ("search_catalog".equals(tool) || "list_tables".equals(tool)
@@ -8231,7 +8780,8 @@ public class McpServer {
      *  NullPointerException (the panel's kind matched neither branch, so it skipped chart-scene
      *  layout but still tried to render one) instead of a clear, actionable error. */
     private static final java.util.Set<String> CHART_TYPE_VALUES = new java.util.HashSet<>(
-        java.util.Arrays.asList("line", "bar", "pie", "scatter", "bubble"));
+        java.util.Arrays.asList("line", "bar", "pie", "scatter", "bubble", "candlestick",
+            "fan"));
 
     /** The bar-chart arguments shared by render_chart and a dashboard chart panel. */
     private static ChartRenderer.BarOptions readBarOptions(JsonNode n, boolean growHeight) {
@@ -8246,14 +8796,14 @@ public class McpServer {
         return growHeight ? o.growing() : o;
     }
 
-    private static DashboardLayout.Panel readPanel(JsonNode pn) {
+    static DashboardLayout.Panel readPanel(JsonNode pn) {
         DashboardLayout.Panel p = new DashboardLayout.Panel();
         p.kind = pn.path("type").asText("chart");
         if (!"chart".equals(p.kind) && !"stat".equals(p.kind)) {
             String hint = CHART_TYPE_VALUES.contains(p.kind)
                 ? " — did you mean chart_type: \"" + p.kind + "\"? 'type' selects the panel "
                     + "kind ('chart' or 'stat'); 'chart_type' selects the chart's flavor "
-                    + "(line/bar/pie/scatter/bubble)."
+                    + "(line/bar/pie/scatter/bubble/candlestick/fan)."
                 : " — must be 'chart' or 'stat'.";
             throw new IllegalArgumentException(
                 "panel 'type' \"" + p.kind + "\" is not recognized" + hint);
@@ -8315,10 +8865,22 @@ public class McpServer {
             p.series.add(new ChartRenderer.SeriesSpec(sNode.path("name").asText(), vals,
                 parseTooltips(sNode)));
         }
-        if (p.categories.isEmpty() || p.series.isEmpty()) {
+        p.candles = readCandles(pn);
+        p.bands = readBands(pn);
+        p.refLines = readRefLines(pn);
+        boolean ordered = ChartRenderer.ORDERED_TYPES.contains(
+            p.chartType.toLowerCase(java.util.Locale.ROOT));
+        if (!ordered && (p.candles != null || !p.bands.isEmpty())) {
             throw new IllegalArgumentException(
                 "chart panel '" + (p.title == null ? "untitled" : p.title)
-                + "' needs categories + series (line/bar/pie) or points (scatter/bubble)");
+                + "': candles apply to chart_type 'candlestick' and bands to 'fan', not '"
+                + p.chartType + "'.");
+        }
+        if (p.categories.isEmpty() || (p.series.isEmpty() && p.candles == null)) {
+            throw new IllegalArgumentException(
+                "chart panel '" + (p.title == null ? "untitled" : p.title)
+                + "' needs categories + series (line/bar/pie/fan), categories + candles "
+                + "(candlestick) or points (scatter/bubble)");
         }
         return p;
     }
@@ -14429,6 +14991,12 @@ public class McpServer {
         ObjectNode p = MAPPER.createObjectNode();
         p.put("type", type);
         p.put("description", description);
+        return p;
+    }
+
+    private static ObjectNode arrayProp(String itemType, String description) {
+        ObjectNode p = prop("array", description);
+        p.set("items", MAPPER.createObjectNode().put("type", itemType));
         return p;
     }
 

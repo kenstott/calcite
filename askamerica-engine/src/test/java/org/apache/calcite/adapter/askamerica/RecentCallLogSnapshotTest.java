@@ -22,9 +22,12 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A rejected {@code preview_report} attempt must not become the recency boundary
@@ -146,5 +149,45 @@ class RecentCallLogSnapshotTest {
 
         assertEquals(1, snap.size());
         assertSame(newQuery, snap.get(0));
+    }
+
+    @Test void aMarketPricingCallCountsAsTheEnginesOwnData() throws Exception {
+        Method gate = McpServer.class.getDeclaredMethod("enforceResearchDepthOnGap");
+        gate.setAccessible(true);
+        callLog().add(entry("find_market_baskets", null));
+        assertTrue(((String) gate.invoke(null)).contains("no query call"));
+
+        callLog().add(entry("price_market_basket", "give exactly one of scenarios"));
+        assertTrue(((String) gate.invoke(null)).contains("no query call"),
+            "a pricing call that failed contributed nothing");
+
+        callLog().add(entry("price_market_basket", null));
+        assertNull(gate.invoke(null));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test void aMarketLayoutIsOwedOnlyByMarketWorkDoneForThisReport() throws Exception {
+        Field view = McpServer.class.getDeclaredField("MARKET_VIEW");
+        view.setAccessible(true);
+        Field owedField = MarketPresentation.class.getDeclaredField("owed");
+        owedField.setAccessible(true);
+        Set<String> owed = (Set<String>) owedField.get(view.get(null));
+        Method gate = McpServer.class.getDeclaredMethod("enforceMarketLayout", boolean.class);
+        gate.setAccessible(true);
+        owed.add("scan:1");
+        try {
+            callLog().add(entry("price_market_event", null));
+            callLog().add(entry("preview_report", null));
+            callLog().add(entry("query", null));
+            assertNull(gate.invoke(null, false),
+                "a layout returned before the last published report must not gate this one");
+
+            callLog().add(entry("scan_market_opportunities", null));
+            String problem = (String) gate.invoke(null, false);
+            assertTrue(problem != null && problem.contains("scan:1"), problem);
+            assertNull(gate.invoke(null, true));
+        } finally {
+            owed.clear();
+        }
     }
 }

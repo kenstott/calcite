@@ -23,6 +23,7 @@ import org.apache.calcite.adapter.askamerica.ChartScene.Rect;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -113,16 +114,27 @@ final class ChartLayout {
             forcedDomain, ChartRenderer.BarOptions.DEFAULT);
     }
 
+    /** As below, with no reference lines. */
+    static ChartScene categoryChart(String type, String title, String xLabel, String yLabel,
+            List<String> categories, List<ChartRenderer.SeriesSpec> series, int width,
+            int height, double[] forcedDomain, ChartRenderer.BarOptions opts) {
+        return categoryChart(type, title, xLabel, yLabel, categories, series, width, height,
+            forcedDomain, opts, Collections.<ChartRenderer.RefLine>emptyList());
+    }
+
     /**
      * As above, with a bar chart's orientation, ordering and value labels.
      *
      * <p>{@code sort} orders by the first series; the other series follow their categories.
      * Horizontal bars take {@code x_label} as the category-axis title and {@code y_label} as the
      * value-axis title, so each names what its own axis carries whichever way the bars run.
+     *
+     * <p>{@code refs} are drawn over a line chart; the caller rejects them for bars.
      */
     static ChartScene categoryChart(String type, String title, String xLabel, String yLabel,
             List<String> categories, List<ChartRenderer.SeriesSpec> series, int width,
-            int height, double[] forcedDomain, ChartRenderer.BarOptions opts) {
+            int height, double[] forcedDomain, ChartRenderer.BarOptions opts,
+            List<ChartRenderer.RefLine> refs) {
         ValueFormat fmt = opts.valueFormat;
         boolean bar = "bar".equals(type);
         if (bar && !"none".equals(opts.sort)) {
@@ -147,6 +159,12 @@ final class ChartLayout {
                     max = Math.max(max, v);
                     min = Math.min(min, v);
                 }
+            }
+        }
+        for (ChartRenderer.RefLine r : refs) {
+            if (r.value != null) {
+                max = Math.max(max, r.value);
+                min = Math.min(min, r.value);
             }
         }
         if (max == Double.NEGATIVE_INFINITY) {
@@ -313,10 +331,314 @@ final class ChartLayout {
             scene.add(g);
         }
 
+        addReferenceLines(scene, refs, categories, left, top, plotW, plotH, slotWidth, ticks,
+            fmt);
         if (series.size() > 1) {
             addLegend(scene, seriesNames(series), height - 10 - FOOTNOTE_BAND, width);
         }
         return scene;
+    }
+
+    private static final Color CANDLE_UP = new Color(0x05, 0x96, 0x69);
+    private static final Color CANDLE_DOWN = new Color(0xdc, 0x26, 0x26);
+    private static final Color VOLUME = new Color(0xd1, 0xd5, 0xdb);
+    private static final Color REFERENCE = new Color(0x4b, 0x55, 0x63);
+    /** Share of the plot height the volume bars may take, behind the candles. */
+    private static final double VOLUME_BAND = 0.18;
+
+    /**
+     * Layout of a candlestick or fan chart: an ordered axis, a y domain fitted to the data
+     * rather than anchored at zero, and category labels thinned to what fits.
+     *
+     * <p>Thinning is right here and wrong on {@link #categoryChart}: these categories are
+     * periods in order, so the labels between two shown ones are implied, where a dropped
+     * state name is simply lost.
+     */
+    static ChartScene orderedChart(String title, String xLabel, String yLabel,
+            List<String> categories, List<ChartRenderer.SeriesSpec> series,
+            ChartRenderer.Candles candles, List<ChartRenderer.Band> bandsIn,
+            List<ChartRenderer.RefLine> refs, int width, int height, ValueFormat fmt,
+            double[] forcedDomain) {
+        ChartScene scene = new ChartScene(width, height, BACKGROUND);
+        int n = categories.size();
+        // Widest band first, so a narrower one is drawn over it whatever order they came in.
+        List<ChartRenderer.Band> bands = new ArrayList<>(bandsIn);
+        bands.sort((a, b) -> Double.compare(bandWidth(b), bandWidth(a)));
+
+        double min = Double.POSITIVE_INFINITY;
+        double max = Double.NEGATIVE_INFINITY;
+        List<List<Double>> extents = new ArrayList<>();
+        for (ChartRenderer.SeriesSpec s : series) {
+            extents.add(s.values);
+        }
+        for (ChartRenderer.Band b : bands) {
+            extents.add(b.low);
+            extents.add(b.high);
+        }
+        if (candles != null) {
+            extents.add(candles.low);
+            extents.add(candles.high);
+        }
+        for (List<Double> values : extents) {
+            for (Double v : values) {
+                if (v != null) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+            }
+        }
+        for (ChartRenderer.RefLine r : refs) {
+            if (r.value != null) {
+                min = Math.min(min, r.value);
+                max = Math.max(max, r.value);
+            }
+        }
+        if (forcedDomain != null) {
+            min = Math.min(min, forcedDomain[0]);
+            max = Math.max(max, forcedDomain[1]);
+        }
+        if (candles != null && candles.volume != null && max > min) {
+            // Room under the lowest price for the volume bars, so no wick runs into them.
+            min -= (max - min) * VOLUME_BAND / (1 - VOLUME_BAND);
+        }
+        Ticks ticks = niceTicks(min, max, fmt);
+
+        List<String> names = seriesNames(series);
+        List<Color> colors = new ArrayList<>();
+        for (int si = 0; si < series.size(); si++) {
+            colors.add(color(si));
+        }
+        List<Color> tints = new ArrayList<>();
+        for (int bi = 0; bi < bands.size(); bi++) {
+            // From a pale tint for the widest band towards the line colour for the narrowest.
+            double weight = 0.16 + 0.34 * (bands.size() == 1 ? 0.5
+                : (double) bi / (bands.size() - 1));
+            Color tint = blend(color(0), weight);
+            tints.add(tint);
+            names.add(bands.get(bi).name);
+            colors.add(tint);
+        }
+        int legendHeight = legendBand(names, width);
+
+        int tickLabelWidth = 0;
+        for (String t : ticks.labels) {
+            tickLabelWidth = Math.max(tickLabelWidth, ChartScene.textWidth(t, TICK_SIZE, false));
+        }
+        double right = 22;
+        double titleBottom = title == null || title.isEmpty() ? 12 : 36;
+        double top = titleBottom + ANNOTATION_BAND;
+        double bottom = 30 + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight
+            + FOOTNOTE_BAND;
+        double plotH = height - top - bottom;
+        double left = 18 + yTitleReserve(yLabel, plotH) + tickLabelWidth + 10;
+        double plotW = width - left - right;
+        double slot = plotW / n;
+
+        addFrame(scene, title, xLabel, yLabel, left, top, plotW, plotH, width, height, ticks,
+            legendHeight);
+        scene.bounds(left, top, plotW, plotH, titleBottom + 4, top - 4, height - 4);
+
+        int widest = 0;
+        for (String c : categories) {
+            widest = Math.max(widest, ChartScene.textWidth(c, TICK_SIZE, false));
+        }
+        int stride = (int) Math.max(1, Math.ceil((widest + 12) / slot));
+        Group xTicks = new Group().at("x-axis-labels");
+        for (int i = 0; i < n; i += stride) {
+            double cx = left + slot * (i + 0.5);
+            String text = categories.get(i);
+            if (cx + ChartScene.textWidth(text, TICK_SIZE, false) / 2.0 > width - 2) {
+                continue;
+            }
+            xTicks.add(new Label(cx, top + plotH + 18, text, INK, TICK_SIZE, Anchor.MIDDLE, 0,
+                false).styled("tick").at("xtick-" + ChartScene.slug(text)));
+        }
+        scene.add(xTicks);
+
+        for (int bi = 0; bi < bands.size(); bi++) {
+            ChartRenderer.Band b = bands.get(bi);
+            Group g = new Group().at("band-" + ChartScene.slug(b.name)).styled("band");
+            int i = 0;
+            while (i < n) {
+                if (b.low.get(i) == null) {
+                    i++;
+                    continue;
+                }
+                int end = i;
+                while (end + 1 < n && b.low.get(end + 1) != null) {
+                    end++;
+                }
+                if (end == i) {
+                    double cx = left + slot * (i + 0.5);
+                    g.add(new Line(cx, valueToY(b.high.get(i), ticks, top, plotH), cx,
+                        valueToY(b.low.get(i), ticks, top, plotH), tints.get(bi), 3, false));
+                } else {
+                    Path p = new Path(null, tints.get(bi), 0);
+                    for (int k = i; k <= end; k++) {
+                        p.to(left + slot * (k + 0.5),
+                            valueToY(b.high.get(k), ticks, top, plotH));
+                    }
+                    for (int k = end; k >= i; k--) {
+                        p.to(left + slot * (k + 0.5),
+                            valueToY(b.low.get(k), ticks, top, plotH));
+                    }
+                    g.add(p);
+                }
+                i = end + 1;
+            }
+            scene.add(g);
+        }
+
+        if (candles != null) {
+            double bodyW = Math.max(1, Math.min(slot * 0.6, 14));
+            if (candles.volume != null) {
+                double maxVolume = 0;
+                for (Double v : candles.volume) {
+                    if (v != null) {
+                        maxVolume = Math.max(maxVolume, v);
+                    }
+                }
+                Group vg = new Group().at("volume").styled("volume");
+                for (int i = 0; i < n && maxVolume > 0; i++) {
+                    Double v = candles.volume.get(i);
+                    if (v == null || v == 0) {
+                        continue;
+                    }
+                    double h = v / maxVolume * plotH * VOLUME_BAND;
+                    vg.add(new Rect(left + slot * (i + 0.5) - bodyW / 2, top + plotH - h,
+                        bodyW, h, VOLUME).at("volume-" + ChartScene.slug(categories.get(i))));
+                }
+                scene.add(vg);
+            }
+            Group cg = new Group().at("series-" + ChartScene.slug(candles.name))
+                .styled("series");
+            for (int i = 0; i < n; i++) {
+                if (candles.open.get(i) == null) {
+                    continue;
+                }
+                double o = candles.open.get(i);
+                double c = candles.close.get(i);
+                double cx = left + slot * (i + 0.5);
+                double yo = valueToY(o, ticks, top, plotH);
+                double yc = valueToY(c, ticks, top, plotH);
+                Color col = c >= o ? CANDLE_UP : CANDLE_DOWN;
+                Group candle = new Group()
+                    .add(new Line(cx, valueToY(candles.high.get(i), ticks, top, plotH), cx,
+                        valueToY(candles.low.get(i), ticks, top, plotH), col, 1, false)
+                        .styled("wick"))
+                    .add(new Rect(cx - bodyW / 2, Math.min(yo, yc), bodyW,
+                        Math.max(1, Math.abs(yo - yc)), col).styled("body"));
+                candle.at("mark-" + ChartScene.slug(candles.name) + "-"
+                    + ChartScene.slug(categories.get(i))).styled("candle");
+                double hitW = Math.max(slot, MIN_HIT);
+                StringBuilder tip = new StringBuilder(categories.get(i)).append(" — open ")
+                    .append(ValueFormat.render(fmt, o)).append(", high ")
+                    .append(ValueFormat.render(fmt, candles.high.get(i))).append(", low ")
+                    .append(ValueFormat.render(fmt, candles.low.get(i))).append(", close ")
+                    .append(ValueFormat.render(fmt, c));
+                if (candles.volume != null && candles.volume.get(i) != null) {
+                    tip.append(", volume ").append(ValueFormat.plain(candles.volume.get(i)));
+                }
+                cg.add(new Hover(candle, HitTarget.rect(cx - hitW / 2, top, hitW, plotH),
+                    tip.toString()));
+            }
+            scene.add(cg);
+        }
+
+        for (int si = 0; si < series.size(); si++) {
+            ChartRenderer.SeriesSpec s = series.get(si);
+            Color c = color(si);
+            Group g = new Group().at("series-" + ChartScene.slug(s.name)).styled("series");
+            Path p = new Path(c, null, 2);
+            for (int i = 0; i < n; i++) {
+                Double v = s.values.get(i);
+                if (v != null) {
+                    p.to(left + slot * (i + 0.5), valueToY(v, ticks, top, plotH));
+                }
+            }
+            g.add(p.at("line-" + ChartScene.slug(s.name)).styled("line"));
+            // A dot per value is a smear once the slots are narrower than the dot.
+            double radius = slot >= 8 ? 3 : 1.5;
+            for (int i = 0; i < n; i++) {
+                Double v = s.values.get(i);
+                if (v == null) {
+                    continue;
+                }
+                double cx = left + slot * (i + 0.5);
+                double cy = valueToY(v, ticks, top, plotH);
+                Element dot = new Dot(cx, cy, radius, c, 1.0)
+                    .at("mark-" + ChartScene.slug(s.name) + "-"
+                        + ChartScene.slug(categories.get(i)))
+                    .styled("point");
+                g.add(new Hover(dot, HitTarget.circle(cx, cy, MIN_HIT / 2),
+                    tooltip(s.tooltips, i, categories.get(i) + " — " + s.name + ": "
+                        + ValueFormat.render(fmt, v))));
+            }
+            scene.add(g);
+        }
+
+        addReferenceLines(scene, refs, categories, left, top, plotW, plotH, slot, ticks, fmt);
+        if (names.size() > 1) {
+            addLegend(scene, names, colors, height - 10 - FOOTNOTE_BAND, width);
+        }
+        return scene;
+    }
+
+    /** Mean width of a band over the categories it covers. */
+    private static double bandWidth(ChartRenderer.Band b) {
+        double sum = 0;
+        int count = 0;
+        for (int i = 0; i < b.low.size(); i++) {
+            if (b.low.get(i) != null) {
+                sum += b.high.get(i) - b.low.get(i);
+                count++;
+            }
+        }
+        return sum / count;
+    }
+
+    /** {@code c} mixed into white: 0 is white, 1 is {@code c}. */
+    private static Color blend(Color c, double weight) {
+        return new Color(
+            (int) Math.round(255 + (c.getRed() - 255) * weight),
+            (int) Math.round(255 + (c.getGreen() - 255) * weight),
+            (int) Math.round(255 + (c.getBlue() - 255) * weight));
+    }
+
+    /**
+     * Dashed marker lines over the plot: across it at a y value, or down it at a category.
+     * Each carries its label, or the formatted value when the caller gave no label.
+     */
+    private static void addReferenceLines(ChartScene scene, List<ChartRenderer.RefLine> refs,
+            List<String> categories, double left, double top, double plotW, double plotH,
+            double slot, Ticks ticks, ValueFormat fmt) {
+        if (refs.isEmpty()) {
+            return;
+        }
+        Group g = new Group().at("reference-lines");
+        for (int i = 0; i < refs.size(); i++) {
+            ChartRenderer.RefLine r = refs.get(i);
+            String text = r.label != null ? r.label
+                : r.value != null ? ValueFormat.render(fmt, r.value) : r.category;
+            String id = "ref-" + ChartScene.slug(text) + "-" + i;
+            if (r.value != null) {
+                double y = valueToY(r.value, ticks, top, plotH);
+                g.add(new Line(left, y, left + plotW, y, REFERENCE, 1.5, true)
+                    .styled("reference").at(id));
+                g.add(new Label(left + plotW - 4, y - 4, text, REFERENCE, TICK_SIZE,
+                    Anchor.END, 0, true).styled("reference-label").at(id + "-label"));
+            } else {
+                int idx = categories.indexOf(r.category);
+                double x = left + slot * (idx + 0.5);
+                g.add(new Line(x, top, x, top + plotH, REFERENCE, 1.5, true)
+                    .styled("reference").at(id));
+                boolean rightHalf = x > left + plotW / 2;
+                g.add(new Label(rightHalf ? x - 4 : x + 4, top + 11, text, REFERENCE,
+                    TICK_SIZE, rightHalf ? Anchor.END : Anchor.START, 0, true)
+                    .styled("reference-label").at(id + "-label"));
+            }
+        }
+        scene.add(g);
     }
 
     /**
@@ -1185,6 +1507,16 @@ final class ChartLayout {
     }
 
     private static void addLegend(ChartScene scene, List<String> names, double y, int width) {
+        List<Color> colors = new ArrayList<>();
+        for (int i = 0; i < names.size(); i++) {
+            colors.add(color(i));
+        }
+        addLegend(scene, names, colors, y, width);
+    }
+
+    /** As above, with each entry's swatch colour given rather than taken from the palette. */
+    private static void addLegend(ChartScene scene, List<String> names, List<Color> colors,
+            double y, int width) {
         List<List<String>> rows = legendRows(names, width);
         Group legend = new Group().at("legend");
         // Rows are laid out bottom-up from the baseline the caller gave us, so the last row keeps
@@ -1198,7 +1530,7 @@ final class ChartLayout {
             }
             double x = Math.max(8, (width - (total - LEGEND_GAP)) / 2.0);
             for (String n : row) {
-                legend.add(new Rect(x, rowY - 8, 11, 11, color(idx))
+                legend.add(new Rect(x, rowY - 8, 11, 11, colors.get(idx))
                     .at("legend-swatch-" + ChartScene.slug(n)));
                 legend.add(new Label(x + 16, rowY + 1, n, INK, TICK_SIZE, Anchor.START, 0, false)
                     .styled("legend-label").at("legend-label-" + ChartScene.slug(n)));
