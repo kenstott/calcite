@@ -3344,7 +3344,9 @@ views:
       segment-level line geometry (geometry_wkt) against geo.counties' own boundary
       geometry (its `geometry` column, latest TIGER vintage year) with DuckDB spatial
       (ST_Intersects/ST_Intersection/ST_Length over WGS84 WKT — both sources use SRID 4326, no reprojection needed), following the
-      same pattern as lands.county_federal_fee_land_share. Unlike that view, no
+      same pattern as lands.county_federal_fee_land_share, including its validity repair of the
+      county polygons (ST_CollectionExtract(ST_MakeValid(ST_Buffer(g, 0.0)), 3)) because GEOS
+      overlay throws a TopologyException on an invalid county boundary. Unlike that view, no
       per-row state filter is applied before the spatial predicate: gas_pipelines
       carries no state column to prefilter on; ST_Intersects itself rejects
       non-overlapping bounding boxes before any exact geometry test, which keeps the
@@ -3373,7 +3375,7 @@ views:
           c.county_fips,
           c.state_fips,
           c.county_name,
-          ST_GeomFromText(c.geometry) AS geom
+          ST_CollectionExtract(ST_MakeValid(ST_Buffer(ST_GeomFromText(c.geometry), 0.0)), 3) AS geom
         FROM "geo"."counties" c
         WHERE c.year = (SELECT MAX(year) FROM "geo"."counties")
           AND c.geometry IS NOT NULL
