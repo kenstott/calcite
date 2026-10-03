@@ -1491,6 +1491,12 @@ run_etl_inline() {
     $GOVDATA_JAVA_OPTS \
     -Xms"${_HEAP_MIN}" \
     -Xmx"${_HEAP_MAX}" \
+    -DAWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
+    -DAWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+    -DAWS_ENDPOINT_OVERRIDE="${AWS_ENDPOINT_OVERRIDE:-}" \
+    -DAWS_REGION="${AWS_REGION:-}" \
+    -DGOVDATA_PARQUET_DIR="${GOVDATA_PARQUET_DIR:-}" \
+    -DGOVDATA_CACHE_DIR="${GOVDATA_CACHE_DIR:-}" \
     -cp "$jar" \
     org.apache.calcite.adapter.govdata.etl.EtlRunner \
     --model "inline:${inline_json}" \
