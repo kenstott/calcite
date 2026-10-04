@@ -1183,8 +1183,15 @@ public class ConversionMetadata {
    */
   public ConversionRecord findRecordBySourceFile(File sourceFile) {
     try {
-      String sourcePath = sourceFile.getCanonicalPath();
-      LOGGER.debug("Looking for record with sourceFile: {}", sourcePath);
+      // Compare on BOTH the canonical and the absolute form. Records are written with
+      // File.getAbsolutePath() (symlinks intact), so where the data directory lives under a
+      // symlink -- e.g. macOS, where a temp path /var/folders/... canonicalizes to
+      // /private/var/folders/... -- a canonical-only comparison never matches the stored
+      // absolute path, the record is missed, and an unchanged file is re-converted (FILE-015).
+      String sourceCanonical = sourceFile.getCanonicalPath();
+      String sourceAbsolute = sourceFile.getAbsolutePath();
+      LOGGER.debug("Looking for record with sourceFile: {} (absolute {})",
+          sourceCanonical, sourceAbsolute);
 
       // Search through all records to find one with matching source file
       // Records can be keyed by table name, converted file path, or source file path
@@ -1192,19 +1199,35 @@ public class ConversionMetadata {
         ConversionRecord record = entry.getValue();
         LOGGER.debug("Checking record key='{}': originalFile='{}', sourceFile='{}'",
             entry.getKey(), record.originalFile, record.sourceFile);
-        if (sourcePath.equals(record.originalFile) || sourcePath.equals(record.sourceFile)) {
+        if (pathsMatch(sourceCanonical, sourceAbsolute, record.originalFile)
+            || pathsMatch(sourceCanonical, sourceAbsolute, record.sourceFile)) {
           LOGGER.debug("Found matching record with key='{}'", entry.getKey());
           return record;
         }
       }
 
-      LOGGER.debug("No matching record found for sourceFile: {}", sourcePath);
+      LOGGER.debug("No matching record found for sourceFile: {}", sourceCanonical);
       return null;
     // fallback-guard: allow documented nullable-finder contract, reuses the same not-found sentinel as the success path above
     } catch (IOException e) {
       LOGGER.error("Failed to find conversion record by source file", e);
       return null;
     }
+  }
+
+  /**
+   * True when a stored path refers to the same file as the lookup target. Records are written
+   * with {@link File#getAbsolutePath()} (symlinks intact) while the lookup also computes
+   * {@link File#getCanonicalPath()}, so comparing against BOTH forms matches a record for an
+   * unchanged file even when the data directory sits under a symlink -- e.g. macOS, where a
+   * stored absolute /var/folders/... never equals its /private/var/folders/... canonical form
+   * (FILE-015). The stored path is compared as written and is NOT itself canonicalized: resolving
+   * it would conflate two genuinely distinct source files that point at the same target through a
+   * symlink (e.g. source/original.csv and target/link_to_source/original.csv), which must stay
+   * separate tables.
+   */
+  private static boolean pathsMatch(String canonical, String absolute, String stored) {
+    return stored != null && (stored.equals(canonical) || stored.equals(absolute));
   }
 
   /**
