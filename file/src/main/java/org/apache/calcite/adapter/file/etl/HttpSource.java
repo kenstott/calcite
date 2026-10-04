@@ -874,8 +874,8 @@ public class HttpSource implements DataSource {
               }
             }
           } catch (Exception e) {
-            LOGGER.warn("Failed to extract cursor from response: {}", e.getMessage());
             hasMore = false;
+            throw new RuntimeException("Cursor extraction failed: " + e.getMessage(), e);
           }
         } else {
           offset += pageSize;
