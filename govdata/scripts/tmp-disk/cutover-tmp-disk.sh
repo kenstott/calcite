@@ -16,6 +16,8 @@ LABEL=govdata-tmp
 EXPECT_GB=120
 DEVICE=""
 DRY=0
+RELEASE_ONLY=0
+BUDGET_FILE="$MNT/runs/pool-budget.conf"
 OWNER=kstott
 HYGIENE=/home/kstott/calcite/govdata/scripts/tmp-hygiene.py
 STOP_WAIT_POOL=120
@@ -30,9 +32,28 @@ while [ $# -gt 0 ]; do
     --device) DEVICE="$2"; shift 2 ;;
     --size-gb) EXPECT_GB="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
+    --release-stale-claim) RELEASE_ONLY=1; shift ;;
+    --budget-file) BUDGET_FILE="$2"; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
+
+# A pool (or x-schema.sh) running its embeddings sweep claims the whole box by writing MAX_WORKERS=0 to
+# the pool budget file, and gives it back when it finishes. Stopping that run partway can leave the claim
+# behind, and every pool started afterwards preserves it and admits nothing. After the cutover has
+# stopped everything, a claim with no live holder is stale, so it is removed; the next pool recreates the
+# file with its own limits. A claim that a live process still holds is left alone.
+CLAIMANTS='^[^ ]*(bash|sh)( -[A-Za-z]+)* [^ ]*(x-schema|vss-local)\.sh( |$)|^[^ ]*python3?( -[A-Za-z]+)* [^ ]*vss-local\.py( |$)|^[^ ]*java .* org\.apache\.calcite\.adapter\.govdata\.ref\.(ChunkOrganizer|EntityBridgeOrganizer)( |$)'   # anchored to how they are launched, so a shell whose command line merely mentions them is not a claimant
+release_stale_claim() {
+  [ -f "$BUDGET_FILE" ] || { say "no pool budget file at $BUDGET_FILE"; return 0; }
+  grep -q '^MAX_WORKERS=0$' "$BUDGET_FILE" || { say "pool budget has no whole-box claim ($(tr '\n' ' ' < "$BUDGET_FILE"))"; return 0; }
+  if pgrep -u "$OWNER" -f "$CLAIMANTS" >/dev/null 2>&1; then
+    say "pool budget claim is held by a live process; leaving $BUDGET_FILE"; return 0
+  fi
+  say "removing stale pool budget claim ($(tr '\n' ' ' < "$BUDGET_FILE")); nothing holds it"
+  run rm -f "$BUDGET_FILE"
+}
+if [ "$RELEASE_ONLY" = 1 ]; then release_stale_claim; exit 0; fi
 [ -n "$DEVICE" ] || die "--device is required"
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || die "run as root (sudo), or pass --dry-run"
 
@@ -142,6 +163,7 @@ run rsync -a \
   --exclude 'cache-str-*' --exclude 'pre-daily-build.*' --exclude 'chunk-organizer-duckdb' \
   --exclude '.tmp-hygiene*' "$OLD/" "$MNT/"
 [ "$DRY" = 1 ] || sudo -u "$OWNER" python3 "$HYGIENE" init
+release_stale_claim
 
 # ---- 6. services refuse to start without the mount --------------------------------------------------
 for unit in govdata-scheduled govdata-runner; do
