@@ -1181,6 +1181,10 @@ public class EtlPipeline {
                     if (currentBatch % 10 == 0) {
                       System.gc();
                     }
+                  } catch (SkippedBatchException e) {
+                    partSkipped.incrementAndGet();
+                    LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
+                        e.getMessage());
                   } catch (Exception e) {
                     String errorMsg =
                         String.format("Batch %d (partition %d/%d) failed: %s", currentBatch, piFinal + 1, partCountFinal, e.getMessage());
@@ -1452,6 +1456,10 @@ public class EtlPipeline {
                   if (currentBatch % 10 == 0) {
                     System.gc();
                   }
+                } catch (SkippedBatchException e) {
+                  parallelSkipped.incrementAndGet();
+                  LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
+                      e.getMessage());
                 } catch (Exception e) {
                   String errorMsg =
                       String.format("Batch %d/%d failed: %s", currentBatch, unitCountFinal, e.getMessage());
