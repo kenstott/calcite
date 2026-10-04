@@ -897,7 +897,7 @@ public class IcebergMaterializer {
    * drop-and-recreate replaces. Tracker state recorded against one instance says nothing about
    * another. A table that does not exist yet has no instance, so nothing recorded earlier matches.
    */
-  private String tableInstanceId(String tableId) {
+  public String tableInstanceId(String tableId) {
     if (!IcebergCatalogManager.tableExists(catalogConfig, tableId)) {
       return "absent";
     }
@@ -950,7 +950,11 @@ public class IcebergMaterializer {
     if (priorCompletion != null && !tableInstance.equals(priorCompletion.signature)) {
       priorCompletion = null;
     }
-    if (priorCompletion != null && priorCompletion.completedAt > 0) {
+    // A caller that names source files it knows are unabsorbed has proved there is work, whatever
+    // the tracker's activity record says about the table as a whole.
+    final boolean namedWorkPending = config.getStagedSourceFiles() != null
+        && !config.getStagedSourceFiles().isEmpty();
+    if (!namedWorkPending && priorCompletion != null && priorCompletion.completedAt > 0) {
       long lastSourceActivity = incrementalTracker.getMaxActivityAt(sourceActivityPhase);
       // -1 means the tracker cannot answer for this scope; that is NOT proof of quiescence, so
       // fall through to the storage listing rather than skipping work that may be needed.
@@ -975,7 +979,7 @@ public class IcebergMaterializer {
     }
 
     // Fast-path: check if source files have been modified since last run
-    if (enableSourceWatermark && currentSourceWatermark > 0) {
+    if (!namedWorkPending && enableSourceWatermark && currentSourceWatermark > 0) {
       // Reuse the record already read above rather than querying the tracker a second time.
       IncrementalTracker.CachedCompletion cached = priorCompletion;
       if (cached != null && cached.sourceFileWatermark > 0
@@ -2516,7 +2520,7 @@ public class IcebergMaterializer {
   }
 
   /** Pure filtering half of {@link #getStagedFilePathsForBatch}, split out to be testable. */
-  static List<String> filterStagedFilesForBatch(List<String> staged, String sourcePattern,
+  public static List<String> filterStagedFilesForBatch(List<String> staged, String sourcePattern,
       String year) {
     if (staged == null || year == null) {
       return null;

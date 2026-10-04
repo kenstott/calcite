@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMaterializer;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
+import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
@@ -822,6 +823,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           // reducing R2 Class A operations from ~10/filing to ~1/batch of filings.
           LocalStagingStorageProvider stagingProvider =
               new LocalStagingStorageProvider(storageProvider);
+          final SecStagedFileLedger stagedFileLedger = new SecStagedFileLedger(
+              PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory));
+          stagingProvider.setUploadRecorder(new LocalStagingStorageProvider.UploadRecorder() {
+            @Override public void recordUpload(String objectPath, String tableType) {
+              stagedFileLedger.recordUpload(objectPath, tableType);
+            }
+          });
 
           // Get or create document converter with vectorization enabled if configured
           FileConverter documentConverter = getOrCreateXbrlConverter(operand, stagingProvider);
@@ -1163,12 +1171,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * concurrency, which is more than the 12-hour scheduling window has to spare once SEC extraction
    * has taken its 6-10 hours.
    *
-   * <p>What the record genuinely does not cover is source files an <em>earlier</em> pass uploaded
-   * but never materialized — the residue of a run that was killed, timed out against its window,
-   * or crashed between upload and commit. That gap is unrelated to this pass's failure count: a
-   * pass with zero failures has exactly the same blind spot. Reconciling it is a deliberate
-   * operation, not a side effect of a failure — run materialization with no CIKs configured, which
-   * leaves the staged list null and puts every table back on the listing path on purpose.
+   * <p>The record is pass-local, so it is not what materialization absorbs: source files an
+   * <em>earlier</em> pass uploaded but never materialized (a killed or timed-out pass, or a table
+   * reset that left its markers behind) come from {@link SecStagedFileLedger}, which records each
+   * upload durably. Here the list only says that a pass ran.
    *
    * <p>An empty list still means "a pass ran and wrote nothing", which is materially different
    * from {@code null}, "no pass ran, so discover by listing".
@@ -1187,11 +1193,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   /**
-   * @param stagedSourceFiles Source files the just-completed ETL pass uploaded, letting each table
-   *     skip the partition LIST it would otherwise need to rediscover them. Pass {@code null} only
-   *     when no ETL pass ran — the no-CIK, materialization-only path — so every table discovers by
-   *     listing and picks up source files an earlier interrupted run left unabsorbed. A pass that
-   *     ran always has a usable record, failures included; see {@link #stagedFilesFor}.
+   * @param stagedSourceFiles Source files the just-completed ETL pass uploaded. Non-null means a
+   *     pass ran, so each table takes its source files from {@link SecStagedFileLedger} instead of
+   *     listing the partitions. Pass {@code null} only when no ETL pass ran — the no-CIK,
+   *     materialization-only path — so every table discovers by listing, which also picks up
+   *     source files uploaded before the ledger recorded them. See {@link #stagedFilesFor}.
    */
   private void materializeStagingFilesToIceberg(Map<String, Object> operand, String secParquetDir,
       List<String> stagedSourceFiles) {
@@ -1213,8 +1219,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.info("Iceberg warehouse path: {}", warehousePath);
 
     // Get incremental tracker for skipping already-materialized partitions
-    IncrementalTracker incrementalTracker =
+    PipelineTracker incrementalTracker =
         PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
+    SecStagedFileLedger stagedFileLedger = new SecStagedFileLedger(incrementalTracker);
 
     // Preload all table completion markers in one batch to avoid per-table round-trips
     incrementalTracker.preloadAllCompletions();
@@ -1284,13 +1291,31 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Build MaterializationConfig from table config
         IcebergMaterializer.MaterializationConfig config =
             buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
-                tableConfig, operand, warehousePath, stagedSourceFiles);
+                tableConfig, operand, warehousePath, null);
+        // A pass ran, so the source files to absorb come from the ledger rather than a listing:
+        // everything uploaded to this table's partitions that its current Iceberg table instance
+        // has not covered, including files an earlier pass staged and never materialized.
+        List<String> pendingSourceFiles = null;
+        if (stagedSourceFiles != null) {
+          pendingSourceFiles = stagedFileLedger.pendingFor(config.getTargetTableId(),
+              materializer.tableInstanceId(config.getTargetTableId()), config.getSourcePattern(),
+              config.getStartYear(), config.getEndYear());
+          LOGGER.info("Table '{}': {} staged source files unabsorbed ({} uploaded by this pass)",
+              icebergTableName, pendingSourceFiles.size(), stagedSourceFiles.size());
+          config = buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
+              tableConfig, operand, warehousePath, pendingSourceFiles);
+        }
 
         // Clean up old empty parquet files that can cause DuckDB union_by_name issues
         cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
 
         // Materialize using IcebergMaterializer (batch-level incremental tracking handles skipping)
         IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
+
+        if (pendingSourceFiles != null && result.getFailedCount() == 0) {
+          stagedFileLedger.markAbsorbed(config.getTargetTableId(),
+              materializer.tableInstanceId(config.getTargetTableId()), pendingSourceFiles);
+        }
 
         if (result.getSuccessCount() > 0) {
           tablesProcessed++;

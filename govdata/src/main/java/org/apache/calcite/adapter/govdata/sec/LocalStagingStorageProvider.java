@@ -145,6 +145,23 @@ public class LocalStagingStorageProvider implements StorageProvider {
   private final List<String> uploadedPaths =
       Collections.synchronizedList(new ArrayList<String>());
 
+  /**
+   * Durable record of uploaded batch files, so a source file outlives the pass that wrote it.
+   *
+   * <p>{@link #uploadedPaths} is in-memory and pass-local; a pass killed between upload and
+   * materialization takes it along. The recorder is called once per upload, before the file is
+   * added to that list, and a failure to record fails the flush.
+   */
+  public interface UploadRecorder {
+    void recordUpload(String objectPath, String tableType);
+  }
+
+  private volatile UploadRecorder uploadRecorder;
+
+  public void setUploadRecorder(UploadRecorder uploadRecorder) {
+    this.uploadRecorder = uploadRecorder;
+  }
+
   public LocalStagingStorageProvider(StorageProvider delegate) {
     this(delegate, resolveStagingDir());
   }
@@ -352,6 +369,10 @@ public class LocalStagingStorageProvider implements StorageProvider {
       }
       LOGGER.info("Uploaded batch {} to R2: {} ({} source files)",
           batchNum, r2TargetPath, files.size());
+      UploadRecorder recorder = uploadRecorder;
+      if (recorder != null) {
+        recorder.recordUpload(r2TargetPath, tableType);
+      }
       uploadedPaths.add(r2TargetPath);
 
     } finally {
