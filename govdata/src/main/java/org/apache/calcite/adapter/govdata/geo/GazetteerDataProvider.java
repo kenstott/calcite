@@ -13,7 +13,6 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
@@ -116,7 +115,7 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
       // geometry/boundary reference product only (POP/HU columns are absent from the source
       // TSV). Enrich from ACS 5-year estimates, joined by ZCTA or place FIPS code.
       if ("gazetteer_places".equals(tableName) || "gazetteer_zctas".equals(tableName)) {
-        enrichWithAcsPopulationHousing(result, tableName, Integer.parseInt(year));
+        enrichWithAcsPopulationHousing(config, result, tableName, Integer.parseInt(year));
       }
 
       return result.iterator();
@@ -137,15 +136,15 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
    * Census API key or a failed ACS call raises, so a vintage is never written with every
    * population/housing_units value NULL.
    */
-  private void enrichWithAcsPopulationHousing(List<Map<String, Object>> records,
-      String tableName, int year) throws IOException {
+  private void enrichWithAcsPopulationHousing(EtlPipelineConfig config,
+      List<Map<String, Object>> records, String tableName, int year) throws IOException {
     if (records.isEmpty()) {
       return;
     }
 
-    String censusApiKey = ModelOperand.getString("geo.censusApiKey");
+    String censusApiKey = config.getSource().getParameters().get("census_api_key");
     if (censusApiKey == null || censusApiKey.isEmpty()) {
-      throw new IOException("geo.censusApiKey (CENSUS_API_KEY) is not set; cannot populate "
+      throw new IOException("source parameter census_api_key (CENSUS_API_KEY) is not set; cannot populate "
           + "population/housing_units for " + tableName + " year=" + year);
     }
 

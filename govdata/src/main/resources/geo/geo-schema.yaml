@@ -18,8 +18,6 @@ schemaName: "${SCHEMA_NAME:geo}"
 dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 refreshInterval: "PT1H"
-# ACS population/housing enrichment of gazetteer_zctas/gazetteer_places (GazetteerDataProvider).
-censusApiKey: "${CENSUS_API_KEY:}"
 
 comment: >
   U.S. government geographic data including Census TIGER boundaries, HUD USPS ZIP code
@@ -2743,6 +2741,8 @@ partitionedTables:
       type: http
       url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_place_national.zip"
       method: GET
+      parameters:
+        census_api_key: "${CENSUS_API_KEY:}"
       response:
         format: json
 
@@ -2840,6 +2840,8 @@ partitionedTables:
       type: http
       url: "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{year}_Gazetteer/{year}_Gaz_zcta_national.zip"
       method: GET
+      parameters:
+        census_api_key: "${CENSUS_API_KEY:}"
       response:
         format: json
 
