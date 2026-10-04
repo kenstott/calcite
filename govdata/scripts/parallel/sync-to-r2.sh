@@ -101,6 +101,17 @@ _VERBOSE_FLAG=""
 [ "$VERBOSE" = true ] && _VERBOSE_FLAG="-v"
 
 MINIO_REMOTE="${GOVDATA_RCLONE_REMOTE:-minio}"
+
+# rclone's idle timeout (default 5m) is shorter than a MinIO directory LIST under ETL load: a LIST of
+# sec/year=2024 returned nothing in 300s on 2026-10-04. The LIST died with "net/http: timeout awaiting
+# response headers", rclone retried the whole slice (~80 min per attempt, 3 attempts), and because the
+# schemas are synced serially every schema behind it starved for ~22 hours. Exported so every rclone
+# call below (copy, lsf, cat) gets it, not just the copy.
+export RCLONE_TIMEOUT="${GOVDATA_R2_SYNC_TIMEOUT:-30m}"
+export RCLONE_CONTIMEOUT="${GOVDATA_R2_SYNC_CONTIMEOUT:-2m}"
+# --checkers is also how many source directories rclone LISTs at once. Each LIST is a burst of random
+# reads on the disk MinIO and the ETL workers share, so 32 of them slowed every LIST past the timeout.
+CHECKERS="${GOVDATA_R2_SYNC_CHECKERS:-8}"
 R2_REMOTE="r2"
 SYNC_STAMP="${HOME}/.r2-last-sync"
 
@@ -314,11 +325,12 @@ for s in "${_schemas[@]}"; do
     _lo=$(( _cursor - BUFFER )); [ "$_lo" -lt 0 ] && _lo=0
     _max_age=$(( _now - _lo ))
     _min_age=$(( _now - _slice_end )); [ "$_min_age" -lt 0 ] && _min_age=0
-    # --checkers raised from rclone's default (8) to 32: --no-traverse means every candidate
-    # file is checked against R2 individually (one HEAD each), and that check phase — not the
-    # transfer phase --transfers already covers — is what a WAN-latency-bound R2 endpoint
-    # bottlenecks on when a slice has thousands of candidates.
-    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers 16 --checkers 32 --stats 60s $_VERBOSE_FLAG"
+    # --checkers: --no-traverse means every candidate file is checked against R2 individually (one HEAD
+    # each), a WAN-latency-bound phase that more checkers speed up; but the same setting is the number
+    # of concurrent source directory LISTs on MinIO, which more checkers slow down (see CHECKERS above).
+    # Default 8 favours the LISTs, which were the failing step; raise it only if the R2 check phase is
+    # the bottleneck again.
+    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers 16 --checkers $CHECKERS --stats 60s $_VERBOSE_FLAG"
     $DRY_RUN && _slice_flags="$_slice_flags --dry-run"
 
     log_info "sync-to-r2: [$s] slice $(date -u -d "@$_lo" +%Y-%m-%dT%H:%MZ) .. $(date -u -d "@$_slice_end" +%Y-%m-%dT%H:%MZ)"
