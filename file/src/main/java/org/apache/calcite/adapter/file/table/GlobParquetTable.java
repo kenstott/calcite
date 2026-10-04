@@ -459,6 +459,49 @@ public class GlobParquetTable extends AbstractTable
     }
   }
 
+  /** Column names of one file, by its extension, for the column-set check (REQ-788). */
+  private static java.util.List<String> columnNamesOf(File file, RelDataTypeFactory typeFactory) {
+    final RelDataType rowType;
+    if (file.getName().endsWith(".csv")) {
+      rowType = new CsvTranslatableTable(Sources.of(file), null).getRowType(typeFactory);
+    } else if (file.getName().endsWith(".json")) {
+      rowType = new JsonScannableTable(Sources.of(file)).getRowType(typeFactory);
+    } else {
+      throw new RuntimeException("Unsupported file type for glob merge: " + file.getName());
+    }
+    return rowType.getFieldNames();
+  }
+
+  /**
+   * Refuse a glob whose matched files do not share a column set (REQ-788): the merge is a
+   * UNION ALL on the first file's columns, so a file that differs is named here — the file and
+   * its missing/extra columns — rather than misaligning or failing with an opaque UNION error.
+   */
+  private void requireSameColumns(java.util.List<String> filePaths, RelDataTypeFactory typeFactory)
+      throws IOException {
+    if (filePaths.size() < 2) {
+      return;
+    }
+    File first = new File(filePaths.get(0));
+    java.util.LinkedHashSet<String> expected =
+        new java.util.LinkedHashSet<>(columnNamesOf(first, typeFactory));
+    for (int i = 1; i < filePaths.size(); i++) {
+      File f = new File(filePaths.get(i));
+      java.util.LinkedHashSet<String> cols =
+          new java.util.LinkedHashSet<>(columnNamesOf(f, typeFactory));
+      if (!cols.equals(expected)) {
+        java.util.LinkedHashSet<String> missing = new java.util.LinkedHashSet<>(expected);
+        missing.removeAll(cols);
+        java.util.LinkedHashSet<String> extra = new java.util.LinkedHashSet<>(cols);
+        extra.removeAll(expected);
+        throw new IOException(
+            "file '" + f.getName() + "' matched by glob '" + globPattern
+            + "' has a different column set (missing " + missing + ", extra " + extra
+            + "); every file in a glob table must have the same columns");
+      }
+    }
+  }
+
   private void mergeFilesToParquet(List<String> filePaths, File parquetFile) throws IOException {
     LOGGER.info("Merging " + filePaths.size() + " files to Parquet");
 
@@ -466,6 +509,11 @@ public class GlobParquetTable extends AbstractTable
          CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class)) {
 
       SchemaPlus rootSchema = calciteConn.getRootSchema();
+
+      // REQ-788: every matched file must share a column set. The merge is a UNION ALL on the
+      // first file's schema; a file whose columns differ would misalign or fail obscurely, so it
+      // is refused here by name (the file and its missing/extra columns), never null-filled.
+      requireSameColumns(filePaths, calciteConn.getTypeFactory());
 
       // Create a custom table that represents the UNION ALL of all files
       org.apache.calcite.schema.Table unionTable = new AbstractTable() {
