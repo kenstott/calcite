@@ -70,7 +70,7 @@ wait_gone() { # pattern seconds
 say "stopping the agent daemon, then the scheduler (KillMode=process leaves pools running)"
 run systemctl stop govdata-runner.service
 run systemctl stop govdata-scheduled.service
-POOLS='run-pool\.sh|run-scheduled\.sh|sync-to-r2\.sh|catchup-sync-r2|x-schema\.sh|vss-local'
+POOLS='run-pool\.sh|run-scheduled\.sh|force-reprocess\.sh|worker(-[a-z_]+)?\.sh|sync-to-r2\.sh|catchup-sync-r2|x-schema\.sh|vss-local'
 if [ "$DRY" = 0 ]; then
   say "SIGTERM to pools and syncs (they forward it to their workers)"
   pkill -TERM -u "$OWNER" -f "$POOLS" || true

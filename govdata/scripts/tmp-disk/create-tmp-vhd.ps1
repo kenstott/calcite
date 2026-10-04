@@ -59,5 +59,11 @@ if (Test-Path $tmpVhd) {
 $out = (wsl --mount --vhd $Path --bare 2>&1 | Out-String) -replace "`0", ''
 Write-Host $out
 Write-Host 'Candidate devices (blank disks of about the right size):'
-wsl -u root -e /bin/bash -c "lsblk -dno NAME,SIZE,TYPE,FSTYPE | awk '`$3==\"disk\" && `$4==\"\"'"
+# Filtered here, not in a quoted awk: quotes do not survive the trip through wsl.exe.
+wsl -u root -e lsblk -bdno NAME,SIZE,TYPE,FSTYPE | ForEach-Object {
+  $f = ("$_" -replace "`0", '').Trim() -split '\s+'
+  if ($f.Count -eq 3 -and $f[2] -eq 'disk' -and [double]$f[1] -gt ($SizeGB * 0.95GB) -and [double]$f[1] -lt ($SizeGB * 1.05GB)) {
+    "/dev/{0}  {1:N0} GB" -f $f[0], ([double]$f[1] / 1GB)
+  }
+}
 Write-Host "Next, in WSL:  sudo bash ~/calcite/govdata/scripts/tmp-disk/cutover-tmp-disk.sh --device /dev/<name>"
