@@ -125,7 +125,14 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
    */
   private static final String KEY_SEP = "\0";
   /** HTS-4 headings under one chapter: {@code NN00}..{@code NN99}. */
-  private static final int HEADINGS_PER_CHAPTER = 100;
+  private static final int HEADINGS_PER_CHAPTER = UsitcSlicePlan.HEADINGS_PER_CHAPTER;
+  /**
+   * Host-local record of where earlier runs had to split a chapter, so this run starts from slices
+   * DataWeb is known to answer rather than paying {@link #QUERY_DEADLINE_MS} to rediscover each
+   * split. Beside {@link #API_LOCK_FILE}, which is host-wide state for the same reason.
+   */
+  private static final File SLICE_PLAN_FILE =
+      new File(System.getProperty("java.io.tmpdir"), "usitc-slice-plan.json");
   /**
    * Bisection depth cap for {@link #fetchSlice}. Halving 100 headings reaches a single one in 7
    * steps; 8 leaves a step of headroom while still bounding a pathological recursion.
@@ -170,10 +177,14 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
     int chaptersOk = 0;
     List<String> failedChapters = new ArrayList<String>();
     List<String> chapters = chapters();
-    LOGGER.info("usitc_tariffs[{}]: chunking {} HTS chapters", year, chapters.size());
+    File planFile = slicePlanFile();
+    UsitcSlicePlan planned = UsitcSlicePlan.load(planFile);
+    UsitcSlicePlan learned = UsitcSlicePlan.empty();
+    LOGGER.info("usitc_tariffs[{}]: chunking {} HTS chapters ({} start pre-split from {})",
+        year, chapters.size(), planned.splitChapters(), planFile);
     for (String chapter : chapters) {
       try {
-        fetchSlice(url, context.getHeaders(), year, chapter, 0, HEADINGS_PER_CHAPTER - 1, 0, merged);
+        fetchChapter(url, context.getHeaders(), year, chapter, planned, learned, merged);
         chaptersOk++;
       } catch (IOException e) {
         // Collected, not rethrown here: one pass over every chapter names all the gaps in a single
@@ -182,6 +193,14 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
         LOGGER.warn("usitc_tariffs[{}]: chapter {} failed: {}", year, chapter, e.getMessage());
       }
       sleep(CHAPTER_PACE_MS);
+    }
+
+    // Saved before the failure checks below: a cut records a slice that timed out, which stays true
+    // whether or not the rest of the year succeeded, and a retry should not pay for it again.
+    if (learned.hasCutsNotIn(planned)) {
+      UsitcSlicePlan saved = UsitcSlicePlan.saveMerged(planFile, learned);
+      LOGGER.info("usitc_tariffs[{}]: slice plan now pre-splits {} chapters ({})",
+          year, saved.splitChapters(), planFile);
     }
 
     List<Map<String, Object>> rows = buildRows(merged);
@@ -287,8 +306,9 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
    * @return grid rows returned by this slice and its children; the merged row count is
    *         {@code merged.size()}, since slices share (hts8, country) keys
    */
-  private int fetchSlice(String url, Map<String, String> headers, String year, String chapter,
-      int lo, int hi, int depth, Map<String, Object[]> merged) throws IOException {
+  int fetchSlice(String url, Map<String, String> headers, String year, String chapter,
+      int lo, int hi, int depth, UsitcSlicePlan learned, Map<String, Object[]> merged)
+      throws IOException {
     String label;
     String codes;
     if (depth == 0) {
@@ -309,9 +329,7 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
 
     String reason;
     try {
-      JsonNode dto = postAndPoll(url, headers, buildQueryBody(year, codes), year, label);
-      // accumulate returns the widest single measure table, which is what the grid cap applies to.
-      int widestTable = accumulate(merged, dto);
+      int widestTable = fetchOnce(url, headers, year, label, codes, merged);
       if (widestTable < GRID_ROW_CAP) {
         LOGGER.debug("usitc_tariffs[{}]: {} -> {} grid rows ({} merged)",
             year, label, widestTable, merged.size());
@@ -330,9 +348,45 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
     LOGGER.warn("usitc_tariffs[{}]: {} {} — splitting into {}-{} and {}-{}",
         year, label, reason, heading(chapter, lo), heading(chapter, mid),
         heading(chapter, mid + 1), heading(chapter, hi));
-    int rows = fetchSlice(url, headers, year, chapter, lo, mid, depth + 1, merged);
-    rows += fetchSlice(url, headers, year, chapter, mid + 1, hi, depth + 1, merged);
+    learned.addCut(chapter, mid + 1);
+    int rows = fetchSlice(url, headers, year, chapter, lo, mid, depth + 1, learned, merged);
+    rows += fetchSlice(url, headers, year, chapter, mid + 1, hi, depth + 1, learned, merged);
     return rows;
+  }
+
+  /**
+   * Fetches every slice of {@code chapter} that {@code planned} says to start from — the bare
+   * chapter query when no earlier run had to split it. A slice that has since become too heavy
+   * still splits reactively, and the new cut goes into {@code learned}.
+   */
+  int fetchChapter(String url, Map<String, String> headers, String year, String chapter,
+      UsitcSlicePlan planned, UsitcSlicePlan learned, Map<String, Object[]> merged)
+      throws IOException {
+    int rows = 0;
+    for (int[] slice : planned.slices(chapter)) {
+      boolean whole = slice[0] == 0 && slice[1] == HEADINGS_PER_CHAPTER - 1;
+      // Depth 0 asks for the bare chapter code; any narrower slice enumerates its headings.
+      rows += fetchSlice(url, headers, year, chapter, slice[0], slice[1], whole ? 0 : 1,
+          learned, merged);
+    }
+    return rows;
+  }
+
+  /**
+   * One query for one slice, accumulated into {@code merged}.
+   *
+   * @return the widest single measure table, which is what the grid cap applies to
+   * @throws QueryTooSlowException if DataWeb never finished computing the slice
+   */
+  int fetchOnce(String url, Map<String, String> headers, String year, String label, String codes,
+      Map<String, Object[]> merged) throws IOException {
+    JsonNode dto = postAndPoll(url, headers, buildQueryBody(year, codes), year, label);
+    return accumulate(merged, dto);
+  }
+
+  /** Where this run reads and writes the slice plan; overridable so tests do not touch the host's. */
+  File slicePlanFile() {
+    return SLICE_PLAN_FILE;
   }
 
   /** The HTS-4 heading at {@code offset} within {@code chapter}: ("84", 7) -> "8407". */
@@ -342,7 +396,7 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
 
   /** Signals a slice DataWeb never finished computing — recoverable by splitting, so it is
    *  distinct from a rejection, which splitting would not fix. */
-  private static final class QueryTooSlowException extends IOException {
+  static final class QueryTooSlowException extends IOException {
     QueryTooSlowException(String message) {
       super(message);
     }
