@@ -117,6 +117,13 @@ CHECKERS="${GOVDATA_R2_SYNC_CHECKERS:-4}"
 # per-remote limit), so it is kept generous: the R2 side does one HEAD per candidate file under
 # --no-traverse and a low cap would stretch a slice with tens of thousands of candidates into hours.
 TRANSFERS="${GOVDATA_R2_SYNC_TRANSFERS:-8}"
+# Wall-clock cap on ONE slice's rclone copy. The schemas are synced serially and a slice that is slow
+# but never errors (sec on 2026-10-04: 2h37m, nothing committed) used to hold every schema behind it
+# indefinitely, because the loop only moves on when a slice FAILS. Hitting the cap takes the existing
+# failure path (sentinel held, next schema, retry next pass), and the schema is then walked last for
+# SLOW_BACK_MIN minutes so the quick schemas are not starved by it every cycle.
+SLICE_MAX="${GOVDATA_R2_SYNC_SLICE_MAX:-60m}"
+SLOW_BACK_MIN="${GOVDATA_R2_SYNC_SLOW_BACK_MIN:-360}"
 TPSLIMIT="${GOVDATA_R2_SYNC_TPSLIMIT:-25}"
 TPSLIMIT_BURST="${GOVDATA_R2_SYNC_TPSLIMIT_BURST:-10}"
 R2_REMOTE="r2"
@@ -292,7 +299,20 @@ if [ -n "$PRIORITY_SCHEMAS" ]; then
   _schemas=("${_head[@]}" "${_tail[@]}")
 fi
 
-log_info "sync-to-r2: ${#_schemas[@]} schema(s); slice=${SLICE}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
+# A schema whose last slice hit SLICE_MAX is walked after everything else for SLOW_BACK_MIN minutes
+# (its .slow-<schema> marker, written below, ages out on its own; a clean slice removes it).
+_rest=()
+_slow=()
+for _s in "${_schemas[@]}"; do
+  if [ -n "$(find "$STATE_DIR" -maxdepth 1 -name ".slow-$_s" -mmin "-$SLOW_BACK_MIN" 2>/dev/null)" ]; then
+    _slow+=("$_s")
+  else
+    _rest+=("$_s")
+  fi
+done
+_schemas=("${_rest[@]}" "${_slow[@]}")
+
+log_info "sync-to-r2: ${#_schemas[@]} schema(s); slice=${SLICE}s, slice cap=${SLICE_MAX}$( [ ${#_slow[@]} -gt 0 ] && echo ", walked last (slow): ${_slow[*]}" ) ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 
 # ── Per-schema slice drain ─────────────────────────────────────────────────────
 # Each schema walks its own sentinel forward in modtime slices, oldest→newest, over
@@ -365,7 +385,7 @@ for s in "${_schemas[@]}"; do
     # mask/abort it), so a failed slice holds THIS schema's sentinel and retries next pass
     # instead of skipping its data.
     set +e
-    rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
+    timeout --kill-after=60 "$SLICE_MAX" rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
       --exclude "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
       log_info "sync-to-r2: [$s] $line"
     done
@@ -385,6 +405,10 @@ for s in "${_schemas[@]}"; do
     set -e
 
     if [ "$_rc_data" -ne 0 ]; then
+      if [ "$_rc_data" -eq 124 ] || [ "$_rc_data" -eq 137 ]; then
+        $DRY_RUN || touch "$STATE_DIR/.slow-$s"
+        log_error "sync-to-r2: [$s] slice exceeded ${SLICE_MAX} — stopped, moving on to the next schema; walked last for ${SLOW_BACK_MIN}m"
+      fi
       log_error "sync-to-r2: [$s] slice FAILED (data rc=$_rc_data) — sentinel held at $_v, retry next pass"
       _fail=1
       break
@@ -402,6 +426,7 @@ for s in "${_schemas[@]}"; do
     fi
 
     $DRY_RUN || echo "$_slice_end" > "$_sf"
+    rm -f "$STATE_DIR/.slow-$s"
     _v=$_slice_end
     _cursor=$_slice_end
   done
