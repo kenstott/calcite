@@ -79,6 +79,7 @@ public class GlobParquetTable extends AbstractTable
   @SuppressWarnings("UnusedVariable")
   private final BufferAllocator allocator;
   private final String columnNameCasing;
+  private final @Nullable String sourceFileColumn;  // REQ-788: opt-in per-row file path column
 
   private File parquetCacheFile;
   private @Nullable Instant lastRefreshTime;
@@ -152,6 +153,14 @@ public class GlobParquetTable extends AbstractTable
   public GlobParquetTable(String globPattern, String tableName, File cacheDir,
       @Nullable Duration refreshInterval, CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig,
       String columnNameCasing) {
+    this(globPattern, tableName, cacheDir, refreshInterval, csvTypeInferenceConfig,
+        columnNameCasing, null);
+  }
+
+  public GlobParquetTable(String globPattern, String tableName, File cacheDir,
+      @Nullable Duration refreshInterval, CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig,
+      String columnNameCasing, @Nullable String sourceFileColumn) {
+    this.sourceFileColumn = sourceFileColumn;
     this.globPattern = globPattern;
     this.tableName = tableName;
     this.cacheDir = cacheDir;
@@ -216,6 +225,9 @@ public class GlobParquetTable extends AbstractTable
       }
 
       lastRefreshTime = Instant.now();
+    } catch (GlobColumnMismatchException e) {
+      // A permanent configuration error (not a transient refresh failure) — surface it.
+      throw e;
     } catch (Exception e) {
       LOGGER.warn("Failed to refresh glob cache", e);
       cacheValid.set(false);
@@ -232,6 +244,9 @@ public class GlobParquetTable extends AbstractTable
     // Step 1: Find all matching files
     List<File> matchingFiles = findMatchingFiles();
     LOGGER.info("Found " + matchingFiles.size() + " files matching pattern");
+
+    // REQ-788: every matched file must share a column set, else refused by name before any merge.
+    requireSameColumns(matchingFiles);
 
     // Step 2: Preprocess Excel and HTML files
     List<File> allFiles = preprocessFiles(matchingFiles);
@@ -472,21 +487,28 @@ public class GlobParquetTable extends AbstractTable
     return rowType.getFieldNames();
   }
 
+  /** A glob's matched files do not share a column set (REQ-788). Unchecked so its message
+   * surfaces to the caller rather than being re-wrapped as a generic cache failure. */
+  public static class GlobColumnMismatchException extends RuntimeException {
+    public GlobColumnMismatchException(String message) {
+      super(message);
+    }
+  }
+
   /**
    * Refuse a glob whose matched files do not share a column set (REQ-788): the merge is a
    * UNION ALL on the first file's columns, so a file that differs is named here — the file and
    * its missing/extra columns — rather than misaligning or failing with an opaque UNION error.
    */
-  private void requireSameColumns(java.util.List<String> filePaths, RelDataTypeFactory typeFactory)
-      throws IOException {
-    if (filePaths.size() < 2) {
+  private void requireSameColumns(java.util.List<File> files) {
+    if (files.size() < 2) {
       return;
     }
-    File first = new File(filePaths.get(0));
+    RelDataTypeFactory typeFactory = new org.apache.calcite.jdbc.JavaTypeFactoryImpl();
     java.util.LinkedHashSet<String> expected =
-        new java.util.LinkedHashSet<>(columnNamesOf(first, typeFactory));
-    for (int i = 1; i < filePaths.size(); i++) {
-      File f = new File(filePaths.get(i));
+        new java.util.LinkedHashSet<>(columnNamesOf(files.get(0), typeFactory));
+    for (int i = 1; i < files.size(); i++) {
+      File f = files.get(i);
       java.util.LinkedHashSet<String> cols =
           new java.util.LinkedHashSet<>(columnNamesOf(f, typeFactory));
       if (!cols.equals(expected)) {
@@ -494,7 +516,7 @@ public class GlobParquetTable extends AbstractTable
         missing.removeAll(cols);
         java.util.LinkedHashSet<String> extra = new java.util.LinkedHashSet<>(cols);
         extra.removeAll(expected);
-        throw new IOException(
+        throw new GlobColumnMismatchException(
             "file '" + f.getName() + "' matched by glob '" + globPattern
             + "' has a different column set (missing " + missing + ", extra " + extra
             + "); every file in a glob table must have the same columns");
@@ -510,23 +532,26 @@ public class GlobParquetTable extends AbstractTable
 
       SchemaPlus rootSchema = calciteConn.getRootSchema();
 
-      // REQ-788: every matched file must share a column set. The merge is a UNION ALL on the
-      // first file's schema; a file whose columns differ would misalign or fail obscurely, so it
-      // is refused here by name (the file and its missing/extra columns), never null-filled.
-      requireSameColumns(filePaths, calciteConn.getTypeFactory());
-
       // Create a custom table that represents the UNION ALL of all files
       org.apache.calcite.schema.Table unionTable = new AbstractTable() {
         @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
           // Use the first file to determine schema
           File firstFile = new File(filePaths.get(0));
+          final RelDataType base;
           if (firstFile.getName().endsWith(".csv")) {
-            return new CsvTranslatableTable(Sources.of(firstFile), null).getRowType(typeFactory);
+            base = new CsvTranslatableTable(Sources.of(firstFile), null).getRowType(typeFactory);
           } else if (firstFile.getName().endsWith(".json")) {
-            return new JsonScannableTable(Sources.of(firstFile)).getRowType(typeFactory);
+            base = new JsonScannableTable(Sources.of(firstFile)).getRowType(typeFactory);
           } else {
             throw new RuntimeException("Unsupported file type: " + firstFile.getName());
           }
+          if (sourceFileColumn == null) {
+            return base;
+          }
+          // REQ-788: append the opt-in source-file column (each row's file path).
+          return typeFactory.builder().addAll(base.getFieldList())
+              .add(sourceFileColumn, org.apache.calcite.sql.type.SqlTypeName.VARCHAR)
+              .build();
         }
       };
 
@@ -559,7 +584,14 @@ public class GlobParquetTable extends AbstractTable
         if (i > 0) {
           unionQuery.append(" UNION ALL ");
         }
-        unionQuery.append("SELECT * FROM \"TEMP_MERGE\".\"FILE_").append(i).append("\"");
+        if (sourceFileColumn != null) {
+          String lit = filePaths.get(i).replace("'", "''");
+          unionQuery.append("SELECT *, '").append(lit).append("' AS \"")
+              .append(sourceFileColumn).append("\" FROM \"TEMP_MERGE\".\"FILE_")
+              .append(i).append("\"");
+        } else {
+          unionQuery.append("SELECT * FROM \"TEMP_MERGE\".\"FILE_").append(i).append("\"");
+        }
       }
       unionQuery.append(") AS MERGED");
 

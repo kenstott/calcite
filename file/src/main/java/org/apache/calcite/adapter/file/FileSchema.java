@@ -2772,7 +2772,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           ? new File(operatingCacheDirectory, ".glob_cache")
           : new File(System.getProperty("java.io.tmpdir"), "calcite_glob_cache");
 
-      Table globTable = new GlobParquetTable(url, tableName, cacheDir, refreshDuration, csvTypeInferenceConfig, columnNameCasing);
+      // REQ-788: an opt-in column carrying each row's source file path.
+      String sourceFileColumn = (String) tableDef.get("sourceFileColumn");
+      Table globTable = new GlobParquetTable(url, tableName, cacheDir, refreshDuration, csvTypeInferenceConfig, columnNameCasing, sourceFileColumn);
       // Use explicit table name as-is, without casing transformation
       builder.put(tableName, globTable);
       return true;
