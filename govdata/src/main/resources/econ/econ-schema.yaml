@@ -2794,7 +2794,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 2635282
-      checkedAt: "2026-10-04T04:22:02Z"
+      checkedAt: "2026-10-04T10:59:21Z"
     # QCEW data year Y stays preliminary until it is finalized alongside the following year's Q1
     # release (~Sept Y+1), and BLS rewrites the annual singlefile in between. Reopening the 2 most
     # recently published years picks up that preliminary-to-final rewrite; BLS does not edit the
