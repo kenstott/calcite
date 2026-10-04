@@ -893,11 +893,10 @@ public class HttpSource implements DataSource {
         LOGGER.debug("Fetched page with {} records (total yielded: {})", pageData.size(), totalYielded);
         return true;
 
-      // fallback-guard: allow logs the fetch failure at ERROR and halts pagination (hasMore=false, return false), a legitimate failure signal, not a fabricated page
       } catch (IOException e) {
-        LOGGER.error("Error fetching paginated data: {}", e.getMessage());
         hasMore = false;
-        return false;
+        throw new RuntimeException("Paginated fetch failed at offset=" + offset
+            + ": " + e.getMessage(), e);
       }
     }
 
@@ -1065,15 +1064,13 @@ public class HttpSource implements DataSource {
         LOGGER.debug("CSV_STREAM batch: {} records (total yielded: {})", pageData.size(), totalYielded);
         return true;
 
-      // fallback-guard: allow logs the batch failure at ERROR and halts the stream (hasMore=false, return false), a legitimate failure signal, not a fabricated batch
       } catch (IOException e) {
-        LOGGER.error("Error in CSV_STREAM batch: {}", e.getMessage());
         hasMore = false;
         if (csvReader != null) {
           try { csvReader.close(); } catch (IOException closeEx) { LOGGER.debug("Failed to close CSV reader: {}", closeEx.getMessage()); }
           csvReader = null;
         }
-        return false;
+        throw new RuntimeException("CSV_STREAM batch failed: " + e.getMessage(), e);
       }
     }
 
