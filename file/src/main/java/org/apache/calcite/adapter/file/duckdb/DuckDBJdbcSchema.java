@@ -207,11 +207,10 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
    * fails with "Contents of view were altered". On first access per connection, compare the
    * catalog view's column count against the FileSchema's current row type and, on a mismatch,
    * {@code CREATE OR REPLACE} the view so Calcite introspects the fresh schema. The same recreate
-   * also fires when the persisted view's SQL predates {@code allow_moved_paths=true} (added to
-   * every iceberg_scan call site in commit dc2250b2f, 2026-05-06): a hive-style partition column
-   * with an {@code =} in the path name gets URL-encoded by DuckDB without that flag, and the
-   * encoded key does not exist in the bucket — every query then fails with an S3 404, even though
-   * the column list is unchanged and the column-count check alone would see nothing wrong (#572).
+   * also fires when the persisted view's SQL has no {@code allow_moved_paths=true}: without it
+   * DuckDB URL-encodes the {@code =} in a hive-style partition path, the encoded key does not
+   * exist in the bucket, and every query fails with an S3 404 even though the column list is
+   * unchanged and the column-count check alone would see nothing wrong.
    * Each view is checked at most once per connection; only flagged views are recreated (the
    * healthy path runs two catalog-local queries — no S3 read).
    */
@@ -293,8 +292,8 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
 
   /**
    * True when a persisted iceberg_scan view exists for {@code name} but its stored SQL lacks
-   * {@code allow_moved_paths}, i.e. it was created before that flag was added to every
-   * iceberg_scan call site (see {@link #refreshStaleIcebergViewIfNeeded}). False both when the
+   * {@code allow_moved_paths}, i.e. it was created before that option was passed to every
+   * iceberg_scan call (see {@link #refreshStaleIcebergViewIfNeeded}). False both when the
    * view does not exist and when the probe itself fails — either way there is no known-stale SQL
    * text to force a recreate over, unlike the column-count probe's -1 sentinel.
    */
