@@ -340,6 +340,11 @@ public class ChunkOrganizer {
           "description", "cis_control_description", null, SEMANTIC_TEXT_CHUNKER),
       new DocumentBlobSource("cyber_threat", "owasp_top10", Arrays.asList("entry_id"),
           "overview", "owasp_entry_overview", null, SEMANTIC_TEXT_CHUNKER),
+      // body_text only: the table's summary column is a short restatement of the same document and
+      // a second registration on this table would collide on vc_staging's (source_schema,
+      // source_table, stringified_fk, sequence) key.
+      new DocumentBlobSource("fedregister", "fr_document_text", Arrays.asList("document_number"),
+          "body_text", "fedregister_document_body", null, SEMANTIC_TEXT_CHUNKER),
       new DocumentBlobSource("patents", "patent_abstracts", Arrays.asList("patent_id"),
           "patent_abstract", "patent_abstract", null, SEMANTIC_TEXT_CHUNKER),
       // Composite PK (patent_id, claim_sequence) -- one patent has many claims.

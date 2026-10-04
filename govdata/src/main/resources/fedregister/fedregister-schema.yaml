@@ -24,9 +24,9 @@ comment: >
   2010 to present by default (start year configurable via GOVDATA_START_YEAR). Key
   cross-reference fields: cfr_references (links to affected CFR titles/parts by
   industry), rin (Regulatory Identifier Number — tracks rulemaking lifecycle from
-  NPRM to final rule), docket_ids (links to regulations.gov comment dockets). Two
+  NPRM to final rule), docket_ids (links to regulations.gov comment dockets). Three
   tables in this schema: fr_documents (full document metadata from govinfo.gov bulk
-  XML) and fr_significance (OIRA EO 12866 economic-significance flag per document,
+  XML), fr_document_text (summary and body text of each document, from the same XML) and fr_significance (OIRA EO 12866 economic-significance flag per document,
   sourced directly from the Federal Register API's own JSON field — join to
   fr_documents on document_number). See each table for its full column list.
 
@@ -203,6 +203,74 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ---------------------------------------------------------------------------
+  # FR_DOCUMENT_TEXT — summary and body text per document, same year+month partitioning
+  # ---------------------------------------------------------------------------
+  # Kept apart from fr_documents: the body text is orders of magnitude larger than the
+  # metadata row (a rule's supplementary information averages ~26k chars), and carrying it on
+  # the 480K-row metadata table would slow every join and filter on it. Joins on document_number.
+  - name: fr_document_text
+    pattern: "year=*/month=*/*.parquet"
+    partitions: *year_month_partitions
+    comment: >
+      Text of each Federal Register document, one row per document_number (joins to
+      fr_documents). summary is the preamble SUMMARY paragraph (a few hundred characters, the
+      agency's own statement of what the document does); body_text is the SUPPLEMENTARY
+      INFORMATION section of a rule, proposed rule or notice — background, discussion, the
+      agency's reasoning and responses to comments, usually thousands of characters and up to
+      about a million for the largest rules — and the whole text of a presidential document
+      (executive order, proclamation, memorandum), which has no such section. The regulatory
+      text itself (amendatory instructions and CFR text) is part of body_text when the XML
+      places it inside SUPLINF. summary is NULL for documents without a SUMMARY (most
+      presidential documents); body_text is NULL for the few documents with no body element.
+      Use this table for text search; use fr_documents for title, agency, CFR references, RIN and
+      dates.
+
+    dimensions:
+      year: *fr_year_range
+      month: *fr_months
+
+    columns:
+      - name: document_number
+        type: string
+        comment: Federal Register document number (e.g., 2026-07234); joins to fr_documents.document_number
+      - name: summary
+        type: string
+        nullable: true
+        comment: Preamble SUMMARY paragraph, without the 'SUMMARY:' label
+      - name: body_text
+        type: string
+        nullable: true
+        comment: >
+          SUPPLEMENTARY INFORMATION text of a rule, proposed rule or notice, or the whole text of
+          a presidential document; paragraphs separated by blank lines, markup removed
+
+    source:
+      type: http
+      url: "https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/FR-{year}-{month:02d}.zip"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fedregister.FedRegisterDocumentTextDataProvider"
+
+    materialize:
+      format: iceberg
+      partition:
+        columns: [year, month]
+      output:
+        pattern: "year={year}/month={month}/"
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
   # FR_SIGNIFICANCE — OIRA EO 12866 economic-significance flag, one row per document
   # ---------------------------------------------------------------------------
   # D-052: fr_documents' source (govinfo.gov bulk XML) carries no significance marker,
@@ -317,6 +385,12 @@ partitionedTables:
 constraints:
   fr_documents:
     primaryKey: [document_number]
+  fr_document_text:
+    primaryKey: [document_number]
+    foreignKeys:
+      - columns: [document_number]
+        targetTable: fr_documents
+        targetColumns: [document_number]
   fr_significance:
     primaryKey: [document_number]
     foreignKeys:

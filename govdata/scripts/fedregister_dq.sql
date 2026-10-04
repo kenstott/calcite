@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Federal Register Data Quality Checks
 -- Schema: fedregister
--- Tables: fr_documents, fr_significance
+-- Tables: fr_documents, fr_document_text, fr_significance
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 for fr_documents exclude partition columns 'year' and 'month'.
 -- T4/T5 for fr_significance exclude partition column 'year' and nullable 'significant'
@@ -119,6 +119,84 @@ SELECT 'fedregister', 'fr_documents', 'T7_publication_date_format',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_documents', allow_moved_paths := true)
       WHERE publication_date IS NOT NULL
         AND NOT REGEXP_MATCHES(publication_date, '^\d{4}-\d{2}-\d{2}$'));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fr_document_text
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'fedregister', 'fr_document_text', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true));
+
+-- T3: sample
+SELECT document_number, length(summary) AS summary_len, length(body_text) AS body_len
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true) LIMIT 3;
+
+-- T6: primary key not null and unique
+INSERT INTO dq_results
+SELECT 'fedregister', 'fr_document_text', 'T6_pk_unique',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'NULL or duplicated document_number'
+FROM (
+  SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true) WHERE document_number IS NULL)
+       + (SELECT COUNT(*) - COUNT(DISTINCT document_number) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true)) AS bad
+);
+
+-- T7: body text is present for most documents (rules, proposed rules, notices and presidential
+-- documents all carry text; only a small remainder has no body element)
+INSERT INTO dq_results
+SELECT 'fedregister', 'fr_document_text', 'T7_body_populated',
+  CASE WHEN pct >= 0.7 THEN 'pass' ELSE 'fail' END,
+  pct, 0.7, 'Share of documents with non-null body_text'
+FROM (SELECT AVG(CASE WHEN body_text IS NOT NULL AND length(body_text) > 0 THEN 1.0 ELSE 0.0 END) AS pct
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true));
+
+-- T7: body text is real text, not just markup residue or a heading
+INSERT INTO dq_results
+SELECT 'fedregister', 'fr_document_text', 'T7_body_length',
+  CASE WHEN med >= 1000 THEN 'pass' ELSE 'fail' END,
+  med, 1000, 'Median body_text length among documents with a body'
+FROM (SELECT MEDIAN(length(body_text)) AS med
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true) WHERE body_text IS NOT NULL);
+
+-- T7: no leftover markup or section labels in extracted text
+INSERT INTO dq_results
+SELECT 'fedregister', 'fr_document_text', 'T7_no_markup',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows whose summary/body_text contain XML tags or start with a section label'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true)
+      WHERE regexp_matches(coalesce(body_text, ''), '<[A-Z]+[ >/]')
+         OR regexp_matches(coalesce(summary, ''), '^(?i)SUMMARY:')
+         OR regexp_matches(coalesce(body_text, ''), '^(?i)SUPPLEMENTARY INFORMATION:'));
+
+-- T7: every text row joins to a fr_documents row
+INSERT INTO dq_results
+SELECT 'fedregister', 'fr_document_text', 'T7_fk_document_number',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'fr_document_text.document_number values not found in fr_documents'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true) t
+  LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_documents', allow_moved_paths := true) d
+    ON t.document_number = d.document_number
+  WHERE d.document_number IS NULL
+);
+
+-- T7: every fr_documents row has a text row (same sources, same months)
+INSERT INTO dq_results
+SELECT 'fedregister', 'fr_document_text', 'T7_covers_fr_documents',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'fr_documents.document_number values with no fr_document_text row'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_documents', allow_moved_paths := true) d
+  LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/fr_document_text', allow_moved_paths := true) t
+    ON t.document_number = d.document_number
+  WHERE t.document_number IS NULL
+);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: fr_significance

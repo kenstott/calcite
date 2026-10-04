@@ -35,6 +35,8 @@ import java.util.Set;
  *   <li>{@code fr_documents} — all FR documents, partitioned by doc_type and year.
  *       Key fields: rin (rulemaking lifecycle), cfr_references (regulated industry),
  *       docket_ids (regulations.gov links).</li>
+ *   <li>{@code fr_document_text} — summary and body text of each document, keyed by
+ *       document_number (join to fr_documents); from the same govinfo.gov bulk XML.</li>
  *   <li>{@code fr_significance} — OIRA EO 12866 economic-significance flag per document,
  *       keyed by document_number (join to fr_documents); sourced directly from the
  *       Federal Register API's own {@code significant} JSON field, which fr_documents'
@@ -69,7 +71,7 @@ public class FedRegisterSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(FedRegisterSchemaFactory.class);
 
   private static final Set<String> DOCUMENT_TABLES =
-      new HashSet<>(Arrays.asList("fr_documents", "fr_significance"));
+      new HashSet<>(Arrays.asList("fr_documents", "fr_document_text", "fr_significance"));
 
   private static final Set<String> AGENCY_TABLES =
       new HashSet<>(Collections.singletonList("fr_agencies"));

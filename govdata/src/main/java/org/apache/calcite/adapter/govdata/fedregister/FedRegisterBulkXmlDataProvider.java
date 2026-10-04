@@ -85,7 +85,7 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
   }
 
   @SuppressWarnings("InlineFormatString")
-  private static final String GOVINFO_URL_TEMPLATE =
+  static final String GOVINFO_URL_TEMPLATE =
       "https://www.govinfo.gov/bulkdata/FR/%d/%02d/FR-%d-%02d.zip";
 
   // Optional leading correction-notice prefix (e.g. "C1-", "E1-") must be captured, not
@@ -93,11 +93,11 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
   // inside "[FR Doc. C1-2010-11578 Filed ...]", silently dropping the correction marker and
   // colliding with that original document's own row on document_number.
   private static final Pattern DOC_NUMBER_PATTERN = Pattern.compile("([A-Z]\\d*-)?\\d{4}-\\d+");
-  private static final Pattern FILENAME_DATE_PATTERN =
+  static final Pattern FILENAME_DATE_PATTERN =
       Pattern.compile("FR-(\\d{4}-\\d{2}-\\d{2})\\.xml$");
 
   // [containerTag, docTag, docType]
-  private static final String[][] CONTAINER_TYPES = {
+  static final String[][] CONTAINER_TYPES = {
       {"RULES",    "RULE",    "RULE"},
       {"PRORULES", "PRORULE", "PRORULE"},
       {"NOTICES",  "NOTICE",  "NOTICE"},
@@ -354,7 +354,7 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
     row.put("docket_ids",    null);
   }
 
-  private String extractDocNumber(String frdocText) {
+  static String extractDocNumber(String frdocText) {
     if (frdocText == null) {
       return null;
     }
