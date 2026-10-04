@@ -88,11 +88,18 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     }
 
     List<Long> applIds = fetchApplIds(year, ic, rawCache);
-    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    // Offset paging over an unsorted result set can return the same link on more than one page,
+    // so (appl_id, pmid) is deduplicated to keep it unique within the slice.
+    java.util.Map<String, Map<String, Object>> byLink =
+        new LinkedHashMap<String, Map<String, Object>>();
     for (int i = 0; i < applIds.size(); i += PAGE_SIZE) {
       List<Long> batch = applIds.subList(i, Math.min(i + PAGE_SIZE, applIds.size()));
-      rows.addAll(fetchPublicationsForBatch(batch, year, ic, rawCache, i / PAGE_SIZE));
+      for (Map<String, Object> row : fetchPublicationsForBatch(batch, year, ic, rawCache,
+          i / PAGE_SIZE)) {
+        byLink.putIfAbsent(row.get("appl_id") + ":" + row.get("pmid"), row);
+      }
     }
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(byLink.values());
     attachPublicationYears(rows, rawCache);
     LOGGER.info("nih_publications: {} publication links for fy={} ic={} ({} appl_ids)",
         rows.size(), year, ic, applIds.size());
