@@ -430,4 +430,30 @@ class HousePtrTextParserTest {
     assertEquals("DNB ASA SPONSORED ADR Representing 10", rows.get(1).assetName);
     assertEquals("DNHBY", rows.get(1).ticker);
   }
+
+  /**
+   * Real filing 20011886: a row whose name wraps across a page break prints its first name line
+   * and its data line at the bottom of one page, and the name tail, ticker and bracket after the
+   * repeated column header on the next.
+   */
+  @Test void rowStraddlingPageBreakKeepsFullNameTickerAndData() {
+    List<Row> rows = HousePtrTextParser.parse(Arrays.asList(
+        "$200?\nMercadolibre, Inc. (MElI) [ST] S 05/28/2019 06/18/2019 $1,001 - $15,000\n"
+        + "FIlINg STaTuS: New\n"
+        + "lVMH Moet Hennessy louis S 05/28/2019 06/18/2019 $1,001 - $15,000 gfedcb\n"
+        + "ID Owner Asset Transaction\nType\nDate Notification\nDate\nAmount Cap.\nGains >\n$200?\n"
+        + "Vuitton unsponsored american\nDepositary Receipt (lVMuY) [ST]\ngfedcb\n"
+        + "FIlINg STaTuS: New\n"
+        + "Royal KPN N.V. (KKPNY) [ST] S 05/28/2019 06/18/2019 $1,001 - $15,000\n"
+        + "FIlINg STaTuS: New"));
+    assertEquals(3, rows.size());
+    assertEquals("MElI".toUpperCase(), rows.get(0).ticker);
+    assertEquals("LVMUY", rows.get(1).ticker);
+    assertEquals("lVMH Moet Hennessy louis\nVuitton unsponsored american\nDepositary Receipt",
+        rows.get(1).assetName);
+    assertEquals("2019-05-28", rows.get(1).transactionDate);
+    assertEquals("New", rows.get(1).filingStatus);
+    assertEquals("KKPNY", rows.get(2).ticker);
+    assertEquals("Royal KPN N.V.", rows.get(2).assetName);
+  }
 }

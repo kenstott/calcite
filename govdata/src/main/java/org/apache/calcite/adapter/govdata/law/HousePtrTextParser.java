@@ -93,6 +93,26 @@ final class HousePtrTextParser {
       + "(\\d{2}/\\d{2}/\\d{4})\\s*(?:\\S+\\s+){0,3}?(Over\\s*\\$[\\d,]+|\\$[\\d,]+\\s*-\\s*\\$[\\d,]+"
       + "|\\$[\\d,]+(?:\\.\\d{2})?)");
 
+  /**
+   * A row that straddles a page break: its first name line and its transaction-data line sit at
+   * the bottom of one page, while the rest of the asset name, the ticker and the {@code [TYPE]}
+   * bracket are printed after the repeated column header at the top of the next. The data line
+   * then has no bracket before it (the anchor the row parser keys on) and the bracket that does
+   * exist is followed by no data. Groups: 1-3 type and dates, 4 amount, 5 the repeated column
+   * header (with any marker glyphs before it), 6 the name tail through the bracket. The gaps
+   * between the data and the bracket may hold no date, so the data matched is the one with no
+   * bracket of its own rather than an earlier row's.
+   */
+  private static final String NO_DATE_OR_BRACKET = "(?:(?!\\d{2}/\\d{2}/\\d{4})[^\\[\\]])";
+
+  private static final Pattern DETACHED_ROW = Pattern.compile(
+      "(P|E|S\\s*\\(partial\\)|S)\\s+(\\d{2}/\\d{2}/\\d{4})\\s*(\\d{2}/\\d{2}/\\d{4})\\s*"
+      + "(?:\\S+\\s+){0,3}?(Over\\s*\\$[\\d,]+|\\$[\\d,]+\\s*-\\s*\\$[\\d,]+"
+      + "|\\$[\\d,]+(?:\\.\\d{2})?)"
+      + "(" + NO_DATE_OR_BRACKET + "*?" + Pattern.quote(TABLE_HEADER_END) + ")"
+      + "(" + NO_DATE_OR_BRACKET + "*?\\[[A-Za-z]{1,4}\\])"
+      + "(?!\\s*(?:P|E|S)\\b\\s*(?:\\(partial\\))?\\s*\\d{2}/)");
+
   private static final Pattern OWNER_PREFIX = Pattern.compile("^(SP|JT|DC)\\s+(.*)$", Pattern.DOTALL);
 
   /**
@@ -204,7 +224,29 @@ final class HousePtrTextParser {
       sb.append(page).append(' ');
     }
     String flattened = normalize(sb.toString());
-    return flattened.contains(TABLE_HEADER_END) ? parseModern(flattened) : parseLegacy(flattened);
+    return flattened.contains(TABLE_HEADER_END)
+        ? parseModern(reattachDetachedRows(flattened)) : parseLegacy(flattened);
+  }
+
+  /**
+   * Moves each page-break-straddling row's transaction data to just after its {@code [TYPE]}
+   * bracket, and the repeated column header to just after that, so the row has the same
+   * name-bracket-data shape the anchor pattern expects.
+   */
+  private static String reattachDetachedRows(String flattened) {
+    Matcher m = DETACHED_ROW.matcher(flattened);
+    StringBuilder out = new StringBuilder(flattened.length());
+    int last = 0;
+    while (m.find()) {
+      out.append(flattened, last, m.start());
+      while (out.length() > 0 && out.charAt(out.length() - 1) == ' ') {
+        out.setLength(out.length() - 1);
+      }
+      out.append(Character.isWhitespace(m.group(6).charAt(0)) ? "" : " ").append(m.group(6)).append(' ').append(m.group(1)).append(' ').append(m.group(2))
+          .append(' ').append(m.group(3)).append(' ').append(m.group(4)).append(m.group(5));
+      last = m.end();
+    }
+    return out.append(flattened, last, flattened.length()).toString();
   }
 
   private static List<Row> parseModern(String flattened) {
