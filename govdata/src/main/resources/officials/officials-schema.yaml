@@ -257,8 +257,11 @@ partitionedTables:
         requestsPerSecond: 5.0
         retryOn: [429, 503]
         maxRetries: 3
+      # Disabled by design: the list endpoint nests records under "members", so the raw
+      # cache's results-array merge would store an empty page and every cache replay would
+      # yield zero rows (and overwritePartitions would then empty the partition).
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       # Implemented and verified against a live keyed response (2026-08-01) against
