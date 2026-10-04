@@ -124,6 +124,13 @@ TRANSFERS="${GOVDATA_R2_SYNC_TRANSFERS:-8}"
 # SLOW_BACK_MIN minutes so the quick schemas are not starved by it every cycle.
 SLICE_MAX="${GOVDATA_R2_SYNC_SLICE_MAX:-60m}"
 SLOW_BACK_MIN="${GOVDATA_R2_SYNC_SLOW_BACK_MIN:-360}"
+# Large schemas are copied one top-level directory ("unit") at a time instead of as one tree. sec has 14
+# table dirs and 24 year=YYYY dirs holding millions of small files; a single copy of the whole schema
+# has to LIST all of it before it can move anything, so one slow directory delayed the rest and one
+# timeout restarted everything. Each unit has its own cursor and its own cap, so a slow unit costs only
+# itself and every finished unit stays finished across passes.
+SPLIT_SCHEMAS="${GOVDATA_R2_SYNC_SPLIT_SCHEMAS:-sec}"
+UNIT_MAX="${GOVDATA_R2_SYNC_UNIT_MAX:-20m}"
 TPSLIMIT="${GOVDATA_R2_SYNC_TPSLIMIT:-25}"
 TPSLIMIT_BURST="${GOVDATA_R2_SYNC_TPSLIMIT_BURST:-10}"
 R2_REMOTE="r2"
@@ -237,6 +244,83 @@ _apply_pins() {
 # exit directly — it's a permanent config problem, not something a retry fixes — while the
 # per-schema slice failure at the bottom returns 1 so --forever can retry next cycle instead
 # of tearing down the process.
+# Seconds in a timeout-style duration (90, 90s, 20m, 2h).
+_secs() {
+  case "$1" in
+    *h) echo $(( ${1%h} * 3600 )) ;;
+    *m) echo $(( ${1%m} * 60 )) ;;
+    *s) echo "${1%s}" ;;
+    *)  echo "$1" ;;
+  esac
+}
+
+_is_split_schema() {
+  local x
+  for x in ${SPLIT_SCHEMAS//,/ }; do [ "$x" = "$1" ] && return 0; done
+  return 1
+}
+
+# _copy_split_schema <schema> <floor> <slice_end> <now>
+# Copies one modtime slice (floor, slice_end] of <schema> one top-level directory at a time, plus the
+# files at the schema root. Each unit keeps its own cursor in STATE_DIR/.unit-cursor-<schema>-<unit>:
+# a unit whose cursor already reaches slice_end is skipped, a unit that fails or hits UNIT_MAX keeps its
+# old cursor and the rest continue, and the whole schema stops starting new units at SLICE_MAX.
+# Units are tried least-recently-attempted first so a stuck unit cannot starve the others pass after
+# pass. Pointers are never touched here: the caller publishes them only when this returns 0, i.e. when
+# EVERY unit has data through slice_end, which keeps the pointer-last invariant intact.
+# Returns 0 if every unit reached slice_end; 124 if no unit made progress; 1 if some did.
+_copy_split_schema() {
+  local s=$1 floor=$2 slice_end=$3 now=$4 u cur lo src dst extra rc
+  local started copied=0 failed=0 skipped=0 remaining=0 units=()
+  started=$(date +%s)
+  local deadline=$(( started + $(_secs "$SLICE_MAX") ))
+  while IFS= read -r u; do
+    [ -n "$u" ] && units+=("$u")
+  done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" 2>/dev/null | sed 's#/*$##')
+  units+=("_root")
+  mapfile -t units < <(for u in "${units[@]}"; do
+    printf '%s\t%s\n' "$(stat -c %Y "$STATE_DIR/.unit-try-$s-$u" 2>/dev/null || echo 0)" "$u"
+  done | sort -n | cut -f2)
+
+  local _uflags="--no-traverse --transfers $TRANSFERS --checkers $CHECKERS --tpslimit $TPSLIMIT --tpslimit-burst $TPSLIMIT_BURST --stats 60s $_VERBOSE_FLAG"
+  $DRY_RUN && _uflags="$_uflags --dry-run"
+  local min_age=$(( now - slice_end )); [ "$min_age" -lt 0 ] && min_age=0
+
+  for u in "${units[@]}"; do
+    cur=$(cat "$STATE_DIR/.unit-cursor-$s-$u" 2>/dev/null | tr -dc 0-9 || true)
+    [ -z "$cur" ] && cur=$floor
+    [ "$cur" -lt "$floor" ] && cur=$floor
+    [ "$cur" -ge "$slice_end" ] && continue
+    if [ "$(date +%s)" -ge "$deadline" ]; then skipped=$((skipped + 1)); continue; fi
+    $DRY_RUN || touch "$STATE_DIR/.unit-try-$s-$u"
+    lo=$(( cur - BUFFER )); [ "$lo" -lt 0 ] && lo=0
+    src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$u"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$u"; extra=""
+    if [ "$u" = "_root" ]; then src="${MINIO_REMOTE}:${BUCKETS[0]}/$s"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s"; extra="--max-depth 1"; fi
+    timeout --kill-after=60 "$UNIT_MAX" rclone copy "$src" "$dst" --exclude "**/version-hint.text" \
+      --min-age "${min_age}s" --max-age "$(( now - lo ))s" $_uflags $extra 2>&1 | while IFS= read -r line; do
+      log_info "sync-to-r2: [$s/$u] $line"
+    done
+    rc=${PIPESTATUS[0]}
+    if [ "$rc" -eq 0 ]; then
+      $DRY_RUN || echo "$slice_end" > "$STATE_DIR/.unit-cursor-$s-$u"
+      copied=$((copied + 1))
+    else
+      failed=$((failed + 1))
+      log_error "sync-to-r2: [$s/$u] unit failed (rc=$rc, cap ${UNIT_MAX}) — its cursor stays at $cur; the other units continue"
+    fi
+  done
+
+  for u in "${units[@]}"; do
+    cur=$(cat "$STATE_DIR/.unit-cursor-$s-$u" 2>/dev/null | tr -dc 0-9 || true)
+    [ -z "$cur" ] && cur=$floor
+    [ "$cur" -lt "$slice_end" ] && remaining=$((remaining + 1))
+  done
+  log_info "sync-to-r2: [$s] unit pass: $copied copied, $failed failed, $skipped not started (schema cap ${SLICE_MAX}); $remaining of ${#units[@]} unit(s) still short of this slice"
+  [ "$remaining" -eq 0 ] && return 0
+  [ "$copied" -eq 0 ] && return 124
+  return 1
+}
+
 run_pass() {
 
 _now=$(date +%s)
@@ -385,11 +469,16 @@ for s in "${_schemas[@]}"; do
     # mask/abort it), so a failed slice holds THIS schema's sentinel and retries next pass
     # instead of skipping its data.
     set +e
-    timeout --kill-after=60 "$SLICE_MAX" rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
-      --exclude "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
-      log_info "sync-to-r2: [$s] $line"
-    done
-    _rc_data=${PIPESTATUS[0]}
+    if _is_split_schema "$s"; then
+      _copy_split_schema "$s" "$_cursor" "$_slice_end" "$_now"
+      _rc_data=$?
+    else
+      timeout --kill-after=60 "$SLICE_MAX" rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
+        --exclude "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
+        log_info "sync-to-r2: [$s] $line"
+      done
+      _rc_data=${PIPESTATUS[0]}
+    fi
     if [ "$_rc_data" -eq 0 ]; then
       if $_is_final; then
         _apply_pins "$s" "$_pins"

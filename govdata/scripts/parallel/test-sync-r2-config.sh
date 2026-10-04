@@ -13,4 +13,5 @@ ok "no hard-coded 32 checkers remain"                             '! grep -q -- 
 first=$(grep -n "rclone " "$S" | grep -v "^[0-9]*:#" | head -1 | cut -d: -f1); exp=$(grep -n "^export RCLONE_TIMEOUT" "$S" | head -1 | cut -d: -f1)
 ok "timeouts are exported before the first rclone call"           '[ -n "$exp" ] && [ "$exp" -lt "$first" ]'
 ok "a per-slice cap wraps the copy (default 60m)"                 'grep -q "^SLICE_MAX=\"\${GOVDATA_R2_SYNC_SLICE_MAX:-60m}\"" "$S" && grep -q "timeout --kill-after=60 \"\$SLICE_MAX\" rclone copy" "$S"'
+ok "large schemas are split per top-level directory (default: sec)" 'grep -q "^SPLIT_SCHEMAS=\"\${GOVDATA_R2_SYNC_SPLIT_SCHEMAS:-sec}\"" "$S" && grep -q "^UNIT_MAX=\"\${GOVDATA_R2_SYNC_UNIT_MAX:-20m}\"" "$S" && grep -q "_copy_split_schema \"\$s\"" "$S"'
 exit $fail
