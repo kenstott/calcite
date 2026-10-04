@@ -17,14 +17,18 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -256,6 +260,16 @@ class ChunkOrganizerVcStagingTest {
   // Full end-to-end sweep against real (read-only) MinIO data
   // ========================================================================
 
+  /** The only source the end-to-end sweep test may touch. Left unscoped, {@code sweep} walks every
+   *  registered source that has a table_completion row, and this test's search_path falls through
+   *  to the REAL tracker namespace for table_completion -- so against production it sweeps all of
+   *  them (patent_claims, mda_sections, ...) into the test schema: one run staged 20 million rows
+   *  (21 GB) over 13 hours before anyone noticed. */
+  private static final Set<String> OWASP_ONLY = Collections.singleton("cyber_threat.owasp_top10");
+
+  // SEPARATE_THREAD so the timeout fails the test even if the sweep is blocked in JDBC and ignores
+  // an interrupt; a small source sweeps in seconds, so 20 minutes is a runaway, not a slow run.
+  @Timeout(value = 20, unit = TimeUnit.MINUTES, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
   @Test void sweepEndToEndAgainstRealOwaspTop10() throws Exception {
     String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
     Assumptions.assumeTrue(accessKey != null,
@@ -283,10 +297,9 @@ class ChunkOrganizerVcStagingTest {
     conn.commit();
 
     try (Connection duckdb = openStandaloneDuckDbForTest()) {
-      // First sweep: owasp_top10's watermark is unset -> needs sweeping. The other six
-      // registered sources have no table_completion row at all this session (purged) -> cleanly
-      // skipped, not errored on a missing Iceberg table.
-      ChunkOrganizer.sweep(duckdb, conn, base);
+      // First sweep: owasp_top10's watermark is unset -> needs sweeping. Every other registered
+      // source is excluded by OWASP_ONLY, whatever production's table_completion says about it.
+      ChunkOrganizer.sweep(duckdb, conn, base, 0, false, OWASP_ONLY);
     }
 
     assertTrue(countAllOwaspTop10Parents() >= 1,
@@ -303,7 +316,7 @@ class ChunkOrganizerVcStagingTest {
     // Second sweep: watermark unchanged -> must skip owasp_top10 entirely (no re-scan, no
     // duplicate rows, no tombstones from a no-op "change").
     try (Connection duckdb = openStandaloneDuckDbForTest()) {
-      ChunkOrganizer.sweep(duckdb, conn, base);
+      ChunkOrganizer.sweep(duckdb, conn, base, 0, false, OWASP_ONLY);
     }
     assertEquals(stagedAfterFirst, countAllOwaspTop10StagedRows(),
         "a second sweep with an unchanged watermark must be a true no-op");
