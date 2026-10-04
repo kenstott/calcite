@@ -5463,6 +5463,23 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       List<StorageProvider.FileEntry> entries = listFilesRecursively(basePath, recursive);
       LOGGER.debug("[processStorageProviderFiles] Found {} entries from storage provider", entries.size());
 
+      // Deterministic processing order (FILE-026): the loop below gives the bare base name to
+      // the first file registered for it and suffixes the rest (tableNameCounts), so the order
+      // decides which format wins a name collision. Sort CSV/TSV first (report.csv owns "report",
+      // a colliding report.json becomes "report_json"), then alphabetically -- independent of the
+      // storage provider's own listing order.
+      entries = new java.util.ArrayList<>(entries);
+      entries.sort((a, b) -> {
+        String n1 = a.getName().toLowerCase(Locale.ROOT);
+        String n2 = b.getName().toLowerCase(Locale.ROOT);
+        boolean csv1 = n1.endsWith(".csv") || n1.endsWith(".tsv");
+        boolean csv2 = n2.endsWith(".csv") || n2.endsWith(".tsv");
+        if (csv1 != csv2) {
+          return csv1 ? -1 : 1; // CSV/TSV first: they win the bare name on a collision
+        }
+        return a.getName().compareTo(b.getName());
+      });
+
       // Create a glob matcher if a directory pattern is configured
       final java.nio.file.PathMatcher globMatcher;
       final java.nio.file.PathMatcher rootGlobMatcher;
