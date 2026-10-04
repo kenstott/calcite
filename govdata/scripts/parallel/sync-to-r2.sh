@@ -111,7 +111,14 @@ export RCLONE_TIMEOUT="${GOVDATA_R2_SYNC_TIMEOUT:-30m}"
 export RCLONE_CONTIMEOUT="${GOVDATA_R2_SYNC_CONTIMEOUT:-2m}"
 # --checkers is also how many source directories rclone LISTs at once. Each LIST is a burst of random
 # reads on the disk MinIO and the ETL workers share, so 32 of them slowed every LIST past the timeout.
-CHECKERS="${GOVDATA_R2_SYNC_CHECKERS:-8}"
+CHECKERS="${GOVDATA_R2_SYNC_CHECKERS:-4}"
+# Pacing: the sync shares MinIO's disk with the ETL workers, so it is deliberately gentle. --transfers is
+# concurrent file copies; --tpslimit caps HTTP requests per second across BOTH remotes (rclone has no
+# per-remote limit), so it is kept generous: the R2 side does one HEAD per candidate file under
+# --no-traverse and a low cap would stretch a slice with tens of thousands of candidates into hours.
+TRANSFERS="${GOVDATA_R2_SYNC_TRANSFERS:-8}"
+TPSLIMIT="${GOVDATA_R2_SYNC_TPSLIMIT:-25}"
+TPSLIMIT_BURST="${GOVDATA_R2_SYNC_TPSLIMIT_BURST:-10}"
 R2_REMOTE="r2"
 SYNC_STAMP="${HOME}/.r2-last-sync"
 
@@ -328,9 +335,9 @@ for s in "${_schemas[@]}"; do
     # --checkers: --no-traverse means every candidate file is checked against R2 individually (one HEAD
     # each), a WAN-latency-bound phase that more checkers speed up; but the same setting is the number
     # of concurrent source directory LISTs on MinIO, which more checkers slow down (see CHECKERS above).
-    # Default 8 favours the LISTs, which were the failing step; raise it only if the R2 check phase is
+    # Default 4 favours the LISTs, which were the failing step; raise it only if the R2 check phase is
     # the bottleneck again.
-    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers 16 --checkers $CHECKERS --stats 60s $_VERBOSE_FLAG"
+    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers $TRANSFERS --checkers $CHECKERS --tpslimit $TPSLIMIT --tpslimit-burst $TPSLIMIT_BURST --stats 60s $_VERBOSE_FLAG"
     $DRY_RUN && _slice_flags="$_slice_flags --dry-run"
 
     log_info "sync-to-r2: [$s] slice $(date -u -d "@$_lo" +%Y-%m-%dT%H:%MZ) .. $(date -u -d "@$_slice_end" +%Y-%m-%dT%H:%MZ)"
