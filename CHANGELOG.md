@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.106.0](https://github.com/kenstott/calcite/compare/engine-v0.105.0...engine-v0.106.0) (2026-10-04)
+
+
+### Features
+
+* **file:** a glob table may carry each row's source file as a column ([7599bcc](https://github.com/kenstott/calcite/commit/7599bcca65f906c192b7b64fa3621dd1215d34cd))
+* **file:** a glob table refuses files with a different column set by name ([fdf44c4](https://github.com/kenstott/calcite/commit/fdf44c4f23b7309b4f9b1d4efc6af376769b58b2))
+* **govdata/weather:** add asos_observations sub-daily airport station observations ([e00f5bc](https://github.com/kenstott/calcite/commit/e00f5bcc9416ec51b0180a570ae1900243af80e6))
+
+
+### Bug Fixes
+
+* **file/iceberg:** retry v{N}.metadata.json read on S3 read-after-write lag ([fe31b12](https://github.com/kenstott/calcite/commit/fe31b127a640e6bbcf4b7c06d27cfaf5a91d8f14))
+* **file:** CSV wins the base name on a storage-provider discovery collision ([cf764c6](https://github.com/kenstott/calcite/commit/cf764c69445fe27d33b6491c00be4dd0d02afc8a))
+* **file:** match a conversion record under a symlinked data directory ([384a8ab](https://github.com/kenstott/calcite/commit/384a8abae38b3a43a2502e21779b2f58873eb642))
+* **govdata/energy:** drop unsupported && operator from county_gas_pipeline_presence view ([df63416](https://github.com/kenstott/calcite/commit/df63416f796110675e220c3f2c2f97cd5a60e6dd))
+* **govdata/energy:** repair county polygon validity in county_gas_pipeline_presence ([#822](https://github.com/kenstott/calcite/issues/822)) ([daea1d6](https://github.com/kenstott/calcite/commit/daea1d625ab88eab87ba210f173b2fead2b2545d))
+* **govdata/officials:** disable members raw cache — list pages nest under 'members' so replay yields zero rows ([#846](https://github.com/kenstott/calcite/issues/846)) ([2cc7fb9](https://github.com/kenstott/calcite/commit/2cc7fb99782f8c72978dd6bc1b6f5b9f7319a876))
+* **govdata/officials:** members.party_name is the party held in that Congress ([da3fc9d](https://github.com/kenstott/calcite/commit/da3fc9d7b006c2b9fda040d67b20c2bfcf030ac7))
+* pass AWS env vars as Java system properties in run_etl_inline ([bce914e](https://github.com/kenstott/calcite/commit/bce914e0c5e0a1186ce9b4c9a883e44cb375a786))
+
 ## [0.105.0](https://github.com/kenstott/calcite/compare/engine-v0.104.1...engine-v0.105.0) (2026-10-02)
 
 
