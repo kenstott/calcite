@@ -424,11 +424,25 @@ public class ChunkOrganizer {
    *  read or chunked -- that cost is identical either way. */
   static void sweep(Connection duckdb, Connection pg, String base, int maxRowsPerSource,
       boolean skipHashCompare) throws SQLException {
+    sweep(duckdb, pg, base, maxRowsPerSource, skipHashCompare, null);
+  }
+
+  /** As above, but when {@code onlySources} is non-null, sweeps only the sources whose
+   *  {@code schema.table} is in it -- every other source is left untouched, neither scanned nor
+   *  counted as skipped. {@code null} sweeps every registered source. Used to resume one large
+   *  source after an interrupted run without first re-checking every source ahead of it -- see
+   *  {@link #main}'s {@code CALCITE_CHUNK_ORGANIZER_ONLY_SOURCES}. */
+  static void sweep(Connection duckdb, Connection pg, String base, int maxRowsPerSource,
+      boolean skipHashCompare, Set<String> onlySources) throws SQLException {
     LOGGER.info("ChunkOrganizer sweep: checking {} row-concat + {} document-blob source(s)",
         ROW_CONCAT_SOURCES.size(), DOCUMENT_BLOB_SOURCES.size());
     int swept = 0;
     int skipped = 0;
     for (RowConcatSource src : ROW_CONCAT_SOURCES) {
+      if (onlySources != null
+          && !onlySources.contains(src.sourceSchema + "." + src.sourceTable)) {
+        continue;
+      }
       if (!sourceNeedsSweep(pg, src.sourceTable)) {
         skipped++;
         continue;
@@ -463,6 +477,10 @@ public class ChunkOrganizer {
       swept++;
     }
     for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
+      if (onlySources != null
+          && !onlySources.contains(src.sourceSchema + "." + src.sourceTable)) {
+        continue;
+      }
       if (!sourceNeedsSweep(pg, src.sourceTable)) {
         skipped++;
         continue;
@@ -772,6 +790,15 @@ public class ChunkOrganizer {
     boolean skipHashCompare = Boolean.parseBoolean(
         System.getenv("CHUNK_ORGANIZER_SKIP_HASH_COMPARE"));
 
+    // Opt-in scope: comma-separated schema.table list; only those sources are swept. Unset (the
+    // normal production path) sweeps every registered source. Same exemption category as the
+    // flags above (CALCITE_ prefix).
+    Set<String> onlySources = null;
+    String onlyEnv = System.getenv("CALCITE_CHUNK_ORGANIZER_ONLY_SOURCES");
+    if (onlyEnv != null && !onlyEnv.isEmpty()) {
+      onlySources = new HashSet<String>(Arrays.asList(onlyEnv.split(",")));
+    }
+
     try (Connection pg = user != null ? DriverManager.getConnection(jdbcUrl, user, password)
             : DriverManager.getConnection(jdbcUrl);
          Connection duckdb = openDuckDbStandalone()) {
@@ -782,7 +809,7 @@ public class ChunkOrganizer {
       }
       ensureVcSchema(pg);
       pg.commit();
-      sweep(duckdb, pg, base, maxRowsPerSource, skipHashCompare);
+      sweep(duckdb, pg, base, maxRowsPerSource, skipHashCompare, onlySources);
     }
   }
 
