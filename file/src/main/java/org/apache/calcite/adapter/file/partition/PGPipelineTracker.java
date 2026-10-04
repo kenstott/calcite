@@ -188,8 +188,12 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       // Existing deployments predate source_as_of. Adding it nullable is the safe migration:
       // every prior row reads as NULL, getMaxActivityAt reports -1 ("cannot prove quiescence"),
       // and callers keep listing storage until genuine source writes have populated it.
-      stmt.execute("ALTER TABLE pipeline_tracker ADD COLUMN IF NOT EXISTS source_as_of BIGINT");
-
+      // ALTER ... IF NOT EXISTS still requests ACCESS EXCLUSIVE on the table, which queues behind
+      // any running reader and then blocks every later statement; consult the catalog so an
+      // already-migrated table is never locked at connection start-up.
+      if (!columnExists("pipeline_tracker", "source_as_of")) {
+        stmt.execute("ALTER TABLE pipeline_tracker ADD COLUMN source_as_of BIGINT");
+      }
 
       stmt.execute(
           "CREATE TABLE IF NOT EXISTS table_completion ("
@@ -202,17 +206,51 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
           + ")");
 
       // Index for phase-based lookups
-      stmt.execute(
-          "CREATE INDEX IF NOT EXISTS idx_pipeline_tracker_phase "
-          + "ON pipeline_tracker(phase, state)");
+      createIndexIfMissing(stmt, "idx_pipeline_tracker_phase",
+          "pipeline_tracker(phase, state)");
 
       // getMaxActivityAt reads max(source_as_of) per phase on every materialization.
-      stmt.execute(
-          "CREATE INDEX IF NOT EXISTS idx_pipeline_tracker_source_as_of "
-          + "ON pipeline_tracker(phase, source_as_of)");
+      createIndexIfMissing(stmt, "idx_pipeline_tracker_source_as_of",
+          "pipeline_tracker(phase, source_as_of)");
+
+      // Year-suffix lookups match the end of source_key; reversing it turns the suffix into a
+      // prefix the index can serve (see appendYearSuffixPredicate).
+      createIndexIfMissing(stmt, "idx_pipeline_tracker_year_suffix",
+          "pipeline_tracker(phase, table_name, reverse(source_key) text_pattern_ops)");
 
       LOGGER.info("Initialized PostgreSQL pipeline tracker schema");
     }
+  }
+
+  private boolean columnExists(String table, String column) throws SQLException {
+    try (PreparedStatement stmt = connection.prepareStatement(
+        "SELECT 1 FROM information_schema.columns "
+        + "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?")) {
+      stmt.setString(1, table);
+      stmt.setString(2, column);
+      try (ResultSet rs = stmt.executeQuery()) {
+        return rs.next();
+      }
+    }
+  }
+
+  /**
+   * Creates the index unless the catalog already lists it, so a migrated table is never locked
+   * at connection start-up. Not CONCURRENTLY: that variant waits for every open transaction in
+   * the database, so one long reader would stall every worker's start-up.
+   */
+  private void createIndexIfMissing(Statement stmt, String name, String onClause)
+      throws SQLException {
+    try (PreparedStatement check = connection.prepareStatement(
+        "SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = ?")) {
+      check.setString(1, name);
+      try (ResultSet rs = check.executeQuery()) {
+        if (rs.next()) {
+          return;
+        }
+      }
+    }
+    stmt.execute("CREATE INDEX IF NOT EXISTS " + name + " ON " + onClause);
   }
 
   // ===== PipelineTracker Implementation =====
@@ -452,13 +490,16 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
 
 
 
-  /** Appends {@code source_key LIKE ?} alternatives, one per year in the range. */
+  /**
+   * Appends {@code reverse(source_key) LIKE ?} alternatives, one per year in the range; the
+   * reversed suffix is a prefix pattern served by idx_pipeline_tracker_year_suffix.
+   */
   private static void appendYearSuffixPredicate(StringBuilder sql, int startYear, int endYear) {
     for (int year = startYear; year <= endYear; year++) {
       if (year > startYear) {
         sql.append(" OR ");
       }
-      sql.append("source_key LIKE ?");
+      sql.append("reverse(source_key) LIKE ?");
     }
   }
 
@@ -467,8 +508,12 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       int startYear, int endYear) throws SQLException {
     int index = firstIndex;
     for (int year = startYear; year <= endYear; year++) {
-      stmt.setString(index++, "%__year=" + year);
+      stmt.setString(index++, reverseSuffix("%__year=" + year));
     }
+  }
+
+  private static String reverseSuffix(String suffixPattern) {
+    return new StringBuilder(suffixPattern).reverse().toString();
   }
 
   @Override public Set<String> getSourceKeysForPhase(String phase) {
@@ -760,10 +805,10 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     Set<Map<String, String>> result = new HashSet<>();
     String sql = "SELECT source_key FROM pipeline_tracker "
         + "WHERE table_name = ? AND phase = 'incremental' AND state = 'complete' "
-        + "AND source_key LIKE ?";
+        + "AND reverse(source_key) LIKE ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, alternateName);
-      stmt.setString(2, "%__year=" + year);
+      stmt.setString(2, reverseSuffix("%__year=" + year));
       try (ResultSet rs = stmt.executeQuery()) {
         while (rs.next()) {
           result.add(unflattenKeyValues(rs.getString("source_key")));
