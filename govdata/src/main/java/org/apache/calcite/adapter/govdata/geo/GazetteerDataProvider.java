@@ -13,8 +13,8 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
-import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
@@ -133,23 +133,20 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
    * ACS 5-year estimates, joined by the record's own ZCTA or place FIPS code — the
    * Gazetteer source has no such columns to carry through.
    *
-   * <p>Leaves population/housing_units {@code null} (not zero, not fetched-and-guessed)
-   * when {@code CENSUS_API_KEY} is unset or the ACS call fails, or per-row when a given
-   * geography has no ACS match — the same "correctly stays NULL rather than a guess"
-   * contract used by the county_fips crosswalk on {@code energy.eia_power_plants}.
+   * <p>A geography with no ACS match keeps {@code null} (not zero, not guessed). A missing
+   * Census API key or a failed ACS call raises, so a vintage is never written with every
+   * population/housing_units value NULL.
    */
   private void enrichWithAcsPopulationHousing(List<Map<String, Object>> records,
-      String tableName, int year) {
+      String tableName, int year) throws IOException {
     if (records.isEmpty()) {
       return;
     }
 
-    String censusApiKey = VariableResolver.resolveEnvVars("${CENSUS_API_KEY:}");
-    if (censusApiKey.isEmpty()) {
-      LOGGER.warn("CENSUS_API_KEY not set — {} population/housing_units left NULL for "
-          + "year={} (Gazetteer files do not publish population data themselves)",
-          tableName, year);
-      return;
+    String censusApiKey = ModelOperand.getString("geo.censusApiKey");
+    if (censusApiKey == null || censusApiKey.isEmpty()) {
+      throw new IOException("geo.censusApiKey (CENSUS_API_KEY) is not set; cannot populate "
+          + "population/housing_units for " + tableName + " year=" + year);
     }
 
     String acsCacheDir = storageProvider().resolvePath(cacheBaseDir, "geo/acs_population_housing");
@@ -157,31 +154,25 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
         Collections.singletonList(year), storageProvider(), year, year);
 
     String keyField = "gazetteer_zctas".equals(tableName) ? "zcta" : "place_fips";
-    try {
-      Map<String, int[]> popHousing = "gazetteer_zctas".equals(tableName)
-          ? censusClient.getZctaPopulationHousing(year)
-          : censusClient.getPlacePopulationHousing(year);
+    Map<String, int[]> popHousing = "gazetteer_zctas".equals(tableName)
+        ? censusClient.getZctaPopulationHousing(year)
+        : censusClient.getPlacePopulationHousing(year);
 
-      int matched = 0;
-      for (Map<String, Object> record : records) {
-        Object keyValue = record.get(keyField);
-        if (keyValue == null) {
-          continue;
-        }
-        int[] popHu = popHousing.get(keyValue.toString());
-        if (popHu != null) {
-          record.put("population", popHu[0]);
-          record.put("housing_units", popHu[1]);
-          matched++;
-        }
+    int matched = 0;
+    for (Map<String, Object> record : records) {
+      Object keyValue = record.get(keyField);
+      if (keyValue == null) {
+        continue;
       }
-      LOGGER.info("Enriched {}/{} {} records with ACS population/housing_units (year={})",
-          matched, records.size(), tableName, year);
-    } catch (IOException e) {
-      LOGGER.warn("Failed to fetch ACS population/housing for {} year={}: {} — "
-          + "population/housing_units left NULL for this vintage", tableName, year,
-          e.getMessage());
+      int[] popHu = popHousing.get(keyValue.toString());
+      if (popHu != null) {
+        record.put("population", popHu[0]);
+        record.put("housing_units", popHu[1]);
+        matched++;
+      }
     }
+    LOGGER.info("Enriched {}/{} {} records with ACS population/housing_units (year={})",
+        matched, records.size(), tableName, year);
   }
 
   private String buildDownloadUrl(String tableName, String year) {
