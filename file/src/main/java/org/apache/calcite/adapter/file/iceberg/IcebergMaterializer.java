@@ -883,6 +883,43 @@ public class IcebergMaterializer {
   }
 
   /**
+   * Tracker key for the "already materialized" record of one year range of a target table.
+   * The range is the one {@link #materialize} is asked to cover, so each range keeps its own
+   * record and watermark.
+   */
+  static String scopedCompletionKey(MaterializationConfig config) {
+    return config.getTargetTableId() + "#materialized#years="
+        + config.getStartYear() + "-" + config.getEndYear();
+  }
+
+  /**
+   * Identity of the Iceberg table currently at {@code tableId}: the UUID in its metadata, which a
+   * drop-and-recreate replaces. Tracker state recorded against one instance says nothing about
+   * another. A table that does not exist yet has no instance, so nothing recorded earlier matches.
+   */
+  private String tableInstanceId(String tableId) {
+    if (!IcebergCatalogManager.tableExists(catalogConfig, tableId)) {
+      return "absent";
+    }
+    Table table = IcebergCatalogManager.loadTable(catalogConfig, tableId);
+    try {
+      return tableInstanceId(table);
+    } finally {
+      // loadTable hands back a table with its own FileIO; this call only reads metadata, so the
+      // FileIO would otherwise be left open until finalization.
+      table.io().close();
+    }
+  }
+
+  static String tableInstanceId(Table table) {
+    if (!(table instanceof org.apache.iceberg.HasTableOperations)) {
+      throw new IllegalStateException("Cannot read the instance id of Iceberg table "
+          + table.name() + ": " + table.getClass().getName() + " exposes no table operations");
+    }
+    return ((org.apache.iceberg.HasTableOperations) table).operations().current().uuid();
+  }
+
+  /**
    * Materializes data according to the configuration.
    *
    * @param config The materialization configuration
@@ -900,8 +937,19 @@ public class IcebergMaterializer {
     // range (20k+ objects for SEC 2025, over ten minutes when several workers list at once) and
     // it ran unconditionally — the expensive fallback was the precondition for taking the cheap
     // path. When the tracker can prove quiescence, storage is never touched.
+    //
+    // The completion record is read under a key naming the year range this call covers, and is
+    // honoured only for the same Iceberg table instance. A table-wide record would let a run
+    // over one range, whose watermark is newer, make every other range look already
+    // materialized; and after a drop-and-recreate it would vouch for rows the new table never
+    // received.
+    final String completionKey = scopedCompletionKey(config);
+    final String tableInstance = tableInstanceId(config.getTargetTableId());
     IncrementalTracker.CachedCompletion priorCompletion =
-        incrementalTracker.getCachedCompletion(config.getTargetTableId());
+        incrementalTracker.getCachedCompletion(completionKey);
+    if (priorCompletion != null && !tableInstance.equals(priorCompletion.signature)) {
+      priorCompletion = null;
+    }
     if (priorCompletion != null && priorCompletion.completedAt > 0) {
       long lastSourceActivity = incrementalTracker.getMaxActivityAt(sourceActivityPhase);
       // -1 means the tracker cannot answer for this scope; that is NOT proof of quiescence, so
@@ -1067,9 +1115,9 @@ public class IcebergMaterializer {
       // compaction above -- per-accession retry tracking is independent of this table-level
       // watermark, so a failed batch elsewhere doesn't need to block it.
       incrementalTracker.markTableCompleteWithSourceWatermark(
-          config.getTargetTableId(),
+          completionKey,
           "auto", // config hash - use constant for tracking
-          IncrementalTracker.computeDimensionSignature(batches),
+          tableInstanceId(config.getTargetTableId()),
           successCount,
           currentSourceWatermark); // 0 for S3, actual watermark for local
       if (currentSourceWatermark > 0) {
@@ -1140,7 +1188,7 @@ public class IcebergMaterializer {
     writer.replacePartitionsDataFiles(dataFiles);
     totalRowsWritten += dataFiles.size();
     incrementalTracker.markTableCompleteWithSourceWatermark(
-        config.getTargetTableId(), "auto", "", dataFiles.size(), 0);
+        scopedCompletionKey(config), "auto", tableInstanceId(table), dataFiles.size(), 0);
     LOGGER.info("File-passthrough materialization complete for '{}': committed {} data files in {}ms",
         config.getTargetTableId(), dataFiles.size(), durationMs);
     return new MaterializationResult(
@@ -3207,8 +3255,12 @@ public class IcebergMaterializer {
             // Non-numeric year batch value — fall through to the snapshot-based signature.
           }
         }
-        String syncSignature = yearSourceWatermark != null
+        // The tracked accession set describes one Iceberg table instance; a recreated table
+        // starts empty whatever the tracker still holds, so the instance is part of the signature.
+        String signatureBase = yearSourceWatermark != null
             ? "source-watermark=" + yearSourceWatermark : snapshotId;
+        String syncSignature = signatureBase == null
+            ? null : signatureBase + "#table=" + tableInstanceId(table);
 
         if (syncSignature != null && incrementalTracker.isTableComplete(syncKey, syncSignature)) {
           Set<String> tracked = getTrackedAccessions(config.getTargetTableId(), yearValue);
@@ -3225,6 +3277,27 @@ public class IcebergMaterializer {
         // (the write storm + compaction overhead). getTrackedAccessions reads both the bare and
         // composite key formats, so the delta is correct regardless of how entries were stored.
         Set<String> alreadyTracked = getTrackedAccessions(config.getTargetTableId(), yearValue);
+        // The scan is the authority on what the table holds. An accession the tracker lists as
+        // materialized but the table lacks was recorded against rows that no longer exist (a
+        // dropped table, a purged partition); left in place it is excluded from every later
+        // materialization and its rows never return.
+        int staleCleared = 0;
+        for (String tracked : alreadyTracked) {
+          if (icebergAccessions.contains(tracked)) {
+            continue;
+          }
+          Map<String, String> staleKey = new LinkedHashMap<String, String>();
+          if (yearValue != null) {
+            staleKey.put("year", yearValue);
+          }
+          staleKey.put(accessionCol, tracked);
+          incrementalTracker.invalidate(config.getTargetTableId(), staleKey);
+          staleCleared++;
+        }
+        if (staleCleared > 0) {
+          LOGGER.info("Cleared {} tracked accessions for {}/year={} that the Iceberg table "
+              + "does not hold", staleCleared, config.getTargetTableId(), yearValue);
+        }
         int newlyMarked = 0;
         for (String accession : icebergAccessions) {
           if (alreadyTracked.contains(accession)) {
