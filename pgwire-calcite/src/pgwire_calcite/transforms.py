@@ -156,6 +156,25 @@ def _convert_json_ops(tree: exp.Expression) -> None:
         node.replace(exp.func(fn, col, exp.Literal.string(path)))
 
 
+def _convert_collations(tree: exp.Expression) -> None:
+    """``x COLLATE "C"`` -> ``x``; any other collation is refused by name.
+
+    DuckDB's postgres scanner pushes every string comparison down as ``col = 'v' COLLATE "C"``
+    (PostgreSQL's byte-order collation). Calcite compares strings in binary order by default, so
+    ``"C"`` names exactly the comparison Calcite already makes and the clause carries nothing to
+    translate; Calcite's parser has no COLLATE, and leaving it in failed every such statement. Any
+    other collation asks for an ordering Calcite does not provide, so it is rejected, never dropped.
+    """
+    for node in list(tree.find_all(exp.Collate)):
+        collation = node.expression
+        name = collation.name if isinstance(collation, (exp.Identifier, exp.Column)) else None
+        if name is None and isinstance(collation, exp.Literal):
+            name = str(collation.this)
+        if name != "C":
+            _reject(f"COLLATE {collation.sql(dialect='postgres')} (only \"C\", byte order, maps)")
+        node.replace(node.this)
+
+
 def apply(tree: exp.Expression, json_enabled: bool = False) -> exp.Expression:
     """Apply conversions and reject-rules to a parsed PG AST. Returns the AST.
 
@@ -165,6 +184,7 @@ def apply(tree: exp.Expression, json_enabled: bool = False) -> exp.Expression:
     """
     if json_enabled:
         _convert_json_ops(tree)
+    _convert_collations(tree)
     # DISTINCT ON — sqlglot models it as exp.Distinct with an ``on`` arg.
     for distinct in tree.find_all(exp.Distinct):
         if distinct.args.get("on") is not None:

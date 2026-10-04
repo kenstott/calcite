@@ -154,3 +154,15 @@ def test_filter_pushdown_reaches_the_server(attached, caplog):
     assert any('"c_int"' in m and "42" in m for m in copy_sql), copy_sql
     # ... and DuckDB projected only the columns it needs, so the scan is not a full read
     assert any("ncols=2" in m for m in copy_sql), copy_sql
+
+
+def test_a_string_filter_reads_through_duckdb(attached, caplog):
+    """DuckDB pushes a string comparison as ``= 'hello' COLLATE "C"``; the server must answer it
+    with the filtered rows, not a parse failure ("Failed to prepare COPY ... COLLATE")."""
+    with caplog.at_level(logging.INFO, logger="pgwire_calcite.binary_copy"):
+        rows = attached.execute(
+            'SELECT "ID" FROM pg."WIDE"."WIDETYPES" WHERE "C_STRING" = \'hello\''
+        ).fetchall()
+    assert rows == [(1,)], rows
+    copy_sql = [r.getMessage() for r in caplog.records if "[COPY]" in r.getMessage()]
+    assert any("COLLATE" in m for m in copy_sql), copy_sql  # DuckDB did push it as COLLATE "C"
