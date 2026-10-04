@@ -519,8 +519,24 @@ cleanup() {
     echo 143 > "${active_exit_files[$_i]}"
   done
   _cleanup_log "=== All workers terminated ==="
+  # Exiting here skips the restore at the end of the RUN_EMBEDDINGS block. Left on disk, the claim's
+  # MAX_WORKERS=0 is preserved by every pool started afterwards (see "preserving on-disk" below),
+  # so a pool terminated mid-sweep used to leave the whole host admitting no work until someone
+  # edited the budget file by hand.
+  if $_budget_claim_active; then
+    OS_RESERVE_MB=$_prior_reserve
+    MAX_WORKERS=$_prior_workers
+    write_budget_file
+    _budget_claim_active=false
+    _cleanup_log "  restored pool budget (RESERVE_MB=${OS_RESERVE_MB}MB, MAX_WORKERS=${MAX_WORKERS})"
+  fi
   exit 130
 }
+# Set only while the RUN_EMBEDDINGS block holds the whole-box budget claim (MAX_WORKERS=0), so that
+# cleanup() knows to give it back. Initialised here because cleanup() reads them under set -u.
+_budget_claim_active=false
+_prior_reserve=""
+_prior_workers=""
 trap cleanup INT TERM
 
 total=${#queue[@]}
@@ -1241,6 +1257,7 @@ if $RUN_EMBEDDINGS; then
   OS_RESERVE_MB=$((total_mem_mb - 2000))   # leave ~2GB for x-schema/vss + OS
   MAX_WORKERS=0
   write_budget_file
+  _budget_claim_active=true
   log_info "x-schema/vss: reserving ${OS_RESERVE_MB}MB (MAX_WORKERS=0) — other consumers should yield"
 
   log_info "x-schema: sweeping every registered source (SEC included) into vc_staging"
@@ -1280,6 +1297,7 @@ if $RUN_EMBEDDINGS; then
   OS_RESERVE_MB=$_prior_reserve
   MAX_WORKERS=$_prior_workers
   write_budget_file
+  _budget_claim_active=false
   log_info "x-schema + Embeddings: complete, budget restored (RESERVE_MB=${OS_RESERVE_MB}MB, MAX_WORKERS=${MAX_WORKERS})"
 fi
 
