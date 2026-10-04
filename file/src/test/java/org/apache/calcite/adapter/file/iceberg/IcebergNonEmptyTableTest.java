@@ -43,7 +43,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -598,17 +597,10 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
     info.setProperty("caseSensitive", "false");
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
-      // The first listing still names the pending view; resolving it attempts the CREATE,
-      // which fails on the missing base table -- the order a catalog walk hits it in.
-      assertThrows(Exception.class, () -> {
-        try (ResultSet tables =
-                 connection.getMetaData().getTables(null, "TEST", "%", null)) {
-          while (tables.next()) {
-            tables.getString("TABLE_NAME");
-          }
-        }
-      });
-
+      // The view's CREATE fails on its missing base table. The catalog walk does not propagate
+      // that failure: it logs the unresolvable view and skips it ("Skipping table
+      // TEST.over_missing: listed by its schema but not resolvable"), so the walk completes and
+      // the sibling table is still served. The requirement is what the walk then lists, below.
       boolean foundOrders = false;
       boolean foundView = false;
       try (ResultSet tables =
