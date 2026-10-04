@@ -118,6 +118,7 @@ djia-production-verification.sql
 test-*.sql
 install-minio-native-wsl.sh
 setup-wsl-tmp-drive.sh
+replace-minio-disk.sh
 register-wsl-boot-task.ps1
 start-minio-with-disk.ps1
 docs/**
