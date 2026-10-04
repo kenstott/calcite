@@ -1063,7 +1063,7 @@ partitionedTables:
       type: http
       url: "https://www.fec.gov/files/bulk-downloads/{year}/indiv{yearSuffix}.zip"
       method: GET
-      extractPattern: "*.txt"
+      extractPattern: "itcont.txt"
       response:
         format: csv
         delimiter: "|"
