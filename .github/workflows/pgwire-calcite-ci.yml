@@ -26,10 +26,14 @@ jobs:
 
       - name: Build Calcite file-adapter runtime classpath
         run: |
-          ./gradlew :file:pgwPrintCp \
+          # What the release bundles (pgwire-calcite-release.yml): the file adapter's runtime
+          # classpath, the adapter's own jar (runtimeClasspath holds only its dependencies), and
+          # the server's Arrow bridge + the DuckDB JDBC driver (compileOnly in file/).
+          ./gradlew :file:jar :file:pgwPrintCp pgwArrowCp \
             --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
             --no-daemon --console=plain -q
-          cp /tmp/pgw-file-cp.txt pgwire-calcite/calcite-classpath.txt
+          { cat /tmp/pgw-file-cp.txt; echo; cat /tmp/pgw-arrow-cp.txt; echo; ls "$PWD"/file/build/libs/*.jar; } \
+            | tr ':' '\n' | grep -v '^$' | paste -sd: - > pgwire-calcite/calcite-classpath.txt
           echo "classpath entries: $(tr ':' '\n' < pgwire-calcite/calcite-classpath.txt | wc -l)"
 
       - name: Install uv
