@@ -1100,14 +1100,11 @@ partitionedTables:
       reporting_person_cik sit in the same row and the join is exact. Matching
       reporting_person_name as text finds the wrong entities.
 
-      NOT YET INGESTED (currently 0 rows in production): the ETL pipeline is fully
-      configured, but its worker slot (sec_secondary, which also covers
-      beneficial_ownership and earnings_transcripts) is deliberately excluded from the
-      scheduled daily/historical rotation — see govdata/scripts/parallel/run-pool.sh's
-      "sec_secondary is deliberately absent" comments — and must be queued explicitly
-      (`run-pool.sh sec_secondary:<year>`), which has not yet happened in production. A
-      consumer seeing 0 rows here should read this as "not yet ingested," not "no insider
-      activity occurred."
+      COVERAGE: populated by the sec_secondary worker slot (which also covers
+      beneficial_ownership and earnings_transcripts). That slot is not part of the scheduled daily/historical
+      rotation (see the note in govdata/scripts/parallel/run-pool.sh); it is queued
+      explicitly per year (`run-pool.sh sec_secondary:<year>`). Production holds 2024-2026 only; earlier years have not been ingested, so an empty
+      result for a pre-2024 period means "not yet ingested," not "no insider activity."
 
     columns:
       - *cik_column
@@ -1376,14 +1373,11 @@ partitionedTables:
       Use for: tracking activist campaigns, monitoring ownership concentration, detecting
       accumulation patterns, and governance risk analysis.
 
-      NOT YET INGESTED (currently 0 rows in production): the ETL pipeline is fully
-      configured, but its worker slot (sec_secondary, which also covers
-      insider_transactions and earnings_transcripts) is deliberately excluded from the
-      scheduled daily/historical rotation — see govdata/scripts/parallel/run-pool.sh's
-      "sec_secondary is deliberately absent" comments — and must be queued explicitly
-      (`run-pool.sh sec_secondary:<year>`), which has not yet happened in production. A
-      consumer seeing 0 rows here should read this as "not yet ingested," not "no >5%
-      holders exist."
+      COVERAGE: populated by the sec_secondary worker slot (which also covers
+      insider_transactions and earnings_transcripts). That slot is not part of the scheduled daily/historical
+      rotation (see the note in govdata/scripts/parallel/run-pool.sh); it is queued
+      explicitly per year (`run-pool.sh sec_secondary:<year>`). Production holds 2026 only; earlier years have not been ingested, so an empty
+      result for a pre-2026 period means "not yet ingested," not "no >5% holders exist."
 
     columns:
       - *cik_column
@@ -1519,15 +1513,14 @@ partitionedTables:
       ChunkOrganizer's cross-schema sweep, not by this schema's own ETL; source_type there
       is 'row_concat' like every other ChunkOrganizer contributor, not a per-content label.
 
-      NOT YET INGESTED (currently 0 rows in production): the ETL pipeline is fully
-      configured, but its worker slot (sec_secondary, which also covers
-      insider_transactions and beneficial_ownership) is deliberately excluded from the
-      scheduled daily/historical rotation — see govdata/scripts/parallel/run-pool.sh's
-      "sec_secondary is deliberately absent" comments — and must be queued explicitly
-      (`run-pool.sh sec_secondary:<year>`), which has not yet happened in production.
-      This is also why #761's ChunkOrganizer skip is permanent for now: that sweep only
-      writes table_completion once this base table has a fully-successful batch, which
-      needs sec_secondary to have run at least once.
+      COVERAGE: populated by the sec_secondary worker slot (which also covers
+      insider_transactions and beneficial_ownership). That slot is not part of the scheduled daily/historical
+      rotation (see the note in govdata/scripts/parallel/run-pool.sh); it is queued
+      explicitly per year (`run-pool.sh sec_secondary:<year>`). Production holds 2024-2026, but 2024 and 2025 are sparse (4 filings each against
+      roughly 10,000 in 2026); earlier years have not been ingested. A thin or empty
+      result for a pre-2026 period means "not yet ingested," not "no earnings releases."
+      ChunkOrganizer's cross-schema sweep writes table_completion only once a batch on
+      this table succeeds end to end.
 
     columns:
       - *cik_column
