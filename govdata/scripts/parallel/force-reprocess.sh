@@ -66,6 +66,9 @@
 # Usage:
 #   force-reprocess.sh --schema <schema> --tables <t1,t2,...> \
 #       [--start YYYY] [--end YYYY] [--skip-historical] [--skip-daily] [--dry-run]
+#   Exit codes: 0 ok; 1 bad arguments or a table whose as_of did not move; 2 no PG namespace for the schema;
+#   3 REFUSED -- another run already holds this schema+years for the same target bucket (one remediation run
+#   per schema+years; DQ runs never conflict with prod).
 #
 set -euo pipefail
 
@@ -76,6 +79,8 @@ source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/historical-year-complete.sh"
 # shellcheck source=/dev/null
 source "$(dirname "$SCRIPT_DIR")/tracker_pg.sh"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/schema-claim.sh"
 load_env
 
 SCHEMA=""
@@ -316,6 +321,25 @@ fi
 export GOVDATA_FORCE_REPROCESS_TABLES="$TABLES"
 export GOVDATA_TABLES="$TABLES"
 RUN_POOL="$SCRIPT_DIR/run-pool.sh"
+
+# ── One remediation run per (target bucket, schema, years) ──
+# check_schema_year_conflict (common.sh) refuses a second WORKER on the same schema+years, but a run that
+# was launched and is merely waiting has no worker yet, so a second launch of the same remediation used to
+# get through, queue for hours behind the first, and then redo the same work (agents respawned while their
+# earlier job was alive did exactly this). Claim the schema+years now and refuse here instead. The claim is
+# per target bucket, so a DQ run (GOVDATA_PARQUET_DIR=...-dq) never conflicts with a production run. A
+# dry run starts nothing and takes no claim. Exit 3 = "already in progress": do NOT relaunch, wait for it.
+if ! $DRY_RUN && ! { $SKIP_HISTORICAL && $SKIP_DAILY; }; then
+  _claim_start=$START_YEAR
+  _claim_end=$END_YEAR
+  if ! $SKIP_DAILY; then _claim_start=0; _claim_end=9999; fi   # a daily run spans every year
+  CLAIM_DIR="${GOVDATA_CLAIM_DIR:-$SCRIPT_DIR/runs/claims}"
+  if ! claim_schema_years "$CLAIM_DIR" "$$" "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}" \
+        "$SCHEMA" "$_claim_start" "$_claim_end" "$TABLES"; then
+    exit 3
+  fi
+  trap 'release_schema_years_claim "$CLAIM_DIR" "$$"' EXIT
+fi
 
 if ! $SKIP_HISTORICAL; then
   # SEC schemas (sec_primary/sec_secondary/sec_13f) require one worker.sh invocation per
