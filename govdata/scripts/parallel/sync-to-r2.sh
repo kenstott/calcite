@@ -254,11 +254,17 @@ _secs() {
   esac
 }
 
+# A schema is split when it is in SPLIT_SCHEMAS or has been switched automatically: a whole-tree slice that
+# hit SLICE_MAX writes STATE_DIR/.split-<schema>, and from the next pass the schema is copied per directory.
+# Delete that file to put a schema back on whole-tree copying.
 _is_split_schema() {
   local x
   for x in ${SPLIT_SCHEMAS//,/ }; do [ "$x" = "$1" ] && return 0; done
-  return 1
+  [ -e "$STATE_DIR/.split-$1" ]
 }
+
+# State-file name for a unit: a second-level unit is "<dir>/<child>", and a slash cannot appear in one.
+_ukey() { echo "${1//\//__}"; }
 
 # _copy_split_schema <schema> <floor> <slice_end> <now>
 # Copies one modtime slice (floor, slice_end] of <schema> one top-level directory at a time, plus the
@@ -274,44 +280,66 @@ _copy_split_schema() {
   local started copied=0 failed=0 skipped=0 remaining=0 units=()
   started=$(date +%s)
   local deadline=$(( started + $(_secs "$SLICE_MAX") ))
-  while IFS= read -r u; do
-    [ -n "$u" ] && units+=("$u")
+  local d c
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    if [ -e "$STATE_DIR/.deep-$s-$d" ]; then
+      # This directory hit UNIT_MAX on its own: copy its subdirectories (and the files directly in it) as units.
+      while IFS= read -r c; do
+        [ -n "$c" ] && units+=("$d/$c")
+      done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$d" 2>/dev/null | sed 's#/*$##')
+      units+=("$d/_root")
+    else
+      units+=("$d")
+    fi
   done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" 2>/dev/null | sed 's#/*$##')
   units+=("_root")
   mapfile -t units < <(for u in "${units[@]}"; do
-    printf '%s\t%s\n' "$(stat -c %Y "$STATE_DIR/.unit-try-$s-$u" 2>/dev/null || echo 0)" "$u"
+    printf '%s\t%s\n' "$(stat -c %Y "$STATE_DIR/.unit-try-$s-$(_ukey "$u")" 2>/dev/null || echo 0)" "$u"
   done | sort -n | cut -f2)
 
   local _uflags="--no-traverse --transfers $TRANSFERS --checkers $CHECKERS --tpslimit $TPSLIMIT --tpslimit-burst $TPSLIMIT_BURST --stats 60s $_VERBOSE_FLAG"
   $DRY_RUN && _uflags="$_uflags --dry-run"
   local min_age=$(( now - slice_end )); [ "$min_age" -lt 0 ] && min_age=0
 
+  local k base
   for u in "${units[@]}"; do
-    cur=$(cat "$STATE_DIR/.unit-cursor-$s-$u" 2>/dev/null | tr -dc 0-9 || true)
+    k=$(_ukey "$u")
+    cur=$(cat "$STATE_DIR/.unit-cursor-$s-$k" 2>/dev/null | tr -dc 0-9 || true)
     [ -z "$cur" ] && cur=$floor
     [ "$cur" -lt "$floor" ] && cur=$floor
     [ "$cur" -ge "$slice_end" ] && continue
     if [ "$(date +%s)" -ge "$deadline" ]; then skipped=$((skipped + 1)); continue; fi
-    $DRY_RUN || touch "$STATE_DIR/.unit-try-$s-$u"
+    $DRY_RUN || touch "$STATE_DIR/.unit-try-$s-$k"
     lo=$(( cur - BUFFER )); [ "$lo" -lt 0 ] && lo=0
     src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$u"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$u"; extra=""
-    if [ "$u" = "_root" ]; then src="${MINIO_REMOTE}:${BUCKETS[0]}/$s"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s"; extra="--max-depth 1"; fi
+    if [ "$u" = "_root" ]; then
+      src="${MINIO_REMOTE}:${BUCKETS[0]}/$s"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s"; extra="--max-depth 1"
+    elif [ "${u##*/}" = "_root" ]; then   # the files directly in a second-level directory
+      base="${u%/_root}"
+      src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$base"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$base"; extra="--max-depth 1"
+    fi
     timeout --kill-after=60 "$UNIT_MAX" rclone copy "$src" "$dst" --exclude "**/version-hint.text" \
       --min-age "${min_age}s" --max-age "$(( now - lo ))s" $_uflags $extra 2>&1 | while IFS= read -r line; do
       log_info "sync-to-r2: [$s/$u] $line"
     done
     rc=${PIPESTATUS[0]}
     if [ "$rc" -eq 0 ]; then
-      $DRY_RUN || echo "$slice_end" > "$STATE_DIR/.unit-cursor-$s-$u"
+      $DRY_RUN || echo "$slice_end" > "$STATE_DIR/.unit-cursor-$s-$k"
       copied=$((copied + 1))
     else
       failed=$((failed + 1))
       log_error "sync-to-r2: [$s/$u] unit failed (rc=$rc, cap ${UNIT_MAX}) — its cursor stays at $cur; the other units continue"
+      # A top-level directory that outruns UNIT_MAX by itself is split by subdirectory from the next pass.
+      if { [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; } && [ "$u" != "_root" ] && [[ "$u" != */* ]]; then
+        $DRY_RUN || touch "$STATE_DIR/.deep-$s-$u"
+        log_error "sync-to-r2: [$s/$u] hit the unit cap — will be copied by subdirectory from the next pass"
+      fi
     fi
   done
 
   for u in "${units[@]}"; do
-    cur=$(cat "$STATE_DIR/.unit-cursor-$s-$u" 2>/dev/null | tr -dc 0-9 || true)
+    cur=$(cat "$STATE_DIR/.unit-cursor-$s-$(_ukey "$u")" 2>/dev/null | tr -dc 0-9 || true)
     [ -z "$cur" ] && cur=$floor
     [ "$cur" -lt "$slice_end" ] && remaining=$((remaining + 1))
   done
@@ -469,7 +497,9 @@ for s in "${_schemas[@]}"; do
     # mask/abort it), so a failed slice holds THIS schema's sentinel and retries next pass
     # instead of skipping its data.
     set +e
+    _was_split=false
     if _is_split_schema "$s"; then
+      _was_split=true
       _copy_split_schema "$s" "$_cursor" "$_slice_end" "$_now"
       _rc_data=$?
     else
@@ -497,6 +527,12 @@ for s in "${_schemas[@]}"; do
       if [ "$_rc_data" -eq 124 ] || [ "$_rc_data" -eq 137 ]; then
         $DRY_RUN || touch "$STATE_DIR/.slow-$s"
         log_error "sync-to-r2: [$s] slice exceeded ${SLICE_MAX} — stopped, moving on to the next schema; walked last for ${SLOW_BACK_MIN}m"
+        if ! $_was_split; then
+          # The whole tree cannot be listed and copied inside the cap, so stop trying it as one: from the next
+          # pass this schema is copied per top-level directory (see _is_split_schema; rm the marker to undo).
+          $DRY_RUN || touch "$STATE_DIR/.split-$s"
+          log_error "sync-to-r2: [$s] switched to per-directory copying from the next pass"
+        fi
       fi
       log_error "sync-to-r2: [$s] slice FAILED (data rc=$_rc_data) — sentinel held at $_v, retry next pass"
       _fail=1
