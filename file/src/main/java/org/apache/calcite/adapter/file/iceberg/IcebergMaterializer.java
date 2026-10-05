@@ -3191,7 +3191,25 @@ public class IcebergMaterializer {
   }
 
   /**
-   * Gets accessions that should be excluded from processing (already exist).
+   * Gets accessions that should be excluded from processing: those already committed, minus the
+   * forced accessions. A forced accession has its rows deleted before the batch writes, so
+   * whatever the tracker still records for it describes rows that no longer exist and must not
+   * keep the replacement from landing.
+   *
+   * @param config The materialization config
+   * @param table The Iceberg table to check for existing data
+   * @param batch The batch being processed (contains year, etc.)
+   * @return Set of accession numbers to exclude
+   */
+  private Set<String> getExcludedAccessions(MaterializationConfig config, Table table,
+      Map<String, String> batch) {
+    Set<String> excluded = getCommittedAccessions(config, table, batch);
+    excluded.removeAll(config.getForceAccessions());
+    return excluded;
+  }
+
+  /**
+   * Gets accessions already committed to the table.
    *
    * <p>This method implements two-tier checking:
    * 1. First checks the tracker (cheap, local DuckDB) for tracked accessions
@@ -3200,9 +3218,9 @@ public class IcebergMaterializer {
    * @param config The materialization config
    * @param table The Iceberg table to check for existing data
    * @param batch The batch being processed (contains year, etc.)
-   * @return Set of accession numbers to exclude
+   * @return Mutable set of committed accession numbers
    */
-  private Set<String> getExcludedAccessions(MaterializationConfig config, Table table,
+  private Set<String> getCommittedAccessions(MaterializationConfig config, Table table,
       Map<String, String> batch) {
     Set<String> excludeAccessions = new HashSet<String>();
 
