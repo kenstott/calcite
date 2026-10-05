@@ -624,15 +624,16 @@ partitionedTables:
 
     source:
       # The URL below is nominal — the DataProvider issues its own chained HTTP calls (see the
-      # provider class). It's set so HttpSource's rate-limit throttle is applied (10 req/s
-      # matches sibling CDE tables). The provider's raw-cache is keyed per call, not by this URL.
+      # provider class). It's set so HttpSource's rate-limit throttle is applied. The provider
+      # reads rateLimit.requestsPerSecond and paces every one of its own calls to that budget; its
+      # raw-cache is keyed per call, not by this URL.
       type: http
       url: "https://cde.ucr.cjis.gov/LATEST/pe/agency/"
       method: GET
       response:
         format: json
       rateLimit:
-        requestsPerSecond: 10.0
+        requestsPerSecond: 5
         retryOn: [403, 429, 503]
         maxRetries: 3
       rawCache:

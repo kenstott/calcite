@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.crime;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.CrossProcessRateLimiter;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
@@ -70,6 +71,9 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
 
   private static final String AGENCIES_ENDPOINT =
       "https://api.usa.gov/crime/fbi/cde/agency/byStateAbbr/";
+  private static final int MAX_ATTEMPTS = 8;
+  private static final long INITIAL_BACKOFF_MS = 2000;
+  private static final long MAX_BACKOFF_MS = 60000;
   private static final String PE_AGENCY_ENDPOINT =
       "https://cde.ucr.cjis.gov/LATEST/pe/agency/";
 
@@ -91,7 +95,9 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
 
     // Step 1: list agencies for this state (fresh fetch per (state, year) combo — cheap, one
     // call, and the cache key includes the year so a lookback re-fetch is a raw-cache hit).
-    Map<String, AgencyInfo> agencies = fetchAgencies(stateAbbr, apiKey, year, rawCache);
+    long intervalMs = requestIntervalMs(config);
+    Map<String, AgencyInfo> agencies =
+        fetchAgencies(stateAbbr, apiKey, year, rawCache, intervalMs);
     LOGGER.info("cde_police_employment_by_agency: {} agencies in {} for year {}",
         agencies.size(), stateAbbr, year);
 
@@ -100,7 +106,7 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
     for (Map.Entry<String, AgencyInfo> entry : agencies.entrySet()) {
       String ori = entry.getKey();
       AgencyInfo info = entry.getValue();
-      Map<String, Object> row = fetchPeForAgency(ori, info, stateAbbr, year, rawCache);
+      Map<String, Object> row = fetchPeForAgency(ori, info, stateAbbr, year, rawCache, intervalMs);
       if (row != null) {
         rows.add(row);
       }
@@ -114,11 +120,11 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
    * bucket carries a list of agencies whose fields include the same county string.
    */
   private Map<String, AgencyInfo> fetchAgencies(String state, String apiKey, String year,
-      RawCache rawCache) throws IOException {
+      RawCache rawCache, long intervalMs) throws IOException {
     String url = AGENCIES_ENDPOINT + state + "?API_KEY=" + apiKey;
     String cacheKey = url + "#year=" + year;
     JsonNode root;
-    try (InputStream in = rawCache.openStream(cacheKey, () -> rawGet(url))) {
+    try (InputStream in = rawCache.openStream(cacheKey, () -> rawGet(url, intervalMs))) {
       root = MAPPER.readTree(in);
     }
     Map<String, AgencyInfo> out = new LinkedHashMap<String, AgencyInfo>();
@@ -150,10 +156,10 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
    * dropped rather than emitting NULL-only rows that fail T4_all_null_cols pointlessly.
    */
   private Map<String, Object> fetchPeForAgency(String ori, AgencyInfo info, String stateAbbr,
-      String year, RawCache rawCache) throws IOException {
+      String year, RawCache rawCache, long intervalMs) throws IOException {
     String url = PE_AGENCY_ENDPOINT + ori + "?from=" + year + "&to=" + year;
     JsonNode root;
-    try (InputStream in = rawCache.openStream(url, () -> rawGet(url))) {
+    try (InputStream in = rawCache.openStream(url, () -> rawGet(url, intervalMs))) {
       root = MAPPER.readTree(in);
     }
     JsonNode actuals = root.path("actuals");
@@ -191,19 +197,28 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
   }
 
   /**
-   * Single-shot GET with in-provider retry on the transient CDE gateway statuses. The
-   * schema YAML's retryOn/maxRetries governs HttpSource-fed tables only — it never reaches
-   * this provider's raw HTTP, which is why kenstott/govdata-ops#268 still dropped whole
-   * (state, year) batches on single 403/503 responses after that fix landed. Retry here:
-   * the api.usa.gov Envoy gateway returns 403/503 under rate pressure and a short backoff
-   * nearly always lands the next attempt.
+   * Minimum spacing between requests, from the table's {@code source.rateLimit}. The provider
+   * issues its own HTTP calls, so HttpSource's throttle never sees them; this carries the same
+   * configured budget onto them.
    */
-  private InputStream rawGet(String url) throws IOException {
+  private static long requestIntervalMs(EtlPipelineConfig config) {
+    int rps = config.getSource().getRateLimit().getRequestsPerSecond();
+    return rps > 0 ? 1000L / rps : 0L;
+  }
+
+  /**
+   * Paced GET with retry on the transient CDE gateway statuses. Both gateways reject bursts
+   * with 403/503 for a window of seconds to minutes, so the backoff grows to a ceiling long
+   * enough to outlast a window rather than ending after a few seconds. Every attempt, retries
+   * included, takes its slot in the host-wide budget shared by all workers.
+   */
+  private InputStream rawGet(String url, long intervalMs) throws IOException {
     int[] retryable = {403, 429, 503};
-    int maxAttempts = 4;             // 1 initial + 3 retries, matching schema maxRetries: 3
-    long backoffMs = 1000;
+    String redacted = redact(url);
     IOException lastError = null;
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+    long backoffMs = INITIAL_BACKOFF_MS;
+    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      CrossProcessRateLimiter.acquire(URI.create(url).getHost(), intervalMs);
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setRequestMethod("GET");
       conn.setRequestProperty("User-Agent", "GovData/1.0");
@@ -227,25 +242,30 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
         }
       }
       if (!retryableStatus) {
-        throw new IOException("CDE HTTP " + status + " from " + url);
+        throw new IOException("CDE HTTP " + status + " from " + redacted);
       }
       if (status != -1) {
-        lastError = new IOException("CDE HTTP " + status + " from " + url);
+        lastError = new IOException("CDE HTTP " + status + " from " + redacted);
       }
-      if (attempt < maxAttempts) {
+      if (attempt < MAX_ATTEMPTS) {
         LOGGER.info("Request failed, retrying in {}ms (attempt {}/{}): CDE HTTP {}: {}",
-            backoffMs, attempt + 1, maxAttempts, status, url);
+            backoffMs, attempt + 1, MAX_ATTEMPTS, status, redacted);
         try {
           Thread.sleep(backoffMs);
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
-          throw new IOException("Interrupted during retry wait for " + url, lastError);
+          throw new IOException("Interrupted during retry wait for " + redacted, lastError);
         }
-        backoffMs *= 2;
+        backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
       }
     }
     throw lastError != null ? lastError
-        : new IOException("CDE fetch failed after " + maxAttempts + " attempts: " + url);
+        : new IOException("CDE fetch failed after " + MAX_ATTEMPTS + " attempts: " + redacted);
+  }
+
+  /** Drops the API key from a URL so it never reaches a log line or exception message. */
+  private static String redact(String url) {
+    return url.replaceAll("(?i)([?&]API_KEY=)[^&]*", "$1***");
   }
 
   private static Long getYearLong(JsonNode measureNode, String year) {
