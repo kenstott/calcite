@@ -793,7 +793,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       List<String> ciks = getCiksFromConfig(operand);
 
       // Compute before CIK guard — needed for materialization regardless of CIK list
-      List<String> filingTypes = getFilingTypes(operand);
+      List<String> filingTypes = getScopedFilingTypes(operand);
       int startYear = getIntValue(operand, "startYear", 2020);
       int endYear = getIntValue(operand, "endYear", Year.now().getValue());
       LOGGER.info("Year range: {} to {}", startYear, endYear);
@@ -1239,7 +1239,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     int totalBatchesSuccessful = 0;
 
     // Get the job's filing types from the operand for table filtering
-    List<String> jobFilingTypes = getFilingTypes(operand);
+    List<String> jobFilingTypes = getScopedFilingTypes(operand);
 
     // Process each table configured for Iceberg materialization
     for (Map<String, Object> tableConfig : partitionedTables) {
@@ -4379,6 +4379,63 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       return CikRegistry.resolveCiks((String) ciks);
     }
     return new ArrayList<>();
+  }
+
+  /**
+   * The filing types this run must fetch: {@link #getFilingTypes} narrowed to what the model's
+   * {@code enabledTables} need. Without {@code enabledTables} (every unscoped run) it is unchanged.
+   */
+  private List<String> getScopedFilingTypes(Map<String, Object> operand) {
+    List<String> all = getFilingTypes(operand);
+    Set<String> enabledTables = readEnabledTables(operand);
+    if (enabledTables == null) {
+      return all;
+    }
+    List<String> scoped = narrowFilingTypes(all, enabledTables, loadPartitionedTablesFromYaml());
+    LOGGER.info("SEC filing types scoped by enabledTables={}: {} -> {}", enabledTables, all,
+        scoped);
+    return scoped;
+  }
+
+  /**
+   * Keeps the filing types that some enabled table lists in its {@code dimensions.filing_type}.
+   * A job type matches a table type ignoring case, dashes and spaces ({@code 10K} = {@code 10-K}),
+   * and a base type matches its amendment ({@code 10-K} matches {@code 10-K/A}). Tables without a
+   * filing_type dimension (stock_prices) need no filings, so they contribute nothing.
+   */
+  @SuppressWarnings("unchecked")
+  static List<String> narrowFilingTypes(List<String> filingTypes, Set<String> enabledTables,
+      List<Map<String, Object>> tables) {
+    Set<String> needed = new HashSet<String>();
+    for (Map<String, Object> table : tables) {
+      if (!enabledTables.contains(String.valueOf(table.get("name")))) {
+        continue;
+      }
+      Object dims = table.get("dimensions");
+      Object types = dims instanceof Map ? ((Map<String, Object>) dims).get("filing_type") : null;
+      if (!(types instanceof List)) {
+        continue;
+      }
+      for (Object type : (List<Object>) types) {
+        String t = String.valueOf(type);
+        needed.add(normFilingType(t));
+        int slash = t.indexOf('/');
+        if (slash > 0) {
+          needed.add(normFilingType(t.substring(0, slash)));
+        }
+      }
+    }
+    List<String> out = new ArrayList<String>();
+    for (String type : filingTypes) {
+      if (needed.contains(normFilingType(type))) {
+        out.add(type);
+      }
+    }
+    return out;
+  }
+
+  private static String normFilingType(String type) {
+    return type.replaceAll("[^A-Za-z0-9]", "").toUpperCase(java.util.Locale.ROOT);
   }
 
   private List<String> getFilingTypes(Map<String, Object> operand) {
