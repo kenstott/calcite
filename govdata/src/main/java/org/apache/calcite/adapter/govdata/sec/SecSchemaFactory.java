@@ -1298,8 +1298,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         List<String> pendingSourceFiles = null;
         if (stagedSourceFiles != null) {
           pendingSourceFiles = stagedFileLedger.pendingFor(config.getTargetTableId(),
-              materializer.tableInstanceId(config.getTargetTableId()), config.getSourcePattern(),
-              config.getStartYear(), config.getEndYear());
+              materializer.tableInstanceId(config.getTargetTableId()), config.getSourcePattern());
           LOGGER.info("Table '{}': {} staged source files unabsorbed ({} uploaded by this pass)",
               icebergTableName, pendingSourceFiles.size(), stagedSourceFiles.size());
           config = buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,

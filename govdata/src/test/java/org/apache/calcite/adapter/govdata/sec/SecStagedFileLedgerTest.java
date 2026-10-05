@@ -88,35 +88,37 @@ class SecStagedFileLedgerTest {
   @Test void filesFromEarlierPassAreOfferedWithoutBeingUploadedByThisOne() {
     SecStagedFileLedger ledger = ledgerWithUploads();
     assertEquals(Arrays.asList(A_2016, B_2025),
-        ledger.pendingFor("facts", "uuid-1", PATTERN, 2016, 2025));
+        ledger.pendingFor("facts", "uuid-1", PATTERN));
   }
 
-  @Test void yearRangeAndPatternNarrowThePendingSet() {
+  @Test void patternNarrowsThePendingSetAcrossEveryYearPartition() {
     SecStagedFileLedger ledger = ledgerWithUploads();
-    assertEquals(Collections.singletonList(B_2025),
-        ledger.pendingFor("facts", "uuid-1", PATTERN, 2025, 2025));
+    assertEquals(Arrays.asList(A_2016, B_2025),
+        ledger.pendingFor("facts", "uuid-1", PATTERN));
+    assertEquals(Collections.singletonList(M_2025),
+        ledger.pendingFor("metadata", "uuid-1", "s3://b/sec/year=*/*metadata*.parquet"));
   }
 
   @Test void absorbedFilesAreNotOfferedAgain() {
     SecStagedFileLedger ledger = ledgerWithUploads();
-    List<String> pending = ledger.pendingFor("facts", "uuid-1", PATTERN, 2016, 2025);
+    List<String> pending = ledger.pendingFor("facts", "uuid-1", PATTERN);
     ledger.markAbsorbed("facts", "uuid-1", pending);
     assertEquals(Collections.<String>emptyList(),
-        ledger.pendingFor("facts", "uuid-1", PATTERN, 2016, 2025));
+        ledger.pendingFor("facts", "uuid-1", PATTERN));
   }
 
   @Test void recreatedTableInstanceSeesEveryFileAsPendingAgain() {
     SecStagedFileLedger ledger = ledgerWithUploads();
     ledger.markAbsorbed("facts", "uuid-1",
-        ledger.pendingFor("facts", "uuid-1", PATTERN, 2016, 2025));
+        ledger.pendingFor("facts", "uuid-1", PATTERN));
     assertEquals(Arrays.asList(A_2016, B_2025),
-        ledger.pendingFor("facts", "uuid-2", PATTERN, 2016, 2025));
+        ledger.pendingFor("facts", "uuid-2", PATTERN));
   }
 
   @Test void absorptionIsPerTable() {
     SecStagedFileLedger ledger = ledgerWithUploads();
     ledger.markAbsorbed("other", "uuid-1", Collections.singletonList(A_2016));
     assertEquals(Arrays.asList(A_2016, B_2025),
-        ledger.pendingFor("facts", "uuid-1", PATTERN, 2016, 2025));
+        ledger.pendingFor("facts", "uuid-1", PATTERN));
   }
 }

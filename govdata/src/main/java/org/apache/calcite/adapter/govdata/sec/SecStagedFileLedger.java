@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Tracker-backed record of the source batch files SEC staging has uploaded and which Iceberg
@@ -42,6 +44,8 @@ final class SecStagedFileLedger {
   static final String PHASE_STAGED = "staged_file";
   static final String PHASE_ABSORBED = "absorbed_file";
 
+  private static final Pattern YEAR_PARTITION = Pattern.compile("year=(\\d+)/");
+
   private final PipelineTracker tracker;
 
   SecStagedFileLedger(PipelineTracker tracker) {
@@ -53,16 +57,23 @@ final class SecStagedFileLedger {
   }
 
   /**
-   * Staged files in the year range that {@code icebergTableId}'s current instance has not yet
-   * absorbed, narrowed to those matching the table's source pattern.
+   * Staged files that {@code icebergTableId}'s current instance has not yet absorbed, narrowed to
+   * those matching the table's source pattern. Every year partition is considered: the converter
+   * partitions by fiscal period, which need not fall inside the filing-year range a pass was
+   * configured with.
    */
-  List<String> pendingFor(String icebergTableId, String instanceId, String sourcePattern,
-      int startYear, int endYear) {
+  List<String> pendingFor(String icebergTableId, String instanceId, String sourcePattern) {
     List<String> staged = new ArrayList<String>(tracker.getSourceKeysForPhase(PHASE_STAGED));
+    Set<String> years = new TreeSet<String>();
+    Matcher yearMatcher = YEAR_PARTITION.matcher("");
+    for (String path : staged) {
+      if (yearMatcher.reset(path).find()) {
+        years.add(yearMatcher.group(1));
+      }
+    }
     Set<String> candidates = new TreeSet<String>();
-    for (int year = startYear; year <= endYear; year++) {
-      candidates.addAll(IcebergMaterializer.filterStagedFilesForBatch(
-          staged, sourcePattern, String.valueOf(year)));
+    for (String year : years) {
+      candidates.addAll(IcebergMaterializer.filterStagedFilesForBatch(staged, sourcePattern, year));
     }
     Map<String, Set<String>> absorbed = tracker.bulkGetCompletedTables(candidates, PHASE_ABSORBED);
     String absorbedBy = absorbedBy(icebergTableId, instanceId);
