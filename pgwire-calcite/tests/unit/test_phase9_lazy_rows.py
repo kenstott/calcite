@@ -83,9 +83,9 @@ class GeneratorBackend:
 
     def execute_sql(
         self, sql, role_id, params=None, stream=False, session_key=None, timeout_ms=0,
-        lane="user",
+        lane="user", client_gone=None,
     ) -> QueryResult:
-        del sql, role_id, params, stream, session_key, timeout_ms, lane
+        del sql, role_id, params, stream, session_key, timeout_ms, lane, client_gone
         return QueryResult(
             column_names=["id", "name"],
             column_types=self._column_types,

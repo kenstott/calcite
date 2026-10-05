@@ -1,5 +1,11 @@
 allprojects {
   tasks.register("pgwPrintCp") {
+    // A printed classpath names this build's own module jars (core, linq4j, arrow, ...); they
+    // are built first, or the list points at files that do not exist yet.
+    def rc = configurations.findByName("runtimeClasspath")
+    if (rc != null) {
+      dependsOn(rc)
+    }
     doLast {
       def c = configurations.findByName("runtimeClasspath")
       if (c != null) {

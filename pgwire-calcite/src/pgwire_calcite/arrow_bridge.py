@@ -70,6 +70,41 @@ _BINARY_TYPE_IDS = frozenset({"Binary", "LargeBinary", "FixedSizeBinary"})
 _FACTORY_CACHE = None
 
 
+class _ClosingIterator:
+    """An iterator whose ``close()`` runs its release whether or not iteration ever started.
+
+    ``stream_ipc_batches`` takes the backend lock BEFORE it returns, and a generator's
+    ``finally`` only runs once the generator has started: closing one that was never
+    iterated is a no-op. A result that is closed without being read -- a Describe, whose
+    column types came from metadata so no batch was peeked -- therefore kept the lock held
+    for good. The lock is re-entrant, so the same connection never noticed; every other
+    connection waited out the queue bound and failed 'server is busy'. ``release`` must be
+    idempotent: exhausting the generator runs it too.
+    """
+
+    def __init__(self, gen: Iterator, release) -> None:
+        self._gen = gen
+        self._release = release
+
+    def __iter__(self) -> "_ClosingIterator":
+        return self
+
+    def __next__(self):
+        return next(self._gen)
+
+    def close(self) -> None:
+        try:
+            self._gen.close()  # type: ignore[attr-defined]
+        finally:
+            self._release()
+
+
+def _closer(source):
+    """``source.close`` when it has one, else a no-op (a plain iterator owns nothing)."""
+    close = getattr(source, "close", None)
+    return close if close is not None else (lambda: None)
+
+
 def _consumer_factory(C):
     """A JdbcConsumerFactory that reads binary columns with ``ResultSet.getBytes``.
 
@@ -199,8 +234,21 @@ def stream_ipc_batches(
             lock.release()
         raise
 
-    def _ipc_gen() -> Iterator[bytes]:
+    def _release() -> None:
         nonlocal acquired
+        if not acquired:
+            return
+        acquired = False
+        if cancel_scope is not None:
+            cancel_scope.disarm()
+        try:
+            iterator.close()
+        except Exception:
+            pass
+        _cleanup(stmt, allocator)
+        lock.release()
+
+    def _ipc_gen() -> Iterator[bytes]:
         try:
             while True:
                 try:
@@ -216,18 +264,9 @@ def stream_ipc_batches(
                 finally:
                     root.close()  # release this batch's off-heap buffers promptly
         finally:
-            if cancel_scope is not None:
-                cancel_scope.disarm()
-            try:
-                iterator.close()
-            except Exception:
-                pass
-            _cleanup(stmt, allocator)
-            if acquired:
-                acquired = False
-                lock.release()
+            _release()
 
-    return names, labels, _ipc_gen()
+    return names, labels, _ClosingIterator(_ipc_gen(), _release)
 
 
 def batches_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[List[tuple]]:
@@ -237,28 +276,38 @@ def batches_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[List[tuple]]:
     can bound resident memory to one batch and, when a column type must be inferred
     from data, buffer exactly one batch before sending RowDescription (PGW-020).
 
-    Closing this generator closes ``ipc_batches`` too, so an early stop propagates
-    down to the JDBC statement cancel/close in ``stream_ipc_batches`` (PGW-022).
+    Closing the result closes ``ipc_batches`` too -- also when it was never iterated -- so
+    an early stop propagates down to the JDBC statement cancel/close in
+    ``stream_ipc_batches`` (PGW-022).
     """
     import pyarrow as pa
 
-    try:
-        for ipc in ipc_batches:
-            table = pa.ipc.open_stream(ipc).read_all()
-            pydata = [col.to_pylist() for col in table.columns]
-            yield [tuple(col[r] for col in pydata) for r in range(table.num_rows)]
-    finally:
-        # Generator protocol: the producers here are always generators; closing them
-        # explicitly makes release deterministic instead of refcount-timed.
-        close = getattr(ipc_batches, "close", None)
-        if close is not None:
-            close()
+    close_source = _closer(ipc_batches)
+
+    def _gen() -> Iterator[List[tuple]]:
+        try:
+            for ipc in ipc_batches:
+                table = pa.ipc.open_stream(ipc).read_all()
+                pydata = [col.to_pylist() for col in table.columns]
+                yield [tuple(col[r] for col in pydata) for r in range(table.num_rows)]
+        finally:
+            close_source()
+
+    return _ClosingIterator(_gen(), close_source)
 
 
 def rows_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[tuple]:
     """Decode a stream of per-batch Arrow IPC bytes into Python row tuples."""
-    for batch in batches_from_ipc(ipc_batches):
-        yield from batch
+    batches = batches_from_ipc(ipc_batches)
+
+    def _gen() -> Iterator[tuple]:
+        try:
+            for batch in batches:
+                yield from batch
+        finally:
+            batches.close()
+
+    return _ClosingIterator(_gen(), batches.close)
 
 
 def stream_query_batches(
