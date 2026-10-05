@@ -43,7 +43,7 @@ jobs:
         working-directory: pgwire-calcite
         run: |
           uv venv --python 3.12 .venv
-          uv pip install --python .venv -e ./vendor/buenavista -e ".[oidc]" pytest
+          uv pip install --python .venv -e ./vendor/buenavista -e ".[oidc,dev]"
 
       - name: Run tests
         working-directory: pgwire-calcite
