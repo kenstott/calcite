@@ -47,7 +47,7 @@ jobs:
 
       - name: Run tests
         working-directory: pgwire-calcite
-        run: .venv/bin/python -m pytest tests/unit -q --junit-xml=pytest.xml
+        run: .venv/bin/python -m pytest tests/unit -q -rs --junit-xml=pytest.xml
 
       - name: Upload test report
         if: always()
