@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.106.3](https://github.com/kenstott/calcite/compare/engine-v0.106.2...engine-v0.106.3) (2026-10-05)
+
+
+### Bug Fixes
+
+* **pgwire-calcite:** closing a streamed result that was never read releases the engine lock ([69d7c18](https://github.com/kenstott/calcite/commit/69d7c181a843b2e2d2c5d4823c32b69448f1cf04))
+* **pgwire-calcite:** information_schema answers in PG terms, scoped to the role ([96395d4](https://github.com/kenstott/calcite/commit/96395d4fc93ded379b47695832859a527deca0ea))
+* **pgwire-calcite:** information_schema.columns.data_type is not blank-padded ([9f657a1](https://github.com/kenstott/calcite/commit/9f657a19adee09c922d63373581f6ac60554528a))
+
 ## [0.106.2](https://github.com/kenstott/calcite/compare/engine-v0.106.1...engine-v0.106.2) (2026-10-05)
 
 
