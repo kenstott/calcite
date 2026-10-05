@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.106.2](https://github.com/kenstott/calcite/compare/engine-v0.106.1...engine-v0.106.2) (2026-10-05)
+
+
+### Bug Fixes
+
+* **pgwire-calcite:** a string filter DuckDB pushes as COLLATE "C" reads instead of failing ([681e9e6](https://github.com/kenstott/calcite/commit/681e9e63e2a3a876b91da9cab1657839b16fca10))
+* **sharepoint-list:** CERTIFICATE auth accepts a PFX that has no password ([825f301](https://github.com/kenstott/calcite/commit/825f3019748f1223a1c6655addbd64947806be31))
+
 ## [0.106.0](https://github.com/kenstott/calcite/compare/engine-v0.105.0...engine-v0.106.0) (2026-10-04)
 
 
