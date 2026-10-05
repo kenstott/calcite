@@ -2061,6 +2061,7 @@ public class IcebergTableWriter {
         return false;
       }
       LOGGER.info("External sort: {} runs spilled to {}", runs.size(), spillDir);
+      runs = mergeRunsToFanIn(runs, comparator, schema, spillDir);
 
       // Pass 2 — k-way merge into rolling output files.
       List<DataFile> newFiles = new ArrayList<>();
@@ -2150,7 +2151,7 @@ public class IcebergTableWriter {
       });
     } finally {
       for (java.io.File run : runs) {
-        if (!run.delete()) {
+        if (run.exists() && !run.delete()) {
           LOGGER.warn("Could not delete spill run {}", run);
         }
       }
@@ -2169,6 +2170,87 @@ public class IcebergTableWriter {
     RunCursor(java.util.Iterator<Record> cursor, Record head) {
       this.cursor = cursor;
       this.head = head;
+    }
+  }
+
+  /**
+   * Most sorted runs the final merge holds open at once. Each open Parquet reader pins a row
+   * group's worth of decoded pages, so the final merge's heap grows with its fan-in; a partition
+   * of tens of millions of rows spills over a thousand runs and exhausts the heap if they are
+   * all opened together. Runs beyond this count are first merged into fewer, larger runs.
+   */
+  private static final int MAX_MERGE_FAN_IN = 32;
+
+  /** Merges runs in groups of {@link #MAX_MERGE_FAN_IN} until no more than that remain. */
+  private static List<java.io.File> mergeRunsToFanIn(List<java.io.File> runs,
+      java.util.Comparator<Record> cmp, Schema schema, java.io.File dir) throws IOException {
+    List<java.io.File> current = runs;
+    int pass = 0;
+    while (current.size() > MAX_MERGE_FAN_IN) {
+      List<java.io.File> merged = new ArrayList<>();
+      for (int i = 0; i < current.size(); i += MAX_MERGE_FAN_IN) {
+        List<java.io.File> group =
+            current.subList(i, Math.min(i + MAX_MERGE_FAN_IN, current.size()));
+        java.io.File out = new java.io.File(dir, "merge-" + pass + "-" + (i / MAX_MERGE_FAN_IN)
+            + ".parquet");
+        mergeRuns(group, cmp, schema, out);
+        for (java.io.File consumed : group) {
+          if (!consumed.delete()) {
+            LOGGER.warn("Could not delete merged spill run {}", consumed);
+          }
+        }
+        merged.add(out);
+      }
+      current = merged;
+      pass++;
+      LOGGER.info("External sort: merged down to {} runs (pass {})", current.size(), pass);
+    }
+    return current;
+  }
+
+  /** K-way merges already-sorted runs into one sorted local Parquet run. */
+  private static void mergeRuns(List<java.io.File> group, java.util.Comparator<Record> cmp,
+      Schema schema, java.io.File out) throws IOException {
+    List<CloseableIterable<Record>> open = new ArrayList<>();
+    java.util.PriorityQueue<RunCursor> queue =
+        new java.util.PriorityQueue<>((a, b) -> cmp.compare(a.head, b.head));
+    try (org.apache.iceberg.io.FileAppender<Record> appender =
+             Parquet.write(org.apache.iceberg.Files.localOutput(out))
+                 .schema(schema)
+                 .createWriterFunc(GenericParquetWriter::buildWriter)
+                 .overwrite()
+                 .build()) {
+      try {
+        for (java.io.File run : group) {
+          CloseableIterable<Record> it = Parquet.read(org.apache.iceberg.Files.localInput(run))
+              .project(schema)
+              .createReaderFunc(fileSchema ->
+                  org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                      schema, fileSchema))
+              .build();
+          open.add(it);
+          java.util.Iterator<Record> cursor = it.iterator();
+          if (cursor.hasNext()) {
+            queue.add(new RunCursor(cursor, copyRecord(cursor.next())));
+          }
+        }
+        while (!queue.isEmpty()) {
+          RunCursor c = queue.poll();
+          appender.add(c.head);
+          if (c.cursor.hasNext()) {
+            c.head = copyRecord(c.cursor.next());
+            queue.add(c);
+          }
+        }
+      } finally {
+        for (CloseableIterable<Record> it : open) {
+          try {
+            it.close();
+          } catch (Exception e) {
+            LOGGER.warn("Failed closing spill run: {}", e.getMessage());
+          }
+        }
+      }
     }
   }
 
