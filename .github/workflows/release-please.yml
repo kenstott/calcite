@@ -46,4 +46,14 @@ jobs:
             --repo "${{ github.repository }}" \
             --ref "refs/tags/${ENGINE_TAG}" \
             --field version="${BARE}"
+          # The pgwire bundles (pgwire-calcite and every adapter) attach to the same release;
+          # they were dispatched by hand for each release until now.
+          gh workflow run "pgwire-calcite release" \
+            --repo "${{ github.repository }}" \
+            --ref "refs/tags/${ENGINE_TAG}" \
+            --field version="${BARE}"
+          gh workflow run "pgwire-adapters release" \
+            --repo "${{ github.repository }}" \
+            --ref "refs/tags/${ENGINE_TAG}" \
+            --field version="${BARE}"
           echo "Dispatched release workflows on ${ENGINE_TAG}"
