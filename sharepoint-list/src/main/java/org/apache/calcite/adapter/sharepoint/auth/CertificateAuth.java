@@ -16,6 +16,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -55,18 +57,21 @@ public class CertificateAuth implements SharePointAuth {
   private KeyStore keyStore;
 
   public CertificateAuth(String clientId, String tenantId, String certificatePath,
-                        String certificatePassword, String thumbprint) throws Exception {
+                        @Nullable String certificatePassword, @Nullable String thumbprint)
+      throws Exception {
     this.clientId = clientId;
     this.tenantId = tenantId;
     this.certificatePath = certificatePath;
-    this.certificatePassword = certificatePassword;
+    // A PKCS#12 file exported without a password is protected by the empty password, so an
+    // absent certificatePassword is that empty password, not a missing credential.
+    this.certificatePassword = certificatePassword == null ? "" : certificatePassword;
     this.objectMapper = new ObjectMapper();
     this.tokenLock = new ReentrantLock();
 
     // Load certificate
     this.keyStore = KeyStore.getInstance("PKCS12");
     try (FileInputStream fis = new FileInputStream(certificatePath)) {
-      keyStore.load(fis, certificatePassword.toCharArray());
+      keyStore.load(fis, this.certificatePassword.toCharArray());
     }
 
     // Auto-calculate thumbprint if not provided
@@ -78,7 +83,7 @@ public class CertificateAuth implements SharePointAuth {
 
     // Create SSL context with client certificate
     KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-    kmf.init(keyStore, certificatePassword.toCharArray());
+    kmf.init(keyStore, this.certificatePassword.toCharArray());
 
     SSLContext sslContext = SSLContext.getInstance("TLS");
     sslContext.init(kmf.getKeyManagers(), null, null);
