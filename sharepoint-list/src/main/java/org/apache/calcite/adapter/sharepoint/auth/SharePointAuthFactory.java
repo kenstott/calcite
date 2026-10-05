@@ -96,10 +96,9 @@ public final class SharePointAuthFactory {
     String certificatePassword = (String) config.get("certificatePassword");
     String thumbprint = (String) config.get("thumbprint");
 
-    if (clientId == null || tenantId == null || certificatePath == null
-        || certificatePassword == null) {
-      throw new RuntimeException("CERTIFICATE auth requires clientId, tenantId, certificatePath, "
-          + "and certificatePassword");
+    if (clientId == null || tenantId == null || certificatePath == null) {
+      throw new RuntimeException("CERTIFICATE auth requires clientId, tenantId and "
+          + "certificatePath (certificatePassword too, unless the PFX has none)");
     }
 
     return new CertificateAuth(clientId, tenantId, certificatePath,
