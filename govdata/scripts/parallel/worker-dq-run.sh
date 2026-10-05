@@ -20,6 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/../tracker_pg.sh"
+source "$SCRIPT_DIR/schema-claim.sh"
 load_env
 _env_dq="$SCRIPT_DIR/../../.env.dq"
 if [ -f "$_env_dq" ]; then set -a; source "$_env_dq"; set +a; fi
@@ -95,6 +96,24 @@ fi
 # CF_API_TOKEN to use an isolated test bucket instead of purging production.
 export GOVDATA_DQ_BUCKET="${GOVDATA_DQ_BUCKET:-govdata-parquet-v1}"
 export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"
+
+# ── One DQ run per (DQ bucket, schema) ──
+# --rebuild purges the WHOLE schema in the DQ bucket before re-running the ETL, so two DQ runs of the same
+# schema in the same bucket tear each other's data down mid-run (three `ag --rebuild` for one table were
+# running together on 2026-10-04, 2h47m / 1h38m / 21m old). Claim the schema in this run's bucket, for all
+# years whatever --start-year/--tables say, and refuse a second one (exit 3, before anything is created).
+# The claim is per bucket: a DQ run in the isolated -dq bucket never conflicts with a production run, which
+# is the point of having one; a run that targets the production bucket does conflict with production
+# remediation of the same schema. A dry run starts nothing and takes no claim. Released in _on_exit.
+if ! $DRY_RUN; then
+  CLAIM_DIR="${GOVDATA_CLAIM_DIR:-$SCRIPT_DIR/runs/claims}"
+  if ! claim_schema_years "$CLAIM_DIR" "$$" "s3://${GOVDATA_DQ_BUCKET}" "$SCHEMA" 0 9999 \
+        "${GOVDATA_TABLES:-<all tables>}" "worker-dq-run.sh"; then
+    exit 3
+  fi
+  _DQ_CLAIM_HELD=true
+  trap 'release_schema_years_claim "$CLAIM_DIR" "$$"' EXIT   # replaced by _on_exit below, which also releases
+fi
 
 WORKER_ID="worker-dq-${SCHEMA}-${MODE}"
 DQ_SQL="$GOVDATA_ROOT/scripts/${SCHEMA}_dq.sql"
@@ -267,6 +286,7 @@ ${log_sections}" \
 _on_exit() {
   local code=$?
   [ -n "${TMP_DIR:-}" ] && rm -rf "$TMP_DIR"
+  if [ "${_DQ_CLAIM_HELD:-false}" = true ]; then release_schema_years_claim "$CLAIM_DIR" "$$"; fi
   if [ "$code" -ne 0 ] && ! $_SCRIPT_COMPLETE; then
     _file_script_error_issue "Script exited unexpectedly with code ${code} — see log: \`${LOG_FILE}\`"
   fi

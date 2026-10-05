@@ -17,21 +17,23 @@
 # A claim only counts while its owner is alive AND is still a force-reprocess.sh (a recycled pid does not
 # hold one); dead claims are removed as they are found. The check and the write happen under one flock.
 
-# claim_schema_years <claim_dir> <owner_pid> <bucket> <schema> <start> <end> <tables>
-# Returns 0 and records the claim, or 1 with the owner described on stderr.
+# claim_schema_years <claim_dir> <owner_pid> <bucket> <schema> <start> <end> <tables> [<owner_cmd>]
+# <owner_cmd> is what the owner's command line must contain for the claim to count (default
+# force-reprocess.sh; worker-dq-run.sh claims its own). Returns 0 and records the claim, or 1 with the
+# owner described on stderr.
 claim_schema_years() {
-  local dir=$1 owner=$2 bucket=$3 schema=$4 start=$5 end=$6 tables=$7
+  local dir=$1 owner=$2 bucket=$3 schema=$4 start=$5 end=$6 tables=$7 pattern=${8:-force-reprocess.sh}
   mkdir -p "$dir"
-  local f c_pid c_bucket c_schema c_start c_end c_tables c_since rc=0
+  local f c_pid c_bucket c_schema c_start c_end c_tables c_since c_pattern rc=0
   (
     flock 9
     for f in "$dir"/*.claim; do
       [ -e "$f" ] || continue
-      c_pid=""; c_bucket=""; c_schema=""; c_start=""; c_end=""; c_tables=""; c_since=""
+      c_pid=""; c_bucket=""; c_schema=""; c_start=""; c_end=""; c_tables=""; c_since=""; c_pattern=""
       # shellcheck disable=SC1090
       source "$f" 2>/dev/null
       if [ -z "$c_pid" ] || ! kill -0 "$c_pid" 2>/dev/null \
-         || ! tr '\0' ' ' < "/proc/$c_pid/cmdline" 2>/dev/null | grep -q "force-reprocess.sh"; then
+         || ! tr '\0' ' ' < "/proc/$c_pid/cmdline" 2>/dev/null | grep -qF "${c_pattern:-force-reprocess.sh}"; then
         rm -f "$f"; continue
       fi
       [ "$c_bucket" = "$bucket" ] || continue
@@ -42,7 +44,7 @@ claim_schema_years() {
       fi
       if [ "$c_start" -le "$end" ] && [ "$start" -le "$c_end" ]; then
         echo "REFUSING: schema '$schema' years $start-$end (bucket $bucket) overlaps a remediation run that is already" \
-             "in progress: force-reprocess.sh pid $c_pid, schema '$c_schema' years $c_start-$c_end," \
+             "in progress: ${c_pattern:-force-reprocess.sh} pid $c_pid, schema '$c_schema' years $c_start-$c_end," \
              "tables '$c_tables', running for $(( $(date +%s) - c_since ))s." \
              "One run per schema+years: wait for it to finish (or stop it) instead of launching another." >&2
         exit 1
@@ -56,6 +58,7 @@ claim_schema_years() {
       echo "c_end=$end"
       echo "c_tables='$tables'"
       echo "c_since=$(date +%s)"
+      echo "c_pattern='$pattern'"
     } > "$dir/$owner.claim"
   ) 9>"$dir/.lock" || rc=1
   return $rc
