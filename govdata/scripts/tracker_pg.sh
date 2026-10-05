@@ -133,6 +133,17 @@ pg_tracker_purge_schema() {
         for suffix in "${suffixes[@]}"; do in_list="${in_list:+$in_list,}'$suffix'"; done
         pg_tracker_purge_accessions "$ns" "$in_list" "$dry_run" || return 1
       fi
+      # The staged-file ledger is keyed by file path and file type, not by Iceberg table name, so
+      # the per-table delete above never reaches it. A whole-schema teardown removes the files the
+      # ledger points at, so the ledger goes with them.
+      if [[ "$dry_run" == "true" ]]; then
+        echo "  [DRY RUN] Would delete staged-file ledger rows from ${ns}"
+      else
+        pg_tracker_exec "
+          DELETE FROM \"${ns}\".pipeline_tracker
+           WHERE phase IN ('staged_file', 'absorbed_file');" > /dev/null || return 1
+        echo "  Deleted staged-file ledger rows from ${ns}"
+      fi
       ;;
   esac
 }
