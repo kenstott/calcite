@@ -69,7 +69,7 @@ def test_columns_restates_data_type_in_pg_names_and_keeps_every_column():
         ("INTEGER", "integer"),
         ("VARCHAR", "character varying"),
     ):
-        assert f"LIKE '{calcite} %' THEN '{pg}'" in sql
+        assert f"LIKE '{calcite} %' THEN CAST('{pg}' AS VARCHAR)" in sql
     # the longer name is tested before the shorter one it starts with
     assert sql.index("'DOUBLE PRECISION'") < sql.index("'DOUBLE'")
     # the client's alias still names the derived table

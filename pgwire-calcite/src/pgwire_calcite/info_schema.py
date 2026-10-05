@@ -55,6 +55,10 @@ def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _varchar(value: str) -> str:
+    return f"CAST({_literal(value)} AS VARCHAR)"
+
+
 def _in_list(values: Iterable[str]) -> str:
     items = sorted(set(values))
     return "(" + ", ".join(_literal(v) for v in items) + ")" if items else "(NULL)"
@@ -63,7 +67,9 @@ def _in_list(values: Iterable[str]) -> str:
 def _pg_type_case(column: str) -> str:
     """``data_type`` as PG's display name. Longest Calcite names first, so DOUBLE PRECISION is not
     read as DOUBLE nor TIMESTAMP WITH LOCAL TIME ZONE as TIMESTAMP; a size suffix (VARCHAR(20)) and
-    Calcite's NOT NULL marker are part of the value, so each name also matches with them."""
+    Calcite's NOT NULL marker are part of the value, so each name also matches with them. Each
+    result is a VARCHAR: Calcite types a CASE over bare literals as CHAR of the longest one, which
+    padded 'integer' with trailing blanks."""
     ref = f'UPPER("{column}")'
     whens = []
     for name in sorted(_TYPE_TABLE, key=len, reverse=True):
@@ -71,10 +77,10 @@ def _pg_type_case(column: str) -> str:
         display = _PG_TYPE_DISPLAY_NAMES.get(mapping.pg_typname, mapping.pg_typname)
         whens.append(
             f"WHEN {ref} = {_literal(name)} OR {ref} LIKE {_literal(name + '(%')} "
-            f"OR {ref} LIKE {_literal(name + ' %')} THEN {_literal(display)}"
+            f"OR {ref} LIKE {_literal(name + ' %')} THEN {_varchar(display)}"
         )
     default = _PG_TYPE_DISPLAY_NAMES.get(_DEFAULT_MAPPING.pg_typname, _DEFAULT_MAPPING.pg_typname)
-    return f"CASE {' '.join(whens)} ELSE {_literal(default)} END"
+    return f"CASE {' '.join(whens)} ELSE {_varchar(default)} END"
 
 
 def _derived(view: str, visible: list[tuple[str, str]], columns_of: Callable[[], list[str]]) -> str:
