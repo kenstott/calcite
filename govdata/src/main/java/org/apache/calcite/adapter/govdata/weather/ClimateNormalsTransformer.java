@@ -122,7 +122,7 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
       offset += PAGE_LIMIT;
     } while (offset <= total);
 
-    List<Map<String, Object>> rows = toRows(grouped, stateFips);
+    List<Map<String, Object>> rows = toRows(grouped, stateFips, context);
     LOGGER.debug("Climate Normals: {} station-month records from {} results for state_fips={}",
         rows.size(), total, stateFips);
     return rows.iterator();
@@ -217,10 +217,18 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
     }
   }
 
+  /**
+   * Emits only the requested state's own stations. CDO's state filter also returns neighbouring
+   * states' border stations; each of those is emitted by the request for its own state, so every
+   * (station, month) appears once, attributed to the state the station file assigns it.
+   */
   private static List<Map<String, Object>> toRows(Map<String, StationMonthRecord> grouped,
-      String stateFips) {
+      String stateFips, RequestContext context) throws IOException {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(grouped.size());
     for (StationMonthRecord rec : grouped.values()) {
+      if (!stateFips.equals(GhcndStationStates.stateFips(rec.stationId, context.getRateLimit()))) {
+        continue;
+      }
       Map<String, Object> row = new LinkedHashMap<String, Object>();
       row.put("county_fips", null);
       row.put("station_id", rec.stationId);

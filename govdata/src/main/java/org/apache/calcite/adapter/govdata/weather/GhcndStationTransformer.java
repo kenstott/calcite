@@ -68,7 +68,7 @@ public class GhcndStationTransformer implements ResponseTransformer {
       + "?where=1%3D1&outFields=GEOID,INTPTLAT,INTPTLON&returnGeometry=false&f=json"
       + "&resultRecordCount=1000&resultOffset=";
 
-  private static final Map<String, String> STATE_FIPS;
+  static final Map<String, String> STATE_FIPS;
   static {
     Map<String, String> m = new HashMap<String, String>();
     m.put("AL", "01"); m.put("AK", "02"); m.put("AZ", "04"); m.put("AR", "05");
