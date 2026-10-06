@@ -88,6 +88,13 @@ import java.util.regex.Pattern;
  */
 @SuppressWarnings({"UnusedMethod", "UnusedVariable", "JavaTimeDefaultTimeZone", "DefaultCharset"})
 public class SecSchemaFactory implements GovDataSubSchemaFactory {
+  /**
+   * How long a worker's claim on staged files holds before another worker may take them over. A
+   * pass that is killed leaves its claims behind, so this is also the longest those files wait to
+   * be absorbed; it must exceed the time one table's materialization takes.
+   */
+  private static final long STAGED_FILE_CLAIM_LEASE_MS = java.util.concurrent.TimeUnit.HOURS.toMillis(3);
+
   private static final Logger LOGGER = LoggerFactory.getLogger(SecSchemaFactory.class);
   private StorageProvider storageProvider;
   private StorageProvider localStorageProvider; // For local operating directory (.aperio) operations
@@ -1297,9 +1304,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // has not covered, including files an earlier pass staged and never materialized.
         List<String> pendingSourceFiles = null;
         if (stagedSourceFiles != null) {
-          pendingSourceFiles = stagedFileLedger.pendingFor(config.getTargetTableId(),
-              materializer.tableInstanceId(config.getTargetTableId()), config.getSourcePattern());
-          LOGGER.info("Table '{}': {} staged source files unabsorbed ({} uploaded by this pass)",
+          pendingSourceFiles = stagedFileLedger.claimPendingFor(config.getTargetTableId(),
+              materializer.tableInstanceId(config.getTargetTableId()), config.getSourcePattern(),
+              STAGED_FILE_CLAIM_LEASE_MS);
+          LOGGER.info("Table '{}': {} staged source files claimed for absorption ({} uploaded by this pass)",
               icebergTableName, pendingSourceFiles.size(), stagedSourceFiles.size());
           config = buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
               tableConfig, operand, warehousePath, pendingSourceFiles);
@@ -1309,11 +1317,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
 
         // Materialize using IcebergMaterializer (batch-level incremental tracking handles skipping)
-        IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
-
-        if (pendingSourceFiles != null && result.getFailedCount() == 0) {
-          stagedFileLedger.markAbsorbed(config.getTargetTableId(),
-              materializer.tableInstanceId(config.getTargetTableId()), pendingSourceFiles);
+        IcebergMaterializer.MaterializationResult result;
+        try {
+          result = materializer.materialize(config);
+          if (pendingSourceFiles != null && result.getFailedCount() == 0) {
+            stagedFileLedger.markAbsorbed(config.getTargetTableId(),
+                materializer.tableInstanceId(config.getTargetTableId()), pendingSourceFiles);
+          }
+        } finally {
+          // Absorbed first, claim released second: another worker that wins the claim after this
+          // release then sees the file as absorbed. A failed pass releases without absorbing, so
+          // the files are offered again.
+          if (pendingSourceFiles != null) {
+            stagedFileLedger.releaseClaims(config.getTargetTableId(),
+                materializer.tableInstanceId(config.getTargetTableId()), pendingSourceFiles);
+          }
         }
 
         if (result.getSuccessCount() > 0) {

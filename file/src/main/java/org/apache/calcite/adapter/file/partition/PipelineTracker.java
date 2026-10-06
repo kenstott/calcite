@@ -86,6 +86,32 @@ public interface PipelineTracker extends IncrementalTracker {
   }
 
   /**
+   * Like {@link #bulkGetCompletedTables} but guaranteed to reflect what other processes have
+   * written, never an in-process cache of an earlier read. For decisions that must not act on a
+   * stale "not done" (e.g. whether another worker has already absorbed a file). The default
+   * delegates, which is right for trackers without a cache.
+   */
+  default Map<String, Set<String>> bulkGetCompletedTablesFresh(
+      Collection<String> sourceKeys, String phase) {
+    return bulkGetCompletedTables(sourceKeys, phase);
+  }
+
+  /**
+   * Atomically claims each {@code (sourceKey, tableName, phase)} for the caller, so that when
+   * several workers race for the same keys exactly one of them wins each. A claim older than
+   * {@code leaseMillis} is treated as abandoned (its owner was killed) and can be taken over.
+   * Claims are released with {@link #markCleared}.
+   *
+   * <p>The default always wins, which is correct only for a tracker that serves one process.
+   *
+   * @return the keys this caller now holds
+   */
+  default Set<String> tryClaimAll(Collection<String> sourceKeys, String tableName, String phase,
+      long leaseMillis) {
+    return new java.util.LinkedHashSet<String>(sourceKeys);
+  }
+
+  /**
    * Mark a (sourceKey, tableName, phase) combination as errored.
    *
    * @param sourceKey  Accession number or dimension value

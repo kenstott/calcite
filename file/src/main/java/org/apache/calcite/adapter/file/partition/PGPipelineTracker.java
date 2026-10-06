@@ -364,6 +364,51 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     return result;
   }
 
+  @Override public Map<String, Set<String>> bulkGetCompletedTablesFresh(
+      Collection<String> sourceKeys, String phase) {
+    for (String sourceKey : sourceKeys) {
+      stageCache.remove(stageCacheKey(sourceKey, phase));
+    }
+    return bulkGetCompletedTables(sourceKeys, phase);
+  }
+
+  /**
+   * One round trip per chunk: inserts a 'claimed' row for every key that has none, and takes over
+   * a claimed row whose lease has run out. The primary key makes the claim atomic across
+   * processes; RETURNING lists only the keys this call actually won.
+   */
+  @Override public Set<String> tryClaimAll(Collection<String> sourceKeys, String tableName,
+      String phase, long leaseMillis) {
+    Set<String> won = new java.util.LinkedHashSet<String>();
+    List<String> keys = new ArrayList<String>(new java.util.LinkedHashSet<String>(sourceKeys));
+    String sql = "INSERT INTO pipeline_tracker (source_key, table_name, phase, state, row_count, "
+        + "as_of) SELECT k, ?, ?, 'claimed', -1, ? FROM unnest(?::varchar[]) AS k "
+        + "ON CONFLICT (source_key, table_name, phase) DO UPDATE SET state = 'claimed', "
+        + "as_of = EXCLUDED.as_of "
+        + "WHERE pipeline_tracker.state = 'claimed' AND pipeline_tracker.as_of < ? "
+        + "RETURNING source_key";
+    long now = System.currentTimeMillis();
+    for (int offset = 0; offset < keys.size(); offset += BULK_CHUNK_SIZE) {
+      List<String> chunk = keys.subList(offset, Math.min(offset + BULK_CHUNK_SIZE, keys.size()));
+      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+        stmt.setString(1, tableName);
+        stmt.setString(2, phase);
+        stmt.setLong(3, now);
+        stmt.setArray(4, getConnection().createArrayOf("varchar", chunk.toArray(new String[0])));
+        stmt.setLong(5, now - leaseMillis);
+        try (ResultSet rs = stmt.executeQuery()) {
+          while (rs.next()) {
+            won.add(rs.getString(1));
+          }
+        }
+      } catch (SQLException e) {
+        throw new RuntimeException("PG tracker claim failed (phase=" + phase + ", chunk of "
+            + chunk.size() + " keys): " + e.getMessage(), e);
+      }
+    }
+    return won;
+  }
+
   /** Cache key for the per-(sourceKey, phase) completed-table set. */
   private static String stageCacheKey(String sourceKey, String phase) {
     return sourceKey + "\0" + phase;

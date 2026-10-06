@@ -43,6 +43,8 @@ import java.util.regex.Pattern;
 final class SecStagedFileLedger {
   static final String PHASE_STAGED = "staged_file";
   static final String PHASE_ABSORBED = "absorbed_file";
+  /** An in-progress absorption by one worker; see {@link #claimPendingFor}. */
+  static final String PHASE_CLAIM = "absorb_claim";
 
   private static final Pattern YEAR_PARTITION = Pattern.compile("year=(\\d+)/");
 
@@ -75,7 +77,8 @@ final class SecStagedFileLedger {
     for (String year : years) {
       candidates.addAll(IcebergMaterializer.filterStagedFilesForBatch(staged, sourcePattern, year));
     }
-    Map<String, Set<String>> absorbed = tracker.bulkGetCompletedTables(candidates, PHASE_ABSORBED);
+    Map<String, Set<String>> absorbed =
+        tracker.bulkGetCompletedTablesFresh(candidates, PHASE_ABSORBED);
     String absorbedBy = absorbedBy(icebergTableId, instanceId);
     Set<String> pending = new TreeSet<String>();
     for (String path : candidates) {
@@ -85,6 +88,53 @@ final class SecStagedFileLedger {
       }
     }
     return Collections.unmodifiableList(new ArrayList<String>(pending));
+  }
+
+  /**
+   * The pending files this caller now holds exclusively. Workers running side by side all see the
+   * same staged files as unabsorbed until one of them commits, so each would append them again;
+   * claiming each file first lets exactly one take it. A claim whose owner was killed expires
+   * after {@code leaseMillis}.
+   *
+   * <p>Absorption is re-checked after the claim is won: a file another worker absorbed and
+   * released between this caller's listing and its claim is dropped, not absorbed twice.
+   * {@link #markAbsorbed} must therefore run before {@link #releaseClaims}.
+   */
+  List<String> claimPendingFor(String icebergTableId, String instanceId, String sourcePattern,
+      long leaseMillis) {
+    List<String> pending = pendingFor(icebergTableId, instanceId, sourcePattern);
+    if (pending.isEmpty()) {
+      return pending;
+    }
+    String absorbedBy = absorbedBy(icebergTableId, instanceId);
+    Set<String> won = tracker.tryClaimAll(pending, absorbedBy, PHASE_CLAIM, leaseMillis);
+    if (won.isEmpty()) {
+      return Collections.<String>emptyList();
+    }
+    Map<String, Set<String>> absorbed = tracker.bulkGetCompletedTablesFresh(won, PHASE_ABSORBED);
+    List<String> mine = new ArrayList<String>();
+    List<String> alreadyAbsorbed = new ArrayList<String>();
+    for (String path : pending) {
+      if (!won.contains(path)) {
+        continue;
+      }
+      Set<String> by = absorbed.get(path);
+      if (by != null && by.contains(absorbedBy)) {
+        alreadyAbsorbed.add(path);
+      } else {
+        mine.add(path);
+      }
+    }
+    releaseClaims(icebergTableId, instanceId, alreadyAbsorbed);
+    return Collections.unmodifiableList(mine);
+  }
+
+  /** Gives up the claims taken by {@link #claimPendingFor}, absorbed or not. */
+  void releaseClaims(String icebergTableId, String instanceId, List<String> paths) {
+    String absorbedBy = absorbedBy(icebergTableId, instanceId);
+    for (String path : paths) {
+      tracker.markCleared(path, absorbedBy, PHASE_CLAIM);
+    }
   }
 
   /** Records that {@code icebergTableId}'s current instance has absorbed these files. */
