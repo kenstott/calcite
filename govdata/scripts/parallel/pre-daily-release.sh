@@ -149,14 +149,15 @@ fi
 # the same "are we building fresh for this head_sha" signal.
 
 # The DuckDB catalog seed bundled in the jar goes stale when a schema YAML changes without a
-# reseed; workers then keep serving the old view definitions.
+# reseed; workers then keep serving the old view definitions. Informational: this script does not
+# rebuild the seed, it only reports that the committed one is behind.
 seed_commit="$(git log -1 --format=%H -- govdata/src/main/resources/duckdb/seed/govdata-seed.zip)"
 stale_yaml=""
 if [ -n "$seed_commit" ]; then
   stale_yaml="$(git diff --name-only "$seed_commit" HEAD -- 'govdata/src/main/resources/*-schema.yaml' 'govdata/src/main/resources/**/*-schema.yaml' | sort -u)"
 fi
 if [ -n "$stale_yaml" ]; then
-  log "ERROR: govdata-seed.zip predates changes to these schema YAMLs; views built from them serve the old definitions until build-seed.sh is run and its output committed:"
+  log "INFO: govdata-seed.zip predates changes to these schema YAMLs; views built from them serve the old definitions until the seed is rebuilt (build-seed.sh) and its output committed:"
   echo "$stale_yaml" | sed 's/^/    /'
 fi
 
