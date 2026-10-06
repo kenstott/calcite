@@ -76,8 +76,9 @@ echo "[x-schema] claimed exclusive pool budget (MAX_WORKERS=0) — restored on e
 
 : "${CALCITE_TRACKER_PG_URL:?CALCITE_TRACKER_PG_URL not set -- required to reach vc_staging}"
 
-# Optional per-step time box. Unset (the default) means no limit, i.e. unchanged behaviour; set
-# either to a `timeout`-style duration (e.g. 90m) to stop one step from consuming the whole window.
+# Per-step time box: a `timeout`-style duration (e.g. 90m). An empty limit means no limit; the
+# chunk sweep defaults to 2h below, the entity-bridge sweep to none unless
+# GOVDATA_XSCHEMA_BRIDGE_TIMEOUT is set.
 run_step() {
   local label="$1" limit="$2" main_class="$3"
   echo "[x-schema] $label (jar: $JAR)"
@@ -127,8 +128,14 @@ if [ "${GOVDATA_XSCHEMA_RUN_CHUNKS:-false}" = "true" ]; then
   if [ "${GOVDATA_XSCHEMA_CHUNK_SKIP_HASH_COMPARE:-false}" = "true" ]; then
     export CHUNK_ORGANIZER_SKIP_HASH_COMPARE=true
   fi
+  # Two hours unless the caller says otherwise: a full sweep is unbounded at production scale
+  # (ops#327: 20-40+ hours). run-pool.sh's trigger already defaulted this, but the explicit
+  # end-of-window call from run-scheduled.sh did not, so that path ran a sweep for 7+ hours with
+  # the whole box held (MAX_WORKERS=0). GOVDATA_XSCHEMA_CHUNK_TIMEOUT=0 removes the limit for a
+  # deliberate full backfill (timeout 0 means no limit). A kill costs one batch: see
+  # ChunkOrganizer's per-year watermark and mid-scan cursor.
   if ! run_step "sweeping every registered source into vc_staging" \
-      "${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-}" \
+      "${GOVDATA_XSCHEMA_CHUNK_TIMEOUT:-2h}" \
       org.apache.calcite.adapter.govdata.ref.ChunkOrganizer; then
     echo "ERROR: ChunkOrganizer failed" >&2
     _xschema_failed=true
