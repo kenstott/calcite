@@ -220,7 +220,7 @@ partitionedTables:
       contiguous: false
       years: [2016, 2017, 2024, 2025]
       rowCount: 94845
-      checkedAt: "2026-10-05T05:04:43Z"
+      checkedAt: "2026-10-06T05:18:30Z"
     partitions: *standard_partitions
     comment: >
       EPA AirData annual-summary air quality — arithmetic mean concentration,
@@ -330,7 +330,7 @@ partitionedTables:
       contiguous: false
       years: [2016, 2017, 2024, 2025]
       rowCount: 6430275
-      checkedAt: "2026-10-05T05:04:44Z"
+      checkedAt: "2026-10-06T05:18:32Z"
     partitions: *standard_partitions
     comment: >
       EPA AirData daily-summary air quality by monitoring site — one row per
@@ -578,7 +578,7 @@ partitionedTables:
       contiguous: false
       years: [2015, 2016, 2023, 2024]
       rowCount: 320420
-      checkedAt: "2026-10-05T05:04:46Z"
+      checkedAt: "2026-10-06T05:18:32Z"
     partitions: *standard_partitions
     comment: >
       EPA Toxics Release Inventory — one row per facility × chemical × year,
@@ -742,7 +742,7 @@ partitionedTables:
       contiguous: false
       years: [2014, 2015, 2022, 2023]
       rowCount: 41082
-      checkedAt: "2026-10-05T05:04:47Z"
+      checkedAt: "2026-10-06T05:18:33Z"
     partitions: *standard_partitions
     comment: >
       EPA GHGRP facility dimension — one row per reporting facility per year
@@ -893,7 +893,7 @@ partitionedTables:
       contiguous: false
       years: [2014, 2015, 2022, 2023]
       rowCount: 102954
-      checkedAt: "2026-10-05T05:04:48Z"
+      checkedAt: "2026-10-06T05:18:34Z"
     partitions: *standard_partitions
     comment: >
       EPA GHGRP emissions facts — CO2-equivalent emissions keyed by facility ×
@@ -993,7 +993,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 161
-      checkedAt: "2026-10-05T05:04:49Z"
+      checkedAt: "2026-10-06T05:18:35Z"
     partitions: *standard_partitions
     comment: >
       EPA eGRID (Emissions & Generation Resource Integrated Database) regional emission
@@ -1304,8 +1304,8 @@ partitionedTables:
       distinctYears: 4
       contiguous: false
       years: [2017, 2018, 2025, 2026]
-      rowCount: 13689831
-      checkedAt: "2026-10-05T05:05:02Z"
+      rowCount: 13696145
+      checkedAt: "2026-10-06T05:18:43Z"
     partitions: *state_year_partitions
     comment: >
       USGS NWIS daily streamflow — one row per (site, date) with discharge (cfs)
@@ -2224,7 +2224,7 @@ partitionedTables:
       contiguous: false
       years: [2017, 2018, 2026]
       rowCount: 4592478
-      checkedAt: "2026-10-05T05:05:06Z"
+      checkedAt: "2026-10-06T05:18:47Z"
     partitions: *state_year_partitions
     comment: >
       USGS/EPA Water Quality Portal — measured water-quality sample results
