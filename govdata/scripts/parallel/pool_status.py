@@ -88,9 +88,41 @@ def resolve_runs_dir(arg):
     if env:
         return env
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs")
-    if os.path.isdir(here):
-        return here
-    return os.path.join(os.getcwd(), "runs")
+    # islink as well as isdir: in a terminal that cannot see /var/tmp/govdata the link dangles.
+    d = here if (os.path.isdir(here) or os.path.islink(here)) else os.path.join(os.getcwd(), "runs")
+    if not glob.glob(os.path.join(d, "pool-*.log")):
+        alt = _scheduler_view(d)
+        if alt:
+            return alt
+    return d
+
+
+def _scheduler_view(runs_dir):
+    """The runs dir as the running scheduler sees it, or None.
+
+    /var/tmp/govdata is its own disk, mounted after some terminals (and Claude sessions) had already
+    started. A process started before the mount keeps its own view of the filesystem and sees only
+    the empty directory underneath, so it finds no pool logs. The scheduler's /proc/<pid>/root is
+    the up-to-date view, readable by the same user. Resolved on every call, so it follows a
+    scheduler restart."""
+    target = os.path.realpath(runs_dir)
+    me = os.getuid()
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            if os.stat("/proc/%s" % pid).st_uid != me:
+                continue
+            with open("/proc/%s/cmdline" % pid, "rb") as fh:
+                cmd = fh.read()
+        except OSError:
+            continue
+        if b"run-scheduled.sh" not in cmd:
+            continue
+        cand = "/proc/%s/root%s" % (pid, target)
+        if glob.glob(os.path.join(cand, "pool-*.log")):
+            return cand
+    return None
 
 
 def newest_pool_log(runs_dir):
