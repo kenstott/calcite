@@ -21,6 +21,7 @@ dependencies = [
 dev = [
     "pytest",
     "psycopg[binary]",
+    "asyncpg",
 ]
 # OIDC/Firebase token auth (Phase 5b, PGW-044). Optional so the base airgap
 # footprint doesn't carry the RSA crypto stack unless OIDC is enabled.

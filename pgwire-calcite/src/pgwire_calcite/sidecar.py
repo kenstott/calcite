@@ -212,19 +212,26 @@ class _ChildHandler(socketserver.StreamRequestHandler):
         names, labels, ipc = arrow_bridge.stream_ipc_batches(
             conn, lock, body["sql"], cancel_scope=scope
         )
-        self.wfile.write(_STATUS_OK)
-        write_frame(self.wfile, json.dumps({"names": names, "labels": labels}).encode("utf-8"))
-        self.wfile.flush()
         failure: Optional[BaseException] = None
+        # The stream holds the backend lock from the moment it is returned; closing it
+        # releases the lock even when the client is gone before the first batch is read.
         try:
-            for batch in ipc:
-                write_frame(self.wfile, batch)
-        except Exception as exc:
-            # Mid-stream failure (cancel, statement_timeout, engine error): the client
-            # is already reading batches, so it is reported in the trailer, not as a
-            # status byte that would be misread as a frame length.
-            log.info("[CALCITE-CHILD] stream ended early: %s", exc)
-            failure = exc
+            self.wfile.write(_STATUS_OK)
+            write_frame(
+                self.wfile, json.dumps({"names": names, "labels": labels}).encode("utf-8")
+            )
+            self.wfile.flush()
+            try:
+                for batch in ipc:
+                    write_frame(self.wfile, batch)
+            except Exception as exc:
+                # Mid-stream failure (cancel, statement_timeout, engine error): the client
+                # is already reading batches, so it is reported in the trailer, not as a
+                # status byte that would be misread as a frame length.
+                log.info("[CALCITE-CHILD] stream ended early: %s", exc)
+                failure = exc
+        finally:
+            ipc.close()
         write_frame(self.wfile, b"")  # terminator
         write_frame(
             self.wfile,

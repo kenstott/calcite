@@ -151,8 +151,9 @@ def test_non_pk_unique_column_surfaced_as_constraint(keyed_server):
 
 
 def test_fk_links_to_unique_constraint_not_pk(keyed_server):
-    """referential_constraints must point the FK at the UNIQUE key it references
-    (depts.dname), not the target's primary key (depts.deptno)."""
+    """The FK must reference the UNIQUE key it points at (depts.dname), not the target's primary
+    key (depts.deptno). Asserted on pg_catalog.pg_constraint, the intercepted surface ER tools
+    read; information_schema passes through to Calcite (catalog._INTERCEPT_SCHEMAS)."""
     ctx, column_types = _unique_target_catalog()
     import pgwire_calcite.server as server_mod
 
@@ -161,12 +162,15 @@ def test_fk_links_to_unique_constraint_not_pk(keyed_server):
     c = MiniPgClient(host, port)
     try:
         r = c.query(
-            "SELECT unique_constraint_name FROM information_schema.referential_constraints "
-            "WHERE constraint_name LIKE 'fk_emps%'"
+            "SELECT src.relname, tgt.relname, a.attname FROM pg_catalog.pg_constraint c "
+            "JOIN pg_catalog.pg_class src ON src.oid = c.conrelid "
+            "JOIN pg_catalog.pg_class tgt ON tgt.oid = c.confrelid "
+            "JOIN pg_catalog.pg_attribute a "
+            "ON a.attrelid = c.confrelid AND a.attnum = c.confkey[1] "
+            "WHERE c.contype = 'f'"
         )
         assert r["error"] is None, r["error"]
-        assert len(r["rows"]) == 1, r["rows"]
-        assert r["rows"][0][0] == "uq_depts__dname"
+        assert r["rows"] == [["emps", "depts", "dname"]]
     finally:
         c.close()
 

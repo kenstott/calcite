@@ -109,3 +109,19 @@ def test_substring_without_length_and_comma_form():
     assert "SUBSTRING(" in transpile_pg_to_calcite("SELECT SUBSTRING(h FROM 3) FROM t")
     out = transpile_pg_to_calcite("SELECT SUBSTR(h, 2, 3) FROM t")
     assert " FROM 2 FOR 3)" in out
+
+
+def test_duckdb_collate_c_pushdown_is_the_binary_comparison_calcite_makes():
+    """DuckDB's postgres scanner pushes a string filter as ``= 'v' COLLATE "C"``; Calcite's parser
+    has no COLLATE ("Encountered COLLATE"). "C" is byte order, which is how Calcite compares
+    strings already, so it translates to the bare comparison."""
+    sql = 'SELECT "region", "amount" FROM "files"."orders" WHERE "region" = \'eu\' COLLATE "C"'
+    out = transpile_pg_to_calcite(sql)
+    assert "COLLATE" not in out.upper()
+    assert out == 'SELECT "region", "amount" FROM "files"."orders" WHERE "region" = \'eu\''
+
+
+@pytest.mark.parametrize("collation", ['"de_DE"', '"en_US.utf8"', '"POSIX"', '"und-x-icu"'])
+def test_any_other_collation_is_refused_by_name(collation):
+    with pytest.raises(UnsupportedConstruct, match=f"COLLATE {collation}"):
+        transpile_pg_to_calcite(f'SELECT 1 FROM t WHERE r = \'eu\' COLLATE {collation}')
