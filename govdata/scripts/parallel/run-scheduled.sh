@@ -201,6 +201,12 @@ run_x_schema_if_needed() {
     echo "[$(ts)] running x-schema.sh explicitly (its own natural-completion trigger didn't fire this window)" | tee -a "$window_log"
     bash "$SCRIPT_DIR/../x-schema.sh" >> "$window_log" 2>&1 \
       || log_error "WARNING: explicit x-schema.sh run (end of daily window) failed — see $window_log"
+    # Embeddings follow the chunk sweep, as they do on run-pool.sh's own trigger. Without this the
+    # explicit path ran the sweep and then skipped embeddings entirely. vss-local.sh bounds itself
+    # (2h on weekdays, 20h on weekends; VSS_MAX_SECONDS overrides) and claims the box on its own.
+    echo "[$(ts)] running vss-local.sh backlog (embeddings, time-boxed)" | tee -a "$window_log"
+    bash "$SCRIPT_DIR/../vss-local.sh" backlog >> "$window_log" 2>&1 \
+      || log_error "WARNING: vss-local.sh backlog (end of daily window) failed — see $window_log"
   fi
 }
 
