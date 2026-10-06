@@ -1274,6 +1274,21 @@ build_inline_model() {
     fi
   fi
 
+  # GOVDATA_FORCE_REPROCESS_TABLES -> forceReprocessTables, sec only. The SEC materializer reads it
+  # to delete the accessions it is about to re-ingest before appending them; without it a forced
+  # table-level reprocess re-stages accessions the table already holds and appends a second copy.
+  if [ "$schema_name" = "sec" ] && [ -n "${GOVDATA_FORCE_REPROCESS_TABLES:-}" ]; then
+    local _frt_json="" _frt
+    IFS=',' read -ra _frt_arr <<< "$GOVDATA_FORCE_REPROCESS_TABLES"
+    for _frt in "${_frt_arr[@]}"; do
+      _frt="$(echo "$_frt" | xargs)"
+      [ -n "$_frt" ] && _frt_json="${_frt_json}\"${_frt}\","
+    done
+    if [ -n "$_frt_json" ]; then
+      user_tables_json="${user_tables_json},\"forceReprocessTables\":[${_frt_json%,}]"
+    fi
+  fi
+
   printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s%s}}]}' \
     "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json" "$user_tables_json"
 }

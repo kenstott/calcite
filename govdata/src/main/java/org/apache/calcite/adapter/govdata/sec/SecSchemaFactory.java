@@ -1309,8 +1309,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               STAGED_FILE_CLAIM_LEASE_MS);
           LOGGER.info("Table '{}': {} staged source files claimed for absorption ({} uploaded by this pass)",
               icebergTableName, pendingSourceFiles.size(), stagedSourceFiles.size());
+          Set<String> forced = parseForceAccessions(operand);
+          if (isForceReprocessed(operand, tableName) && !pendingSourceFiles.isEmpty()) {
+            // A table-level force re-stages accessions the table already holds. Delete exactly
+            // those accessions' rows, in every year partition, before the replacements are
+            // appended: an accession is one filing, and a forced reprocess replaces it, it does
+            // not add a second copy.
+            Set<String> restaged = materializer.distinctValuesInFiles(pendingSourceFiles,
+                config.getAccessionColumn());
+            LOGGER.info("Table '{}' is force-reprocessed: replacing {} accession(s) from {} staged "
+                + "file(s)", icebergTableName, restaged.size(), pendingSourceFiles.size());
+            forced = new HashSet<String>(forced);
+            forced.addAll(restaged);
+          }
           config = buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
-              tableConfig, operand, warehousePath, pendingSourceFiles);
+              tableConfig, operand, warehousePath, pendingSourceFiles, null, forced);
         }
 
         // Clean up old empty parquet files that can cause DuckDB union_by_name issues
@@ -1479,6 +1492,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String tableName, String icebergTableName, String baseDir, String pattern,
       Map<String, Object> tableConfig, Map<String, Object> operand, String warehousePath,
       List<String> stagedSourceFiles, Map<String, String> fixedPartitionValues) {
+    return buildMaterializationConfig(tableName, icebergTableName, baseDir, pattern, tableConfig,
+        operand, warehousePath, stagedSourceFiles, fixedPartitionValues,
+        parseForceAccessions(operand));
+  }
+
+  private IcebergMaterializer.MaterializationConfig buildMaterializationConfig(
+      String tableName, String icebergTableName, String baseDir, String pattern,
+      Map<String, Object> tableConfig, Map<String, Object> operand, String warehousePath,
+      List<String> stagedSourceFiles, Map<String, String> fixedPartitionValues,
+      Set<String> forceAccessions) {
 
     // Build source pattern
     String sourcePattern = storageProvider.resolvePath(baseDir, pattern);
@@ -1690,7 +1713,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .fixedPartitionValues(fixedPartitionValues)
-        .forceAccessions(parseForceAccessions(operand))
+        .forceAccessions(forceAccessions)
         .description(tableName)
         .build();
   }
@@ -1715,6 +1738,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
     return forceAccessions;
+  }
+
+  /**
+   * True when {@code forceReprocessTables} (the model operand the launch scripts fill from the
+   * table-level force request) lists {@code table}.
+   */
+  private boolean isForceReprocessed(Map<String, Object> operand, String table) {
+    Object raw = operand.get("forceReprocessTables");
+    if (raw instanceof List) {
+      for (Object name : (List<?>) raw) {
+        if (table.equals(String.valueOf(name))) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**

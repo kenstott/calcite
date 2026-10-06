@@ -3903,6 +3903,51 @@ public class IcebergMaterializer {
   }
 
   /**
+   * Distinct values of {@code column} across the given parquet files. A table-level force-reprocess
+   * uses it to learn which accessions the files about to be absorbed carry, so exactly those can
+   * have their existing rows deleted first.
+   */
+  public Set<String> distinctValuesInFiles(List<String> files, String column) {
+    if (files == null || files.isEmpty()) {
+      return new HashSet<String>();
+    }
+    try (Connection conn = getDuckDBConnection(1)) {
+      return distinctValuesInFiles(conn, files, column);
+    } catch (SQLException e) {
+      throw new RuntimeException("Failed to read " + column + " from " + files.size()
+          + " staged file(s): " + e.getMessage(), e);
+    }
+  }
+
+  /** {@link #distinctValuesInFiles(List, String)} on a caller-supplied DuckDB connection. */
+  static Set<String> distinctValuesInFiles(Connection conn, List<String> files, String column)
+      throws SQLException {
+    if (!column.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+      throw new IllegalArgumentException("not a column name: " + column);
+    }
+    Set<String> values = new HashSet<String>();
+    int chunk = 500;
+    for (int offset = 0; offset < files.size(); offset += chunk) {
+      StringBuilder list = new StringBuilder();
+      for (String file : files.subList(offset, Math.min(offset + chunk, files.size()))) {
+        if (list.length() > 0) {
+          list.append(", ");
+        }
+        String path = file.startsWith("s3a://") ? "s3://" + file.substring(6) : file;
+        list.append('\'').append(path.replace("'", "''")).append('\'');
+      }
+      String sql = "SELECT DISTINCT " + column + " FROM read_parquet([" + list
+          + "], union_by_name=true) WHERE " + column + " IS NOT NULL";
+      try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          values.add(rs.getString(1));
+        }
+      }
+    }
+    return values;
+  }
+
+  /**
    * Creates a DuckDB connection with configured settings.
    */
   private Connection getDuckDBConnection(int threads) throws SQLException {
