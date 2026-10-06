@@ -26,6 +26,34 @@ RUNS = os.path.join(REPO, "govdata", "scripts", "parallel", "runs")
 JOURNAL_WINDOW = "-6h"
 GH_TTL = 60
 
+
+def visible(path):
+    """`path` as this process can read it.
+
+    /var/tmp/govdata is its own disk, mounted after some terminals had already started. A process
+    started before the mount keeps its own view of the filesystem and finds the runs directory
+    dangling. The scheduler's /proc/<pid>/root is the up-to-date view, readable by the same user, so
+    fall back to it. Resolved on every call, so it follows a scheduler restart."""
+    if os.path.exists(path):
+        return path
+    target = os.path.realpath(path)
+    me = os.getuid()
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            if os.stat("/proc/%s" % pid).st_uid != me:
+                continue
+            with open("/proc/%s/cmdline" % pid, "rb") as fh:
+                if b"run-scheduled.sh" not in fh.read():
+                    continue
+        except OSError:
+            continue
+        cand = "/proc/%s/root%s" % (pid, target)
+        if os.path.exists(cand):
+            return cand
+    return path
+
 USE_COLOR = sys.stdout.isatty()
 
 
@@ -178,7 +206,7 @@ def pool():
         except OSError as e:
             raise RuntimeError("cannot read %s: %s" % (fd_dir, e))
         if log:
-            with open(log, errors="replace") as f:
+            with open(visible(log), errors="replace") as f:
                 lines = [l for l in f.read().splitlines()[-400:] if "Running:" in l]
             last = lines[-1] if lines else None
         mg["log"], mg["last"] = log, last
@@ -187,7 +215,8 @@ def pool():
 
 
 def window():
-    logs = sorted((os.path.join(RUNS, n) for n in os.listdir(RUNS)
+    runs = visible(RUNS)
+    logs = sorted((os.path.join(runs, n) for n in os.listdir(runs)
                    if n.startswith("scheduled-") and n.endswith(".log")), key=os.path.getmtime)
     if not logs:
         return None, [], []
