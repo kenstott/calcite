@@ -34,8 +34,14 @@
 #   git add govdata/src/main/resources/duckdb/seed/govdata-seed.zip \
 #           govdata/src/main/resources/duckdb/seed/govdata-seed.version
 #
+# Exit codes: 0 seed built, 1/2 error, 10 seed not needed (only with --if-needed or --check).
+#
 # Usage:
 #   scripts/build-seed.sh                         # all schemas, staging under build/seed-staging
+#   scripts/build-seed.sh --if-needed             # build only if a schema YAML changed since the
+#                                                 # committed seed; exit 10 (nothing done) if not
+#   scripts/build-seed.sh --check                 # report only: exit 0 if a rebuild is needed,
+#                                                 # 10 if not; builds nothing
 #   scripts/build-seed.sh --source sec,geo,econ   # subset (partial seed — for testing only)
 #   scripts/build-seed.sh --version 2026.07.24    # override marker version (default: project version)
 #   scripts/build-seed.sh --operating-dir /path   # override staging operating dir
@@ -54,6 +60,9 @@ SOURCE=""
 SEED_VERSION=""
 STAGING="$GOVDATA_HOME/build/seed-staging"
 KEEP=false
+IF_NEEDED=false
+CHECK_ONLY=false
+SEED_NOT_NEEDED=10
 # Which object store to read while generating. Passed straight through to
 # model-verify.sh: 'local' uses the AWS_* creds/endpoint in .env.prod (the LAN
 # mirror), 'mirror' uses PROD_AWS_* (the real R2). The seed is identical either
@@ -68,6 +77,8 @@ while [[ $# -gt 0 ]]; do
         --version)       SEED_VERSION="$2"; shift 2 ;;
         --operating-dir) STAGING="$2"; shift 2 ;;
         --keep)          KEEP=true; shift ;;
+        --if-needed)     IF_NEEDED=true; shift ;;
+        --check)         CHECK_ONLY=true; shift ;;
         --mode)          MODE="$2"; shift 2
                          case "$MODE" in
                              local|mirror) ;;
@@ -77,6 +88,31 @@ while [[ $# -gt 0 ]]; do
         *)               echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
+
+# --- Is a rebuild needed? --------------------------------------------------------------------
+# The bundled seed goes stale when a schema's MODEL changes after the commit that last touched the
+# seed zip: workers then keep serving the old view definitions. seed-model-diff.py compares parsed
+# models and ignores the generated observedCoverage blocks (rewritten nightly) and comments, so
+# only a real model change asks for a rebuild.
+SEED_REL="govdata/src/main/resources/duckdb/seed/govdata-seed.zip"
+seed_commit="$(git -C "$REPO_ROOT" log -1 --format=%H -- "$SEED_REL")"
+stale_yaml=""
+if [[ -n "$seed_commit" ]]; then
+    stale_yaml="$(cd "$REPO_ROOT" && python3 "$SCRIPT_DIR/seed-model-diff.py" "$seed_commit" HEAD)"
+fi
+if [[ "$IF_NEEDED" == true || "$CHECK_ONLY" == true ]]; then
+    if [[ -n "$seed_commit" && -z "$stale_yaml" ]]; then
+        echo "build-seed: seed is current (no schema model changed since $seed_commit); not needed"
+        exit "$SEED_NOT_NEEDED"
+    fi
+    if [[ -z "$seed_commit" ]]; then
+        echo "build-seed: seed rebuild needed: no committed seed"
+    else
+        echo "build-seed: seed rebuild needed: schema models changed since $seed_commit:"
+        echo "$stale_yaml" | sed 's/^/    /'
+    fi
+    [[ "$CHECK_ONLY" == true ]] && exit 0
+fi
 
 # --- Require S3 mode (portability guard) -----------------------------------------------------
 ENV_PROD="$GOVDATA_HOME/.env.prod"
