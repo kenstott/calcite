@@ -502,7 +502,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 540749
-      checkedAt: "2026-10-05T05:09:14Z"
+      checkedAt: "2026-10-06T05:31:26Z"
     partitions: *standard_partitions
     comment: >
       NHTSA Fatality Analysis Reporting System — one row per fatal traffic crash
@@ -670,7 +670,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 106363320
-      checkedAt: "2026-10-05T05:09:22Z"
+      checkedAt: "2026-10-06T05:31:41Z"
     partitions: *month_partitions
     comment: >
       BTS Reporting Carrier On-Time Performance — one row per scheduled domestic
@@ -1011,7 +1011,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 297946
-      checkedAt: "2026-10-05T05:09:26Z"
+      checkedAt: "2026-10-06T05:31:52Z"
     partitions: *month_partitions
     comment: >
       FTA National Transit Database — Complete Monthly Ridership (with
@@ -1156,7 +1156,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 7144555
-      checkedAt: "2026-10-05T05:09:27Z"
+      checkedAt: "2026-10-06T05:31:55Z"
     partitions: *standard_partitions
     comment: >
       BTS T-100 Domestic Segment (All Carriers) — monthly air-carrier traffic and
@@ -1311,7 +1311,7 @@ partitionedTables:
       contiguous: false
       years: [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2024]
       rowCount: 510
-      checkedAt: "2026-10-05T05:09:28Z"
+      checkedAt: "2026-10-06T05:31:57Z"
     partitions: *standard_partitions
     comment: >
       FHWA Highway Statistics table MV-1 — state motor-vehicle registrations by
@@ -1417,7 +1417,7 @@ partitionedTables:
       distinctYears: 2
       contiguous: true
       rowCount: 728
-      checkedAt: "2026-10-05T05:09:28Z"
+      checkedAt: "2026-10-06T05:31:58Z"
     partitions: *standard_partitions
     comment: >
       FHWA Highway Statistics table HM-64 — functional-system road mileage by measured
@@ -3053,7 +3053,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 9494201
-      checkedAt: "2026-10-05T05:09:30Z"
+      checkedAt: "2026-10-06T05:32:02Z"
     partitions: *standard_partitions
     # Single-fetch bulk table (one national zip per year, dimensions: [type, year] only)
     # — see the govdata-dq-patterns single-fetch-bulk caveat: dqRowLimit takes the first
@@ -4437,7 +4437,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 1466734
-      checkedAt: "2026-10-05T05:09:31Z"
+      checkedAt: "2026-10-06T05:32:05Z"
     partitions: *standard_partitions
     dqRowLimit: 50000
     comment: >
