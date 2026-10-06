@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -845,6 +846,185 @@ public class IcebergTableWriter {
     });
     LOGGER.info("deleteRows: removed {} row(s) across {} file(s) ({} replacement file(s) written)",
         finalDeletedRows, finalFilesToDelete.size(), finalReplacementFiles.size());
+  }
+
+  /**
+   * Removes the surplus copies left when whole groups of rows (e.g. every row of an SEC accession)
+   * were ingested more than once, leaving one copy of each row.
+   *
+   * <p>A group is treated as re-ingested only when every one of its distinct rows appears the same
+   * number of times k &gt; 1 (more precisely, when the greatest common divisor k of its rows'
+   * multiplicities exceeds 1); its rows are then reduced to count / k copies each. A group whose
+   * multiplicities share no factor is left alone, so a row that legitimately appears twice in a
+   * once-ingested group is never collapsed, and no distinct row is ever removed entirely: the set
+   * of distinct rows, and therefore of keys, is unchanged.
+   *
+   * <p>Two passes over the files {@code scanFilter} selects: the first counts, the second removes
+   * (only when {@code execute}), replacing each file that held a surplus copy through
+   * {@link #deleteRowsMatching}, so untouched files are not rewritten. The filter should name a
+   * partition column, so that it selects whole partitions exactly. After a commit the scan is
+   * repeated and compared with the first.
+   *
+   * @param groupColumn column that groups rows into ingestions, e.g. {@code accession_number}
+   * @param keyColumns columns that identify a row logically; their distinct count is checked
+   *     before and after, may be empty
+   * @param scanFilter selects the files to examine
+   * @param execute false for a dry run that only reports
+   */
+  public DedupeReport dedupeCopies(String groupColumn, List<String> keyColumns,
+      org.apache.iceberg.expressions.Expression scanFilter, boolean execute) throws IOException {
+    Schema schema = table.schema();
+    if (groupColumn == null || schema.findField(groupColumn) == null) {
+      throw new IllegalArgumentException("dedupeCopies: no column '" + groupColumn + "'");
+    }
+    List<Types.NestedField> keyFields = new ArrayList<Types.NestedField>();
+    for (String key : keyColumns) {
+      Types.NestedField f = schema.findField(key);
+      if (f == null) {
+        throw new IllegalArgumentException("dedupeCopies: no key column '" + key + "'");
+      }
+      keyFields.add(f);
+    }
+    long snapshotBefore = table.currentSnapshot() == null ? -1 : table.currentSnapshot().snapshotId();
+    CopyScan before = scanCopies(groupColumn, keyFields, scanFilter);
+
+    long rowsToRemove = 0;
+    Map<Integer, Integer> groupsByCopies = new HashMap<Integer, Integer>();
+    for (int g = 0; g < before.groupGcd.length; g++) {
+      if (before.groupGcd[g] > 1) {
+        Integer k = Integer.valueOf(before.groupGcd[g]);
+        Integer n = groupsByCopies.get(k);
+        groupsByCopies.put(k, n == null ? 1 : n + 1);
+      }
+    }
+    RowDigestCounts digests = before.digests;
+    for (int slot = 0; slot < digests.capacity(); slot++) {
+      int c = digests.count(slot);
+      if (c > 0) {
+        rowsToRemove += c - c / before.groupGcd[digests.group(slot)];
+      }
+    }
+    if (!execute || rowsToRemove == 0) {
+      return new DedupeReport(before.rows, digests.size(), before.distinctKeys,
+          before.groupGcd.length, groupsByCopies, rowsToRemove, 0, snapshotBefore, null);
+    }
+
+    final MessageDigest md = newMd5();
+    final long[] d = new long[2];
+    final List<Types.NestedField> allColumns = schema.columns();
+    final int[] groupGcd = before.groupGcd;
+    final java.util.concurrent.atomic.AtomicLong removed = new java.util.concurrent.atomic.AtomicLong();
+    deleteRowsMatching(scanFilter, record -> {
+      RowDigestCounts.digest(md, record, allColumns, d);
+      int slot = digests.find(d[0], d[1]);
+      if (slot < 0) {
+        return false;
+      }
+      int target = digests.count(slot) / groupGcd[digests.group(slot)];
+      if (digests.kept(slot) < target) {
+        digests.keepOne(slot);
+        return false;
+      }
+      removed.incrementAndGet();
+      return true;
+    }, "dedupeCopies on " + groupColumn);
+
+    table.refresh();
+    CopyScan after = scanCopies(groupColumn, keyFields, scanFilter);
+    String verification;
+    if (after.rows != before.rows - removed.get()) {
+      verification = "MISMATCH rows: expected " + (before.rows - removed.get()) + " found " + after.rows;
+    } else if (after.digests.size() != digests.size()) {
+      verification = "MISMATCH distinct rows: before " + digests.size() + " after " + after.digests.size();
+    } else if (after.distinctKeys != before.distinctKeys) {
+      verification = "MISMATCH distinct keys: before " + before.distinctKeys + " after " + after.distinctKeys;
+    } else {
+      verification = "OK";
+    }
+    return new DedupeReport(before.rows, digests.size(), before.distinctKeys,
+        before.groupGcd.length, groupsByCopies, rowsToRemove, removed.get(), snapshotBefore,
+        verification);
+  }
+
+  /** Counts every row's digest under its group, and the distinct keys, for {@link #dedupeCopies}. */
+  private CopyScan scanCopies(String groupColumn, List<Types.NestedField> keyFields,
+      org.apache.iceberg.expressions.Expression scanFilter) throws IOException {
+    Schema schema = table.schema();
+    List<Types.NestedField> allColumns = schema.columns();
+    RowDigestCounts digests = new RowDigestCounts();
+    RowDigestCounts keys = keyFields.isEmpty() ? null : new RowDigestCounts();
+    Map<String, Integer> groupIndex = new HashMap<String, Integer>();
+    MessageDigest md = newMd5();
+    long[] d = new long[2];
+    long rows = 0;
+    try (CloseableIterable<FileScanTask> tasks =
+             table.newScan().filter(scanFilter).planFiles()) {
+      for (FileScanTask task : tasks) {
+        InputFile in = table.io().newInputFile(task.file().path().toString());
+        try (CloseableIterable<Record> records = Parquet.read(in)
+            .project(schema)
+            .createReaderFunc(fileSchema ->
+                org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                    schema, fileSchema))
+            .build()) {
+          for (Record record : records) {
+            String group = String.valueOf(record.getField(groupColumn));
+            Integer gi = groupIndex.get(group);
+            if (gi == null) {
+              gi = groupIndex.size();
+              groupIndex.put(group, gi);
+            }
+            RowDigestCounts.digest(md, record, allColumns, d);
+            digests.add(d[0], d[1], gi);
+            if (keys != null) {
+              RowDigestCounts.digest(md, record, keyFields, d);
+              keys.add(d[0], d[1], 0);
+            }
+            rows++;
+          }
+        }
+      }
+    }
+    int[] gcd = new int[groupIndex.size()];
+    for (int slot = 0; slot < digests.capacity(); slot++) {
+      int c = digests.count(slot);
+      if (c > 0) {
+        gcd[digests.group(slot)] = gcd(gcd[digests.group(slot)], c);
+      }
+    }
+    return new CopyScan(digests, gcd, rows, keys == null ? -1 : keys.size());
+  }
+
+  private static int gcd(int a, int b) {
+    while (b != 0) {
+      int t = a % b;
+      a = b;
+      b = t;
+    }
+    return a;
+  }
+
+  private static MessageDigest newMd5() {
+    try {
+      return MessageDigest.getInstance("MD5");
+    } catch (java.security.NoSuchAlgorithmException e) {
+      throw new IllegalStateException("MD5 is required by the JDK", e);
+    }
+  }
+
+  /** One counting pass: digests per group, each group's gcd of multiplicities, totals. */
+  private static final class CopyScan {
+    final RowDigestCounts digests;
+    final int[] groupGcd;
+    final long rows;
+    final long distinctKeys;
+
+    CopyScan(RowDigestCounts digests, int[] groupGcd, long rows, long distinctKeys) {
+      this.digests = digests;
+      this.groupGcd = groupGcd;
+      this.rows = rows;
+      this.distinctKeys = distinctKeys;
+    }
   }
 
   /** Converts an Iceberg {@link Record} to a plain map, for feeding back into {@link #writeRecords}. */
