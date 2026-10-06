@@ -5738,7 +5738,10 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Process separately-downloaded exhibit files from the accession directory
       try {
-        List<StorageProvider.FileEntry> exhibitFiles = storageProvider.listFiles(accessionDir, false);
+        // The trailing slash makes an object-store delimiter listing return the accession's files;
+        // without it the folder itself comes back as one directory entry and no exhibit is seen.
+        List<StorageProvider.FileEntry> exhibitFiles =
+            storageProvider.listFiles(accessionDir + "/", false);
         for (StorageProvider.FileEntry entry : exhibitFiles) {
           if (entry.isDirectory()) {
             continue;
