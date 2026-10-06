@@ -16,8 +16,9 @@ setup() { # fresh scratch repo + bare origin
   mkdir -p "$tmp/w/govdata/scripts/parallel" "$tmp/w/govdata/src/main/resources/duckdb/seed" "$tmp/bin"
   cd "$tmp/w"; git init -q -b main .; git config user.email t@t; git config user.name t
   cp "$HERE/pre-daily-release.sh" govdata/scripts/parallel/
-  cat > gradlew <<'G'
+  cat > gradlew <<G
 #!/usr/bin/env bash
+echo "\$*" >> "$tmp/gradle-args.log"
 mkdir -p govdata/build/libs
 python3 -c "import zipfile;zipfile.ZipFile('govdata/build/libs/sih-govdata-1-SNAPSHOT.jar','w').writestr('x','y')"
 G
@@ -61,6 +62,8 @@ grep -q "seedgen" "$tmp/seed-builds.log" && ok "changed model: seed generated fr
 [ "$(cat "$tmp/w/govdata/build/libs/sih-govdata.jar.commit" 2>/dev/null)" = "$head1" ] && ok "changed model: staged jar built from the seed commit" || bad "changed model: stale staged jar"
 grep -q -- "--target $head1" "$tmp/gh.log" && ok "changed model: release targets the seed commit" || bad "changed model: release not at seed commit"
 ls "$tmp/w/govdata/build/libs" | grep -q seedgen && bad "changed model: seedgen jar left behind" || ok "changed model: seedgen jar cleaned up"
+[ -s "$tmp/gradle-args.log" ] && ! grep -qv -- "--no-daemon" "$tmp/gradle-args.log" \
+  && ok "every build runs with --no-daemon" || bad "a build ran without --no-daemon: $(cat "$tmp/gradle-args.log")"
 
 # 3. rebuild fails: reported, release continues on the committed seed
 setup; stub_seed 0 1; head0=$(git -C "$tmp/w" rev-parse HEAD); run

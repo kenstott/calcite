@@ -52,7 +52,10 @@ build_jar() {
   wt="$(mktemp -d "${TMPDIR:-/tmp}/pre-daily-build.XXXXXX")"
   git worktree add --detach --quiet "$wt" "$sha" || { rm -rf "$wt"; return 1; }
   log "building shadowJar from $sha in $wt"
-  if ! (cd "$wt" && ./gradlew :govdata:shadowJar --console=plain -q); then
+  # --no-daemon: a daemon started from a shell in another mount namespace (one that predates the
+  # /var/tmp/govdata mount) is reused by default and cannot chdir into a checkout under that path
+  # ("could not setcwd()"), which failed the whole build. A one-shot build has no such state.
+  if ! (cd "$wt" && ./gradlew --no-daemon :govdata:shadowJar --console=plain -q); then
     log "ERROR: the shadowJar build failed"; rc=1
   else
     built="$(find "$wt/govdata/build/libs" -maxdepth 1 -name 'sih-govdata-*-SNAPSHOT.jar' | head -1)"
