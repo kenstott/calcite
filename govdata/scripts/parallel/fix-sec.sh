@@ -36,6 +36,11 @@
 #   corresponding row-level entry in X's Iceberg table therefore lost data — it is not a
 #   filing that legitimately had nothing to contribute.
 #
+# A filing that lost its filing_metadata row is absent from the table the check above starts from,
+# so that check cannot see it. filing_metadata is therefore also audited against EDGAR's full-index:
+# an indexed filing of a form in the matrix with no filing_metadata row is a gap. Every gap is
+# reprocessed through the pool slot that owns its form type.
+#
 # WHY force-reprocess RATHER THAN DELETING TRACKER ROWS
 #   filterUnprocessed has a forceAccessions path that runs before any tracker read, so
 #   listed accessions are reprocessed regardless of their markers. That leaves tracker
@@ -265,6 +270,23 @@ log_info "fix-sec: scanning Iceberg for filings missing a table their form shoul
   echo "CREATE TEMP TABLE meta AS SELECT accession_number AS acc, filing_type AS form"
   echo "  FROM iceberg_scan('${GOVDATA_PARQUET_DIR}/sec/filing_metadata', allow_moved_paths => true)"
   echo " WHERE accession_number IS NOT NULL ${_year_filter};"
+  # filing_metadata cannot be audited against itself: a filing whose row was lost is simply absent
+  # from `meta`, so it never reaches the join below and every other table's gap check, which is
+  # driven from `meta`, never sees it either. EDGAR's own full-index is the authority on which
+  # filings exist, so every indexed filing of a form in the matrix that has no filing_metadata row
+  # is a gap. The index is read from the raw cache the ETL itself uses.
+  _idx_year="*"
+  [ -z "$ONLY_YEAR" ] || _idx_year="$ONLY_YEAR"
+  echo "CREATE TEMP TABLE idx AS SELECT DISTINCT acc, form FROM ("
+  echo "  SELECT regexp_extract(line, '([0-9]{10}-[0-9]{2}-[0-9]{6})[.]txt', 1) AS acc,"
+  echo "         replace(upper(trim(substr(line, 63, 12))), 'SCHEDULE ', 'SC ') AS form"
+  if [ -n "$ONLY_TABLE" ] && [ "$ONLY_TABLE" != "filing_metadata" ]; then
+    echo "    FROM (SELECT NULL::VARCHAR AS line WHERE false) l"
+  else
+    echo "    FROM (SELECT unnest(string_split(content, chr(10))) AS line"
+    echo "            FROM read_text('${GOVDATA_CACHE_DIR}/sec/full-index/${_idx_year}/QTR*/company.idx')) l"
+  fi
+  echo "   WHERE length(line) > 113) x WHERE acc <> '' ${_year_filter};"
   echo "CREATE TEMP TABLE present(tbl VARCHAR, acc VARCHAR);"
   printf '%s\n' "$_scanned" | while read -r tbl; do
     [ -n "$tbl" ] || continue
@@ -279,8 +301,21 @@ log_info "fix-sec: scanning Iceberg for filings missing a table their form shoul
   # marker is consulted, so an output that was legitimately empty is never mistaken for loss.
   echo "CREATE TEMP TABLE gaps AS"
   echo "  SELECT m.acc, x.tbl FROM meta m JOIN matrix x ON x.form = m.form"
-  echo "   WHERE NOT EXISTS (SELECT 1 FROM present p WHERE p.tbl = x.tbl AND p.acc = m.acc);"
-  echo "COPY (SELECT DISTINCT acc FROM gaps ORDER BY acc) TO '${ACC_FILE}' (HEADER false);"
+  echo "   WHERE NOT EXISTS (SELECT 1 FROM present p WHERE p.tbl = x.tbl AND p.acc = m.acc)"
+  echo "  UNION"
+  echo "  SELECT i.acc, 'filing_metadata' FROM idx i JOIN matrix x ON x.form = i.form"
+  echo "   WHERE x.tbl = 'filing_metadata'"
+  echo "     AND NOT EXISTS (SELECT 1 FROM present p WHERE p.tbl = 'filing_metadata' AND p.acc = i.acc);"
+  # Each gap accession is reprocessed through the pool slot that owns its form type.
+  echo "CREATE TEMP TABLE acc_form AS SELECT acc, any_value(form) AS form FROM"
+  echo "  (SELECT acc, form FROM meta UNION ALL SELECT acc, form FROM idx) GROUP BY acc;"
+  echo "COPY (SELECT DISTINCT g.acc FROM gaps g ORDER BY 1) TO '${ACC_FILE}' (HEADER false);"
+  echo "COPY (SELECT g.acc, CASE"
+  echo "    WHEN f.form IN ('10-K','10-K/A','10-Q','10-Q/A') THEN 'sec_primary'"
+  echo "    WHEN f.form IN ('13F-HR','13F-HR/A') THEN 'sec_13f'"
+  echo "    ELSE 'sec_secondary' END AS slot"
+  echo "  FROM (SELECT DISTINCT acc FROM gaps) g JOIN acc_form f ON f.acc = g.acc ORDER BY 1)"
+  echo "  TO '${ACC_FILE}.slots' (HEADER false, DELIMITER '|');"
   echo "SELECT 'BY_TABLE|'||tbl||'|'||count(DISTINCT acc) FROM gaps GROUP BY tbl ORDER BY 1;"
   echo "SELECT 'BY_YEAR|20'||yy||'|'||cnt FROM (SELECT substring(acc,12,2) AS yy,"
   echo "  count(DISTINCT acc) AS cnt FROM gaps GROUP BY 1) y ORDER BY yy;"
@@ -408,9 +443,12 @@ fi
 # the EDGAR full-index load to a single year: worker-sec-reprocess.sh derives its model's
 # year RANGE from the accessions it is given, so a mixed batch would load every year in
 # between just to locate a handful of filings.
-awk '{ print "20" substr($0,12,2) "\t" $0 }' "$ACC_FILE" | sort > "$ACC_FILE.byyear"
+awk -F'|' 'NR==FNR{slot[$1]=$2; next} { print "20" substr($0,12,2) "\t" slot[$0] "\t" $0 }' \
+  "$ACC_FILE.slots" "$ACC_FILE" | sort > "$ACC_FILE.byyear"
 
-YEARS=$(cut -f1 "$ACC_FILE.byyear" | uniq)
+# Each (year, slot) pair is its own worker invocation: the slot selects the filingTypes list the
+# accessions are reprocessed under, and worker-sec-reprocess.sh refuses to run without one.
+YEARS=$(cut -f1,2 "$ACC_FILE.byyear" | uniq | tr '\t' ':')
 # Record an accession list as attempted. Whether rows appeared or the filing's output was
 # legitimately empty, each listed accession has now had its one pass and must drop out of the next
 # enumeration — otherwise the undecidable cases recirculate forever. ON CONFLICT keeps a re-run of
@@ -439,11 +477,13 @@ record_attempted() {
 
 batches=0
 failed=0
-for year in $YEARS; do
-  year_file="$ACC_FILE.$year"
-  awk -F'\t' -v y="$year" '$1==y{print $2}' "$ACC_FILE.byyear" > "$year_file"
+for ys in $YEARS; do
+  year="${ys%%:*}"
+  slot="${ys##*:}"
+  year_file="$ACC_FILE.$year.$slot"
+  awk -F'\t' -v y="$year" -v s="$slot" '$1==y && $2==s{print $3}' "$ACC_FILE.byyear" > "$year_file"
   count=$(wc -l < "$year_file")
-  log_info "fix-sec: year $year — $count accession(s), batches of $BATCH_SIZE"
+  log_info "fix-sec: year $year slot $slot — $count accession(s), batches of $BATCH_SIZE"
 
   split -l "$BATCH_SIZE" -d "$year_file" "$year_file.batch."
   for bf in "$year_file".batch.*; do
@@ -452,7 +492,7 @@ for year in $YEARS; do
     n=$(wc -l < "$bf")
     log_info "fix-sec: reprocessing batch $batches ($n accessions, year $year)"
     # No --force-download: the raw cache is intact and is what makes this cheap.
-    if ! "$SCRIPT_DIR/worker-sec-reprocess.sh" $(tr '\n' ' ' < "$bf"); then
+    if ! "$SCRIPT_DIR/worker-sec-reprocess.sh" --schema "$slot" $(tr '\n' ' ' < "$bf"); then
       failed=$((failed + 1))
       log_info "fix-sec: batch $batches FAILED (year $year) — list kept at $bf"
       continue
