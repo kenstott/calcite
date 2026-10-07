@@ -19,6 +19,8 @@ import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rex.RexNode;
 
+import java.util.List;
+
 /**
  * Implementation of {@link Filter} relational expression in Salesforce.
  */
@@ -46,7 +48,7 @@ public class SalesforceFilter extends Filter implements SalesforceRel {
     implementor.visitChild(0, getInput());
 
     // Convert filter condition to SOQL WHERE clause
-    String whereClause = SOQLBuilder.buildWhereClause(condition);
+    String whereClause = SOQLBuilder.buildWhereClause(condition, inputFieldNames(implementor));
 
     if (implementor.whereClause == null) {
       implementor.whereClause = whereClause;
@@ -54,5 +56,13 @@ public class SalesforceFilter extends Filter implements SalesforceRel {
       // Combine with existing WHERE clause
       implementor.whereClause = "(" + implementor.whereClause + ") AND (" + whereClause + ")";
     }
+  }
+
+  /** SOQL field names of this filter's input, honoring a projection below it. */
+  private List<String> inputFieldNames(Implementor implementor) {
+    if (implementor.selectFields != null) {
+      return implementor.selectFields;
+    }
+    return getInput().getRowType().getFieldNames();
   }
 }

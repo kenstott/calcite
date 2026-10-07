@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.salesforce;
 
+import org.apache.calcite.DataContext;
 import org.apache.calcite.adapter.enumerable.EnumerableRel;
 import org.apache.calcite.adapter.enumerable.EnumerableRelImplementor;
 import org.apache.calcite.adapter.enumerable.PhysType;
@@ -60,9 +61,10 @@ public class SalesforceToEnumerableConverter extends ConverterImpl
 
     // Generate the enumerable implementation
     final BlockBuilder builder = new BlockBuilder();
+    // Rows are always Object[]; do not let a single-column result collapse to a scalar
     final PhysType physType =
         PhysTypeImpl.of(implementor.getTypeFactory(), getRowType(),
-            pref.preferArray());
+            pref.preferArray(), false);
 
     // Get the table reference
     Expression table = salesforceImplementor.table.getExpression(SalesforceTable.class);
@@ -71,7 +73,9 @@ public class SalesforceToEnumerableConverter extends ConverterImpl
     Expression query =
         Expressions.call(table,
         "query",
-        Expressions.constant(soql));
+        DataContext.ROOT,
+        Expressions.constant(soql),
+        Expressions.constant(String.join(",", selectFields(salesforceImplementor))));
 
     builder.add(Expressions.return_(null, query));
 
@@ -121,11 +125,18 @@ public class SalesforceToEnumerableConverter extends ConverterImpl
   }
 
   private String getAllFields(SalesforceRel.Implementor implementor) {
+    return String.join(", ", selectFields(implementor));
+  }
+
+  /** SOQL field names in the order the result row carries them. */
+  private List<String> selectFields(SalesforceRel.Implementor implementor) {
+    if (implementor.selectFields != null) {
+      return implementor.selectFields;
+    }
     List<String> fields = new ArrayList<>();
-    RelDataType rowType = getRowType();
-    for (RelDataTypeField field : rowType.getFieldList()) {
+    for (RelDataTypeField field : getRowType().getFieldList()) {
       fields.add(field.getName());
     }
-    return String.join(", ", fields);
+    return fields;
   }
 }

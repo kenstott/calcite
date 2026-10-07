@@ -19,10 +19,15 @@ import org.apache.calcite.rel.convert.ConverterRule;
 import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.Sort;
+import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.logical.LogicalProject;
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexNode;
 
 import com.google.common.collect.ImmutableList;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
@@ -64,7 +69,8 @@ public class SalesforceRules {
   public static final List<RelOptRule> RULES =
       ImmutableList.of(FILTER,
       PROJECT,
-      SORT);
+      SORT,
+      SalesforceTableModifyRule.INSTANCE);
 
   /**
    * Abstract base class for Salesforce converter rules.
@@ -111,8 +117,15 @@ public class SalesforceRules {
       super(config);
     }
 
-    @Override public RelNode convert(RelNode rel) {
+    @Override public @Nullable RelNode convert(RelNode rel) {
       final LogicalFilter filter = (LogicalFilter) rel;
+      // Conditions with no SOQL form stay in Calcite
+      try {
+        SOQLBuilder.buildWhereClause(filter.getCondition(),
+            filter.getInput().getRowType().getFieldNames());
+      } catch (UnsupportedOperationException e) {
+        return null;
+      }
       final RelTraitSet traitSet = filter.getTraitSet().replace(SalesforceRel.CONVENTION);
       return new SalesforceFilter(
           filter.getCluster(),
@@ -137,8 +150,14 @@ public class SalesforceRules {
       super(config);
     }
 
-    @Override public RelNode convert(RelNode rel) {
+    @Override public @Nullable RelNode convert(RelNode rel) {
       final LogicalProject project = (LogicalProject) rel;
+      // SOQL can only select fields; computed expressions stay in Calcite
+      for (RexNode expr : project.getProjects()) {
+        if (!(expr instanceof RexInputRef)) {
+          return null;
+        }
+      }
       final RelTraitSet traitSet = project.getTraitSet().replace(SalesforceRel.CONVENTION);
       return new SalesforceProject(
           project.getCluster(),
@@ -174,6 +193,37 @@ public class SalesforceRules {
           sort.getCollation(),
           sort.offset,
           sort.fetch);
+    }
+  }
+
+  /**
+   * Rule to convert a {@link TableModify} on a {@link SalesforceTable} into a
+   * {@link SalesforceTableModify}.
+   */
+  private static class SalesforceTableModifyRule extends ConverterRule {
+
+    static final SalesforceTableModifyRule INSTANCE = Config.INSTANCE
+        .withConversion(TableModify.class, Convention.NONE,
+            EnumerableConvention.INSTANCE, "SalesforceTableModifyRule")
+        .withRuleFactory(SalesforceTableModifyRule::new)
+        .toRule(SalesforceTableModifyRule.class);
+
+    protected SalesforceTableModifyRule(Config config) {
+      super(config);
+    }
+
+    @Override public @Nullable RelNode convert(RelNode rel) {
+      final TableModify modify = (TableModify) rel;
+      if (modify.getTable().unwrap(SalesforceTable.class) == null) {
+        return null;
+      }
+      final RelTraitSet traitSet =
+          modify.getTraitSet().replace(EnumerableConvention.INSTANCE);
+      return new SalesforceTableModify(modify.getCluster(), traitSet,
+          modify.getTable(), modify.getCatalogReader(),
+          convert(modify.getInput(), traitSet), modify.getOperation(),
+          modify.getUpdateColumnList(), modify.getSourceExpressionList(),
+          modify.isFlattened());
     }
   }
 }

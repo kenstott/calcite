@@ -51,27 +51,37 @@ public class SalesforceSchemaFactory implements SchemaFactory {
       // Username/password flow
       authConfig = SalesforceConnection.AuthConfig
           .usernamePassword(username, password, securityToken, clientId, clientSecret);
+    } else if (clientId != null && clientSecret != null) {
+      // Client credentials flow
+      authConfig = SalesforceConnection.AuthConfig
+          .clientCredentials(clientId, clientSecret);
     } else {
       // OAuth token flow
       String accessToken = (String) operand.get("accessToken");
       String instanceUrl = (String) operand.get("instanceUrl");
       if (accessToken == null || instanceUrl == null) {
         throw new IllegalArgumentException(
-            "Either username/password or accessToken/instanceUrl must be provided");
+            "One of username/password, clientId/clientSecret, or "
+                + "accessToken/instanceUrl must be provided");
       }
       authConfig = SalesforceConnection.AuthConfig.accessToken(accessToken, instanceUrl);
     }
 
     // Cache configuration
-    Integer cacheMaxSize = (Integer) operand.get("cacheMaxSize");
-    if (cacheMaxSize == null) {
-      cacheMaxSize = 1000;
-    }
+    Object lowercaseAliasesOperand = operand.get("lowercaseAliases");
+    boolean lowercaseAliases = lowercaseAliasesOperand == null
+        || Boolean.parseBoolean(lowercaseAliasesOperand.toString());
+
+    // A model file supplies a number; the JDBC driver supplies URL strings
+    Object cacheMaxSizeOperand = operand.get("cacheMaxSize");
+    int cacheMaxSize = cacheMaxSizeOperand == null
+        ? 1000
+        : Integer.parseInt(cacheMaxSizeOperand.toString());
 
     try {
       SalesforceConnection connection =
           new SalesforceConnection(loginUrl, authConfig, apiVersion);
-      return new SalesforceSchema(connection, cacheMaxSize);
+      return new SalesforceSchema(connection, cacheMaxSize, lowercaseAliases);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create Salesforce schema", e);
     }

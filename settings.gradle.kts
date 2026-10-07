@@ -99,6 +99,7 @@ include(
     "trino-calcite",
     "trino-cloudops",
     "trino-file",
+    "trino-salesforce",
     "trino-sharepoint",
     "trino-splunk"
 )

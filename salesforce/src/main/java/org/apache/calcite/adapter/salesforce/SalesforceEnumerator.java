@@ -18,6 +18,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -29,19 +33,22 @@ public class SalesforceEnumerator implements Enumerator<Object[]> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SalesforceEnumerator.class);
 
+  private static final DateTimeFormatter SF_DATETIME =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
+
   private final SalesforceConnection connection;
   private final String soql;
-  private final RelDataType rowType;
+  private final List<RelDataTypeField> fields;
 
   private SalesforceConnection.QueryResult currentResult;
   private Iterator<Map<String, Object>> currentIterator;
   private Object[] current;
 
   public SalesforceEnumerator(SalesforceConnection connection, String soql,
-      RelDataType rowType) {
+      List<RelDataTypeField> fields) {
     this.connection = connection;
     this.soql = soql;
-    this.rowType = rowType;
+    this.fields = fields;
   }
 
   @Override public Object[] current() {
@@ -81,7 +88,6 @@ public class SalesforceEnumerator implements Enumerator<Object[]> {
   }
 
   private Object[] convertRecord(Map<String, Object> record) {
-    List<RelDataTypeField> fields = rowType.getFieldList();
     Object[] row = new Object[fields.size()];
 
     for (int i = 0; i < fields.size(); i++) {
@@ -128,9 +134,17 @@ public class SalesforceEnumerator implements Enumerator<Object[]> {
       return new java.math.BigDecimal(stringValue);
 
     case DATE:
+      // Calcite's internal DATE representation is days since epoch
+      return (int) LocalDate.parse(stringValue).toEpochDay();
+
     case TIMESTAMP:
-      // Parse Salesforce date/datetime format
-      return parseDate(stringValue);
+      // Salesforce datetimes look like 2026-10-07T12:34:56.000+0000;
+      // Calcite's internal TIMESTAMP representation is epoch millis
+      return OffsetDateTime.parse(stringValue, SF_DATETIME).toInstant().toEpochMilli();
+
+    case TIME:
+      // Salesforce times look like 12:34:56.000Z; internal TIME is millis of day
+      return (int) (LocalTime.parse(stringValue.replace("Z", "")).toNanoOfDay() / 1_000_000L);
 
     default:
       // VARCHAR and others
@@ -138,11 +152,7 @@ public class SalesforceEnumerator implements Enumerator<Object[]> {
     }
   }
 
-  private Object parseDate(String dateString) {
-    // Salesforce dates are in ISO format
-    // For now, return as string - proper date parsing would use java.time
-    return dateString;
-  }
+
 
   @Override public void reset() {
     throw new UnsupportedOperationException("reset not supported");
