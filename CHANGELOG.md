@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.108.0](https://github.com/kenstott/calcite/compare/engine-v0.107.0...engine-v0.108.0) (2026-10-07)
+
+
+### Features
+
+* **cloudops:** the schema name is configurable (schema property) ([0c20d72](https://github.com/kenstott/calcite/commit/0c20d7269d6ffd0f3fb54b3557d869f85aefb1df))
+* **govdata/scripts:** never remediate a worker outside a scheduled production slot ([254a0ff](https://github.com/kenstott/calcite/commit/254a0ff9be72e8774234c252b730943a26009c7e))
+* **govdata/scripts:** there is no bare sec slot for production remediation ([10ce09c](https://github.com/kenstott/calcite/commit/10ce09c7f60914855b85d3785d19036eb6cc5139))
+* **pgwire:** INSERT/UPDATE/DELETE ... RETURNING on salesforce and sharepoint ([f25f3e0](https://github.com/kenstott/calcite/commit/f25f3e0e317f2b9114bd7e5690e10374f6ee7328))
+* **pgwire:** INSERT/UPDATE/DELETE are routed to adapters with modifiable tables ([ac371a8](https://github.com/kenstott/calcite/commit/ac371a89d75eec3ec044bb50c006eeeef3646bda))
+* **pgwire:** the bridge backend routes INSERT/UPDATE/DELETE to the Calcite child ([812923c](https://github.com/kenstott/calcite/commit/812923c7a3ff0797de59c26623086d87d8df605b))
+* **salesforce:** JDBC driver, DML, bind-parameter pushdown, Trino connector and pgwire server ([83d933a](https://github.com/kenstott/calcite/commit/83d933aca6c28fbf7360862c5a920e149478005f))
+* **salesforce:** sObject describe results persist on disk between starts ([2b58448](https://github.com/kenstott/calcite/commit/2b58448e13965867515718c58b375d220b4e62e5))
+
+
+### Bug Fixes
+
+* **govdata/scripts:** fix-sec audits filing_metadata against the EDGAR index and routes batches by slot ([877cf3b](https://github.com/kenstott/calcite/commit/877cf3baa92c00f5e256fd0672393d6036a4e90b))
+* **salesforce:** IN lists and repeated columns in pushed-down queries ([cc3b6f7](https://github.com/kenstott/calcite/commit/cc3b6f7fff58866fe987f0ae69c4a8bce0bc327e))
+
 ## [0.107.0](https://github.com/kenstott/calcite/compare/engine-v0.106.3...engine-v0.107.0) (2026-10-06)
 
 
