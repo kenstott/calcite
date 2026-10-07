@@ -74,6 +74,9 @@ class ServerState:
     #: (PG semantics). Every new session starts here and may override it with
     #: `SET statement_timeout`. Set by the launcher's --statement-timeout-ms (PGW-051).
     statement_timeout_ms: int = 0
+    #: Whether INSERT/UPDATE/DELETE are routed to the backend. Off by default: a server
+    #: is read-only unless its operator starts it with --allow-writes.
+    allow_writes: bool = False
 
     def check_password(self, username: str, password: str) -> bool:
         """Cleartext-password check for provider='simple'. No silent default."""

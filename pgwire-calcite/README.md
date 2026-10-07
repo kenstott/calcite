@@ -52,6 +52,23 @@ Generate the file from the govdata schemas' measured row counts:
 
     python3 scripts/export_table_coverage.py coverage.json ../govdata/src/main/resources/*/*-schema.yaml
 
+## Writes
+
+The server is read-only unless started with `--allow-writes`; without it an `INSERT`, `UPDATE`
+or `DELETE` is refused with SQLSTATE `25006`. With it, the statement is run through Calcite and
+answered with PostgreSQL's command tag (`INSERT 0 n`, `UPDATE n`, `DELETE n`).
+
+- The model decides per table. A table that is not modifiable — every table of the file,
+  splunk, cloudops and govdata adapters — still rejects the write; the salesforce and
+  sharepoint adapters accept it. Their release bundles pass `--allow-writes`; the others do not.
+- A write is committed by the adapter when its statement runs. `BEGIN` and `COMMIT` are
+  acknowledged, and a `ROLLBACK` in a transaction that wrote is refused (SQLSTATE `0A000`)
+  rather than reported as done.
+- When the server is given per-role grants (`serve(authz_grants=...)`), the grants that gate
+  reads gate writes: a role may write only to relations granted to it.
+- `RETURNING` and DDL are not supported. Writes run on the in-process `calcite` backend, not
+  the `bridge` backend.
+
 ## Client timeouts and cancellation
 
 `statement_timeout` (per session via `SET`, server default via launcher state) bounds a

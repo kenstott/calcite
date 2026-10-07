@@ -78,6 +78,7 @@ def build_state(
     auth: str = "none",
     users: dict | None = None,
     statement_timeout_ms: int = 0,
+    allow_writes: bool = False,
 ) -> ServerState:
     """Assemble the ServerState the wire layer reads.
 
@@ -92,6 +93,7 @@ def build_state(
     st.auth_middleware_active = auth != "none"
     st.users = dict(users or {})
     st.statement_timeout_ms = int(statement_timeout_ms)
+    st.allow_writes = bool(allow_writes)
     return st
 
 
@@ -124,6 +126,7 @@ def serve(
     mtls_mode: str | None = None,
     mtls_bind_principal: bool | None = None,
     statement_timeout_ms: int = 0,
+    allow_writes: bool = False,
     sock: socket.socket | None = None,
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking).
@@ -144,7 +147,11 @@ def serve(
 
     _catalog.set_database_name(database)
     server_mod.state = build_state(
-        backend=backend, auth=auth, users=users, statement_timeout_ms=statement_timeout_ms
+        backend=backend,
+        auth=auth,
+        users=users,
+        statement_timeout_ms=statement_timeout_ms,
+        allow_writes=allow_writes,
     )
     server_mod.state.schema_registry.database = database
     # Keep the GUC the catalog intercept reports in step with the server default,
@@ -358,6 +365,13 @@ def main(argv: list | None = None) -> int:
         help="cleartext user for --auth simple (repeatable)",
     )
     parser.add_argument(
+        "--allow-writes",
+        action="store_true",
+        help="route INSERT/UPDATE/DELETE to the Calcite model (for adapters with modifiable "
+        "tables, e.g. salesforce, sharepoint). Without it the server is read-only. A write "
+        "is committed by the adapter when its statement runs: ROLLBACK cannot undo it.",
+    )
+    parser.add_argument(
         "--statement-timeout-ms",
         type=int,
         default=0,
@@ -502,6 +516,7 @@ def main(argv: list | None = None) -> int:
             mtls_mode=args.mtls_mode,
             mtls_bind_principal=args.mtls_bind_principal,
             statement_timeout_ms=args.statement_timeout_ms,
+            allow_writes=args.allow_writes,
             sock=listen_sock,
         )
     except OSError:
