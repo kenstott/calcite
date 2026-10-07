@@ -50,10 +50,20 @@ import java.util.stream.Collectors;
 public abstract class AbstractCloudOpsTable extends AbstractTable implements ProjectableFilterableTable {
   private static final Logger logger = LoggerFactory.getLogger(AbstractCloudOpsTable.class);
 
+  /** Schema name used when the model does not choose one. */
+  public static final String DEFAULT_SCHEMA_NAME = "cloud";
+
   protected final CloudOpsConfig config;
+  /** Name the schema holding this table is registered under; foreign keys refer to it. */
+  protected final String schemaName;
 
   protected AbstractCloudOpsTable(CloudOpsConfig config) {
+    this(config, DEFAULT_SCHEMA_NAME);
+  }
+
+  protected AbstractCloudOpsTable(CloudOpsConfig config, String schemaName) {
     this.config = config;
+    this.schemaName = schemaName;
   }
 
   /**

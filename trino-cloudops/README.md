@@ -9,7 +9,7 @@ It mirrors [`trino-sharepoint`](../trino-sharepoint): a thin wrapper that reuses
 (Depending on the SPI-less base rather than the `trino-calcite` plugin keeps the generic `calcite`
 connector out of this plugin's zip, so only `cloudops` is registered.) The friendly catalog
 properties are assembled into a `jdbc:cloudops:` URL for `CloudOpsDriver`, which builds an inline
-Calcite model targeting `CloudOpsSchemaFactory`. Tables are exposed under the `cloud` schema.
+Calcite model targeting `CloudOpsSchemaFactory`. Tables are exposed under the `cloud` schema, or the one named by the `schema` property.
 
 ## Configuration
 
@@ -58,6 +58,7 @@ azure.subscription-ids=sub-1,sub-2
 | `cache.enabled` | no | Enable the adapter result cache (adapter default: `true`) |
 | `cache.ttl-minutes` | no | Result-cache TTL in minutes (adapter default: `5`) |
 | `cache.debug-mode` | no | Adapter cache debug logging (adapter default: `false`) |
+| `schema` | no | Schema name the tables are registered under (default: `cloud`) |
 
 The connector resolves credentials at the connector layer and passes them **explicitly** into the
 inline model. Secrets and list values are URL-encoded into the `jdbc:cloudops:` URL and decoded by

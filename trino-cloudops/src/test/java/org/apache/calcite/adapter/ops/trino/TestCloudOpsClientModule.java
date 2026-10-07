@@ -81,6 +81,16 @@ class TestCloudOpsClientModule
     }
 
     @Test
+    void testSchemaPropertyReachesTheDriver()
+    {
+        Map<String, String> params =
+                parse(CloudOpsClientModule.buildConnectionUrl(awsConfig().setSchema("inventory")));
+        assertEquals("inventory", params.get("schema"));
+        // Unset: the driver's own default ("cloud") applies.
+        assertFalse(parse(CloudOpsClientModule.buildConnectionUrl(awsConfig())).containsKey("schema"));
+    }
+
+    @Test
     void testAzureSubscriptionListAndCacheParams()
     {
         CloudOpsConfig config = new CloudOpsConfig()
