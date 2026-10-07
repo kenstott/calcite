@@ -133,10 +133,11 @@ public class CloudOpsDataConverter {
         default:
           return value;
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error converting value {} to type {}: {}",
-          value, targetType, e.getMessage());
-      return value;
+    } catch (RuntimeException e) {
+      // Passing the value through would put the wrong Java type in the column, which fails
+      // later, in the JDBC layer, with no hint of which value it was
+      throw new IllegalArgumentException("Cannot convert " + value.getClass().getSimpleName()
+          + " value '" + value + "' to " + targetType + ": " + e.getMessage(), e);
     }
   }
 

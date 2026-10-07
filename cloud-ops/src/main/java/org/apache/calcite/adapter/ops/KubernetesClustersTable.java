@@ -203,28 +203,28 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
       for (Map<String, Object> cluster : clusterResults) {
         results.add(new Object[]{
             "gcp",
-            cluster.get("ProjectId"),
+            cluster.get("AccountId"),
             cluster.get("ClusterName"),
             cluster.get("Application"),
             cluster.get("Location"),
             null, // resource_group - GCP doesn't have this concept
             cluster.get("ResourceId"),
-            cluster.get("ClusterVersion"),
+            cluster.get("KubernetesVersion"),
             cluster.get("NodeCount"),
-            cluster.get("NodePoolCount"),
+            cluster.get("NodePools"),
             cluster.get("RBACEnabled"),
             cluster.get("PrivateCluster"),
-            !((Boolean) cluster.getOrDefault("PrivateEndpoint", false)),
-            cluster.get("AuthorizedNetworksCount"),
-            cluster.get("NetworkPolicy"),
+            cluster.get("PublicEndpoint"),
+            cluster.get("AuthorizedIPRanges"),
+            cluster.get("NetworkPolicyProvider"),
             false, // GKE doesn't have pod security policy
-            cluster.get("DatabaseEncryption") != null,
-            cluster.get("DatabaseEncryption"),
+            cluster.get("EncryptionAtRestEnabled"),
+            cluster.get("EncryptionKeyType"),
             cluster.get("LoggingEnabled"),
             cluster.get("MonitoringEnabled"),
-            null, // created_date - not available in current implementation
-            null, // modified_date - not available in current implementation
-            null  // tags - would need to convert labels to JSON
+            CloudOpsDataConverter.convertValue(cluster.get("CreatedDate"), SqlTypeName.TIMESTAMP),
+            null, // modified_date - GKE does not report one
+            cluster.get("Tags")
         });
       }
     } catch (Exception e) {

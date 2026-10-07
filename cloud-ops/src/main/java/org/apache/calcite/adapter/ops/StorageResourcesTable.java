@@ -163,7 +163,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("ResourceId"),
             null, // size_bytes - not in current query
             storage.get("StorageClass"),
-            null, // replication_type
+            storage.get("LocationType"), // region / dual-region / multi-region
             storage.get("EncryptionEnabled"),
             storage.get("EncryptionEnabled") != null && (Boolean) storage.get("EncryptionEnabled") ?
                 (storage.get("EncryptionKeyName") != null ? "customer-managed" : "service-managed") : "none",
@@ -218,7 +218,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("Location"),
             null, // resource_group - AWS doesn't use this concept for S3
             storage.get("ResourceId"),
-            null, // size_bytes - would need CloudWatch metrics
+            storage.get("SizeBytes"), // from CloudWatch; fetched only when projected
             null, // storage_class - in S3 this is per object
             null, // replication_type - would need to check replication rules
             storage.get("EncryptionEnabled"),

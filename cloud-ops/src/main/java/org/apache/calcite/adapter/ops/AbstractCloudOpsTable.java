@@ -20,6 +20,7 @@ import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ProjectableFilterableTable;
@@ -27,6 +28,7 @@ import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -157,6 +159,14 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
       providers = new HashSet<>(config.providers);
     }
 
+    // Providers hand back whatever their API returned (Azure Resource Graph, for one, sends
+    // booleans as 0/1); every row is brought to the declared column types before it leaves
+    final List<RelDataTypeField> fields = getRowType(root.getTypeFactory()).getFieldList();
+    final SqlTypeName[] columnTypes = new SqlTypeName[fields.size()];
+    for (int i = 0; i < columnTypes.length; i++) {
+      columnTypes[i] = fields.get(i).getType().getSqlTypeName();
+    }
+
     // Query providers in parallel with projection support
     List<CompletableFuture<List<Object[]>>> futures = new ArrayList<>();
 
@@ -165,7 +175,7 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
           CompletableFuture.supplyAsync(() -> {
             List<Object[]> results =
                 queryAzure(accounts.isEmpty() ? config.azure.subscriptionIds : accounts, projectionHandler, sortHandler, paginationHandler, filterHandler);
-            return projectionHandler.projectRows(results);
+            return projectionHandler.projectRows(toColumnTypes(results, columnTypes));
           }));
     }
 
@@ -174,7 +184,7 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
           CompletableFuture.supplyAsync(() -> {
             List<Object[]> results =
                 queryGCP(accounts.isEmpty() ? config.gcp.projectIds : accounts, projectionHandler, sortHandler, paginationHandler, filterHandler);
-            return projectionHandler.projectRows(results);
+            return projectionHandler.projectRows(toColumnTypes(results, columnTypes));
           }));
     }
 
@@ -183,7 +193,7 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
           CompletableFuture.supplyAsync(() -> {
             List<Object[]> results =
                 queryAWS(accounts.isEmpty() ? config.aws.accountIds : accounts, projectionHandler, sortHandler, paginationHandler, filterHandler);
-            return projectionHandler.projectRows(results);
+            return projectionHandler.projectRows(toColumnTypes(results, columnTypes));
           }));
     }
 
@@ -220,6 +230,18 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
 
     // Apply remaining filters in memory
     return applyFilters(Linq4j.asEnumerable(allResults), filters);
+  }
+
+  private static List<Object[]> toColumnTypes(List<Object[]> rows, SqlTypeName[] columnTypes) {
+    final List<Object[]> converted = new ArrayList<>(rows.size());
+    for (Object[] row : rows) {
+      if (row.length != columnTypes.length) {
+        throw new IllegalStateException("Row has " + row.length + " values for "
+            + columnTypes.length + " columns");
+      }
+      converted.add(CloudOpsDataConverter.convertRow(row, columnTypes));
+    }
+    return converted;
   }
 
   /**
