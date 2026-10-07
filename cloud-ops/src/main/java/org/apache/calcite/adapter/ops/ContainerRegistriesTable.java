@@ -104,8 +104,8 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(registry.get("CreatedAt"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure container registries: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure container registries failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -146,8 +146,8 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(registry.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP container registries: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP container registries failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -187,8 +187,8 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(registry.get("CreatedAt"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS container registries: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS container registries failed: " + e.getMessage(), e);
     }
 
     return results;

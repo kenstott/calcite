@@ -110,8 +110,8 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             null  // create time not in query
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure database resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure database resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -153,8 +153,8 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(db.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP database resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP database resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -207,8 +207,8 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
                 db.get("CreationDateTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS database resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS database resources failed: " + e.getMessage(), e);
     }
 
     return results;

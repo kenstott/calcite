@@ -91,33 +91,37 @@ public class AzureProvider implements CloudProvider {
     return cacheManager.getOrCompute(cacheKey, () -> {
       List<Map<String, Object>> results = new ArrayList<>();
 
-      try {
+      // Resource Graph returns at most 1000 rows per call and a skip token for the rest
+      String skipToken = null;
+      do {
         QueryRequestOptions options = new QueryRequestOptions()
             .withResultFormat(ResultFormat.OBJECT_ARRAY)
-            .withTop(1000);
+            .withTop(1000)
+            .withSkipToken(skipToken);
 
         QueryRequest queryRequest = new QueryRequest()
             .withSubscriptions(subscriptionIds)
             .withQuery(kql)
             .withOptions(options);
 
-        QueryResponse response = resourceGraphManager.resourceProviders()
-            .resources(queryRequest);
-
-        if (response.data() instanceof List) {
-          @SuppressWarnings("unchecked")
-          List<Object> dataList = (List<Object>) response.data();
-          for (Object item : dataList) {
-            if (item instanceof Map) {
-              @SuppressWarnings("unchecked")
-              Map<String, Object> row = (Map<String, Object>) item;
-              results.add(row);
-            }
-          }
+        final QueryResponse response;
+        try {
+          response = resourceGraphManager.resourceProviders().resources(queryRequest);
+        } catch (RuntimeException e) {
+          throw new IllegalStateException(
+              "Azure Resource Graph query failed: " + e.getMessage(), e);
         }
-      } catch (Exception e) {
-        LOGGER.debug("Error executing KQL query: " + e.getMessage());
-      }
+
+        if (!(response.data() instanceof List)) {
+          throw new IllegalStateException("Azure Resource Graph returned "
+              + (response.data() == null ? "no data" : response.data().getClass().getName())
+              + " instead of a list of rows");
+        }
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> page = (List<Map<String, Object>>) response.data();
+        results.addAll(page);
+        skipToken = response.skipToken();
+      } while (skipToken != null && !skipToken.isEmpty());
 
       return results;
     });
@@ -252,8 +256,8 @@ public class AzureProvider implements CloudProvider {
        .append("| extend PrivateCluster = tobool(properties.apiServerAccessProfile.enablePrivateCluster)\n")
        .append("| extend NetworkPlugin = tostring(properties.networkProfile.networkPlugin)\n")
        .append("| extend NetworkPolicy = tostring(properties.networkProfile.networkPolicy)\n")
-       .append("| extend ServiceCIDR = tostring(properties.networkProfile.serviceCidr)\n")
-       .append("| extend PodCIDR = tostring(properties.networkProfile.podCidr)\n")
+       .append("| extend ServiceCidr = tostring(properties.networkProfile.serviceCidr)\n")
+       .append("| extend PodCidr = tostring(properties.networkProfile.podCidr)\n")
        .append("| extend RBACEnabled = tobool(properties.enableRBAC)\n")
        .append("| extend AADEnabled = tobool(properties.aadProfile.managed)\n")
        .append("| extend AuthorizedIPRanges = array_length(properties.apiServerAccessProfile.authorizedIPRanges)\n")

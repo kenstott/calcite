@@ -102,8 +102,8 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
             null  // password last used not applicable
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure IAM resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure IAM resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -148,8 +148,8 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
             null  // password last used not applicable
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP IAM resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP IAM resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -192,8 +192,8 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(iam.get("PasswordLastUsed"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS IAM resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS IAM resources failed: " + e.getMessage(), e);
     }
 
     return results;

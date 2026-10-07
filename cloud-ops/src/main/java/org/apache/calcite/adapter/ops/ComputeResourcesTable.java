@@ -177,8 +177,8 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(vm.get("LaunchTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure compute instances: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure compute instances failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -222,8 +222,8 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(vm.get("CreationTimestamp"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP compute instances: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP compute instances failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -267,8 +267,8 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(vm.get("LaunchTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS compute instances: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS compute instances failed: " + e.getMessage(), e);
     }
 
     return results;

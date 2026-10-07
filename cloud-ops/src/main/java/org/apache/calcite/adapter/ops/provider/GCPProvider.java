@@ -282,7 +282,8 @@ public class GCPProvider implements CloudProvider {
           }
         }
       } catch (Exception e) {
-        LOGGER.warn("Failed to query GKE clusters for project {}: {}", projectId, e.getMessage());
+        throw new IllegalStateException("Querying GKE clusters in project " + projectId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -366,8 +367,8 @@ public class GCPProvider implements CloudProvider {
           results.add(storageData);
         }
       } catch (Exception e) {
-        LOGGER.debug("Error querying storage resources in project {}: {}",
-            projectId, e.getMessage());
+        throw new IllegalStateException("Querying storage resources in project " + projectId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -439,8 +440,8 @@ public class GCPProvider implements CloudProvider {
           }
         }
       } catch (Exception e) {
-        LOGGER.debug("Error querying GCP compute instances in project {}: {}",
-            projectId, e.getMessage());
+        throw new IllegalStateException("Querying GCP compute instances in project " + projectId
+            + " failed: " + e.getMessage(), e);
       }
     }
     return results;
@@ -471,7 +472,8 @@ public class GCPProvider implements CloudProvider {
           }
         }
       } catch (Exception e) {
-        LOGGER.debug("Error querying GCP networks in project {}: {}", projectId, e.getMessage());
+        throw new IllegalStateException("Querying GCP networks in project " + projectId
+            + " failed: " + e.getMessage(), e);
       }
 
       // Firewall rules: GCP's counterpart of a security group
@@ -505,8 +507,8 @@ public class GCPProvider implements CloudProvider {
           }
         }
       } catch (Exception e) {
-        LOGGER.debug("Error querying GCP firewall rules in project {}: {}",
-            projectId, e.getMessage());
+        throw new IllegalStateException("Querying GCP firewall rules in project " + projectId
+            + " failed: " + e.getMessage(), e);
       }
 
       // Subnetworks (across all regions)
@@ -532,8 +534,8 @@ public class GCPProvider implements CloudProvider {
           }
         }
       } catch (Exception e) {
-        LOGGER.debug("Error querying GCP subnetworks in project {}: {}",
-            projectId, e.getMessage());
+        throw new IllegalStateException("Querying GCP subnetworks in project " + projectId
+            + " failed: " + e.getMessage(), e);
       }
     }
     return results;

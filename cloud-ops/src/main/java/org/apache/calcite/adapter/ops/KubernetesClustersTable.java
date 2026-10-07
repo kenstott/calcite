@@ -179,9 +179,8 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("Tags")
         });
       }
-    } catch (Exception e) {
-      // Log error but don't fail the entire query
-      LOGGER.debug("Error querying Azure AKS clusters: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure AKS clusters failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -227,8 +226,8 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP Kubernetes clusters: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP Kubernetes clusters failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -276,8 +275,8 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             null  // tags - would need to convert tag map to JSON
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS Kubernetes clusters: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS Kubernetes clusters failed: " + e.getMessage(), e);
     }
 
     return results;

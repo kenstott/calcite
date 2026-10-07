@@ -118,8 +118,8 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure network resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure network resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -157,8 +157,8 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             null  // networks, subnets and firewall rules carry no labels
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP network resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP network resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -199,8 +199,8 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             null  // tags would need conversion
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS network resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS network resources failed: " + e.getMessage(), e);
     }
 
     return results;

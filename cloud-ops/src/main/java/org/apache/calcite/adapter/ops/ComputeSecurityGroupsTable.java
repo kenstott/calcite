@@ -130,8 +130,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
             row.get("SecurityGroupId")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure compute security-group associations: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure compute security-group associations failed: " + e.getMessage(), e);
     }
     return results;
   }
@@ -162,8 +162,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
             row.get("SecurityGroupId")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS compute security-group associations: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS compute security-group associations failed: " + e.getMessage(), e);
     }
     return results;
   }

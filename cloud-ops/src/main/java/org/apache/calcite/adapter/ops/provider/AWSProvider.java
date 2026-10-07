@@ -30,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
@@ -87,6 +88,27 @@ public class AWSProvider implements CloudProvider {
     initializeAccountCredentials();
   }
 
+  /** Whether an AWS error is one of the given error codes ("there is none" answers). */
+  private static boolean isAwsError(AwsServiceException e, String... codes) {
+    final String code = e.awsErrorDetails() == null ? null : e.awsErrorDetails().errorCode();
+    for (String candidate : codes) {
+      if (candidate.equals(code)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** The application a resource belongs to, from its tags. */
+  private static String applicationOf(Map<String, String> tags) {
+    for (String key : new String[] {"Application", "application", "app"}) {
+      if (tags.containsKey(key)) {
+        return tags.get(key);
+      }
+    }
+    return "Untagged/Orphaned";
+  }
+
   private void initializeAccountCredentials() {
     if (config.roleArn != null && !config.roleArn.isEmpty()) {
       // If using cross-account role assumption
@@ -108,9 +130,11 @@ public class AWSProvider implements CloudProvider {
               AwsBasicCredentials.create(response.credentials().accessKeyId(),
               response.credentials().secretAccessKey());
           accountCredentials.put(accountId, assumedCredentials);
-        } catch (Exception e) {
-          LOGGER.debug("Failed to assume role for account " + accountId + ": " + e.getMessage());
-          accountCredentials.put(accountId, baseCredentials);
+        } catch (RuntimeException e) {
+          // Falling back to the base credentials would read the base account and label
+          // its resources with this account's id
+          throw new IllegalStateException("Assuming role " + roleArn + " for AWS account "
+              + accountId + " failed: " + e.getMessage(), e);
         }
       }
     } else {
@@ -258,18 +282,9 @@ public class AWSProvider implements CloudProvider {
             results.add(clusterData);
           }
         }
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for EKS clusters in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying EKS clusters in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying EKS clusters in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -322,7 +337,7 @@ public class AWSProvider implements CloudProvider {
     // Tags
     Map<String, String> tags = cluster.tags();
     String application =
-        tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+        applicationOf(tags);
     clusterData.put("Application", application);
 
     // Configuration facts
@@ -436,8 +451,11 @@ public class AWSProvider implements CloudProvider {
       if (credentials == null) continue;
 
       try {
+        // Buckets are listed globally but configured per region: let the client follow a
+        // bucket to the region it lives in
         S3Client s3Client = S3Client.builder()
             .region(region)
+            .crossRegionAccessEnabled(true)
             .credentialsProvider(StaticCredentialsProvider.create(credentials))
             .build();
 
@@ -447,18 +465,7 @@ public class AWSProvider implements CloudProvider {
 
         List<Bucket> buckets = listBucketsResponse.buckets();
 
-        // Apply default pagination limit if no specific limit is set
-        int maxBuckets = 100; // Default limit to prevent API overload
-        if (paginationHandler != null && paginationHandler.hasPagination()) {
-          maxBuckets = Math.min((int)paginationHandler.getLimit(), maxBuckets);
-        }
-
-        int bucketCount = 0;
         for (Bucket bucket : buckets) {
-          if (bucketCount >= maxBuckets) {
-            LOGGER.debug("Reached pagination limit of {} buckets for account {}", maxBuckets, accountId);
-            break;
-          }
 
           Map<String, Object> storageData = new HashMap<>();
 
@@ -476,7 +483,9 @@ public class AWSProvider implements CloudProvider {
                   .bucket(bucket.name())
                   .build();
               String location = s3Client.getBucketLocation(locationRequest).locationConstraintAsString();
-              storageData.put("Location", location != null ? location : "us-east-1");
+              // us-east-1 is reported as no location constraint at all
+              storageData.put("Location",
+                  location != null && !location.isEmpty() ? location : "us-east-1");
             } else {
               storageData.put("Location", null);
             }
@@ -490,12 +499,13 @@ public class AWSProvider implements CloudProvider {
               try {
                 GetBucketTaggingResponse taggingResponse = s3Client.getBucketTagging(taggingRequest);
                 taggingResponse.tagSet().forEach(tag -> tags.put(tag.key(), tag.value()));
-              } catch (Exception e) {
-                // Bucket may not have tags
+              } catch (AwsServiceException e) {
+                if (!isAwsError(e, "NoSuchTagSet")) {
+                  throw e;
+                }
               }
-              String application =
-                  tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
-              storageData.put("Application", application);
+              storageData.put("Application", applicationOf(tags));
+              storageData.put("Tags", GCPProvider.toJson(tags));
             } else {
               storageData.put("Application", null);
             }
@@ -514,7 +524,10 @@ public class AWSProvider implements CloudProvider {
                   storageData.put("EncryptionType", rule.applyServerSideEncryptionByDefault().sseAlgorithmAsString());
                   storageData.put("KmsKeyId", rule.applyServerSideEncryptionByDefault().kmsMasterKeyID());
                 }
-              } catch (Exception e) {
+              } catch (AwsServiceException e) {
+                if (!isAwsError(e, "ServerSideEncryptionConfigurationNotFoundError")) {
+                  throw e;
+                }
                 storageData.put("EncryptionEnabled", false);
               }
             } else {
@@ -534,7 +547,10 @@ public class AWSProvider implements CloudProvider {
                 storageData.put("PublicAccessBlocked",
                     config.blockPublicAcls() && config.blockPublicPolicy() &&
                     config.ignorePublicAcls() && config.restrictPublicBuckets());
-              } catch (Exception e) {
+              } catch (AwsServiceException e) {
+                if (!isAwsError(e, "NoSuchPublicAccessBlockConfiguration")) {
+                  throw e;
+                }
                 storageData.put("PublicAccessBlocked", false);
               }
             } else {
@@ -564,7 +580,10 @@ public class AWSProvider implements CloudProvider {
                     s3Client.getBucketLifecycleConfiguration(lifecycleRequest);
                 storageData.put("LifecycleRuleCount",
                     lifecycleResponse.rules() != null ? lifecycleResponse.rules().size() : 0);
-              } catch (Exception e) {
+              } catch (AwsServiceException e) {
+                if (!isAwsError(e, "NoSuchLifecycleConfiguration")) {
+                  throw e;
+                }
                 storageData.put("LifecycleRuleCount", 0);
               }
             } else {
@@ -585,26 +604,16 @@ public class AWSProvider implements CloudProvider {
               storageData.put("SizeGB", null);
             }
 
-          } catch (Exception e) {
-            // Error getting bucket details, still add basic info
-            LOGGER.debug("Error getting details for bucket " + bucket.name() + ": " + e.getMessage());
+          } catch (RuntimeException e) {
+            throw new IllegalStateException("Reading the configuration of bucket "
+                + bucket.name() + " failed: " + e.getMessage(), e);
           }
 
           results.add(storageData);
-          bucketCount++;
         }
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for S3 buckets in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying S3 buckets in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying S3 buckets in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -672,7 +681,7 @@ public class AWSProvider implements CloudProvider {
             Map<String, String> tags = new HashMap<>();
             instance.tags().forEach(tag -> tags.put(tag.key(), tag.value()));
             String application =
-                tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+                applicationOf(tags);
             vmData.put("Application", application);
             vmData.put("InstanceName", tags.getOrDefault("Name", instance.instanceId()));
 
@@ -712,18 +721,9 @@ public class AWSProvider implements CloudProvider {
             results.add(vmData);
           }
         }
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for EC2 instances in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying EC2 instances in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying EC2 instances in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -763,18 +763,9 @@ public class AWSProvider implements CloudProvider {
             }
           }
         }
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for EC2 instances in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying EC2 security-group associations in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying EC2 instances in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -810,7 +801,7 @@ public class AWSProvider implements CloudProvider {
           Map<String, String> tags = new HashMap<>();
           vpc.tags().forEach(tag -> tags.put(tag.key(), tag.value()));
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           networkData.put("Application", application);
 
           // VPC Configuration
@@ -840,7 +831,7 @@ public class AWSProvider implements CloudProvider {
           Map<String, String> tags = new HashMap<>();
           sg.tags().forEach(tag -> tags.put(tag.key(), tag.value()));
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           networkData.put("Application", application);
 
           // Security Group Configuration
@@ -874,7 +865,7 @@ public class AWSProvider implements CloudProvider {
           Map<String, String> tags = new HashMap<>();
           address.tags().forEach(tag -> tags.put(tag.key(), tag.value()));
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           networkData.put("Application", application);
 
           // Elastic IP Configuration
@@ -906,7 +897,7 @@ public class AWSProvider implements CloudProvider {
           Map<String, String> tags = new HashMap<>();
           subnet.tags().forEach(tag -> tags.put(tag.key(), tag.value()));
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           networkData.put("Application", application);
 
           // Subnet Configuration
@@ -918,18 +909,9 @@ public class AWSProvider implements CloudProvider {
           results.add(networkData);
         }
 
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for network resources in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying network resources in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying network resources in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -961,14 +943,10 @@ public class AWSProvider implements CloudProvider {
 
           // Get user tags
           Map<String, String> tags = new HashMap<>();
-          try {
-            iamClient.listUserTags(r -> r.userName(user.userName())).tags()
-                .forEach(tag -> tags.put(tag.key(), tag.value()));
-          } catch (Exception e) {
-            // User may not have tags
-          }
+          iamClient.listUserTags(r -> r.userName(user.userName())).tags()
+              .forEach(tag -> tags.put(tag.key(), tag.value()));
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           iamData.put("Application", application);
 
           // User configuration
@@ -977,24 +955,15 @@ public class AWSProvider implements CloudProvider {
           iamData.put("Path", user.path());
 
           // Check for access keys
-          try {
-            List<AccessKeyMetadata> accessKeys = iamClient.listAccessKeys(r -> r.userName(user.userName())).accessKeyMetadata();
-            iamData.put("AccessKeyCount", accessKeys.size());
-            iamData.put("ActiveAccessKeys", accessKeys.stream()
-                .filter(key -> key.statusAsString().equals("Active"))
-                .count());
-          } catch (Exception e) {
-            iamData.put("AccessKeyCount", 0);
-            iamData.put("ActiveAccessKeys", 0);
-          }
+          List<AccessKeyMetadata> accessKeys = iamClient.listAccessKeys(r -> r.userName(user.userName())).accessKeyMetadata();
+          iamData.put("AccessKeyCount", accessKeys.size());
+          iamData.put("ActiveAccessKeys", accessKeys.stream()
+              .filter(key -> key.statusAsString().equals("Active"))
+              .count());
 
           // Check for MFA devices
-          try {
-            List<MFADevice> mfaDevices = iamClient.listMFADevices(r -> r.userName(user.userName())).mfaDevices();
-            iamData.put("MFAEnabled", !mfaDevices.isEmpty());
-          } catch (Exception e) {
-            iamData.put("MFAEnabled", false);
-          }
+          List<MFADevice> mfaDevices = iamClient.listMFADevices(r -> r.userName(user.userName())).mfaDevices();
+          iamData.put("MFAEnabled", !mfaDevices.isEmpty());
 
           results.add(iamData);
         }
@@ -1011,14 +980,10 @@ public class AWSProvider implements CloudProvider {
 
           // Get role tags
           Map<String, String> tags = new HashMap<>();
-          try {
-            iamClient.listRoleTags(r -> r.roleName(role.roleName())).tags()
-                .forEach(tag -> tags.put(tag.key(), tag.value()));
-          } catch (Exception e) {
-            // Role may not have tags
-          }
+          iamClient.listRoleTags(r -> r.roleName(role.roleName())).tags()
+              .forEach(tag -> tags.put(tag.key(), tag.value()));
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           iamData.put("Application", application);
 
           // Role configuration
@@ -1047,14 +1012,10 @@ public class AWSProvider implements CloudProvider {
 
           // Get policy tags
           Map<String, String> tags = new HashMap<>();
-          try {
-            iamClient.listPolicyTags(r -> r.policyArn(policy.arn())).tags()
-                .forEach(tag -> tags.put(tag.key(), tag.value()));
-          } catch (Exception e) {
-            // Policy may not have tags
-          }
+          iamClient.listPolicyTags(r -> r.policyArn(policy.arn())).tags()
+              .forEach(tag -> tags.put(tag.key(), tag.value()));
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           iamData.put("Application", application);
 
           // Policy configuration
@@ -1086,18 +1047,9 @@ public class AWSProvider implements CloudProvider {
           results.add(iamData);
         }
 
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for IAM resources in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying IAM resources in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying IAM resources in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -1133,7 +1085,7 @@ public class AWSProvider implements CloudProvider {
             tags.put(tag.key(), tag.value());
           }
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           dbData.put("Application", application);
 
           // Configuration
@@ -1188,7 +1140,7 @@ public class AWSProvider implements CloudProvider {
             tags.put(tag.key(), tag.value());
           }
           String application =
-              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+              applicationOf(tags);
           dbData.put("Application", application);
 
           // Configuration
@@ -1238,14 +1190,10 @@ public class AWSProvider implements CloudProvider {
 
             // Get tags
             Map<String, String> tags = new HashMap<>();
-            try {
-              dynamoClient.listTagsOfResource(r -> r.resourceArn(table.tableArn())).tags()
-                  .forEach(tag -> tags.put(tag.key(), tag.value()));
-            } catch (Exception e) {
-              // Table may not have tags
-            }
+            dynamoClient.listTagsOfResource(r -> r.resourceArn(table.tableArn())).tags()
+                .forEach(tag -> tags.put(tag.key(), tag.value()));
             String application =
-                tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+                applicationOf(tags);
             dbData.put("Application", application);
 
             // Configuration
@@ -1284,8 +1232,9 @@ public class AWSProvider implements CloudProvider {
             dbData.put("CreationDateTime", table.creationDateTime());
 
             results.add(dbData);
-          } catch (Exception e) {
-            LOGGER.debug("Error describing DynamoDB table " + tableName + ": " + e.getMessage());
+          } catch (RuntimeException e) {
+            throw new IllegalStateException("Describing DynamoDB table " + tableName
+                + " failed: " + e.getMessage(), e);
           }
         }
 
@@ -1334,18 +1283,9 @@ public class AWSProvider implements CloudProvider {
           results.add(dbData);
         }
 
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for database resources in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying database resources in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying database resources in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -1394,18 +1334,9 @@ public class AWSProvider implements CloudProvider {
 
           results.add(registryData);
         }
-      } catch (Exception e) {
-        String errorMessage = e.getMessage();
-        if (errorMessage != null && (errorMessage.contains("not authorized") ||
-                                     errorMessage.contains("AccessDenied") ||
-                                     errorMessage.contains("UnauthorizedOperation") ||
-                                     errorMessage.contains("Forbidden"))) {
-          LOGGER.warn("Authorization denied for ECR repositories in account {} - results may be incomplete: {}",
-                     accountId, errorMessage);
-        } else {
-          LOGGER.debug("Error querying ECR repositories in account {}: {}",
-                      accountId, e.getMessage());
-        }
+      } catch (RuntimeException e) {
+        throw new IllegalStateException("Querying ECR repositories in AWS account " + accountId
+            + " failed: " + e.getMessage(), e);
       }
     }
 
@@ -1592,10 +1523,9 @@ public class AWSProvider implements CloudProvider {
       LOGGER.debug("No CloudWatch size metrics found for bucket {} in account {}", bucketName, accountId);
       return null;
 
-    } catch (Exception e) {
-      LOGGER.debug("Error fetching CloudWatch metrics for bucket {} in account {}: {}",
-                  bucketName, accountId, e.getMessage());
-      return null;
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Reading the CloudWatch size metric of bucket "
+          + bucketName + " failed: " + e.getMessage(), e);
     }
   }
 }

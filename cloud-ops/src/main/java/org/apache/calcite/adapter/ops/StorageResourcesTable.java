@@ -133,8 +133,8 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure storage resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure storage resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -184,8 +184,8 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP storage resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP storage resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -241,8 +241,8 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null  // tags - would need to convert tag map to JSON
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS storage resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS storage resources failed: " + e.getMessage(), e);
     }
 
     return results;
