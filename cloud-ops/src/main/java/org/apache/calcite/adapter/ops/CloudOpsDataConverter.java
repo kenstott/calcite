@@ -419,8 +419,22 @@ public class CloudOpsDataConverter {
       return ((Number) value).longValue();
     }
 
-    // If already the correct type, return as-is
-    return value instanceof Long ? (Long) value : null;
+    // ISO-8601 text, which is how the cloud REST APIs send timestamps: with an offset
+    // ("2026-10-07T14:46:40.123-07:00"), in UTC ("...Z"), or with neither (taken as UTC)
+    if (value instanceof CharSequence) {
+      final String text = value.toString().trim();
+      if (text.isEmpty()) {
+        return null;
+      }
+      try {
+        return OffsetDateTime.parse(text).toInstant().toEpochMilli();
+      } catch (java.time.format.DateTimeParseException e) {
+        return LocalDateTime.parse(text).toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+      }
+    }
+
+    throw new IllegalArgumentException(
+        "Not a timestamp: " + value.getClass().getName() + " " + value);
   }
 
   /**

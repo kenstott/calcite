@@ -138,19 +138,18 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             db.get("Location"),
             null, // resource group not applicable
             db.get("ResourceId"),
-            db.get("DatabaseVersion"),
-            db.get("DatabaseVersion"),
+            db.get("Engine"),
+            db.get("EngineVersion"),
             db.get("Tier"),
-            db.get("MemorySizeGb") != null ?
-                ((Number) db.get("MemorySizeGb")).intValue() * 1024 : null, // Convert GB to MB
-            false, // GCP uses regional replication differently
+            db.get("AllocatedStorageGb"), // GB, as for AWS
+            db.get("MultiZone"),
             db.get("State"),
-            db.get("PublicNetworkAccess") != null,
-            db.get("RequireSSL") != null && (Boolean) db.get("RequireSSL"),
-            null, // encryption key not exposed
-            db.get("RequireSSL") != null && (Boolean) db.get("RequireSSL") ? "1.2" : null,
-            db.get("BackupEnabled") != null && (Boolean) db.get("BackupEnabled") ? 7 : 0,
-            null, // backup window not exposed
+            db.get("PubliclyAccessible"),
+            db.get("Encrypted"),
+            db.get("KmsKeyName"),
+            Boolean.TRUE.equals(db.get("RequireSsl")) ? "required" : null,
+            db.get("RetainedBackups"), // a count of backups, the unit Cloud SQL retains by
+            db.get("BackupStartTime"),
             CloudOpsDataConverter.convertValue(db.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }

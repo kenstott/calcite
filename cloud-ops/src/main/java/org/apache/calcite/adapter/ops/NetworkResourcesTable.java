@@ -148,13 +148,13 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("ResourceId"),
             network.get("NativeId"),
             network.get("Configuration"),
-            network.get("SourceRanges"), // for firewall rules
-            null, // state not applicable
-            null, // is_default would need additional info
+            network.get("SourceRanges"), // subnet range, or a firewall rule's ranges
+            network.get("State"), // firewall rules only: enabled / disabled
+            network.get("IsDefault"), // networks only
             null, // security findings not computed
-            null, // has_open_ingress would need rule analysis
-            null, // rule_count not computed
-            null  // tags would need conversion
+            network.get("HasOpenIngress"), // firewall rules only
+            network.get("RuleCount"), // firewall rules only
+            null  // networks, subnets and firewall rules carry no labels
         });
       }
     } catch (Exception e) {

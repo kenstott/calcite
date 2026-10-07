@@ -181,7 +181,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null, // last_access_time
             CloudOpsDataConverter.convertValue(storage.get("TimeCreated"), SqlTypeName.TIMESTAMP),
             CloudOpsDataConverter.convertValue(storage.get("Updated"), SqlTypeName.TIMESTAMP),
-            null  // tags - would need to convert labels map to JSON
+            storage.get("Tags")
         });
       }
     } catch (Exception e) {

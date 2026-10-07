@@ -208,17 +208,17 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             vm.get("ResourceId"),
             vm.get("MachineType"),
             vm.get("Status"),
-            null, // platform not directly available
+            null, // platform: the instance does not name its operating system
             vm.get("CpuPlatform"),
             null, // virtualization type not exposed
-            vm.get("HasExternalIP") != null && (Boolean) vm.get("HasExternalIP") ? "assigned" : null,
-            null, // private IP would need additional query
+            vm.get("PublicIp"),
+            vm.get("PrivateIp"),
             vm.get("NetworkId"), // vpc_id: VPC network self-link (matches network_resources.native_id)
             vm.get("SubnetId"),  // subnet_id: subnetwork self-link
-            null, // iam_role: GCP service-account row emission is a follow-up (left null, FK-safe)
-            null, // security groups as JSON
+            vm.get("ServiceAccount"), // iam_role: resource name of the attached service account
+            vm.get("NetworkTags"), // security_groups: the tags firewall rules target
             "Enabled".equals(vm.get("DiskEncryption")),
-            false, // monitoring not in basic query
+            null, // monitoring: no per-instance switch in GCP
             CloudOpsDataConverter.convertValue(vm.get("CreationTimestamp"), SqlTypeName.TIMESTAMP)
         });
       }

@@ -131,19 +131,18 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("Location"),
             null, // resource group not applicable
             registry.get("ResourceId"),
-            null, // registry URI would need construction
+            registry.get("RegistryUri"),
             registry.get("Format"), // GCP uses format instead of SKU
-            false, // admin user not a GCP concept
+            null, // admin user not a GCP concept
             null, // public access controlled by IAM
-            false, // image scanning configured separately
-            "STANDARD_REPOSITORY".equals(registry.get("Mode")),
+            registry.get("ScanningEnabled"),
+            registry.get("ImmutableTags"),
             registry.get("Encryption"),
             registry.get("KmsKey"),
             null, // quarantine policy not in GCP
             null, // trust policy not in GCP
-            registry.get("CleanupPoliciesCount") != null &&
-                ((Number) registry.get("CleanupPoliciesCount")).intValue() > 0 ?
-                "Enabled" : "Disabled",
+            ((Number) registry.get("CleanupPoliciesCount")).intValue() > 0
+                ? "Enabled" : "Disabled",
             CloudOpsDataConverter.convertValue(registry.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }

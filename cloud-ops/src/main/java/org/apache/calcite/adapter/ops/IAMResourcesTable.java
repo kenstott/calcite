@@ -137,14 +137,14 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
             null, // resource group not applicable
             iam.get("ResourceId"),
             iam.get("DisplayName") != null ? "Display: " + iam.get("DisplayName") : null,
-            null, // security configuration not computed
-            null, // principal type not exposed
+            iam.get("Description"),
+            iam.get("PrincipalType"),
             iam.get("Email"),
             isActive,
-            null, // MFA not tracked at resource level
-            null, // access key count not applicable
-            null, // active access keys not applicable
-            CloudOpsDataConverter.convertValue(iam.get("CreateTime"), SqlTypeName.TIMESTAMP),
+            null, // MFA does not apply to service accounts
+            iam.get("AccessKeyCount"),
+            iam.get("ActiveAccessKeys"),
+            null, // the IAM API does not report when a service account was created
             null  // password last used not applicable
         });
       }
