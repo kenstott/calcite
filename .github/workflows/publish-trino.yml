@@ -33,6 +33,7 @@ jobs:
           - { module: trino-calcite,      pub: TrinoCalcite,      artifact: trino-calcite }
           - { module: trino-cloudops,     pub: TrinoCloudops,     artifact: trino-cloudops }
           - { module: trino-file,         pub: TrinoFile,         artifact: trino-file }
+          - { module: trino-salesforce,   pub: TrinoSalesforce,   artifact: trino-salesforce }
           - { module: trino-sharepoint,   pub: TrinoSharepoint,   artifact: trino-sharepoint }
           - { module: trino-splunk,       pub: TrinoSplunk,       artifact: trino-splunk }
     steps:

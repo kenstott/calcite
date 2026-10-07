@@ -36,11 +36,21 @@ public class SalesforceSchema extends AbstractSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(SalesforceSchema.class);
 
   private final SalesforceConnection connection;
+  private final boolean lowercaseAliases;
   private final LoadingCache<String, SalesforceConnection.SObjectDescription> descriptionCache;
   private Map<String, Table> tableMap;
 
-  public SalesforceSchema(SalesforceConnection connection, int cacheMaxSize) {
+  /**
+   * Creates a Salesforce schema.
+   *
+   * @param lowercaseAliases also register each sObject under its lower-case
+   *     name; turn off for clients such as Trino that match names
+   *     case-insensitively and would see the pair as ambiguous
+   */
+  public SalesforceSchema(SalesforceConnection connection, int cacheMaxSize,
+      boolean lowercaseAliases) {
     this.connection = connection;
+    this.lowercaseAliases = lowercaseAliases;
     this.descriptionCache = CacheBuilder.newBuilder()
         .maximumSize(cacheMaxSize)
         .expireAfterWrite(1, TimeUnit.HOURS)
@@ -70,7 +80,7 @@ public class SalesforceSchema extends AbstractSchema {
 
           // Also add with lowercase name for case-insensitive matching
           String lowerName = sObject.name.toLowerCase(Locale.ROOT);
-          if (!lowerName.equals(sObject.name)) {
+          if (lowercaseAliases && !lowerName.equals(sObject.name)) {
             builder.put(lowerName, new SalesforceTable(this, sObject.name));
           }
         }

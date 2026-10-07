@@ -14,6 +14,8 @@ import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelNode;
 
+import java.util.List;
+
 /**
  * Relational expression that uses Salesforce calling convention.
  */
@@ -36,6 +38,7 @@ public interface SalesforceRel extends RelNode {
 
     // Query components
     String selectClause;
+    List<String> selectFields;
     String fromClause;
     String whereClause;
     String orderByClause;

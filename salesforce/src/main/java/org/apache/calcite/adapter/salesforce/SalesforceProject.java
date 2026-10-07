@@ -56,6 +56,7 @@ public class SalesforceProject extends Project implements SalesforceRel {
     // Build SELECT clause from projected fields
     List<String> fieldNames = extractFieldNames(this);
     implementor.selectClause = String.join(", ", fieldNames);
+    implementor.selectFields = fieldNames;
   }
 
   /**

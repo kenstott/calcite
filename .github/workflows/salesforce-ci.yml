@@ -1,0 +1,252 @@
+# Salesforce CI — runs the Salesforce adapter, its Trino connector and its pgwire server against a
+# live Salesforce org. The org's connected-app credentials come from the SF_LOGIN_URL,
+# SF_CONSUMER_KEY and SF_CONSUMER_SECRET repository secrets (OAuth client credentials flow).
+name: Salesforce CI
+
+on:
+  push:
+    paths:
+      - "salesforce/**"
+      - "trino-salesforce/**"
+      - "trino-calcite-base/**"
+      - "pgwire-salesforce/**"
+      - ".github/workflows/salesforce-ci.yml"
+  pull_request:
+    paths:
+      - "salesforce/**"
+      - "trino-salesforce/**"
+      - "trino-calcite-base/**"
+      - "pgwire-salesforce/**"
+  workflow_dispatch:
+
+# One run at a time: the adapter's DML test writes to the shared org.
+concurrency:
+  group: salesforce-ci
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
+  SF_CONSUMER_KEY: ${{ secrets.SF_CONSUMER_KEY }}
+  SF_CONSUMER_SECRET: ${{ secrets.SF_CONSUMER_SECRET }}
+
+jobs:
+  adapter:
+    name: Adapter (unit + live org)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Unit tests
+        run: ./gradlew :salesforce:test --no-daemon --console=plain
+
+      # The integration tests read the org credentials from govdata/.env.prod.
+      - name: Write org credentials
+        run: |
+          set -euo pipefail
+          : "${SF_LOGIN_URL:?SF_LOGIN_URL secret is not set}"
+          : "${SF_CONSUMER_KEY:?SF_CONSUMER_KEY secret is not set}"
+          : "${SF_CONSUMER_SECRET:?SF_CONSUMER_SECRET secret is not set}"
+          umask 077
+          printf 'SF_LOGIN_URL=%s\nSF_CONSUMER_KEY=%s\nSF_CONSUMER_SECRET=%s\n' \
+            "$SF_LOGIN_URL" "$SF_CONSUMER_KEY" "$SF_CONSUMER_SECRET" > govdata/.env.prod
+
+      - name: Integration tests (live org)
+        run: ./gradlew :salesforce:test -PincludeTags=integration --no-daemon --console=plain
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: salesforce-test-results
+          path: salesforce/build/test-results/test
+
+  trino:
+    name: Trino connector (unit + live org)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 25 for the connector toolchain (Trino SPI) + Java 21 to run Gradle.
+      # Last-listed becomes the default JAVA_HOME (21), which runs Gradle.
+      - name: Set up JDKs
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            25
+            21
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Unit tests + plugin archive
+        run: |
+          ./gradlew :trino-salesforce:test :trino-salesforce:trinoPlugin \
+            -Porg.gradle.java.installations.paths="${JAVA_HOME_25_X64},${JAVA_HOME_21_X64}" \
+            --no-daemon --console=plain
+
+      - name: Write org credentials
+        run: |
+          set -euo pipefail
+          : "${SF_LOGIN_URL:?SF_LOGIN_URL secret is not set}"
+          : "${SF_CONSUMER_KEY:?SF_CONSUMER_KEY secret is not set}"
+          : "${SF_CONSUMER_SECRET:?SF_CONSUMER_SECRET secret is not set}"
+          umask 077
+          printf 'SF_LOGIN_URL=%s\nSF_CONSUMER_KEY=%s\nSF_CONSUMER_SECRET=%s\n' \
+            "$SF_LOGIN_URL" "$SF_CONSUMER_KEY" "$SF_CONSUMER_SECRET" > govdata/.env.prod
+
+      # Starts an in-process Trino server with the plugin installed and queries the org through it.
+      - name: Integration tests (live org)
+        run: |
+          ./gradlew :trino-salesforce:test -PincludeTags=integration \
+            -Porg.gradle.java.installations.paths="${JAVA_HOME_25_X64},${JAVA_HOME_21_X64}" \
+            --no-daemon --console=plain
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trino-salesforce-test-results
+          path: trino-salesforce/build/test-results/test
+
+  pgwire:
+    name: pgwire server (live org)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build the adapter's runtime classpath
+        run: |
+          set -euo pipefail
+          ./gradlew :salesforce:jar :salesforce:pgwPrintCp pgwArrowCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
+          { cat /tmp/pgw-file-cp.txt; echo; cat /tmp/pgw-arrow-cp.txt; echo; \
+            ls "$PWD"/salesforce/build/libs/*.jar; ls "$PWD"/pgwire-calcite/vendor/jars/*.jar; } \
+            | tr ':' '\n' | grep -v '^$' | paste -sd: - > "$RUNNER_TEMP/salesforce-classpath.txt"
+          echo "classpath entries: $(tr ':' '\n' < "$RUNNER_TEMP/salesforce-classpath.txt" | wc -l)"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pgwire server
+        working-directory: pgwire-calcite
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv -e ./vendor/buenavista -e .
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client
+
+      # The shipped pgwire-salesforce/model.json with the placeholders replaced by the org's
+      # credentials, so the test covers the model the bundle ships.
+      - name: Write the model
+        run: |
+          set -euo pipefail
+          : "${SF_LOGIN_URL:?SF_LOGIN_URL secret is not set}"
+          : "${SF_CONSUMER_KEY:?SF_CONSUMER_KEY secret is not set}"
+          : "${SF_CONSUMER_SECRET:?SF_CONSUMER_SECRET secret is not set}"
+          umask 077
+          mkdir -p "$RUNNER_TEMP/model"
+          python3 - "$RUNNER_TEMP/model/model.json" <<'PY'
+          import json, os, sys
+          with open("pgwire-salesforce/model.json") as f:
+              model = json.load(f)
+          operand = model["schemas"][0]["operand"]
+          host = os.environ["SF_LOGIN_URL"]
+          operand["loginUrl"] = host if host.startswith("https://") else "https://" + host
+          operand["clientId"] = os.environ["SF_CONSUMER_KEY"]
+          operand["clientSecret"] = os.environ["SF_CONSUMER_SECRET"]
+          with open(sys.argv[1], "w") as f:
+              json.dump(model, f)
+          PY
+
+      # The server describes every sObject in the org before it listens, which takes minutes.
+      - name: Start pgwire-calcite and wait for the port
+        working-directory: pgwire-calcite
+        env:
+          PGWIRE_CALCITE_CLASSPATH_FILE: ${{ runner.temp }}/salesforce-classpath.txt
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m pgwire_calcite.launcher --backend calcite \
+            --model "$RUNNER_TEMP/model/model.json" --database salesforce \
+            --port 5455 --auth trust > "$RUNNER_TEMP/pgwire.log" 2>&1 &
+          pid=$!
+          echo "$pid" > "$RUNNER_TEMP/pgwire.pid"
+          for _ in $(seq 1 900); do
+            if (exec 3<>/dev/tcp/127.0.0.1/5455) 2>/dev/null; then
+              exec 3>&- 3<&-
+              echo "port 5455 is up"
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "pgwire-calcite exited before opening port 5455" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "pgwire-calcite never opened port 5455" >&2
+          exit 1
+
+      - name: Query the org through psql
+        run: |
+          set -euo pipefail
+          conn="host=127.0.0.1 port=5455 user=tester dbname=salesforce connect_timeout=30"
+          q() { psql "$conn" -v ON_ERROR_STOP=1 -tA -c "$1"; }
+
+          accounts=$(q 'SELECT count(*) FROM salesforce."Account"')
+          echo "accounts: $accounts"
+          [ "$accounts" -gt 0 ]
+
+          named=$(q "SELECT \"Name\" FROM salesforce.\"Account\" WHERE \"Name\" LIKE '%a%' ORDER BY \"Name\" LIMIT 3" | wc -l)
+          echo "filtered + sorted + limited rows: $named"
+          [ "$named" -gt 0 ] && [ "$named" -le 3 ]
+
+          joined=$(q 'SELECT count(*) FROM salesforce."Contact" c JOIN salesforce."Account" a ON c."AccountId" = a."Id"')
+          echo "contacts joined to accounts: $joined"
+          [ "$joined" -gt 0 ]
+
+      - name: Stop pgwire-calcite
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/pgwire.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/pgwire.pid")" 2>/dev/null || true
+          fi
+
+      # Lines that could carry a credential (the model path is logged, not its content) are kept
+      # out by GitHub's secret masking; the log is the only diagnostic when startup fails.
+      - name: Server log
+        if: always()
+        run: tail -n 200 "$RUNNER_TEMP/pgwire.log" || true

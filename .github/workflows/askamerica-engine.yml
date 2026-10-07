@@ -95,6 +95,7 @@ jobs:
             :trino-calcite:trinoPlugin \
             :trino-sharepoint:trinoPlugin \
             :trino-splunk:trinoPlugin \
+            :trino-salesforce:trinoPlugin \
             :trino-file:trinoPlugin \
             :trino-cloudops:trinoPlugin \
             -Porg.gradle.java.installations.paths="${JAVA_HOME_25_X64},${JAVA_HOME_21_X64}" \
@@ -105,7 +106,7 @@ jobs:
       - name: Collect plugin archives (stable names)
         run: |
           mkdir -p trino-assets
-          for m in trino-calcite trino-sharepoint trino-splunk trino-file trino-cloudops; do
+          for m in trino-calcite trino-sharepoint trino-splunk trino-salesforce trino-file trino-cloudops; do
             src=$(ls ${m}/build/distributions/${m}-plugin-*.zip | head -1)
             cp "$src" "trino-assets/${m}-plugin.zip"
           done
@@ -1071,6 +1072,7 @@ jobs:
             | `trino-calcite-plugin.zip` | `calcite` | any Calcite model (`jdbc:calcite:`) |
             | `trino-sharepoint-plugin.zip` | `sharepoint` | SharePoint Lists (`jdbc:sharepoint:`) |
             | `trino-splunk-plugin.zip` | `splunk` | Splunk (`jdbc:splunk:`) |
+            | `trino-salesforce-plugin.zip` | `salesforce` | Salesforce sObjects (`jdbc:salesforce:`) |
             | `trino-file-plugin.zip` | `file` | files / S3 globs (file adapter) |
             | `trino-cloudops-plugin.zip` | `cloudops` | Azure/AWS/GCP inventory (`jdbc:cloudops:`) |
 

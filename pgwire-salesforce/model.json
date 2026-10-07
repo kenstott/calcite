@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "defaultSchema": "salesforce",
+  "schemas": [
+    {
+      "name": "salesforce",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.salesforce.SalesforceSchemaFactory",
+      "operand": {
+        "loginUrl": "https://YOUR-DOMAIN.my.salesforce.com",
+        "clientId": "YOUR_CONNECTED_APP_CONSUMER_KEY",
+        "clientSecret": "YOUR_CONNECTED_APP_CONSUMER_SECRET",
+        "apiVersion": "v61.0",
+        "lowercaseAliases": false
+      }
+    }
+  ]
+}

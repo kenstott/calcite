@@ -29,3 +29,14 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.apache.logging.log4j:log4j-slf4j-impl")
 }
+
+tasks.test {
+    useJUnitPlatform {
+        // Integration tests hit a live Salesforce org; run them with -PincludeTags=integration.
+        if (project.hasProperty("includeTags")) {
+            includeTags(*project.property("includeTags").toString().split(",").toTypedArray())
+        } else {
+            excludeTags("integration")
+        }
+    }
+}
