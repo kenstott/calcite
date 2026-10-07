@@ -115,13 +115,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # flags: extra launcher arguments baked into the bundle's entry script. Only an
+        # adapter whose tables are modifiable gets --allow-writes (INSERT/UPDATE/DELETE);
+        # the rest serve read-only.
         adapter:
-          - { name: file,       module: file }
-          - { name: sharepoint, module: sharepoint-list }
-          - { name: splunk,     module: splunk }
-          - { name: salesforce, module: salesforce }
-          - { name: cloudops,   module: cloud-ops }
-          - { name: govdata,    module: govdata }
+          - { name: file,       module: file,            flags: "" }
+          - { name: sharepoint, module: sharepoint-list, flags: "--allow-writes" }
+          - { name: splunk,     module: splunk,          flags: "" }
+          - { name: salesforce, module: salesforce,      flags: "--allow-writes" }
+          - { name: cloudops,   module: cloud-ops,       flags: "" }
+          - { name: govdata,    module: govdata,         flags: "" }
         os:
           - { runner: ubuntu-latest, variant: linux-x86_64 }
           - { runner: macos-14,      variant: macos-arm64 }
@@ -297,7 +300,7 @@ jobs:
             "-Dpgwire.python=$HERE/cpython/bin/python" \
             -jar "$HERE/pgwire-launcher.jar" \
             --backend calcite --model "$HERE/model/model.json" \
-            --database ${{ matrix.adapter.name }} "$@"
+            --database ${{ matrix.adapter.name }} ${{ matrix.adapter.flags }} "$@"
           SH
           chmod +x "bundle/bin/pgwire-${{ matrix.adapter.name }}"
           fi
@@ -327,9 +330,10 @@ jobs:
           rem path before every launch, since that varies per machine.
           for /d %%d in ("%HERE%\python\cpython-*") do set "PYHOME=%%~fd"
           if defined PYHOME powershell -NoProfile -Command "(Get-Content -Raw '%HERE%\cpython\pyvenv.cfg') -replace [regex]::Escape('__PGWIRE_PYTHON_HOME__'), '%PYHOME%' | Set-Content -NoNewline '%HERE%\cpython\pyvenv.cfg'"
-          "%HERE%\jre\bin\java.exe" "-Dpgwire.python=%HERE%\cpython\Scripts\python.exe" -jar "%HERE%\pgwire-launcher.jar" --backend calcite --model "%HERE%\model\model.json" --database __ADAPTER__ %*
+          "%HERE%\jre\bin\java.exe" "-Dpgwire.python=%HERE%\cpython\Scripts\python.exe" -jar "%HERE%\pgwire-launcher.jar" --backend calcite --model "%HERE%\model\model.json" --database __ADAPTER__ __FLAGS__ %*
           '@
           $bat = $bat.Replace("__ADAPTER__", "${{ matrix.adapter.name }}")
+          $bat = $bat.Replace("__FLAGS__", "${{ matrix.adapter.flags }}")
           Set-Content -Path "bundle\bin\pgwire-${{ matrix.adapter.name }}.bat" -Value $bat -Encoding ASCII -NoNewline
           Get-Content "bundle\bin\pgwire-${{ matrix.adapter.name }}.bat"
 

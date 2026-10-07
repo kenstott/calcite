@@ -22,8 +22,10 @@ rewired so the execution seam targets Calcite instead of Trino:
 The wire-protocol logic (handshake, extended protocol, describe/execute/query)
 is unchanged from provisa. The catalog intercept is wired to Calcite metadata and
 gated behind ``state.catalog_enabled``; ``COPY ... TO STDOUT`` is served from the
-same execution seam. DDL has no route here at all — the Calcite model is read-only,
-so a DDL statement is refused with SQLSTATE 0A000 naming the statement kind.
+same execution seam. INSERT/UPDATE/DELETE are routed to the backend only when the
+server was started with --allow-writes (SQLSTATE 25006 otherwise). DDL has no route here
+at all — the schema comes from the Calcite model — so a DDL statement is refused with
+SQLSTATE 0A000 naming the statement kind.
 """
 # Requirements: PGW-001, PGW-002, PGW-003, PGW-004, PGW-007
 
@@ -82,10 +84,8 @@ _TXN_TAG_RE = re.compile(
 
 _COPY_RE = re.compile(r"^\s*COPY\b", re.IGNORECASE)
 # DDL is rejected, never routed: every schema pgwire-calcite serves comes from the
-# Calcite model (the file/splunk/sharepoint/govdata adapters are read-only), and the
-# execution seam is a query path -- `executeQuery` against a connection no client may
-# mutate. A DDL statement is therefore answered with SQLSTATE 0A000 naming the
-# statement kind instead of being half-executed.
+# Calcite model, which no client may change. A DDL statement is therefore answered with
+# SQLSTATE 0A000 naming the statement kind instead of being half-executed.
 _DDL_RE = re.compile(
     r"^\s*(?P<verb>CREATE|ALTER|DROP)\s+(?:OR\s+REPLACE\s+)?"
     r"(?:TEMP\s+|TEMPORARY\s+)?"
@@ -101,6 +101,24 @@ def _current_backend():
     statement to a backend, so there is nothing to cancel or discard for them.
     """
     return state.backend if state is not None else None
+
+
+# DML is routed to the backend only when the server was started with --allow-writes.
+_DML_RE = re.compile(r"^\s*(INSERT|UPDATE|DELETE)\b", re.IGNORECASE)
+_TXN_BEGIN_RE = re.compile(r"^\s*(BEGIN|START\s+TRANSACTION)\b", re.IGNORECASE)
+_TXN_END_RE = re.compile(r"^\s*(COMMIT|END|ROLLBACK)\b", re.IGNORECASE)
+_TXN_ROLLBACK_RE = re.compile(r"^\s*ROLLBACK\b", re.IGNORECASE)
+
+
+def _dml_statement_kind(sql: str) -> Optional[str]:
+    """``"INSERT"``, ``"UPDATE"`` or ``"DELETE"`` for a DML statement; None otherwise."""
+    m = _DML_RE.match(sql)
+    return m.group(1).upper() if m is not None else None
+
+
+def _dml_command_tag(kind: str, count: int) -> str:
+    """PostgreSQL's CommandComplete tag for a DML statement (INSERT carries an OID of 0)."""
+    return f"INSERT 0 {count}" if kind == "INSERT" else f"{kind} {count}"
 
 
 def _ddl_statement_kind(sql: str) -> Optional[str]:
@@ -298,10 +316,10 @@ class CalciteQueryResult(BVQueryResult):
     early stop, and by the handler when the client disconnects mid-stream (PGW-022).
     """
 
-    def __init__(self, result: TrinoResult, original_sql: str = ""):
+    def __init__(self, result: TrinoResult, original_sql: str = "", status: str | None = None):
         super().__init__()
         self._cols = result.column_names
-        self._status = _tag_from_sql(original_sql)
+        self._status = status if status is not None else _tag_from_sql(original_sql)
         # Materialized results (catalog intercept, session commands, non-streaming
         # backends) arrive as a single batch; streaming backends hand over a lazy
         # batch iterator instead. Both are consumed the same way below.
@@ -420,6 +438,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         self.client_gone = None
         #: GUC name -> value as SHOW reports it, for the settings this session SET.
         self.settings: dict[str, str] = {}
+        #: Inside BEGIN ... COMMIT/ROLLBACK, and whether a write ran there. The adapters
+        #: commit each write as it runs, so a ROLLBACK after one cannot be honoured.
+        self._in_transaction = False
+        self._wrote_in_transaction = False
         self.statement_timeout_ms: int = self._default_statement_timeout_ms()
         self.settings["statement_timeout"] = _format_statement_timeout(self.statement_timeout_ms)
 
@@ -557,6 +579,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         self._release_open_result()
 
         if _TXN_TAG_RE.match(stripped):
+            self._track_transaction(stripped)
             self.apply_session_command(stripped)
             return CalciteQueryResult(TrinoResult(), stripped)
 
@@ -578,6 +601,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         _state = _m.state
         if _state is None:
             raise RuntimeError("Server state not initialized")
+
+        dml_kind = _dml_statement_kind(stripped)
+        if dml_kind is not None:
+            return self._execute_dml(_state, dml_kind, stripped)
 
         # Catalog intercept (information_schema / pg_catalog). Copied from provisa
         # but only wired to Calcite metadata in Phase 2 — gated until then.
@@ -649,6 +676,78 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
 
         return self._track(CalciteQueryResult(result, stripped))
 
+
+    def _track_transaction(self, sql: str) -> None:
+        """Follow BEGIN/COMMIT/ROLLBACK, refusing a ROLLBACK that cannot undo a write."""
+        if _TXN_BEGIN_RE.match(sql):
+            self._in_transaction = True
+            self._wrote_in_transaction = False
+            return
+        if not _TXN_END_RE.match(sql):
+            return
+        wrote = self._in_transaction and self._wrote_in_transaction
+        # ROLLBACK TO SAVEPOINT stays inside the transaction; everything else ends it.
+        to_savepoint = re.match(r"^\s*ROLLBACK\s+(TRANSACTION\s+|WORK\s+)?TO\b", sql, re.IGNORECASE)
+        if not to_savepoint:
+            self._in_transaction = False
+            self._wrote_in_transaction = False
+        if wrote and _TXN_ROLLBACK_RE.match(sql):
+            from pgwire_calcite.backend import PgProtocolError
+
+            raise PgProtocolError(
+                "0A000",
+                "ROLLBACK cannot undo this transaction's writes: each INSERT, UPDATE and "
+                "DELETE was committed to the data source when it ran",
+            )
+
+    def _execute_dml(self, state, kind: str, pg_sql: str) -> CalciteQueryResult:
+        """Run one INSERT/UPDATE/DELETE and answer with its CommandComplete tag."""
+        from pgwire_calcite.backend import PgProtocolError
+
+        if not getattr(state, "allow_writes", False):
+            raise PgProtocolError(
+                "25006",
+                f"cannot execute {kind}: this pgwire-calcite server is read-only "
+                "(it was started without --allow-writes)",
+            )
+        backend = state.backend
+        if not hasattr(backend, "execute_update"):
+            raise PgProtocolError(
+                "0A000", f"{kind} is not supported by the {type(backend).__name__} backend"
+            )
+        # RETURNING would need a result set from a statement Calcite runs as an update.
+        if re.search(r"\bRETURNING\b", pg_sql, re.IGNORECASE):
+            import sqlglot
+            import sqlglot.expressions as exp
+
+            if sqlglot.parse_one(pg_sql, read="postgres").find(exp.Returning) is not None:
+                raise PgProtocolError("0A000", f"{kind} ... RETURNING is not supported")
+
+        # The same grants that gate reads gate writes: every relation the statement names,
+        # its target included, must be granted to the role.
+        grants = getattr(state, "authz_grants", None)
+        if grants is not None:
+            from pgwire_calcite.authz import enforce_query
+
+            enforce_query(grants, self.role_id or "", pg_sql)
+        metering.enforce_quota()
+
+        try:
+            count = backend.execute_update(
+                pg_sql,
+                session_key=self.key,
+                timeout_ms=self.statement_timeout_ms,
+                lane=self._lane(),
+                client_gone=self.client_gone,
+            )
+        except (PermissionError, PgProtocolError):
+            raise
+        except Exception as exc:
+            log.warning("[PGWIRE] EXCEPTION sql=%r", pg_sql[:300], exc_info=True)
+            raise RuntimeError(str(exc)) from exc
+        if self._in_transaction:
+            self._wrote_in_transaction = True
+        return CalciteQueryResult(TrinoResult(), pg_sql, status=_dml_command_tag(kind, count))
 
     def _rewrite_information_schema(self, state, pg_sql: str) -> str:
         """``pg_sql`` with its information_schema views scoped to this role's catalog."""
@@ -1152,6 +1251,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             if portal_sql and _COPY_RE.match(portal_sql):
                 self.send_no_data()
                 return
+            # A write returns no rows; describing it must not run it.
+            if portal_sql and _DML_RE.match(portal_sql):
+                self.send_no_data()
+                return
         elif ba[0] == ord("S"):
             stmt = ba[1 : len(ba) - 1].decode("utf-8")
             sql = ctx.stmts[stmt][0]
@@ -1189,6 +1292,12 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             # Store the resolved OIDs so describe_statement substitutes typed example
             # values instead of executing the SQL with unresolved $N placeholders.
             ctx.stmts[stmt] = (sql, param_oids)
+            # A write returns no rows, and describe_statement would run it (with example
+            # parameter values) to learn that.
+            if _DML_RE.match(sql):
+                self.send_paramter_description(param_oids)
+                self.send_no_data()
+                return
             try:
                 # describe_statement substitutes typed example values for the $N
                 # placeholders (0-row result) but gives us the column schema.

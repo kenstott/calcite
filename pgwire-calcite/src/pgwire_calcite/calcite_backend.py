@@ -558,6 +558,46 @@ class CalciteBackend:
         finally:
             lock.release()
 
+    def execute_update(
+        self,
+        sql: str,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> int:
+        """Execute one INSERT/UPDATE/DELETE and return the number of rows it affected.
+
+        The adapter decides what a write means (the Salesforce and SharePoint adapters send
+        it to their service as the statement runs); a table that is not modifiable is
+        rejected by Calcite's validator. Cancellation and ``timeout_ms`` behave as for
+        :meth:`execute_sql`.
+        """
+        calcite_sql = transpile_pg_to_calcite(
+            sql,
+            json_enabled=("json" in self._extensions),
+            vector_enabled=("vector" in self._extensions),
+        )
+        log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
+        conn, lock = self.lane(lane)
+        if conn is None:
+            raise RuntimeError("Calcite connection is not open")
+        scope = CancelScope(session_key, timeout_ms, client_gone)
+        scope.acquire(lock)
+        try:
+            stmt = conn.createStatement()
+            scope.arm(stmt)
+            try:
+                return int(stmt.executeUpdate(calcite_sql))
+            except BaseException:
+                scope.raise_if_canceled()
+                raise
+            finally:
+                scope.disarm()
+                stmt.close()
+        finally:
+            lock.release()
+
     def _read_result(self, rs) -> QueryResult:
         md = rs.getMetaData()
         ncols = int(md.getColumnCount())
