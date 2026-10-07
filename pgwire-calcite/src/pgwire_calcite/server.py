@@ -77,6 +77,24 @@ _CAST_OID = {
     "float8": 701,
 }
 
+#: PostgreSQL type OID for the SQL type Calcite infers for a parameter. NUMERIC has no
+#: binary decoder in the wire codec, so exact decimals travel as float8.
+_SQL_TYPE_OID = {
+    "CHAR": 25,
+    "VARCHAR": 25,
+    "BOOLEAN": 16,
+    "TINYINT": 21,
+    "SMALLINT": 21,
+    "INTEGER": 23,
+    "BIGINT": 20,
+    "REAL": 701,
+    "FLOAT": 701,
+    "DOUBLE": 701,
+    "DECIMAL": 701,
+    "DATE": 1082,
+    "TIMESTAMP": 1114,
+}
+
 _TXN_TAG_RE = re.compile(
     r"^\s*(SET|BEGIN|START\s+TRANSACTION|COMMIT|ROLLBACK|DISCARD|RESET|DEALLOCATE|SAVEPOINT|RELEASE)\b",
     re.IGNORECASE,
@@ -446,6 +464,8 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         #: commit each write as it runs, so a ROLLBACK after one cannot be honoured.
         self._in_transaction = False
         self._wrote_in_transaction = False
+        #: SQL text -> resolved parameter type OIDs (see CalciteHandler._resolve_param_oids).
+        self.param_oid_cache: dict[str, list] = {}
         self.statement_timeout_ms: int = self._default_statement_timeout_ms()
         self.settings["statement_timeout"] = _format_statement_timeout(self.statement_timeout_ms)
 
@@ -817,6 +837,46 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             column_names=names[:-1],
             column_types=types[:-1] if types else None,
         )
+
+    def infer_parameter_oids(self, pg_sql: str, numbers: list) -> dict:
+        """The PostgreSQL type OID of each ``$N`` in ``numbers`` that the engine can type.
+
+        A statement the engine does not plan itself (a catalog query answered by the
+        intercept, a session command) has no inference; its parameters are left out, and
+        the caller describes them as text, which is what catalog look-ups by name bind.
+        """
+        if not numbers:
+            return {}
+        import pgwire_calcite.server as _m
+
+        state = _m.state
+        backend = getattr(state, "backend", None)
+        if backend is None or not hasattr(backend, "parameter_types"):
+            return {}
+        if getattr(state, "catalog_enabled", False):
+            from pgwire_calcite.catalog import classify
+
+            if classify(pg_sql) == "INTERCEPT":
+                return {}
+        sql = pg_sql
+        if _DML_RE.match(sql) and _RETURNING_RE.search(sql):
+            from pgwire_calcite import returning
+
+            plan = returning.plan(sql)
+            if plan is not None:
+                sql = plan.write_sql
+        try:
+            names = backend.parameter_types(sql, **self._statement_args())
+        except Exception as exc:
+            # The statement will fail the same way when it is executed, with this error
+            # reported to the client then; describing it must not be what breaks it.
+            log.warning("[PGWIRE] could not infer parameter types of %r: %s", pg_sql[:200], exc)
+            return {}
+        return {
+            n: _SQL_TYPE_OID.get(str(names[n]).split("(")[0].strip().upper(), 25)
+            for n in numbers
+            if n in names
+        }
 
     def describe_returning(self, pg_sql: str) -> "CalciteQueryResult | None":
         """The columns of a DML statement's RETURNING clause, without running the write: a
@@ -1337,6 +1397,69 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             tag = prefix + tag[len("SELECT"):]
         super().send_command_complete(tag)
 
+    def _resolve_param_oids(self, ctx: BVContext, stmt: str) -> list:
+        """The type OID of each ``$N`` of a prepared statement: declared at Parse, named by
+        an inline cast, or inferred by the engine. Remembered per session by SQL text,
+        because a client may Parse the same statement again before it binds (asyncpg does,
+        with its statement cache off), and Parse forgets what Describe worked out."""
+        sql, declared = ctx.stmts[stmt]
+        cache = ctx.session.param_oid_cache
+        if not declared and sql in cache:
+            return cache[sql]
+        indices = {int(m) for m in re.findall(r"\$(\d+)", sql)}
+        if "typeinfo_tree" in sql.lower() and indices:
+            # OID 1028 = _oid (oid[]) — asyncpg has a built-in binary codec for this,
+            # so it can encode list(typeoids) and we can decode the binary response.
+            param_oids = [1028]
+        elif "set_config" in sql.lower() and indices:
+            # set_config takes TEXT params; OID 25 prevents asyncpg from looping on OID 0
+            param_oids = [25] * len(indices)
+        else:
+            stored_oids = ctx.stmts[stmt][1]
+            if stored_oids:
+                param_oids = stored_oids
+            elif indices:
+                # No Parse-declared OIDs: an inline cast (`$1::text`) names the type;
+                # otherwise it is the type Calcite infers from where the parameter is
+                # used (`col = $1` takes the column's). OID 0 (unspecified) is never
+                # sent: it makes psycopg/asyncpg re-describe forever.
+                cast_map = {
+                    int(m): _CAST_OID.get(t.lower(), 25)
+                    for m, t in re.findall(r"\$(\d+)::(\w+)", sql)
+                }
+                inferred = ctx.session.infer_parameter_oids(
+                    sql, [i for i in sorted(indices) if i not in cast_map]
+                )
+                param_oids = [
+                    cast_map.get(i) or inferred.get(i, 25) for i in range(1, max(indices) + 1)
+                ]
+            else:
+                param_oids = []
+        if not declared:
+            cache[sql] = param_oids
+        return param_oids
+
+    def handle_bind(self, ctx: BVContext, payload: bytes) -> None:
+        # A parameter sent in binary can only be decoded with its type. If this statement's
+        # types are not known here (never described, or parsed again since), work them out.
+        ba = bytearray(payload)
+        portal_end = ba.index(0)
+        stmt_end = ba.index(0, portal_end + 1)
+        stmt = ba[portal_end + 1 : stmt_end].decode("utf-8")
+        if stmt in ctx.stmts and not ctx.stmts[stmt][1]:
+            (num_formats,) = struct.unpack("!h", ba[stmt_end + 1 : stmt_end + 3])
+            formats = struct.unpack(
+                f"!{num_formats}h", ba[stmt_end + 3 : stmt_end + 3 + 2 * num_formats]
+            )
+            sql = ctx.stmts[stmt][0]
+            if any(f == 1 for f in formats) and sql.strip() and not _COPY_RE.match(sql):
+                try:
+                    ctx.stmts[stmt] = (sql, self._resolve_param_oids(ctx, stmt))
+                except Exception as e:
+                    self.send_error(e, ctx)
+                    return
+        super().handle_bind(ctx, payload)
+
     def handle_describe(self, ctx: BVContext, payload: bytes) -> None:
         ba = bytearray(payload)
         if ba[0] == ord("P"):
@@ -1372,29 +1495,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 self.send_paramter_description([])
                 self.send_no_data()
                 return
-            indices = {int(m) for m in re.findall(r"\$(\d+)", sql)}
-            if "typeinfo_tree" in sql.lower() and indices:
-                # OID 1028 = _oid (oid[]) — asyncpg has a built-in binary codec for this,
-                # so it can encode list(typeoids) and we can decode the binary response.
-                param_oids = [1028]
-            elif "set_config" in sql.lower() and indices:
-                # set_config takes TEXT params; OID 25 prevents asyncpg from looping on OID 0
-                param_oids = [25] * len(indices)
-            else:
-                stored_oids = ctx.stmts[stmt][1]
-                if stored_oids:
-                    param_oids = stored_oids
-                elif indices:
-                    # No Parse-declared OIDs: derive each $N's type from an inline
-                    # cast (`$1::text`). Unmatched placeholders default to int8 --
-                    # OID 0 (unspecified) makes psycopg/asyncpg re-describe forever.
-                    cast_map = {
-                        int(m): _CAST_OID.get(t.lower(), 25)
-                        for m, t in re.findall(r"\$(\d+)::(\w+)", sql)
-                    }
-                    param_oids = [cast_map.get(i, 20) for i in range(1, max(indices) + 1)]
-                else:
-                    param_oids = []
+            param_oids = self._resolve_param_oids(ctx, stmt)
             # Store the resolved OIDs so describe_statement substitutes typed example
             # values instead of executing the SQL with unresolved $N placeholders.
             ctx.stmts[stmt] = (sql, param_oids)

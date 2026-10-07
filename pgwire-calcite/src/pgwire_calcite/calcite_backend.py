@@ -124,6 +124,40 @@ def exit_wedged(reason: str, grace_ms: int) -> None:
     os._exit(EXIT_STUCK_STATEMENT)
 
 
+def _question_marks(calcite_sql: str) -> Tuple[str, List[int]]:
+    """``calcite_sql`` with each parameter (``@N``, as the transpiler writes ``$N``) replaced
+    by a JDBC ``?``, and the parameter numbers in the order of the question marks. Text
+    inside string literals and quoted identifiers is left alone."""
+    out: List[str] = []
+    numbers: List[int] = []
+    i, n = 0, len(calcite_sql)
+    while i < n:
+        ch = calcite_sql[i]
+        if ch in ("'", '"'):
+            # copy the quoted run; a doubled quote inside it is an escaped quote
+            j = i + 1
+            while j < n:
+                if calcite_sql[j] == ch:
+                    if j + 1 < n and calcite_sql[j + 1] == ch:
+                        j += 2
+                        continue
+                    break
+                j += 1
+            out.append(calcite_sql[i:j + 1])
+            i = j + 1
+        elif ch == "@" and i + 1 < n and calcite_sql[i + 1].isdigit():
+            j = i + 1
+            while j < n and calcite_sql[j].isdigit():
+                j += 1
+            numbers.append(int(calcite_sql[i + 1:j]))
+            out.append("?")
+            i = j
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out), numbers
+
+
 def _match_name(name: str, candidates: List[str]) -> Optional[str]:
     """``name`` among ``candidates``: exact, else the one case-insensitive match."""
     if name in candidates:
@@ -625,6 +659,46 @@ class CalciteBackend:
         scope = CancelScope(session_key, timeout_ms, client_gone)
         count, keys = self.run_update(calcite_sql, scope, lane, keys_of=table_ref)
         return count, keys or []
+
+    def parameter_types(
+        self,
+        sql: str,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> dict:
+        """The SQL type name Calcite infers for each ``$N`` of ``sql``, keyed by N.
+
+        Calcite types a parameter from where it is used (``col = $1`` takes the column's
+        type). The statement is prepared, not run.
+        """
+        calcite_sql = transpile_pg_to_calcite(
+            sql,
+            json_enabled=("json" in self._extensions),
+            vector_enabled=("vector" in self._extensions),
+        )
+        prepared_sql, numbers = _question_marks(calcite_sql)
+        if not numbers:
+            return {}
+        conn, lock = self.lane(lane)
+        if conn is None:
+            raise RuntimeError("Calcite connection is not open")
+        scope = CancelScope(session_key, timeout_ms, client_gone)
+        scope.acquire(lock)
+        try:
+            statement = conn.prepareStatement(prepared_sql)
+            try:
+                metadata = statement.getParameterMetaData()
+                types: dict = {}
+                for position, number in enumerate(numbers, start=1):
+                    # A parameter used twice is typed by its first use
+                    types.setdefault(number, str(metadata.getParameterTypeName(position)))
+                return types
+            finally:
+                statement.close()
+        finally:
+            lock.release()
 
     def key_column(
         self,
