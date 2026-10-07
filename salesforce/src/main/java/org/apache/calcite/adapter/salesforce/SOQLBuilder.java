@@ -11,11 +11,13 @@
 package org.apache.calcite.adapter.salesforce;
 
 import org.apache.calcite.DataContext;
+import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexDynamicParam;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.rex.RexVisitorImpl;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -169,12 +171,17 @@ public class SOQLBuilder {
    * Convert a filter condition to a SOQL WHERE clause. If the condition has bind parameters the
    * result is a template (see {@link #MARK}) to pass through {@link #bind}.
    *
+   * @param rexBuilder builder of the condition's cluster
    * @param condition  filter condition
    * @param fieldNames SOQL field name for each input column
    * @throws UnsupportedOperationException if the condition has no SOQL form
    */
-  public static String buildWhereClause(RexNode condition, List<String> fieldNames) {
-    return translate(condition, new SOQLFilterTranslator(fieldNames));
+  public static String buildWhereClause(RexBuilder rexBuilder, RexNode condition,
+      List<String> fieldNames) {
+    // Calcite folds IN lists and ranges into SEARCH(field, Sarg); SOQL has neither, so
+    // they are spelled out as comparisons first
+    return translate(RexUtil.expandSearch(rexBuilder, null, condition),
+        new SOQLFilterTranslator(fieldNames));
   }
 
   /**

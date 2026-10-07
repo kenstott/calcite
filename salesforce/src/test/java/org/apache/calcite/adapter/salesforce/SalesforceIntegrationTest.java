@@ -239,6 +239,37 @@ class SalesforceIntegrationTest {
     }
   }
 
+  /**
+   * The read-back a server issues for {@code INSERT ... RETURNING}: an IN list of Ids, with the
+   * Id selected twice.
+   */
+  @Test void inListOfIdsWithARepeatedColumn() throws SQLException {
+    try (Connection conn = connect();
+         Statement stmt = conn.createStatement()) {
+      List<String> ids = new ArrayList<>();
+      try (ResultSet rs = stmt.executeQuery("SELECT Id FROM Account LIMIT 2")) {
+        while (rs.next()) {
+          ids.add(rs.getString(1));
+        }
+      }
+      assertThat(ids.size(), equalTo(2));
+      String sql = "SELECT Id, Name, Id AS K FROM Account WHERE Id IN ('"
+          + ids.get(0) + "', '" + ids.get(1) + "')";
+      Set<String> found = new HashSet<>();
+      try (ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          assertThat(rs.getString("K"), equalTo(rs.getString("Id")));
+          found.add(rs.getString("Id"));
+        }
+      }
+      assertThat(found, equalTo((Set<String>) new HashSet<>(ids)));
+      try (ResultSet rs = stmt.executeQuery("EXPLAIN PLAN FOR " + sql)) {
+        rs.next();
+        assertThat(rs.getString(1), containsString("SalesforceFilter"));
+      }
+    }
+  }
+
   @Test void preparedStatementParameterFiltersRows() throws SQLException {
     try (Connection conn = connect()) {
       String accountId;

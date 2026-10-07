@@ -20,6 +20,7 @@ import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlCollation;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.NlsString;
@@ -53,15 +54,26 @@ class SOQLBuilderTest {
     RexNode condition =
         rexBuilder.makeCall(SqlStdOperatorTable.EQUALS, accountId(),
             rexBuilder.makeLiteral("001gK00001Za2LCQAZ"));
-    assertThat(SOQLBuilder.buildWhereClause(condition, FIELDS),
+    assertThat(SOQLBuilder.buildWhereClause(rexBuilder, condition, FIELDS),
         equalTo("AccountId = '001gK00001Za2LCQAZ'"));
+  }
+
+  /** Calcite plans {@code AccountId IN ('a', 'b')} as SEARCH(AccountId, Sarg['a', 'b']). */
+  @Test void inListPlannedAsSearchBecomesComparisons() {
+    RexNode condition =
+        rexBuilder.makeIn(accountId(),
+            Arrays.asList(rexBuilder.makeLiteral("001gK00001Za2LCQAZ"),
+                rexBuilder.makeLiteral("001gK00001Za2LDQAZ")));
+    assertThat(condition.getKind(), equalTo(SqlKind.SEARCH));
+    assertThat(SOQLBuilder.buildWhereClause(rexBuilder, condition, FIELDS),
+        equalTo("(AccountId = '001gK00001Za2LCQAZ' OR AccountId = '001gK00001Za2LDQAZ')"));
   }
 
   @Test void stringLiteralIsEscaped() {
     RexNode condition =
         rexBuilder.makeCall(SqlStdOperatorTable.EQUALS, accountId(),
             rexBuilder.makeLiteral("O'Brien\\"));
-    assertThat(SOQLBuilder.buildWhereClause(condition, FIELDS),
+    assertThat(SOQLBuilder.buildWhereClause(rexBuilder, condition, FIELDS),
         equalTo("AccountId = 'O\\'Brien\\\\'"));
   }
 
@@ -71,7 +83,7 @@ class SOQLBuilderTest {
             rexBuilder.makeCharLiteral(
                 new NlsString("a" + SOQLBuilder.MARK + "b", "UTF-16LE", SqlCollation.IMPLICIT)));
     assertThrows(UnsupportedOperationException.class,
-        () -> SOQLBuilder.buildWhereClause(condition, FIELDS));
+        () -> SOQLBuilder.buildWhereClause(rexBuilder, condition, FIELDS));
   }
 
   @Test void bindParameterIsBoundAtExecution() {
@@ -125,7 +137,7 @@ class SOQLBuilderTest {
   @Test void bindParameterOfUnsupportedTypeIsNotPushedDown() {
     RelDataType time = typeFactory.createSqlType(SqlTypeName.TIME);
     assertThrows(UnsupportedOperationException.class,
-        () -> SOQLBuilder.buildWhereClause(greaterThan(time, 0), FIELDS));
+        () -> SOQLBuilder.buildWhereClause(rexBuilder, greaterThan(time, 0), FIELDS));
   }
 
   /** A parameter that is not an operand of a comparison has no SOQL form. */
@@ -134,7 +146,7 @@ class SOQLBuilderTest {
     RexNode condition =
         rexBuilder.makeCall(SqlStdOperatorTable.IS_NULL, param(bool, 0));
     assertThrows(UnsupportedOperationException.class,
-        () -> SOQLBuilder.buildWhereClause(condition, FIELDS));
+        () -> SOQLBuilder.buildWhereClause(rexBuilder, condition, FIELDS));
   }
 
   private RexNode param(RelDataType type, int index) {
@@ -146,8 +158,8 @@ class SOQLBuilderTest {
         rexBuilder.makeInputRef(type, 0), param(type, index));
   }
 
-  private static String bind(RexNode condition, Object... values) {
-    return SOQLBuilder.bind(SOQLBuilder.buildWhereClause(condition, FIELDS),
+  private String bind(RexNode condition, Object... values) {
+    return SOQLBuilder.bind(SOQLBuilder.buildWhereClause(rexBuilder, condition, FIELDS),
         new DataContext() {
           @Override public SchemaPlus getRootSchema() {
             throw new UnsupportedOperationException();
