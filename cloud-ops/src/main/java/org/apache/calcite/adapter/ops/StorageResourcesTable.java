@@ -43,43 +43,43 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("resource_name", SqlTypeName.VARCHAR)
-        .add("storage_type", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_name", SqlTypeName.VARCHAR).nullable(true)
+        .add("storage_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("size_bytes", SqlTypeName.BIGINT)
-        .add("storage_class", SqlTypeName.VARCHAR)
-        .add("replication_type", SqlTypeName.VARCHAR)
+        .add("size_bytes", SqlTypeName.BIGINT).nullable(true)
+        .add("storage_class", SqlTypeName.VARCHAR).nullable(true)
+        .add("replication_type", SqlTypeName.VARCHAR).nullable(true)
 
         // Security facts
-        .add("encryption_enabled", SqlTypeName.BOOLEAN)
-        .add("encryption_type", SqlTypeName.VARCHAR)
-        .add("encryption_key_type", SqlTypeName.VARCHAR)
-        .add("public_access_enabled", SqlTypeName.BOOLEAN)
-        .add("public_access_level", SqlTypeName.VARCHAR)
-        .add("network_restrictions", SqlTypeName.VARCHAR)
-        .add("https_only", SqlTypeName.BOOLEAN)
+        .add("encryption_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("encryption_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("encryption_key_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("public_access_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("public_access_level", SqlTypeName.VARCHAR).nullable(true)
+        .add("network_restrictions", SqlTypeName.VARCHAR).nullable(true)
+        .add("https_only", SqlTypeName.BOOLEAN).nullable(true)
 
         // Data protection facts
-        .add("versioning_enabled", SqlTypeName.BOOLEAN)
-        .add("soft_delete_enabled", SqlTypeName.BOOLEAN)
-        .add("soft_delete_retention_days", SqlTypeName.INTEGER)
-        .add("backup_enabled", SqlTypeName.BOOLEAN)
-        .add("lifecycle_rules_count", SqlTypeName.INTEGER)
+        .add("versioning_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("soft_delete_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("soft_delete_retention_days", SqlTypeName.INTEGER).nullable(true)
+        .add("backup_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("lifecycle_rules_count", SqlTypeName.INTEGER).nullable(true)
 
         // Access control facts
-        .add("access_tier", SqlTypeName.VARCHAR)
-        .add("last_access_time", SqlTypeName.TIMESTAMP)
-        .add("created_date", SqlTypeName.TIMESTAMP)
-        .add("modified_date", SqlTypeName.TIMESTAMP)
+        .add("access_tier", SqlTypeName.VARCHAR).nullable(true)
+        .add("last_access_time", SqlTypeName.TIMESTAMP).nullable(true)
+        .add("created_date", SqlTypeName.TIMESTAMP).nullable(true)
+        .add("modified_date", SqlTypeName.TIMESTAMP).nullable(true)
 
         // Metadata
-        .add("tags", SqlTypeName.VARCHAR) // JSON string
+        .add("tags", SqlTypeName.VARCHAR).nullable(true) // JSON string
 
         .build();
   }

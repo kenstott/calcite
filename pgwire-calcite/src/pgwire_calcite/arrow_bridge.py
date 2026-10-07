@@ -106,7 +106,8 @@ def _closer(source):
 
 
 def _consumer_factory(C):
-    """A JdbcConsumerFactory that reads binary columns with ``ResultSet.getBytes``.
+    """A JdbcConsumerFactory that reads binary columns with ``ResultSet.getBytes`` and
+    treats every column as nullable.
 
     arrow-jdbc's stock BinaryConsumer reads binary columns through
     ``getBinaryStream``, which Calcite's Avatica cursor does not implement --
@@ -153,8 +154,12 @@ def _consumer_factory(C):
         def apply(self, arrow_type, column_index, nullable, vector, config):
             if str(arrow_type.getTypeID()) in _BINARY_TYPE_IDS:
                 return _BytesConsumer(int(column_index), vector)
+            # Always the nullable consumer, whatever the column declares: the non-null
+            # ones skip the wasNull check, so one NULL in a column an adapter declared
+            # NOT NULL threw a NullPointerException and took the connection with it.
+            del nullable
             return C["JdbcToArrowUtils"].getConsumer(
-                arrow_type, column_index, nullable, vector, config
+                arrow_type, column_index, True, vector, config
             )
 
     _FACTORY_CACHE = _Factory()

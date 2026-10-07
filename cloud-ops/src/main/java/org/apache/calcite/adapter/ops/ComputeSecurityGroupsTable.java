@@ -56,10 +56,10 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("instance_id", SqlTypeName.VARCHAR)
-        .add("compute_resource_id", SqlTypeName.VARCHAR)
-        .add("security_group_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("compute_resource_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("security_group_id", SqlTypeName.VARCHAR).nullable(true)
         .build();
   }
 

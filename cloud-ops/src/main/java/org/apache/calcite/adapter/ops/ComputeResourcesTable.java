@@ -105,36 +105,36 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("instance_id", SqlTypeName.VARCHAR)
-        .add("instance_name", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("availability_zone", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_name", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("availability_zone", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("instance_type", SqlTypeName.VARCHAR)
-        .add("state", SqlTypeName.VARCHAR)
-        .add("platform", SqlTypeName.VARCHAR)
-        .add("architecture", SqlTypeName.VARCHAR)
-        .add("virtualization_type", SqlTypeName.VARCHAR)
+        .add("instance_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("state", SqlTypeName.VARCHAR).nullable(true)
+        .add("platform", SqlTypeName.VARCHAR).nullable(true)
+        .add("architecture", SqlTypeName.VARCHAR).nullable(true)
+        .add("virtualization_type", SqlTypeName.VARCHAR).nullable(true)
 
         // Network facts
-        .add("public_ip", SqlTypeName.VARCHAR)
-        .add("private_ip", SqlTypeName.VARCHAR)
-        .add("vpc_id", SqlTypeName.VARCHAR)
-        .add("subnet_id", SqlTypeName.VARCHAR)
+        .add("public_ip", SqlTypeName.VARCHAR).nullable(true)
+        .add("private_ip", SqlTypeName.VARCHAR).nullable(true)
+        .add("vpc_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("subnet_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Security facts
-        .add("iam_role", SqlTypeName.VARCHAR)
-        .add("security_groups", SqlTypeName.VARCHAR) // JSON array
-        .add("disk_encryption_enabled", SqlTypeName.BOOLEAN)
-        .add("monitoring_enabled", SqlTypeName.BOOLEAN)
+        .add("iam_role", SqlTypeName.VARCHAR).nullable(true)
+        .add("security_groups", SqlTypeName.VARCHAR).nullable(true) // JSON array
+        .add("disk_encryption_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("monitoring_enabled", SqlTypeName.BOOLEAN).nullable(true)
 
         // Timestamps
-        .add("launch_time", SqlTypeName.TIMESTAMP)
+        .add("launch_time", SqlTypeName.TIMESTAMP).nullable(true)
 
         .build();
   }

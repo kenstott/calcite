@@ -58,30 +58,30 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("network_resource", SqlTypeName.VARCHAR)
-        .add("network_resource_type", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("network_resource", SqlTypeName.VARCHAR).nullable(true)
+        .add("network_resource_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
         // Provider-native stable identifier (AWS bare id, Azure ARM id, GCP self-link/id). The
         // consistent cross-cloud join key referenced by compute_resources / compute_security_groups.
-        .add("native_id", SqlTypeName.VARCHAR)
+        .add("native_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("configuration", SqlTypeName.VARCHAR)
-        .add("cidr_block", SqlTypeName.VARCHAR)
-        .add("state", SqlTypeName.VARCHAR)
-        .add("is_default", SqlTypeName.BOOLEAN)
+        .add("configuration", SqlTypeName.VARCHAR).nullable(true)
+        .add("cidr_block", SqlTypeName.VARCHAR).nullable(true)
+        .add("state", SqlTypeName.VARCHAR).nullable(true)
+        .add("is_default", SqlTypeName.BOOLEAN).nullable(true)
 
         // Security facts
-        .add("security_findings", SqlTypeName.VARCHAR)
-        .add("has_open_ingress", SqlTypeName.BOOLEAN)
-        .add("rule_count", SqlTypeName.INTEGER)
+        .add("security_findings", SqlTypeName.VARCHAR).nullable(true)
+        .add("has_open_ingress", SqlTypeName.BOOLEAN).nullable(true)
+        .add("rule_count", SqlTypeName.INTEGER).nullable(true)
 
         // Metadata
-        .add("tags", SqlTypeName.VARCHAR) // JSON
+        .add("tags", SqlTypeName.VARCHAR).nullable(true) // JSON
 
         .build();
   }

@@ -42,34 +42,34 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("database_resource", SqlTypeName.VARCHAR)
-        .add("database_type", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("database_resource", SqlTypeName.VARCHAR).nullable(true)
+        .add("database_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("engine", SqlTypeName.VARCHAR)
-        .add("engine_version", SqlTypeName.VARCHAR)
-        .add("instance_class", SqlTypeName.VARCHAR)
-        .add("allocated_storage", SqlTypeName.INTEGER)
-        .add("multi_az", SqlTypeName.BOOLEAN)
-        .add("status", SqlTypeName.VARCHAR)
+        .add("engine", SqlTypeName.VARCHAR).nullable(true)
+        .add("engine_version", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_class", SqlTypeName.VARCHAR).nullable(true)
+        .add("allocated_storage", SqlTypeName.INTEGER).nullable(true)
+        .add("multi_az", SqlTypeName.BOOLEAN).nullable(true)
+        .add("status", SqlTypeName.VARCHAR).nullable(true)
 
         // Security facts
-        .add("publicly_accessible", SqlTypeName.BOOLEAN)
-        .add("encrypted", SqlTypeName.BOOLEAN)
-        .add("encryption_key", SqlTypeName.VARCHAR)
-        .add("tls_version", SqlTypeName.VARCHAR)
+        .add("publicly_accessible", SqlTypeName.BOOLEAN).nullable(true)
+        .add("encrypted", SqlTypeName.BOOLEAN).nullable(true)
+        .add("encryption_key", SqlTypeName.VARCHAR).nullable(true)
+        .add("tls_version", SqlTypeName.VARCHAR).nullable(true)
 
         // Backup facts
-        .add("backup_retention_days", SqlTypeName.INTEGER)
-        .add("backup_window", SqlTypeName.VARCHAR)
+        .add("backup_retention_days", SqlTypeName.INTEGER).nullable(true)
+        .add("backup_window", SqlTypeName.VARCHAR).nullable(true)
 
         // Timestamps
-        .add("create_time", SqlTypeName.TIMESTAMP)
+        .add("create_time", SqlTypeName.TIMESTAMP).nullable(true)
 
         .build();
   }

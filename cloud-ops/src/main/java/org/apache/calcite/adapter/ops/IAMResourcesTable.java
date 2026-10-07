@@ -42,29 +42,29 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("iam_resource", SqlTypeName.VARCHAR)
-        .add("iam_resource_type", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("iam_resource", SqlTypeName.VARCHAR).nullable(true)
+        .add("iam_resource_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("configuration", SqlTypeName.VARCHAR)
-        .add("security_configuration", SqlTypeName.VARCHAR)
+        .add("configuration", SqlTypeName.VARCHAR).nullable(true)
+        .add("security_configuration", SqlTypeName.VARCHAR).nullable(true)
 
         // IAM specific facts
-        .add("principal_type", SqlTypeName.VARCHAR)
-        .add("email", SqlTypeName.VARCHAR)
-        .add("is_active", SqlTypeName.BOOLEAN)
-        .add("mfa_enabled", SqlTypeName.BOOLEAN)
-        .add("access_key_count", SqlTypeName.INTEGER)
-        .add("active_access_keys", SqlTypeName.INTEGER)
+        .add("principal_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("email", SqlTypeName.VARCHAR).nullable(true)
+        .add("is_active", SqlTypeName.BOOLEAN).nullable(true)
+        .add("mfa_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("access_key_count", SqlTypeName.INTEGER).nullable(true)
+        .add("active_access_keys", SqlTypeName.INTEGER).nullable(true)
 
         // Timestamps
-        .add("create_date", SqlTypeName.TIMESTAMP)
-        .add("password_last_used", SqlTypeName.TIMESTAMP)
+        .add("create_date", SqlTypeName.TIMESTAMP).nullable(true)
+        .add("password_last_used", SqlTypeName.TIMESTAMP).nullable(true)
 
         .build();
   }

@@ -102,38 +102,38 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("cluster_name", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("cluster_name", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("kubernetes_version", SqlTypeName.VARCHAR)
-        .add("node_count", SqlTypeName.INTEGER)
-        .add("node_pools", SqlTypeName.INTEGER)
+        .add("kubernetes_version", SqlTypeName.VARCHAR).nullable(true)
+        .add("node_count", SqlTypeName.INTEGER).nullable(true)
+        .add("node_pools", SqlTypeName.INTEGER).nullable(true)
 
         // Security facts (raw boolean/string values)
-        .add("rbac_enabled", SqlTypeName.BOOLEAN)
-        .add("private_cluster", SqlTypeName.BOOLEAN)
-        .add("public_endpoint", SqlTypeName.BOOLEAN)
-        .add("authorized_ip_ranges", SqlTypeName.INTEGER)
-        .add("network_policy_provider", SqlTypeName.VARCHAR)
-        .add("pod_security_policy_enabled", SqlTypeName.BOOLEAN)
+        .add("rbac_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("private_cluster", SqlTypeName.BOOLEAN).nullable(true)
+        .add("public_endpoint", SqlTypeName.BOOLEAN).nullable(true)
+        .add("authorized_ip_ranges", SqlTypeName.INTEGER).nullable(true)
+        .add("network_policy_provider", SqlTypeName.VARCHAR).nullable(true)
+        .add("pod_security_policy_enabled", SqlTypeName.BOOLEAN).nullable(true)
 
         // Encryption facts
-        .add("encryption_at_rest_enabled", SqlTypeName.BOOLEAN)
-        .add("encryption_key_type", SqlTypeName.VARCHAR)
+        .add("encryption_at_rest_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("encryption_key_type", SqlTypeName.VARCHAR).nullable(true)
 
         // Monitoring facts
-        .add("logging_enabled", SqlTypeName.BOOLEAN)
-        .add("monitoring_enabled", SqlTypeName.BOOLEAN)
+        .add("logging_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("monitoring_enabled", SqlTypeName.BOOLEAN).nullable(true)
 
         // Metadata
-        .add("created_date", SqlTypeName.TIMESTAMP)
-        .add("modified_date", SqlTypeName.TIMESTAMP)
-        .add("tags", SqlTypeName.VARCHAR) // JSON string
+        .add("created_date", SqlTypeName.TIMESTAMP).nullable(true)
+        .add("modified_date", SqlTypeName.TIMESTAMP).nullable(true)
+        .add("tags", SqlTypeName.VARCHAR).nullable(true) // JSON string
 
         .build();
   }

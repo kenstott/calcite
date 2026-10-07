@@ -42,30 +42,30 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("registry_name", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
-        .add("registry_uri", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("registry_name", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("registry_uri", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("sku", SqlTypeName.VARCHAR)
-        .add("admin_user_enabled", SqlTypeName.BOOLEAN)
-        .add("public_access", SqlTypeName.VARCHAR)
-        .add("image_scanning_enabled", SqlTypeName.BOOLEAN)
-        .add("immutable_tags", SqlTypeName.BOOLEAN)
+        .add("sku", SqlTypeName.VARCHAR).nullable(true)
+        .add("admin_user_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("public_access", SqlTypeName.VARCHAR).nullable(true)
+        .add("image_scanning_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("immutable_tags", SqlTypeName.BOOLEAN).nullable(true)
 
         // Security facts
-        .add("encryption_type", SqlTypeName.VARCHAR)
-        .add("encryption_key", SqlTypeName.VARCHAR)
-        .add("quarantine_policy", SqlTypeName.VARCHAR)
-        .add("trust_policy", SqlTypeName.VARCHAR)
-        .add("retention_policy", SqlTypeName.VARCHAR)
+        .add("encryption_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("encryption_key", SqlTypeName.VARCHAR).nullable(true)
+        .add("quarantine_policy", SqlTypeName.VARCHAR).nullable(true)
+        .add("trust_policy", SqlTypeName.VARCHAR).nullable(true)
+        .add("retention_policy", SqlTypeName.VARCHAR).nullable(true)
 
         // Timestamps
-        .add("created_at", SqlTypeName.TIMESTAMP)
+        .add("created_at", SqlTypeName.TIMESTAMP).nullable(true)
 
         .build();
   }
