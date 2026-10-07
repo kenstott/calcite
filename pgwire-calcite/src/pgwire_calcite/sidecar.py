@@ -84,6 +84,9 @@ CANCEL_REQUEST = "\x00__PGWIRE_CANCEL__"
 #: Reserved prefix for an execution request carrying its session key and timeout.
 EXEC_REQUEST = "\x00__PGWIRE_EXEC__"
 
+#: Reserved prefix for an INSERT/UPDATE/DELETE; answered with its row count, not a stream.
+UPDATE_REQUEST = "\x00__PGWIRE_UPDATE__"
+
 #: Extra seconds allowed on the socket read deadline beyond the session's
 #: statement_timeout: the child enforces the timeout itself and then still has to
 #: send the trailer, so the reader must outlive the cancel it asked for.
@@ -159,10 +162,14 @@ class _ChildHandler(socketserver.StreamRequestHandler):
                 elif request.startswith(EXEC_REQUEST):
                     body = json.loads(request[len(EXEC_REQUEST):])
                     self._execute(backend, body)
+                elif request.startswith(UPDATE_REQUEST):
+                    body = json.loads(request[len(UPDATE_REQUEST):])
+                    self._send_control(self._update_payload(backend, body))
                 else:
                     raise ValueError(
                         "unknown bridge request: the pgwire side must send a ping, "
-                        f"{CATALOG_REQUEST!r}, {CANCEL_REQUEST!r} or {EXEC_REQUEST!r}"
+                        f"{CATALOG_REQUEST!r}, {CANCEL_REQUEST!r}, {EXEC_REQUEST!r} or "
+                        f"{UPDATE_REQUEST!r}"
                     )
             except Exception as exc:  # pre-stream failure -> loud, framed, with SQLSTATE
                 log.warning("[CALCITE-CHILD] error: %s", exc)
@@ -195,6 +202,20 @@ class _ChildHandler(socketserver.StreamRequestHandler):
 
         cancelled = IN_FLIGHT.cancel(body["session_key"], body["reason"])
         return json.dumps({"cancelled": cancelled}).encode("utf-8")
+
+    def _update_payload(self, backend, body: dict) -> bytes:
+        """Run one INSERT/UPDATE/DELETE in THIS process and report its row count."""
+        from pgwire_calcite.calcite_backend import CancelScope
+        from pgwire_calcite.server import _peer_closed
+
+        scope = CancelScope(
+            body["session_key"],
+            body["timeout_ms"],
+            lambda: _peer_closed(self.request),
+            body["max_queue_wait_ms"],
+        )
+        count = backend.run_update(body["sql"], scope, body["lane"])
+        return json.dumps({"count": count}).encode("utf-8")
 
     def _execute(self, backend, body: dict) -> None:
         from pgwire_calcite.calcite_backend import CancelScope
@@ -351,8 +372,46 @@ class BridgeBackend:
         """
         del session_key
 
-    def _control_request(self, request: str) -> bytes:
+    def execute_update(
+        self,
+        sql: str,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> int:
+        """Execute one INSERT/UPDATE/DELETE in the Calcite child; return its row count.
+
+        The child owns the statement and enforces ``timeout_ms``. A write is not abandoned
+        because its client went away, so ``client_gone`` is not polled here.
+        """
+        from pgwire_calcite.calcite_backend import CancelScope
+
+        del client_gone
+        calcite_sql = transpile_pg_to_calcite(
+            sql,
+            json_enabled=("json" in self._extensions),
+            vector_enabled=("vector" in self._extensions),
+        )
+        request = UPDATE_REQUEST + json.dumps(
+            {
+                "sql": calcite_sql,
+                "session_key": session_key,
+                "timeout_ms": int(timeout_ms),
+                "lane": lane,
+                "max_queue_wait_ms": CancelScope.max_queue_wait_ms,
+            }
+        )
+        deadline = timeout_ms / 1000.0 + _TIMEOUT_GRACE_S if timeout_ms else None
+        answer = self._control_request(request, read_timeout_s=deadline)
+        return int(json.loads(answer.decode("utf-8"))["count"])
+
+    def _control_request(self, request: str, read_timeout_s: Optional[float] = -1.0) -> bytes:
         sock = self._connect_with_retry()
+        # -1 keeps the connect timeout (pings, catalog, cancel); a write waits as long as
+        # its statement_timeout allows, or indefinitely when the session set none.
+        if read_timeout_s is None or read_timeout_s >= 0:
+            sock.settimeout(read_timeout_s)
         w, r = sock.makefile("wb"), sock.makefile("rb")
         try:
             write_frame(w, request.encode("utf-8"))

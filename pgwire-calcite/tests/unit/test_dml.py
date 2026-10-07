@@ -222,3 +222,27 @@ def test_grants_gate_writes(writable_backend):
             client.close()
     finally:
         srv.shutdown()
+
+
+def test_writes_cross_the_bridge(writable_backend):
+    """pgwire -> BridgeBackend -> Calcite child process seam -> writable model."""
+    from pgwire_calcite.sidecar import BridgeBackend, serve_calcite_child
+
+    child_port = _free_port()
+    child = serve_calcite_child(writable_backend, port=child_port)
+    srv, port = _serve(BridgeBackend(port=child_port), allow_writes=True)
+    try:
+        r = _query(port, """INSERT INTO W."T" ("ID", "QTY") VALUES (1, 10), (2, 20)""")
+        assert r["error"] is None, r["error"]
+        assert r["command_tag"] == "INSERT 0 2"
+        r = _query(port, """UPDATE W."T" SET "QTY" = 5 WHERE "ID" = 2""")
+        assert r["command_tag"] == "UPDATE 1"
+        assert _rows(port) == [["1", "10"], ["2", "5"]]
+        r = _query(port, 'DELETE FROM W."T"')
+        assert r["command_tag"] == "DELETE 2"
+        # An engine error comes back as an error, not a row count.
+        r = _query(port, """INSERT INTO W."NOPE" ("ID") VALUES (1)""")
+        assert r["error"] is not None
+    finally:
+        srv.shutdown()
+        child.shutdown()

@@ -66,8 +66,8 @@ answered with PostgreSQL's command tag (`INSERT 0 n`, `UPDATE n`, `DELETE n`).
   rather than reported as done.
 - When the server is given per-role grants (`serve(authz_grants=...)`), the grants that gate
   reads gate writes: a role may write only to relations granted to it.
-- `RETURNING` and DDL are not supported. Writes run on the in-process `calcite` backend, not
-  the `bridge` backend.
+- `RETURNING` and DDL are not supported.
+- Both the in-process `calcite` backend and the `bridge` backend route writes.
 
 ## Client timeouts and cancellation
 
