@@ -107,6 +107,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 refuse_unscheduled_remediation "$SCHEMA" "force-reprocess.sh --schema $SCHEMA --tables ${TABLES:-?}" || exit 2
+if [[ "$SCHEMA" == "sec" ]]; then
+  refuse_bare_sec_remediation "force-reprocess.sh --schema sec --tables ${TABLES:-?}" || exit 2
+fi
 
 if [[ -z "$SCHEMA" || -z "$TABLES" ]]; then
   cat <<EOF >&2

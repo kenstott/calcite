@@ -322,6 +322,22 @@ refuse_unscheduled_remediation() {
   return 1
 }
 
+# refuse_bare_sec_remediation <what>
+# There is no bare "sec" slot: SEC work always runs as a slot (sec_primary, sec_13f, sec_prices;
+# sec_secondary is not remediated), with --tables to target one table. Bare "sec" held a 0-9999 claim
+# over every sec_* slot for days and blocked their remediations. Returns 1 (after saying why) for a
+# production target; a DQ target is allowed. GOVDATA_ALLOW_BARE_SEC=true lifts the rule.
+refuse_bare_sec_remediation() {
+  [ "${GOVDATA_ALLOW_BARE_SEC:-false}" = "true" ] && return 0
+  case "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}" in
+    *-dq|*-dq/*) return 0 ;;
+  esac
+  echo "REFUSED: there is no bare sec slot; run the table through its slot ($1)." >&2
+  echo "         Use --schema sec_primary (10-K/10-Q) or sec_13f with --tables <table>." >&2
+  echo "         Set GOVDATA_ALLOW_BARE_SEC=true to override." >&2
+  return 1
+}
+
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
 # Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
 # single read of version-hint.text, then metadata.json + manifest-list + every manifest +

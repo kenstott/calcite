@@ -412,6 +412,7 @@ fi
 for _slot in "${queue[@]+"${queue[@]}"}"; do
   case "$_slot" in
     *:dq*) ;;
+    sec:*) refuse_bare_sec_remediation "run-pool.sh $_slot" || exit 2 ;;
     *) refuse_unscheduled_remediation "${_slot%%:*}" "run-pool.sh $_slot" || exit 2 ;;
   esac
 done
