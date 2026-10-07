@@ -579,10 +579,16 @@ class CalciteBackend:
             vector_enabled=("vector" in self._extensions),
         )
         log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
+        return self.run_update(calcite_sql, CancelScope(session_key, timeout_ms, client_gone), lane)
+
+    def run_update(self, calcite_sql: str, scope: "CancelScope", lane: str = LANE_USER) -> int:
+        """Run an already-transpiled INSERT/UPDATE/DELETE under ``scope``; return its row count.
+
+        The seam the bridge's Calcite child uses: the pgwire side transpiles, the child runs.
+        """
         conn, lock = self.lane(lane)
         if conn is None:
             raise RuntimeError("Calcite connection is not open")
-        scope = CancelScope(session_key, timeout_ms, client_gone)
         scope.acquire(lock)
         try:
             stmt = conn.createStatement()
