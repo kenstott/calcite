@@ -137,6 +137,7 @@ public class CloudOpsClientModule
     {
         List<String> params = new ArrayList<>();
         addParam(params, "providers", config.getProviders());
+        addParam(params, "schema", config.getSchema());
 
         addParam(params, "azure.tenantId", config.getAzureTenantId());
         addParam(params, "azure.clientId", config.getAzureClientId());

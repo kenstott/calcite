@@ -51,6 +51,7 @@ public class CloudOpsConfig
     private Boolean cacheEnabled;
     private Integer cacheTtlMinutes;
     private Boolean cacheDebugMode;
+    private String schema;
 
     public String getProviders()
     {
@@ -246,6 +247,19 @@ public class CloudOpsConfig
     public CloudOpsConfig setCacheDebugMode(Boolean cacheDebugMode)
     {
         this.cacheDebugMode = cacheDebugMode;
+        return this;
+    }
+
+    public String getSchema()
+    {
+        return schema;
+    }
+
+    @Config("schema")
+    @ConfigDescription("The schema name to register the cloud resource tables under (default: \"cloud\")")
+    public CloudOpsConfig setSchema(String schema)
+    {
+        this.schema = schema;
         return this;
     }
 }

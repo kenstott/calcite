@@ -26,9 +26,20 @@ import java.util.Map;
  */
 public class CloudOpsSchema extends AbstractSchema {
   private final CloudOpsConfig config;
+  private final String schemaName;
 
   public CloudOpsSchema(CloudOpsConfig config) {
+    this(config, AbstractCloudOpsTable.DEFAULT_SCHEMA_NAME);
+  }
+
+  /**
+   * Creates a schema.
+   *
+   * @param schemaName name the schema is registered under, which the tables' foreign keys refer to
+   */
+  public CloudOpsSchema(CloudOpsConfig config, String schemaName) {
     this.config = config;
+    this.schemaName = schemaName;
   }
 
   @Override public boolean isMutable() {
@@ -39,7 +50,7 @@ public class CloudOpsSchema extends AbstractSchema {
     final ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
 
     // Core resource tables
-    builder.put("compute_resources", new ComputeResourcesTable(config));
+    builder.put("compute_resources", new ComputeResourcesTable(config, schemaName));
     builder.put("storage_resources", new StorageResourcesTable(config));
     builder.put("kubernetes_clusters", new KubernetesClustersTable(config));
     builder.put("container_registries", new ContainerRegistriesTable(config));
@@ -49,7 +60,7 @@ public class CloudOpsSchema extends AbstractSchema {
 
     // Junction table: normalizes compute -> security-group associations (FK to compute_resources
     // and network_resources).
-    builder.put("compute_security_groups", new ComputeSecurityGroupsTable(config));
+    builder.put("compute_security_groups", new ComputeSecurityGroupsTable(config, schemaName));
 
     return builder.build();
   }

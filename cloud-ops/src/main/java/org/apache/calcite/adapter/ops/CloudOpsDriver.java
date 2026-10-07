@@ -80,13 +80,22 @@ public class CloudOpsDriver extends org.apache.calcite.jdbc.Driver {
 
     private String buildModel(Properties props) throws SQLException {
         try {
+            // "schema" names the schema the tables are registered under; the rest is the operand
+            String schemaName = AbstractCloudOpsTable.DEFAULT_SCHEMA_NAME;
             Map<String, Object> operand = new HashMap<String, Object>();
             for (String key : props.stringPropertyNames()) {
-                operand.put(key, props.getProperty(key));
+                if ("schema".equals(key)) {
+                    schemaName = props.getProperty(key);
+                } else {
+                    operand.put(key, props.getProperty(key));
+                }
+            }
+            if (schemaName.trim().isEmpty()) {
+                throw new SQLException("The schema property is empty");
             }
 
             Map<String, Object> schema = new HashMap<String, Object>();
-            schema.put("name", "cloud");
+            schema.put("name", schemaName);
             schema.put("type", "custom");
             schema.put("factory", "org.apache.calcite.adapter.ops.CloudOpsSchemaFactory");
             schema.put("operand", operand);
@@ -96,7 +105,7 @@ public class CloudOpsDriver extends org.apache.calcite.jdbc.Driver {
 
             Map<String, Object> model = new HashMap<String, Object>();
             model.put("version", "1.0");
-            model.put("defaultSchema", "cloud");
+            model.put("defaultSchema", schemaName);
             model.put("schemas", schemas);
 
             return new ObjectMapper().writeValueAsString(model);

@@ -49,6 +49,10 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
     super(config);
   }
 
+  public ComputeSecurityGroupsTable(CloudOpsConfig config, String schemaName) {
+    super(config, schemaName);
+  }
+
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("cloud_provider", SqlTypeName.VARCHAR)
@@ -88,8 +92,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
     final int tgtResourceId = computeColumns.indexOf("resource_id");
     if (srcComputeId >= 0 && tgtResourceId >= 0) {
       fks.add(RelReferentialConstraintImpl.of(
-          Arrays.asList("cloud", "compute_security_groups"),
-          Arrays.asList("cloud", "compute_resources"),
+          Arrays.asList(schemaName, "compute_security_groups"),
+          Arrays.asList(schemaName, "compute_resources"),
           Collections.singletonList(IntPair.of(srcComputeId, tgtResourceId))));
     }
 
@@ -99,8 +103,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
     final int tgtNativeId = networkColumns.indexOf("native_id");
     if (srcProvider >= 0 && srcSecurityGroupId >= 0 && tgtProvider >= 0 && tgtNativeId >= 0) {
       fks.add(RelReferentialConstraintImpl.of(
-          Arrays.asList("cloud", "compute_security_groups"),
-          Arrays.asList("cloud", "network_resources"),
+          Arrays.asList(schemaName, "compute_security_groups"),
+          Arrays.asList(schemaName, "network_resources"),
           Arrays.asList(
               IntPair.of(srcProvider, tgtProvider),
               IntPair.of(srcSecurityGroupId, tgtNativeId))));

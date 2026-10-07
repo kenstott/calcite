@@ -86,7 +86,7 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
           new CloudOpsConfig(providers, azure, gcp, aws, cacheEnabled, cacheTtlMinutes, cacheDebugMode);
 
       // Create the main Cloud Governance schema
-      CloudOpsSchema cloudGovernanceSchema = new CloudOpsSchema(config);
+      CloudOpsSchema cloudGovernanceSchema = new CloudOpsSchema(config, name);
 
       // Navigate to root schema to add metadata schemas as siblings (following File/Splunk pattern)
       SchemaPlus rootSchema = parentSchema;

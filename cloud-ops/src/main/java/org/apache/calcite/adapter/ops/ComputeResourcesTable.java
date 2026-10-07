@@ -44,6 +44,10 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     super(config);
   }
 
+  public ComputeResourcesTable(CloudOpsConfig config, String schemaName) {
+    super(config, schemaName);
+  }
+
   /**
    * Logical foreign keys, declared provider-neutrally on the shared tables:
    * <ul>
@@ -76,8 +80,8 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     final int tgtIamResourceId = iamColumns.indexOf("resource_id");
     if (srcIamRole >= 0 && tgtIamResourceId >= 0) {
       fks.add(RelReferentialConstraintImpl.of(
-          Arrays.asList("cloud", "compute_resources"),
-          Arrays.asList("cloud", "iam_resources"),
+          Arrays.asList(schemaName, "compute_resources"),
+          Arrays.asList(schemaName, "iam_resources"),
           Collections.singletonList(IntPair.of(srcIamRole, tgtIamResourceId))));
     }
 
@@ -90,8 +94,8 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
       return;
     }
     fks.add(RelReferentialConstraintImpl.of(
-        Arrays.asList("cloud", "compute_resources"),
-        Arrays.asList("cloud", "network_resources"),
+        Arrays.asList(schemaName, "compute_resources"),
+        Arrays.asList(schemaName, "network_resources"),
         Arrays.asList(
             IntPair.of(srcProvider, tgtProvider),
             IntPair.of(srcNativeId, tgtNativeId))));
