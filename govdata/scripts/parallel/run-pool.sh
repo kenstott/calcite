@@ -407,6 +407,15 @@ fi
 # session-completion list duplicated that and silently skipped whole schemas on re-invocation
 # (the same broken "force"-style state, requiring --force to undo) — removed.
 
+# A slot outside the scheduled production rotation (UNSCHEDULED_SLOTS in common.sh) is never run
+# against production; its DQ slots (<schema>:dq*) are fine.
+for _slot in "${queue[@]+"${queue[@]}"}"; do
+  case "$_slot" in
+    *:dq*) ;;
+    *) refuse_unscheduled_remediation "${_slot%%:*}" "run-pool.sh $_slot" || exit 2 ;;
+  esac
+done
+
 # Verify shadow JAR before launching
 resolve_classpath > /dev/null
 

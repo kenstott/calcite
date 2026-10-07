@@ -290,6 +290,38 @@ resolve_classpath() {
   "$GOVDATA_ROOT/scripts/pin-jar.sh" "$jar" || exit 1
 }
 
+# Slots (schemas) that are NOT part of the scheduled production rotation: run-pool.sh leaves them out of
+# its daily and historical queues on purpose (sec_secondary: its runs take multiple days). Keep this
+# list equal to those schemas; remove a schema when it is added back to the schedule.
+UNSCHEDULED_SLOTS="sec_secondary"
+
+# is_unscheduled_slot <schema> -- true when the schema is outside the scheduled production rotation.
+is_unscheduled_slot() {
+  local s
+  for s in $UNSCHEDULED_SLOTS; do
+    [ "$s" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# refuse_unscheduled_remediation <schema> <what>
+# A worker that is not in a production ETL slot is never remediated against production. A problem
+# there is investigated with a reduced accession set in DQ, and the table is fixed once its schema is
+# added back to the schedule. Returns 1 (after saying why) for a production target of an unscheduled
+# schema; any other schema, and a DQ target (a parquet dir ending in "-dq"), is allowed.
+# GOVDATA_ALLOW_UNSCHEDULED_REMEDIATION=true lifts the rule.
+refuse_unscheduled_remediation() {
+  is_unscheduled_slot "$1" || return 0
+  [ "${GOVDATA_ALLOW_UNSCHEDULED_REMEDIATION:-false}" = "true" ] && return 0
+  case "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}" in
+    *-dq|*-dq/*) return 0 ;;
+  esac
+  echo "REFUSED: $1 is not in a scheduled production slot, so it is never remediated against production ($2)." >&2
+  echo "         Validate with a reduced accession set in DQ; the table is fixed when the schema is added" >&2
+  echo "         back to the schedule. Set GOVDATA_ALLOW_UNSCHEDULED_REMEDIATION=true to override." >&2
+  return 1
+}
+
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
 # Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
 # single read of version-hint.text, then metadata.json + manifest-list + every manifest +

@@ -106,6 +106,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+refuse_unscheduled_remediation "$SCHEMA" "force-reprocess.sh --schema $SCHEMA --tables ${TABLES:-?}" || exit 2
+
 if [[ -z "$SCHEMA" || -z "$TABLES" ]]; then
   cat <<EOF >&2
 Usage: $0 --schema <schema> --tables <t1,t2,...> [--start YYYY] [--end YYYY] [--skip-historical] [--skip-daily] [--dry-run] [--force-download]
