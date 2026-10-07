@@ -83,7 +83,7 @@ public class SalesforceEnumerator implements Enumerator<Object[]> {
       return false;
 
     } catch (IOException e) {
-      throw new RuntimeException("Failed to query Salesforce", e);
+      throw new RuntimeException("Failed to query Salesforce: " + e.getMessage(), e);
     }
   }
 

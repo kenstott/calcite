@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
@@ -55,7 +56,9 @@ public class SalesforceProject extends Project implements SalesforceRel {
 
     // Build SELECT clause from projected fields
     List<String> fieldNames = extractFieldNames(this);
-    implementor.selectClause = String.join(", ", fieldNames);
+    // SOQL rejects a field selected twice; the row is laid out from selectFields, which
+    // reads each column from the record by name, so a repeated column costs nothing
+    implementor.selectClause = String.join(", ", new LinkedHashSet<>(fieldNames));
     implementor.selectFields = fieldNames;
   }
 

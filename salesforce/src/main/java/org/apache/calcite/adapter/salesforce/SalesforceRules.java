@@ -121,7 +121,7 @@ public class SalesforceRules {
       final LogicalFilter filter = (LogicalFilter) rel;
       // Conditions with no SOQL form stay in Calcite
       try {
-        SOQLBuilder.buildWhereClause(filter.getCondition(),
+        SOQLBuilder.buildWhereClause(filter.getCluster().getRexBuilder(), filter.getCondition(),
             filter.getInput().getRowType().getFieldNames());
       } catch (UnsupportedOperationException e) {
         return null;

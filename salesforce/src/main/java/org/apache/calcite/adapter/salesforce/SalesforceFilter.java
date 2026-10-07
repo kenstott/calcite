@@ -48,7 +48,9 @@ public class SalesforceFilter extends Filter implements SalesforceRel {
     implementor.visitChild(0, getInput());
 
     // Convert filter condition to SOQL WHERE clause
-    String whereClause = SOQLBuilder.buildWhereClause(condition, inputFieldNames(implementor));
+    String whereClause =
+        SOQLBuilder.buildWhereClause(getCluster().getRexBuilder(), condition,
+            inputFieldNames(implementor));
 
     if (implementor.whereClause == null) {
       implementor.whereClause = whereClause;
