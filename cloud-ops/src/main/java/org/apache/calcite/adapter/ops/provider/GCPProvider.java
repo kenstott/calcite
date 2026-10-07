@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.ops.provider;
 
 import org.apache.calcite.adapter.ops.CloudOpsConfig;
+import org.apache.calcite.adapter.ops.CloudOpsDataConverter;
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheManager;
 import org.apache.calcite.adapter.ops.util.CloudOpsFilterHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsPaginationHandler;
@@ -729,14 +730,7 @@ public class GCPProvider implements CloudProvider {
 
   /** Labels as a JSON object, or null when there are none. */
   static String toJson(Map<String, String> labels) {
-    if (labels == null || labels.isEmpty()) {
-      return null;
-    }
-    try {
-      return MAPPER.writeValueAsString(new java.util.TreeMap<String, String>(labels));
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
+    return CloudOpsDataConverter.tagsToJson(labels);
   }
 
   private static String textOrNull(JsonNode node, String field) {

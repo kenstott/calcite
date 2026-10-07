@@ -220,7 +220,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("ResourceId"),
             storage.get("SizeBytes"), // from CloudWatch; fetched only when projected
             null, // storage_class - in S3 this is per object
-            null, // replication_type - would need to check replication rules
+            storage.get("Replication"),
             storage.get("EncryptionEnabled"),
             storage.get("EncryptionType"),
             storage.get("KmsKeyId") != null ? "customer-managed" :
@@ -238,7 +238,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null, // last_access_time - would need CloudWatch
             CloudOpsDataConverter.convertValue(storage.get("CreationDate"), SqlTypeName.TIMESTAMP),
             null, // modified_date - S3 doesn't track bucket modification
-            null  // tags - would need to convert tag map to JSON
+            storage.get("Tags")
         });
       }
     } catch (RuntimeException e) {

@@ -196,7 +196,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("HasOpenIngressRule"),
             network.get("IngressRulesCount") != null ? network.get("IngressRulesCount") :
                 network.get("EgressRulesCount"),
-            null  // tags would need conversion
+            network.get("Tags")
         });
       }
     } catch (RuntimeException e) {

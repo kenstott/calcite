@@ -175,7 +175,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("ResourceId"),
             registry.get("RepositoryUri"),
             null, // SKU not applicable to ECR
-            false, // admin user not applicable to ECR
+            null, // admin user not applicable to ECR
             "Private", // ECR is always private
             registry.get("ImageScanningEnabled"),
             "IMMUTABLE".equals(registry.get("ImageTagMutability")),
@@ -183,7 +183,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("KmsKey"),
             null, // quarantine policy not in ECR
             null, // trust policy not in ECR
-            null, // retention policy configured per lifecycle rules
+            registry.get("RetentionPolicy"), // whether a lifecycle policy expires images
             CloudOpsDataConverter.convertValue(registry.get("CreatedAt"), SqlTypeName.TIMESTAMP)
         });
       }

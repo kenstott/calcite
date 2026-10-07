@@ -181,7 +181,7 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
             iam.get("Path") != null ? "Path: " + iam.get("Path") :
                 iam.get("Description") != null ? "Description: " + iam.get("Description") : null,
             null, // security configuration not computed
-            null, // principal type in users/roles
+            resourceType == null ? null : resourceType.replace("IAM ", "").replace(" ", ""),
             null, // email not exposed
             !"IAM Policy".equals(resourceType), // policies aren't active/inactive
             iam.get("MFAEnabled"),

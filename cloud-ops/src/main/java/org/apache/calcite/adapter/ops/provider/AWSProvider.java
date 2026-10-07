@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.ops.provider;
 
 import org.apache.calcite.adapter.ops.CloudOpsConfig;
+import org.apache.calcite.adapter.ops.CloudOpsDataConverter;
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheManager;
 import org.apache.calcite.adapter.ops.util.CloudOpsFilterHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsPaginationHandler;
@@ -277,6 +278,23 @@ public class AWSProvider implements CloudProvider {
           // Build full cluster data (no server-side projection available)
           Map<String, Object> clusterData = buildClusterData(accountId, cluster);
 
+          // Node groups are resources of their own: count them and total their desired sizes
+          int nodeGroups = 0;
+          int nodes = 0;
+          for (String nodegroup
+              : eksClient.listNodegroupsPaginator(r -> r.clusterName(clusterName)).nodegroups()) {
+            nodeGroups++;
+            software.amazon.awssdk.services.eks.model.NodegroupScalingConfig scaling =
+                eksClient.describeNodegroup(
+                    r -> r.clusterName(clusterName).nodegroupName(nodegroup))
+                    .nodegroup().scalingConfig();
+            if (scaling != null && scaling.desiredSize() != null) {
+              nodes += scaling.desiredSize();
+            }
+          }
+          clusterData.put("NodeGroupCount", nodeGroups);
+          clusterData.put("NodeCount", nodes);
+
           // Apply client-side filtering for non-pushable filters
           if (filterHandler == null || passesClientSideFilters(clusterData, filterHandler)) {
             results.add(clusterData);
@@ -339,6 +357,7 @@ public class AWSProvider implements CloudProvider {
     String application =
         applicationOf(tags);
     clusterData.put("Application", application);
+    clusterData.put("Tags", CloudOpsDataConverter.tagsToJson(tags));
 
     // Configuration facts
     clusterData.put("ClusterVersion", cluster.version());
@@ -436,6 +455,7 @@ public class AWSProvider implements CloudProvider {
                                                 isFieldProjected(projectionHandler, "public_access_enabled", "public_access_level", "PublicAccessBlocked");
     boolean needsVersioning = isFieldProjected(projectionHandler, "versioning_enabled", "VersioningEnabled");
     boolean needsLifecycle = isFieldProjected(projectionHandler, "lifecycle_rules_count", "LifecycleRuleCount");
+    boolean needsReplication = isFieldProjected(projectionHandler, "replication_type");
     boolean needsSizeMetrics = isFieldProjected(projectionHandler, "size_bytes", "SizeBytes", "size_gb", "SizeGB");
 
     // Log optimization decisions
@@ -505,7 +525,7 @@ public class AWSProvider implements CloudProvider {
                 }
               }
               storageData.put("Application", applicationOf(tags));
-              storageData.put("Tags", GCPProvider.toJson(tags));
+              storageData.put("Tags", CloudOpsDataConverter.tagsToJson(tags));
             } else {
               storageData.put("Application", null);
             }
@@ -567,6 +587,19 @@ public class AWSProvider implements CloudProvider {
                   BucketVersioningStatus.ENABLED == versioningResponse.status());
             } else {
               storageData.put("VersioningEnabled", null);
+            }
+
+            if (needsReplication) {
+              try {
+                int rules = s3Client.getBucketReplication(r -> r.bucket(bucket.name()))
+                    .replicationConfiguration().rules().size();
+                storageData.put("Replication", "replicated (" + rules + " rules)");
+              } catch (AwsServiceException e) {
+                if (!isAwsError(e, "ReplicationConfigurationNotFoundError")) {
+                  throw e;
+                }
+                storageData.put("Replication", "none");
+              }
             }
 
             // Only fetch lifecycle if needed
@@ -664,7 +697,7 @@ public class AWSProvider implements CloudProvider {
             .build();
 
         // Describe all instances
-        for (Reservation reservation : ec2Client.describeInstances().reservations()) {
+        for (Reservation reservation : ec2Client.describeInstancesPaginator().reservations()) {
           for (Instance instance : reservation.instances()) {
             Map<String, Object> vmData = new HashMap<>();
 
@@ -689,7 +722,8 @@ public class AWSProvider implements CloudProvider {
             vmData.put("InstanceType", instance.instanceTypeAsString());
             vmData.put("State", instance.state().nameAsString());
             vmData.put("Architecture", instance.architectureAsString());
-            vmData.put("Platform", instance.platformAsString());
+            // platform is only set for Windows; platformDetails names every OS ("Linux/UNIX")
+            vmData.put("Platform", instance.platformDetails());
             vmData.put("VirtualizationType", instance.virtualizationTypeAsString());
 
             // Network facts
@@ -700,15 +734,25 @@ public class AWSProvider implements CloudProvider {
 
             // Security facts. Store the instance-profile ARN (not the SDK object) so it equi-matches
             // iam_resources.resource_id for the compute_resources.iam_role foreign key.
-            vmData.put("SecurityGroups", instance.securityGroups());
+            vmData.put("SecurityGroups", instance.securityGroups().stream()
+                .map(GroupIdentifier::groupId)
+                .collect(java.util.stream.Collectors.joining(",")));
             vmData.put("IamInstanceProfile",
                 instance.iamInstanceProfile() != null ? instance.iamInstanceProfile().arn() : null);
 
-            // EBS encryption
-            boolean allEbsEncrypted = instance.blockDeviceMappings().stream()
+            // EBS encryption: the instance only names its volumes; whether each is encrypted
+            // is a property of the volume
+            List<String> volumeIds = instance.blockDeviceMappings().stream()
                 .filter(bdm -> bdm.ebs() != null)
-                .allMatch(bdm -> bdm.ebs() != null);
-            vmData.put("EbsEncrypted", allEbsEncrypted);
+                .map(bdm -> bdm.ebs().volumeId())
+                .collect(java.util.stream.Collectors.toList());
+            if (volumeIds.isEmpty()) {
+              vmData.put("EbsEncrypted", null); // instance store only
+            } else {
+              vmData.put("EbsEncrypted",
+                  ec2Client.describeVolumes(r -> r.volumeIds(volumeIds)).volumes().stream()
+                      .allMatch(volume -> Boolean.TRUE.equals(volume.encrypted())));
+            }
 
             // Monitoring
             vmData.put("MonitoringEnabled",
@@ -748,7 +792,7 @@ public class AWSProvider implements CloudProvider {
             .credentialsProvider(StaticCredentialsProvider.create(credentials))
             .build();
 
-        for (Reservation reservation : ec2Client.describeInstances().reservations()) {
+        for (Reservation reservation : ec2Client.describeInstancesPaginator().reservations()) {
           for (Instance instance : reservation.instances()) {
             String computeResourceId =
                 String.format(Locale.ROOT, "arn:aws:ec2:%s:%s:instance/%s",
@@ -786,7 +830,7 @@ public class AWSProvider implements CloudProvider {
             .build();
 
         // Query VPCs
-        for (Vpc vpc : ec2Client.describeVpcs().vpcs()) {
+        for (Vpc vpc : ec2Client.describeVpcsPaginator().vpcs()) {
           Map<String, Object> networkData = new HashMap<>();
 
           networkData.put("AccountId", accountId);
@@ -803,6 +847,7 @@ public class AWSProvider implements CloudProvider {
           String application =
               applicationOf(tags);
           networkData.put("Application", application);
+          networkData.put("Tags", CloudOpsDataConverter.tagsToJson(tags));
 
           // VPC Configuration
           networkData.put("CidrBlock", vpc.cidrBlock());
@@ -816,7 +861,7 @@ public class AWSProvider implements CloudProvider {
         }
 
         // Query Security Groups
-        for (SecurityGroup sg : ec2Client.describeSecurityGroups().securityGroups()) {
+        for (SecurityGroup sg : ec2Client.describeSecurityGroupsPaginator().securityGroups()) {
           Map<String, Object> networkData = new HashMap<>();
 
           networkData.put("AccountId", accountId);
@@ -833,6 +878,7 @@ public class AWSProvider implements CloudProvider {
           String application =
               applicationOf(tags);
           networkData.put("Application", application);
+          networkData.put("Tags", CloudOpsDataConverter.tagsToJson(tags));
 
           // Security Group Configuration
           networkData.put("GroupName", sg.groupName());
@@ -844,7 +890,9 @@ public class AWSProvider implements CloudProvider {
           // Check for overly permissive rules
           boolean hasOpenIngress = sg.ipPermissions().stream()
               .anyMatch(rule -> rule.ipRanges().stream()
-                  .anyMatch(range -> "0.0.0.0/0".equals(range.cidrIp())));
+                      .anyMatch(range -> "0.0.0.0/0".equals(range.cidrIp()))
+                  || rule.ipv6Ranges().stream()
+                      .anyMatch(range -> "::/0".equals(range.cidrIpv6())));
           networkData.put("HasOpenIngressRule", hasOpenIngress);
 
           results.add(networkData);
@@ -867,6 +915,7 @@ public class AWSProvider implements CloudProvider {
           String application =
               applicationOf(tags);
           networkData.put("Application", application);
+          networkData.put("Tags", CloudOpsDataConverter.tagsToJson(tags));
 
           // Elastic IP Configuration
           networkData.put("PublicIp", address.publicIp());
@@ -882,7 +931,7 @@ public class AWSProvider implements CloudProvider {
         // Query Subnets. Emitting these as rows lets compute_resources.subnet_id reference a
         // network_resources row by its bare native ID (subnet-...), the same pattern as VPCs.
         for (software.amazon.awssdk.services.ec2.model.Subnet subnet
-            : ec2Client.describeSubnets().subnets()) {
+            : ec2Client.describeSubnetsPaginator().subnets()) {
           Map<String, Object> networkData = new HashMap<>();
 
           networkData.put("AccountId", accountId);
@@ -899,6 +948,7 @@ public class AWSProvider implements CloudProvider {
           String application =
               applicationOf(tags);
           networkData.put("Application", application);
+          networkData.put("Tags", CloudOpsDataConverter.tagsToJson(tags));
 
           // Subnet Configuration
           networkData.put("CidrBlock", subnet.cidrBlock());
@@ -932,7 +982,7 @@ public class AWSProvider implements CloudProvider {
             .build();
 
         // Query IAM Users
-        for (software.amazon.awssdk.services.iam.model.User user : iamClient.listUsers().users()) {
+        for (software.amazon.awssdk.services.iam.model.User user : iamClient.listUsersPaginator().users()) {
           Map<String, Object> iamData = new HashMap<>();
 
           iamData.put("AccountId", accountId);
@@ -969,7 +1019,7 @@ public class AWSProvider implements CloudProvider {
         }
 
         // Query IAM Roles
-        for (Role role : iamClient.listRoles().roles()) {
+        for (Role role : iamClient.listRolesPaginator().roles()) {
           Map<String, Object> iamData = new HashMap<>();
 
           iamData.put("AccountId", accountId);
@@ -1001,7 +1051,7 @@ public class AWSProvider implements CloudProvider {
         }
 
         // Query IAM Policies (customer managed only)
-        for (Policy policy : iamClient.listPolicies(r -> r.scope(PolicyScopeType.LOCAL)).policies()) {
+        for (Policy policy : iamClient.listPoliciesPaginator(r -> r.scope(PolicyScopeType.LOCAL)).policies()) {
           Map<String, Object> iamData = new HashMap<>();
 
           iamData.put("AccountId", accountId);
@@ -1032,7 +1082,7 @@ public class AWSProvider implements CloudProvider {
 
         // Query Instance Profiles. These are the identity actually attached to EC2 instances, so
         // emitting them lets compute_resources.iam_role reference iam_resources by the profile ARN.
-        for (InstanceProfile instanceProfile : iamClient.listInstanceProfiles().instanceProfiles()) {
+        for (InstanceProfile instanceProfile : iamClient.listInstanceProfilesPaginator().instanceProfiles()) {
           Map<String, Object> iamData = new HashMap<>();
 
           iamData.put("AccountId", accountId);
@@ -1070,7 +1120,7 @@ public class AWSProvider implements CloudProvider {
             .build();
 
         // Query RDS DB Instances
-        for (DBInstance dbInstance : rdsClient.describeDBInstances().dbInstances()) {
+        for (DBInstance dbInstance : rdsClient.describeDBInstancesPaginator().dbInstances()) {
           Map<String, Object> dbData = new HashMap<>();
 
           dbData.put("AccountId", accountId);
@@ -1125,7 +1175,7 @@ public class AWSProvider implements CloudProvider {
         }
 
         // Query RDS DB Clusters (Aurora)
-        for (DBCluster dbCluster : rdsClient.describeDBClusters().dbClusters()) {
+        for (DBCluster dbCluster : rdsClient.describeDBClustersPaginator().dbClusters()) {
           Map<String, Object> dbData = new HashMap<>();
 
           dbData.put("AccountId", accountId);
@@ -1177,7 +1227,7 @@ public class AWSProvider implements CloudProvider {
             .credentialsProvider(StaticCredentialsProvider.create(credentials))
             .build();
 
-        for (String tableName : dynamoClient.listTables().tableNames()) {
+        for (String tableName : dynamoClient.listTablesPaginator().tableNames()) {
           try {
             TableDescription table = dynamoClient.describeTable(r -> r.tableName(tableName)).table();
             Map<String, Object> dbData = new HashMap<>();
@@ -1244,7 +1294,7 @@ public class AWSProvider implements CloudProvider {
             .credentialsProvider(StaticCredentialsProvider.create(credentials))
             .build();
 
-        for (CacheCluster cluster : elastiCacheClient.describeCacheClusters().cacheClusters()) {
+        for (CacheCluster cluster : elastiCacheClient.describeCacheClustersPaginator().cacheClusters()) {
           Map<String, Object> dbData = new HashMap<>();
 
           dbData.put("AccountId", accountId);
@@ -1306,7 +1356,7 @@ public class AWSProvider implements CloudProvider {
             .build();
 
         // List all repositories
-        for (Repository repository : ecrClient.describeRepositories().repositories()) {
+        for (Repository repository : ecrClient.describeRepositoriesPaginator().repositories()) {
           Map<String, Object> registryData = new HashMap<>();
 
           // Identity fields
@@ -1327,6 +1377,23 @@ public class AWSProvider implements CloudProvider {
             registryData.put("EncryptionType",
                 repository.encryptionConfiguration().encryptionTypeAsString());
             registryData.put("KmsKey", repository.encryptionConfiguration().kmsKey());
+          }
+
+          // Tags are not part of the repository description
+          Map<String, String> tags = new HashMap<>();
+          ecrClient.listTagsForResource(r -> r.resourceArn(repository.repositoryArn())).tags()
+              .forEach(tag -> tags.put(tag.key(), tag.value()));
+          registryData.put("Application", applicationOf(tags));
+
+          // A lifecycle policy is what expires images
+          try {
+            ecrClient.getLifecyclePolicy(r -> r.repositoryName(repository.repositoryName()));
+            registryData.put("RetentionPolicy", "Enabled");
+          } catch (AwsServiceException e) {
+            if (!isAwsError(e, "LifecyclePolicyNotFoundException")) {
+              throw e;
+            }
+            registryData.put("RetentionPolicy", "Disabled");
           }
 
           // Timestamps

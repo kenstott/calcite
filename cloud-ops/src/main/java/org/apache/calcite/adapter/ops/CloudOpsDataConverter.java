@@ -471,6 +471,22 @@ public class CloudOpsDataConverter {
   }
 
   /**
+   * Renders a resource's tags or labels as a JSON object with sorted keys, the form of every
+   * {@code tags} column; null when there are none.
+   */
+  public static String tagsToJson(java.util.Map<String, String> tags) {
+    if (tags == null || tags.isEmpty()) {
+      return null;
+    }
+    try {
+      return new com.fasterxml.jackson.databind.ObjectMapper()
+          .writeValueAsString(new java.util.TreeMap<String, String>(tags));
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      throw new IllegalArgumentException("Tags cannot be rendered as JSON: " + tags, e);
+    }
+  }
+
+  /**
    * Converts a row of values according to their SQL types.
    *
    * @param row The row of values to convert

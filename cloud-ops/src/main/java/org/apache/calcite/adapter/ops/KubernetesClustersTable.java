@@ -258,8 +258,8 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             null, // resource_group - AWS doesn't have this concept for EKS
             cluster.get("ResourceId"),
             cluster.get("ClusterVersion"),
-            null, // node_count - would need to query node groups separately
-            null, // node_pools - would need to query node groups separately
+            cluster.get("NodeCount"),
+            cluster.get("NodeGroupCount"),
             cluster.get("RBACEnabled"),
             !((Boolean) cluster.getOrDefault("EndpointPublicAccess", true)),
             cluster.get("EndpointPublicAccess"),
@@ -272,7 +272,7 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             true, // EKS has CloudWatch monitoring by default
             CloudOpsDataConverter.convertValue(cluster.get("CreatedAt"), SqlTypeName.TIMESTAMP),
             null, // modified_date - not available
-            null  // tags - would need to convert tag map to JSON
+            cluster.get("Tags")
         });
       }
     } catch (RuntimeException e) {
