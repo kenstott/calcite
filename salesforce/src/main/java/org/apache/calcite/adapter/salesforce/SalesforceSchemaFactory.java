@@ -16,6 +16,9 @@ import org.apache.calcite.schema.SchemaPlus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -78,10 +81,21 @@ public class SalesforceSchemaFactory implements SchemaFactory {
         ? 1000
         : Integer.parseInt(cacheMaxSizeOperand.toString());
 
+    // Describe results are kept on disk between runs; a time to live of 0 turns that off
+    Object describeCacheDirectoryOperand = operand.get("describeCacheDirectory");
+    Path describeCacheDirectory = describeCacheDirectoryOperand == null
+        ? Paths.get(System.getProperty("user.home"), ".calcite", "salesforce", "describe-cache")
+        : Paths.get(describeCacheDirectoryOperand.toString());
+    Object describeCacheTtlOperand = operand.get("describeCacheTtlMinutes");
+    Duration describeCacheTimeToLive = describeCacheTtlOperand == null
+        ? Duration.ofHours(24)
+        : Duration.ofMinutes(Long.parseLong(describeCacheTtlOperand.toString()));
+
     try {
       SalesforceConnection connection =
           new SalesforceConnection(loginUrl, authConfig, apiVersion);
-      return new SalesforceSchema(connection, cacheMaxSize, lowercaseAliases);
+      return new SalesforceSchema(connection, cacheMaxSize, lowercaseAliases,
+          describeCacheDirectory, describeCacheTimeToLive);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create Salesforce schema", e);
     }

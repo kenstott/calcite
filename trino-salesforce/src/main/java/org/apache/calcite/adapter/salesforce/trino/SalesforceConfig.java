@@ -20,6 +20,7 @@ import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 /**
@@ -45,6 +46,8 @@ public class SalesforceConfig
     private String apiVersion;
     private String schema;
     private Integer cacheMaxSize;
+    private String describeCacheDirectory;
+    private Integer describeCacheTtlMinutes;
 
     @NotNull
     public String getLoginUrl()
@@ -192,6 +195,35 @@ public class SalesforceConfig
     public SalesforceConfig setCacheMaxSize(Integer cacheMaxSize)
     {
         this.cacheMaxSize = cacheMaxSize;
+        return this;
+    }
+
+    public String getDescribeCacheDirectory()
+    {
+        return describeCacheDirectory;
+    }
+
+    @Config("describe-cache-directory")
+    @ConfigDescription("Directory where sObject describe results are kept between restarts "
+            + "(adapter default: ~/.calcite/salesforce/describe-cache)")
+    public SalesforceConfig setDescribeCacheDirectory(String describeCacheDirectory)
+    {
+        this.describeCacheDirectory = describeCacheDirectory;
+        return this;
+    }
+
+    @Min(0)
+    public Integer getDescribeCacheTtlMinutes()
+    {
+        return describeCacheTtlMinutes;
+    }
+
+    @Config("describe-cache-ttl-minutes")
+    @ConfigDescription("How long an sObject describe result on disk is used for; 0 keeps nothing "
+            + "on disk (adapter default: 1440)")
+    public SalesforceConfig setDescribeCacheTtlMinutes(Integer describeCacheTtlMinutes)
+    {
+        this.describeCacheTtlMinutes = describeCacheTtlMinutes;
         return this;
     }
 }
