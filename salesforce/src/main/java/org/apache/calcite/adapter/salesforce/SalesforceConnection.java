@@ -162,6 +162,13 @@ public class SalesforceConnection implements Closeable {
    * Describe an sObject type.
    */
   public SObjectDescription describeSObject(String sObjectType) throws IOException {
+    return parseDescription(describeSObjectJson(sObjectType));
+  }
+
+  /**
+   * Describe an sObject type, returning the response body as Salesforce sent it.
+   */
+  public String describeSObjectJson(String sObjectType) throws IOException {
     String path = String.format(Locale.ROOT, DESCRIBE_PATH, apiVersion, sObjectType);
 
     HttpGet get = new HttpGet(instanceUrl + path);
@@ -169,15 +176,28 @@ public class SalesforceConnection implements Closeable {
     get.setHeader("Accept", "application/json");
 
     try (CloseableHttpResponse response = httpClient.execute(get)) {
-      String responseBody = EntityUtils.toString(response.getEntity());
+      String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
       if (response.getStatusLine().getStatusCode() != 200) {
-        throw new IOException("Describe failed: " + responseBody);
+        throw new IOException("Describe of " + sObjectType + " failed: " + responseBody);
       }
-
-      return mapper.readValue(responseBody, SObjectDescription.class);
-    } catch (Exception e) {
-      throw new IOException("Describe failed", e);
+      return responseBody;
     }
+  }
+
+  /**
+   * Parses the response body of a describe call.
+   */
+  public SObjectDescription parseDescription(String json) throws IOException {
+    return mapper.readValue(json, SObjectDescription.class);
+  }
+
+  /**
+   * What a describe result is specific to: the org, the API version and the credentials, since
+   * field-level security makes the visible fields depend on the user the connection runs as.
+   */
+  String describeScope() {
+    return instanceUrl + "|" + apiVersion + "|" + authConfig.type
+        + "|" + authConfig.clientId + "|" + authConfig.username;
   }
 
   /**

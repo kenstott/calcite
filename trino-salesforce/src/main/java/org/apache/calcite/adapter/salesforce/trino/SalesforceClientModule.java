@@ -142,6 +142,10 @@ public class SalesforceClientModule
         if (config.getCacheMaxSize() != null) {
             addParam(params, "cacheMaxSize", config.getCacheMaxSize().toString());
         }
+        addParam(params, "describeCacheDirectory", config.getDescribeCacheDirectory());
+        if (config.getDescribeCacheTtlMinutes() != null) {
+            addParam(params, "describeCacheTtlMinutes", config.getDescribeCacheTtlMinutes().toString());
+        }
         // Trino matches names case-insensitively, so the adapter's lower-case duplicate of each
         // sObject name (Account + account) would be ambiguous.
         params.add("lowercaseAliases=false");

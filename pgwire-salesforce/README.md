@@ -26,7 +26,22 @@ Other auth options, replacing `clientId`/`clientSecret` in the operand:
   username-password flow. Orgs created since Summer '23 block it by default.
 - `accessToken` + `instanceUrl` — a pre-issued token.
 
-Optional: `apiVersion` (default `v58.0`), `cacheMaxSize` (describe cache entries, default 1000).
+Optional: `apiVersion` (default `v58.0`), `cacheMaxSize` (describe cache entries held in memory,
+default 1000), `describeCacheDirectory` and `describeCacheTtlMinutes` (see below).
+
+## Startup time and caching
+
+Before it listens, the server reads the columns of every sObject, which is one Salesforce
+describe call per sObject — about four minutes for an org with 1,200 of them. That is paid once:
+
+- The finished catalog is written next to the model as `model/catalog-cache-<hash>.pkl` and
+  loaded on every later start. The hash is of `model.json`, so editing the model rebuilds it.
+- Each describe result is also kept in `describeCacheDirectory` (default
+  `~/.calcite/salesforce/describe-cache`) for `describeCacheTtlMinutes` (default `1440`; `0` keeps
+  nothing on disk), so a rebuild after a model edit reads them from disk instead of Salesforce.
+
+To pick up fields or sObjects added in Salesforce, delete `model/catalog-cache-*.pkl` and the
+describe cache directory, then restart.
 
 Every queryable sObject is a table (`Account`, `Contact`, `Opportunity`, custom `*__c` objects);
 columns and types come from the sObject's describe. Filters, projections, sorts and limits are

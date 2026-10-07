@@ -193,8 +193,9 @@ jobs:
               json.dump(model, f)
           PY
 
-      # The server describes every sObject in the org before it listens, which takes minutes.
-      - name: Start pgwire-calcite and wait for the port
+      # The server describes every sObject in the org before it serves, which takes minutes. Its
+      # socket accepts connections long before that, so readiness is its "listening on" log line.
+      - name: Start pgwire-calcite and wait until it serves
         working-directory: pgwire-calcite
         env:
           PGWIRE_CALCITE_CLASSPATH_FILE: ${{ runner.temp }}/salesforce-classpath.txt
@@ -206,18 +207,17 @@ jobs:
           pid=$!
           echo "$pid" > "$RUNNER_TEMP/pgwire.pid"
           for _ in $(seq 1 900); do
-            if (exec 3<>/dev/tcp/127.0.0.1/5455) 2>/dev/null; then
-              exec 3>&- 3<&-
-              echo "port 5455 is up"
+            if grep -q 'listening on 127.0.0.1:5455' "$RUNNER_TEMP/pgwire.log"; then
+              echo "pgwire-calcite is serving on port 5455"
               exit 0
             fi
             if ! kill -0 "$pid" 2>/dev/null; then
-              echo "pgwire-calcite exited before opening port 5455" >&2
+              echo "pgwire-calcite exited before serving on port 5455" >&2
               exit 1
             fi
             sleep 1
           done
-          echo "pgwire-calcite never opened port 5455" >&2
+          echo "pgwire-calcite never served on port 5455" >&2
           exit 1
 
       - name: Query the org through psql

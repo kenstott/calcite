@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.salesforce;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +37,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -61,6 +63,9 @@ class SalesforceIntegrationTest {
   private static final String SCHEMA = "sf";
 
   private static Map<String, String> env;
+
+  /** Describe cache of this run, so the tests never read one a previous run left behind. */
+  @TempDir static Path describeCache;
 
   @BeforeAll static void loadEnv() throws IOException {
     String rootDir = System.getProperty("gradle.rootDir");
@@ -126,7 +131,8 @@ class SalesforceIntegrationTest {
         + "      \"loginUrl\": " + jsonString(loginUrl()) + ",\n"
         + "      \"clientId\": " + jsonString(env.get("SF_CONSUMER_KEY")) + ",\n"
         + "      \"clientSecret\": " + jsonString(env.get("SF_CONSUMER_SECRET")) + ",\n"
-        + "      \"apiVersion\": \"v61.0\"\n"
+        + "      \"apiVersion\": \"v61.0\",\n"
+        + "      \"describeCacheDirectory\": " + jsonString(describeCache.toString()) + "\n"
         + "    }\n"
         + "  }]\n"
         + "}";
@@ -287,6 +293,34 @@ class SalesforceIntegrationTest {
       try (ResultSet rs = ps.executeQuery()) {
         assertThat(rs.next(), equalTo(false));
       }
+    }
+  }
+
+  @Test void describeIsCachedOnDiskBetweenConnections() throws SQLException, IOException {
+    String sql = "SELECT Id FROM Campaign LIMIT 1";
+    try (Connection conn = connect();
+         Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      rs.next();
+    }
+    Path cached;
+    try (Stream<Path> paths = Files.walk(describeCache)) {
+      cached = paths.filter(path -> path.getFileName().toString().equals("Campaign.json"))
+          .findFirst().orElseThrow(
+              () -> new AssertionError("no Campaign.json under " + describeCache));
+    }
+    // A describe that only the cache can supply: the next connection must see this column
+    String json = new String(Files.readAllBytes(cached), StandardCharsets.UTF_8);
+    String marked = json.replaceFirst("\\{\"aggregatable\"",
+        "{\"name\":\"CachedOnly__c\",\"type\":\"string\",\"length\":10,\"nillable\":true},"
+            + "{\"aggregatable\"");
+    assertThat(marked.equals(json), equalTo(false));
+    Files.write(cached, marked.getBytes(StandardCharsets.UTF_8));
+    try (Connection conn = connect();
+         ResultSet rs = conn.getMetaData().getColumns(null, SCHEMA, "Campaign", "CachedOnly__c")) {
+      assertThat(rs.next(), equalTo(true));
+    } finally {
+      Files.write(cached, json.getBytes(StandardCharsets.UTF_8));
     }
   }
 

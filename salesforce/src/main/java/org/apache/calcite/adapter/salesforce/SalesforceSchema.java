@@ -22,6 +22,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -46,9 +48,16 @@ public class SalesforceSchema extends AbstractSchema {
    * @param lowercaseAliases also register each sObject under its lower-case
    *     name; turn off for clients such as Trino that match names
    *     case-insensitively and would see the pair as ambiguous
+   * @param describeCacheDirectory where describe results are kept between
+   *     runs
+   * @param describeCacheTimeToLive how long a describe result on disk is used
+   *     for; zero keeps nothing on disk
    */
   public SalesforceSchema(SalesforceConnection connection, int cacheMaxSize,
-      boolean lowercaseAliases) {
+      boolean lowercaseAliases, Path describeCacheDirectory, Duration describeCacheTimeToLive) {
+    final DescribeCache describeCache =
+        new DescribeCache(describeCacheDirectory, connection.describeScope(),
+            describeCacheTimeToLive);
     this.connection = connection;
     this.lowercaseAliases = lowercaseAliases;
     this.descriptionCache = CacheBuilder.newBuilder()
@@ -57,7 +66,8 @@ public class SalesforceSchema extends AbstractSchema {
         .build(new CacheLoader<String, SalesforceConnection.SObjectDescription>() {
           @Override public SalesforceConnection.SObjectDescription load(String sObjectType)
               throws IOException {
-            return connection.describeSObject(sObjectType);
+            return connection.parseDescription(
+                describeCache.get(sObjectType, connection::describeSObjectJson));
           }
         });
   }

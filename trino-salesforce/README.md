@@ -67,6 +67,8 @@ OAuth policies; every query runs with that user's permissions.
 | `api-version` | REST API version, e.g. `v61.0` (adapter default `v58.0`) | No |
 | `schema` | Schema name the sObjects are registered under (default `salesforce`) | No |
 | `cache-max-size` | Maximum sObject describe results cached per connection (default 1000) | No |
+| `describe-cache-directory` | Directory where sObject describe results are kept between restarts (default `~/.calcite/salesforce/describe-cache`) | No |
+| `describe-cache-ttl-minutes` | How long a describe result on disk is used for; `0` keeps nothing on disk (default `1440`) | No |
 
 Exactly one credential set is needed: `client-id` + `client-secret`, or `username` + `password`
 with `client-id` + `client-secret`, or `access-token` + `instance-url`. The connector refuses to
@@ -93,6 +95,10 @@ JOIN salesforce.salesforce.account a ON c.accountid = a.id GROUP BY a.name;
 - **Bind parameters are pushed into SOQL.** A comparison against a prepared statement parameter —
   which is how Trino delivers join dynamic filters — is bound into the SOQL `WHERE` clause at
   execution time, so a join against a small build side fetches only the matching rows.
+- **Describe results persist across restarts.** Each sObject's describe is stored under
+  `describe-cache-directory` and reused for `describe-cache-ttl-minutes`, so a restarted server
+  does not describe the org again. A field added in Salesforce shows up when the cached describe
+  expires, or at once after deleting the directory.
 - Columns and types come from each sObject's describe; authentication and describe caching are
   owned by the underlying Salesforce adapter.
 

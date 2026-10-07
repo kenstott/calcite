@@ -40,6 +40,22 @@ class TestSalesforceClientModule
     }
 
     @Test
+    void describeCacheSettingsReachTheDriver()
+    {
+        SalesforceConfig config = new SalesforceConfig()
+                .setLoginUrl("https://acme.my.salesforce.com")
+                .setClientId("key")
+                .setClientSecret("secret")
+                .setDescribeCacheDirectory("/var/cache/sf describe")
+                .setDescribeCacheTtlMinutes(0);
+        assertEquals(
+                "jdbc:salesforce:loginUrl=https%3A%2F%2Facme.my.salesforce.com;clientId=key;"
+                        + "clientSecret=secret;describeCacheDirectory=%2Fvar%2Fcache%2Fsf+describe;"
+                        + "describeCacheTtlMinutes=0;lowercaseAliases=false",
+                SalesforceClientModule.buildConnectionUrl(config));
+    }
+
+    @Test
     void usernamePasswordNeedsConnectedApp()
     {
         SalesforceConfig config = new SalesforceConfig()
