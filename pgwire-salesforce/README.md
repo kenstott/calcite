@@ -73,6 +73,11 @@ DELETE FROM salesforce."Account" WHERE "Name" = 'Acme';
 
 Each statement is sent to Salesforce and committed when it runs. `BEGIN` / `COMMIT` are accepted,
 but a `ROLLBACK` after a write is refused with an error, because the write cannot be undone.
-`RETURNING` is not supported.
+
+`RETURNING` works on all three, which is how to get the Id Salesforce assigns:
+
+```sql
+INSERT INTO salesforce."Account" ("Name") VALUES ('Acme') RETURNING "Id", "Name";
+```
 
 No Python or Java install required — the bundle is airgap-ready.

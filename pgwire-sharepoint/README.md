@@ -36,6 +36,7 @@ through to `pgwire-calcite`. There is no port env var — set it on the command 
 The bundle's launcher starts the server with `--allow-writes`, so `INSERT`, `UPDATE` and `DELETE`
 against a list work for the columns the app registration may write. Each statement is sent to
 SharePoint and committed when it runs. `BEGIN` / `COMMIT` are accepted, but a `ROLLBACK` after a
-write is refused with an error, because the write cannot be undone. `RETURNING` is not supported.
+write is refused with an error, because the write cannot be undone. `RETURNING` is supported on
+all three, e.g. `INSERT ... RETURNING "id"` for the id SharePoint assigns.
 
 No Python or Java install required — the bundle is airgap-ready.

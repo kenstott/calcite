@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.salesforce;
 
+import org.apache.calcite.jdbc.CalciteConnection;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -329,21 +331,34 @@ class SalesforceIntegrationTest {
     try (Connection conn = connect();
          Statement stmt = conn.createStatement()) {
       try {
+        // The table reports the Ids Salesforce assigns, which is how a server answers
+        // INSERT ... RETURNING
+        SalesforceTable account = (SalesforceTable) conn.unwrap(CalciteConnection.class)
+            .getRootSchema().subSchemas().get(SCHEMA).tables().get("Account");
+        assertThat(account.getKeyColumn(), equalTo("Id"));
+        account.takeInsertedKeys();
+
         int inserted = stmt.executeUpdate(
             "INSERT INTO Account (Name, Industry, NumberOfEmployees) VALUES "
                 + "('" + marker + "-1', 'Energy', 10), "
                 + "('" + marker + "-2', 'Energy', 20)");
         assertThat(inserted, equalTo(2));
+        List<String> insertedKeys = account.takeInsertedKeys();
+        assertThat(insertedKeys.size(), equalTo(2));
+        assertThat(account.takeInsertedKeys().size(), equalTo(0));
 
         try (ResultSet rs = stmt.executeQuery(
             "SELECT Id, Industry, NumberOfEmployees, CreatedDate FROM Account "
                 + "WHERE Name LIKE '" + marker + "%' ORDER BY Name")) {
           assertThat(rs.next(), equalTo(true));
           assertThat(rs.getString("Id").length(), equalTo(18));
+          // Keys come back in insertion order
+          assertThat(rs.getString("Id"), equalTo(insertedKeys.get(0)));
           assertThat(rs.getString("Industry"), equalTo("Energy"));
           assertThat(rs.getInt("NumberOfEmployees"), equalTo(10));
           assertThat(rs.getTimestamp("CreatedDate").getTime(), greaterThan(0L));
           assertThat(rs.next(), equalTo(true));
+          assertThat(rs.getString("Id"), equalTo(insertedKeys.get(1)));
           assertThat(rs.getInt("NumberOfEmployees"), equalTo(20));
           assertThat(rs.next(), equalTo(false));
         }

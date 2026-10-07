@@ -47,6 +47,9 @@ import java.util.Map;
  */
 public class SharePointListTable extends AbstractQueryableTable
     implements ScannableTable, ModifiableTable {
+  /** Ids of the items created since {@link #takeInsertedKeys} was last called. */
+  private final List<String> insertedKeys = new ArrayList<>();
+
   private final SharePointListMetadata metadata;
   private final MicrosoftGraphListClient client;
 
@@ -112,6 +115,28 @@ public class SharePointListTable extends AbstractQueryableTable
     };
   }
 
+  /**
+   * Name of the column that identifies a row. With {@link #takeInsertedKeys} this is what a
+   * server needs to answer {@code INSERT/UPDATE/DELETE ... RETURNING}: Calcite has no RETURNING,
+   * so the rows are read back by key. pgwire-calcite looks these two methods up by name.
+   */
+  public String getKeyColumn() {
+    return "id";
+  }
+
+  /**
+   * Returns the ids of the items created through this table since the last call, in creation
+   * order, and forgets them. SharePoint assigns the id, so a caller that needs the rows it just
+   * inserted calls this before the INSERT (to discard earlier ids) and again after it.
+   */
+  public List<String> takeInsertedKeys() {
+    synchronized (insertedKeys) {
+      List<String> keys = new ArrayList<>(insertedKeys);
+      insertedKeys.clear();
+      return keys;
+    }
+  }
+
   @Override public @Nullable Collection getModifiableCollection() {
     checkWritable();
     return new SharePointModifiableCollection();
@@ -154,6 +179,9 @@ public class SharePointListTable extends AbstractQueryableTable
         String itemId = client.createListItem(metadata.getListId(), fields);
 
         if (itemId != null) {
+          synchronized (insertedKeys) {
+            insertedKeys.add(itemId);
+          }
           // Update the row with the generated ID
           row[0] = itemId;
           // Add to local collection for consistency

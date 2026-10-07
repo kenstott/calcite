@@ -236,13 +236,19 @@ public class SalesforceConnection implements Closeable {
    * Creates records with the sObject Collections API. Each call is atomic
    * (allOrNone); at most {@link #COLLECTION_BATCH_SIZE} records per call.
    *
-   * @return number of records created
+   * @return Id of each record created, in the order of {@code records}
    */
-  public int createRecords(String sObjectType, List<Map<String, Object>> records)
+  public List<String> createRecords(String sObjectType, List<Map<String, Object>> records)
       throws IOException {
     HttpPost post = new HttpPost(instanceUrl + collectionsPath());
     post.setEntity(collectionBody(sObjectType, records));
-    return countSuccesses(execute(post, "Create"), "Create");
+    JsonNode results = execute(post, "Create");
+    countSuccesses(results, "Create");
+    List<String> ids = new ArrayList<>();
+    for (JsonNode result : results) {
+      ids.add(result.path("id").asText());
+    }
+    return ids;
   }
 
   /**

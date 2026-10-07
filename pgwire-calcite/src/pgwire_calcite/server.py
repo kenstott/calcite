@@ -105,6 +105,7 @@ def _current_backend():
 
 # DML is routed to the backend only when the server was started with --allow-writes.
 _DML_RE = re.compile(r"^\s*(INSERT|UPDATE|DELETE)\b", re.IGNORECASE)
+_RETURNING_RE = re.compile(r"\bRETURNING\b", re.IGNORECASE)
 _TXN_BEGIN_RE = re.compile(r"^\s*(BEGIN|START\s+TRANSACTION)\b", re.IGNORECASE)
 _TXN_END_RE = re.compile(r"^\s*(COMMIT|END|ROLLBACK)\b", re.IGNORECASE)
 _TXN_ROLLBACK_RE = re.compile(r"^\s*ROLLBACK\b", re.IGNORECASE)
@@ -320,6 +321,9 @@ class CalciteQueryResult(BVQueryResult):
         super().__init__()
         self._cols = result.column_names
         self._status = status if status is not None else _tag_from_sql(original_sql)
+        #: Command-tag prefix for a result that carries rows but is not a SELECT (a DML
+        #: statement with RETURNING): "INSERT 0", "UPDATE" or "DELETE". None = "SELECT".
+        self.row_tag_prefix: str | None = None
         # Materialized results (catalog intercept, session commands, non-streaming
         # backends) arrive as a single batch; streaming backends hand over a lazy
         # batch iterator instead. Both are consumed the same way below.
@@ -715,13 +719,12 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             raise PgProtocolError(
                 "0A000", f"{kind} is not supported by the {type(backend).__name__} backend"
             )
-        # RETURNING would need a result set from a statement Calcite runs as an update.
-        if re.search(r"\bRETURNING\b", pg_sql, re.IGNORECASE):
-            import sqlglot
-            import sqlglot.expressions as exp
+        from pgwire_calcite import returning
 
-            if sqlglot.parse_one(pg_sql, read="postgres").find(exp.Returning) is not None:
-                raise PgProtocolError("0A000", f"{kind} ... RETURNING is not supported")
+        try:
+            plan = returning.plan(pg_sql) if _RETURNING_RE.search(pg_sql) else None
+        except ValueError as exc:
+            raise PgProtocolError("0A000", str(exc)) from exc
 
         # The same grants that gate reads gate writes: every relation the statement names,
         # its target included, must be granted to the role.
@@ -733,13 +736,14 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         metering.enforce_quota()
 
         try:
-            count = backend.execute_update(
-                pg_sql,
-                session_key=self.key,
-                timeout_ms=self.statement_timeout_ms,
-                lane=self._lane(),
-                client_gone=self.client_gone,
-            )
+            if plan is None:
+                count = backend.execute_update(pg_sql, **self._statement_args())
+                result = CalciteQueryResult(
+                    TrinoResult(), pg_sql, status=_dml_command_tag(kind, count)
+                )
+            else:
+                result = CalciteQueryResult(self._execute_returning(backend, plan), pg_sql)
+                result.row_tag_prefix = "INSERT 0" if kind == "INSERT" else kind
         except (PermissionError, PgProtocolError):
             raise
         except Exception as exc:
@@ -747,7 +751,90 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             raise RuntimeError(str(exc)) from exc
         if self._in_transaction:
             self._wrote_in_transaction = True
-        return CalciteQueryResult(TrinoResult(), pg_sql, status=_dml_command_tag(kind, count))
+        return result
+
+    def _statement_args(self) -> dict:
+        return {
+            "session_key": self.key,
+            "timeout_ms": self.statement_timeout_ms,
+            "lane": self._lane(),
+            "client_gone": self.client_gone,
+        }
+
+    def _select_rows(self, backend, pg_sql: str) -> TrinoResult:
+        """Run a read-back SELECT and hold all of its rows; a write's result is bounded by
+        the write, and its rows must outlive the statement that produced them."""
+        result = backend.execute_sql(pg_sql, self.role_id, None, **self._statement_args())
+        rows = [tuple(r) for r in result.iter_rows()]
+        return TrinoResult(
+            rows=rows, column_names=list(result.column_names), column_types=result.column_types
+        )
+
+    def _execute_returning(self, backend, plan) -> TrinoResult:
+        """Run a DML statement that has RETURNING; see :mod:`pgwire_calcite.returning`."""
+        from pgwire_calcite import returning
+
+        table_ref = (plan.schema, plan.table)
+        key = backend.key_column(table_ref, **self._statement_args())
+        if plan.kind == "DELETE":
+            deleted = self._select_rows(
+                backend, returning.select_sql(plan.select_list, plan.table_sql, plan.where_sql)
+            )
+            backend.execute_update(plan.write_sql, **self._statement_args())
+            return deleted
+        if plan.kind == "UPDATE":
+            matched = self._select_rows(
+                backend,
+                returning.select_sql(
+                    returning.quote_identifier(key), plan.table_sql, plan.where_sql
+                ),
+            )
+            keys = [row[0] for row in matched.rows]
+            backend.execute_update(plan.write_sql, **self._statement_args())
+        else:
+            _, keys = backend.execute_insert(plan.write_sql, table_ref, **self._statement_args())
+
+        # Read the written rows back by key, the key riding along as a last column so the
+        # rows can be put in the order the keys were produced; it is dropped again below.
+        select_list = (
+            f"{plan.select_list}, {returning.quote_identifier(key)} "
+            f"AS {returning.quote_identifier(returning.KEY_ALIAS)}"
+        )
+        conditions = returning.key_conditions(key, keys) or ["1 = 0"]
+        names: list = []
+        types = None
+        by_key: dict = {}
+        for condition in conditions:
+            chunk = self._select_rows(
+                backend, returning.select_sql(select_list, plan.table_sql, condition)
+            )
+            names, types = chunk.column_names, chunk.column_types
+            for row in chunk.rows:
+                by_key[str(row[-1])] = row[:-1]
+        rows = [by_key[str(k)] for k in keys if str(k) in by_key]
+        return TrinoResult(
+            rows=rows,
+            column_names=names[:-1],
+            column_types=types[:-1] if types else None,
+        )
+
+    def describe_returning(self, pg_sql: str) -> "CalciteQueryResult | None":
+        """The columns of a DML statement's RETURNING clause, without running the write: a
+        zero-row SELECT of the same expressions. None when the statement has no RETURNING."""
+        from pgwire_calcite import returning
+        from pgwire_calcite.backend import PgProtocolError
+
+        if not _RETURNING_RE.search(pg_sql):
+            return None
+        try:
+            plan = returning.plan(pg_sql)
+        except ValueError as exc:
+            raise PgProtocolError("0A000", str(exc)) from exc
+        if plan is None:
+            return None
+        return self.execute_sql(
+            returning.select_sql(plan.select_list, plan.table_sql, "1 = 0")
+        )
 
     def _rewrite_information_schema(self, state, pg_sql: str) -> str:
         """``pg_sql`` with its information_schema views scoped to this role's catalog."""
@@ -1237,6 +1324,19 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         if ctx is not None:
             ctx.mark_error()
 
+    def send_data_rows(self, query_result, limit: int = 0) -> int:  # type: ignore[override]
+        # Remembered for the CommandComplete that follows: buenavista tags every result
+        # that carries rows "SELECT n", which is wrong for a write with RETURNING.
+        self._row_tag_prefix = getattr(query_result, "row_tag_prefix", None)
+        return super().send_data_rows(query_result, limit)
+
+    def send_command_complete(self, tag: str) -> None:  # type: ignore[override]
+        prefix = getattr(self, "_row_tag_prefix", None)
+        self._row_tag_prefix = None
+        if prefix is not None and tag.startswith("SELECT "):
+            tag = prefix + tag[len("SELECT"):]
+        super().send_command_complete(tag)
+
     def handle_describe(self, ctx: BVContext, payload: bytes) -> None:
         ba = bytearray(payload)
         if ba[0] == ord("P"):
@@ -1251,8 +1351,14 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             if portal_sql and _COPY_RE.match(portal_sql):
                 self.send_no_data()
                 return
-            # A write returns no rows; describing it must not run it.
-            if portal_sql and _DML_RE.match(portal_sql):
+            # A write without RETURNING returns no rows; describing it must not run it. One
+            # with RETURNING takes the default path, which runs the portal once and keeps
+            # its result for Execute.
+            if (
+                portal_sql
+                and _DML_RE.match(portal_sql)
+                and not _RETURNING_RE.search(portal_sql)
+            ):
                 self.send_no_data()
                 return
         elif ba[0] == ord("S"):
@@ -1295,8 +1401,19 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             # A write returns no rows, and describe_statement would run it (with example
             # parameter values) to learn that.
             if _DML_RE.match(sql):
+                try:
+                    described = ctx.session.describe_returning(_example_sql(sql, param_oids))
+                except Exception as e:
+                    self.send_error(e, ctx)
+                    return
                 self.send_paramter_description(param_oids)
-                self.send_no_data()
+                if described is None:
+                    self.send_no_data()
+                else:
+                    try:
+                        self.send_row_description(described)
+                    finally:
+                        described.close()
                 return
             try:
                 # describe_statement substitutes typed example values for the $N
