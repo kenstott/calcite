@@ -162,8 +162,8 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("ResourceGroup"),
             cluster.get("ResourceId"),
             cluster.get("ClusterVersion"),
+            cluster.get("NodeCount"),
             cluster.get("NodePoolCount"),
-            cluster.get("NodePoolCount"), // Same as node_pools for Azure
             cluster.get("RBACEnabled"),
             cluster.get("PrivateCluster"),
             !((Boolean) cluster.getOrDefault("PrivateCluster", false)), // Inverse for public
@@ -176,7 +176,7 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             true, // AKS has monitoring by default
             null, // created_date - not in current query
             null, // modified_date - not in current query
-            null  // tags - would need to be added to query
+            cluster.get("Tags")
         });
       }
     } catch (Exception e) {

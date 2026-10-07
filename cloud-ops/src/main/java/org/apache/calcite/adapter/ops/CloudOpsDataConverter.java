@@ -369,7 +369,10 @@ public class CloudOpsDataConverter {
       return null;
     }
 
-    return value.toString();
+    // Azure Resource Graph sends '' for a property a resource does not have, and '{}' for no
+    // tags; neither is a value
+    final String text = value.toString();
+    return text.isEmpty() || "{}".equals(text) ? null : text;
   }
 
   /**

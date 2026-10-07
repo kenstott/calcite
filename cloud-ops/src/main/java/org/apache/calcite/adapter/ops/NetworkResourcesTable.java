@@ -109,13 +109,13 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("ResourceId"),
             network.get("NativeId"),
             network.get("Configuration"),
-            null, // CIDR block would need parsing from configuration
-            null, // state not in query
-            null, // is_default not in query
+            network.get("CidrBlock"), // address prefix; the address itself for a public IP
+            network.get("State"),
+            null, // is_default: Azure has no default network
             network.get("SecurityFindings"),
-            null, // has_open_ingress would need rule analysis
-            null, // rule_count would need parsing
-            null  // tags not in query
+            network.get("HasOpenIngress"), // network security groups only
+            network.get("RuleCount"), // network security groups only
+            network.get("Tags")
         });
       }
     } catch (Exception e) {

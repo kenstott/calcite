@@ -92,13 +92,13 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
             iam.get("ResourceId"),
             iam.get("Configuration"),
             iam.get("SecurityConfiguration"),
-            null, // principal type parsed from configuration
+            iam.get("PrincipalType"),
             null, // email not applicable
-            true, // Azure resources are active by default
-            null, // MFA not in basic query
+            true, // a managed identity or vault exists or it does not; neither can be disabled
+            null, // MFA does not apply to managed identities
             null, // access key count not applicable
             null, // active access keys not applicable
-            null, // create date not in query
+            null, // Resource Graph does not report when these were created
             null  // password last used not applicable
         });
       }

@@ -90,18 +90,18 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("Location"),
             registry.get("ResourceGroup"),
             registry.get("ResourceId"),
-            null, // registry URI would need construction
+            registry.get("LoginServer"),
             registry.get("RegistrySKU"),
             registry.get("AdminUserEnabled"),
             registry.get("PublicNetworkAccess"),
-            false, // image scanning configured differently in Azure
-            false, // immutable tags configured differently in Azure
+            null, // image scanning: a Defender for Cloud setting, not a registry property
+            null, // immutable tags: set per repository in ACR, not per registry
             registry.get("Encryption"),
-            null, // encryption key not in query
+            registry.get("EncryptionKey"),
             registry.get("QuarantinePolicy"),
             registry.get("TrustPolicy"),
             registry.get("RetentionPolicy"),
-            null  // created time not in query
+            CloudOpsDataConverter.convertValue(registry.get("CreatedAt"), SqlTypeName.TIMESTAMP)
         });
       }
     } catch (Exception e) {

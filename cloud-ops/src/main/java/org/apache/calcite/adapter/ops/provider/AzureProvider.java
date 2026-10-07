@@ -261,7 +261,15 @@ public class AzureProvider implements CloudProvider {
        .append("    isnotempty(properties.diskEncryptionSetID), 'Customer Managed Key',\n")
        .append("    'Platform Managed Key'\n")
        .append(")\n")
-       .append("| extend NodePoolCount = array_length(properties.agentPoolProfiles)\n");
+       .append("| extend NodePoolCount = array_length(properties.agentPoolProfiles)\n")
+       // Resource Graph has no mv-apply: total the node pools in a sub-query and join it
+       .append("| join kind=leftouter (\n")
+       .append("    Resources\n")
+       .append("    | where type == 'microsoft.containerservice/managedclusters'\n")
+       .append("    | mv-expand pool = properties.agentPoolProfiles\n")
+       .append("    | summarize NodeCount = sum(toint(pool['count'])) by id\n")
+       .append(") on id\n")
+       .append("| extend Tags = tostring(tags)\n");
 
     // Add filter WHERE clause if specified
     if (filterHandler != null && filterHandler.hasPushableFilters()) {
@@ -357,277 +365,195 @@ public class AzureProvider implements CloudProvider {
   +
            "    AuthorizedIPRanges,\n"
   +
-           "    DiskEncryption";
+           "    DiskEncryption,\n"
+  +
+        "    NodeCount,\n"
+  +
+        "    Tags";
   }
 
   @Override public List<Map<String, Object>> queryStorageResources(List<String> subscriptionIds) {
     String kql = "Resources\n"
-  +
-        "| where type in (\n"
-  +
-        "    'microsoft.storage/storageaccounts',\n"
-  +
-        "    'microsoft.sql/servers/databases',\n"
-  +
-        "    'microsoft.documentdb/databaseaccounts',\n"
-  +
-        "    'microsoft.compute/disks'\n"
-  +
-        ")\n"
-  +
-        "| extend Application = case(\n"
-  +
-        "    isnotempty(tags.Application), tags.Application,\n"
-  +
-        "    isnotempty(tags.app), tags.app,\n"
-  +
-        "    'Untagged/Orphaned'\n"
-  +
-        ")\n"
-  +
-        "| extend StorageType = case(\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts', 'Storage Account',\n"
-  +
-        "    type == 'microsoft.sql/servers/databases', 'SQL Database',\n"
-  +
-        "    type == 'microsoft.documentdb/databaseaccounts', 'Cosmos DB',\n"
-  +
-        "    type == 'microsoft.compute/disks', 'Managed Disk',\n"
-  +
-        "    type\n"
-  +
-        ")\n"
-  +
-        "| extend EncryptionEnabled = case(\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts', \n"
-  +
-        "        isnotnull(properties.encryption.services.blob.enabled),\n"
-  +
-        "    type == 'microsoft.sql/servers/databases',\n"
-  +
-        "        properties.transparentDataEncryption.status == 'Enabled',\n"
-  +
-        "    type == 'microsoft.documentdb/databaseaccounts',\n"
-  +
-        "        true,\n"
-  +
-        "    type == 'microsoft.compute/disks',\n"
-  +
-        "        isnotnull(properties.encryption),\n"
-  +
-        "    false\n"
-  +
-        ")\n"
-  +
-        "| extend EncryptionMethod = case(\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts' and properties.encryption.keySource == 'Microsoft.Keyvault',\n"
-  +
-        "        'Customer Managed Key',\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts',\n"
-  +
-        "        tostring(properties.encryption.keySource),\n"
-  +
-        "    type == 'microsoft.compute/disks' and isnotnull(properties.encryption.diskEncryptionSetId),\n"
-  +
-        "        'Customer Managed Key',\n"
-  +
-        "    EncryptionEnabled == true,\n"
-  +
-        "        'Service Managed Key',\n"
-  +
-        "    'None'\n"
-  +
-        ")\n"
-  +
-        "| extend HttpsOnly = case(\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts',\n"
-  +
-        "        tobool(properties.supportsHttpsTrafficOnly),\n"
-  +
-        "    true\n"
-  +
-        ")\n"
-  +
-        "| extend MinimumTlsVersion = case(\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts',\n"
-  +
-        "        tostring(properties.minimumTlsVersion),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| extend NetworkDefaultAction = case(\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts',\n"
-  +
-        "        tostring(properties.networkAcls.defaultAction),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| extend PublicNetworkAccess = case(\n"
-  +
-        "    type == 'microsoft.storage/storageaccounts',\n"
-  +
-        "        tostring(properties.publicNetworkAccess),\n"
-  +
-        "    type == 'microsoft.sql/servers/databases',\n"
-  +
-        "        tostring(properties.publicNetworkAccess),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| project\n"
-  +
-        "    SubscriptionId = subscriptionId,\n"
-  +
-        "    StorageResource = name,\n"
-  +
-        "    StorageType,\n"
-  +
-        "    ResourceGroup = resourceGroup,\n"
-  +
-        "    Location = location,\n"
-  +
-        "    ResourceId = id,\n"
-  +
-        "    Application,\n"
-  +
-        "    EncryptionEnabled,\n"
-  +
-        "    EncryptionMethod,\n"
-  +
-        "    HttpsOnly,\n"
-  +
-        "    MinimumTlsVersion,\n"
-  +
-        "    NetworkDefaultAction,\n"
-  +
-        "    PublicNetworkAccess\n"
-  +
-        "| order by Application, StorageType, StorageResource";
+        + "| where type in (\n"
+        + "    'microsoft.storage/storageaccounts',\n"
+        + "    'microsoft.sql/servers/databases',\n"
+        + "    'microsoft.documentdb/databaseaccounts',\n"
+        + "    'microsoft.compute/disks'\n"
+        + ")\n"
+        + "| extend Application = case(\n"
+        + "    isnotempty(tags.Application), tostring(tags.Application),\n"
+        + "    isnotempty(tags.application), tostring(tags.application),\n"
+        + "    isnotempty(tags.app), tostring(tags.app),\n"
+        + "    'Untagged/Orphaned'\n"
+        + ")\n"
+        + "| extend StorageType = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts', 'Storage Account',\n"
+        + "    type == 'microsoft.sql/servers/databases', 'SQL Database',\n"
+        + "    type == 'microsoft.documentdb/databaseaccounts', 'Cosmos DB',\n"
+        + "    type == 'microsoft.compute/disks', 'Managed Disk',\n"
+        + "    type\n"
+        + ")\n"
+        + "| extend EncryptionEnabled = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts',\n"
+        + "        isnotnull(properties.encryption.services.blob.enabled),\n"
+        + "    type == 'microsoft.sql/servers/databases',\n"
+        + "        properties.transparentDataEncryption.status == 'Enabled',\n"
+        + "    type == 'microsoft.documentdb/databaseaccounts',\n"
+        + "        true,\n"
+        + "    type == 'microsoft.compute/disks',\n"
+        + "        isnotnull(properties.encryption),\n"
+        + "    false\n"
+        + ")\n"
+        + "| extend EncryptionMethod = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts' and properties.encryption.keySource == 'Microsoft.Keyvault',\n"
+        + "        'Customer Managed Key',\n"
+        + "    type == 'microsoft.storage/storageaccounts',\n"
+        + "        tostring(properties.encryption.keySource),\n"
+        + "    type == 'microsoft.compute/disks' and isnotnull(properties.encryption.diskEncryptionSetId),\n"
+        + "        'Customer Managed Key',\n"
+        + "    EncryptionEnabled == true,\n"
+        + "        'Service Managed Key',\n"
+        + "    'None'\n"
+        + ")\n"
+        + "| extend HttpsOnly = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts',\n"
+        + "        tobool(properties.supportsHttpsTrafficOnly),\n"
+        + "    true\n"
+        + ")\n"
+        + "| extend MinimumTlsVersion = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts',\n"
+        + "        tostring(properties.minimumTlsVersion),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend NetworkDefaultAction = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts',\n"
+        + "        tostring(properties.networkAcls.defaultAction),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend PublicNetworkAccess = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts',\n"
+        + "        tostring(properties.publicNetworkAccess),\n"
+        + "    type == 'microsoft.sql/servers/databases',\n"
+        + "        tostring(properties.publicNetworkAccess),\n"
+        + "    type == 'microsoft.compute/disks',\n"
+        + "        tostring(properties.publicNetworkAccess),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend PublicBlobAccess = iff(type == 'microsoft.storage/storageaccounts',\n"
+        + "    tobool(properties.allowBlobPublicAccess), bool(null))\n"
+        + "| extend StorageClass = tostring(sku.name)\n"
+        + "| extend ReplicationType = iff(\n"
+        + "    type in ('microsoft.storage/storageaccounts', 'microsoft.compute/disks'),\n"
+        + "    tostring(split(tostring(sku.name), '_')[1]), '')\n"
+        + "| extend AccessTier = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts', tostring(properties.accessTier),\n"
+        + "    type == 'microsoft.compute/disks', tostring(properties.tier),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend CreatedDate = case(\n"
+        + "    type == 'microsoft.storage/storageaccounts', tostring(properties.creationTime),\n"
+        + "    type == 'microsoft.compute/disks', tostring(properties.timeCreated),\n"
+        + "    type == 'microsoft.sql/servers/databases', tostring(properties.creationDate),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend SizeBytes = case(\n"
+        + "    type == 'microsoft.compute/disks', tolong(properties.diskSizeBytes),\n"
+        + "    type == 'microsoft.sql/servers/databases', tolong(properties.maxSizeBytes),\n"
+        + "    long(null)\n"
+        + ")\n"
+        + "| extend Tags = tostring(tags)\n"
+        + "| project\n"
+        + "    SubscriptionId = subscriptionId,\n"
+        + "    StorageResource = name,\n"
+        + "    StorageType,\n"
+        + "    ResourceGroup = resourceGroup,\n"
+        + "    Location = location,\n"
+        + "    ResourceId = id,\n"
+        + "    Application,\n"
+        + "    EncryptionEnabled,\n"
+        + "    EncryptionMethod,\n"
+        + "    HttpsOnly,\n"
+        + "    MinimumTlsVersion,\n"
+        + "    NetworkDefaultAction,\n"
+        + "    PublicNetworkAccess,\n"
+        + "    PublicBlobAccess,\n"
+        + "    StorageClass,\n"
+        + "    ReplicationType,\n"
+        + "    AccessTier,\n"
+        + "    CreatedDate,\n"
+        + "    SizeBytes,\n"
+        + "    Tags\n"
+        + "| order by Application, StorageType, StorageResource";
 
     return executeKqlQuery(kql, subscriptionIds);
   }
 
   @Override public List<Map<String, Object>> queryComputeInstances(List<String> subscriptionIds) {
     String kql = "Resources\n"
-  +
-        "| where type == 'microsoft.compute/virtualmachines'\n"
-  +
-        "| extend Application = case(\n"
-  +
-        "    isnotempty(tags.Application), tags.Application,\n"
-  +
-        "    isnotempty(tags.app), tags.app,\n"
-  +
-        "    'Untagged/Orphaned'\n"
-  +
-        ")\n"
-  +
-        "| extend VMSize = tostring(properties.hardwareProfile.vmSize)\n"
-  +
-        "| extend OSType = tostring(properties.storageProfile.osDisk.osType)\n"
-  +
-        "| extend PowerState = tostring(properties.extended.instanceView.powerState.displayStatus)\n"
-  +
-        "| extend DiskEncryption = case(\n"
-  +
-        "    isnotnull(properties.storageProfile.osDisk.encryptionSettings.enabled) and\n"
-  +
-        "        tobool(properties.storageProfile.osDisk.encryptionSettings.enabled) == true,\n"
-  +
-        "        'Enabled',\n"
-  +
-        "    isnotnull(properties.storageProfile.osDisk.managedDisk.diskEncryptionSet),\n"
-  +
-        "        'Enabled',\n"
-  +
-        "    'Disabled'\n"
-  +
-        ")\n"
-  +
-        "| extend ManagedDisk = isnotnull(properties.storageProfile.osDisk.managedDisk)\n"
-  +
-        "| extend BootDiagnostics = tobool(properties.diagnosticsProfile.bootDiagnostics.enabled)\n"
-  +
-        "| extend HasPublicIP = false  // Would need to join with network interfaces and public IPs\n"
-  +
-        "| extend AvailabilitySet = tostring(properties.availabilitySet.id)\n"
-  +
-        "| extend AvailabilityZone = tostring(properties.zones[0])\n"
-  +
-        // Attached identity (user-assigned managed identity ARM id) -> iam_resources.resource_id.
-        "| extend AttachedIdentity = tostring(bag_keys(identity.userAssignedIdentities)[0])\n"
-  +
-        // Resolve the VM's primary NIC to find its subnet (and derive the VNet) ARM ids.
-        "| extend PrimaryNicId = tostring(properties.networkProfile.networkInterfaces[0].id)\n"
-  +
-        "| join kind=leftouter (\n"
-  +
-        "    Resources\n"
-  +
-        "    | where type == 'microsoft.network/networkinterfaces'\n"
-  +
-        "    | extend NicSubnetId = tostring(properties.ipConfigurations[0].properties.subnet.id)\n"
-  +
-        "    | project PrimaryNicId = id, NicSubnetId\n"
-  +
-        ") on PrimaryNicId\n"
-  +
-        "| extend SubnetId = NicSubnetId\n"
-  +
-        // VNet ARM id = the subnet id without the trailing /subnets/<name> (first 9 path segments).
-        "| extend VNetId = iff(isnotempty(NicSubnetId),"
-  + " strcat_array(array_slice(split(NicSubnetId, '/'), 0, 8), '/'), '')\n"
-  +
-        "| project\n"
-  +
-        "    SubscriptionId = subscriptionId,\n"
-  +
-        "    VMName = name,\n"
-  +
-        "    ResourceGroup = resourceGroup,\n"
-  +
-        "    Location = location,\n"
-  +
-        "    ResourceId = id,\n"
-  +
-        "    Application,\n"
-  +
-        "    VMSize,\n"
-  +
-        "    OSType,\n"
-  +
-        "    PowerState,\n"
-  +
-        "    DiskEncryption,\n"
-  +
-        "    ManagedDiskEnabled = ManagedDisk,\n"
-  +
-        "    BootDiagnostics,\n"
-  +
-        "    AvailabilitySet,\n"
-  +
-        "    AvailabilityZone,\n"
-  +
-        "    SubnetId,\n"
-  +
-        "    VNetId,\n"
-  +
-        "    AttachedIdentity\n"
-  +
-        "| order by Application, VMName";
+        + "| where type == 'microsoft.compute/virtualmachines'\n"
+        + "| extend Application = case(\n"
+        + "    isnotempty(tags.Application), tostring(tags.Application),\n"
+        + "    isnotempty(tags.application), tostring(tags.application),\n"
+        + "    isnotempty(tags.app), tostring(tags.app),\n"
+        + "    'Untagged/Orphaned'\n"
+        + ")\n"
+        + "| extend VMSize = tostring(properties.hardwareProfile.vmSize)\n"
+        + "| extend OSType = tostring(properties.storageProfile.osDisk.osType)\n"
+        + "| extend PowerState = tostring(properties.extended.instanceView.powerState.displayStatus)\n"
+        + "| extend DiskEncryption = case(\n"
+        + "    isnotnull(properties.storageProfile.osDisk.encryptionSettings.enabled) and\n"
+        + "        tobool(properties.storageProfile.osDisk.encryptionSettings.enabled) == true,\n"
+        + "        'Enabled',\n"
+        + "    isnotnull(properties.storageProfile.osDisk.managedDisk.diskEncryptionSet),\n"
+        + "        'Enabled',\n"
+        + "    'Disabled'\n"
+        + ")\n"
+        + "| extend ManagedDisk = isnotnull(properties.storageProfile.osDisk.managedDisk)\n"
+        + "| extend BootDiagnostics = tobool(properties.diagnosticsProfile.bootDiagnostics.enabled)\n"
+        + "| extend AvailabilitySet = tostring(properties.availabilitySet.id)\n"
+        + "| extend AvailabilityZone = tostring(zones[0])\n"
+        + "| extend LaunchTime = tostring(properties.timeCreated)\n"
+        + "| extend AttachedIdentity = tostring(bag_keys(identity.userAssignedIdentities)[0])\n"
+        + "| extend PrimaryNicId = tolower(tostring(properties.networkProfile.networkInterfaces[0].id))\n"
+        + "| join kind=leftouter (\n"
+        + "    Resources\n"
+        + "    | where type == 'microsoft.network/networkinterfaces'\n"
+        + "    | extend NicSubnetId = tostring(properties.ipConfigurations[0].properties.subnet.id)\n"
+        + "    | extend PrivateIp = tostring(properties.ipConfigurations[0].properties.privateIPAddress)\n"
+        + "    | extend PublicIpId = tolower(tostring(properties.ipConfigurations[0].properties.publicIPAddress.id))\n"
+        + "    | extend NicNsgId = tostring(properties.networkSecurityGroup.id)\n"
+        + "    | project PrimaryNicId = tolower(id), NicSubnetId, PrivateIp, PublicIpId, NicNsgId\n"
+        + ") on PrimaryNicId\n"
+        + "| join kind=leftouter (\n"
+        + "    Resources\n"
+        + "    | where type == 'microsoft.network/publicipaddresses'\n"
+        + "    | project PublicIpId = tolower(id), PublicIp = tostring(properties.ipAddress)\n"
+        + ") on PublicIpId\n"
+        + "| extend SubnetId = NicSubnetId\n"
+        + "| extend VNetId = iff(isnotempty(NicSubnetId), strcat_array(array_slice(split(NicSubnetId, '/'), 0, 8), '/'), '')\n"
+        + "| project\n"
+        + "    SubscriptionId = subscriptionId,\n"
+        + "    VMName = name,\n"
+        + "    ResourceGroup = resourceGroup,\n"
+        + "    Location = location,\n"
+        + "    ResourceId = id,\n"
+        + "    Application,\n"
+        + "    VMSize,\n"
+        + "    OSType,\n"
+        + "    PowerState,\n"
+        + "    DiskEncryption,\n"
+        + "    ManagedDiskEnabled = ManagedDisk,\n"
+        + "    BootDiagnostics,\n"
+        + "    AvailabilitySet,\n"
+        + "    AvailabilityZone,\n"
+        + "    LaunchTime,\n"
+        + "    SubnetId,\n"
+        + "    VNetId,\n"
+        + "    AttachedIdentity,\n"
+        + "    PrivateIp,\n"
+        + "    PublicIp,\n"
+        + "    SecurityGroups = NicNsgId\n"
+        + "| order by Application, VMName";
 
     return executeKqlQuery(kql, subscriptionIds);
   }
@@ -640,255 +566,169 @@ public class AzureProvider implements CloudProvider {
    */
   public List<Map<String, Object>> queryComputeSecurityGroups(List<String> subscriptionIds) {
     String kql = "Resources\n"
-  +
-        "| where type == 'microsoft.network/networkinterfaces'\n"
-  +
-        "| where isnotempty(properties.virtualMachine.id)"
-  + " and isnotempty(properties.networkSecurityGroup.id)\n"
-  +
-        "| project\n"
-  +
-        "    SubscriptionId = subscriptionId,\n"
-  +
-        "    ComputeResourceId = tostring(properties.virtualMachine.id),\n"
-  +
-        "    SecurityGroupId = tostring(properties.networkSecurityGroup.id)";
+        + "| where type == 'microsoft.network/networkinterfaces'\n"
+        + "| where isnotempty(properties.virtualMachine.id) and isnotempty(properties.networkSecurityGroup.id)\n"
+        + "| project\n"
+        + "    SubscriptionId = subscriptionId,\n"
+        + "    InstanceId = tostring(split(tostring(properties.virtualMachine.id), '/')[8]),\n"
+        + "    ComputeResourceId = tostring(properties.virtualMachine.id),\n"
+        + "    SecurityGroupId = tostring(properties.networkSecurityGroup.id)";
 
     return executeKqlQuery(kql, subscriptionIds);
   }
 
   @Override public List<Map<String, Object>> queryNetworkResources(List<String> subscriptionIds) {
     String kql = "Resources\n"
-  +
-        "| where type in (\n"
-  +
-        "    'microsoft.network/virtualnetworks',\n"
-  +
-        "    'microsoft.network/networksecuritygroups',\n"
-  +
-        "    'microsoft.network/publicipaddresses',\n"
-  +
-        "    'microsoft.network/loadbalancers',\n"
-  +
-        "    'microsoft.network/applicationgateways'\n"
-  +
-        ")\n"
-  +
-        "| extend Application = case(\n"
-  +
-        "    isnotempty(tags.Application), tags.Application,\n"
-  +
-        "    isnotempty(tags.app), tags.app,\n"
-  +
-        "    'Untagged/Orphaned'\n"
-  +
-        ")\n"
-  +
-        "| extend NetworkResourceType = case(\n"
-  +
-        "    type == 'microsoft.network/virtualnetworks', 'Virtual Network',\n"
-  +
-        "    type == 'microsoft.network/networksecuritygroups', 'Network Security Group',\n"
-  +
-        "    type == 'microsoft.network/publicipaddresses', 'Public IP',\n"
-  +
-        "    type == 'microsoft.network/loadbalancers', 'Load Balancer',\n"
-  +
-        "    type == 'microsoft.network/applicationgateways', 'Application Gateway',\n"
-  +
-        "    type\n"
-  +
-        ")\n"
-  +
-        "| extend Configuration = case(\n"
-  +
-        "    type == 'microsoft.network/virtualnetworks',\n"
-  +
-        "        strcat('Address Space: ', tostring(properties.addressSpace.addressPrefixes)),\n"
-  +
-        "    type == 'microsoft.network/networksecuritygroups',\n"
-  +
-        "        strcat('Rules: ', tostring(array_length(properties.securityRules))),\n"
-  +
-        "    type == 'microsoft.network/publicipaddresses',\n"
-  +
-        "        strcat('Allocation: ', tostring(properties.publicIPAllocationMethod)),\n"
-  +
-        "    type == 'microsoft.network/loadbalancers',\n"
-  +
-        "        strcat('SKU: ', tostring(sku.name)),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| extend SecurityFindings = case(\n"
-  +
-        "    type == 'microsoft.network/networksecuritygroups' and \n"
-  +
-        "        array_length(properties.securityRules) == 0,\n"
-  +
-        "        'No security rules defined',\n"
-  +
-        "    type == 'microsoft.network/publicipaddresses' and\n"
-  +
-        "        properties.publicIPAllocationMethod == 'Static',\n"
-  +
-        "        'Static public IP',\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| project\n"
-  +
-        "    SubscriptionId = subscriptionId,\n"
-  +
-        "    NetworkResource = name,\n"
-  +
-        "    NativeId = id,\n"
-  +
-        "    NetworkResourceType,\n"
-  +
-        "    ResourceGroup = resourceGroup,\n"
-  +
-        "    Location = location,\n"
-  +
-        "    ResourceId = id,\n"
-  +
-        "    Application,\n"
-  +
-        "    Configuration,\n"
-  +
-        "    SecurityFindings\n"
-  +
-        // Expand VNet subnets into their own rows so compute_resources.subnet_id can reference them
-        // (native_id = the subnet ARM id).
-        "| union (\n"
-  +
-        "    Resources\n"
-  +
-        "    | where type == 'microsoft.network/virtualnetworks'\n"
-  +
-        "    | mv-expand subnet = properties.subnets\n"
-  +
-        "    | project\n"
-  +
-        "        SubscriptionId = subscriptionId,\n"
-  +
-        "        NetworkResource = tostring(subnet.name),\n"
-  +
-        "        NativeId = tostring(subnet.id),\n"
-  +
-        "        NetworkResourceType = 'Subnet',\n"
-  +
-        "        ResourceGroup = resourceGroup,\n"
-  +
-        "        Location = location,\n"
-  +
-        "        ResourceId = tostring(subnet.id),\n"
-  +
-        "        Application = 'Untagged/Orphaned',\n"
-  +
-        "        Configuration = strcat('CIDR: ', tostring(subnet.properties.addressPrefix)),\n"
-  +
-        "        SecurityFindings = ''\n"
-  +
-        ")\n"
-  +
-        "| order by Application, NetworkResourceType, NetworkResource";
+        + "| where type in (\n"
+        + "    'microsoft.network/virtualnetworks',\n"
+        + "    'microsoft.network/networksecuritygroups',\n"
+        + "    'microsoft.network/publicipaddresses',\n"
+        + "    'microsoft.network/loadbalancers',\n"
+        + "    'microsoft.network/applicationgateways'\n"
+        + ")\n"
+        + "| extend Application = case(\n"
+        + "    isnotempty(tags.Application), tostring(tags.Application),\n"
+        + "    isnotempty(tags.application), tostring(tags.application),\n"
+        + "    isnotempty(tags.app), tostring(tags.app),\n"
+        + "    'Untagged/Orphaned'\n"
+        + ")\n"
+        + "| extend NetworkResourceType = case(\n"
+        + "    type == 'microsoft.network/virtualnetworks', 'Virtual Network',\n"
+        + "    type == 'microsoft.network/networksecuritygroups', 'Network Security Group',\n"
+        + "    type == 'microsoft.network/publicipaddresses', 'Public IP',\n"
+        + "    type == 'microsoft.network/loadbalancers', 'Load Balancer',\n"
+        + "    type == 'microsoft.network/applicationgateways', 'Application Gateway',\n"
+        + "    type\n"
+        + ")\n"
+        + "| extend Configuration = case(\n"
+        + "    type == 'microsoft.network/virtualnetworks',\n"
+        + "        strcat('Address Space: ', tostring(properties.addressSpace.addressPrefixes)),\n"
+        + "    type == 'microsoft.network/networksecuritygroups',\n"
+        + "        strcat('Rules: ', tostring(array_length(properties.securityRules))),\n"
+        + "    type == 'microsoft.network/publicipaddresses',\n"
+        + "        strcat('Allocation: ', tostring(properties.publicIPAllocationMethod)),\n"
+        + "    type == 'microsoft.network/loadbalancers',\n"
+        + "        strcat('SKU: ', tostring(sku.name)),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend SecurityFindings = case(\n"
+        + "    type == 'microsoft.network/networksecuritygroups' and\n"
+        + "        array_length(properties.securityRules) == 0,\n"
+        + "        'No security rules defined',\n"
+        + "    type == 'microsoft.network/publicipaddresses' and\n"
+        + "        properties.publicIPAllocationMethod == 'Static',\n"
+        + "        'Static public IP',\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend CidrBlock = case(\n"
+        + "    type == 'microsoft.network/virtualnetworks',\n"
+        + "        tostring(properties.addressSpace.addressPrefixes[0]),\n"
+        + "    type == 'microsoft.network/publicipaddresses',\n"
+        + "        tostring(properties.ipAddress),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend State = tostring(properties.provisioningState)\n"
+        + "| extend RuleCount = iff(type == 'microsoft.network/networksecuritygroups',\n"
+        // toint: array_length is a long, and the union below declares the column int;
+        // differing types would split it into two columns
+        + "    toint(array_length(properties.securityRules)), int(null))\n"
+        + "| join kind=leftouter (\n"
+        + "    Resources\n"
+        + "    | where type == 'microsoft.network/networksecuritygroups'\n"
+        + "    | mv-expand rule = properties.securityRules\n"
+        + "    | where rule.properties.direction =~ 'Inbound' and rule.properties.access =~ 'Allow'\n"
+        + "        and tostring(rule.properties.sourceAddressPrefix) in~ ('*', '0.0.0.0/0', 'Internet', 'Any')\n"
+        + "    | summarize OpenIngressRules = count() by id\n"
+        + ") on id\n"
+        + "| extend HasOpenIngress = iff(type == 'microsoft.network/networksecuritygroups',\n"
+        + "    coalesce(OpenIngressRules, 0) > 0, bool(null))\n"
+        + "| project\n"
+        + "    SubscriptionId = subscriptionId,\n"
+        + "    NetworkResource = name,\n"
+        + "    NativeId = id,\n"
+        + "    NetworkResourceType,\n"
+        + "    ResourceGroup = resourceGroup,\n"
+        + "    Location = location,\n"
+        + "    ResourceId = id,\n"
+        + "    Application,\n"
+        + "    Configuration,\n"
+        + "    SecurityFindings,\n"
+        + "    CidrBlock,\n"
+        + "    State,\n"
+        + "    RuleCount,\n"
+        + "    HasOpenIngress,\n"
+        + "    Tags = tostring(tags)\n"
+        + "| union (\n"
+        + "    Resources\n"
+        + "    | where type == 'microsoft.network/virtualnetworks'\n"
+        + "    | mv-expand subnet = properties.subnets\n"
+        + "    | project\n"
+        + "        SubscriptionId = subscriptionId,\n"
+        + "        NetworkResource = tostring(subnet.name),\n"
+        + "        NativeId = tostring(subnet.id),\n"
+        + "        NetworkResourceType = 'Subnet',\n"
+        + "        ResourceGroup = resourceGroup,\n"
+        + "        Location = location,\n"
+        + "        ResourceId = tostring(subnet.id),\n"
+        + "        Application = 'Untagged/Orphaned',\n"
+        + "        Configuration = strcat('CIDR: ', tostring(subnet.properties.addressPrefix)),\n"
+        + "        SecurityFindings = '',\n"
+        + "        CidrBlock = tostring(subnet.properties.addressPrefix),\n"
+        + "        State = tostring(subnet.properties.provisioningState),\n"
+        + "        RuleCount = int(null),\n"
+        + "        HasOpenIngress = bool(null),\n"
+        + "        Tags = ''\n"
+        + ")\n"
+        + "| order by Application, NetworkResourceType, NetworkResource";
 
     return executeKqlQuery(kql, subscriptionIds);
   }
 
   @Override public List<Map<String, Object>> queryIAMResources(List<String> subscriptionIds) {
     String kql = "Resources\n"
-  +
-        "| where type in (\n"
-  +
-        "    'microsoft.authorization/roleassignments',\n"
-  +
-        "    'microsoft.managedidentity/userassignedidentities',\n"
-  +
-        "    'microsoft.keyvault/vaults'\n"
-  +
-        ")\n"
-  +
-        "| extend Application = case(\n"
-  +
-        "    isnotempty(tags.Application), tags.Application,\n"
-  +
-        "    isnotempty(tags.app), tags.app,\n"
-  +
-        "    'Untagged/Orphaned'\n"
-  +
-        ")\n"
-  +
-        "| extend IAMResourceType = case(\n"
-  +
-        "    type == 'microsoft.authorization/roleassignments', 'Role Assignment',\n"
-  +
-        "    type == 'microsoft.managedidentity/userassignedidentities', 'Managed Identity',\n"
-  +
-        "    type == 'microsoft.keyvault/vaults', 'Key Vault',\n"
-  +
-        "    type\n"
-  +
-        ")\n"
-  +
-        "| extend Configuration = case(\n"
-  +
-        "    type == 'microsoft.authorization/roleassignments',\n"
-  +
-        "        strcat('Principal: ', tostring(properties.principalType)),\n"
-  +
-        "    type == 'microsoft.managedidentity/userassignedidentities',\n"
-  +
-        "        strcat('ClientId: ', tostring(properties.clientId)),\n"
-  +
-        "    type == 'microsoft.keyvault/vaults',\n"
-  +
-        "        strcat('SKU: ', tostring(properties.sku.name)),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| extend SecurityConfiguration = case(\n"
-  +
-        "    type == 'microsoft.keyvault/vaults',\n"
-  +
-        "        strcat('Purge Protection: ', \n"
-  +
-        "            case(tobool(properties.enablePurgeProtection) == true, 'Enabled', 'Disabled'),\n"
-  +
-        "            ' | Network: ', tostring(properties.networkAcls.defaultAction)),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| project\n"
-  +
-        "    SubscriptionId = subscriptionId,\n"
-  +
-        "    IAMResource = name,\n"
-  +
-        "    IAMResourceType,\n"
-  +
-        "    ResourceGroup = resourceGroup,\n"
-  +
-        "    Location = location,\n"
-  +
-        "    ResourceId = id,\n"
-  +
-        "    Application,\n"
-  +
-        "    Configuration,\n"
-  +
-        "    SecurityConfiguration\n"
-  +
-        "| order by Application, IAMResourceType, IAMResource";
+        + "| where type in (\n"
+        + "    'microsoft.managedidentity/userassignedidentities',\n"
+        + "    'microsoft.keyvault/vaults'\n"
+        + ")\n"
+        + "| extend Application = case(\n"
+        + "    isnotempty(tags.Application), tostring(tags.Application),\n"
+        + "    isnotempty(tags.application), tostring(tags.application),\n"
+        + "    isnotempty(tags.app), tostring(tags.app),\n"
+        + "    'Untagged/Orphaned'\n"
+        + ")\n"
+        + "| extend IAMResourceType = case(\n"
+        + "    type == 'microsoft.managedidentity/userassignedidentities', 'Managed Identity',\n"
+        + "    type == 'microsoft.keyvault/vaults', 'Key Vault',\n"
+        + "    type\n"
+        + ")\n"
+        + "| extend Configuration = case(\n"
+        + "    type == 'microsoft.managedidentity/userassignedidentities',\n"
+        + "        strcat('ClientId: ', tostring(properties.clientId)),\n"
+        + "    type == 'microsoft.keyvault/vaults',\n"
+        + "        strcat('SKU: ', tostring(properties.sku.name)),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend SecurityConfiguration = case(\n"
+        + "    type == 'microsoft.keyvault/vaults',\n"
+        + "        strcat('Purge Protection: ',\n"
+        + "            case(tobool(properties.enablePurgeProtection) == true, 'Enabled', 'Disabled'),\n"
+        + "            ' | Network: ', tostring(properties.networkAcls.defaultAction)),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend PrincipalType = iff(type == 'microsoft.managedidentity/userassignedidentities',\n"
+        + "    'ManagedIdentity', '')\n"
+        + "| project\n"
+        + "    SubscriptionId = subscriptionId,\n"
+        + "    IAMResource = name,\n"
+        + "    IAMResourceType,\n"
+        + "    ResourceGroup = resourceGroup,\n"
+        + "    Location = location,\n"
+        + "    ResourceId = id,\n"
+        + "    Application,\n"
+        + "    Configuration,\n"
+        + "    SecurityConfiguration,\n"
+        + "    PrincipalType\n"
+        + "| order by Application, IAMResourceType, IAMResource";
 
     return executeKqlQuery(kql, subscriptionIds);
   }
@@ -1019,102 +859,59 @@ public class AzureProvider implements CloudProvider {
 
   @Override public List<Map<String, Object>> queryContainerRegistries(List<String> subscriptionIds) {
     String kql = "Resources\n"
-  +
-        "| where type == 'microsoft.containerregistry/registries'\n"
-  +
-        "| extend Application = case(\n"
-  +
-        "    isnotempty(tags.Application), tags.Application,\n"
-  +
-        "    isnotempty(tags.app), tags.app,\n"
-  +
-        "    'Untagged/Orphaned'\n"
-  +
-        ")\n"
-  +
-        "| extend RegistrySKU = tostring(sku.name)\n"
-  +
-        "| extend AdminUserEnabled = tobool(properties.adminUserEnabled)\n"
-  +
-        "| extend PublicNetworkAccess = tostring(properties.publicNetworkAccess)\n"
-  +
-        "| extend NetworkRuleSetDefaultAction = tostring(properties.networkRuleSet.defaultAction)\n"
-  +
-        "| extend ZoneRedundancy = tostring(properties.zoneRedundancy)\n"
-  +
-        "| extend DataEndpointEnabled = tobool(properties.dataEndpointEnabled)\n"
-  +
-        "| extend Encryption = case(\n"
-  +
-        "    isnotnull(properties.encryption.keyVaultProperties),\n"
-  +
-        "        'Customer Managed Key',\n"
-  +
-        "    'Service Managed Key'\n"
-  +
-        ")\n"
-  +
-        "| extend QuarantinePolicy = tostring(properties.policies.quarantinePolicy.status)\n"
-  +
-        "| extend TrustPolicy = tostring(properties.policies.trustPolicy.status)\n"
-  +
-        "| extend RetentionPolicy = tostring(properties.policies.retentionPolicy.status)\n"
-  +
-        "| extend SecurityConfiguration = strcat(\n"
-  +
-        "    'Admin User: ', case(AdminUserEnabled == true, 'Enabled', 'Disabled'),\n"
-  +
-        "    ' | Network: ', case(\n"
-  +
-        "        PublicNetworkAccess == 'Disabled', 'Private Only',\n"
-  +
-        "        NetworkRuleSetDefaultAction == 'Deny', 'Restricted',\n"
-  +
-        "        'Public'\n"
-  +
-        "),\n"
-  +
-        "    ' | Encryption: ', Encryption\n"
-  +
-        ")\n"
-  +
-        "| project\n"
-  +
-        "    SubscriptionId = subscriptionId,\n"
-  +
-        "    RegistryName = name,\n"
-  +
-        "    ResourceGroup = resourceGroup,\n"
-  +
-        "    Location = location,\n"
-  +
-        "    ResourceId = id,\n"
-  +
-        "    Application,\n"
-  +
-        "    RegistrySKU,\n"
-  +
-        "    AdminUserEnabled,\n"
-  +
-        "    PublicNetworkAccess,\n"
-  +
-        "    NetworkRuleSetDefaultAction,\n"
-  +
-        "    ZoneRedundancy,\n"
-  +
-        "    DataEndpointEnabled,\n"
-  +
-        "    Encryption,\n"
-  +
-        "    QuarantinePolicy,\n"
-  +
-        "    TrustPolicy,\n"
-  +
-        "    RetentionPolicy,\n"
-  +
-        "    SecurityConfiguration\n"
-  +
-        "| order by Application, RegistryName";
+        + "| where type == 'microsoft.containerregistry/registries'\n"
+        + "| extend Application = case(\n"
+        + "    isnotempty(tags.Application), tostring(tags.Application),\n"
+        + "    isnotempty(tags.application), tostring(tags.application),\n"
+        + "    isnotempty(tags.app), tostring(tags.app),\n"
+        + "    'Untagged/Orphaned'\n"
+        + ")\n"
+        + "| extend RegistrySKU = tostring(sku.name)\n"
+        + "| extend AdminUserEnabled = tobool(properties.adminUserEnabled)\n"
+        + "| extend PublicNetworkAccess = tostring(properties.publicNetworkAccess)\n"
+        + "| extend NetworkRuleSetDefaultAction = tostring(properties.networkRuleSet.defaultAction)\n"
+        + "| extend ZoneRedundancy = tostring(properties.zoneRedundancy)\n"
+        + "| extend DataEndpointEnabled = tobool(properties.dataEndpointEnabled)\n"
+        + "| extend Encryption = case(\n"
+        + "    properties.encryption.status =~ 'enabled',\n"
+        + "        'Customer Managed Key',\n"
+        + "    'Service Managed Key'\n"
+        + ")\n"
+        + "| extend EncryptionKey = tostring(properties.encryption.keyVaultProperties.keyIdentifier)\n"
+        + "| extend QuarantinePolicy = tostring(properties.policies.quarantinePolicy.status)\n"
+        + "| extend TrustPolicy = tostring(properties.policies.trustPolicy.status)\n"
+        + "| extend RetentionPolicy = tostring(properties.policies.retentionPolicy.status)\n"
+        + "| extend SecurityConfiguration = strcat(\n"
+        + "    'Admin User: ', case(AdminUserEnabled == true, 'Enabled', 'Disabled'),\n"
+        + "    ' | Network: ', case(\n"
+        + "        PublicNetworkAccess == 'Disabled', 'Private Only',\n"
+        + "        NetworkRuleSetDefaultAction == 'Deny', 'Restricted',\n"
+        + "        'Public'\n"
+        + "    ),\n"
+        + "    ' | Encryption: ', Encryption\n"
+        + ")\n"
+        + "| project\n"
+        + "    SubscriptionId = subscriptionId,\n"
+        + "    RegistryName = name,\n"
+        + "    ResourceGroup = resourceGroup,\n"
+        + "    Location = location,\n"
+        + "    ResourceId = id,\n"
+        + "    Application,\n"
+        + "    RegistrySKU,\n"
+        + "    AdminUserEnabled,\n"
+        + "    PublicNetworkAccess,\n"
+        + "    NetworkRuleSetDefaultAction,\n"
+        + "    ZoneRedundancy,\n"
+        + "    DataEndpointEnabled,\n"
+        + "    Encryption,\n"
+        + "    EncryptionKey,\n"
+        + "    QuarantinePolicy,\n"
+        + "    TrustPolicy,\n"
+        + "    RetentionPolicy,\n"
+        + "    SecurityConfiguration,\n"
+        + "    LoginServer = tostring(properties.loginServer),\n"
+        + "    CreatedAt = tostring(properties.creationDate)\n"
+        + "| order by Application, RegistryName";
 
     return executeKqlQuery(kql, subscriptionIds);
   }

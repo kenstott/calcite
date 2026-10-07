@@ -164,17 +164,17 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             vm.get("VMSize"),
             vm.get("PowerState"),
             vm.get("OSType"),
-            null, // architecture not in query
-            null, // virtualization type not in query
-            null, // public IP would need additional query
-            null, // private IP would need additional query
+            null, // architecture: implied by the VM size, not reported on the VM
+            null, // virtualization type: no Azure counterpart
+            vm.get("PublicIp"),
+            vm.get("PrivateIp"),
             vm.get("VNetId"),   // vpc_id: VNet ARM id (matches network_resources.native_id)
             vm.get("SubnetId"), // subnet_id: subnet ARM id
             vm.get("AttachedIdentity"), // iam_role: attached managed-identity ARM id
-            null, // security groups would need additional query
+            vm.get("SecurityGroups"), // NSG of the primary network interface
             "Enabled".equals(vm.get("DiskEncryption")),
             vm.get("BootDiagnostics"),
-            null  // launch time not in query
+            CloudOpsDataConverter.convertValue(vm.get("LaunchTime"), SqlTypeName.TIMESTAMP)
         });
       }
     } catch (Exception e) {

@@ -110,27 +110,27 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("Location"),
             storage.get("ResourceGroup"),
             storage.get("ResourceId"),
-            null, // size_bytes - not in current query
-            null, // storage_class - Azure specific
-            getAzureReplicationType(storageType),
+            storage.get("SizeBytes"), // provisioned size: disks and SQL databases only
+            storage.get("StorageClass"), // the SKU, e.g. Standard_LRS
+            storage.get("ReplicationType"),
             storage.get("EncryptionEnabled"),
             encryptionMethod,
             encryptionMethod != null && encryptionMethod.contains("Customer") ?
                 "customer-managed" : "service-managed",
-            false, // public_access_enabled - would need additional query
-            null, // public_access_level
+            storage.get("PublicBlobAccess"), // storage accounts only
+            storage.get("PublicNetworkAccess"),
             storage.get("NetworkDefaultAction"),
             storage.get("HttpsOnly"),
-            null, // versioning_enabled - would need additional query
-            null, // soft_delete_enabled
+            null, // versioning_enabled - a blob-service setting, not in Resource Graph
+            null, // soft_delete_enabled - a blob-service setting, not in Resource Graph
             null, // soft_delete_retention_days
-            null, // backup_enabled
-            null, // lifecycle_rules_count
-            null, // access_tier
+            null, // backup_enabled - Azure Backup is configured on a vault, not here
+            null, // lifecycle_rules_count - a management policy, not in Resource Graph
+            storage.get("AccessTier"),
             null, // last_access_time
-            null, // created_date
-            null, // modified_date
-            null  // tags
+            CloudOpsDataConverter.convertValue(storage.get("CreatedDate"), SqlTypeName.TIMESTAMP),
+            null, // modified_date: not reported
+            storage.get("Tags")
         });
       }
     } catch (Exception e) {
@@ -246,21 +246,5 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
     }
 
     return results;
-  }
-
-  private String getAzureReplicationType(String storageType) {
-    // Simplified logic - in reality would parse from SKU
-    switch (storageType) {
-      case "Storage Account":
-        return "LRS"; // Locally Redundant Storage
-      case "Managed Disk":
-        return "LRS";
-      case "SQL Database":
-        return "Geo-Replicated";
-      case "Cosmos DB":
-        return "Multi-Region";
-      default:
-        return "Unknown";
-    }
   }
 }
