@@ -195,10 +195,10 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             db.get("KmsKeyId") != null ? db.get("KmsKeyId") :
                 db.get("KMSMasterKeyArn"),
             null, // TLS version not directly exposed
-            db.get("BackupRetentionPeriod") != null ?
-                ((Number) db.get("BackupRetentionPeriod")).intValue() :
-                db.get("SnapshotRetentionLimit") != null ?
-                    ((Number) db.get("SnapshotRetentionLimit")).intValue() : null,
+            // RDS reports a retention period, ElastiCache a snapshot limit, DynamoDB neither.
+            // (No nested ?: here: mixing int and null in one unboxes the null.)
+            db.get("BackupRetentionPeriod") != null ? db.get("BackupRetentionPeriod")
+                : db.get("SnapshotRetentionLimit"),
             db.get("PreferredBackupWindow") != null ? db.get("PreferredBackupWindow") :
                 db.get("SnapshotWindow"),
             CloudOpsDataConverter.convertValue(

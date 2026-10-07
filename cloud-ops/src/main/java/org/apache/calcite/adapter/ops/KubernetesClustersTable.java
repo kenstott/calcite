@@ -120,7 +120,6 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
         .add("public_endpoint", SqlTypeName.BOOLEAN).nullable(true)
         .add("authorized_ip_ranges", SqlTypeName.INTEGER).nullable(true)
         .add("network_policy_provider", SqlTypeName.VARCHAR).nullable(true)
-        .add("pod_security_policy_enabled", SqlTypeName.BOOLEAN).nullable(true)
 
         // Encryption facts
         .add("encryption_at_rest_enabled", SqlTypeName.BOOLEAN).nullable(true)
@@ -169,7 +168,6 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             !((Boolean) cluster.getOrDefault("PrivateCluster", false)), // Inverse for public
             cluster.get("AuthorizedIPRanges"),
             cluster.get("NetworkPolicy"),
-            false, // Azure doesn't have pod security policy
             cluster.get("DiskEncryption") != null && !cluster.get("DiskEncryption").equals("Platform Managed Key"),
             cluster.get("DiskEncryption"),
             true, // AKS has logging by default
@@ -216,7 +214,6 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("PublicEndpoint"),
             cluster.get("AuthorizedIPRanges"),
             cluster.get("NetworkPolicyProvider"),
-            false, // GKE doesn't have pod security policy
             cluster.get("EncryptionAtRestEnabled"),
             cluster.get("EncryptionKeyType"),
             cluster.get("LoggingEnabled"),
@@ -265,7 +262,6 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("EndpointPublicAccess"),
             publicAccessCidrs,
             null, // network_policy - EKS doesn't have built-in network policy
-            false, // EKS doesn't have pod security policy
             cluster.get("EncryptionEnabled"),
             cluster.get("EncryptionProvider"),
             cluster.get("LoggingEnabled"),

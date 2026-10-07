@@ -242,7 +242,6 @@ erDiagram
         boolean backup_enabled
         integer lifecycle_rules_count
         varchar access_tier
-        timestamp last_access_time
         timestamp created_date
         timestamp modified_date
         varchar tags
@@ -264,7 +263,6 @@ erDiagram
         boolean public_endpoint
         integer authorized_ip_ranges
         varchar network_policy_provider
-        boolean pod_security_policy_enabled
         boolean encryption_at_rest_enabled
         varchar encryption_key_type
         boolean logging_enabled
@@ -454,7 +452,6 @@ Object/blob storage and storage accounts (S3, Azure Storage, GCS).
 | `backup_enabled` | BOOLEAN | | Backup/retention policy on (GCP) |
 | `lifecycle_rules_count` | INTEGER | | Number of lifecycle rules (AWS, GCP) |
 | `access_tier` | VARCHAR | | Access tier |
-| `last_access_time` | TIMESTAMP | | Last access time |
 | `created_date` | TIMESTAMP | | Creation time (AWS, GCP) |
 | `modified_date` | TIMESTAMP | | Last modification (GCP) |
 | `tags` | VARCHAR | | JSON tags/labels |
@@ -480,7 +477,6 @@ Managed Kubernetes (AKS, EKS, GKE).
 | `public_endpoint` | BOOLEAN | | Public API endpoint exposed |
 | `authorized_ip_ranges` | INTEGER | | Count of authorized IP ranges |
 | `network_policy_provider` | VARCHAR | | Network-policy plugin |
-| `pod_security_policy_enabled` | BOOLEAN | | PSP/pod-security on |
 | `encryption_at_rest_enabled` | BOOLEAN | | Secrets/etcd encryption on |
 | `encryption_key_type` | VARCHAR | | `customer-managed` / `service-managed` |
 | `logging_enabled` | BOOLEAN | | Control-plane/audit logging on |

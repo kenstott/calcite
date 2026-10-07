@@ -74,7 +74,6 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
 
         // Access control facts
         .add("access_tier", SqlTypeName.VARCHAR).nullable(true)
-        .add("last_access_time", SqlTypeName.TIMESTAMP).nullable(true)
         .add("created_date", SqlTypeName.TIMESTAMP).nullable(true)
         .add("modified_date", SqlTypeName.TIMESTAMP).nullable(true)
 
@@ -127,7 +126,6 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null, // backup_enabled - Azure Backup is configured on a vault, not here
             null, // lifecycle_rules_count - a management policy, not in Resource Graph
             storage.get("AccessTier"),
-            null, // last_access_time
             CloudOpsDataConverter.convertValue(storage.get("CreatedDate"), SqlTypeName.TIMESTAMP),
             null, // modified_date: not reported
             storage.get("Tags")
@@ -178,7 +176,6 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("RetentionPolicy") != null && (Boolean) storage.get("RetentionPolicy"),
             storage.get("LifecycleRuleCount"),
             null, // access_tier
-            null, // last_access_time
             CloudOpsDataConverter.convertValue(storage.get("TimeCreated"), SqlTypeName.TIMESTAMP),
             CloudOpsDataConverter.convertValue(storage.get("Updated"), SqlTypeName.TIMESTAMP),
             storage.get("Tags")
@@ -235,7 +232,6 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null, // backup_enabled - S3 doesn't have explicit backup
             storage.get("LifecycleRuleCount"),
             null, // access_tier - S3 doesn't have access tiers at bucket level
-            null, // last_access_time - would need CloudWatch
             CloudOpsDataConverter.convertValue(storage.get("CreationDate"), SqlTypeName.TIMESTAMP),
             null, // modified_date - S3 doesn't track bucket modification
             storage.get("Tags")

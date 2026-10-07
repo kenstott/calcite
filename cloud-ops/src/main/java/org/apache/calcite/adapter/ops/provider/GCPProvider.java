@@ -73,6 +73,7 @@ import java.util.concurrent.Future;
 public class GCPProvider implements CloudProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(GCPProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final int HTTP_ATTEMPTS = 3;
 
   private final CloudOpsConfig.GCPConfig config;
   private final GoogleCredentials credentials;
@@ -259,7 +260,6 @@ public class GCPProvider implements CloudProvider {
             // Network configuration
             clusterData.put("NetworkPolicyProvider", cluster.hasNetworkPolicy() ?
                 cluster.getNetworkPolicy().getProvider().name() : null);
-            clusterData.put("PodSecurityPolicyEnabled", false); // PSP is deprecated in newer GKE versions
 
             // Encryption and logging
             clusterData.put("EncryptionAtRestEnabled", cluster.hasDatabaseEncryption() &&
@@ -753,6 +753,29 @@ public class GCPProvider implements CloudProvider {
    * has no client library for (IAM, Cloud SQL Admin, Artifact Registry).
    */
   private JsonNode getJson(String url) throws IOException {
+    // These are idempotent reads, so a timeout or a "try again" status is retried; the last
+    // failure is what the caller sees
+    IOException last = null;
+    for (int attempt = 1; attempt <= HTTP_ATTEMPTS; attempt++) {
+      if (attempt > 1) {
+        try {
+          Thread.sleep(500L * attempt);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while retrying GET " + url, e);
+        }
+      }
+      try {
+        return getJsonOnce(url);
+      } catch (RetryableHttpException | java.net.SocketTimeoutException e) {
+        last = e;
+      }
+    }
+    throw new IOException("GET " + url + " failed after " + HTTP_ATTEMPTS + " attempts: "
+        + last.getMessage(), last);
+  }
+
+  private JsonNode getJsonOnce(String url) throws IOException {
     final String token;
     synchronized (credentials) {
       credentials.refreshIfExpired();
@@ -762,8 +785,8 @@ public class GCPProvider implements CloudProvider {
     try {
       connection.setRequestProperty("Authorization", "Bearer " + token);
       connection.setRequestProperty("Accept", "application/json");
-      connection.setConnectTimeout(30000);
-      connection.setReadTimeout(60000);
+      connection.setConnectTimeout(15000);
+      connection.setReadTimeout(20000);
       final int status = connection.getResponseCode();
       final InputStream stream =
           status >= 400 ? connection.getErrorStream() : connection.getInputStream();
@@ -775,13 +798,24 @@ public class GCPProvider implements CloudProvider {
           stream.close();
         }
       }
-      if (status != 200) {
-        throw new IOException("GET " + url + " returned " + status + ": "
-            + body.path("error").path("message").asText());
+      if (status == 200) {
+        return body;
       }
-      return body;
+      final String message = "GET " + url + " returned " + status + ": "
+          + body.path("error").path("message").asText();
+      if (status == 429 || status >= 500) {
+        throw new RetryableHttpException(message);
+      }
+      throw new IOException(message);
     } finally {
       connection.disconnect();
+    }
+  }
+
+  /** A response that asks for the request to be tried again (429 or 5xx). */
+  private static class RetryableHttpException extends IOException {
+    RetryableHttpException(String message) {
+      super(message);
     }
   }
 

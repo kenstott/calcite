@@ -82,9 +82,17 @@ jdbc:cloudops:azure.tenantId=xxx;azure.clientId=xxx;azure.clientSecret=xxx;azure
 | `cloud.storage_resources` | Azure, AWS, GCP | Storage accounts and buckets |
 | `cloud.kubernetes_clusters` | Azure, AWS, GCP | AKS, EKS, GKE clusters |
 | `cloud.database_resources` | Azure, AWS, GCP | Managed database services |
-| `cloud.network_resources` | Azure, AWS, GCP | VNets, VPCs, subnets |
-| `cloud.iam_resources` | Azure, AWS, GCP | Users, roles, service accounts |
-| `cloud.container_registries` | Azure, AWS, GCP | ACR, ECR, GCR |
+| `cloud.network_resources` | Azure, AWS, GCP | VNets, VPCs, subnets, security groups, firewall rules |
+| `cloud.iam_resources` | Azure, AWS, GCP | Users, roles, policies, managed identities, service accounts |
+| `cloud.container_registries` | Azure, AWS, GCP | ACR, ECR, Artifact Registry |
+| `cloud.compute_security_groups` | Azure, AWS | Which security group is attached to which instance |
+
+The schema is named `cloud` unless the `schema` connection property says otherwise.
+
+A column is null where a cloud has no such concept (`resource_group` outside Azure, for one), or
+where the value is not available from the inventory APIs the adapter calls. A cloud that cannot
+be queried — expired credentials, a missing permission, an API that is not enabled — fails the
+query with that cloud's error; it is never reported as "no resources".
 
 ## Sample queries
 

@@ -61,17 +61,26 @@ public class CloudOpsCacheManager {
                                                Supplier<List<Map<String, Object>>> apiCall) {
     long startTime = System.currentTimeMillis();
 
-    List<Map<String, Object>> result = cache.get(cacheKey, key -> {
+    // The API call runs outside the cache's own compute lock. A cached call that makes
+    // another cached call (an Azure table query wrapping its Resource Graph query) would
+    // otherwise update the map from inside its own update, which the map rejects with
+    // "Recursive update" whenever the two keys land in the same bin. The price is that two
+    // threads missing the same key at once both call the API.
+    List<Map<String, Object>> result = cache.getIfPresent(cacheKey);
+    final boolean wasFromCache = result != null;
+    if (result == null) {
       if (debugMode && logger.isDebugEnabled()) {
         logger.debug("Cache MISS for key: {} - executing API call", cacheKey);
       }
-      return apiCall.get();
-    });
+      result = apiCall.get();
+      if (result != null) {
+        cache.put(cacheKey, result);
+      }
+    }
 
     long duration = System.currentTimeMillis() - startTime;
 
     if (debugMode && logger.isDebugEnabled()) {
-      boolean wasFromCache = cache.getIfPresent(cacheKey) != null;
       logger.debug("Cache {} for key: {} - {} results retrieved in {}ms",
                  wasFromCache ? "HIT" : "MISS", cacheKey,
                  result != null ? result.size() : 0, duration);

@@ -212,7 +212,6 @@ public class CloudOpsProjectionHandler {
     mapping.put("public_endpoint", "case(PrivateCluster == false, true, false)");
     mapping.put("authorized_ip_ranges", "AuthorizedIPRanges");
     mapping.put("network_policy_provider", "NetworkPolicy");
-    mapping.put("pod_security_policy_enabled", "false"); // Not supported in Azure
     mapping.put("encryption_at_rest_enabled", "case(DiskEncryption != 'Platform Managed Key', true, false)");
     mapping.put("encryption_key_type", "DiskEncryption");
     mapping.put("logging_enabled", "true"); // Default in AKS

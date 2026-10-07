@@ -253,4 +253,19 @@ public class CacheManagerTest {
     assertFalse(invalidResult.getErrors().isEmpty());
     logger.info("✅ Invalid config validation: {}", invalidResult);
   }
+
+  /**
+   * A cached call may itself make a cached call. Computing inside the cache's own update
+   * failed with "Recursive update" whenever the two keys shared a hash bin, which depends on
+   * the keys: with enough pairs it happens every time.
+   */
+  @Test public void testNestedGetOrCompute() {
+    final CloudOpsCacheManager manager = new CloudOpsCacheManager(5, false);
+    for (int i = 0; i < 5000; i++) {
+      final String inner = "inner:" + i;
+      List<Map<String, Object>> result = manager.getOrCompute("outer:" + i,
+          () -> manager.getOrCompute(inner, () -> new java.util.ArrayList<Map<String, Object>>()));
+      assertNotNull(result);
+    }
+  }
 }
