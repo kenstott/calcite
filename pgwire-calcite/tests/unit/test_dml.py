@@ -183,14 +183,152 @@ def test_commit_after_a_write_succeeds_and_rollback_is_refused(writable_backend)
         srv.shutdown()
 
 
-def test_returning_is_rejected_before_the_write_runs(writable_backend):
+class _KeyedTable:
+    """Stands in for an adapter table that names its key column and reports the keys it
+    inserts. Calcite's JDBC tables do neither, and DuckDB assigns no keys, so a test says
+    which keys its INSERT 'generated'."""
+
+    def __init__(self) -> None:
+        self.keys: list = []
+
+    def getKeyColumn(self) -> str:  # noqa: N802 - the Java method name
+        return "ID"
+
+    def takeInsertedKeys(self) -> list:  # noqa: N802
+        return list(self.keys)
+
+
+@pytest.fixture()
+def keyed(writable_backend, monkeypatch):
+    table = _KeyedTable()
+    monkeypatch.setattr(writable_backend, "_keyed_table", lambda conn, ref: table)
+    yield table
+    writable_backend.execute_update('DELETE FROM W."T"')
+
+
+def test_returning_is_refused_on_a_table_that_reports_no_keys(writable_backend):
     srv, port = _serve(writable_backend, allow_writes=True)
     try:
-        r = _query(port, """INSERT INTO W."T" ("ID", "QTY") VALUES (1, 10) RETURNING "ID\"""")
-        assert r["error"] is not None and "RETURNING" in r["error"]
+        r = _query(port, 'INSERT INTO W."T" ("ID", "QTY") VALUES (1, 10) RETURNING "ID"')
+        assert r["error"] is not None and "RETURNING is not supported on table" in r["error"]
         assert _rows(port) == []
     finally:
         srv.shutdown()
+
+
+def test_insert_returning_gives_the_new_rows_in_key_order(writable_backend, keyed):
+    srv, port = _serve(writable_backend, allow_writes=True)
+    try:
+        keyed.keys = [2, 1]  # the order the "adapter" created them in
+        r = _query(
+            port,
+            'INSERT INTO W."T" ("ID", "QTY") VALUES (1, 10), (2, 20) '
+            'RETURNING "ID", "QTY" * 2 AS DBL',
+        )
+        assert r["error"] is None, r["error"]
+        assert r["columns"] == ["ID", "DBL"]
+        assert r["rows"] == [["2", "40"], ["1", "20"]]
+        assert r["command_tag"] == "INSERT 0 2"
+        assert _rows(port) == [["1", "10"], ["2", "20"]]
+    finally:
+        srv.shutdown()
+
+
+def test_update_returning_gives_the_values_after_the_write(writable_backend, keyed):
+    srv, port = _serve(writable_backend, allow_writes=True)
+    try:
+        _query(port, 'INSERT INTO W."T" ("ID", "QTY") VALUES (1, 10), (2, 20), (3, 10)')
+        # The update changes the very column it filters on: the rows are still returned.
+        r = _query(port, 'UPDATE W."T" SET "QTY" = 11 WHERE "QTY" = 10 RETURNING *')
+        assert r["error"] is None, r["error"]
+        assert sorted(r["rows"]) == [["1", "11"], ["3", "11"]]
+        assert r["command_tag"] == "UPDATE 2"
+        r = _query(port, 'UPDATE W."T" SET "QTY" = 0 WHERE "ID" = 99 RETURNING "ID"')
+        assert r["error"] is None and r["rows"] == [] and r["command_tag"] == "UPDATE 0"
+    finally:
+        srv.shutdown()
+
+
+def test_delete_returning_gives_the_rows_it_removed(writable_backend, keyed):
+    srv, port = _serve(writable_backend, allow_writes=True)
+    try:
+        _query(port, 'INSERT INTO W."T" ("ID", "QTY") VALUES (1, 10), (2, 20)')
+        r = _query(port, 'DELETE FROM W."T" WHERE "ID" = 2 RETURNING "ID", "QTY"')
+        assert r["error"] is None, r["error"]
+        assert r["rows"] == [["2", "20"]]
+        assert r["command_tag"] == "DELETE 1"
+        assert _rows(port) == [["1", "10"]]
+    finally:
+        srv.shutdown()
+
+
+def test_parameterised_returning_writes_exactly_once(writable_backend, keyed):
+    """psycopg describes the statement and the portal before executing; neither may run the
+    INSERT a second time."""
+    srv, port = _serve(writable_backend, allow_writes=True)
+    try:
+        keyed.keys = [5]
+        with psycopg.connect(
+            host="127.0.0.1", port=port, user="tester", dbname="postgres", autocommit=True
+        ) as conn:
+            cur = conn.execute(
+                'INSERT INTO W."T" ("ID", "QTY") VALUES (%s, %s) RETURNING "ID", "QTY"', (5, 50)
+            )
+            assert cur.fetchall() == [(5, 50)]
+            assert cur.statusmessage == "INSERT 0 1"
+        assert _rows(port) == [["5", "50"]]
+    finally:
+        srv.shutdown()
+
+
+def test_returning_crosses_the_bridge(writable_backend, keyed):
+    from pgwire_calcite.sidecar import BridgeBackend, serve_calcite_child
+
+    child_port = _free_port()
+    child = serve_calcite_child(writable_backend, port=child_port)
+    srv, port = _serve(BridgeBackend(port=child_port), allow_writes=True)
+    try:
+        keyed.keys = [1, 2]
+        r = _query(
+            port, 'INSERT INTO W."T" ("ID", "QTY") VALUES (1, 10), (2, 20) RETURNING "ID", "QTY"'
+        )
+        assert r["error"] is None, r["error"]
+        assert r["rows"] == [["1", "10"], ["2", "20"]]
+        r = _query(port, 'UPDATE W."T" SET "QTY" = 7 WHERE "ID" = 1 RETURNING "QTY"')
+        assert r["rows"] == [["7"]]
+        r = _query(port, 'DELETE FROM W."T" RETURNING "ID"')
+        assert sorted(r["rows"]) == [["1"], ["2"]] and r["command_tag"] == "DELETE 2"
+    finally:
+        srv.shutdown()
+        child.shutdown()
+
+
+def test_backend_resolves_tables_case_insensitively(writable_backend):
+    """The real lookup, against a table that has no key contract."""
+    from pgwire_calcite.backend import PgProtocolError
+
+    with pytest.raises(PgProtocolError, match="does not report row keys"):
+        writable_backend.key_column(("w", "t"))
+    with pytest.raises(PgProtocolError, match='relation "NOPE" does not exist'):
+        writable_backend.key_column(("W", "NOPE"))
+    with pytest.raises(PgProtocolError, match='schema "NOPE" does not exist'):
+        writable_backend.key_column(("NOPE", "T"))
+
+
+def test_returning_plan():
+    from pgwire_calcite import returning
+
+    p = returning.plan('UPDATE s."T" AS a SET "X" = 1 WHERE a."Y" > 2 RETURNING a."X", "Y" AS y')
+    assert (p.kind, p.schema, p.table) == ("UPDATE", "s", "T")
+    assert p.write_sql == 'UPDATE s."T" AS a SET "X" = 1 WHERE a."Y" > 2'
+    assert p.table_sql == 's."T" AS a'
+    assert p.where_sql == 'a."Y" > 2'
+    assert p.select_list == 'a."X", "Y" AS y'
+    assert returning.plan('DELETE FROM t WHERE x = 1') is None
+    with pytest.raises(ValueError):
+        returning.plan("DELETE FROM t USING u WHERE t.a = u.a RETURNING t.a")
+    assert returning.key_conditions("Id", ["a'b", 2]) == ["\"Id\" IN ('a''b', 2)"]
+    assert len(returning.key_conditions("Id", list(range(450)))) == 3
 
 
 def test_table_that_is_not_modifiable_rejects_the_write(calcite_backend):

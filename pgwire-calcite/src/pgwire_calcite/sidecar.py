@@ -87,6 +87,9 @@ EXEC_REQUEST = "\x00__PGWIRE_EXEC__"
 #: Reserved prefix for an INSERT/UPDATE/DELETE; answered with its row count, not a stream.
 UPDATE_REQUEST = "\x00__PGWIRE_UPDATE__"
 
+#: Reserved prefix asking which column identifies a row of a table (for RETURNING).
+KEY_COLUMN_REQUEST = "\x00__PGWIRE_KEY_COLUMN__"
+
 #: Extra seconds allowed on the socket read deadline beyond the session's
 #: statement_timeout: the child enforces the timeout itself and then still has to
 #: send the trailer, so the reader must outlive the cancel it asked for.
@@ -165,11 +168,20 @@ class _ChildHandler(socketserver.StreamRequestHandler):
                 elif request.startswith(UPDATE_REQUEST):
                     body = json.loads(request[len(UPDATE_REQUEST):])
                     self._send_control(self._update_payload(backend, body))
+                elif request.startswith(KEY_COLUMN_REQUEST):
+                    body = json.loads(request[len(KEY_COLUMN_REQUEST):])
+                    column = backend.key_column(
+                        tuple(body["table_ref"]),
+                        session_key=body["session_key"],
+                        timeout_ms=body["timeout_ms"],
+                        lane=body["lane"],
+                    )
+                    self._send_control(json.dumps({"column": column}).encode("utf-8"))
                 else:
                     raise ValueError(
                         "unknown bridge request: the pgwire side must send a ping, "
-                        f"{CATALOG_REQUEST!r}, {CANCEL_REQUEST!r}, {EXEC_REQUEST!r} or "
-                        f"{UPDATE_REQUEST!r}"
+                        f"{CATALOG_REQUEST!r}, {CANCEL_REQUEST!r}, {EXEC_REQUEST!r}, "
+                        f"{UPDATE_REQUEST!r} or {KEY_COLUMN_REQUEST!r}"
                     )
             except Exception as exc:  # pre-stream failure -> loud, framed, with SQLSTATE
                 log.warning("[CALCITE-CHILD] error: %s", exc)
@@ -214,8 +226,11 @@ class _ChildHandler(socketserver.StreamRequestHandler):
             lambda: _peer_closed(self.request),
             body["max_queue_wait_ms"],
         )
-        count = backend.run_update(body["sql"], scope, body["lane"])
-        return json.dumps({"count": count}).encode("utf-8")
+        keys_of = body.get("keys_of")
+        count, keys = backend.run_update(
+            body["sql"], scope, body["lane"], keys_of=tuple(keys_of) if keys_of else None
+        )
+        return json.dumps({"count": count, "keys": keys}).encode("utf-8")
 
     def _execute(self, backend, body: dict) -> None:
         from pgwire_calcite.calcite_backend import CancelScope
@@ -385,9 +400,52 @@ class BridgeBackend:
         The child owns the statement and enforces ``timeout_ms``. A write is not abandoned
         because its client went away, so ``client_gone`` is not polled here.
         """
+        del client_gone
+        return self._update(sql, None, session_key, timeout_ms, lane)[0]
+
+    def execute_insert(
+        self,
+        sql: str,
+        table_ref,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ):
+        """Execute one INSERT in the Calcite child; return its row count and the keys of the
+        rows it created (see ``CalciteBackend.execute_insert``)."""
+        del client_gone
+        count, keys = self._update(sql, table_ref, session_key, timeout_ms, lane)
+        return count, keys or []
+
+    def key_column(
+        self,
+        table_ref,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> str:
+        """Name of the column that identifies a row of ``table_ref``, asked of the child."""
+        del client_gone
+        request = KEY_COLUMN_REQUEST + json.dumps(
+            {
+                "table_ref": list(table_ref),
+                "session_key": session_key,
+                "timeout_ms": int(timeout_ms),
+                "lane": lane,
+            }
+        )
+        answer = self._control_request(request, read_timeout_s=self._deadline(timeout_ms))
+        return str(json.loads(answer.decode("utf-8"))["column"])
+
+    @staticmethod
+    def _deadline(timeout_ms: int) -> Optional[float]:
+        return timeout_ms / 1000.0 + _TIMEOUT_GRACE_S if timeout_ms else None
+
+    def _update(self, sql: str, keys_of, session_key, timeout_ms: int, lane: str):
         from pgwire_calcite.calcite_backend import CancelScope
 
-        del client_gone
         calcite_sql = transpile_pg_to_calcite(
             sql,
             json_enabled=("json" in self._extensions),
@@ -400,11 +458,12 @@ class BridgeBackend:
                 "timeout_ms": int(timeout_ms),
                 "lane": lane,
                 "max_queue_wait_ms": CancelScope.max_queue_wait_ms,
+                "keys_of": list(keys_of) if keys_of is not None else None,
             }
         )
-        deadline = timeout_ms / 1000.0 + _TIMEOUT_GRACE_S if timeout_ms else None
-        answer = self._control_request(request, read_timeout_s=deadline)
-        return int(json.loads(answer.decode("utf-8"))["count"])
+        answer = self._control_request(request, read_timeout_s=self._deadline(timeout_ms))
+        body = json.loads(answer.decode("utf-8"))
+        return int(body["count"]), body.get("keys")
 
     def _control_request(self, request: str, read_timeout_s: Optional[float] = -1.0) -> bytes:
         sock = self._connect_with_retry()

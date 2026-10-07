@@ -29,7 +29,7 @@ import logging
 import os
 import threading
 import time
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from pgwire_calcite import normalize
 from pgwire_calcite.admission import AdmissionPolicy
@@ -122,6 +122,26 @@ def exit_wedged(reason: str, grace_ms: int) -> None:
         )
     logging.shutdown()
     os._exit(EXIT_STUCK_STATEMENT)
+
+
+def _match_name(name: str, candidates: List[str]) -> Optional[str]:
+    """``name`` among ``candidates``: exact, else the one case-insensitive match."""
+    if name in candidates:
+        return name
+    folded = [c for c in candidates if c.lower() == name.lower()]
+    return folded[0] if len(folded) == 1 else None
+
+
+def _plain_key(key):
+    """A row key from the JVM as a Python value. JPype's boxed numbers are Python numbers
+    already; anything else (a Java String arrives as ``str``) is taken as text."""
+    if isinstance(key, bool):
+        return str(key)
+    if isinstance(key, int):
+        return int(key)
+    if isinstance(key, float):
+        return float(key)
+    return str(key)
 
 
 class InFlightStatement:
@@ -579,30 +599,128 @@ class CalciteBackend:
             vector_enabled=("vector" in self._extensions),
         )
         log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
-        return self.run_update(calcite_sql, CancelScope(session_key, timeout_ms, client_gone), lane)
+        scope = CancelScope(session_key, timeout_ms, client_gone)
+        return self.run_update(calcite_sql, scope, lane)[0]
 
-    def run_update(self, calcite_sql: str, scope: "CancelScope", lane: str = LANE_USER) -> int:
-        """Run an already-transpiled INSERT/UPDATE/DELETE under ``scope``; return its row count.
+    def execute_insert(
+        self,
+        sql: str,
+        table_ref: Tuple[str, str],
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> Tuple[int, list]:
+        """Execute one INSERT into ``table_ref`` (schema, table); return its row count and the
+        keys of the rows it created, in creation order.
 
-        The seam the bridge's Calcite child uses: the pgwire side transpiles, the child runs.
+        The keys are read under the same lock as the INSERT, so they are this statement's
+        and no other session's. Raises SQLSTATE 0A000 if the table does not report keys.
+        """
+        calcite_sql = transpile_pg_to_calcite(
+            sql,
+            json_enabled=("json" in self._extensions),
+            vector_enabled=("vector" in self._extensions),
+        )
+        scope = CancelScope(session_key, timeout_ms, client_gone)
+        count, keys = self.run_update(calcite_sql, scope, lane, keys_of=table_ref)
+        return count, keys or []
+
+    def key_column(
+        self,
+        table_ref: Tuple[str, str],
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> str:
+        """Name of the column that identifies a row of ``table_ref`` (schema, table).
+
+        Raises SQLSTATE 0A000 if the table does not name one — it cannot answer RETURNING.
+        """
+        conn, lock = self.lane(lane)
+        if conn is None:
+            raise RuntimeError("Calcite connection is not open")
+        scope = CancelScope(session_key, timeout_ms, client_gone)
+        scope.acquire(lock)
+        try:
+            return str(self._keyed_table(conn, table_ref).getKeyColumn())
+        finally:
+            lock.release()
+
+    def run_update(
+        self,
+        calcite_sql: str,
+        scope: "CancelScope",
+        lane: str = LANE_USER,
+        keys_of: Optional[Tuple[str, str]] = None,
+    ) -> Tuple[int, Optional[list]]:
+        """Run an already-transpiled INSERT/UPDATE/DELETE under ``scope``.
+
+        Returns its row count and, when ``keys_of`` names the INSERT's target table, the keys
+        of the rows it created. The seam the bridge's Calcite child uses: the pgwire side
+        transpiles, the child runs.
         """
         conn, lock = self.lane(lane)
         if conn is None:
             raise RuntimeError("Calcite connection is not open")
         scope.acquire(lock)
         try:
+            table = None
+            if keys_of is not None:
+                table = self._keyed_table(conn, tuple(keys_of))
+                table.takeInsertedKeys()  # discard keys of earlier inserts nobody asked for
             stmt = conn.createStatement()
             scope.arm(stmt)
             try:
-                return int(stmt.executeUpdate(calcite_sql))
+                count = int(stmt.executeUpdate(calcite_sql))
             except BaseException:
                 scope.raise_if_canceled()
                 raise
             finally:
                 scope.disarm()
                 stmt.close()
+            keys = None if table is None else [_plain_key(k) for k in table.takeInsertedKeys()]
+            return count, keys
         finally:
             lock.release()
+
+    def _keyed_table(self, conn, table_ref: Tuple[str, str]):
+        """The Calcite table ``table_ref`` names, which must name its key column and report
+        the keys it inserts (``getKeyColumn()`` / ``takeInsertedKeys()``, looked up by name —
+        the adapters share no interface)."""
+        from pgwire_calcite.backend import PgProtocolError
+
+        table = self._lookup_table(conn, table_ref)
+        if not (hasattr(table, "getKeyColumn") and hasattr(table, "takeInsertedKeys")):
+            raise PgProtocolError(
+                "0A000",
+                f'RETURNING is not supported on table "{table_ref[1]}": '
+                "its adapter does not report row keys",
+            )
+        return table
+
+    def _lookup_table(self, conn, table_ref: Tuple[str, str]):
+        """Resolve (schema, table) in the connection's root schema; names match exactly, or
+        case-insensitively when that is unambiguous. An empty schema is the default schema."""
+        import jpype
+
+        from pgwire_calcite.backend import PgProtocolError
+
+        schema_name, table_name = table_ref
+        calcite = conn.unwrap(jpype.JClass("org.apache.calcite.jdbc.CalciteConnection"))
+        root = calcite.getRootSchema()
+        if not schema_name:
+            schema_name = str(conn.getSchema() or "")
+        resolved = _match_name(schema_name, [str(n) for n in root.getSubSchemaNames()])
+        schema = root.getSubSchema(resolved) if resolved is not None else None
+        if schema is None:
+            raise PgProtocolError("3F000", f'schema "{schema_name}" does not exist')
+        resolved = _match_name(table_name, [str(n) for n in schema.getTableNames()])
+        table = schema.getTable(resolved) if resolved is not None else None
+        if table is None:
+            raise PgProtocolError("42P01", f'relation "{table_name}" does not exist')
+        return table
 
     def _read_result(self, rs) -> QueryResult:
         md = rs.getMetaData()

@@ -66,7 +66,13 @@ answered with PostgreSQL's command tag (`INSERT 0 n`, `UPDATE n`, `DELETE n`).
   rather than reported as done.
 - When the server is given per-role grants (`serve(authz_grants=...)`), the grants that gate
   reads gate writes: a role may write only to relations granted to it.
-- `RETURNING` and DDL are not supported.
+- `RETURNING` is supported on `INSERT`, `UPDATE` and `DELETE` for tables whose adapter names
+  a key column and reports the keys it creates (salesforce, sharepoint). Calcite has no
+  `RETURNING`, so the server reads the rows back by key around the write; the reply carries
+  the usual `INSERT 0 n` / `UPDATE n` / `DELETE n` tag. On any other table it is refused
+  (SQLSTATE `0A000`) before the write runs. `UPDATE ... FROM`, `DELETE ... USING` and
+  `INSERT ... ON CONFLICT` with `RETURNING` are not supported.
+- DDL is not supported.
 - Both the in-process `calcite` backend and the `bridge` backend route writes.
 
 ## Client timeouts and cancellation
