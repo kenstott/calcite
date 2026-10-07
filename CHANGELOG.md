@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.107.0](https://github.com/kenstott/calcite/compare/engine-v0.106.3...engine-v0.107.0) (2026-10-06)
+
+
+### Features
+
+* **govdata/etl:** dedupe runner removes surplus copies of re-ingested accessions in place ([bacec01](https://github.com/kenstott/calcite/commit/bacec01ac374fe198508d0571dd38f8500c91403))
+* **govdata/scripts:** the daily release rebuilds the DuckDB seed only when a schema model changed ([243ab17](https://github.com/kenstott/calcite/commit/243ab17391a7c26e2541bd501f1df43e3194dab7))
+
+
+### Bug Fixes
+
+* **file/iceberg:** bound the external sort's final-merge fan-in ([aa38b77](https://github.com/kenstott/calcite/commit/aa38b772a4dd4fd0ae232f299a807ca372366ecc))
+* **govdata/crime:** pace and patiently retry cde_police_employment_by_agency requests ([1972379](https://github.com/kenstott/calcite/commit/1972379610a6e0171acea0746b2a4b3e0343f185))
+* **govdata/fec:** extract only itcont.txt from the individual-contributions ZIP ([119dd9c](https://github.com/kenstott/calcite/commit/119dd9cc471d51abb992e9fc3df4364d3509b808))
+* **govdata/scripts:** pool_status finds the scheduler's runs dir from its own mount namespace ([b3ac93f](https://github.com/kenstott/calcite/commit/b3ac93f4f5ac0e3d0b2b20b5fdc027fae5478cb0))
+* **govdata/scripts:** pre-daily-release builds with --no-daemon ([2c59697](https://github.com/kenstott/calcite/commit/2c596974cc2cb6c9a5c762666603ea353e6b5eb1))
+* **govdata/scripts:** pre-daily-release reports a stale seed as INFO, not ERROR ([38dcd35](https://github.com/kenstott/calcite/commit/38dcd3500fbab2459fa32200835eb069a0c0471f))
+* **govdata/scripts:** runners-dashboard reads the runs dir through the scheduler's mount view ([7382ce0](https://github.com/kenstott/calcite/commit/7382ce0fb79d0e7021e7addb3cb179a320b80573))
+* **govdata/scripts:** the end-of-window x-schema call also runs the embeddings backlog ([441bb47](https://github.com/kenstott/calcite/commit/441bb479eaa6b1c9604357cb1e81b1596a65a8b0))
+* **govdata/scripts:** x-schema.sh bounds the chunk sweep to 2h by default ([5ea43a0](https://github.com/kenstott/calcite/commit/5ea43a0372fbcf6846303184c246d54663562657))
+* **govdata/sec:** a table-level force-reprocess replaces the accessions it re-stages ([9020a00](https://github.com/kenstott/calcite/commit/9020a0065a1b2238d67606ff13843e0d9d2a30e4))
+* **govdata/sec:** concurrent workers no longer absorb the same staged file twice ([4dd77e8](https://github.com/kenstott/calcite/commit/4dd77e8fde5443d11f1138a3b1b96c7d92ae2515))
+* **govdata/sec:** list the 8-K accession directory with a trailing slash so cached EX-99 exhibits are read ([4a1ad10](https://github.com/kenstott/calcite/commit/4a1ad10e4bab684bf41cebb8a54a1b4bea77056c))
+* **govdata/sec:** stop mislabeling 8-K cover-letter text as prepared_remarks ([7286cbb](https://github.com/kenstott/calcite/commit/7286cbbd1eb89c84b99cf578a44d820d79fb06bc))
+* **govdata/weather:** attribute climate normals to the station's own state ([7e7cc7a](https://github.com/kenstott/calcite/commit/7e7cc7a14d9bf70c7e299ed473a8b92628054320))
+* **govdata/weather:** fetch climate normals per state, all 12 months in one partition ([3f0c066](https://github.com/kenstott/calcite/commit/3f0c0667fb91fa3accc68008bbd8c551203095b2))
+
+
+### Performance Improvements
+
+* **govdata/fec:** cluster individual_contributions by contributor_name, employer ([df9ba49](https://github.com/kenstott/calcite/commit/df9ba497927a2b4298547ca75147c65a3ea5196d))
+
 ## [0.106.3](https://github.com/kenstott/calcite/compare/engine-v0.106.2...engine-v0.106.3) (2026-10-05)
 
 
