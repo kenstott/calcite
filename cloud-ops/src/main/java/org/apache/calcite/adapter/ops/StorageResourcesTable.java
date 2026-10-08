@@ -22,9 +22,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +31,6 @@ import java.util.Map;
  * Returns raw facts without subjective assessments.
  */
 public class StorageResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(StorageResourcesTable.class);
   public StorageResourcesTable(CloudOpsConfig config) {
     super(config);
   }

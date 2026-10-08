@@ -54,14 +54,12 @@ public class AzureProvider implements CloudProvider {
   private static final String ARM = "https://management.azure.com";
   private static final String MANAGED_REDIS_API_VERSION = "2025-04-01";
 
-  private final CloudOpsConfig.AzureConfig config;
   private final ResourceGraphManager resourceGraphManager;
   private final TokenCredential credential;
   private final ObjectMapper objectMapper;
   private final CloudOpsCacheManager cacheManager;
 
   public AzureProvider(CloudOpsConfig.AzureConfig config) {
-    this.config = config;
     this.objectMapper = new ObjectMapper();
 
     this.credential = new ClientSecretCredentialBuilder()
@@ -80,7 +78,6 @@ public class AzureProvider implements CloudProvider {
   }
 
   public AzureProvider(CloudOpsConfig.AzureConfig config, CloudOpsCacheManager cacheManager) {
-    this.config = config;
     this.objectMapper = new ObjectMapper();
     this.cacheManager = cacheManager;
 
@@ -182,20 +179,19 @@ public class AzureProvider implements CloudProvider {
     if (shouldCache) {
       return cacheManager.getOrCompute(
           cacheKey, () -> executeKubernetesClusterQuery(
-          subscriptionIds, projectionHandler, sortHandler, paginationHandler, filterHandler));
+          subscriptionIds, projectionHandler, paginationHandler, filterHandler));
     } else {
       // Execute directly without caching for highly specific queries
       return executeKubernetesClusterQuery(
-          subscriptionIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
+          subscriptionIds, projectionHandler, paginationHandler, filterHandler);
     }
   }
 
   private List<Map<String, Object>> executeKubernetesClusterQuery(List<String> subscriptionIds,
                                                                  @Nullable CloudOpsProjectionHandler projectionHandler,
-                                                                 @Nullable CloudOpsSortHandler sortHandler,
                                                                  @Nullable CloudOpsPaginationHandler paginationHandler,
                                                                  @Nullable CloudOpsFilterHandler filterHandler) {
-    String kql = buildKubernetesClusterKql(projectionHandler, sortHandler, paginationHandler, filterHandler);
+    String kql = buildKubernetesClusterKql(projectionHandler, paginationHandler, filterHandler);
 
     if (LOGGER.isDebugEnabled()) {
       if (projectionHandler != null && !projectionHandler.isSelectAll()) {
@@ -244,16 +240,9 @@ public class AzureProvider implements CloudProvider {
   }
 
   /**
-   * Build KQL query for Kubernetes clusters with optional projection, sort, pagination, and filtering.
+   * Build KQL query for Kubernetes clusters with optional projection, pagination, and filtering.
    */
   private String buildKubernetesClusterKql(@Nullable CloudOpsProjectionHandler projectionHandler,
-                                          @Nullable CloudOpsSortHandler sortHandler,
-                                          @Nullable CloudOpsPaginationHandler paginationHandler) {
-    return buildKubernetesClusterKql(projectionHandler, sortHandler, paginationHandler, null);
-  }
-
-  private String buildKubernetesClusterKql(@Nullable CloudOpsProjectionHandler projectionHandler,
-                                          @Nullable CloudOpsSortHandler sortHandler,
                                           @Nullable CloudOpsPaginationHandler paginationHandler,
                                           @Nullable CloudOpsFilterHandler filterHandler) {
     StringBuilder kql = new StringBuilder();

@@ -22,9 +22,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +30,6 @@ import java.util.Map;
  * Table containing database resource information across cloud providers.
  */
 public class DatabaseResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseResourcesTable.class);
   public DatabaseResourcesTable(CloudOpsConfig config) {
     super(config);
   }

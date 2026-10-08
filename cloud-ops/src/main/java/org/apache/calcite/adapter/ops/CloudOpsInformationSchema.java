@@ -119,12 +119,12 @@ public class CloudOpsInformationSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       // Need to check all schemas, not just direct children of root
-      scanSchemaRecursively(null, rows);
+      scanSchemaRecursively(rows);
 
       return Linq4j.asEnumerable(rows);
     }
 
-    private void scanSchemaRecursively(SchemaPlus schema, List<Object[]> rows) {
+    private void scanSchemaRecursively(List<Object[]> rows) {
       // Navigate to root schema to see all schemas
       SchemaPlus rootSchema = parentSchema;
       while (rootSchema.getParentSchema() != null) {
@@ -195,11 +195,11 @@ public class CloudOpsInformationSchema extends AbstractSchema {
               org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
 
       // Need to check all schemas, not just direct children of root
-      scanSchemaRecursively(null, rows, typeFactory);
+      scanSchemaRecursively(rows, typeFactory);
       return Linq4j.asEnumerable(rows);
     }
 
-    private void scanSchemaRecursively(SchemaPlus schema, List<Object[]> rows,
+    private void scanSchemaRecursively(List<Object[]> rows,
         RelDataTypeFactory typeFactory) {
       // Navigate to root schema to see all schemas
       SchemaPlus rootSchema = parentSchema;
@@ -364,7 +364,7 @@ public class CloudOpsInformationSchema extends AbstractSchema {
   /**
    * information_schema.VIEWS table (empty for Cloud Governance).
    */
-  private class ViewsTable extends AbstractTable implements ScannableTable {
+  private static class ViewsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
@@ -389,7 +389,7 @@ public class CloudOpsInformationSchema extends AbstractSchema {
   /**
    * information_schema.TABLE_CONSTRAINTS table (empty for Cloud Governance).
    */
-  private class TableConstraintsTable extends AbstractTable implements ScannableTable {
+  private static class TableConstraintsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -414,7 +414,7 @@ public class CloudOpsInformationSchema extends AbstractSchema {
   /**
    * information_schema.KEY_COLUMN_USAGE table (empty for Cloud Governance).
    */
-  private class KeyColumnUsageTable extends AbstractTable implements ScannableTable {
+  private static class KeyColumnUsageTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)

@@ -22,7 +22,7 @@ package org.apache.calcite.adapter.file.etl;
  *   <li>{@link Action#FAIL} - Row fails validation, stop processing with error</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * public class DataValidator implements Validator {
  *     public ValidationResult validate(Map<String, Object> row) {

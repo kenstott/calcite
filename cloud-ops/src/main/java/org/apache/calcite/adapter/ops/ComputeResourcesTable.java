@@ -25,9 +25,6 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.mapping.IntPair;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,8 +35,6 @@ import java.util.Map;
  * Table containing compute resource (VM) information across cloud providers.
  */
 public class ComputeResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ComputeResourcesTable.class);
-
   public ComputeResourcesTable(CloudOpsConfig config) {
     super(config);
   }

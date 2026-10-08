@@ -31,7 +31,7 @@ import java.util.Set;
  * including URL, method, parameters, headers, request body, authentication,
  * response parsing, pagination, rate limiting, and caching.
  *
- * <h3>GET Request Example</h3>
+ * <h2>GET Request Example</h2>
  * <pre>{@code
  * source:
  *   type: http
@@ -45,7 +45,7 @@ import java.util.Set;
  *     dataPath: "$.results.data"
  * }</pre>
  *
- * <h3>POST Request with JSON Body</h3>
+ * <h2>POST Request with JSON Body</h2>
  * <pre>{@code
  * source:
  *   type: http
@@ -737,7 +737,7 @@ public class HttpSourceConfig {
    *   <li>Aggregate results from all batches</li>
    * </ol>
    *
-   * <h3>YAML Configuration Example</h3>
+   * <h2>YAML Configuration Example</h2>
    * <pre>{@code
    * source:
    *   type: http
@@ -851,7 +851,7 @@ public class HttpSourceConfig {
    * <p>Filters rows during CSV parsing to avoid loading entire large files into memory.
    * Only rows where the specified column matches the pattern are kept.
    *
-   * <h3>YAML Configuration Example</h3>
+   * <h2>YAML Configuration Example</h2>
    * <pre>{@code
    * source:
    *   type: http
@@ -1635,7 +1635,7 @@ public class HttpSourceConfig {
    *   <li>Data lineage - preserve original API responses</li>
    * </ul>
    *
-   * <h3>Cache Path Structure</h3>
+   * <h2>Cache Path Structure</h2>
    * <pre>
    * {basePath}/.raw/{tableName}/{partitionKey}/response.json
    * </pre>
@@ -1730,7 +1730,7 @@ public class HttpSourceConfig {
    * returns data for multiple dimensions (e.g., all countries, all years) in a single
    * response, but you want to partition the output by those dimensions.
    *
-   * <h3>Example: World Bank API</h3>
+   * <h2>Example: World Bank API</h2>
    * <pre>{@code
    * source:
    *   url: "https://api.worldbank.org/v2/country/all/indicator/{indicator}"
@@ -1921,7 +1921,7 @@ public class HttpSourceConfig {
    * (years, quarters) are stored as column headers. This config transforms such data
    * into a normalized narrow format with separate rows for each time period.
    *
-   * <h3>BEA Example</h3>
+   * <h2>BEA Example</h2>
    * <pre>
    * Wide format (input):
    * GeoFIPS,GeoName,TableName,LineCode,Description,Unit,1929,1930,...,2024
@@ -1934,7 +1934,7 @@ public class HttpSourceConfig {
    * ...
    * </pre>
    *
-   * <h3>YAML Configuration</h3>
+   * <h2>YAML Configuration</h2>
    * <pre>{@code
    * wideToNarrow:
    *   keyColumns: [GeoFIPS, GeoName, TableName, LineCode, Description, Unit]
@@ -2128,7 +2128,7 @@ public class HttpSourceConfig {
     }
 
     /**
-     * Returns the column mapping (source name -> output name).
+     * Returns the column mapping (source name -&gt; output name).
      * Used to rename columns during the wide-to-narrow transformation.
      *
      * @return Immutable map of source column names to output column names
@@ -2172,7 +2172,7 @@ public class HttpSourceConfig {
    * a single 10-K document produces financial_line_items, filing_contexts,
    * mda_sections, and other tables.
    *
-   * <h3>YAML Configuration Example</h3>
+   * <h4>YAML Configuration Example</h4>
    * <pre>{@code
    * source:
    *   type: document
@@ -2487,7 +2487,7 @@ public class HttpSourceConfig {
 
     /**
      * Returns the list of extraction strategies for text extraction.
-     * For MD&A: ["regex_item7", "direct_search", "html_element_specific", "aggressive_fallback"]
+     * For MD&amp;A: ["regex_item7", "direct_search", "html_element_specific", "aggressive_fallback"]
      */
     public List<String> getExtractionStrategies() {
       return extractionStrategies;

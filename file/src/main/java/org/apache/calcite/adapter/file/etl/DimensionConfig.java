@@ -24,7 +24,7 @@ import java.util.Map;
  * The {@link DimensionIterator} expands dimension configurations into
  * concrete value combinations.
  *
- * <h3>YAML Configuration Examples</h3>
+ * <h2>YAML Configuration Examples</h2>
  *
  * <p><b>Range dimension</b> - Numeric sequence:
  * <pre>{@code

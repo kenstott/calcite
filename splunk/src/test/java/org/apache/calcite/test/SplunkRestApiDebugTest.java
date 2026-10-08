@@ -38,9 +38,9 @@ import java.util.Map;
 @Tag("integration")
 class SplunkRestApiDebugTest {
 
-  private static final String BASE_URL = "https://kentest.xyz:8089";
+  private static final String BASE_URL = SplunkTestSettings.url();
   private static final String USERNAME = "admin";
-  private static final String PASSWORD = "admin123";
+  private static final String PASSWORD = SplunkTestSettings.password();
 
 
   @Test void testDirectRestApiCall() throws Exception {

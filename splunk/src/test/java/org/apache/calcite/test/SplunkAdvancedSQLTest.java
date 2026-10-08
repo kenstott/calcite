@@ -17,6 +17,7 @@
 package org.apache.calcite.test;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -38,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests advanced SQL features that should be handled by Calcite's execution engine
  * on top of SplunkTableScan.
  */
+@Tag("integration")
+@Tag("splunk-data")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @EnabledIfEnvironmentVariable(named = "CALCITE_TEST_SPLUNK", matches = "true")
 public class SplunkAdvancedSQLTest extends SplunkTestBase {

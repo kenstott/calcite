@@ -177,7 +177,7 @@ public enum CalciteConnectionProperty implements ConnectionProperty {
    * semantics. */
   CONFORMANCE("conformance", Type.ENUM, SqlConformanceEnum.DEFAULT, false),
 
-  /** Whether {@link SqlConformance#shouldConvertRaggedUnionTypesToVarying()} should return true,
+  /** Whether {@code SqlConformance#shouldConvertRaggedUnionTypesToVarying()} should return true,
    * layered on top of whatever {@link #CONFORMANCE conformance} is otherwise configured, default
    * false.
    *

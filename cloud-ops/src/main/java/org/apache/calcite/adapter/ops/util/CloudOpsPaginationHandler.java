@@ -28,8 +28,6 @@ import java.util.Locale;
 public class CloudOpsPaginationHandler {
   private static final Logger logger = LoggerFactory.getLogger(CloudOpsPaginationHandler.class);
 
-  private final @Nullable RexNode offset;
-  private final @Nullable RexNode fetch;
   private final boolean hasPagination;
   private final long offsetValue;
   private final long limitValue;
@@ -41,8 +39,6 @@ public class CloudOpsPaginationHandler {
   private static final int GCP_MAX_RESULTS = 500;
 
   private CloudOpsPaginationHandler(long rows) {
-    this.offset = null;
-    this.fetch = null;
     this.offsetValue = 0L;
     this.limitValue = rows;
     this.hasPagination = true;
@@ -59,9 +55,6 @@ public class CloudOpsPaginationHandler {
   }
 
   public CloudOpsPaginationHandler(@Nullable RexNode offset, @Nullable RexNode fetch) {
-    this.offset = offset;
-    this.fetch = fetch;
-
     // Extract numeric values from RexNode
     this.offsetValue = extractNumericValue(offset, 0L);
     this.limitValue = extractNumericValue(fetch, DEFAULT_MAX_RESULTS);
@@ -147,7 +140,7 @@ public class CloudOpsPaginationHandler {
 
   /**
    * Check if AWS needs multiple pages to handle offset.
-   * When offset > 0, we may need to fetch multiple pages and skip results.
+   * When offset &gt; 0, we may need to fetch multiple pages and skip results.
    */
   public boolean needsAWSMultiPageFetch() {
     return hasPagination && offsetValue > 0;

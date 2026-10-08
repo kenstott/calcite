@@ -307,24 +307,6 @@ public class GraphQLRules {
         return isSimple;
       }
 
-      // Handle BETWEEN
-      if (condition.isA(SqlKind.BETWEEN)) {
-        RexCall call = (RexCall) condition;
-        RexNode value = call.getOperands().get(0);  // The value being tested
-        RexNode lower = call.getOperands().get(1);  // Lower bound
-        RexNode upper = call.getOperands().get(2);  // Upper bound
-
-        // Allow both literals and dynamic parameters for bounds
-        boolean isSimple = value instanceof RexInputRef
-            && (isConstantOrDynamicParam(lower))
-            && (isConstantOrDynamicParam(upper));
-
-        LOGGER.debug("Checking BETWEEN - Value: {}, Lower: {}, Upper: {}, IsSimple: {}",
-            value, lower, upper, isSimple);
-
-        return isSimple;
-      }
-
       // For basic comparison operations
       if (condition.isA(SqlKind.EQUALS) ||
           condition.isA(SqlKind.LESS_THAN) ||
@@ -336,10 +318,9 @@ public class GraphQLRules {
         RexNode left = call.getOperands().get(0);
         RexNode right = call.getOperands().get(1);
 
-        // Allow both column reference on left and constant/param on right
-        // OR constant/param on left and column reference on right
-        boolean isSimple = (left instanceof RexInputRef && isConstantOrDynamicParam(right)) ||
-            (isConstantOrDynamicParam(left) && right instanceof RexInputRef);
+        // GraphQLRel writes a filter only for a column on the left and a literal on the
+        // right; the reverse, and a dynamic parameter, stay with Calcite
+        boolean isSimple = left instanceof RexInputRef && right instanceof RexLiteral;
 
         LOGGER.debug("Checking comparison - Left: {}, Right: {}, IsSimple: {}",
             left, right, isSimple);
@@ -349,10 +330,6 @@ public class GraphQLRules {
 
       LOGGER.debug("Filter is not a supported operation type: {}", condition.getKind());
       return false;
-    }
-
-    private boolean isConstantOrDynamicParam(RexNode node) {
-      return node instanceof RexLiteral || node instanceof RexDynamicParam;
     }
 
     @Override public RelNode convert(RelNode rel) {

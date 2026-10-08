@@ -111,7 +111,6 @@ public class GovtFinanceProvider implements CachingDataProvider {
    * county 003).
    */
   private static final int GID_STATE_START = 113;
-  private static final int GID_COUNTY_START = 115;
   private static final int GID_COUNTY_END = 118;
 
   private static final Map<String, String> GOV_TYPE_NAMES = buildGovTypeNameMap();
@@ -145,7 +144,7 @@ public class GovtFinanceProvider implements CachingDataProvider {
     // Left open deliberately: the iterator streams records straight off this entry and closes the
     // stream when the entry is exhausted.
     final ZipInputStream zis = new ZipInputStream(rawCache.openStream(zipUrl));
-    if (!advanceToDataEntry(zis, zipUrl, yearStr)) {
+    if (!advanceToDataEntry(zis, yearStr)) {
       zis.close();
       throw new IOException("govt_finance_by_unit: no *" + DATA_ENTRY_MARKER + "*.txt entry in "
           + zipUrl + " for year=" + yearStr);
@@ -299,7 +298,7 @@ public class GovtFinanceProvider implements CachingDataProvider {
   }
 
   /** Positions {@code zis} at the fixed-width data entry, or returns false if the ZIP has none. */
-  private static boolean advanceToDataEntry(ZipInputStream zis, String zipUrl, String yearStr)
+  private static boolean advanceToDataEntry(ZipInputStream zis, String yearStr)
       throws IOException {
     ZipEntry entry;
     while ((entry = zis.getNextEntry()) != null) {

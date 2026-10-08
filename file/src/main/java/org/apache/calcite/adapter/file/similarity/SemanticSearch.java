@@ -437,7 +437,7 @@ public final class SemanticSearch {
    * it can be clustered, so early codes are written unassigned and every search is a full scan
    * until training catches up. {@link #centroidCount} of 0 is what turns the probe off.
    */
-  private static void loadCentroids(Connection c, Statement st) {
+  private static void loadCentroids(Statement st) {
     String path = System.getProperty("calcite.vss.centroids",
         "s3://govdata-parquet-v1/ref/vss_centroids/centroids.parquet").trim();
     centroidCount = 0;
@@ -709,7 +709,7 @@ public final class SemanticSearch {
           LOGGER.info("SEMANTIC_SEARCH added {} new codes files locally", missing.size());
         }
       }
-      loadCentroids(c, st);
+      loadCentroids(st);
       localReady = true;
     } catch (Exception e) {
       localReady = false;

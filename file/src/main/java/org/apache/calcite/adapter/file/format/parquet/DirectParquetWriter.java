@@ -274,11 +274,8 @@ public class DirectParquetWriter {
       case java.sql.Types.DATE:
         java.sql.Date date = rs.getDate(index);
         if (date != null) {
-          // DATE type should never involve timezones
-          // Convert to LocalDate using UTC instant to avoid timezone issues
-          java.time.Instant instant = java.time.Instant.ofEpochMilli(date.getTime());
-          java.time.LocalDate localDate = instant.atZone(java.time.ZoneOffset.UTC).toLocalDate();
-          int daysSinceEpoch = (int) localDate.toEpochDay();
+          // A DATE has no time zone: store the calendar date the driver returned
+          int daysSinceEpoch = JdbcTemporals.epochDay(date);
 
           LOGGER.debug("DATE storage: column={}, date={}, daysSinceEpoch={}",
                       columnName, date, daysSinceEpoch);
@@ -307,15 +304,12 @@ public class DirectParquetWriter {
         break;
 
       case java.sql.Types.TIMESTAMP:
-        // For TIMESTAMP WITHOUT TIME ZONE (wall clock time):
-        // The CsvEnumerator already provides the correct UTC value for the wall clock time.
-        // For example, "1996-08-02 00:01:02" becomes 838958462000 (UTC representation).
-        // We store this value directly in parquet.
+        // For TIMESTAMP WITHOUT TIME ZONE (wall clock time), store the wall-clock time the
+        // driver returned as that same time in UTC: "1996-08-02 00:01:02" is 838958462000
+        // whatever the JVM's zone
         java.sql.Timestamp timestamp = rs.getTimestamp(index);
         if (timestamp != null) {
-          // The timestamp from CsvEnumerator is already the UTC representation
-          // of the wall clock time that we need to store
-          long utcMillis = timestamp.getTime();
+          long utcMillis = JdbcTemporals.wallClockMillis(timestamp);
 
           LOGGER.debug("TIMESTAMP storage: column={}, storing UTC value={}, as timestamp={}",
                       columnName, utcMillis, new java.sql.Timestamp(utcMillis));

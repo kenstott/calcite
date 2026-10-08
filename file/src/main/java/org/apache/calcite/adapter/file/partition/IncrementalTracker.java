@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.partition;
 import org.apache.calcite.adapter.file.etl.DimensionConfig;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -224,7 +225,7 @@ public interface IncrementalTracker {
   /**
    * Filters combinations treating ALL entries (including those with rows) as expired after the TTL.
    *
-   * <p>Unlike {@link #filterUnprocessedWithEmptyTtl}, which only re-queues zero-row entries,
+   * <p>Unlike an empty-result TTL, which only re-queues zero-row entries,
    * this method re-queues any entry whose tracker timestamp is older than {@code successTtlMillis}.
    * Use this for annual-cadence tables that need periodic full refresh within a release window.
    *
@@ -466,7 +467,9 @@ public interface IncrementalTracker {
    * dimension; the framework intentionally does no aliasing. Non-period labels such as
    * {@code frequency} are correctly ignored.
    */
-  String[] PERIOD_SLOTS = {"year", "quarter", "month", "week", "day", "day_of_week"};
+  List<String> PERIOD_SLOTS =
+      Collections.unmodifiableList(
+          Arrays.asList("year", "quarter", "month", "week", "day", "day_of_week"));
 
   /**
    * Builds the uniform per-period completion key for a pipeline.

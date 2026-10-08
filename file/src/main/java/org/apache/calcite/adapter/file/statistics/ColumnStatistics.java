@@ -84,7 +84,7 @@ public class ColumnStatistics {
   /**
    * Calculate selectivity for a predicate on this column.
    *
-   * @param operator The comparison operator (=, <, >, <=, >=, !=)
+   * @param operator The comparison operator (=, &lt;, &gt;, &lt;=, &gt;=, !=)
    * @param value The comparison value
    * @return Selectivity estimate between 0.0 and 1.0
    */

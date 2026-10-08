@@ -222,11 +222,11 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
    * states' border stations; each of those is emitted by the request for its own state, so every
    * (station, month) appears once, attributed to the state the station file assigns it.
    */
-  private static List<Map<String, Object>> toRows(Map<String, StationMonthRecord> grouped,
+  private List<Map<String, Object>> toRows(Map<String, StationMonthRecord> grouped,
       String stateFips, RequestContext context) throws IOException {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(grouped.size());
     for (StationMonthRecord rec : grouped.values()) {
-      if (!stateFips.equals(GhcndStationStates.stateFips(rec.stationId, context.getRateLimit()))) {
+      if (!stateFips.equals(stationStateFips(rec.stationId, context))) {
         continue;
       }
       Map<String, Object> row = new LinkedHashMap<String, Object>();
@@ -248,12 +248,20 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
   }
 
   /**
+   * The 2-digit state FIPS the NCEI station file assigns a station, or null when it assigns
+   * none.
+   */
+  String stationStateFips(String stationId, RequestContext context) throws IOException {
+    return GhcndStationStates.stateFips(stationId, context.getRateLimit());
+  }
+
+  /**
    * True for CDO's {@code -7777} trace flag, which occupies the value field of a precipitation or
    * snowfall normal in place of a measurement. Compared with a tolerance because the field arrives
    * as a JSON number.
    */
   private static boolean isTrace(double rawValue) {
-    return Math.abs(rawValue - (-7777.0)) < 0.5;
+    return Math.abs(rawValue + 7777.0) < 0.5;
   }
 
   /** Converts a raw value in tenths of &deg;F to an absolute temperature in &deg;C. */

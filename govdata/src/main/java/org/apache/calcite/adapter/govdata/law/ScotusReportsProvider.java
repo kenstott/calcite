@@ -214,7 +214,7 @@ public class ScotusReportsProvider implements StorageAwareDataProvider {
   // ---------------------------------------------------------------------------------------
 
   /** Walks the cases of the given volumes, granule page by granule page. */
-  private final class CaseIterator implements Iterator<Map<String, Object>> {
+  private static final class CaseIterator implements Iterator<Map<String, Object>> {
     private final int term;
     private final Deque<Integer> volumes;
     private final Map<String, String> headers;

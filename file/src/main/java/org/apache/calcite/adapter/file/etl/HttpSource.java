@@ -80,7 +80,7 @@ import java.util.zip.ZipInputStream;
  *   <li>JSONPath data extraction</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * HttpSourceConfig config = HttpSourceConfig.builder()
  *     .url("https://api.example.com/data")
@@ -195,8 +195,6 @@ public class HttpSource implements DataSource {
   private final VariableNormalizer variableNormalizer;
   private final StorageProvider storageProvider;
   private final String rawCachePath;
-  /** Operating directory from model operands (e.g., .aperio/<schema>), used for local cache base. */
-  private final String operatingDirectory;
   /**
    * When true, {@link #hasValidRawCache} always reports a miss regardless of what's on disk —
    * forces a live fetch instead of reading a possibly-corrupted cached response (e.g. one
@@ -323,7 +321,6 @@ public class HttpSource implements DataSource {
     }
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
-    this.operatingDirectory = operatingDirectory;
     this.textualSourceKeys = textualSourceKeys(columns, config.getResponse().getRawFields());
     this.bypassRawCache = bypassRawCache;
   }
@@ -344,7 +341,6 @@ public class HttpSource implements DataSource {
     this.variableNormalizer = null;
     this.storageProvider = null;
     this.rawCachePath = null;
-    this.operatingDirectory = null;
     this.textualSourceKeys = Collections.emptySet();
     this.bypassRawCache = false;
   }
@@ -1694,18 +1690,6 @@ public class HttpSource implements DataSource {
     } finally {
       conn.disconnect();
     }
-  }
-
-  /**
-   * Performs the actual HTTP request.
-   *
-   * @param urlString Full URL to request
-   * @param variables Variable substitution map
-   * @param rawCachePath Optional path to write large files directly to cache (null to use temp files)
-   */
-  private String doRequest(String urlString, Map<String, String> variables,
-      String rawCachePath) throws IOException {
-    return doRequest(urlString, variables, rawCachePath, null);
   }
 
   private String doRequest(String urlString, Map<String, String> variables,
@@ -3189,6 +3173,8 @@ public class HttpSource implements DataSource {
    * @param delimiter The delimiter character (comma for CSV, tab for TSV)
    * @return Array of field values
    */
+  // Reached only through reflection, by the tests of this class.
+  @SuppressWarnings("UnusedMethod")
   private String[] parseDelimitedLine(String line, char delimiter) {
     return parseDelimitedLine(line, delimiter, true);
   }

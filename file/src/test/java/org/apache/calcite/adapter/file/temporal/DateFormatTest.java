@@ -132,9 +132,8 @@ public class DateFormatTest {
           Date dateValue = resultSet.getDate(2);
 
           // Calculate days since epoch from the date value
-          long millis = dateValue.getTime();
-          long millisPerDay = 24L * 60 * 60 * 1000;
-          int daysSinceEpoch = Math.toIntExact(Math.floorDiv(millis, millisPerDay));
+          // A java.sql.Date holds local midnight, so its calendar date is toLocalDate()
+          int daysSinceEpoch = Math.toIntExact(dateValue.toLocalDate().toEpochDay());
 
           System.out.println("ID " + id + ": " + dateValue + " = " + daysSinceEpoch + " days");
 

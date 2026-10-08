@@ -75,7 +75,7 @@ public class NcuaBranchLocationsTransformer implements StreamingResponseTransfor
           while (pending.isEmpty() && (record = CsvRecordReader.readRecord(reader)) != null) {
             if (!record.isEmpty()) {
               List<String> fields = CsvRecordReader.splitFields(record, ',');
-              pending.add(mapRow(headers, fields.toArray(new String[0]), cycle, url));
+              pending.add(mapRow(headers, fields.toArray(new String[0]), cycle));
             }
           }
         } catch (IOException e) {
@@ -106,7 +106,7 @@ public class NcuaBranchLocationsTransformer implements StreamingResponseTransfor
     };
   }
 
-  private Map<String, Object> mapRow(String[] headers, String[] values, String cycle, String url) {
+  private Map<String, Object> mapRow(String[] headers, String[] values, String cycle) {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     row.put("cycle", cycle);
     row.put("cu_number", longOrNull(col(headers, values, "CU_NUMBER")));

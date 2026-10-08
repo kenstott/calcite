@@ -44,7 +44,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -512,29 +511,5 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
       sb.append(items.get(i));
     }
     return sb.toString();
-  }
-
-  /**
-   * Wraps an InputStream to prevent DocumentBuilder.parse() from closing the
-   * underlying ZipInputStream when it finishes parsing a single entry.
-   */
-  private static final class NonClosingInputStream extends InputStream {
-    private final InputStream delegate;
-
-    NonClosingInputStream(InputStream delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override public int read() throws IOException {
-      return delegate.read();
-    }
-
-    @Override public int read(byte[] b, int off, int len) throws IOException {
-      return delegate.read(b, off, len);
-    }
-
-    @Override public void close() {
-      // intentionally do not close — caller owns the ZipInputStream lifecycle
-    }
   }
 }

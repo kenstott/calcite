@@ -36,7 +36,6 @@ import graphql.schema.GraphQLType;
  */
 public class GraphQLCalciteSchema extends AbstractSchema {
   final GraphQL graphQL;
-  private final SchemaPlus parentSchema;
   private final String name;
   private final String endpoint;
   @Nullable public final String role;
@@ -57,7 +56,6 @@ public class GraphQLCalciteSchema extends AbstractSchema {
       @Nullable Map<String, Object> cacheConfig, @Nullable Integer objectDepth,
       @Nullable Boolean pseudoKeys) {
     this.graphQL = graphQL;
-    this.parentSchema = parentSchema;
     this.name = name;
     this.endpoint = endpoint;
     this.role = role;

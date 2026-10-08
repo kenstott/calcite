@@ -48,7 +48,7 @@ import java.util.NoSuchElementException;
  *   <li>parquet - Parquet via DuckDB</li>
  * </ul>
  *
- * <h3>YAML Configuration</h3>
+ * <h2>YAML Configuration</h2>
  * <pre>{@code
  * source:
  *   type: file

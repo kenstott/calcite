@@ -39,7 +39,7 @@ import java.util.Map;
  * Data is first staged to a temporary JSON file, then DuckDB reads and writes
  * it to the final partitioned Parquet structure.
  *
- * <h3>Write Process</h3>
+ * <h2>Write Process</h2>
  * <ol>
  *   <li>Data is buffered to a temporary JSON file</li>
  *   <li>DuckDB reads the JSON and writes partitioned Parquet</li>

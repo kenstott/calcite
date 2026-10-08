@@ -3,20 +3,22 @@
 # SF_CONSUMER_KEY and SF_CONSUMER_SECRET repository secrets (OAuth client credentials flow).
 name: Salesforce CI
 
+# Temporarily manual-only: the push and pull_request triggers are off so that CI does not spend the
+# org's daily API allowance. Restore them from the commented block to bring the tests back.
 on:
-  push:
-    paths:
-      - "salesforce/**"
-      - "trino-salesforce/**"
-      - "trino-calcite-base/**"
-      - "pgwire-salesforce/**"
-      - ".github/workflows/salesforce-ci.yml"
-  pull_request:
-    paths:
-      - "salesforce/**"
-      - "trino-salesforce/**"
-      - "trino-calcite-base/**"
-      - "pgwire-salesforce/**"
+#  push:
+#    paths:
+#      - "salesforce/**"
+#      - "trino-salesforce/**"
+#      - "trino-calcite-base/**"
+#      - "pgwire-salesforce/**"
+#      - ".github/workflows/salesforce-ci.yml"
+#  pull_request:
+#    paths:
+#      - "salesforce/**"
+#      - "trino-salesforce/**"
+#      - "trino-calcite-base/**"
+#      - "pgwire-salesforce/**"
   workflow_dispatch:
 
 # One run at a time: the adapter's DML test writes to the shared org.

@@ -23,9 +23,6 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,7 +32,6 @@ import java.util.Map;
  * Table containing network resource information across cloud providers.
  */
 public class NetworkResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(NetworkResourcesTable.class);
   public NetworkResourcesTable(CloudOpsConfig config) {
     super(config);
   }

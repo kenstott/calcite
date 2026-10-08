@@ -189,7 +189,7 @@ class DuckDBFunctionMappingTest {
     SqlNode path = SqlLiteral.createCharString("$.path", SqlParserPos.ZERO);
     SqlCall call = SqlStdOperatorTable.JSON_VALUE.createCall(SqlParserPos.ZERO, doc, path);
 
-    SqlPrettyWriter writer = new SqlPrettyWriter(DuckDBSqlDialect.DEFAULT);
+    SqlPrettyWriter writer = new SqlPrettyWriter(SqlPrettyWriter.config().withDialect(DuckDBSqlDialect.DEFAULT));
     DuckDBFunctionMapping.unparseCall(writer, call, 0, 0);
 
     // DuckDB is case-insensitive for unquoted function names (same as the pre-existing
@@ -204,7 +204,7 @@ class DuckDBFunctionMappingTest {
     SqlCall call =
         SqlStdOperatorTable.JSON_VALUE.createCall(SqlParserPos.ZERO, doc, path, onError);
 
-    SqlPrettyWriter writer = new SqlPrettyWriter(DuckDBSqlDialect.DEFAULT);
+    SqlPrettyWriter writer = new SqlPrettyWriter(SqlPrettyWriter.config().withDialect(DuckDBSqlDialect.DEFAULT));
     DuckDBFunctionMapping.unparseCall(writer, call, 0, 0);
 
     // RETURNING/ON ERROR/ON EMPTY have no json_extract equivalent: the ANSI form is left

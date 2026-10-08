@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -115,9 +114,7 @@ public final class BertWordPieceTokenizer {
     }
 
     Map<String, Integer> vocab = new HashMap<>();
-    Iterator<Map.Entry<String, JsonNode>> fields = model.path("vocab").fields();
-    while (fields.hasNext()) {
-      Map.Entry<String, JsonNode> e = fields.next();
+    for (Map.Entry<String, JsonNode> e : model.path("vocab").properties()) {
       vocab.put(e.getKey(), e.getValue().asInt());
     }
     if (vocab.isEmpty()) {

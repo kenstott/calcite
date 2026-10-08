@@ -21,7 +21,7 @@ import java.util.Map;
  * and row number during row-by-row transformation. This allows transformers
  * to make context-aware decisions during transformation.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * public class MyRowTransformer implements RowTransformer {
  *     public Map<String, Object> transform(Map<String, Object> row, RowContext context) {

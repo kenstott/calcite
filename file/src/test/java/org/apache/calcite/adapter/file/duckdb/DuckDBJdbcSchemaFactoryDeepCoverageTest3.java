@@ -557,7 +557,8 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
 
   private static Method getRegisterSqlViewsMethod() throws Exception {
     Method m =
-        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInDuckDB", String.class, String.class, Map.class);
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInDuckDB",
+            Connection.class, String.class, String.class, Map.class);
     m.setAccessible(true);
     return m;
   }
@@ -565,7 +566,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
   private static void registerAndFlush(Method method, Connection conn, String schema,
       Map<String, Object> operand) throws Exception {
     String dbPath = "test3-db-" + System.nanoTime();
-    method.invoke(null, dbPath, schema, operand);
+    method.invoke(null, conn, dbPath, schema, operand);
     DuckDBPendingViews.buildAll(dbPath, conn);
   }
 
@@ -575,7 +576,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
     try {
       Method method = getRegisterSqlViewsMethod();
       // Should not throw - just returns early
-      method.invoke(null, "test3-null-" + System.nanoTime(), "main", null);
+      method.invoke(null, conn, "test3-null-" + System.nanoTime(), "main", null);
     } finally {
       conn.close();
     }

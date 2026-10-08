@@ -28,6 +28,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+import static java.util.Objects.requireNonNull;
+
 /**
  * Enumerable that reads from an Arrow file, either through Gandiva (when available — see
  * {@link GandivaAvailability}) or, as a fallback, by reading vectors directly and — when a
@@ -73,7 +75,7 @@ class ArrowEnumerable extends AbstractEnumerable<Object> {
         return new ArrowGandivaFilterEnumerator(arrowFileReader, fields, gandivaFilter);
       } else if (javaFilterConditions != null) {
         return new ArrowJavaFilterEnumerator(arrowFileReader, fields,
-            java.util.Objects.requireNonNull(javaFilterSchema, "javaFilterSchema"),
+            requireNonNull(javaFilterSchema, "javaFilterSchema"),
             javaFilterConditions);
       }
       // No projector, no filter, no conditions: Gandiva unavailable and no filter was pushed

@@ -35,6 +35,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
  * Live server test for Splunk adapter.
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkLiveServerTest {
 
 

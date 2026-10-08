@@ -32,6 +32,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -45,7 +46,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -202,8 +202,9 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
           }
         }
       } else if (Arrays.asList("http", "https", "ftp").contains(source.protocol())) {
-        //noinspection unchecked
-        jsonObj = selectedMapper.readValue(source.url(), Object.class);
+        try (InputStream in = source.url().openStream()) {
+          jsonObj = selectedMapper.readValue(in, Object.class);
+        }
       } else {
         jsonObj = selectedMapper.readValue(source.reader(), Object.class);
       }
@@ -280,7 +281,6 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
     int rowsToScan = Math.min(10, list.size());
 
     // First, collect all column names from the first row (or the jsonFieldMap for single objects)
-    Set<String> allColumns = new LinkedHashSet<>(jsonFieldMap.keySet());
 
     // Scan rows to find non-null values for type inference
     for (int i = 0; i < rowsToScan; i++) {
