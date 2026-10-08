@@ -43,6 +43,9 @@ public class CrawlerConfiguration {
   // where a link sits can. These apply before any link or table is read.
   private @Nullable String contentSelector; // CSS selector of the region read; null = the body
   private List<String> removeSelectors = new ArrayList<>(); // elements dropped from the page first
+  // What a followed link is, by what the link element itself carries (its classes and
+  // attributes), which a site's own markup states and a URL's wording only suggests.
+  private @Nullable String linkSelector; // CSS selector a link must match to be followed; null = any
   private List<Pattern> linkExcludePatterns = new ArrayList<>(); // a link any of these finds is not followed
   private String tableSelector = "table"; // CSS selector of the HTML tables that become tables
   private String userAgent = DEFAULT_USER_AGENT;
@@ -174,6 +177,10 @@ public class CrawlerConfiguration {
       config.setRemoveSelectors(strings(options.get("removeSelectors")));
     }
 
+    if (options.containsKey("linkSelector")) {
+      config.setLinkSelector(options.get("linkSelector").toString());
+    }
+
     if (options.containsKey("linkExcludePatterns")) {
       List<Pattern> patterns = new ArrayList<>();
       for (String pattern : strings(options.get("linkExcludePatterns"))) {
@@ -269,6 +276,14 @@ public class CrawlerConfiguration {
 
   public void setRemoveSelectors(List<String> removeSelectors) {
     this.removeSelectors = removeSelectors;
+  }
+
+  public @Nullable String getLinkSelector() {
+    return linkSelector;
+  }
+
+  public void setLinkSelector(@Nullable String linkSelector) {
+    this.linkSelector = linkSelector;
   }
 
   public List<Pattern> getLinkExcludePatterns() {

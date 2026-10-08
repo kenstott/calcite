@@ -153,8 +153,12 @@ def _consumer_factory(C):
         def apply(self, arrow_type, column_index, nullable, vector, config):
             if str(arrow_type.getTypeID()) in _BINARY_TYPE_IDS:
                 return _BytesConsumer(int(column_index), vector)
+            # Every column is read as nullable, whatever the adapter declares. ``nullable`` is
+            # the adapter's claim about the column, and arrow-jdbc's consumer for a column
+            # claimed NOT NULL does not check for null: one null value in such a column
+            # (seen on cloudops) threw NullPointerException and ended the connection.
             return C["JdbcToArrowUtils"].getConsumer(
-                arrow_type, column_index, nullable, vector, config
+                arrow_type, column_index, True, vector, config
             )
 
     _FACTORY_CACHE = _Factory()

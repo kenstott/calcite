@@ -65,10 +65,13 @@ public class HtmlCrawlStageTest {
       + "<nav><a href='/wiki/Main_Page'>Main page</a>"
       + "<a href='/wiki/Special:Random'>Random</a></nav>"
       + "<div id='mw-content-text'><div class='mw-parser-output'>"
-      + "<p>See <a href='/wiki/Linked_Article'>the linked article</a>, "
-      + "<a href='/wiki/Linked_Article#History'>its history</a>, "
-      + "<a href='/wiki/File:Chart.png'>a chart</a>, "
-      + "<a href='/wiki/Start#Notes'>a note</a> and "
+      + "<p>See <a rel='mw:WikiLink' href='/wiki/Linked_Article'>the linked article</a>, "
+      + "<a rel='mw:WikiLink' href='/wiki/Linked_Article#History'>its history</a>, "
+      + "<a class='mw-file-description' href='/wiki/Datei:Chart.png'>a chart</a>, "
+      + "<a rel='mw:WikiLink' class='new' href='/wiki/Unwritten_Page'>a page not written</a>, "
+      + "<a rel='mw:WikiLink/Interwiki' class='extiw' href='/wiki/Other_Wiki'>another wiki</a>, "
+      + "<a rel='mw:WikiLink' class='mw-selflink' href='/wiki/Start'>this page</a>, "
+      + "<a rel='mw:WikiLink' href='/wiki/Start#Notes'>a note</a> and "
       + "<a href='/data/figures.csv?download=1'>the figures</a>.</p>"
       + "<table class='wikitable'><caption>Population by region</caption>"
       + "<tr><th rowspan='2'>Region</th><th colspan='2'>Population</th></tr>"
@@ -88,7 +91,7 @@ public class HtmlCrawlStageTest {
   private static final String LINKED = "<html><body>"
       + "<div id='mw-content-text'><div class='mw-parser-output'>"
       + "<div class='mw-heading'><h2>Results</h2></div>"
-      + "<p>Text with <a href='/wiki/Second_Level'>a further link</a>.</p>"
+      + "<p>Text with <a rel='mw:WikiLink' href='/wiki/Second_Level'>a further link</a>.</p>"
       + "<table class='wikitable'><tr><th>Team</th><th>Points</th></tr>"
       + "<tr><td>Reds</td><td>3</td></tr><tr><td>Blues</td><td>1</td></tr></table>"
       + "</div></div></body></html>";
@@ -137,7 +140,9 @@ public class HtmlCrawlStageTest {
     crawl.put("requestDelay", "0 seconds");
     crawl.put("contentSelector", "#mw-content-text .mw-parser-output");
     crawl.put("removeSelectors", Arrays.asList(".navbox", ".reflist", "sup.reference"));
-    crawl.put("linkExcludePatterns", Arrays.asList("/wiki/[A-Za-z_]+:", "[?&]action="));
+    // By what the link element carries, never by a name in its address: the file page here
+    // has a name no list of names would hold.
+    crawl.put("linkSelector", "a[rel='mw:WikiLink']:not(.new):not(.mw-selflink)");
     crawl.put("tableSelector", "table.wikitable");
     crawl.put("userAgent", "ExampleBot/1.0 (ops@example.test)");
     return crawl;
@@ -157,8 +162,9 @@ public class HtmlCrawlStageTest {
   @Test void onlyLinksInTheContentAreFollowedAndWhatThePagesHoldLandsAsFiles() throws Exception {
     HtmlCrawlStage.run("wiki", crawl(), directory.getPath(), "local", "SMART_CASING");
 
-    // Navigation, the footer, the navigation box, the reference list and the File: page are
-    // never requested; a link to a place on a page is that page, once.
+    // Navigation, the footer, the navigation box, the reference list, the file page, the page
+    // not written and the other wiki are never requested; a link to a place on a page is that
+    // page, once.
     assertEquals(
         new TreeSet<>(Arrays.asList("/wiki/Start", "/wiki/Linked_Article", "/data/figures.csv")),
         new TreeSet<>(requested));
@@ -185,6 +191,14 @@ public class HtmlCrawlStageTest {
     assertEquals("id,amount\n1,5\n2,7\n",
         new String(Files.readAllBytes(new File(directory, "figures.csv").toPath()),
             StandardCharsets.UTF_8));
+  }
+
+  @Test void aLinkAnExclusionPatternFindsIsNotFollowed() throws Exception {
+    Map<String, Object> crawl = crawl();
+    crawl.put("linkExcludePatterns", Collections.singletonList("/wiki/Linked_"));
+    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING");
+    assertEquals(new TreeSet<>(Arrays.asList("/wiki/Start", "/data/figures.csv")),
+        new TreeSet<>(requested));
   }
 
   @Test void aCrawlWithinItsCacheLifetimeRequestsNothingAndAChangedOperandCrawlsAgain()

@@ -170,6 +170,10 @@ public class HtmlLinkCache {
       String page = withoutFragment(baseUrl);
 
       for (Element link : linkElements) {
+        // A page link is followed for what the element is, when the crawl says what that is.
+        if (config.getLinkSelector() != null && !link.is(config.getLinkSelector())) {
+          continue;
+        }
         String href = link.attr("abs:href");
         if (href.isEmpty()) {
           href = resolveUrl(baseUrl, link.attr("href"));

@@ -255,7 +255,8 @@ public class FileConfig
     @ConfigDescription("A crawl whose HTML tables and linked data files land in the glob's local "
             + "directory before it is scanned, as a JSON object of the file adapter's crawl "
             + "operand: startUrls, maxDepth, maxPages, contentSelector, removeSelectors, "
-            + "linkExcludePatterns, tableSelector, userAgent, requestDelay, htmlCacheTTL.")
+            + "linkSelector, linkExcludePatterns, tableSelector, userAgent, requestDelay, "
+            + "htmlCacheTTL.")
     public FileConfig setCrawl(String crawl)
     {
         this.crawl = crawl;
