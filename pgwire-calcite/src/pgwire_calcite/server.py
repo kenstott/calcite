@@ -52,6 +52,7 @@ from buenavista.postgres import (
     BuenaVistaHandler,
     BuenaVistaServer,
     ServerResponse,
+    TYPE_OIDS,
 )
 
 from pgwire_calcite.auth import is_personal_access_token
@@ -217,6 +218,52 @@ def _substitute_params(sql: str, params: list | None) -> str:
     for i in range(len(params), 0, -1):
         result = result.replace(f"${i}", _pg_literal(params[i - 1]))
     return result
+
+
+def _example_sql(sql: str, param_oids: list) -> str:
+    """``sql`` with an example value of each parameter's type in place of its ``$N``: what a
+    statement is described with, since describing it cannot wait for the values."""
+    examples = []
+    for oid in param_oids:
+        described = TYPE_OIDS.get(oid)
+        if described is None:
+            raise ValueError(f"Unsupported parameter type: {oid}")
+        examples.append(described[2])
+    return _substitute_params(sql, examples)
+
+
+#: The PG type a parameter is reported as, by the SQL type the engine gives it. A type absent
+#: here has no parameter codec in this server and is refused by name.
+_PARAMETER_OID = {
+    "CHAR": 25,
+    "VARCHAR": 25,
+    "BOOLEAN": 16,
+    "TINYINT": 21,
+    "SMALLINT": 21,
+    "INTEGER": 23,
+    "BIGINT": 20,
+    "REAL": 700,
+    "FLOAT": 701,
+    "DOUBLE": 701,
+    "DECIMAL": 1700,
+    "DATE": 1082,
+    "TIMESTAMP": 1114,
+    "TIMESTAMP_WITH_LOCAL_TIME_ZONE": 1184,
+    "BINARY": 17,
+    "VARBINARY": 17,
+}
+
+
+def _parameter_oid(sql_type: str) -> int:
+    """The PG type OID of a parameter the engine types as ``sql_type``."""
+    name = sql_type.upper().split("(")[0].strip().replace(" ", "_")
+    if name not in _PARAMETER_OID:
+        from pgwire_calcite.backend import PgProtocolError
+
+        raise PgProtocolError(
+            "0A000", f"a parameter of type {sql_type} is not supported: give it a cast this server reads"
+        )
+    return _PARAMETER_OID[name]
 
 
 def _tag_from_sql(sql: str) -> str:
@@ -818,6 +865,68 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             column_types=types[:-1] if types else None,
         )
 
+    def parameter_oids(self, sql: str, cast_map: dict, count: int) -> list:
+        """The PG type of each of ``sql``'s ``count`` parameters: its inline cast where it has
+        one, else the type the engine gives it from what the statement does with it.
+
+        A parameter was reported as int8 whenever it had no cast, so a text parameter compared
+        with a text column could not be sent, and describing the statement ran it with a number
+        in the parameter's place. A statement the engine does not type (a catalog or session
+        statement it never sees, or a parameter it cannot place, as in ``SELECT $1``) keeps
+        int8 for the parameters with no cast: nothing says what else they are.
+        """
+        if all(i in cast_map for i in range(1, count + 1)):
+            return [cast_map[i] for i in range(1, count + 1)]
+        engine_types = self._engine_parameter_types(sql)
+        oids = []
+        for i in range(1, count + 1):
+            if i in cast_map:
+                oids.append(cast_map[i])
+            elif engine_types is not None and engine_types[i - 1] is not None:
+                oids.append(_parameter_oid(engine_types[i - 1]))
+            else:
+                oids.append(20)
+        return oids
+
+    def _engine_parameter_types(self, sql: str) -> "list | None":
+        """What the engine types ``sql``'s parameters as, or None for a statement it is not
+        asked about or cannot type."""
+        import pgwire_calcite.server as _m
+
+        _state = _m.state
+        stripped = sql.strip()
+        if _state is None or _TXN_TAG_RE.match(stripped) or _dml_statement_kind(stripped):
+            return None
+        if getattr(_state, "catalog_enabled", False):
+            from pgwire_calcite import info_schema
+            from pgwire_calcite.catalog import classify
+
+            if classify(stripped) == "INTERCEPT" or info_schema.references(stripped):
+                return None
+        ask = getattr(_state.backend, "parameter_types", None)
+        if ask is None:  # a backend with no engine behind it (the stub)
+            return None
+        # Casts are removed for the question: the engine types `$1::text` as it reads it, and
+        # the cast already says what the parameter is.
+        question = re.sub(r"(\$\d+)::\w+", r"\1", stripped)
+        try:
+            return ask(
+                question,
+                session_key=self.key,
+                timeout_ms=self.statement_timeout_ms,
+                lane=self._lane(),
+                client_gone=self.client_gone,
+            )
+        except Exception as exc:
+            from pgwire_calcite.backend import PgProtocolError
+
+            if isinstance(exc, PgProtocolError):
+                raise
+            # The engine could not prepare the statement with its parameters open. Running
+            # it will say why, with the values in place; until then nothing types them.
+            log.info("[PGWIRE] the engine did not type the parameters of %r: %s", stripped[:200], exc)
+            return None
+
     def describe_returning(self, pg_sql: str) -> "CalciteQueryResult | None":
         """The columns of a DML statement's RETURNING clause, without running the write: a
         zero-row SELECT of the same expressions. None when the statement has no RETURNING."""
@@ -1385,14 +1494,18 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 if stored_oids:
                     param_oids = stored_oids
                 elif indices:
-                    # No Parse-declared OIDs: derive each $N's type from an inline
-                    # cast (`$1::text`). Unmatched placeholders default to int8 --
-                    # OID 0 (unspecified) makes psycopg/asyncpg re-describe forever.
+                    # No Parse-declared OIDs: each $N's type is its inline cast (`$1::text`),
+                    # else the type the engine gives it from the statement. OID 0
+                    # (unspecified) makes psycopg/asyncpg re-describe forever.
                     cast_map = {
                         int(m): _CAST_OID.get(t.lower(), 25)
                         for m, t in re.findall(r"\$(\d+)::(\w+)", sql)
                     }
-                    param_oids = [cast_map.get(i, 20) for i in range(1, max(indices) + 1)]
+                    try:
+                        param_oids = ctx.session.parameter_oids(sql, cast_map, max(indices))
+                    except Exception as e:
+                        self.send_error(e, ctx)
+                        return
                 else:
                     param_oids = []
             # Store the resolved OIDs so describe_statement substitutes typed example

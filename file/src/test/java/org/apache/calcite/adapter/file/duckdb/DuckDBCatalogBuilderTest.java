@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.duckdb;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -36,6 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the method body (lines 70-184).
  */
 @SuppressWarnings("deprecation")
+// Sets duckdb.catalog.path, which is the JVM's and which every DuckDB schema test reads:
+// it runs with no other test class beside it.
+@Isolated
 @Tag("unit")
 public class DuckDBCatalogBuilderTest {
 
