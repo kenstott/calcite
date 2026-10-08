@@ -9,7 +9,7 @@ accounts. One command runs both; which live tests run depends on whether credent
 
 ## What `:cloud-ops:test` runs
 
-Tests are JUnit 5 classes selected by `@Tag`. `cloud-ops/build.gradle` configures the default task
+Tests are JUnit 5 classes selected by `@Tag`. `cloud-ops/build.gradle.kts` configures the default task
 as follows:
 
 | Tag | Runs in `:cloud-ops:test` |
