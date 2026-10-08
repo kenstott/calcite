@@ -73,6 +73,114 @@ def claim_listen_socket(host: str, port: int) -> socket.socket | None:
         return None
 
 
+#: PostgreSQL's SSLRequest, GSSENCRequest and CancelRequest codes, and protocol 3.0.
+_SSL_REQUEST = 80877103
+_GSSENC_REQUEST = 80877104
+_CANCEL_REQUEST = 80877102
+_PROTOCOL_3 = 196608
+#: Longest startup packet PostgreSQL itself accepts.
+_MAX_STARTUP_PACKET = 10000
+
+
+class StartupResponder:
+    """Answers clients that connect while the backend is still being built.
+
+    The listening socket is claimed before the backend exists (``claim_listen_socket``)
+    and the backend can take minutes to build, so for that whole time the port accepted
+    connections that nothing answered: a client could not tell a server that was starting
+    from one that was wedged, and waited out its own timeout to learn nothing. With the
+    responder running (--reject-while-starting), each connection gets what PostgreSQL
+    sends in the same state -- a FATAL ErrorResponse with SQLSTATE 57P03, "the database
+    system is starting up" -- and is closed. It is opt-in because a client that connects
+    once and waits for the server to come up depends on the connection being held.
+
+    ``stop()`` must be called before the real server adopts the socket; connections that
+    arrive after it wait in the listen backlog for the real server.
+    """
+
+    MESSAGE = "the database system is starting up"
+    _POLL_S = 0.1
+    _CLIENT_TIMEOUT_S = 5.0
+
+    def __init__(self, sock: socket.socket) -> None:
+        self._sock = sock
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="pgwire-startup-responder", daemon=True
+        )
+        self.answered = 0
+
+    def start(self) -> "StartupResponder":
+        self._thread.start()
+        return self
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join()
+
+    def _run(self) -> None:
+        # A timed accept, so stop() is noticed; the socket goes back to blocking before
+        # the real server adopts it.
+        self._sock.settimeout(self._POLL_S)
+        try:
+            while not self._stop.is_set():
+                try:
+                    client, _ = self._sock.accept()
+                except socket.timeout:
+                    continue
+                threading.Thread(
+                    target=self._answer,
+                    args=(client,),
+                    name="pgwire-startup-answer",
+                    daemon=True,
+                ).start()
+        finally:
+            self._sock.settimeout(None)
+
+    @staticmethod
+    def _read(client: socket.socket, n: int) -> bytes:
+        buf = b""
+        while len(buf) < n:
+            chunk = client.recv(n - len(buf))
+            if not chunk:
+                raise ConnectionError("client closed the connection during startup")
+            buf += chunk
+        return buf
+
+    def _answer(self, client: socket.socket) -> None:
+        import struct
+
+        try:
+            client.settimeout(self._CLIENT_TIMEOUT_S)
+            length, code = struct.unpack("!II", self._read(client, 8))
+            if code in (_SSL_REQUEST, _GSSENC_REQUEST):
+                client.sendall(b"N")  # no encryption for a message that carries no data
+                length, code = struct.unpack("!II", self._read(client, 8))
+            if code != _PROTOCOL_3:
+                # A CancelRequest has nothing to cancel yet and gets no reply by protocol;
+                # anything else is not a PostgreSQL client.
+                return
+            if 8 <= length <= _MAX_STARTUP_PACKET:
+                self._read(client, length - 8)
+            body = b"".join(
+                field + value.encode("utf-8") + b"\x00"
+                for field, value in (
+                    (b"S", "FATAL"),
+                    (b"V", "FATAL"),
+                    (b"C", "57P03"),
+                    (b"M", self.MESSAGE),
+                )
+            ) + b"\x00"
+            client.sendall(b"E" + struct.pack("!i", len(body) + 4) + body)
+            self.answered += 1
+        except OSError as exc:
+            # The client hung up or sent nothing: there is nobody to answer.
+            log.debug("[PGWIRE] startup-time connection ended early: %s", exc)
+        finally:
+            client.close()
+
+
 def build_state(
     backend=None,
     auth: str = "none",
@@ -128,6 +236,8 @@ def serve(
     statement_timeout_ms: int = 0,
     allow_writes: bool = False,
     sock: socket.socket | None = None,
+    startup_responder: "StartupResponder | None" = None,
+    idle_shutdown_seconds: float | None = None,
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking).
 
@@ -198,7 +308,18 @@ def serve(
             "mTLS client CA is configured but no --tls-cert/--tls-key (or certfile/keyfile) "
             "was given; a server certificate is required to negotiate TLS at all"
         )
-    srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx, mtls_auth=mtls_auth, sock=sock)
+    # The catalog is installed and the server can answer: hand the socket over. Whoever
+    # connects from here on is served, not told the server is starting.
+    if startup_responder is not None:
+        startup_responder.stop()
+    srv = server_mod.start_pgwire_server(
+        host,
+        port,
+        ssl_ctx=ssl_ctx,
+        mtls_auth=mtls_auth,
+        sock=sock,
+        idle_shutdown_seconds=idle_shutdown_seconds,
+    )
     return srv
 
 
@@ -234,6 +355,8 @@ def watch_owner(owner_pid: int, stop: threading.Event) -> threading.Thread:
 
 SHUTDOWN_BUDGET_SECONDS = 10.0
 EXIT_SHUTDOWN_STUCK = 3
+#: PostgreSQL's wording for a session ended by a server shutdown (SQLSTATE 57P01).
+SHUTDOWN_REASON = "terminating connection due to administrator command"
 
 
 def close_server(srv, budget: float = SHUTDOWN_BUDGET_SECONDS, exit_fn=os._exit) -> None:
@@ -249,6 +372,12 @@ def close_server(srv, budget: float = SHUTDOWN_BUDGET_SECONDS, exit_fn=os._exit)
 
     def _close() -> None:
         srv.shutdown()
+        # Stop accepting first, then end the sessions that are connected: an idle client
+        # holds its request thread in a read with no timeout, so without this every
+        # shutdown with a client connected ran out the budget and was forced.
+        terminate = getattr(srv, "terminate_sessions", None)
+        if terminate is not None:
+            terminate(SHUTDOWN_REASON)
         srv.server_close()
         done.set()
 
@@ -284,7 +413,35 @@ def install_shutdown_handler(stop: threading.Event) -> None:
     signal.signal(signal.SIGINT, _handle)
 
 
-def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcite_child: str | None = None, extensions=None):
+EXIT_STARTUP_FAILED = 1
+
+
+def exit_startup_failed(stage: str, host: str, port: int) -> None:
+    """Log the exception being handled and end the process at once.
+
+    Called for a failure after the listening socket was claimed. A plain exception is
+    not enough there: the embedded JVM's own non-daemon threads (the S3 SDK's
+    connection-pool threads in particular) keep the process alive past it, and a process
+    that is alive still holds the port -- accepting connections it will never answer,
+    and making every later start lose the bind. ``os._exit`` ends the process and closes
+    its descriptors whatever the JVM's threads are doing.
+    """
+    log.exception(
+        "[PGWIRE] startup failed while %s; exiting with status %d so %s:%d is released",
+        stage, EXIT_STARTUP_FAILED, host, port,
+    )
+    logging.shutdown()
+    os._exit(EXIT_STARTUP_FAILED)
+
+
+def build_backend(
+    kind: str,
+    model: str | None,
+    jdbc: dict | None = None,
+    calcite_child: str | None = None,
+    extensions=None,
+    jvm_args: list | None = None,
+):
     """Construct the execution backend.
 
     - 'stub'    (Phase 0) fixed responses;
@@ -307,6 +464,7 @@ def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcit
             default_schema=jdbc.get("schema"),
             extra_props=jdbc.get("extra_props") or {},
             extensions=extensions,
+            jvm_args=list(jvm_args or []),
         )
     if kind == "bridge":
         from pgwire_calcite.sidecar import BridgeBackend
@@ -408,6 +566,44 @@ def main(argv: list | None = None) -> int:
         "take to return before the server logs a Java thread dump and exits with "
         "status 3 so a fresh server replaces it; 0 = wait forever.",
     )
+    parser.add_argument(
+        "--idle-holder-grace-ms",
+        type=int,
+        default=30000,
+        help="how long a statement waits behind a session that holds the query engine "
+        "without using it (its client stopped reading a result, or holds a cursor it does "
+        "not fetch from) before that session's connection is closed; 0 = never.",
+    )
+    parser.add_argument(
+        "--reject-while-starting",
+        action="store_true",
+        help="answer a client that connects before the server can serve with FATAL 57P03 "
+        "('the database system is starting up') at once, as PostgreSQL does. Without it "
+        "such a connection waits until the server is up. For a client that polls for "
+        "readiness and must tell a server that is starting from one that is stuck.",
+    )
+    parser.add_argument(
+        "--idle-shutdown-seconds",
+        type=float,
+        default=None,
+        help="exit once the server has had no client connection for this long; unset or "
+        "0 = serve until stopped (env PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS when unset). "
+        "For a server a client starts on demand and shares.",
+    )
+    parser.add_argument(
+        "--jvm-arg",
+        action="append",
+        default=[],
+        metavar="ARG",
+        help="argument for the embedded Calcite JVM (repeatable), e.g. --jvm-arg=-Xmx4g or "
+        "--jvm-arg=-Dname=value (--backend calcite).",
+    )
+    parser.add_argument(
+        "--pid-file",
+        default=None,
+        help="write the pid of the process that holds the listening port to this file "
+        "once the port is claimed; removed on a clean shutdown.",
+    )
     parser.add_argument("--tls-cert", default=None)
     parser.add_argument("--tls-key", default=None)
     parser.add_argument(
@@ -471,13 +667,30 @@ def main(argv: list | None = None) -> int:
             args.host, args.port,
         )
         return 1
+    if args.pid_file:
+        with open(args.pid_file, "w", encoding="utf-8") as fh:
+            fh.write(str(os.getpid()))
+    # Opt-in (--reject-while-starting): from here until the server can answer, tell every
+    # client that connects that it is starting (SQLSTATE 57P03). Without it a connection
+    # made during start-up waits in the listen backlog and is served once the server is
+    # up, which is what a client that connects once and waits relies on.
+    responder = StartupResponder(listen_sock).start() if args.reject_while_starting else None
 
     from pgwire_calcite.extensions import resolve as _resolve_ext
 
     enabled_ext = _resolve_ext(args.extension)
-    backend = build_backend(
-        args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child, extensions=enabled_ext
-    )
+    try:
+        backend = build_backend(
+            args.backend,
+            args.model,
+            jdbc=jdbc,
+            calcite_child=args.calcite_child,
+            extensions=enabled_ext,
+            jvm_args=args.jvm_arg,
+        )
+    except Exception:
+        exit_startup_failed("building the backend", args.host, args.port)
+        raise  # only reached when exit_startup_failed is replaced (tests)
     auth_provider = None
     if args.auth in ("trust", "local", "scram"):
         from pgwire_calcite.auth import AccountStore, LocalAccountsProvider, TrustProvider
@@ -500,6 +713,7 @@ def main(argv: list | None = None) -> int:
             args.max_unfiltered_scan_rows, load_coverage(args.table_coverage_file)
         )
     CancelScope.max_queue_wait_ms = max(0, args.max_queue_wait_ms)
+    CancelScope.idle_holder_grace_ms = max(0, args.idle_holder_grace_ms)
     InFlightStatement.cancel_grace_ms = max(0, args.cancel_grace_ms)
     try:
         srv = serve(
@@ -518,24 +732,14 @@ def main(argv: list | None = None) -> int:
             statement_timeout_ms=args.statement_timeout_ms,
             allow_writes=args.allow_writes,
             sock=listen_sock,
+            startup_responder=responder,
+            idle_shutdown_seconds=args.idle_shutdown_seconds,
         )
-    except OSError:
-        # No bind can fail here anymore — claim_listen_socket() already holds the real
-        # listening socket, and CalciteServer adopts it rather than rebinding (see its
-        # __init__). This is a last-resort safety net for a genuinely unexpected failure,
-        # not the normal bind-race path anymore. Kept anyway because the old failure mode
-        # (a Python-level exception left the process alive forever, held open by an
-        # embedded JVM's own non-daemon threads — the S3 SDK's connection-pool threads in
-        # particular) was exactly the port-exhaustion bug this whole change exists to fix:
-        # os._exit() guarantees the process actually dies and its fds actually close,
-        # regardless of what native JVM threads are doing, rather than trusting a plain
-        # exception to be enough.
-        log.error(
-            "[PGWIRE] unexpected failure starting the server on %s:%d after the listen "
-            "socket was already claimed — forcing immediate exit rather than lingering.",
-            args.host, args.port,
-        )
-        os._exit(1)
+    except Exception:
+        # Any failure here, not only an OSError: the catalog walk, a bad certificate, an
+        # mTLS misconfiguration. See exit_startup_failed for why this must be a hard exit.
+        exit_startup_failed("starting the server", args.host, args.port)
+        raise  # only reached when exit_startup_failed is replaced (tests)
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
         args.backend,
@@ -557,6 +761,8 @@ def main(argv: list | None = None) -> int:
         stop.set()
     log.info("shutting down")
     close_server(srv)
+    if args.pid_file and os.path.exists(args.pid_file):
+        os.remove(args.pid_file)
     return 0
 
 
