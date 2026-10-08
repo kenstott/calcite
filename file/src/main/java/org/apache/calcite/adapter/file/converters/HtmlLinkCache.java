@@ -52,6 +52,7 @@ public class HtmlLinkCache {
     private final Set<String> dataFileLinks;
     private final Set<String> htmlLinks;
     private final List<TableInfo> tables;
+    private final @Nullable Element content;
     private final String contentHash;
     private final Instant extractedAt;
     private final @Nullable String etag;
@@ -63,6 +64,7 @@ public class HtmlLinkCache {
         this.dataFileLinks = new java.util.HashSet<>();
         this.htmlLinks = new java.util.HashSet<>();
         this.tables = new java.util.ArrayList<>();
+        this.content = null;
         this.contentHash = "";
         this.extractedAt = Instant.now();
         this.etag = null;
@@ -71,8 +73,10 @@ public class HtmlLinkCache {
       }
 
       Document doc = Jsoup.parse(htmlContent, url);
-      this.dataFileLinks = extractDataLinks(doc, url, config);
-      this.htmlLinks = extractHtmlLinks(doc, url, config);
+      Element region = contentOf(doc, config);
+      this.content = region;
+      this.dataFileLinks = extractDataLinks(region, url, config);
+      this.htmlLinks = extractHtmlLinks(region, url, config);
 
       // Only extract HTML tables if configured to do so
       if (config.isGenerateTablesFromHtml()) {
@@ -93,11 +97,12 @@ public class HtmlLinkCache {
     }
 
     private ExtractedLinks(Set<String> dataFileLinks, Set<String> htmlLinks,
-                          List<TableInfo> tables, String contentHash,
+                          List<TableInfo> tables, @Nullable Element content, String contentHash,
                           @Nullable String etag, @Nullable String lastModified) {
       this.dataFileLinks = dataFileLinks;
       this.htmlLinks = htmlLinks;
       this.tables = tables;
+      this.content = content;
       this.contentHash = contentHash;
       this.extractedAt = Instant.now();
       this.etag = etag;
@@ -105,11 +110,40 @@ public class HtmlLinkCache {
     }
 
     public ExtractedLinks withHttpMetadata(@Nullable String etag, @Nullable String lastModified) {
-      return new ExtractedLinks(dataFileLinks, htmlLinks, tables, contentHash, etag, lastModified);
+      return new ExtractedLinks(dataFileLinks, htmlLinks, tables, content, contentHash, etag,
+          lastModified);
     }
 
-    private static Set<String> extractDataLinks(Document doc, String baseUrl, CrawlerConfiguration config) {
-      Set<String> links = new HashSet<>();
+    /**
+     * The part of the page that is read: the page with the configured elements dropped, cut to
+     * the configured region. A page that has no such region has nothing to read.
+     */
+    private static @Nullable Element contentOf(Document doc, CrawlerConfiguration config) {
+      for (String selector : config.getRemoveSelectors()) {
+        doc.select(selector).remove();
+      }
+      if (config.getContentSelector() == null) {
+        return doc.body();
+      }
+      return doc.selectFirst(config.getContentSelector());
+    }
+
+    /** The region of the page that was read, or null when the page had none. */
+    public @Nullable Element getContent() {
+      return content;
+    }
+
+    /** {@code url} without its fragment: a fragment names a place on a page, not another page. */
+    private static String withoutFragment(String url) {
+      int hash = url.indexOf('#');
+      return hash < 0 ? url : url.substring(0, hash);
+    }
+
+    private static Set<String> extractDataLinks(@Nullable Element doc, String baseUrl, CrawlerConfiguration config) {
+      Set<String> links = new java.util.LinkedHashSet<>();
+      if (doc == null) {
+        return links;
+      }
       Elements linkElements = doc.select("a[href]");
 
       for (Element link : linkElements) {
@@ -117,6 +151,7 @@ public class HtmlLinkCache {
         if (href.isEmpty()) {
           href = resolveUrl(baseUrl, link.attr("href"));
         }
+        href = withoutFragment(href);
 
         if (isDataFile(href, config)) {
           links.add(href);
@@ -126,17 +161,23 @@ public class HtmlLinkCache {
       return links;
     }
 
-    private static Set<String> extractHtmlLinks(Document doc, String baseUrl, CrawlerConfiguration config) {
-      Set<String> links = new HashSet<>();
+    private static Set<String> extractHtmlLinks(@Nullable Element doc, String baseUrl, CrawlerConfiguration config) {
+      Set<String> links = new java.util.LinkedHashSet<>();
+      if (doc == null) {
+        return links;
+      }
       Elements linkElements = doc.select("a[href]");
+      String page = withoutFragment(baseUrl);
 
       for (Element link : linkElements) {
         String href = link.attr("abs:href");
         if (href.isEmpty()) {
           href = resolveUrl(baseUrl, link.attr("href"));
         }
+        href = withoutFragment(href);
 
-        if (isHtmlLink(href, baseUrl, config)) {
+        // A link to a place on this page is not another page.
+        if (!href.equals(page) && isHtmlLink(href, baseUrl, config)) {
           links.add(href);
         }
       }
@@ -145,7 +186,7 @@ public class HtmlLinkCache {
     }
 
     private static boolean isDataFile(String url, CrawlerConfiguration config) {
-      if (url == null || url.isEmpty()) {
+      if (url == null || url.isEmpty() || config.isLinkExcluded(url)) {
         return false;
       }
 
@@ -169,7 +210,9 @@ public class HtmlLinkCache {
       }
 
       // Fall back to file extension check if no pattern is configured
-      String lowerUrl = url.toLowerCase();
+      // The extension is the path's: a query string after it is not part of the name.
+      int query = url.indexOf('?');
+      String lowerUrl = (query < 0 ? url : url.substring(0, query)).toLowerCase();
       for (String ext : config.getAllowedFileExtensions()) {
         if (lowerUrl.endsWith("." + ext)) {
           return true;
@@ -194,8 +237,7 @@ public class HtmlLinkCache {
         return false;
       }
 
-      // Skip anchors and javascript
-      if (url.contains("#") || url.startsWith("javascript:")) {
+      if (config.isLinkExcluded(url)) {
         return false;
       }
 
@@ -358,6 +400,13 @@ public class HtmlLinkCache {
   }
 
   /**
+   * What was last read of {@code url}, without a request, or null when it has not been read.
+   */
+  public @Nullable ExtractedLinks peek(String url) {
+    return cache.get(url);
+  }
+
+  /**
    * Clears the cache.
    */
   public void clear() {
@@ -379,6 +428,7 @@ public class HtmlLinkCache {
       if (connection instanceof HttpURLConnection) {
         HttpURLConnection conn = (HttpURLConnection) connection;
         conn.setRequestMethod("HEAD");
+        conn.setRequestProperty("User-Agent", config.getUserAgent());
         conn.setConnectTimeout(5000);
         conn.setReadTimeout(5000);
         conn.connect();
@@ -417,6 +467,7 @@ public class HtmlLinkCache {
 
     try {
       URLConnection connection = new URI(url).toURL().openConnection();
+      connection.setRequestProperty("User-Agent", config.getUserAgent());
       connection.setConnectTimeout(10000);
       connection.setReadTimeout(10000);
 
