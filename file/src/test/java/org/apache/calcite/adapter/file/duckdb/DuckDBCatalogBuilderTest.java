@@ -13,6 +13,9 @@ package org.apache.calcite.adapter.file.duckdb;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -36,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the method body (lines 70-184).
  */
 @SuppressWarnings("deprecation")
+// Sets duckdb.catalog.path, which is the JVM's: classes run concurrently, so it is held alone.
+@ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ_WRITE)
 @Tag("unit")
 public class DuckDBCatalogBuilderTest {
 

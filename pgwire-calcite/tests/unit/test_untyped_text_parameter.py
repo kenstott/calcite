@@ -99,3 +99,27 @@ def test_the_example_statement_of_a_describe_carries_a_value_of_each_parameters_
     assert (_parameter_oid("VARCHAR(20)"), _parameter_oid("INTEGER"), _parameter_oid("DOUBLE")) == (25, 23, 701)
     with pytest.raises(Exception, match="not supported"):
         _parameter_oid("GEOMETRY")
+
+
+def test_a_statement_after_a_row_limited_one_reads_its_own_rows(server):
+    """A read that stops at a row limit leaves its portal suspended on the result. The next
+    statement bound to the same portal was handed that leftover result -- so every second
+    single-row read (asyncpg's fetchrow/fetchval) came back empty."""
+    asyncpg = pytest.importorskip("asyncpg")
+    import asyncio
+
+    async def run():
+        conn = await asyncpg.connect(host="127.0.0.1", port=server, user="tester", database="postgres")
+        try:
+            by_name = 'SELECT "deptno" FROM "SALES"."depts" WHERE "dname" = $1'
+            return [
+                await conn.fetchval(by_name, "RESEARCH"),
+                await conn.fetchval(by_name, "ACCOUNTING"),
+                await conn.fetchval('SELECT "dname" FROM "SALES"."depts" WHERE "deptno" = $1', 20),
+                tuple(await conn.fetchrow('SELECT "deptno", "dname" FROM "SALES"."depts" WHERE "deptno" = 10')),
+                len(await conn.fetch('SELECT "deptno" FROM "SALES"."depts"')),
+            ]
+        finally:
+            await conn.close()
+
+    assert asyncio.run(run()) == [20, 10, "RESEARCH", (10, "ACCOUNTING"), 4]

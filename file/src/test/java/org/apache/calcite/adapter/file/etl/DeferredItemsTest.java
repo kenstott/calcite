@@ -181,6 +181,12 @@ class DeferredItemsTest {
         .dimensions(dims)
         .materialize(MaterializeConfig.builder()
             .format(MaterializeConfig.Format.PARQUET)
+            // Partitioned by its one fetch dimension: a batch then owns its partition, which is
+            // what makes skipping an unchanged batch safe (PerUnitSkipSafety). Without it the
+            // pipeline always writes, whatever its freshness says.
+            .partition(MaterializePartitionConfig.builder()
+                .columns(Collections.singletonList("year"))
+                .build())
             .output(MaterializeOutputConfig.builder()
                 .location(tempDir.toString())
                 .build())

@@ -400,10 +400,23 @@ class BVContext:
         del self.stmts[name]
 
     def add_portal(self, name: str, stmt: str, params: List, result_formats: List[int]):
+        # Binding a portal replaces the one of that name, and with it any result that one was
+        # suspended on: a result kept past this point was handed to the next statement bound
+        # to the same name (every statement, for a client that uses the unnamed portal), which
+        # then read the last statement's leftover rows -- none -- instead of its own.
+        self._drop_result(name)
         self.portals[name] = (stmt, params, result_formats)
 
     def close_portal(self, name: str):
+        self._drop_result(name)
         del self.portals[name]
+
+    def _drop_result(self, name: str) -> None:
+        """Forget the result ``name``'s portal was suspended on, releasing what it holds."""
+        stale = self.result_cache.pop(name, None)
+        close = getattr(stale, "close", None)
+        if close is not None:
+            close()
 
     def flush(self):
         pass

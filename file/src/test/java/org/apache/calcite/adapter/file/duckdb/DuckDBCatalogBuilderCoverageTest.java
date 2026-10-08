@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -41,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 @Execution(ExecutionMode.SAME_THREAD)
+// Sets duckdb.catalog.path, which is the JVM's: classes run concurrently, so it is held alone.
+@ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ_WRITE)
 public class DuckDBCatalogBuilderCoverageTest {
 
   private String oldCatalogPath;
