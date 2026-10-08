@@ -970,8 +970,9 @@ public class RelFieldTrimmer implements ReflectiveVisitor {
         @Override public RexNode visitSubQuery(RexSubQuery subQuery) {
           RexSubQuery newSubQuery = (RexSubQuery) super.visitSubQuery(subQuery);
           for (CorrelationId id : correlationIds) {
-            newSubQuery = RelOptUtil.remapCorrelatesInSuqQuery(relBuilder.getRexBuilder(),
-                newSubQuery, id, newJoinRowType, conditionMapping);
+            newSubQuery =
+                RelOptUtil.remapCorrelatesInSuqQuery(relBuilder.getRexBuilder(), newSubQuery,
+                    id, newJoinRowType, conditionMapping);
           }
           return newSubQuery;
         }
