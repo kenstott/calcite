@@ -138,7 +138,12 @@ public class SharePointCastIntegrationTest {
 
     assertNotNull(numAsString, "Numeric to string cast should work");
     assertNotNull(amountAsString, "Amount to string cast should work");
-    assertTrue(numAsString.matches("\\d+"), "Should be a numeric string: " + numAsString);
+    // A SharePoint number column holds a floating-point value, whatever its displayed decimal
+    // places, so a whole number is read as a DOUBLE and casts to "1.0", not "1"
+    assertTrue(numAsString.matches("\\d+\\.\\d+"),
+        "Should be a floating-point string: " + numAsString);
+    assertEquals(Math.rint(Double.parseDouble(numAsString)), Double.parseDouble(numAsString),
+        "A whole number was stored: " + numAsString);
   }
 
   @Test public void testCastDateTimeToString() throws SQLException {
