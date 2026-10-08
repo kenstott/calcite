@@ -187,7 +187,7 @@ public class MarkdownTableTest {
       writer.write("      \"type\": \"custom\",\n");
       writer.write("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("      \"operand\": {\n");
-      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath() + "\",\n");
+      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"ephemeralCache\": true\n");
       writer.write("      }\n");
       writer.write("    }\n");
@@ -231,7 +231,7 @@ public class MarkdownTableTest {
       writer.write("      \"type\": \"custom\",\n");
       writer.write("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("      \"operand\": {\n");
-      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath() + "\",\n");
+      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"ephemeralCache\": true\n");
       writer.write("      }\n");
       writer.write("    }\n");

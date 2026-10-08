@@ -14,8 +14,6 @@ import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -27,8 +25,6 @@ import java.util.Map;
 public class SalesforceSchemaFactory implements SchemaFactory {
 
   public static final SalesforceSchemaFactory INSTANCE = new SalesforceSchemaFactory();
-
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   @Override public Schema create(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {

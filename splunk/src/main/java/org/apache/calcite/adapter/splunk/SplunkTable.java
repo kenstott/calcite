@@ -73,7 +73,7 @@ public class SplunkTable extends AbstractQueryableTable implements TranslatableT
 
   /**
    * Returns the field mapping from schema field names to Splunk field names.
-   * For example: "reason" -> "Authentication.reason"
+   * For example: "reason" -&gt; "Authentication.reason"
    */
   public Map<String, String> getFieldMapping() {
     return fieldMapping;

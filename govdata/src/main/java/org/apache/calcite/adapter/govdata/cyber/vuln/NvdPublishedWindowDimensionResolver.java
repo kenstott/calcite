@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -183,7 +184,7 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
       return;
     }
 
-    resolveDate = LocalDate.now();
+    resolveDate = LocalDate.now(ZoneId.systemDefault());
     // Precedence: GOVDATA_START_YEAR env/sysprop (set by dq-rebuild) > YAML startYear > default.
     // This ensures the dq-rebuild's 2-year DQ window (GOVDATA_START_YEAR=2025) limits history
     // to 2025+, while a full production backfill sets a lower start year.

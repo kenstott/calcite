@@ -1186,9 +1186,10 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
       Map<String, Object> operand) throws Exception {
     String dbPath = "test-db-" + System.nanoTime();
     Method method =
-        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInDuckDB", String.class, String.class, Map.class);
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("registerSqlViewsInDuckDB",
+            Connection.class, String.class, String.class, Map.class);
     method.setAccessible(true);
-    method.invoke(null, dbPath, schema, operand);
+    method.invoke(null, c, dbPath, schema, operand);
     // Flush deferred views into the in-memory connection
     DuckDBPendingViews.buildAll(dbPath, c);
   }

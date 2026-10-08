@@ -25,7 +25,7 @@ import java.util.Map;
  *   <li>{@code parquet} - Uses {@code HiveParquetWriter} for hive-partitioned Parquet</li>
  * </ul>
  *
- * <h3>YAML Configuration Example</h3>
+ * <h2>YAML Configuration Example</h2>
  * <pre>
  * materialize:
  *   enabled: true
@@ -48,7 +48,7 @@ import java.util.Map;
  *     rowGroupSize: 100000
  * </pre>
  *
- * <h3>Trigger Types</h3>
+ * <h2>Trigger Types</h2>
  * <ul>
  *   <li>{@code auto} - Materialize when schema loads</li>
  *   <li>{@code manual} - Only via explicit API call</li>
@@ -523,7 +523,7 @@ public class MaterializeConfig {
   /**
    * Configuration specific to Iceberg format materialization.
    *
-   * <h3>YAML Configuration Example</h3>
+   * <h2>YAML Configuration Example</h2>
    * <pre>
    * materialize:
    *   format: iceberg

@@ -40,9 +40,9 @@ import java.util.Properties;
  */
 @Tag("integration")
 class SplunkAllTablesCountTest {
-  private static String SPLUNK_URL = "https://kentest.xyz:8089";
+  private static String SPLUNK_URL = SplunkTestSettings.url();
   private static String SPLUNK_USER = "admin";
-  private static String SPLUNK_PASSWORD = "admin123";
+  private static String SPLUNK_PASSWORD = SplunkTestSettings.password();
   private static boolean DISABLE_SSL_VALIDATION = true;
 
   @BeforeAll

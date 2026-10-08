@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * This test demonstrates the exact problem the user is experiencing.
  */
 @Tag("integration")
+@Tag("splunk-data")
 public class SplunkJdbc43ReproducerTest extends SplunkTestBase {
 
   @Override protected Connection getConnection() throws SQLException {

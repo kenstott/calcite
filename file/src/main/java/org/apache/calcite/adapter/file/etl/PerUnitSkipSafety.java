@@ -101,13 +101,12 @@ final class PerUnitSkipSafety {
    * @return offending dimension names, in declaration order; empty when the key determines the unit
    */
   static Set<String> dimensionsOutsidePartition(EtlPipelineConfig config) {
-    Set<String> none = Collections.emptySet();
     if (config == null) {
-      return none;
+      return new LinkedHashSet<>();
     }
     Map<String, DimensionConfig> dimensions = config.getDimensions();
     if (dimensions == null || dimensions.isEmpty()) {
-      return none;
+      return new LinkedHashSet<>();
     }
 
     Set<String> partitionVars = partitionVariables(config);

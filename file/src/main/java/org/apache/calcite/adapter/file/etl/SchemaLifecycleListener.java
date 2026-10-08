@@ -25,7 +25,7 @@ import java.util.Map;
  *   <li>Custom bulk download logic (SharePoint, S3, FTP, etc.)</li>
  * </ul>
  *
- * <h3>Lifecycle Order</h3>
+ * <h2>Lifecycle Order</h2>
  * <pre>
  * 1. beforeSchema()
  * 2. [for each bulk download: downloadBulkFile()]
@@ -93,7 +93,7 @@ public interface SchemaLifecycleListener {
    * <p>The default implementation returns null, which tells the processor
    * to use the built-in HTTP download logic.
    *
-   * <h3>Example Implementation</h3>
+   * <p><b>Example Implementation</b></p>
    * <pre>{@code
    * public String downloadBulkFile(SchemaContext ctx, BulkDownloadConfig cfg,
    *     Map<String, String> vars, String targetPath) {

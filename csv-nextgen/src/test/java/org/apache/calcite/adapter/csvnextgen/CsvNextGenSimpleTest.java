@@ -51,7 +51,7 @@ public class CsvNextGenSimpleTest {
         + "      \"type\": \"custom\",\n"
         + "      \"factory\": \"org.apache.calcite.adapter.csvnextgen.CsvNextGenSchemaFactorySimple\",\n"
         + "      \"operand\": {\n"
-        + "        \"directory\": \"" + tempDir.getAbsolutePath() + "\",\n"
+        + "        \"directory\": \"" + jsonPath(tempDir) + "\",\n"
         + "        \"engine\": \"linq4j\",\n"
         + "        \"batchSize\": 100,\n"
         + "        \"header\": true\n"
@@ -85,7 +85,7 @@ public class CsvNextGenSimpleTest {
         + "      \"type\": \"custom\",\n"
         + "      \"factory\": \"org.apache.calcite.adapter.csvnextgen.CsvNextGenSchemaFactorySimple\",\n"
         + "      \"operand\": {\n"
-        + "        \"directory\": \"" + tempDir.getAbsolutePath() + "\",\n"
+        + "        \"directory\": \"" + jsonPath(tempDir) + "\",\n"
         + "        \"engine\": \"linq4j\",\n"
         + "        \"header\": true\n"
         + "      }\n"
@@ -97,5 +97,11 @@ public class CsvNextGenSimpleTest {
         .query("SELECT * FROM test")
         .returns("id=1; name=Alice; value=100\n"
             + "id=2; name=Bob; value=200\n");
+  }
+
+  /** The path of a directory as it is written inside a JSON string: a Windows path holds
+   * backslashes, which JSON would read as escapes. */
+  private static String jsonPath(File directory) {
+    return directory.getAbsolutePath().replace("\\", "\\\\");
   }
 }

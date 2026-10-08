@@ -46,13 +46,11 @@ import java.util.List;
  * that keeps this safe to enable unconditionally in {@link ArrowRules#RULES}.
  */
 class ArrowJavaFilterEnumerator extends AbstractArrowEnumerator {
-  private final ArrowFileReader arrowFileReader;
   private final List<Condition> conditions;
 
   ArrowJavaFilterEnumerator(ArrowFileReader arrowFileReader, ImmutableIntList fields,
       Schema schema, List<String> rawConditions) {
     super(arrowFileReader, fields);
-    this.arrowFileReader = arrowFileReader;
     this.conditions = new ArrayList<>(rawConditions.size());
     for (String raw : rawConditions) {
       this.conditions.add(Condition.parse(schema, raw));

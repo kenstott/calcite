@@ -973,6 +973,12 @@ allprojects {
             }
             tasks.withType<JavaCompile>().configureEach {
                 options.errorprone {
+                    // This ErrorProne release cannot load into javac 16 or later (it reaches
+                    // into jdk.compiler internals), so it stays off for the modules whose
+                    // toolchain is newer, such as trino-*.
+                    isEnabled.set(
+                        javaCompiler.map { it.metadata.languageVersion.asInt() < 16 }.orElse(true)
+                    )
                     disableWarningsInGeneratedCode.set(true)
                     errorproneArgs.add("-XepExcludedPaths:.*/javacc/.*")
                     enable(

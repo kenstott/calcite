@@ -343,7 +343,7 @@ public class ParquetConversionUtil {
   }
 
   /**
-   * Scans any file-adapter {@link Table} to its rows, handling both {@link ScannableTable} and
+   * Scans any file-adapter {@code Table} to its rows, handling both {@code ScannableTable} and
    * {@link org.apache.calcite.schema.TranslatableTable} (via {@link TranslatableTableAdapter}).
    * Shared by Parquet conversion and Iceberg materialization so both read a discovered table the
    * same way. Throws if the table supports neither interface.
@@ -605,7 +605,7 @@ public class ParquetConversionUtil {
       org.apache.hadoop.fs.Path path, org.apache.parquet.schema.MessageType schema,
       org.apache.hadoop.conf.Configuration conf) throws Exception {
 
-    return new SimpleParquetWriter.Builder(path)
+    return new SimpleParquetWriter.Builder(ParquetLocalFiles.outputFile(path, conf))
         .withSchema(schema)
         .withConf(conf)
         .withCompressionCodec(org.apache.parquet.hadoop.metadata.CompressionCodecName.SNAPPY)
@@ -641,6 +641,10 @@ public class ParquetConversionUtil {
 
       private Builder(org.apache.hadoop.fs.Path path) {
         super(path);
+      }
+
+      private Builder(org.apache.parquet.io.OutputFile file) {
+        super(file);
       }
 
       public Builder withSchema(org.apache.parquet.schema.MessageType schema) {
@@ -864,12 +868,8 @@ public class ParquetConversionUtil {
 
       case DATE:
         if (value instanceof java.sql.Date) {
-          // Convert to days since epoch (1970-01-01) in UTC
-          // Use Instant from millis with UTC zone to avoid timezone issues
-          java.sql.Date sqlDate = (java.sql.Date) value;
-          java.time.Instant instant = java.time.Instant.ofEpochMilli(sqlDate.getTime());
-          java.time.LocalDate localDate = instant.atZone(java.time.ZoneOffset.UTC).toLocalDate();
-          int daysSinceEpoch = (int) localDate.toEpochDay();
+          // A DATE has no time zone: store the calendar date the value holds
+          int daysSinceEpoch = JdbcTemporals.epochDay((java.sql.Date) value);
           group.append(fieldName, daysSinceEpoch);
         } else if (value instanceof java.time.LocalDate) {
           group.append(fieldName, (int) ((java.time.LocalDate) value).toEpochDay());
@@ -928,21 +928,8 @@ public class ParquetConversionUtil {
         int fieldIndexTs = group.getType().getFieldIndex(fieldName);
 
         if (value instanceof java.sql.Timestamp) {
-          // The timestamp from CsvEnumerator has timezone adjustment applied
-          java.sql.Timestamp ts = (java.sql.Timestamp) value;
-          long adjustedMillis = ts.getTime();
-
-          // Get the timezone offset for this timestamp
-          java.util.TimeZone tz = java.util.TimeZone.getDefault();
-          long offset = tz.getOffset(adjustedMillis);
-
-          // Add the offset to get back to UTC (offset is negative for US timezones)
-          // For example, if the value is 838972862000 (04:01:02 EDT),
-          // we add the -4 hour offset (which subtracts 4 hours) to get 838958462000 (00:01:02 UTC)
-          long utcMillis = adjustedMillis + offset;
-
-          LOGGER.debug("TIMESTAMP storage: field={}, input value={}, adjusted millis={}, offset={}, storing UTC millis={}",
-                      fieldName, value, adjustedMillis, offset, utcMillis);
+          // Store the wall-clock time the value holds as that same time in UTC
+          long utcMillis = JdbcTemporals.wallClockMillis((java.sql.Timestamp) value);
           group.add(fieldIndexTs, utcMillis);
         } else if (value instanceof java.time.LocalDateTime) {
           // Convert LocalDateTime to UTC millis
@@ -957,7 +944,7 @@ public class ParquetConversionUtil {
           // Try to parse as timestamp string
           try {
             java.sql.Timestamp ts = java.sql.Timestamp.valueOf(value.toString());
-            group.add(fieldIndexTs, ts.getTime());
+            group.add(fieldIndexTs, JdbcTemporals.wallClockMillis(ts));
           } catch (Exception e) {
             LOGGER.warn("Failed to parse timestamp value: {}", value);
           }

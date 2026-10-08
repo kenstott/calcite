@@ -30,7 +30,7 @@ import java.util.Map;
  * <p>This source type is used for static reference data that is defined
  * in YAML configuration files rather than fetched from APIs.
  *
- * <h3>Configuration</h3>
+ * <h2>Configuration</h2>
  * <pre>{@code
  * source:
  *   type: constants
@@ -40,7 +40,7 @@ import java.util.Map;
  *   valueColumn: "supersector_name"    # Column name for map values
  * }</pre>
  *
- * <h3>Example YAML</h3>
+ * <h2>Example YAML</h2>
  * <pre>{@code
  * naicsSupersectors:
  *   "00000000": Total Nonfarm

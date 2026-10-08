@@ -54,7 +54,6 @@ public class HolidaysDataProvider implements CachingDataProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(HolidaysDataProvider.class);
 
   private static final String COUNTRIES_URL = "https://date.nager.at/api/v3/AvailableCountries";
-  private static final String HOLIDAYS_URL = "https://date.nager.at/api/v3/PublicHolidays/%d/%s";
   /** Politeness delay between per-country requests against the free public endpoint. */
   private static final long REQUEST_DELAY_MS = 150;
 
@@ -110,7 +109,7 @@ public class HolidaysDataProvider implements CachingDataProvider {
   private List<Map<String, Object>> fetchCountryHolidays(int year, String code, String name,
       RawCache rawCache) {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-    String url = String.format(HOLIDAYS_URL, year, code);
+    String url = String.format("https://date.nager.at/api/v3/PublicHolidays/%d/%s", year, code);
     String body;
     try {
       body = get(url, rawCache);

@@ -132,8 +132,7 @@ public class CrossProcessCommitLockTest {
       throws IOException {
     String javaBin = System.getProperty("java.home")
         + File.separator + "bin" + File.separator + "java";
-    String classpath = System.getProperty("java.class.path");
-    ProcessBuilder pb = new ProcessBuilder(javaBin, "-cp", classpath,
+    ProcessBuilder pb = new ProcessBuilder(javaBin, org.apache.calcite.adapter.file.ChildJvmClasspath.argument(),
         CrossProcessCommitLockTest.class.getName(),
         tableLocation, readyFile.toString(), releaseFile.toString());
     pb.redirectErrorStream(true);

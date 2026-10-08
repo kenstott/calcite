@@ -21,7 +21,6 @@ import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.core.retry.RetryPolicy;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
@@ -178,7 +177,7 @@ public class S3StorageProvider implements StorageProvider {
       // "Connection reset" — with the SDK's exponential backoff. Works for any S3 server
       // (MinIO, R2, AWS). The default is too few under heavy concurrent ETL load.
       ClientOverrideConfiguration overrideConfig = ClientOverrideConfiguration.builder()
-          .retryPolicy(RetryPolicy.builder().numRetries(8).build())
+          .retryStrategy(retry -> retry.maxAttempts(9)) // the first attempt and 8 retries
           .build();
 
       software.amazon.awssdk.services.s3.S3ClientBuilder builder = S3Client.builder()

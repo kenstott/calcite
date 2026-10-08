@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Simple test to discover web table structure against live Splunk.
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkWebTableDiscoveryTest {
   private static String SPLUNK_URL = null;
   private static String SPLUNK_USER = null;

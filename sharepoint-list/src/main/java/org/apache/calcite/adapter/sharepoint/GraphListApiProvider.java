@@ -28,13 +28,11 @@ import java.util.Map;
 public class GraphListApiProvider implements SharePointListApiProvider {
 
   private final MicrosoftGraphListClient graphClient;
-  private final SharePointAuthProvider authProvider;
 
   /**
    * Creates a GraphListApiProvider with an auth provider.
    */
   public GraphListApiProvider(SharePointAuthProvider authProvider) {
-    this.authProvider = authProvider;
 
     // Create a SharePointAuth adapter for the existing client
     SharePointAuth auth = new SharePointAuthAdapter(authProvider);

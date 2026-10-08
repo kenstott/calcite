@@ -341,9 +341,9 @@ public final class ZipDownloadUtils {
    */
   public static void deleteDirectory(File dir) {
     if (dir == null || !dir.exists()) return;
-    try {
-      java.nio.file.Files.walk(dir.toPath())
-          .sorted(java.util.Comparator.reverseOrder())
+    try (java.util.stream.Stream<java.nio.file.Path> paths =
+        java.nio.file.Files.walk(dir.toPath())) {
+      paths.sorted(java.util.Comparator.reverseOrder())
           .map(java.nio.file.Path::toFile)
           .forEach(File::delete);
     } catch (IOException e) {

@@ -168,6 +168,15 @@ class DeferredItemsTest {
 
   private EtlPipelineConfig buildConfig(String name, String datasetType,
       FreshnessConfig freshness) {
+    return buildConfig(name, datasetType, freshness, false);
+  }
+
+  /**
+   * As {@link #buildConfig(String, String, FreshnessConfig)}, with the table optionally
+   * partitioned by its one fetch dimension, the year.
+   */
+  private EtlPipelineConfig buildConfig(String name, String datasetType,
+      FreshnessConfig freshness, boolean partitionedByYear) {
     Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
     dims.put("year", DimensionConfig.builder()
         .name("year")
@@ -175,22 +184,21 @@ class DeferredItemsTest {
         .start(2023)
         .end(2024)
         .build());
+    MaterializeConfig.Builder materialize = MaterializeConfig.builder()
+        .format(MaterializeConfig.Format.PARQUET)
+        .output(MaterializeOutputConfig.builder()
+            .location(tempDir.toString())
+            .build());
+    if (partitionedByYear) {
+      materialize.partition(MaterializePartitionConfig.builder()
+          .columns(Collections.singletonList("year"))
+          .build());
+    }
     EtlPipelineConfig.Builder b = EtlPipelineConfig.builder()
         .name(name)
         .source(HttpSourceConfig.builder().url("https://example.invalid/api").build())
         .dimensions(dims)
-        .materialize(MaterializeConfig.builder()
-            .format(MaterializeConfig.Format.PARQUET)
-            // Partitioned by its one fetch dimension: a batch then owns its partition, which is
-            // what makes skipping an unchanged batch safe (PerUnitSkipSafety). Without it the
-            // pipeline always writes, whatever its freshness says.
-            .partition(MaterializePartitionConfig.builder()
-                .columns(Collections.singletonList("year"))
-                .build())
-            .output(MaterializeOutputConfig.builder()
-                .location(tempDir.toString())
-                .build())
-            .build());
+        .materialize(materialize.build());
     if (datasetType != null) {
       b.datasetType(datasetType);
     }
@@ -258,6 +266,10 @@ class DeferredItemsTest {
   /**
    * Verifies the full pipeline gate: two runs with identical content → second run
    * skips the write (DataWriter.write not called on the second run).
+   *
+   * <p>The table is partitioned by year, its one fetch dimension. A skip is only allowed when
+   * no other fetch unit shares the partition; see
+   * {@link #hashFreshnessGate_unitsShareAPartition_secondRunStillWrites}.
    */
   @Test void hashFreshnessGate_identicalContent_secondRunSkipsWrite() throws IOException {
     StorageProvider sp = new LocalFileStorageProvider();
@@ -272,7 +284,8 @@ class DeferredItemsTest {
     FixedDataProvider provider1 = new FixedDataProvider(
         Collections.singletonList(new ArrayList<Map<String, Object>>(rows)));
 
-    EtlPipelineConfig config = buildConfig("hash_test_pipeline", "snapshot", hashFreshness());
+    EtlPipelineConfig config =
+        buildConfig("hash_test_pipeline", "snapshot", hashFreshness(), true);
 
     EtlPipeline pipeline1 = new EtlPipeline(
         config, sp, tempDir.toString(), null, tracker, provider1, writer);
@@ -295,6 +308,33 @@ class DeferredItemsTest {
 
     assertEquals(writeCountBefore, writer.writeCount.get(),
         "Run 2: DataWriter.write() must NOT be called when content is unchanged");
+  }
+
+  /**
+   * Two years are fetched into one unpartitioned table, so a skipped unit would be dropped
+   * when the other unit's write replaces the partition: an unchanged unit is hashed, and
+   * written again.
+   */
+  @Test void hashFreshnessGate_unitsShareAPartition_secondRunStillWrites() throws IOException {
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryTracker tracker = new MemoryTracker();
+    RecordingDataWriter writer = new RecordingDataWriter();
+
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    rows.add(row("id", "1", "name", "alice"));
+
+    EtlPipelineConfig config =
+        buildConfig("hash_shared_partition_pipeline", "snapshot", hashFreshness());
+
+    new EtlPipeline(config, sp, tempDir.toString(), null, tracker,
+        new FixedDataProvider(Collections.singletonList(rows)), writer).execute();
+    int writesInRun1 = writer.writeCount.get();
+    assertEquals(1, writesInRun1, "Run 1 writes the one unit that returned rows");
+
+    new EtlPipeline(config, sp, tempDir.toString(), null, tracker,
+        new FixedDataProvider(Collections.singletonList(rows)), writer).execute();
+    assertEquals(writesInRun1 + 1, writer.writeCount.get(),
+        "Run 2 must write the unchanged unit again: its partition is shared");
   }
 
   /**

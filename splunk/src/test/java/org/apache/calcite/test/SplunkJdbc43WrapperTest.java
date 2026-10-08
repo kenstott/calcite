@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * and performs JDBC 4.3 compliant string-to-numeric conversions.</p>
  */
 @Tag("integration")
+@Tag("splunk-data")
 public class SplunkJdbc43WrapperTest extends SplunkTestBase {
 
   @Override protected Connection getConnection() throws SQLException {

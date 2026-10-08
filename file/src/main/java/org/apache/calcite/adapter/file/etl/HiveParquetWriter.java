@@ -34,7 +34,7 @@ import java.util.Map;
  * <p>This class materializes data from various sources (JSON, CSV, API responses)
  * to Parquet files organized in a hive-style partition layout.
  *
- * <h3>Features</h3>
+ * <h2>Features</h2>
  * <ul>
  *   <li>Uses DuckDB COPY with PARTITION_BY for efficient partitioned writes</li>
  *   <li>Supports schema-driven column definitions with types</li>
@@ -43,7 +43,7 @@ import java.util.Map;
  *   <li>Configurable compression and row group size</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * StorageProvider storageProvider = StorageProviderFactory.createFromUrl("s3://bucket/");
  * HiveParquetWriter writer = new HiveParquetWriter(storageProvider, "/data/output");
@@ -62,7 +62,7 @@ import java.util.Map;
  * MaterializeResult result = writer.materialize(config, dataSource);
  * }</pre>
  *
- * <h3>Batched Processing</h3>
+ * <h2>Batched Processing</h2>
  * <p>When processing large datasets, the writer uses batching to avoid OOM:
  * <ol>
  *   <li>Build batch combinations from batchBy columns</li>

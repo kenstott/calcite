@@ -265,6 +265,8 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
         "FileReaderException is not a SQLException");
   }
 
+  // The deprecated FileReader is the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test @Tag("FILE-151") void missingFileThrowsPlainException(@TempDir Path dir) {
     File missing = dir.resolve("does-not-exist.html").toFile();
     Source source = Sources.of(missing);
@@ -276,6 +278,8 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
         "message identifies the missing file (got: " + ex.getMessage() + ")");
   }
 
+  // The deprecated FileReader is the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test @Tag("FILE-151") void nullSourceThrowsNpeBeforeConstruction() {
     // The constructor requireNonNull guards null source: a NullPointerException is thrown
     // (not a FileReaderException) before any read is attempted.
@@ -283,6 +287,8 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
         "a null source is rejected by the constructor");
   }
 
+  // The deprecated FileReader is the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test @Tag("FILE-151") void noMatchSelectorThrowsPlainException(@TempDir Path dir) throws Exception {
     String html = "<html><body><table><tr><th>a</th></tr><tr><td>1</td></tr></table></body></html>";
     File f = dir.resolve("doc.html").toFile();
@@ -296,6 +302,8 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
         "message reports the empty selection (got: " + ex.getMessage() + ")");
   }
 
+  // The deprecated FileReader is the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test @Tag("FILE-151") void nonTableElementSelectedThrowsPlainException(@TempDir Path dir)
       throws Exception {
     // The selector matches exactly one element that is not a <table>.
@@ -312,6 +320,8 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
         "message reports the wrong element type (got: " + ex.getMessage() + ")");
   }
 
+  // The deprecated FileReader is the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test @Tag("FILE-151") void noTablesFoundThrowsPlainException(@TempDir Path dir) throws Exception {
     // No selector -> getBestTable; a document with no <table> at all throws "no tables found".
     String html = "<html><body><p>nothing here</p></body></html>";
@@ -332,6 +342,8 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
    * above which pin that present behavior. Enable this once the code fix lands.
    */
   @Disabled("C-11: FileReaderException should be a SQLException with SQLState — pending code fix")
+  // The deprecated FileReader is the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test @Tag("FILE-151") void targetContractIsSqlExceptionWithSqlState(@TempDir Path dir)
       throws Exception {
     String html = "<html><body><p>nothing here</p></body></html>";

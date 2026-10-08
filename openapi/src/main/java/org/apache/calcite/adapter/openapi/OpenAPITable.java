@@ -29,7 +29,6 @@ import org.apache.calcite.schema.impl.AbstractTableQueryable;
 import org.apache.calcite.sql.type.SqlTypeName;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -45,7 +44,6 @@ public class OpenAPITable extends AbstractQueryableTable implements Translatable
 
   private final String tableName;
   private final OpenAPITransport transport;
-  private final ObjectMapper mapper;
   private final OpenAPIConfig config;
 
   /**
@@ -56,7 +54,6 @@ public class OpenAPITable extends AbstractQueryableTable implements Translatable
     this.tableName = requireNonNull(tableName, "tableName");
     this.transport = requireNonNull(transport, "transport");
     this.config = requireNonNull(config, "config");
-    this.mapper = transport.mapper();
   }
 
   /**

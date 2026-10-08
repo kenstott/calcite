@@ -94,6 +94,8 @@ public abstract class AbstractClinicalTrialsResponseTransformer
   }
 
   /**
+   * Appends the row or rows of one study.
+   *
    * @param study the raw per-study element (siblings of {@code protocolSection} such as the
    *     top-level {@code hasResults} flag live here, not under {@code protocolSection})
    * @param protocolSection {@code study.protocolSection} — the node most fields come from

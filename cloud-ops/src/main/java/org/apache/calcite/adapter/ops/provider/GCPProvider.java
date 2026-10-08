@@ -56,12 +56,10 @@ import java.util.Map;
 public class GCPProvider implements CloudProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(GCPProvider.class);
 
-  private final CloudOpsConfig.GCPConfig config;
   private final GoogleCredentials credentials;
   private final CloudOpsCacheManager cacheManager;
 
   public GCPProvider(CloudOpsConfig.GCPConfig config) {
-    this.config = config;
     this.cacheManager = new CloudOpsCacheManager(5, false);
     try {
       this.credentials =
@@ -73,7 +71,6 @@ public class GCPProvider implements CloudProvider {
   }
 
   public GCPProvider(CloudOpsConfig.GCPConfig config, CloudOpsCacheManager cacheManager) {
-    this.config = config;
     this.cacheManager = cacheManager;
     try {
       this.credentials =
@@ -115,7 +112,6 @@ public class GCPProvider implements CloudProvider {
                                                           @Nullable CloudOpsSortHandler sortHandler,
                                                           @Nullable CloudOpsPaginationHandler paginationHandler,
                                                           @Nullable CloudOpsFilterHandler filterHandler) {
-
     // Build comprehensive cache key including all optimization parameters
     String cacheKey =
         CloudOpsCacheManager.buildComprehensiveCacheKey("gcp", "kubernetes_clusters", projectionHandler, sortHandler, paginationHandler, filterHandler, projectIds);

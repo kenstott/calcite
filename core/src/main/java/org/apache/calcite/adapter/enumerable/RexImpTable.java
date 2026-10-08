@@ -2294,9 +2294,9 @@ public class RexImpTable {
       // which needs both a widening and a boxing conversion that plain Java method
       // invocation cannot combine in one implicit step) failed to compile instead of
       // being converted.
-      final Class<?>[] valueParamTypes =
-          Arrays.copyOfRange(afi.addMethod.getParameterTypes(), 1,
-              afi.addMethod.getParameterTypes().length);
+      final Class<?>[] paramTypes = afi.addMethod.getParameterTypes();
+      final Class<?>[] valueParamTypes = new Class<?>[paramTypes.length - 1];
+      System.arraycopy(paramTypes, 1, valueParamTypes, 0, valueParamTypes.length);
       List<Expression> aggArgs = EnumUtils.fromInternal(valueParamTypes, add.arguments());
       aggArgs = EnumUtils.convertAssignableTypes(valueParamTypes, aggArgs);
       List<Expression> args = new ArrayList<>(aggArgs.size() + 1);
