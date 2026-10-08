@@ -222,11 +222,11 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
    * states' border stations; each of those is emitted by the request for its own state, so every
    * (station, month) appears once, attributed to the state the station file assigns it.
    */
-  private static List<Map<String, Object>> toRows(Map<String, StationMonthRecord> grouped,
+  private List<Map<String, Object>> toRows(Map<String, StationMonthRecord> grouped,
       String stateFips, RequestContext context) throws IOException {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(grouped.size());
     for (StationMonthRecord rec : grouped.values()) {
-      if (!stateFips.equals(GhcndStationStates.stateFips(rec.stationId, context.getRateLimit()))) {
+      if (!stateFips.equals(stationStateFips(rec.stationId, context))) {
         continue;
       }
       Map<String, Object> row = new LinkedHashMap<String, Object>();
@@ -245,6 +245,14 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
       rows.add(row);
     }
     return rows;
+  }
+
+  /**
+   * The 2-digit state FIPS the NCEI station file assigns a station, or null when it assigns
+   * none.
+   */
+  String stationStateFips(String stationId, RequestContext context) throws IOException {
+    return GhcndStationStates.stateFips(stationId, context.getRateLimit());
   }
 
   /**
