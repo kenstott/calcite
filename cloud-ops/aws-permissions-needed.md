@@ -1,22 +1,26 @@
-# AWS Permissions Required for CloudOps Adapter
+# Permissions the Cloud Ops adapter needs
 
-The CloudOps adapter needs read-only permissions to query AWS resources.
+The adapter only reads. Give it read-only credentials in each cloud. A missing permission fails
+the query that needs it with the cloud's own error message; it does not return an empty table.
 
-## Option 1: Attach AWS Managed Policies (Easiest)
+This file keeps its original name. It now covers [AWS](#aws), [Azure](#azure) and [GCP](#gcp).
 
-Attach these AWS managed policies to the IAM user `ken`:
-- `ReadOnlyAccess` - Provides read-only access to all AWS services
-- OR more granular policies:
-  - `AmazonEKSReadOnlyAccess` - For EKS clusters
-  - `AmazonEC2ReadOnlyAccess` - For EC2 instances and VPCs
-  - `IAMReadOnlyAccess` - For IAM resources
-  - `AmazonRDSReadOnlyAccess` - For RDS databases
-  - `AmazonEC2ContainerRegistryReadOnly` - For ECR
-  - `CloudWatchReadOnlyAccess` - For CloudWatch metrics
+## AWS
 
-## Option 2: Create Custom Policy
+### Simplest: the managed ReadOnlyAccess policy
 
-Create a new policy with this JSON:
+The AWS-managed policy `ReadOnlyAccess` covers every action below.
+
+```bash
+aws iam attach-user-policy \
+  --user-name <user> \
+  --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
+```
+
+### Minimal: a custom policy
+
+The list matches the AWS SDK calls in `provider/AWSProvider.java`. Several S3 actions are named
+differently from the API call that needs them; the table after the policy gives the mapping.
 
 ```json
 {
@@ -26,53 +30,55 @@ Create a new policy with this JSON:
       "Sid": "CloudOpsReadOnly",
       "Effect": "Allow",
       "Action": [
+        "ec2:DescribeRegions",
+        "ec2:DescribeInstances",
+        "ec2:DescribeVolumes",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeAddresses",
+
         "eks:ListClusters",
         "eks:DescribeCluster",
         "eks:ListNodegroups",
         "eks:DescribeNodegroup",
-        "ec2:DescribeInstances",
-        "ec2:DescribeVpcs",
-        "ec2:DescribeSubnets",
-        "ec2:DescribeSecurityGroups",
-        "ec2:DescribeNetworkInterfaces",
-        "ec2:DescribeInternetGateways",
-        "ec2:DescribeNatGateways",
-        "ec2:DescribeRouteTables",
-        "ec2:DescribeAddresses",
+        "eks:ListAddons",
+
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation",
+        "s3:GetBucketTagging",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketVersioning",
+        "s3:GetReplicationConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "cloudwatch:GetMetricStatistics",
+
         "iam:ListUsers",
+        "iam:ListUserTags",
+        "iam:ListAccessKeys",
+        "iam:ListMFADevices",
         "iam:ListRoles",
-        "iam:ListGroups",
+        "iam:ListRoleTags",
         "iam:ListPolicies",
+        "iam:ListPolicyTags",
         "iam:ListInstanceProfiles",
-        "iam:GetUser",
-        "iam:GetRole",
-        "iam:GetPolicy",
+
         "rds:DescribeDBInstances",
         "rds:DescribeDBClusters",
-        "rds:DescribeDBSnapshots",
-        "rds:ListTagsForResource",
+
+        "dynamodb:ListTables",
+        "dynamodb:DescribeTable",
+        "dynamodb:ListTagsOfResource",
+        "dynamodb:DescribeContinuousBackups",
+
+        "elasticache:DescribeCacheClusters",
+        "elasticache:DescribeReplicationGroups",
+        "elasticache:ListTagsForResource",
+
         "ecr:DescribeRepositories",
-        "ecr:ListImages",
-        "ecr:GetRepositoryPolicy",
         "ecr:ListTagsForResource",
-        "cloudwatch:GetMetricStatistics",
-        "cloudwatch:ListMetrics",
-        "cloudwatch:GetMetricData",
-        "s3:ListBucket",
-        "s3:GetBucketLocation",
-        "s3:GetBucketVersioning",
-        "s3:GetBucketEncryption",
-        "s3:GetBucketTagging",
-        "s3:GetBucketLifecycleConfiguration",
-        "s3:GetBucketPublicAccessBlock",
-        "s3:GetEncryptionConfiguration",
-        "s3:ListAllMyBuckets",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeTargetGroups",
-        "autoscaling:DescribeAutoScalingGroups",
-        "kms:ListKeys",
-        "kms:DescribeKey",
-        "tag:GetResources"
+        "ecr:GetLifecyclePolicy"
       ],
       "Resource": "*"
     }
@@ -80,40 +86,84 @@ Create a new policy with this JSON:
 }
 ```
 
-## How to Apply in AWS Console
+When `aws.roleArn` is set, the access key's own principal also needs `sts:AssumeRole` on each
+role, and the policy above belongs on the roles.
 
-1. Log into AWS Console with an administrator account
-2. Navigate to **IAM** → **Users** → **ken**
-3. Click **Add permissions** → **Attach policies directly**
-4. Either:
-   - Search for and select the managed policies listed above, OR
-   - Click **Create policy**, paste the JSON above, name it `CloudOpsReadOnlyAccess`
-5. Click **Next** → **Add permissions**
+### Which table needs which action
 
-## How to Apply with AWS CLI (Requires Admin Access)
+| Table | Actions |
+|-------|---------|
+| every regional table, when `aws.region` is absent or `all` | `ec2:DescribeRegions` |
+| `compute_resources` | `ec2:DescribeInstances`, `ec2:DescribeVolumes` |
+| `compute_security_groups` | `ec2:DescribeInstances` |
+| `network_resources` | `ec2:DescribeVpcs`, `ec2:DescribeSecurityGroups`, `ec2:DescribeAddresses`, `ec2:DescribeSubnets` |
+| `kubernetes_clusters` | `eks:ListClusters`, `eks:DescribeCluster`, `eks:ListNodegroups`, `eks:DescribeNodegroup`, `eks:ListAddons` |
+| `storage_resources` | the `s3:` actions and `cloudwatch:GetMetricStatistics` |
+| `iam_resources` | the `iam:` actions |
+| `database_resources` | the `rds:`, `dynamodb:` and `elasticache:` actions |
+| `container_registries` | the `ecr:` actions |
 
-If you have admin credentials configured:
+`storage_resources` makes a per-bucket call only for the columns a query selects, so a query that
+leaves a column out does not need that column's action:
+
+| Column | SDK call | IAM action |
+|--------|----------|------------|
+| any | `ListBuckets` | `s3:ListAllMyBuckets` |
+| `region`, `size_bytes` | `GetBucketLocation` | `s3:GetBucketLocation` |
+| `application`, `tags` | `GetBucketTagging` | `s3:GetBucketTagging` |
+| `encryption_enabled`, `encryption_type`, `encryption_key_type` | `GetBucketEncryption` | `s3:GetEncryptionConfiguration` |
+| `public_access_enabled`, `public_access_level` | `GetPublicAccessBlock` | `s3:GetBucketPublicAccessBlock` |
+| `versioning_enabled` | `GetBucketVersioning` | `s3:GetBucketVersioning` |
+| `replication_type` | `GetBucketReplication` | `s3:GetReplicationConfiguration` |
+| `lifecycle_rules_count` | `GetBucketLifecycleConfiguration` | `s3:GetLifecycleConfiguration` |
+| `size_bytes` | CloudWatch `GetMetricStatistics` | `cloudwatch:GetMetricStatistics` |
+
+`SELECT *` needs all of them.
+
+## Azure
+
+Assign the built-in **Reader** role on each subscription in `azure.subscriptionIds`.
 
 ```bash
-# Option 1: Attach AWS managed ReadOnlyAccess policy
-aws iam attach-user-policy \
-  --user-name ken \
-  --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
-
-# Option 2: Attach individual managed policies
-aws iam attach-user-policy --user-name ken --policy-arn arn:aws:iam::aws:policy/AmazonEKSReadOnlyAccess
-aws iam attach-user-policy --user-name ken --policy-arn arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
-aws iam attach-user-policy --user-name ken --policy-arn arn:aws:iam::aws:policy/IAMReadOnlyAccess
-aws iam attach-user-policy --user-name ken --policy-arn arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess
-aws iam attach-user-policy --user-name ken --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-aws iam attach-user-policy --user-name ken --policy-arn arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+az role assignment create --assignee <app-id> --role Reader \
+  --scope /subscriptions/<subscription-id>
 ```
 
-## Testing After Permissions Are Added
+Reader covers both things the adapter does:
 
-Run the CloudOps comprehensive count test again:
+- Azure Resource Graph queries, which every table uses. Resource Graph returns only resources the
+  caller can read.
+- Two Azure Resource Manager reads per storage account, used by `storage_resources` for
+  versioning, soft delete and lifecycle rules: `<account>/blobServices/default` and
+  `<account>/managementPolicies/default`.
+
+`scripts/New-CloudOpsAzureCredentials.ps1` creates an app registration, assigns Reader, and writes
+the credentials to an env file.
+
+## GCP
+
+Grant the service account the project-level **Viewer** role (`roles/viewer`) on each project in
+`gcp.projectIds`, and enable the APIs the adapter calls:
+
+| Table | API | Service to enable |
+|-------|-----|-------------------|
+| `kubernetes_clusters` | Kubernetes Engine: list clusters | `container.googleapis.com` |
+| `storage_resources` | Cloud Storage: list buckets | `storage.googleapis.com` |
+| `compute_resources` | Compute Engine: aggregated instance list | `compute.googleapis.com` |
+| `network_resources` | Compute Engine: networks, firewalls, aggregated subnetworks | `compute.googleapis.com` |
+| `iam_resources` | IAM: service accounts and their user-managed keys | `iam.googleapis.com` |
+| `database_resources` | Cloud SQL Admin: instances | `sqladmin.googleapis.com` |
+| `container_registries` | Artifact Registry: locations and repositories | `artifactregistry.googleapis.com` |
+
 ```bash
-./gradlew :cloud-ops:test --tests "*.CloudOpsComprehensiveCountTest"
+gcloud services enable container.googleapis.com storage.googleapis.com compute.googleapis.com \
+  iam.googleapis.com sqladmin.googleapis.com artifactregistry.googleapis.com --project PROJECT_ID
 ```
 
-You should see data from AWS resources without 403 errors.
+The adapter does not call the Cloud Asset or Cloud Resource Manager APIs. `compute_security_groups`
+returns no GCP rows.
+
+## Checking the result
+
+Run the live column audit ([TESTING.md](TESTING.md#live-column-audit)). It reads every table from
+every configured cloud and fails on the first table that cannot be read, with the cloud's error.
