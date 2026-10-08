@@ -90,6 +90,9 @@ UPDATE_REQUEST = "\x00__PGWIRE_UPDATE__"
 #: Reserved prefix asking which column identifies a row of a table (for RETURNING).
 KEY_COLUMN_REQUEST = "\x00__PGWIRE_KEY_COLUMN__"
 
+#: Reserved prefix asking the type the engine gives each parameter of a statement.
+PARAMETER_TYPES_REQUEST = "\x00__PGWIRE_PARAMETER_TYPES__"
+
 #: Extra seconds allowed on the socket read deadline beyond the session's
 #: statement_timeout: the child enforces the timeout itself and then still has to
 #: send the trailer, so the reader must outlive the cancel it asked for.
@@ -177,6 +180,15 @@ class _ChildHandler(socketserver.StreamRequestHandler):
                         lane=body["lane"],
                     )
                     self._send_control(json.dumps({"column": column}).encode("utf-8"))
+                elif request.startswith(PARAMETER_TYPES_REQUEST):
+                    body = json.loads(request[len(PARAMETER_TYPES_REQUEST):])
+                    types = backend.parameter_types(
+                        body["sql"],
+                        session_key=body["session_key"],
+                        timeout_ms=body["timeout_ms"],
+                        lane=body["lane"],
+                    )
+                    self._send_control(json.dumps({"types": types}).encode("utf-8"))
                 else:
                     raise ValueError(
                         "unknown bridge request: the pgwire side must send a ping, "
@@ -438,6 +450,22 @@ class BridgeBackend:
         )
         answer = self._control_request(request, read_timeout_s=self._deadline(timeout_ms))
         return str(json.loads(answer.decode("utf-8"))["column"])
+
+    def parameter_types(
+        self,
+        sql: str,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> list:
+        """The SQL type the engine gives each ``$N`` of ``sql``, asked of the child."""
+        del client_gone
+        request = PARAMETER_TYPES_REQUEST + json.dumps(
+            {"sql": sql, "session_key": session_key, "timeout_ms": int(timeout_ms), "lane": lane}
+        )
+        answer = self._control_request(request, read_timeout_s=self._deadline(timeout_ms))
+        return list(json.loads(answer.decode("utf-8"))["types"])
 
     @staticmethod
     def _deadline(timeout_ms: int) -> Optional[float]:
