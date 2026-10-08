@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.duckdb;
 
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.lookup.LikePattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,8 +84,8 @@ public final class DuckDBCatalogMaintenance {
       throws SQLException {
     SchemaPlus root = connection.getRootSchema();
     Set<String> doneCatalogPaths = new HashSet<>();
-    for (String name : root.getSubSchemaNames()) {
-      SchemaPlus sub = root.getSubSchema(name);
+    for (String name : root.subSchemas().getNames(LikePattern.any())) {
+      SchemaPlus sub = root.subSchemas().get(name);
       DuckDBJdbcSchema duckSchema;
       try {
         // Unwrap throws ClassCastException, not null, for a subschema that isn't wrappable to

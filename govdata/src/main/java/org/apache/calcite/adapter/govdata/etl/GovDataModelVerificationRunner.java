@@ -11,8 +11,10 @@
 package org.apache.calcite.adapter.govdata.etl;
 
 import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.FileInputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -915,41 +917,6 @@ public final class GovDataModelVerificationRunner {
     return r.dupApprox ? "~ok" : "ok";
   }
 
-  private static List<String> crossCheckExpected(Config cfg, List<TableResult> results)
-      throws Exception {
-    List<String> missing = new ArrayList<String>();
-    if (cfg.expected == null) {
-      return missing;
-    }
-    Set<String> exposed = new LinkedHashSet<String>();
-    for (int i = 0; i < results.size(); i++) {
-      exposed.add((results.get(i).schema + "." + results.get(i).table).toLowerCase());
-    }
-    BufferedReader br = new BufferedReader(new FileReader(cfg.expected));
-    try {
-      String line;
-      while ((line = br.readLine()) != null) {
-        String t = line.trim().toLowerCase();
-        if (t.isEmpty() || t.startsWith("#")) {
-          continue;
-        }
-        if (!cfg.schemaFilter.isEmpty()) {
-          int dot = t.indexOf('.');
-          String sc = dot > 0 ? t.substring(0, dot) : t;
-          if (!cfg.schemaFilter.contains(sc)) {
-            continue;
-          }
-        }
-        if (!exposed.contains(t)) {
-          missing.add(t);
-        }
-      }
-    } finally {
-      br.close();
-    }
-    return missing;
-  }
-
   private static int runProbes(Connection conn, Config cfg) throws Exception {
     if (cfg.probes == null) {
       return 0;
@@ -957,7 +924,8 @@ public final class GovDataModelVerificationRunner {
     System.out.println();
     System.out.println("================ FEATURE PROBES ================");
     int failures = 0;
-    BufferedReader br = new BufferedReader(new FileReader(cfg.probes));
+    BufferedReader br = new BufferedReader(
+        new InputStreamReader(new FileInputStream(cfg.probes), Charset.defaultCharset()));
     try {
       String line;
       while ((line = br.readLine()) != null) {
@@ -1267,7 +1235,7 @@ public final class GovDataModelVerificationRunner {
       }
     }
     java.util.Collections.sort(items, new java.util.Comparator<Defined>() {
-      public int compare(Defined a, Defined b) {
+      @Override public int compare(Defined a, Defined b) {
         int c = a.schema.compareTo(b.schema);
         return c != 0 ? c : a.table.compareTo(b.table);
       }

@@ -19,11 +19,11 @@ import java.util.Map;
  *
  * <p>When CUSTOM dimensions depend on a context key (e.g., {@code ori} depends on
  * {@code state_abbr}), the full Cartesian product can be enormous (millions of combinations).
- * Instead of materializing all combinations at once, {@link DimensionIterator#expandByPartition}
+ * Instead of materializing all combinations at once, {@code DimensionIterator#expandByPartition}
  * produces one {@code DimensionPartition} per distinct context value, keeping only one
  * partition's combinations in memory at a time.
  *
- * @see DimensionIterator#expandByPartition(Map)
+ * <p>See {@code DimensionIterator#expandByPartition(Map)}.
  */
 public class DimensionPartition {
 

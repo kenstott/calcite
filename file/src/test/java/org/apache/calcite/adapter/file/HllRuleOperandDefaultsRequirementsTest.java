@@ -105,7 +105,7 @@ public class HllRuleOperandDefaultsRequirementsTest {
     AggregateCall countCall =
         AggregateCall.create(SqlStdOperatorTable.COUNT, distinct, false, false,
             ImmutableList.of(), ImmutableList.of(0), -1, null,
-            RelCollations.EMPTY, 0, input, null, "cd");
+            RelCollations.EMPTY, true, input, null, "cd");
     return LogicalAggregate.create(input, ImmutableList.of(), ImmutableBitSet.of(),
         Collections.singletonList(ImmutableBitSet.of()),
         Collections.singletonList(countCall));

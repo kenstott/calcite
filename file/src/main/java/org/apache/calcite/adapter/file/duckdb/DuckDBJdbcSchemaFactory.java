@@ -23,6 +23,7 @@ import org.apache.calcite.config.NullCollation;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Schemas;
+import org.apache.calcite.schema.lookup.LikePattern;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.dialect.DuckDBSqlDialect;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -1960,7 +1961,7 @@ public class DuckDBJdbcSchemaFactory {
       String duckdbSchema, String calciteSchemaName,
       org.apache.calcite.adapter.file.FileSchema fileSchema,
       java.util.Set<String> recreatedIcebergTables) throws SQLException {
-    fileSchema.getTableNames();
+    fileSchema.tables().getNames(LikePattern.any());
     registerFilesAsViews(conn, directoryPath, recursive, duckdbSchema, calciteSchemaName,
         fileSchema, recreatedIcebergTables);
   }

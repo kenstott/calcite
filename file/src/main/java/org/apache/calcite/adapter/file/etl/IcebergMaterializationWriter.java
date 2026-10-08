@@ -71,7 +71,7 @@ import java.util.stream.Stream;
  *   <li>Iceberg commits the staged files atomically</li>
  * </ol>
  *
- * <h3>Key Features</h3>
+ * <h2>Key Features</h2>
  * <ul>
  *   <li>Atomic commits via Iceberg transactions</li>
  *   <li>Schema evolution support</li>

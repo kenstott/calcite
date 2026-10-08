@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -83,7 +82,7 @@ public final class CountyFipsByNameLookup {
       if (is == null) {
         LOGGER.warn("{} not found on classpath — county FIPS-by-name lookup disabled",
             RESOURCE_PATH);
-        return Collections.emptyMap();
+        return new HashMap<>();
       }
       JsonNode root = mapper.readTree(is);
       Map<String, String> result = new HashMap<>();

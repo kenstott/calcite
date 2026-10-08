@@ -142,7 +142,7 @@ public final class IcebergSchemaCache {
     /** The Iceberg snapshot ID {@link #rowCount} was computed from, or null. Diagnostic only --
      * lookup() does not compare it against the table's current snapshot. */
     public Long statsSnapshotId;
-    /** Per-column distinct-value count (lower-cased column name -> NDV), or null when never
+    /** Per-column distinct-value count (lower-cased column name -&gt; NDV), or null when never
      * recorded. Same trust model as {@link #rowCount} -- see {@link #lookupNdv}. */
     public Map<String, Long> ndv;
 
@@ -347,12 +347,12 @@ public final class IcebergSchemaCache {
    * {@code IcebergTable.publishedNdv()}'s own instance field is exactly as useless across the
    * per-query schema-tree rebuilds as {@code cachedRowCount} was before that fix -- confirmed
    * live (2026-09-18) via a publish_report call that timed out inside
-   * {@code IcebergTable.getDistinctRowCount()} -> {@code publishedNdv()} -> a fresh
+   * {@code IcebergTable.getDistinctRowCount()} -&gt; {@code publishedNdv()} -&gt; a fresh
    * {@code loadIcebergTable()} on every rebuild, for the cost-based planner's per-GROUP-BY-column
    * cardinality estimate.
    *
    * @param tablePath table root; ignored when null
-   * @param ndv the computed NDV map (lower-cased column name -> distinct count)
+   * @param ndv the computed NDV map (lower-cased column name -&gt; distinct count)
    */
   public static void recordNdv(String tablePath, Map<String, Long> ndv) {
     if (!ENABLED || tablePath == null) {

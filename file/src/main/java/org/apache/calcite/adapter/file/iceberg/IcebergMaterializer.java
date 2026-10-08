@@ -150,7 +150,11 @@ public class IcebergMaterializer {
    */
   private volatile String sourceActivityPhase = null;
 
-  /** @see #sourceActivityPhase */
+  /**
+   * Sets the source activity phase.
+   *
+   * @see #sourceActivityPhase
+   */
   public void setSourceActivityPhase(String phase) {
     this.sourceActivityPhase = phase;
   }
@@ -407,7 +411,7 @@ public class IcebergMaterializer {
     }
 
     /**
-     * Returns computed columns map (column name -> SQL expression).
+     * Returns computed columns map (column name -&gt; SQL expression).
      * Computed columns are evaluated by DuckDB during materialization.
      */
     public Map<String, String> getComputedColumns() {
@@ -416,7 +420,7 @@ public class IcebergMaterializer {
 
     /**
      * Returns the row batch size for expensive computed columns.
-     * When > 0, data is processed in batches of this size to prevent OOM.
+     * When &gt; 0, data is processed in batches of this size to prevent OOM.
      * Use for expensive operations like ML embeddings.
      */
     public int getRowBatchSize() {
@@ -657,7 +661,7 @@ public class IcebergMaterializer {
       }
 
       /**
-       * Sets computed columns (column name -> SQL expression).
+       * Sets computed columns (column name -&gt; SQL expression).
        * These columns are evaluated by DuckDB during materialization.
        * For example: {"embedding": "embed_jina(text)::FLOAT[768]"}
        */
@@ -668,7 +672,7 @@ public class IcebergMaterializer {
 
       /**
        * Sets the row batch size for expensive computed columns.
-       * When > 0, data is processed in batches of this size to prevent OOM.
+       * When &gt; 0, data is processed in batches of this size to prevent OOM.
        * Use for expensive operations like ML embeddings (e.g., 30 rows at a time).
        */
       public Builder rowBatchSize(int rowBatchSize) {
@@ -727,7 +731,7 @@ public class IcebergMaterializer {
 
       /**
        * Sets columns to exclude from full-row dedup because they are synthesized per conversion
-       * (non-deterministic across re-runs). Empty/unset => DISTINCT over all columns.
+       * (non-deterministic across re-runs). Empty/unset =&gt; DISTINCT over all columns.
        */
       public Builder dedupIgnoreColumns(List<String> dedupIgnoreColumns) {
         this.dedupIgnoreColumns = dedupIgnoreColumns;
@@ -1307,7 +1311,6 @@ public class IcebergMaterializer {
           LOGGER.error("Batch {} failed with HTTP/S3 error (attempt {}/{}). Batch parameters: {}. Full exception trace:",
               batch, attempts, maxRetries, batch, e);
           // Also extract and log just the URL/path if possible
-          String[] stackElements = e.getStackTrace().length > 0 ? new String[0] : null;
           for (StackTraceElement elem : e.getStackTrace()) {
             if (elem.toString().contains("s3") || elem.toString().contains("httpfs")) {
               LOGGER.error("S3/httpfs context: {}", elem);
@@ -3611,7 +3614,7 @@ public class IcebergMaterializer {
    * Extracts the tracker table name from a source pattern's filename infix.
    *
    * <p>A source file is named {@code <cik>_<accession>_<infix>.parquet} and the marker recording
-   * its write is keyed on that same infix, so {@code year=*&#47;*metadata*.parquet} identifies the
+   * its write is keyed on that same infix, so <code>year=*&#47;*metadata*.parquet</code> identifies the
    * {@code metadata} markers. Returns null when the filename carries no infix
    * ({@code *.parquet}), which is a pattern the tracker cannot be asked about.
    */

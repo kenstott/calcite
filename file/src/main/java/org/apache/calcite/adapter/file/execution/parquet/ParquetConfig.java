@@ -36,11 +36,11 @@ public class ParquetConfig {
   /**
    * Get the batch size for reading Parquet files.
    *
-   * <h3>Trade-offs:</h3>
+   * <p><b>Trade-offs:</b></p>
    * <ul>
-   *   <li><b>Too small (< 1000):</b> High I/O overhead, frequent row group loading,
+   *   <li><b>Too small (&lt; 1000):</b> High I/O overhead, frequent row group loading,
    *       poor CPU cache utilization, many small object allocations</li>
-   *   <li><b>Too large (> 10000):</b> High memory usage, potential OOM,
+   *   <li><b>Too large (&gt; 10000):</b> High memory usage, potential OOM,
    *       longer GC pauses, reduced parallelism opportunities</li>
    *   <li><b>Optimal (2000-8000):</b> Good balance of memory usage and I/O efficiency</li>
    * </ul>
@@ -83,7 +83,7 @@ public class ParquetConfig {
   /**
    * Compute optimal batch size based on available memory and system characteristics.
    *
-   * <h3>Factors considered:</h3>
+   * <p><b>Factors considered:</b></p>
    * <ul>
    *   <li><b>Available heap memory:</b> Larger heap allows larger batches</li>
    *   <li><b>CPU cores:</b> More cores can handle larger batches in parallel</li>

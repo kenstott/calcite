@@ -304,7 +304,7 @@ public class SplunkInformationSchema extends AbstractSchema {
   /**
    * information_schema.TABLE_CONSTRAINTS table (empty for Splunk).
    */
-  private class TableConstraintsTable extends AbstractTable implements ScannableTable {
+  private static class TableConstraintsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -329,7 +329,7 @@ public class SplunkInformationSchema extends AbstractSchema {
   /**
    * information_schema.KEY_COLUMN_USAGE table (empty for Splunk).
    */
-  private class KeyColumnUsageTable extends AbstractTable implements ScannableTable {
+  private static class KeyColumnUsageTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -353,7 +353,7 @@ public class SplunkInformationSchema extends AbstractSchema {
   /**
    * information_schema.VIEWS table (empty for Splunk).
    */
-  private class ViewsTable extends AbstractTable implements ScannableTable {
+  private static class ViewsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
@@ -378,7 +378,7 @@ public class SplunkInformationSchema extends AbstractSchema {
   /**
    * information_schema.ROUTINES table (empty for Splunk).
    */
-  private class RoutinesTable extends AbstractTable implements ScannableTable {
+  private static class RoutinesTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("SPECIFIC_CATALOG", SqlTypeName.VARCHAR)
@@ -402,7 +402,7 @@ public class SplunkInformationSchema extends AbstractSchema {
   /**
    * information_schema.PARAMETERS table (empty for Splunk).
    */
-  private class ParametersTable extends AbstractTable implements ScannableTable {
+  private static class ParametersTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("SPECIFIC_CATALOG", SqlTypeName.VARCHAR)

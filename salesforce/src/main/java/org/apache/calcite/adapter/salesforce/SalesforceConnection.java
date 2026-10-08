@@ -44,9 +44,6 @@ import java.util.Map;
  */
 public class SalesforceConnection implements Closeable {
 
-  private static final String DESCRIBE_PATH = "/services/data/%s/sobjects/%s/describe";
-  private static final String COLLECTIONS_PATH = "/services/data/%s/composite/sobjects";
-
   /** Maximum records per sObject Collections request. */
   static final int COLLECTION_BATCH_SIZE = 200;
 
@@ -169,7 +166,7 @@ public class SalesforceConnection implements Closeable {
    * Describe an sObject type, returning the response body as Salesforce sent it.
    */
   public String describeSObjectJson(String sObjectType) throws IOException {
-    String path = String.format(Locale.ROOT, DESCRIBE_PATH, apiVersion, sObjectType);
+    String path = String.format(Locale.ROOT, "/services/data/%s/sobjects/%s/describe", apiVersion, sObjectType);
 
     HttpGet get = new HttpGet(instanceUrl + path);
     get.setHeader("Authorization", "Bearer " + accessToken);
@@ -285,7 +282,7 @@ public class SalesforceConnection implements Closeable {
   }
 
   private String collectionsPath() {
-    return String.format(Locale.ROOT, COLLECTIONS_PATH, apiVersion);
+    return String.format(Locale.ROOT, "/services/data/%s/composite/sobjects", apiVersion);
   }
 
   private static void checkBatchSize(int size) {

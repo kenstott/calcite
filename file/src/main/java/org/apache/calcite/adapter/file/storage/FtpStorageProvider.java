@@ -350,6 +350,8 @@ public class FtpStorageProvider implements StorageProvider {
    * {@link StorageProvider#stageToSafeStream} so a slow consumer cannot stall the data connection
    * into an idle drop — but retained as a tested utility for callers that want lazy streaming.
    */
+  // Reached only through reflection, by the tests of this class.
+  @SuppressWarnings("UnusedNestedClass")
   private static class FtpInputStream extends InputStream {
     private final InputStream wrapped;
     private final FTPClient ftpClient;

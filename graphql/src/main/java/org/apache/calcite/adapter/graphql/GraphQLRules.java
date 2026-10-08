@@ -316,8 +316,8 @@ public class GraphQLRules {
 
         // Allow both literals and dynamic parameters for bounds
         boolean isSimple = value instanceof RexInputRef
-            && (isConstantOrDynamicParam(lower))
-            && (isConstantOrDynamicParam(upper));
+            && isConstantOrDynamicParam(lower)
+            && isConstantOrDynamicParam(upper);
 
         LOGGER.debug("Checking BETWEEN - Value: {}, Lower: {}, Upper: {}, IsSimple: {}",
             value, lower, upper, isSimple);

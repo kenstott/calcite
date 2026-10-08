@@ -962,7 +962,7 @@ public class ConversionMetadata {
 
   /**
    * Builds a comprehensive mapping of all conversions across all schemas in a base directory.
-   * This scans all .aperio/<schema>/.conversions.json files and creates a unified view.
+   * This scans all .aperio/&lt;schema&gt;/.conversions.json files and creates a unified view.
    *
    * @param baseDirectory The base directory containing .aperio subdirectories
    * @param htmlFileToTableName Map of HTML filenames to explicit table names from model definitions

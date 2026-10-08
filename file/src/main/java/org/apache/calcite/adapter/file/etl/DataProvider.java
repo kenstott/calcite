@@ -24,7 +24,7 @@ import java.util.Map;
  * batch (dimension combination). If a custom DataProvider is supplied and
  * returns non-null, the built-in HttpSource is skipped.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * // Custom FTP data provider
  * DataProvider ftpProvider = (config, variables) -> {

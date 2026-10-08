@@ -51,7 +51,7 @@ import java.util.Set;
  * └─────────────────────────────────────────────────────────────┘
  * </pre>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * // Directories are defined in the config YAML:
  * // schema:
@@ -1305,7 +1305,7 @@ public class SchemaLifecycleProcessor {
 
     /**
      * Registers a custom data writer for a specific table.
-     * If the hook returns >= 0, the built-in MaterializationWriter is skipped.
+     * If the hook returns &gt;= 0, the built-in MaterializationWriter is skipped.
      *
      * <p>Example:
      * <pre>{@code

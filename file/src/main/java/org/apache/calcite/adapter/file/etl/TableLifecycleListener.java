@@ -22,7 +22,7 @@ package org.apache.calcite.adapter.file.etl;
  *   <li>Custom error handling per table</li>
  * </ul>
  *
- * <h3>Lifecycle Order</h3>
+ * <h2>Lifecycle Order</h2>
  * <pre>
  * 1. beforeTable()
  * 2. resolveDimensions(), shouldProcessTable()

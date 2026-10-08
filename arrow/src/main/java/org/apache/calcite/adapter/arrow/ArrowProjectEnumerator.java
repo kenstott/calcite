@@ -32,13 +32,11 @@ import java.io.IOException;
  * {@link ArrowScanEnumerator}.
  */
 class ArrowProjectEnumerator extends AbstractArrowEnumerator {
-  private final ArrowFileReader arrowFileReader;
   private final Projector projector;
 
   ArrowProjectEnumerator(ArrowFileReader arrowFileReader, ImmutableIntList fields,
       Object projector) {
     super(arrowFileReader, fields);
-    this.arrowFileReader = arrowFileReader;
     this.projector = (Projector) projector;
   }
 

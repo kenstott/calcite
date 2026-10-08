@@ -26,7 +26,7 @@ import java.util.List;
  * needed to satisfy a projection. If the projection's expressions are trivial,
  * the projection is removed.
  *
- * @see FileRules#PROJECT_SCAN
+ * <p>See {@code FileRules#PROJECT_SCAN}.
  */
 @Value.Enclosing
 public class CsvProjectTableScanRule

@@ -313,6 +313,8 @@ public interface GraphQLRel extends RelNode {
           case AND:
             f.append(String.format(Locale.ROOT, "{ %s: [", KEYWORDS.get("_or")));
             break;
+          default:
+            break;
           }
           ArrayList<String> conditions = new ArrayList<>();
           for (RexNode o : ((RexCall) filter).operands) {
@@ -363,18 +365,6 @@ public interface GraphQLRel extends RelNode {
         return sarg.rangeSet.asRanges().toArray();
       }
       return null;
-    }
-
-    private String convertQuotes(String input) {
-      //Replace any original double quotes to \"
-      input = input.replace("\"", "\\\"");
-
-      //If string starts and ends with single quote
-      if (input.startsWith("'") && input.endsWith("'")) {
-        //Replaces outer single quotes with double quotes
-        input = "\"" + input.substring(1, input.length() - 1) + "\"";
-      }
-      return input;
     }
 
     private String getComparator(List<RexNode> operands) {

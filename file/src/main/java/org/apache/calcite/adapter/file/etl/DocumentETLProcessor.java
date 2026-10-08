@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * document-based ETL downloads documents (XBRL, HTML) and extracts multiple tables
  * from each document.
  *
- * <h3>Document ETL Flow</h3>
+ * <h2>Document ETL Flow</h2>
  * <pre>
  * 1. Fetch metadata from source (e.g., SEC submissions.json)
  * 2. Parse metadata to enumerate documents
@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 4. Track conversion results
  * </pre>
  *
- * <h3>Multi-Table Output</h3>
+ * <h2>Multi-Table Output</h2>
  * <p>Document converters produce multiple output files with different schemas:
  * <ul>
  *   <li>{cik}_{accession}_facts.parquet - Financial line items</li>

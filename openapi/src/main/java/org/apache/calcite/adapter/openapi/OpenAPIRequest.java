@@ -67,7 +67,6 @@ public class OpenAPIRequest {
    */
   public static class Builder {
     private OpenAPIConfig.Variant variant;
-    private OpenAPITransport transport;
     private final Map<String, Object> pathParams = new HashMap<>();
     private final List<NameValuePair> queryParams = new ArrayList<>();
     private final Map<String, String> headers = new HashMap<>();
@@ -90,7 +89,6 @@ public class OpenAPIRequest {
     }
 
     public Builder transport(OpenAPITransport transport) {
-      this.transport = transport;
       return this;
     }
 
@@ -172,7 +170,7 @@ public class OpenAPIRequest {
       String apiDirection = config.getDirectionValues().get(direction);
 
       // Format according to configuration
-      String sortValue = formatSort(columnName, apiDirection, config.getFormat(), config);
+      String sortValue = formatSort(columnName, apiDirection, config.getFormat());
 
       // Add to appropriate location
       switch (config.getLocation()) {
@@ -184,7 +182,7 @@ public class OpenAPIRequest {
           }
         } else if (config.getFormat() == OpenAPIConfig.SortFormat.JQL_ORDER_BY) {
           // Special handling for Jira JQL - append to existing JQL or create new
-          String orderByClause = formatSort(columnName, apiDirection, config.getFormat(), config);
+          String orderByClause = formatSort(columnName, apiDirection, config.getFormat());
           // This is a simplified approach - in reality you'd need to parse existing JQL
           // and append the ORDER BY clause properly
           String existingJql = getExistingJqlParam();
@@ -260,7 +258,7 @@ public class OpenAPIRequest {
     }
 
     private String formatSort(String column, String direction,
-        OpenAPIConfig.SortFormat format, OpenAPIConfig.SortPushdown config) {
+        OpenAPIConfig.SortFormat format) {
 
       switch (format) {
       case SEPARATE_PARAMS:

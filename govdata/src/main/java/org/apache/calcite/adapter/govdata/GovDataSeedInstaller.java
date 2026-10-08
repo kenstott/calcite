@@ -36,15 +36,15 @@ import java.util.zip.ZipInputStream;
  *   <li>{@code .duckdb/govdata.duckdb} — the single shared catalog (view DDL only, no data),
  *       built against {@code s3://} URIs so every {@code iceberg_scan}/{@code parquet_scan} view
  *       is machine-independent;</li>
- *   <li>{@code .aperio/&lt;schema&gt;/.conversions.json} — the per-schema conversion trackers,
+ *   <li>{@code .aperio/<schema>/.conversions.json} — the per-schema conversion trackers,
  *       whose Iceberg records are namespaced by the S3 warehouse root and carry {@code s3://}
  *       paths only.</li>
  * </ul>
  *
  * <p>On the first connection per JVM, {@link #ensureSeeded(String)} compares a SHA-256 fingerprint
  * of the bundled {@code govdata-seed.zip} against the on-disk marker
- * ({@code &lt;base&gt;/.duckdb/govdata.duckdb.version}) AND confirms the catalog file itself
- * ({@code &lt;base&gt;/.duckdb/govdata.duckdb}) still exists. Both must hold for extraction to be
+ * ({@code <base>/.duckdb/govdata.duckdb.version}) AND confirms the catalog file itself
+ * ({@code <base>/.duckdb/govdata.duckdb}) still exists. Both must hold for extraction to be
  * skipped (fast path); either the fingerprint changing (a JAR upgrade with new/changed data) or the
  * catalog file being absent despite a matching marker (deleted, corrupted, or replaced out from
  * under the marker) forces re-extraction. A content fingerprint is used rather than the project

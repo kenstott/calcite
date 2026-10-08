@@ -28,6 +28,7 @@ if (JavaVersion.current() < JavaVersion.VERSION_21) {
     afterEvaluate {
         tasks.withType<JavaCompile>().configureEach { enabled = false }
         tasks.withType<Test>().configureEach { enabled = false }
+        tasks.withType<Javadoc>().configureEach { enabled = false }
     }
 } else {
     // Override the root's --release 11 convention: at 11 javac refuses to read

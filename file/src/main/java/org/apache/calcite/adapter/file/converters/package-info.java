@@ -111,6 +111,7 @@
  *
  * <h2>Supported Formats Summary</h2>
  * <table>
+ *   <caption>Converters by file format</caption>
  *   <tr>
  *     <th>Format</th>
  *     <th>Converter</th>

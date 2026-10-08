@@ -343,7 +343,7 @@ public class ParquetConversionUtil {
   }
 
   /**
-   * Scans any file-adapter {@link Table} to its rows, handling both {@link ScannableTable} and
+   * Scans any file-adapter {@code Table} to its rows, handling both {@code ScannableTable} and
    * {@link org.apache.calcite.schema.TranslatableTable} (via {@link TranslatableTableAdapter}).
    * Shared by Parquet conversion and Iceberg materialization so both read a discovered table the
    * same way. Throws if the table supports neither interface.

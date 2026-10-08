@@ -29,7 +29,11 @@ final class PdfPageTexts {
 
   /** Receives the extracted text of each page, in page order. */
   interface PageSink {
-    /** @param pageNumber 1-based page number */
+    /**
+     * Receives the text of one page.
+     *
+     * @param pageNumber 1-based page number
+     */
     void page(int pageNumber, String text) throws IOException;
   }
 

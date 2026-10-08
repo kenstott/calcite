@@ -55,10 +55,6 @@ final class FiaStateArchive {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(FiaStateArchive.class);
 
-  private static final String ARCHIVE_URL_PATTERN =
-      "https://apps.fs.usda.gov/fia/datamart/CSV/%s_CSV.zip";
-  private static final String CACHE_PATH_PATTERN = "lands/%s_CSV.zip";
-
   private static final int CONNECT_TIMEOUT_MS = 60_000;
   private static final int READ_TIMEOUT_MS = 1_800_000; // 30 min ceiling per state archive
 
@@ -80,7 +76,7 @@ final class FiaStateArchive {
     if (base == null || base.isEmpty()) {
       throw new IllegalStateException("GOVDATA_CACHE_DIR is not set");
     }
-    String suffix = String.format(Locale.ROOT, CACHE_PATH_PATTERN, normalize(state));
+    String suffix = String.format(Locale.ROOT, "lands/%s_CSV.zip", normalize(state));
     return base.endsWith("/") ? base + suffix : base + "/" + suffix;
   }
 
@@ -94,7 +90,8 @@ final class FiaStateArchive {
    */
   static String ensureCached(String state) throws IOException {
     String st = normalize(state);
-    String url = String.format(Locale.ROOT, ARCHIVE_URL_PATTERN, st);
+    String url = String.format(Locale.ROOT,
+        "https://apps.fs.usda.gov/fia/datamart/CSV/%s_CSV.zip", st);
     String target = cachedPath(st);
     Object lock = STATE_LOCKS.computeIfAbsent(st, k -> new Object());
     synchronized (lock) {

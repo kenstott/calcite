@@ -19,7 +19,7 @@ import java.util.Map;
  * API versions, years, or data sources by mapping source-specific field names to
  * consistent conceptual names.
  *
- * <h3>Schema Evolution Use Case</h3>
+ * <h2>Schema Evolution Use Case</h2>
  * <p>Many APIs change their field names over time:
  * <ul>
  *   <li>Census Bureau: {@code B01001_001E} (ACS) vs {@code P1_001N} (Decennial 2020)</li>
@@ -30,7 +30,7 @@ import java.util.Map;
  * <p>The normalizer maps these to consistent names (e.g., {@code total_population})
  * so column expressions don't need to change when the underlying API changes.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * public class CensusVariableNormalizer implements VariableNormalizer {
  *     public String normalize(String apiVariable, Map<String, String> context) {
@@ -42,7 +42,7 @@ import java.util.Map;
  * }
  * }</pre>
  *
- * <h3>Schema Configuration</h3>
+ * <h2>Schema Configuration</h2>
  * <pre>{@code
  * hooks:
  *   variableNormalizer: "org.apache.calcite.adapter.govdata.census.CensusVariableNormalizer"

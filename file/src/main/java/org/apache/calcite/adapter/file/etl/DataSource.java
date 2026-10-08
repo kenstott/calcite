@@ -20,14 +20,14 @@ import java.util.Map;
  * <p>DataSource implementations provide data as an iterator of Maps,
  * where each Map represents a row with column name to value mappings.
  *
- * <h3>Implementations</h3>
+ * <h2>Implementations</h2>
  * <ul>
  *   <li>File-based: JSON, CSV files read via DuckDB</li>
  *   <li>HTTP-based: REST API responses (future Phase 3)</li>
  *   <li>Query-based: SQL query results (future)</li>
  * </ul>
  *
- * <h3>Usage</h3>
+ * <h2>Usage</h2>
  * <pre>{@code
  * DataSource source = JsonDataSource.fromFile("/path/to/data.json");
  * Iterator<Map<String, Object>> data = source.fetch(variables);

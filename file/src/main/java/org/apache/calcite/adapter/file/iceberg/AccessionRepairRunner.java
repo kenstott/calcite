@@ -15,11 +15,10 @@ import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.hadoop.HadoopTables;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -58,8 +57,6 @@ import java.util.Set;
  * }</pre>
  */
 public class AccessionRepairRunner {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(AccessionRepairRunner.class);
 
   public static void main(String[] args) throws Exception {
     String warehouse = null;
@@ -239,7 +236,8 @@ public class AccessionRepairRunner {
     Set<String> accessions = new HashSet<>();
     // storage-provider-guard: allow — local CLI input file for this standalone repair tool,
     // same as CompactionRunner's local --warehouse/--table args; not a data-pipeline path.
-    try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(new FileInputStream(path), Charset.defaultCharset()))) {
       String line;
       boolean first = true;
       while ((line = reader.readLine()) != null) {

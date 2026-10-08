@@ -410,7 +410,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * PostgreSQL pg_type system catalog.
    * Lists all data types.
    */
-  private class PgTypeTable extends AbstractTable implements ScannableTable {
+  private static class PgTypeTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("oid", SqlTypeName.INTEGER)
@@ -509,7 +509,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * PostgreSQL pg_proc system catalog.
    * Lists all functions and procedures.
    */
-  private class PgProcTable extends AbstractTable implements ScannableTable {
+  private static class PgProcTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("oid", SqlTypeName.INTEGER)
@@ -709,7 +709,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
   /**
    * PostgreSQL pg_views view (empty for Splunk).
    */
-  private class PgViewsView extends AbstractTable implements ScannableTable {
+  private static class PgViewsView extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("schemaname", SqlTypeName.VARCHAR)
@@ -728,7 +728,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
   /**
    * PostgreSQL pg_indexes view (empty for Splunk).
    */
-  private class PgIndexesView extends AbstractTable implements ScannableTable {
+  private static class PgIndexesView extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("schemaname", SqlTypeName.VARCHAR)
@@ -749,7 +749,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * Splunk-specific table: splunk_indexes.
    * Lists available Splunk indexes (placeholder - would require API access).
    */
-  private class SplunkIndexesTable extends AbstractTable implements ScannableTable {
+  private static class SplunkIndexesTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("index_name", SqlTypeName.VARCHAR)
@@ -805,7 +805,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * Splunk-specific table: splunk_sources.
    * Lists data sources available in Splunk (placeholder).
    */
-  private class SplunkSourcesTable extends AbstractTable implements ScannableTable {
+  private static class SplunkSourcesTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("source", SqlTypeName.VARCHAR)

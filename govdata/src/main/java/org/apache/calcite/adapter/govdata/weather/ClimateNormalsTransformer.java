@@ -253,7 +253,7 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
    * as a JSON number.
    */
   private static boolean isTrace(double rawValue) {
-    return Math.abs(rawValue - (-7777.0)) < 0.5;
+    return Math.abs(rawValue + 7777.0) < 0.5;
   }
 
   /** Converts a raw value in tenths of &deg;F to an absolute temperature in &deg;C. */

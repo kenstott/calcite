@@ -171,16 +171,10 @@ public class SharePointRestAttachmentFunctions {
     // Get the schema from the data context
     org.apache.calcite.schema.Schema schema = context.getRootSchema().getSubSchema("sharepoint");
     if (schema instanceof SharePointListSchema) {
-      SharePointListSchema spSchema = (SharePointListSchema) schema;
-
-      // For now, create a REST client using the existing Graph client's auth
-      // In a real implementation, you'd want to configure this properly
-      MicrosoftGraphListClient graphClient = spSchema.getClient();
-
       // Extract site URL and auth from the graph client
       // This is a simplified approach - you'd want proper configuration
-      String siteUrl = extractSiteUrl(graphClient);
-      org.apache.calcite.adapter.sharepoint.auth.SharePointAuth auth = extractAuth(graphClient);
+      String siteUrl = extractSiteUrl();
+      org.apache.calcite.adapter.sharepoint.auth.SharePointAuth auth = extractAuth();
 
       return new SharePointRestListClient(siteUrl, auth);
     }
@@ -191,7 +185,7 @@ public class SharePointRestAttachmentFunctions {
    * Extracts site URL from Graph client.
    * This is a placeholder - in real implementation you'd have proper configuration.
    */
-  private static String extractSiteUrl(MicrosoftGraphListClient graphClient) {
+  private static String extractSiteUrl() {
     // For demonstration purposes, assume a standard SharePoint URL
     // In real implementation, this would be properly configured
     return "https://example.sharepoint.com/sites/example";
@@ -201,7 +195,7 @@ public class SharePointRestAttachmentFunctions {
    * Extracts authentication from Graph client.
    * This is a placeholder - in real implementation you'd have proper configuration.
    */
-  private static org.apache.calcite.adapter.sharepoint.auth.SharePointAuth extractAuth(MicrosoftGraphListClient graphClient) {
+  private static org.apache.calcite.adapter.sharepoint.auth.SharePointAuth extractAuth() {
     // For demonstration purposes, create a dummy auth
     // In real implementation, this would use the same auth as the Graph client
     return new org.apache.calcite.adapter.sharepoint.auth.SharePointAuth() {
@@ -210,15 +204,6 @@ public class SharePointRestAttachmentFunctions {
         // For now, return a placeholder
         return "placeholder-token";
       }
-    };
-  }
-
-  private static <T> Enumerator<T> emptyEnumerator() {
-    return new Enumerator<T>() {
-      @Override public T current() { return null; }
-      @Override public boolean moveNext() { return false; }
-      @Override public void reset() { }
-      @Override public void close() { }
     };
   }
 
