@@ -23,11 +23,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -49,7 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <ul>
  *   <li>SHAREPOINT_TENANT_ID</li>
  *   <li>SHAREPOINT_CLIENT_ID</li>
- *   <li>SHAREPOINT_CLIENT_SECRET</li>
+ *   <li>SHAREPOINT_CERT_PATH</li>
+ *   <li>SHAREPOINT_CERT_PASSWORD</li>
  *   <li>SHAREPOINT_SITE_URL</li>
  * </ul>
  */
@@ -69,32 +66,7 @@ public class SharePointListIntegrationTest {
   }
 
   private static Properties loadTestConfig() throws IOException {
-    Properties props = new Properties();
-
-    // Try to load from file module's local-test.properties
-    Path configPath = Paths.get("../file/local-test.properties");
-    if (!Files.exists(configPath)) {
-      // Try alternate path
-      configPath = Paths.get("../../file/local-test.properties");
-    }
-
-    if (Files.exists(configPath)) {
-      try (FileInputStream fis = new FileInputStream(configPath.toFile())) {
-        props.load(fis);
-      }
-    } else {
-      // Fall back to environment variables
-      props.setProperty("SHAREPOINT_TENANT_ID",
-          System.getenv().getOrDefault("SHAREPOINT_TENANT_ID", ""));
-      props.setProperty("SHAREPOINT_CLIENT_ID",
-          System.getenv().getOrDefault("SHAREPOINT_CLIENT_ID", ""));
-      props.setProperty("SHAREPOINT_CLIENT_SECRET",
-          System.getenv().getOrDefault("SHAREPOINT_CLIENT_SECRET", ""));
-      props.setProperty("SHAREPOINT_SITE_URL",
-          System.getenv().getOrDefault("SHAREPOINT_SITE_URL", ""));
-    }
-
-    return props;
+    return SharePointTestCredentials.load().properties();
   }
 
   @Test public void testListDiscovery() throws SQLException {
@@ -119,7 +91,6 @@ public class SharePointListIntegrationTest {
       assertTrue(foundTables, "Should discover at least one SharePoint list");
     }
   }
-
 
   @Test public void testQuerySharePointList() throws SQLException {
     try (Connection connection = createConnection()) {
@@ -148,7 +119,6 @@ public class SharePointListIntegrationTest {
   // Note: For now, we'll focus on read-only tests
   // Write operations would require implementing ModifiableTable properly
 
-
   private Connection createConnection() throws SQLException {
     Properties info = new Properties();
     info.setProperty("lex", "JAVA");
@@ -160,10 +130,7 @@ public class SharePointListIntegrationTest {
     // Create SharePoint schema with auth config
     Map<String, Object> operand = new HashMap<>();
     operand.put("siteUrl", testConfig.getProperty("SHAREPOINT_SITE_URL"));
-    operand.put("authType", "CLIENT_CREDENTIALS");
-    operand.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    operand.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    operand.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    operand.putAll(SharePointTestCredentials.load().authConfig());
 
     SharePointListSchema sharePointSchema =
         new SharePointListSchema(testConfig.getProperty("SHAREPOINT_SITE_URL"), operand);

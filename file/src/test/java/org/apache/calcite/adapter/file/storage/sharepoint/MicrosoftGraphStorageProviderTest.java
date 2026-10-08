@@ -15,6 +15,7 @@ import org.apache.calcite.adapter.file.storage.SharePointTokenManager;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Test for Microsoft Graph API-based SharePoint storage provider.
  * Compares functionality with the existing SharePoint REST API implementation.
  */
+@Disabled("needs a client secret; the test tenant authenticates by certificate (owner decision 2026-10-08)")
 @Tag("integration")
 public class MicrosoftGraphStorageProviderTest {
 

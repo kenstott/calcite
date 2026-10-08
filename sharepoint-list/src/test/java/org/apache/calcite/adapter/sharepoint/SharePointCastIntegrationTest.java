@@ -25,12 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -382,29 +378,7 @@ public class SharePointCastIntegrationTest {
   }
 
   private static Properties loadTestConfig() throws IOException {
-    Properties props = new Properties();
-
-    Path configPath = Paths.get("../file/local-test.properties");
-    if (!Files.exists(configPath)) {
-      configPath = Paths.get("../../file/local-test.properties");
-    }
-
-    if (Files.exists(configPath)) {
-      try (FileInputStream fis = new FileInputStream(configPath.toFile())) {
-        props.load(fis);
-      }
-    } else {
-      props.setProperty("SHAREPOINT_TENANT_ID",
-          System.getenv().getOrDefault("SHAREPOINT_TENANT_ID", ""));
-      props.setProperty("SHAREPOINT_CLIENT_ID",
-          System.getenv().getOrDefault("SHAREPOINT_CLIENT_ID", ""));
-      props.setProperty("SHAREPOINT_CLIENT_SECRET",
-          System.getenv().getOrDefault("SHAREPOINT_CLIENT_SECRET", ""));
-      props.setProperty("SHAREPOINT_SITE_URL",
-          System.getenv().getOrDefault("SHAREPOINT_SITE_URL", ""));
-    }
-
-    return props;
+    return SharePointTestCredentials.load().properties();
   }
 
   private Connection createConnection() throws SQLException {
@@ -417,10 +391,7 @@ public class SharePointCastIntegrationTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("siteUrl", testConfig.getProperty("SHAREPOINT_SITE_URL"));
-    operand.put("authType", "CLIENT_CREDENTIALS");
-    operand.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    operand.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    operand.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    operand.putAll(SharePointTestCredentials.load().authConfig());
 
     SharePointListSchema sharePointSchema =
         new SharePointListSchema(testConfig.getProperty("SHAREPOINT_SITE_URL"), operand);
@@ -431,10 +402,7 @@ public class SharePointCastIntegrationTest {
 
   private MicrosoftGraphListClient createDirectClient() {
     Map<String, Object> authConfig = new HashMap<>();
-    authConfig.put("authType", "CLIENT_CREDENTIALS");
-    authConfig.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    authConfig.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    authConfig.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    authConfig.putAll(SharePointTestCredentials.load().authConfig());
 
     return new MicrosoftGraphListClient(testConfig.getProperty("SHAREPOINT_SITE_URL"),
         org.apache.calcite.adapter.sharepoint.auth.SharePointAuthFactory.createAuth(authConfig));

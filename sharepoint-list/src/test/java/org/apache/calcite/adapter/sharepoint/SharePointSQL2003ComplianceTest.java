@@ -25,11 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -101,44 +97,7 @@ public class SharePointSQL2003ComplianceTest {
   }
 
   private Properties loadTestConfig() throws IOException {
-    Properties props = new Properties();
-
-    // Try to load from sharepoint-list module's local-test.properties
-    Path configPath = Paths.get("sharepoint-list/local-test.properties");
-    if (!Files.exists(configPath)) {
-      // Try from current directory if running from module
-      configPath = Paths.get("local-test.properties");
-    }
-    if (!Files.exists(configPath)) {
-      // Try absolute path
-      configPath = Paths.get("/Users/kennethstott/calcite/sharepoint-list/local-test.properties");
-    }
-
-    if (Files.exists(configPath)) {
-      try (FileInputStream fis = new FileInputStream(configPath.toFile())) {
-        props.load(fis);
-      }
-    }
-
-    // Also support environment variables
-    String tenantId = System.getenv("SHAREPOINT_TENANT_ID");
-    if (tenantId != null) {
-      props.setProperty("SHAREPOINT_TENANT_ID", tenantId);
-    }
-    String clientId = System.getenv("SHAREPOINT_CLIENT_ID");
-    if (clientId != null) {
-      props.setProperty("SHAREPOINT_CLIENT_ID", clientId);
-    }
-    String clientSecret = System.getenv("SHAREPOINT_CLIENT_SECRET");
-    if (clientSecret != null) {
-      props.setProperty("SHAREPOINT_CLIENT_SECRET", clientSecret);
-    }
-    String siteUrl = System.getenv("SHAREPOINT_SITE_URL");
-    if (siteUrl != null) {
-      props.setProperty("SHAREPOINT_SITE_URL", siteUrl);
-    }
-
-    return props;
+    return SharePointTestCredentials.load().properties();
   }
 
   private Connection createConnection() throws SQLException {
@@ -154,10 +113,7 @@ public class SharePointSQL2003ComplianceTest {
     // Create SharePoint schema with auth config
     Map<String, Object> operand = new HashMap<>();
     operand.put("siteUrl", testConfig.getProperty("SHAREPOINT_SITE_URL"));
-    operand.put("authType", "CLIENT_CREDENTIALS");
-    operand.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    operand.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    operand.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    operand.putAll(SharePointTestCredentials.load().authConfig());
 
     SharePointListSchema sharePointSchema =
         new SharePointListSchema(testConfig.getProperty("SHAREPOINT_SITE_URL"), operand);
