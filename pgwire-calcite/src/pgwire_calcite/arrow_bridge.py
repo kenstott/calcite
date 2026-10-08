@@ -256,6 +256,8 @@ def stream_ipc_batches(
         try:
             while True:
                 try:
+                    if cancel_scope is not None:
+                        cancel_scope.enter_engine()
                     if not bool(iterator.hasNext()):
                         break
                     root = iterator.next()
@@ -264,12 +266,21 @@ def stream_ipc_batches(
                         cancel_scope.raise_if_canceled()
                     raise
                 try:
-                    yield _root_to_ipc_bytes(C, root)
+                    batch = _root_to_ipc_bytes(C, root)
                 finally:
                     root.close()  # release this batch's off-heap buffers promptly
+                # From here until the consumer asks for the next batch the engine is
+                # idle: the time is the client's (reading these rows, or not).
+                if cancel_scope is not None:
+                    cancel_scope.leave_engine()
+                yield batch
         finally:
             _release()
 
+    # The statement has returned its first answer; until the first batch is pulled the
+    # connection is held for the consumer, not by the engine.
+    if cancel_scope is not None:
+        cancel_scope.leave_engine()
     return names, labels, _ClosingIterator(_ipc_gen(), _release)
 
 

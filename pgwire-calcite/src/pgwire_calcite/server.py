@@ -465,6 +465,47 @@ def _peer_closed(sock) -> bool:
         return True
 
 
+class ClientLink:
+    """A statement's view of the client connection it is running for.
+
+    Calling it answers "has the client gone?" (what the backends poll while a statement
+    waits for the engine). ``terminate`` ends the connection from the server's side, for
+    a client that keeps the engine without reading from it.
+    """
+
+    def __init__(self, sock) -> None:
+        self._sock = sock
+
+    def __call__(self) -> bool:
+        return _peer_closed(self._sock)
+
+    def terminate(self, reason: str) -> None:
+        """Shut the connection down so the thread serving it (blocked reading the
+        client's next message, or writing rows it does not read) returns and releases
+        what it holds. No ErrorResponse is written: that thread may be mid-message, and
+        a client that is not reading would not see it."""
+        log.warning("[PGWIRE] closing a client connection: %s", reason)
+        try:
+            self._sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            # Already disconnected: the serving thread is on its way out by itself.
+            pass
+
+
+#: SQLSTATE for an error that names none: PostgreSQL's internal_error.
+_SQLSTATE_INTERNAL_ERROR = "XX000"
+
+
+def _sqlstate_of(exception) -> str:
+    """The SQLSTATE an exception reaches the client with."""
+    sqlstate = getattr(exception, "sqlstate", None)
+    if sqlstate:
+        return sqlstate
+    if isinstance(exception, PermissionError):
+        return "42501"
+    return _SQLSTATE_INTERNAL_ERROR
+
+
 class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def __init__(self) -> None:
         super().__init__()
@@ -1065,19 +1106,39 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         super().setup()
         self.request.settimeout(self._STARTUP_TIMEOUT_SECONDS)
         self._enable_tcp_keepalive()
-        self.server.connection_opened()
+        self.server.connection_opened(self)
+
+    def terminate(self, reason: str) -> None:
+        """End this connection from another thread (server shutdown): cancel what it is
+        running in the engine, then shut its socket so the thread serving it returns."""
+        ctx = self._ctx
+        backend = _current_backend()
+        if ctx is not None and backend is not None:
+            try:
+                backend.cancel_session(ctx.session.key, reason)
+            except Exception:  # noqa: BLE001 - reported; the socket is shut regardless
+                log.exception("[PGWIRE] could not cancel session %s", ctx.session.key)
+        ClientLink(self.request).terminate(reason)
 
     def finish(self) -> None:
         ctx = self._ctx
         self._ctx = None
         try:
             if ctx is not None:
+                # buenavista's handle() unregisters the context only on its clean exit.
+                # A client that vanishes mid-result breaks the pipe on its error path
+                # first, and every such connection then stayed in the server's table
+                # (context, prepared statements, portals) for the life of the process.
+                self.server.ctxts.pop(ctx.process_id, None)  # type: ignore[attr-defined]
                 ctx.session.close()
         finally:
             try:
                 super().finish()
+            except OSError as gone:
+                # Flushing to a client that already disconnected: nothing left to send.
+                log.debug("[PGWIRE] connection already closed at finish: %s", gone)
             finally:
-                self.server.connection_closed()
+                self.server.connection_closed(self)
 
     # Per-connection SASL SCRAM exchange state; None before the handshake starts and
     # between the SASLInitialResponse and SASLResponse messages is impossible (only ever
@@ -1125,6 +1186,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         ``_send_pg_notice``) so query results are never modified or gated.
         """
         super().handle_post_auth(ctx)
+        # The handshake is complete on every authentication path (trust, cleartext,
+        # SCRAM): clear the startup timeout here, the one place they all pass through,
+        # so an authenticated session that sits idle is not cut off by it.
+        self.request.settimeout(None)
 
     def _send_lockout(self, locked: LockedOut) -> None:
         # A lockout ends the connection, so it is a FATAL ErrorResponse with SQLSTATE 28000
@@ -1204,8 +1269,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             # JDBC statement, Arrow allocator and backend lock (PGW-022).
             self._ctx = ctx
             ctx.session.bind_context(ctx)  # type: ignore[attr-defined]
-            sock = self.request
-            ctx.session.client_gone = lambda: _peer_closed(sock)  # type: ignore[attr-defined]
+            ctx.session.client_gone = ClientLink(self.request)  # type: ignore[attr-defined]
             # Trust mode: authenticate immediately with no password challenge, so a
             # plain `psql host=… user=… dbname=…` connects like any client. A
             # pluggable provider (Phase 5b) decides via requires_password; else the
@@ -1426,14 +1490,92 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         read as SQLSTATE XX000. Cancellation must be distinguishable (57014) or a
         client cannot tell "you cancelled me" from "the engine broke" (PGW-050).
         """
-        sqlstate = getattr(exception, "sqlstate", None)
-        if sqlstate is None:
-            super().send_error(exception, ctx)
-            return
-        log.info("[PGWIRE] %s: %s", sqlstate, exception)
-        self._send_pg_error("ERROR", sqlstate, str(exception))
+        sqlstate = _sqlstate_of(exception)
+        if sqlstate == _SQLSTATE_INTERNAL_ERROR:
+            log.error("[PGWIRE] %s: %s", sqlstate, exception)
+        else:
+            log.info("[PGWIRE] %s: %s", sqlstate, exception)
         if ctx is not None:
+            self._send_pg_error("ERROR", sqlstate, str(exception))
             ctx.mark_error()
+            return
+        # No context: buenavista's handle() reports the error that is ending the
+        # connection. That is FATAL to the client, and very often the error is that the
+        # client is already gone -- then there is nobody left to tell.
+        try:
+            self._send_pg_error("FATAL", sqlstate, str(exception))
+        except OSError as gone:
+            log.info("[PGWIRE] client disconnected before the error could be sent: %s", gone)
+
+    # --- extended protocol: one error rule for every message ------------------
+
+    def _extended(self, name: str, handler, ctx: BVContext, payload: bytes) -> None:
+        """Run one extended-protocol message under PostgreSQL's error rule: a failure is
+        answered with an ErrorResponse and every later message is discarded until Sync;
+        the connection survives. Only a failure of the connection itself propagates."""
+        from pgwire_calcite.backend import PgProtocolError
+
+        if ctx.has_error:
+            return
+        try:
+            handler(ctx, payload)
+        except PermissionError as exc:  # an OSError by inheritance, but the client's to see
+            self.send_error(exc, ctx)
+        except OSError:
+            raise
+        except (struct.error, IndexError, UnicodeDecodeError) as exc:
+            self.send_error(PgProtocolError("08P01", f"malformed {name} message: {exc}"), ctx)
+        except Exception as exc:
+            self.send_error(exc, ctx)
+
+    def handle_parse(self, ctx: BVContext, payload: bytes) -> None:
+        self._extended("Parse", super().handle_parse, ctx, payload)
+
+    def handle_bind(self, ctx: BVContext, payload: bytes) -> None:
+        self._extended("Bind", self._bind, ctx, payload)
+
+    def handle_describe(self, ctx: BVContext, payload: bytes) -> None:
+        self._extended("Describe", self._describe, ctx, payload)
+
+    def handle_execute(self, ctx: BVContext, payload: bytes) -> None:
+        self._extended("Execute", self._execute, ctx, payload)
+
+    def handle_close(self, ctx: BVContext, payload: bytes) -> None:
+        self._extended("Close", self._close, ctx, payload)
+
+    def _close(self, ctx: BVContext, payload: bytes) -> None:
+        """Close a prepared statement or a portal. Closing one that does not exist is not
+        an error (PostgreSQL's rule; a client closes names the server already dropped
+        after DISCARD ALL or DEALLOCATE). Closing a portal releases its result now: a
+        cursor closed after a partial fetch otherwise kept the engine until the session's
+        next statement."""
+        from pgwire_calcite.backend import PgProtocolError
+
+        kind, name = payload[0], payload[1:-1].decode("utf-8")
+        if kind == ord("S"):
+            ctx.stmts.pop(name, None)
+        elif kind == ord("P"):
+            ctx.portals.pop(name, None)
+            cached = ctx.result_cache.pop(name, None)
+            if cached is not None:
+                cached.close()
+        else:
+            raise PgProtocolError("08P01", f"invalid Close target type {chr(kind)!r}")
+        self.send_close_complete()
+
+    @staticmethod
+    def _require_statement(ctx: BVContext, name: str) -> None:
+        from pgwire_calcite.backend import PgProtocolError
+
+        if name not in ctx.stmts:
+            raise PgProtocolError("26000", f'prepared statement "{name}" does not exist')
+
+    @staticmethod
+    def _require_portal(ctx: BVContext, name: str) -> None:
+        from pgwire_calcite.backend import PgProtocolError
+
+        if name not in ctx.portals:
+            raise PgProtocolError("34000", f'portal "{name}" does not exist')
 
     def send_data_rows(self, query_result, limit: int = 0) -> int:  # type: ignore[override]
         # Remembered for the CommandComplete that follows: buenavista tags every result
@@ -1482,13 +1624,14 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             cache[sql] = param_oids
         return param_oids
 
-    def handle_bind(self, ctx: BVContext, payload: bytes) -> None:
+    def _bind(self, ctx: BVContext, payload: bytes) -> None:
         # A parameter sent in binary can only be decoded with its type. If this statement's
         # types are not known here (never described, or parsed again since), work them out.
         ba = bytearray(payload)
         portal_end = ba.index(0)
         stmt_end = ba.index(0, portal_end + 1)
         stmt = ba[portal_end + 1 : stmt_end].decode("utf-8")
+        self._require_statement(ctx, stmt)
         if stmt in ctx.stmts and not ctx.stmts[stmt][1]:
             (num_formats,) = struct.unpack("!h", ba[stmt_end + 1 : stmt_end + 3])
             formats = struct.unpack(
@@ -1503,10 +1646,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                     return
         super().handle_bind(ctx, payload)
 
-    def handle_describe(self, ctx: BVContext, payload: bytes) -> None:
+    def _describe(self, ctx: BVContext, payload: bytes) -> None:
         ba = bytearray(payload)
         if ba[0] == ord("P"):
             portal = ba[1 : len(ba) - 1].decode("utf-8")
+            self._require_portal(ctx, portal)
             stmt_name = ctx.portals.get(portal, (None,))[0] if portal in ctx.portals else None
             portal_sql = ctx.stmts.get(stmt_name, ("",))[0] if stmt_name is not None else ""
             if stmt_name is not None and not portal_sql.strip():
@@ -1529,6 +1673,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 return
         elif ba[0] == ord("S"):
             stmt = ba[1 : len(ba) - 1].decode("utf-8")
+            self._require_statement(ctx, stmt)
             sql = ctx.stmts[stmt][0]
             if not sql.strip():
                 self.send_paramter_description([])
@@ -1588,10 +1733,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             return
         super().handle_describe(ctx, payload)
 
-    def handle_execute(self, ctx: BVContext, payload: bytes) -> None:
+    def _execute(self, ctx: BVContext, payload: bytes) -> None:
         ba = bytearray(payload)
         portal_idx = ba.index(0)
         portal = ba[:portal_idx].decode("utf-8")
+        self._require_portal(ctx, portal)
         stmt_name = ctx.portals.get(portal, (None,))[0] if portal in ctx.portals else None
         sql = ctx.stmts.get(stmt_name, ("",))[0] if stmt_name is not None else ""
         if stmt_name is not None and not sql.strip():
@@ -1683,6 +1829,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 status = query_result.status()
                 self.send_command_complete(f"{status}\x00")
 
+        # A simple Query is its own synchronisation point: an error in it must not leave
+        # the connection discarding the next extended-protocol batch (whose Execute was
+        # then skipped without a word, so the client read an empty result).
+        ctx.sync()
         self.send_ready_for_query(ctx)
 
 
@@ -1727,6 +1877,8 @@ class CalciteServer(BuenaVistaServer):  # PGW-001
         # always calls finish() after setup(), even when handle() raises).
         self._active_connections = 0
         self._active_lock = threading.Lock()
+        #: The handlers of the connections that are open, for terminate_sessions().
+        self._handlers: set = set()
         # Wall-clock time.monotonic() the count first reached zero, or None while
         # a connection is live. Read/written only under _active_lock.
         self._idle_since: float | None = None
@@ -1735,13 +1887,36 @@ class CalciteServer(BuenaVistaServer):  # PGW-001
         del request, client_address
         return True
 
-    def connection_opened(self) -> None:
+    def handle_error(self, request, client_address) -> None:
+        """A connection that ends because its client went away is routine (a client
+        process killed mid-result, a driver's socket timeout); it is logged in one line,
+        not as the stderr traceback socketserver prints. Anything else keeps the trace."""
+        import sys
+
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionError, TimeoutError, ssl.SSLError)):
+            log.info("[PGWIRE] connection from %s ended: %s", client_address, exc)
+            return
+        log.error("[PGWIRE] connection from %s failed", client_address, exc_info=True)
+
+    def connection_opened(self, handler=None) -> None:
         with self._active_lock:
             self._active_connections += 1
             self._idle_since = None
+            if handler is not None:
+                self._handlers.add(handler)
 
-    def connection_closed(self) -> None:
+    def terminate_sessions(self, reason: str) -> int:
+        """End every open connection (server shutdown). Returns how many there were."""
         with self._active_lock:
+            handlers = list(self._handlers)
+        for handler in handlers:
+            handler.terminate(reason)
+        return len(handlers)
+
+    def connection_closed(self, handler=None) -> None:
+        with self._active_lock:
+            self._handlers.discard(handler)
             self._active_connections -= 1
             if self._active_connections <= 0:
                 self._active_connections = 0
@@ -1755,7 +1930,9 @@ class CalciteServer(BuenaVistaServer):  # PGW-001
             return time.monotonic() - self._idle_since
 
 
-def maybe_start_idle_shutdown_watcher(server: "CalciteServer") -> None:
+def maybe_start_idle_shutdown_watcher(
+    server: "CalciteServer", idle_shutdown_seconds: float | None = None
+) -> None:
     """Opt-in: exit the process once the server has had zero live connections for a
     configurable grace period.
 
@@ -1769,11 +1946,16 @@ def maybe_start_idle_shutdown_watcher(server: "CalciteServer") -> None:
     number of seconds; unset or <= 0 leaves the server running forever, unchanged from
     prior behavior.
     """
-    raw = os.environ.get("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", "")
-    try:
-        grace = float(raw)
-    except ValueError:
-        grace = 0.0
+    if idle_shutdown_seconds is not None:
+        # The launcher's --idle-shutdown-seconds: an explicit setting wins over the
+        # environment variable, which stays for hosts that already set it.
+        grace = float(idle_shutdown_seconds)
+    else:
+        raw = os.environ.get("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", "")
+        try:
+            grace = float(raw)
+        except ValueError:
+            grace = 0.0
     if grace <= 0:
         return
 
@@ -1809,6 +1991,7 @@ def start_pgwire_server(
     ssl_ctx: ssl.SSLContext | None = None,
     mtls_auth=None,
     sock: socket.socket | None = None,
+    idle_shutdown_seconds: float | None = None,
 ) -> CalciteServer:
     """Start the pgwire server in a daemon thread. Returns the server instance.
 
@@ -1837,5 +2020,5 @@ def start_pgwire_server(
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     log.info("[PGWIRE] listening on %s:%d (TLS=%s)", host, port, ssl_ctx is not None)
-    maybe_start_idle_shutdown_watcher(server)
+    maybe_start_idle_shutdown_watcher(server, idle_shutdown_seconds)
     return server

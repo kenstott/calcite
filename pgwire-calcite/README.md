@@ -87,3 +87,63 @@ the underlying DuckDB query, which does not stop instantly: observed cancel late
 seconds. A client budgeting its own deadline around `statement_timeout` needs at least that
 much slack on top — otherwise the client's socket deadline fires before the server has
 finished cancelling and the connection is dropped with the statement still winding down.
+
+A `CancelRequest` also reaches a statement that is still queued for the engine: its wait ends
+with SQLSTATE `57014` instead of the statement running later for a client that gave up on it.
+
+## Several clients, one engine
+
+Statements from every connection run one at a time on the shared engine connection, and a
+streamed result keeps it until the result is closed. A client that keeps the engine without
+using it would starve the others, so the server drops that client instead:
+
+- **Idle holder.** A session whose client stopped reading a result, or fetched part of a
+  cursor (an `Execute` with a row limit) and went quiet, is disconnected once another
+  statement has waited `--idle-holder-grace-ms` (default 30000; 0 = never) behind it. A
+  client that is steadily reading a long result is using the engine and is never dropped.
+  Closing a portal (`Close`) releases the engine at once.
+- **Cancelled but not released.** When `statement_timeout` or a `CancelRequest` cancels a
+  statement whose thread is outside the engine (waiting on its client), that client is
+  disconnected after `--cancel-grace-ms`. Only a statement that does not come back from
+  the engine itself is a wedge, and only that exits the server (status 3).
+
+## Errors
+
+Every error reaches the client as an ErrorResponse with a severity and a SQLSTATE; one the
+engine raises without naming a state is `XX000`. In the extended protocol a failed message
+is answered with the error and the messages after it are discarded until `Sync`; the
+connection stays open. Binding an unknown prepared statement is `26000`, an unknown portal
+`34000`, a malformed message `08P01`. Closing a statement or portal that does not exist is
+not an error.
+
+## Start-up and shutdown
+
+The listening port is claimed before the backend is built, which can take minutes: an open
+port is not a ready server. By default a connection made in that time waits and is served
+once the server is up (it logs `listening on <host>:<port>` at that point). With
+`--reject-while-starting`, such a connection is answered at once with `FATAL 57P03` ("the
+database system is starting up"), as PostgreSQL does, so a client that polls for readiness
+can tell a server that is starting from one that is stuck. A failure after the port is
+claimed ends the process (status 1), so the port is never left held by a server that cannot
+answer.
+
+On `SIGTERM`/`SIGINT` the server stops accepting, cancels running statements, closes its
+client connections and exits 0.
+
+| Launcher option | Purpose |
+|-----------------|---------|
+| `--reject-while-starting` | answer connections made before the server is ready with `FATAL 57P03` |
+| `--idle-shutdown-seconds N` | exit after N seconds with no client connected (also `PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS`) |
+| `--pid-file PATH` | write the pid of the process holding the port; removed on a clean shutdown |
+| `--jvm-arg ARG` | argument for the embedded JVM, repeatable (`--jvm-arg=-Xmx4g`) |
+| `--owner-pid PID` | exit when that process is gone |
+
+## Variants
+
+`pgwire-file`, `pgwire-govdata`, `pgwire-salesforce`, `pgwire-sharepoint`, `pgwire-splunk` and
+`pgwire-cloudops` are this server, unchanged, plus configuration: each directory holds a
+`model.json` (the Calcite model) and a `launch-args.txt` (launcher arguments baked into the
+bundle's entry script, e.g. `--allow-writes`). `.github/workflows/pgwire-adapters-release.yml`
+builds them all the same way from those two files. `tests/unit/test_variant_drift.py` fails if
+a variant carries anything else, or if the workflow or the AskAmerica connector passes the
+launcher an argument it does not have.

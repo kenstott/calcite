@@ -1,0 +1,12 @@
+# Launcher arguments baked into the pgwire-govdata bundle's entry script, after
+# --backend/--model/--database and before the caller's own arguments (which win).
+# One or more arguments per line; lines starting with # are comments.
+# The server code is pgwire-calcite's, unchanged: a variant is model.json plus this file.
+#
+# The SQL the AskAmerica engine's own launch of this server accepts (its
+# PgwireGovDataConnector passes the same two): PostgreSQL, spatial, SQL Server and BigQuery
+# functions, and the Babel parser, which takes a reserved word such as YEAR as a column
+# name. That launch's statement timeout is deliberately not a default here: a standalone
+# server may run long scans. test_variant_drift.py holds the two in step.
+--fun standard,postgresql,spatial,mssql,bigquery
+--jdbc-prop parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY

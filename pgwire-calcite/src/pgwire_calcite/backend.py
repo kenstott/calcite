@@ -124,6 +124,12 @@ CANCELED_SERVER_BUSY = (
     "engine behind other statements; retry later or narrow the query"
 )
 
+#: The statement's own client stopped reading its result (or never fetched the rest of a
+#: suspended portal) while other statements waited for the engine it was holding.
+CANCELED_IDLE_HOLDER = (
+    "terminating connection because it held the query engine without reading its result "
+    "while other statements waited"
+)
 
 
 class QueryCanceled(PgProtocolError):

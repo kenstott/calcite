@@ -115,16 +115,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # flags: extra launcher arguments baked into the bundle's entry script. Only an
-        # adapter whose tables are modifiable gets --allow-writes (INSERT/UPDATE/DELETE);
-        # the rest serve read-only.
+        # Every adapter is the same pgwire-calcite server. What differs per adapter is
+        # configuration kept in its own directory: pgwire-<name>/model.json and
+        # pgwire-<name>/launch-args.txt (extra launcher arguments baked into the entry script,
+        # e.g. --allow-writes for an adapter whose tables are modifiable). Nothing
+        # adapter-specific belongs in this matrix beyond the Gradle module that builds
+        # the jars; pgwire-calcite/tests/unit/test_variant_drift.py holds that line.
         adapter:
-          - { name: file,       module: file,            flags: "" }
-          - { name: sharepoint, module: sharepoint-list, flags: "--allow-writes" }
-          - { name: splunk,     module: splunk,          flags: "" }
-          - { name: salesforce, module: salesforce,      flags: "--allow-writes" }
-          - { name: cloudops,   module: cloud-ops,       flags: "" }
-          - { name: govdata,    module: govdata,         flags: "" }
+          - { name: file,       module: file }
+          - { name: sharepoint, module: sharepoint-list }
+          - { name: splunk,     module: splunk }
+          - { name: salesforce, module: salesforce }
+          - { name: cloudops,   module: cloud-ops }
+          - { name: govdata,    module: govdata }
         os:
           - { runner: ubuntu-latest, variant: linux-x86_64 }
           - { runner: macos-14,      variant: macos-arm64 }
@@ -286,6 +289,13 @@ jobs:
           # this was ALWAYS broken there, independent of anything else -- this exact heredoc
           # was generated identically for windows-x86_64 too, an unusable artifact PgwireGov
           # DataConnector could never actually run. See the "Windows launcher" step below.
+          # The adapter's baked launcher arguments: launch-args.txt without its comment lines,
+          # on one line. Staged for the Windows launcher step too.
+          # (sed, not grep -v: a file of comments only would make grep exit 1 and, under
+          # this shell's pipefail, fail the step.)
+          FLAGS="$(sed -e '/^[[:space:]]*#/d' "pgwire-${{ matrix.adapter.name }}/launch-args.txt" | tr -s '\r\n' '  ' | sed -e 's/^ *//' -e 's/ *$//')"
+          echo "baked launcher arguments for ${{ matrix.adapter.name }}: '${FLAGS}'"
+          printf '%s' "$FLAGS" > bundle/launch.flags
           if [[ "$RUNNER_OS" != "Windows" ]]; then
           cat > "bundle/bin/pgwire-${{ matrix.adapter.name }}" <<'SH'
           #!/usr/bin/env bash
@@ -300,9 +310,17 @@ jobs:
             "-Dpgwire.python=$HERE/cpython/bin/python" \
             -jar "$HERE/pgwire-launcher.jar" \
             --backend calcite --model "$HERE/model/model.json" \
-            --database ${{ matrix.adapter.name }} ${{ matrix.adapter.flags }} "$@"
+            --database ${{ matrix.adapter.name }} __FLAGS__ "$@"
           SH
+          # The heredoc is quoted (so $HERE/$@ stay literal); the arguments go in afterwards.
+          sed -i.bak "s|__FLAGS__|${FLAGS}|" "bundle/bin/pgwire-${{ matrix.adapter.name }}"
+          rm "bundle/bin/pgwire-${{ matrix.adapter.name }}.bak"
+          if grep -q '__FLAGS__' "bundle/bin/pgwire-${{ matrix.adapter.name }}"; then
+            echo "::error::launcher arguments were not substituted into the entry script"
+            exit 1
+          fi
           chmod +x "bundle/bin/pgwire-${{ matrix.adapter.name }}"
+          rm bundle/launch.flags   # only the Windows launcher step reads it
           fi
 
       - name: Stage adapter launcher (Windows)
@@ -333,7 +351,12 @@ jobs:
           "%HERE%\jre\bin\java.exe" "-Dpgwire.python=%HERE%\cpython\Scripts\python.exe" -jar "%HERE%\pgwire-launcher.jar" --backend calcite --model "%HERE%\model\model.json" --database __ADAPTER__ __FLAGS__ %*
           '@
           $bat = $bat.Replace("__ADAPTER__", "${{ matrix.adapter.name }}")
-          $bat = $bat.Replace("__FLAGS__", "${{ matrix.adapter.flags }}")
+          # launch-args.txt as one line, written by the "Stage adapter model + launcher" step.
+          # [string] of an empty file's $null is "", which is what an adapter with no
+          # baked arguments must substitute.
+          $flags = [string](Get-Content -Raw "bundle\launch.flags")
+          $bat = $bat.Replace("__FLAGS__", $flags)
+          Remove-Item "bundle\launch.flags"
           Set-Content -Path "bundle\bin\pgwire-${{ matrix.adapter.name }}.bat" -Value $bat -Encoding ASCII -NoNewline
           Get-Content "bundle\bin\pgwire-${{ matrix.adapter.name }}.bat"
 
@@ -356,6 +379,15 @@ jobs:
           # platform whose runner has sha256sum (not macOS, which falls through to shasum).
           (command -v sha256sum >/dev/null 2>&1 && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
             | awk '{print $1}' > "${name}.tar.gz.sha256"
+          # The installer compares this file to the hash it computes: it must be exactly
+          # one line of 64 hex digits. Anything else (the bug above wrote a path first)
+          # fails every download, so fail the build here instead.
+          if [ "$(wc -l < "${name}.tar.gz.sha256" | tr -d ' ')" != "1" ] \
+             || ! grep -Eqx '[0-9a-f]{64}' "${name}.tar.gz.sha256"; then
+            echo "::error::${name}.tar.gz.sha256 is not a single sha256 line:"
+            cat "${name}.tar.gz.sha256"
+            exit 1
+          fi
           echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
 
       - name: GPG-sign tarball
