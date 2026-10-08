@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,7 +33,9 @@ public class FileConversionManager {
   private static final Logger LOGGER = LoggerFactory.getLogger(FileConversionManager.class);
   private static final FileConversionManager INSTANCE = new FileConversionManager();
 
-  private final List<FileConverter> converters = new ArrayList<>();
+  // Registered and read from any thread (the instance is the process's one): a plain list
+  // being added to while convert() walked it threw ConcurrentModificationException.
+  private final List<FileConverter> converters = new java.util.concurrent.CopyOnWriteArrayList<>();
   private final Map<String, FileConverter> converterCache = new ConcurrentHashMap<>();
 
   private FileConversionManager() {

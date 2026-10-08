@@ -52,6 +52,7 @@ public class FileConfig
     private boolean sftpStrictHostKeyChecking;
     private String refreshInterval;
     private Duration catalogRefreshInterval;
+    private String crawl;
 
     @NotNull
     public String getGlob()
@@ -242,6 +243,23 @@ public class FileConfig
     public FileConfig setCatalogRefreshInterval(Duration catalogRefreshInterval)
     {
         this.catalogRefreshInterval = catalogRefreshInterval;
+        return this;
+    }
+
+    public String getCrawl()
+    {
+        return crawl;
+    }
+
+    @Config("crawl")
+    @ConfigDescription("A crawl whose HTML tables and linked data files land in the glob's local "
+            + "directory before it is scanned, as a JSON object of the file adapter's crawl "
+            + "operand: startUrls, maxDepth, maxPages, contentSelector, removeSelectors, "
+            + "linkSelector, linkExcludePatterns, tableSelector, userAgent, requestDelay, "
+            + "htmlCacheTTL.")
+    public FileConfig setCrawl(String crawl)
+    {
+        this.crawl = crawl;
         return this;
     }
 }

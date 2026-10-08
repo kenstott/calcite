@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.109.0](https://github.com/kenstott/calcite/compare/engine-v0.108.0...engine-v0.109.0) (2026-10-08)
+
+
+### Features
+
+* **file:** a crawl follows links by what the link element carries ([7d74032](https://github.com/kenstott/calcite/commit/7d74032c3f29ce69b56fb8799c025fc30c71926a))
+* **file:** a schema's crawl operand lands a site's tables and data files as files ([c8b7d4d](https://github.com/kenstott/calcite/commit/c8b7d4d6f22ab370172e34e2a78118bd9026b5d4))
+* **trino-file:** a crawl catalog property carries the file adapter's crawl operand ([4d05c78](https://github.com/kenstott/calcite/commit/4d05c787aabec150d9b95e49e4e791c08d26838c))
+
+
+### Bug Fixes
+
+* **file:** the converter registry is safe across threads; property-setting tests run isolated ([3f47521](https://github.com/kenstott/calcite/commit/3f47521f015b19938e65c4fdc9e0623f55c1e9d1))
+* **govdata:** ChunkOrganizer records the completed_at it scanned, not one re-read afterwards ([641d50f](https://github.com/kenstott/calcite/commit/641d50f39a87e1087ba6152752f4dd5c133955d9))
+* **pgwire,file:** a rebound portal reads its own rows; two file tests state what they need ([5a31201](https://github.com/kenstott/calcite/commit/5a312017c8b79137796ad0726d225575de828584))
+* **pgwire:** a parameter with no declared type is typed by the statement ([e5b72dd](https://github.com/kenstott/calcite/commit/e5b72dd2bc1c9c1c8cc76f8450bbd8129d2e6e79))
+
 ## [0.108.0](https://github.com/kenstott/calcite/compare/engine-v0.107.0...engine-v0.108.0) (2026-10-07)
 
 

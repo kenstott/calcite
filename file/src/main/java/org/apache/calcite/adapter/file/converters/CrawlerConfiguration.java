@@ -13,8 +13,10 @@ package org.apache.calcite.adapter.file.converters;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -31,8 +33,22 @@ public class CrawlerConfiguration {
   private Duration requestDelay = Duration.ofSeconds(1);
   private int maxPages = 100;
   private boolean followExternalLinks = false;
-  @SuppressWarnings("UnusedVariable")
-  private Set<String> excludePatterns = new HashSet<>();
+
+  /** What a request without a configured agent names itself as. */
+  public static final String DEFAULT_USER_AGENT =
+      "Mozilla/5.0 (compatible; Apache Calcite/1.0; +https://calcite.apache.org)";
+
+  // Which part of a page is read. A page's navigation, footers and reference lists hold links
+  // of the same form as the ones in its text, so a URL pattern cannot tell them apart: only
+  // where a link sits can. These apply before any link or table is read.
+  private @Nullable String contentSelector; // CSS selector of the region read; null = the body
+  private List<String> removeSelectors = new ArrayList<>(); // elements dropped from the page first
+  // What a followed link is, by what the link element itself carries (its classes and
+  // attributes), which a site's own markup states and a URL's wording only suggests.
+  private @Nullable String linkSelector; // CSS selector a link must match to be followed; null = any
+  private List<Pattern> linkExcludePatterns = new ArrayList<>(); // a link any of these finds is not followed
+  private String tableSelector = "table"; // CSS selector of the HTML tables that become tables
+  private String userAgent = DEFAULT_USER_AGENT;
 
   // Data file pattern configuration
   private @Nullable Pattern dataFilePattern; // Regex pattern for data files to include
@@ -153,7 +169,60 @@ public class CrawlerConfiguration {
       config.setHtmlTableMaxRows(Integer.parseInt(options.get("htmlTableMaxRows").toString()));
     }
 
+    if (options.containsKey("contentSelector")) {
+      config.setContentSelector(options.get("contentSelector").toString());
+    }
+
+    if (options.containsKey("removeSelectors")) {
+      config.setRemoveSelectors(strings(options.get("removeSelectors")));
+    }
+
+    if (options.containsKey("linkSelector")) {
+      config.setLinkSelector(options.get("linkSelector").toString());
+    }
+
+    if (options.containsKey("linkExcludePatterns")) {
+      List<Pattern> patterns = new ArrayList<>();
+      for (String pattern : strings(options.get("linkExcludePatterns"))) {
+        patterns.add(Pattern.compile(pattern));
+      }
+      config.setLinkExcludePatterns(patterns);
+    }
+
+    if (options.containsKey("tableSelector")) {
+      config.setTableSelector(options.get("tableSelector").toString());
+    }
+
+    if (options.containsKey("userAgent")) {
+      config.setUserAgent(options.get("userAgent").toString());
+    }
+
+    if (options.containsKey("requestDelay")) {
+      config.setRequestDelay(parseDuration(options.get("requestDelay").toString()));
+    }
+
+    if (options.containsKey("htmlCacheTTL")) {
+      config.setHtmlCacheTTL(parseDuration(options.get("htmlCacheTTL").toString()));
+    }
+
+    if (options.containsKey("allowedFileExtensions")) {
+      config.setAllowedFileExtensions(new HashSet<>(strings(options.get("allowedFileExtensions"))));
+    }
+
     return config;
+  }
+
+  /** One string or a list of them, as a list. */
+  private static List<String> strings(Object value) {
+    List<String> list = new ArrayList<>();
+    if (value instanceof Iterable) {
+      for (Object item : (Iterable<?>) value) {
+        list.add(item.toString());
+      }
+    } else {
+      list.add(value.toString());
+    }
+    return list;
   }
 
   private static long parseSize(String sizeStr) {
@@ -193,6 +262,64 @@ public class CrawlerConfiguration {
 
   // Getters and setters
 
+  public @Nullable String getContentSelector() {
+    return contentSelector;
+  }
+
+  public void setContentSelector(@Nullable String contentSelector) {
+    this.contentSelector = contentSelector;
+  }
+
+  public List<String> getRemoveSelectors() {
+    return removeSelectors;
+  }
+
+  public void setRemoveSelectors(List<String> removeSelectors) {
+    this.removeSelectors = removeSelectors;
+  }
+
+  public @Nullable String getLinkSelector() {
+    return linkSelector;
+  }
+
+  public void setLinkSelector(@Nullable String linkSelector) {
+    this.linkSelector = linkSelector;
+  }
+
+  public List<Pattern> getLinkExcludePatterns() {
+    return linkExcludePatterns;
+  }
+
+  public void setLinkExcludePatterns(List<Pattern> linkExcludePatterns) {
+    this.linkExcludePatterns = linkExcludePatterns;
+  }
+
+  /** Whether a configured exclusion is found anywhere in {@code url}. */
+  public boolean isLinkExcluded(String url) {
+    for (Pattern pattern : linkExcludePatterns) {
+      if (pattern.matcher(url).find()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public String getTableSelector() {
+    return tableSelector;
+  }
+
+  public void setTableSelector(String tableSelector) {
+    this.tableSelector = tableSelector;
+  }
+
+  public String getUserAgent() {
+    return userAgent;
+  }
+
+  public void setUserAgent(String userAgent) {
+    this.userAgent = userAgent;
+  }
+
   public boolean isEnabled() {
     return enabled;
   }
@@ -219,6 +346,10 @@ public class CrawlerConfiguration {
 
   public Set<String> getAllowedFileExtensions() {
     return allowedFileExtensions;
+  }
+
+  public void setAllowedFileExtensions(Set<String> allowedFileExtensions) {
+    this.allowedFileExtensions = allowedFileExtensions;
   }
 
   public void addAllowedFileExtension(String extension) {
