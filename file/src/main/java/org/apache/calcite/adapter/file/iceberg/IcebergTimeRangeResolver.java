@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -120,8 +121,10 @@ public class IcebergTimeRangeResolver {
     }
 
     try {
-      Instant startTime = Instant.parse(startStr);
-      Instant endTime = Instant.parse(endStr);
+      // Instant.parse reads an offset such as -05:00 only from JDK 12 on; OffsetDateTime
+      // reads both it and Z on every JDK
+      Instant startTime = OffsetDateTime.parse(startStr).toInstant();
+      Instant endTime = OffsetDateTime.parse(endStr).toInstant();
 
       if (startTime.isAfter(endTime)) {
         throw new IllegalArgumentException("Start time must be before end time");

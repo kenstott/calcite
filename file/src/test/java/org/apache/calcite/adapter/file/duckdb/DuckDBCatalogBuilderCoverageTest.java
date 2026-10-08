@@ -64,13 +64,11 @@ public class DuckDBCatalogBuilderCoverageTest {
    */
   private SubprocessResult runMainInSubprocess(String... mainArgs) throws Exception {
     String javaHome = System.getProperty("java.home");
-    String classpath = System.getProperty("java.class.path");
     String javaBin = javaHome + File.separator + "bin" + File.separator + "java";
 
     List<String> command = new ArrayList<String>();
     command.add(javaBin);
-    command.add("-cp");
-    command.add(classpath);
+    command.add(org.apache.calcite.adapter.file.ChildJvmClasspath.argument());
     command.add(DuckDBCatalogBuilder.class.getName());
     for (String arg : mainArgs) {
       command.add(arg);

@@ -25,78 +25,85 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.schema.lookup.LikePattern;
 import org.apache.calcite.sql.type.SqlTypeName;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.collect.ImmutableMap;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 
 /**
  * PostgreSQL-compatible metadata schema (pg_catalog) for Splunk adapter.
  * Provides PostgreSQL system catalog tables for tool compatibility.
  */
 public class SplunkPostgresMetadataSchema extends AbstractSchema {
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(SplunkPostgresMetadataSchema.class);
+
 
   private final SchemaPlus rootSchema;
   private final String catalogName;
 
-  // Shared OID mappings for referential integrity
-  private final Map<String, Integer> namespaceOids = new HashMap<>();
-  private final Map<String, Map<String, Integer>> tableOids = new HashMap<>();
-  private boolean oidsInitialized = false;
-
   public SplunkPostgresMetadataSchema(SchemaPlus rootSchema, String catalogName) {
     this.rootSchema = rootSchema;
     this.catalogName = catalogName;
-    initializeOidMappings();
+  }
+
+  /** The object ids of the schemas and of their tables, as of one scan. */
+  private static class Oids {
+    final Map<String, Integer> namespaces = new LinkedHashMap<>();
+    final Map<String, Map<String, Integer>> tables = new LinkedHashMap<>();
   }
 
   /**
-   * Initialize OID mappings for all schemas and tables to ensure
-   * referential integrity across pg_catalog tables.
+   * Assigns an object id to every schema and table, so that the pg_catalog tables of one
+   * query agree with each other.
+   *
+   * <p>They are assigned at each scan, in name order: this schema is created before the
+   * schema whose factory creates it is registered, so a list taken in the constructor
+   * would lack that schema and its tables.
    */
-  private synchronized void initializeOidMappings() {
-    if (oidsInitialized) {
-      return;
-    }
+  private Oids oids() {
+    Oids oids = new Oids();
 
     // Standard PostgreSQL schemas
-    namespaceOids.put("pg_catalog", 11);
-    namespaceOids.put("information_schema", 99);
-    namespaceOids.put("public", 2200);
+    oids.namespaces.put("pg_catalog", 11);
+    oids.namespaces.put("information_schema", 99);
+    oids.namespaces.put("public", 2200);
 
     int namespaceOid = 16384;
     int tableOid = 16385;
 
-    // Iterate through all schemas and tables once to assign consistent OIDs
-    for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+    for (String schemaName : new TreeSet<>(rootSchema.subSchemas().getNames(LikePattern.any()))) {
       if (!"pg_catalog".equals(schemaName)
           && !"information_schema".equals(schemaName)
           && !"metadata".equals(schemaName)) {
 
-        // Assign namespace OID
-        namespaceOids.put(schemaName, namespaceOid++);
+        oids.namespaces.put(schemaName, namespaceOid++);
 
-        // Get tables in this schema
         SchemaPlus subSchema = rootSchema.subSchemas().get(schemaName);
         if (subSchema != null) {
-          Map<String, Integer> schemaTableOids = new HashMap<>();
+          Map<String, Integer> schemaTableOids = new LinkedHashMap<>();
 
           try {
-            for (String tableName : subSchema.tables().getNames(LikePattern.any())) {
+            for (String tableName
+                : new TreeSet<>(subSchema.tables().getNames(LikePattern.any()))) {
               schemaTableOids.put(tableName, tableOid++);
             }
-          } catch (Exception e) {
-            // Log but continue - some schemas might not support table listing
+          } catch (RuntimeException e) {
+            LOGGER.warn("pg_catalog lists no tables for schema {}: its tables could not be"
+                + " listed", schemaName, e);
           }
 
-          tableOids.put(schemaName, schemaTableOids);
+          oids.tables.put(schemaName, schemaTableOids);
         }
       }
     }
-
-    oidsInitialized = true;
+    return oids;
   }
 
   @Override protected Map<String, Table> getTableMap() {
@@ -134,7 +141,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       // Add all schemas from the OID mapping
-      for (Map.Entry<String, Integer> entry : namespaceOids.entrySet()) {
+      for (Map.Entry<String, Integer> entry : oids().namespaces.entrySet()) {
         rows.add(new Object[] {entry.getValue(), entry.getKey(), 10, null});
       }
 
@@ -188,7 +195,8 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
       RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
 
       // Iterate through all schemas using the consistent OID mappings
-      for (Map.Entry<String, Integer> nsEntry : namespaceOids.entrySet()) {
+      Oids oids = oids();
+      for (Map.Entry<String, Integer> nsEntry : oids.namespaces.entrySet()) {
         String schemaName = nsEntry.getKey();
         Integer namespaceOid = nsEntry.getValue();
 
@@ -197,7 +205,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
           continue;
         }
 
-        Map<String, Integer> schemaTableOids = tableOids.get(schemaName);
+        Map<String, Integer> schemaTableOids = oids.tables.get(schemaName);
         if (schemaTableOids == null) {
           continue;
         }
@@ -298,7 +306,8 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
       RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
 
       // Iterate through all schemas using the consistent OID mappings
-      for (Map.Entry<String, Integer> nsEntry : namespaceOids.entrySet()) {
+      Oids oids = oids();
+      for (Map.Entry<String, Integer> nsEntry : oids.namespaces.entrySet()) {
         String schemaName = nsEntry.getKey();
 
         // Skip system schemas for table listing
@@ -306,7 +315,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
           continue;
         }
 
-        Map<String, Integer> schemaTableOids = tableOids.get(schemaName);
+        Map<String, Integer> schemaTableOids = oids.tables.get(schemaName);
         if (schemaTableOids == null) {
           continue;
         }
@@ -410,7 +419,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * PostgreSQL pg_type system catalog.
    * Lists all data types.
    */
-  private class PgTypeTable extends AbstractTable implements ScannableTable {
+  private static class PgTypeTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("oid", SqlTypeName.INTEGER)
@@ -509,7 +518,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * PostgreSQL pg_proc system catalog.
    * Lists all functions and procedures.
    */
-  private class PgProcTable extends AbstractTable implements ScannableTable {
+  private static class PgProcTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("oid", SqlTypeName.INTEGER)
@@ -684,7 +693,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       // Use the shared OID mappings to ensure consistency
-      for (Map.Entry<String, Map<String, Integer>> schemaEntry : tableOids.entrySet()) {
+      for (Map.Entry<String, Map<String, Integer>> schemaEntry : oids().tables.entrySet()) {
         String schemaName = schemaEntry.getKey();
         Map<String, Integer> tables = schemaEntry.getValue();
 
@@ -709,7 +718,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
   /**
    * PostgreSQL pg_views view (empty for Splunk).
    */
-  private class PgViewsView extends AbstractTable implements ScannableTable {
+  private static class PgViewsView extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("schemaname", SqlTypeName.VARCHAR)
@@ -728,7 +737,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
   /**
    * PostgreSQL pg_indexes view (empty for Splunk).
    */
-  private class PgIndexesView extends AbstractTable implements ScannableTable {
+  private static class PgIndexesView extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("schemaname", SqlTypeName.VARCHAR)
@@ -749,7 +758,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * Splunk-specific table: splunk_indexes.
    * Lists available Splunk indexes (placeholder - would require API access).
    */
-  private class SplunkIndexesTable extends AbstractTable implements ScannableTable {
+  private static class SplunkIndexesTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("index_name", SqlTypeName.VARCHAR)
@@ -805,7 +814,7 @@ public class SplunkPostgresMetadataSchema extends AbstractSchema {
    * Splunk-specific table: splunk_sources.
    * Lists data sources available in Splunk (placeholder).
    */
-  private class SplunkSourcesTable extends AbstractTable implements ScannableTable {
+  private static class SplunkSourcesTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("source", SqlTypeName.VARCHAR)

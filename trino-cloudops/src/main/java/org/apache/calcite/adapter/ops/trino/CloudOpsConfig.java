@@ -164,7 +164,8 @@ public class CloudOpsConfig
     }
 
     @Config("aws.region")
-    @ConfigDescription("AWS region, e.g. us-east-1")
+    @ConfigDescription("AWS regions to query: one, several separated by commas, or all "
+            + "(the default) for every region enabled for an account")
     public CloudOpsConfig setAwsRegion(String awsRegion)
     {
         this.awsRegion = awsRegion;

@@ -56,11 +56,11 @@ import java.util.regex.Pattern;
  *
  * <p>Output format is controlled by {@link MaterializeConfig.Format}:
  * <ul>
- *   <li>{@code ICEBERG} (default) - Uses {@link IcebergMaterializer} with atomic commits</li>
+ *   <li>{@code ICEBERG} (default) - Uses {@code IcebergMaterializer} with atomic commits</li>
  *   <li>{@code PARQUET} - Uses {@link HiveParquetWriter} for hive-partitioned files</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * EtlPipelineConfig config = EtlPipelineConfig.builder()
  *     .name("sales_data")
@@ -74,7 +74,7 @@ import java.util.regex.Pattern;
  *
  * }</pre>
  *
- * <h3>Error Handling</h3>
+ * <h2>Error Handling</h2>
  * <p>The pipeline handles errors according to the configured error handling policy:
  * <ul>
  *   <li>Transient errors (429, 503) - Retry with exponential backoff</li>
@@ -2694,7 +2694,7 @@ public class EtlPipeline {
    */
   static List<Validator> loadValidators(HooksConfig hooksConfig) {
     if (hooksConfig == null || hooksConfig.getValidators().isEmpty()) {
-      return Collections.emptyList();
+      return new ArrayList<Validator>();
     }
     List<Validator> validators = new ArrayList<Validator>();
     for (HooksConfig.ValidatorConfig vc : hooksConfig.getValidators()) {
@@ -3031,7 +3031,7 @@ public class EtlPipeline {
    */
   static List<RowTransformer> loadRowTransformers(HooksConfig hooksConfig) {
     if (hooksConfig == null || hooksConfig.getRowTransformers().isEmpty()) {
-      return Collections.emptyList();
+      return new ArrayList<RowTransformer>();
     }
     List<RowTransformer> transformers = new ArrayList<RowTransformer>();
     for (HooksConfig.TransformerConfig tc : hooksConfig.getRowTransformers()) {
@@ -4725,8 +4725,9 @@ public class EtlPipeline {
           return variables;
         }
         // Use ISO week: week 1 Monday of the given ISO week-year
-        java.time.LocalDate weekStart = java.time.LocalDate.now()
-            .with(java.time.temporal.IsoFields.WEEK_BASED_YEAR, year)
+        // 4 January is always in ISO week 1 of its year: a base that needs no clock
+        java.time.LocalDate weekStart =
+            java.time.LocalDate.of(year, 1, 4)
             .with(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR, week)
             .with(java.time.DayOfWeek.MONDAY);
         start = weekStart;

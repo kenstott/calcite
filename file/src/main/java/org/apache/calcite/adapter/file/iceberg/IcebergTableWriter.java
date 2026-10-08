@@ -596,28 +596,6 @@ public class IcebergTableWriter {
     return Math.max(1, fileSize / 100);
   }
 
-  /**
-   * Builds a Hive-style partition path (e.g. {@code year=2025/month=4}) from partition
-   * variables, using the table's partition spec field order.
-   */
-  private String buildHivePartitionPath(Map<String, String> partitionVariables) {
-    if (partitionVariables == null || partitionVariables.isEmpty()) {
-      return "";
-    }
-    PartitionSpec spec = table.spec();
-    StringBuilder sb = new StringBuilder();
-    for (org.apache.iceberg.PartitionField field : spec.fields()) {
-      String name = field.name();
-      String val = partitionVariables.get(name);
-      if (val != null) {
-        if (sb.length() > 0) {
-          sb.append("/");
-        }
-        sb.append(name).append("=").append(val);
-      }
-    }
-    return sb.toString();
-  }
 
   /**
    * Deletes files from a partition before overwriting.
@@ -1808,7 +1786,7 @@ public class IcebergTableWriter {
   public java.util.List<String> declaredSortOrder() {
     String declared = table.properties().get(SORT_ORDER_PROPERTY);
     if (declared == null || declared.trim().isEmpty()) {
-      return java.util.Collections.emptyList();
+      return new java.util.ArrayList<>();
     }
     java.util.List<String> columns = new java.util.ArrayList<>();
     for (String col : declared.split(",")) {

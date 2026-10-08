@@ -21,11 +21,10 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.io.InputFile;
 import org.apache.iceberg.parquet.ParquetUtil;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -65,8 +64,6 @@ import java.util.Map;
  * <p>Manifest format: one line per file, tab-separated {@code path\tpartitionPath\trecordCount}.
  */
 public final class IcebergOrphanFileRestoreRunner {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(IcebergOrphanFileRestoreRunner.class);
 
   private IcebergOrphanFileRestoreRunner() {
   }
@@ -184,7 +181,8 @@ public final class IcebergOrphanFileRestoreRunner {
     List<String[]> entries = new ArrayList<>();
     // storage-provider-guard: allow — local CLI input file for this standalone repair tool,
     // not schema-managed data.
-    try (BufferedReader reader = new BufferedReader(new FileReader(manifestPath))) {
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(new FileInputStream(manifestPath), Charset.defaultCharset()))) {
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.trim().isEmpty()) {

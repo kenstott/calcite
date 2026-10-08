@@ -228,7 +228,7 @@ public class CisaAdvisoryResponseTransformer implements ResponseTransformer {
         : result;
   }
 
-  /** Recursively collects distinct branch {@code name} values, depth-first. */
+  /** Recursively collects the distinct values of each branch's "name" field, depth-first. */
   private static void collectBranchNames(JsonNode branches, List<String> names) {
     if (!branches.isArray()) {
       return;

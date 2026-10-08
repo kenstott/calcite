@@ -311,7 +311,7 @@ public class XmlToJsonConverter {
    * Flatten a child object into the parent with prefixed property names.
    */
   private static void flattenChildObject(ObjectNode parent, ObjectNode child, String prefix, String columnNameCasing) {
-    child.fields().forEachRemaining(entry -> {
+    child.properties().forEach(entry -> {
       String childKey = entry.getKey();
       String flattenedKey = prefix + DEFAULT_FLATTEN_SEPARATOR + childKey;
       String columnName = ConverterUtils.sanitizeIdentifier(org.apache.calcite.adapter.file.util.SmartCasing.applyCasing(flattenedKey, columnNameCasing));

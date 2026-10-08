@@ -64,7 +64,6 @@ public class FiaPlotsTransformer implements StreamingResponseTransformer {
       int idxCn = indexOf(hdr, "CN");
       int idxPrevCn = indexOf(hdr, "PREV_PLT_CN");
       int idxInvyr = indexOf(hdr, "INVYR");
-      int idxStatecd = indexOf(hdr, "STATECD");
       int idxCountycd = indexOf(hdr, "COUNTYCD");
       int idxPlot = indexOf(hdr, "PLOT");
       int idxStatus = indexOf(hdr, "PLOT_STATUS_CD");

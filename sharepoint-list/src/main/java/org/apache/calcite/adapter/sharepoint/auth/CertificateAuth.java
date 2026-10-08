@@ -45,7 +45,6 @@ public class CertificateAuth implements SharePointAuth {
 
   private final String clientId;
   private final String tenantId;
-  private final String certificatePath;
   private final String certificatePassword;
   private final String thumbprint;
   private final HttpClient httpClient;
@@ -61,7 +60,6 @@ public class CertificateAuth implements SharePointAuth {
       throws Exception {
     this.clientId = clientId;
     this.tenantId = tenantId;
-    this.certificatePath = certificatePath;
     // A PKCS#12 file exported without a password is protected by the empty password, so an
     // absent certificatePassword is that empty password, not a missing credential.
     this.certificatePassword = certificatePassword == null ? "" : certificatePassword;
@@ -188,9 +186,9 @@ public class CertificateAuth implements SharePointAuth {
           .setSubject(clientId)
           .setAudience("https://login.microsoftonline.com/" + tenantId
               + "/oauth2/v2.0/token")
-          .setIssuedAt(new java.util.Date(now * 1000))
-          .setNotBefore(new java.util.Date(now * 1000))
-          .setExpiration(new java.util.Date((now + 600) * 1000))
+          .setIssuedAt(java.util.Date.from(java.time.Instant.ofEpochSecond(now)))
+          .setNotBefore(java.util.Date.from(java.time.Instant.ofEpochSecond(now)))
+          .setExpiration(java.util.Date.from(java.time.Instant.ofEpochSecond(now + 600)))
           .signWith(key, SignatureAlgorithm.RS256)
           .compact();
     } finally {

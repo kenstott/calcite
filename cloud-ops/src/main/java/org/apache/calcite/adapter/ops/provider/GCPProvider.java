@@ -75,12 +75,10 @@ public class GCPProvider implements CloudProvider {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int HTTP_ATTEMPTS = 3;
 
-  private final CloudOpsConfig.GCPConfig config;
   private final GoogleCredentials credentials;
   private final CloudOpsCacheManager cacheManager;
 
   public GCPProvider(CloudOpsConfig.GCPConfig config) {
-    this.config = config;
     this.cacheManager = new CloudOpsCacheManager(5, false);
     try {
       this.credentials =
@@ -92,7 +90,6 @@ public class GCPProvider implements CloudProvider {
   }
 
   public GCPProvider(CloudOpsConfig.GCPConfig config, CloudOpsCacheManager cacheManager) {
-    this.config = config;
     this.cacheManager = cacheManager;
     try {
       this.credentials =
@@ -134,7 +131,6 @@ public class GCPProvider implements CloudProvider {
                                                           @Nullable CloudOpsSortHandler sortHandler,
                                                           @Nullable CloudOpsPaginationHandler paginationHandler,
                                                           @Nullable CloudOpsFilterHandler filterHandler) {
-
     // Build comprehensive cache key including all optimization parameters
     String cacheKey =
         CloudOpsCacheManager.buildComprehensiveCacheKey("gcp", "kubernetes_clusters", projectionHandler, sortHandler, paginationHandler, filterHandler, projectIds);
@@ -145,17 +141,16 @@ public class GCPProvider implements CloudProvider {
     if (shouldCache) {
       return cacheManager.getOrCompute(
           cacheKey, () -> executeKubernetesClusterQuery(
-          projectIds, projectionHandler, sortHandler, paginationHandler, filterHandler));
+          projectIds, projectionHandler, paginationHandler, filterHandler));
     } else {
       // Execute directly without caching for highly specific queries
       return executeKubernetesClusterQuery(
-          projectIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
+          projectIds, projectionHandler, paginationHandler, filterHandler);
     }
   }
 
   private List<Map<String, Object>> executeKubernetesClusterQuery(List<String> projectIds,
                                                                  @Nullable CloudOpsProjectionHandler projectionHandler,
-                                                                 @Nullable CloudOpsSortHandler sortHandler,
                                                                  @Nullable CloudOpsPaginationHandler paginationHandler,
                                                                  @Nullable CloudOpsFilterHandler filterHandler) {
     List<Map<String, Object>> results = new ArrayList<>();
@@ -179,16 +174,6 @@ public class GCPProvider implements CloudProvider {
         }
       } else {
         LOGGER.debug("GCP GKE querying: SELECT * (all fields)");
-      }
-
-      // Debug sort optimization
-      if (sortHandler != null && sortHandler.hasSort()) {
-        String orderByParam = sortHandler.buildGcpOrderByParameter();
-        if (orderByParam != null) {
-          LOGGER.debug("GCP orderBy parameter: {}", orderByParam);
-        } else {
-          LOGGER.debug("GCP sort: Falling back to client-side sorting (no compatible orderBy fields)");
-        }
       }
 
       // Debug pagination optimization
@@ -262,11 +247,12 @@ public class GCPProvider implements CloudProvider {
                 cluster.getNetworkPolicy().getProvider().name() : null);
 
             // Encryption and logging
-            clusterData.put("EncryptionAtRestEnabled", cluster.hasDatabaseEncryption() &&
-                cluster.getDatabaseEncryption().getState().name().equals("ENCRYPTED"));
-            clusterData.put("EncryptionKeyType", cluster.hasDatabaseEncryption() &&
-                !cluster.getDatabaseEncryption().getKeyName().isEmpty() ?
-                "customer-managed" : "service-managed");
+            // Google encrypts a cluster's storage at rest itself; a cluster may add
+            // encryption of its secrets under a Cloud KMS key of the project
+            clusterData.put("EncryptionAtRestEnabled", true);
+            clusterData.put("EncryptionKeyType", cluster.hasDatabaseEncryption()
+                && cluster.getDatabaseEncryption().getState().name().equals("ENCRYPTED")
+                ? "customer-managed" : "service-managed");
             clusterData.put("LoggingEnabled", cluster.getLoggingService() != null &&
                 !cluster.getLoggingService().equals("none"));
             clusterData.put("MonitoringEnabled", cluster.getMonitoringService() != null &&
@@ -625,9 +611,17 @@ public class GCPProvider implements CloudProvider {
           row.put("KmsKeyName",
               textOrNull(instance.path("diskEncryptionConfiguration"), "kmsKeyName"));
           final String sslMode = textOrNull(ip, "sslMode");
-          row.put("RequireSsl", sslMode != null
-              ? !"ALLOW_UNENCRYPTED_AND_ENCRYPTED".equals(sslMode)
-              : ip.has("requireSsl") ? ip.path("requireSsl").asBoolean() : null);
+          // Boolean on every branch: a primitive branch would unbox the null of an instance
+          // that reports neither setting
+          final Boolean requireSsl;
+          if (sslMode != null) {
+            requireSsl = !"ALLOW_UNENCRYPTED_AND_ENCRYPTED".equals(sslMode);
+          } else if (ip.has("requireSsl")) {
+            requireSsl = ip.path("requireSsl").asBoolean();
+          } else {
+            requireSsl = null;
+          }
+          row.put("RequireSsl", requireSsl);
           row.put("BackupEnabled",
               backup.has("enabled") ? backup.path("enabled").asBoolean() : null);
           final JsonNode retained = backup.path("backupRetentionSettings").path("retainedBackups");

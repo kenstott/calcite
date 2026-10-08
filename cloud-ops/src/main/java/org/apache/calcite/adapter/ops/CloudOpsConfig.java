@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.ops;
 
+import org.apache.calcite.adapter.ops.util.CloudOpsCacheManager;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
@@ -41,6 +43,8 @@ public class CloudOpsConfig {
   @JsonProperty("cacheDebugMode")
   public final boolean cacheDebugMode;
 
+  private final CloudOpsCacheManager cacheManager;
+
   @JsonCreator
   public CloudOpsConfig(
       @JsonProperty("providers") List<String> providers,
@@ -57,6 +61,17 @@ public class CloudOpsConfig {
     this.cacheEnabled = cacheEnabled != null ? cacheEnabled : true;
     this.cacheTtlMinutes = cacheTtlMinutes != null ? cacheTtlMinutes : 5;
     this.cacheDebugMode = cacheDebugMode != null ? cacheDebugMode : false;
+    this.cacheManager = this.cacheEnabled
+        ? new CloudOpsCacheManager(this.cacheTtlMinutes, this.cacheDebugMode)
+        : CloudOpsCacheManager.disabled(this.cacheDebugMode);
+  }
+
+  /**
+   * The cache every provider created for this configuration shares, so that an answer
+   * fetched for one query serves the next one within the time to live.
+   */
+  public CloudOpsCacheManager cacheManager() {
+    return cacheManager;
   }
 
   public static class AzureConfig {
@@ -105,6 +120,10 @@ public class CloudOpsConfig {
     @JsonProperty("accountIds")
     public final List<String> accountIds;
 
+    /**
+     * One region, several separated by commas, or — absent or {@code all} — every region
+     * enabled for an account.
+     */
     @JsonProperty("region")
     public final String region;
 
@@ -125,7 +144,7 @@ public class CloudOpsConfig {
         @JsonProperty("secretAccessKey") String secretAccessKey,
         @JsonProperty("roleArn") String roleArn) {
       this.accountIds = accountIds;
-      this.region = region != null ? region : "us-east-1";
+      this.region = region;
       this.accessKeyId = accessKeyId;
       this.secretAccessKey = secretAccessKey;
       this.roleArn = roleArn;

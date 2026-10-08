@@ -19,7 +19,6 @@ import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.ddl.SqlColumnDeclaration;
 import org.apache.calcite.sql.ddl.SqlCreateTable;
 import org.apache.calcite.sql.ddl.SqlDropTable;
-import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 
@@ -250,7 +249,7 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
     // Create the list using REST API
     String createListUrl = siteUrl + "/_api/web/lists";
     JsonNode response = restClient.executeRestCall("POST", createListUrl, requestBody);
-    String listId = response.get("d").get("Id").asText();
+    requireNonNull(response.get("d").get("Id"), "SharePoint returned no Id for the new list");
 
     // Add columns to the list
     for (SharePointColumn column : columns) {
@@ -397,39 +396,6 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
       if (!ifExists) {
         throw new RuntimeException("Failed to delete list: " + listName, e);
       }
-    }
-  }
-
-  private String mapSqlTypeToSharePoint(SqlTypeName sqlType) {
-    switch (sqlType) {
-      case VARCHAR:
-      case CHAR:
-        return "text";
-
-      case INTEGER:
-      case BIGINT:
-      case SMALLINT:
-      case TINYINT:
-      case DECIMAL:
-      case DOUBLE:
-      case FLOAT:
-      case REAL:
-        return "number";
-
-      case BOOLEAN:
-        return "boolean";
-
-      case DATE:
-      case TIME:
-      case TIMESTAMP:
-        return "dateTime";
-
-      case BINARY:
-      case VARBINARY:
-        return "text"; // SharePoint doesn't have direct binary columns
-
-      default:
-        return "text";
     }
   }
 

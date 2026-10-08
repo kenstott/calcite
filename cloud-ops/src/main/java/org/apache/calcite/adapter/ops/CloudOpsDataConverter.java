@@ -12,9 +12,6 @@ package org.apache.calcite.adapter.ops;
 
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -44,8 +41,6 @@ import java.util.Locale;
  * automatically convert.</p>
  */
 public class CloudOpsDataConverter {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CloudOpsDataConverter.class);
-
   /**
    * Determines if a value represents null/missing/blank data from cloud provider APIs
    * for non-string data types. For VARCHAR/CHAR, we preserve all string representations.
@@ -382,6 +377,9 @@ public class CloudOpsDataConverter {
    * @param value The temporal value to convert
    * @return Long representing milliseconds since epoch
    */
+  // The value may be a java.sql.Time, whose toInstant() throws; getTime() is the one call
+  // every java.util.Date supports.
+  @SuppressWarnings("JavaUtilDate")
   private static Long convertToTimestampMillis(Object value) {
     if (value == null) {
       return null;

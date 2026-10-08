@@ -48,6 +48,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
  * @deprecated Use SplunkAdapterUnitTest for unit tests or SplunkAdapterIntegrationTest for integration tests
  */
 @Tag("integration")
+@Tag("splunk-data")
 @Deprecated
 class SplunkAdapterQueryTest {
   // Connection properties must be loaded from local-properties.settings

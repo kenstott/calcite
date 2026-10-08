@@ -102,7 +102,7 @@ public class CloudOpsLiveColumnAuditTest {
           sample.append(columns.get(i - 1)).append('=')
               .append(text.length() > 60 ? text.substring(0, 60) + "..." : text).append("; ");
         }
-        if (samples.get(provider).size() < 2) {
+        if (samples.get(provider).size() < 8) {
           samples.get(provider).add(sample.toString());
         }
       }

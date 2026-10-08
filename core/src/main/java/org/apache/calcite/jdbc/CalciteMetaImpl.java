@@ -87,7 +87,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
@@ -450,17 +449,17 @@ public class CalciteMetaImpl extends MetaImpl {
     // A schema may list a name it can only resolve lazily (e.g. a deferred view created on first
     // lookup); if that lookup fails the name is skipped, not fatal to the whole enumeration.
     return Linq4j.asEnumerable(schema.calciteSchema.getTableNames(tableNamePattern))
-        .select(name -> {
+        .selectMany(name -> {
           final CalciteSchema.TableEntry entry = schema.calciteSchema.getTable(name, true);
           if (entry == null) {
             LOGGER.warn("Skipping table {}.{}: listed by its schema but not resolvable",
                 schema.tableSchem, name);
-            return null;
+            return Linq4j.<MetaTable>emptyEnumerable();
           }
-          return metaTableFactory.createTable(entry.getTable(), schema.tableCatalog,
-              schema.tableSchem, name);
+          return Linq4j.singletonEnumerable(
+              metaTableFactory.createTable(entry.getTable(), schema.tableCatalog,
+                  schema.tableSchem, name));
         })
-        .where(Objects::nonNull)
         .concat(
             Linq4j.asEnumerable(
                 schema.calciteSchema.getTablesBasedOnNullaryFunctions()
@@ -678,18 +677,18 @@ public class CalciteMetaImpl extends MetaImpl {
 
   @Override public MetaResultSet getImportedKeys(ConnectionHandle ch,
       String catalog, String schemaName, String tableName) {
-    return foreignKeyResultSet(catalog, schemaName, tableName, false);
+    return foreignKeyResultSet(schemaName, tableName, false);
   }
 
   @Override public MetaResultSet getExportedKeys(ConnectionHandle ch,
       String catalog, String schemaName, String tableName) {
-    return foreignKeyResultSet(catalog, schemaName, tableName, true);
+    return foreignKeyResultSet(schemaName, tableName, true);
   }
 
   /** Builds the result set for {@link #getImportedKeys} and {@link #getExportedKeys}.
    * When {@code exported} is false, filters by the FK source table;
    * when true, filters by the FK target table. */
-  private MetaResultSet foreignKeyResultSet(String catalog, String schemaName,
+  private MetaResultSet foreignKeyResultSet(String schemaName,
       String tableName, boolean exported) {
     final CalciteConnectionImpl conn = getConnection();
     final String cat;

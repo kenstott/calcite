@@ -37,7 +37,6 @@ import java.util.Map;
 /**
  * Table containing Kubernetes cluster information across cloud providers.
  * Returns raw facts without subjective assessments.
- * Supports query optimization through projection, filtering, sorting, and pagination pushdown.
  */
 public class KubernetesClustersTable extends AbstractCloudOpsTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(KubernetesClustersTable.class);
@@ -146,7 +145,7 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
 
     try {
       // Use Azure provider with projection, sort, pagination, and filter support
-      AzureProvider azureProvider = new AzureProvider(config.azure);
+      AzureProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> aksResults =
           azureProvider.queryKubernetesClusters(subscriptionIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
 
@@ -165,15 +164,15 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("NodePoolCount"),
             cluster.get("RBACEnabled"),
             cluster.get("PrivateCluster"),
-            !((Boolean) cluster.getOrDefault("PrivateCluster", false)), // Inverse for public
+            cluster.get("PublicEndpoint"),
             cluster.get("AuthorizedIPRanges"),
             cluster.get("NetworkPolicy"),
-            cluster.get("DiskEncryption") != null && !cluster.get("DiskEncryption").equals("Platform Managed Key"),
+            true, // Azure encrypts every managed disk at rest
             cluster.get("DiskEncryption"),
-            true, // AKS has logging by default
-            true, // AKS has monitoring by default
-            null, // created_date - not in current query
-            null, // modified_date - not in current query
+            cluster.get("LoggingEnabled"),
+            cluster.get("MonitoringEnabled"),
+            CloudOpsDataConverter.convertValue(cluster.get("CreatedDate"), SqlTypeName.TIMESTAMP),
+            CloudOpsDataConverter.convertValue(cluster.get("ModifiedDate"), SqlTypeName.TIMESTAMP),
             cluster.get("Tags")
         });
       }
@@ -193,7 +192,7 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
 
     try {
       // Use GCP provider with projection, sort, pagination, and filter support
-      GCPProvider gcpProvider = new GCPProvider(config.gcp);
+      GCPProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> clusterResults =
           gcpProvider.queryKubernetesClusters(projectIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
 
@@ -239,13 +238,11 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
 
     try {
       // Use AWS provider with projection, sort, pagination, and filter support
-      AWSProvider awsProvider = new AWSProvider(config.aws);
+      AWSProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> clusterResults =
           awsProvider.queryKubernetesClusters(accountIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
 
       for (Map<String, Object> cluster : clusterResults) {
-        Integer publicAccessCidrs = (Integer) cluster.get("PublicAccessCidrs");
-
         results.add(new Object[]{
             "aws",
             cluster.get("AccountId"),
@@ -258,16 +255,16 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("NodeCount"),
             cluster.get("NodeGroupCount"),
             cluster.get("RBACEnabled"),
-            !((Boolean) cluster.getOrDefault("EndpointPublicAccess", true)),
+            cluster.get("PrivateCluster"),
             cluster.get("EndpointPublicAccess"),
-            publicAccessCidrs,
-            null, // network_policy - EKS doesn't have built-in network policy
+            cluster.get("PublicAccessCidrs"),
+            null, // network_policy_provider - not a setting of an EKS cluster
             cluster.get("EncryptionEnabled"),
-            cluster.get("EncryptionProvider"),
+            cluster.get("EncryptionKeyType"),
             cluster.get("LoggingEnabled"),
-            true, // EKS has CloudWatch monitoring by default
+            cluster.get("MonitoringEnabled"),
             CloudOpsDataConverter.convertValue(cluster.get("CreatedAt"), SqlTypeName.TIMESTAMP),
-            null, // modified_date - not available
+            null, // modified_date - EKS does not report one
             cluster.get("Tags")
         });
       }

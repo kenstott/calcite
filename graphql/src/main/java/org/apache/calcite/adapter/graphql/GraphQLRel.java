@@ -75,6 +75,7 @@ public interface GraphQLRel extends RelNode {
       map.put("_and", "_and");
       map.put("_or", "_or");
       map.put("_in", "_in");
+      map.put("_is_null", "_is_null");
       KEYWORDS = map;
     }
 
@@ -202,11 +203,9 @@ public interface GraphQLRel extends RelNode {
      * @param rowType  List of row types to be used in the conversion
      * @return A string representing the converted GraphQL filter in accordance with the input RexNode filter
      */
-    private @Nullable String convertRexNodeToGraphQLFilter(@Nullable RexNode filter,
+    String convertRexNodeToGraphQLFilter(@Nullable RexNode filter,
         List<String>  rowType) {
-      // Implement this method to convert RexNode to GraphQL filter syntax
-      // This is a placeholder and needs to be implemented based on your specific GraphQL schema
-      // and requirements
+      // The filter syntax is Hasura's: _and and _or take a list of conditions, _not takes one
       if (filter == null) {
         return "";
       }
@@ -301,19 +300,21 @@ public interface GraphQLRel extends RelNode {
                 KEYWORDS.get("_in"),
                 rangeString);
           }
+        case IS_NULL:
+        case IS_NOT_NULL:
+          return String.format(Locale.ROOT, "{ %s: { %s: %s } }",
+              getFieldName(call.operands, rowType),
+              KEYWORDS.get("_is_null"),
+              filter.getKind() == SqlKind.IS_NULL);
         case NOT:
-          return String.format(Locale.ROOT, "{ %s: %s }", KEYWORDS.get("_not"), convertRexNodeToGraphQLFilter(call.operands.get(1), rowType));
+          return String.format(Locale.ROOT, "{ %s: %s }", KEYWORDS.get("_not"),
+              convertRexNodeToGraphQLFilter(call.operands.get(0), rowType));
         case OR:
         case AND:
           StringBuilder f = new StringBuilder();
-          switch (filter.getKind()) {
-          case OR:
-            f.append(String.format(Locale.ROOT, "{ %s: [", KEYWORDS.get("_and")));
-            break;
-          case AND:
-            f.append(String.format(Locale.ROOT, "{ %s: [", KEYWORDS.get("_or")));
-            break;
-          }
+          f.append(
+              String.format(Locale.ROOT, "{ %s: [",
+                  KEYWORDS.get(filter.getKind() == SqlKind.AND ? "_and" : "_or")));
           ArrayList<String> conditions = new ArrayList<>();
           for (RexNode o : ((RexCall) filter).operands) {
             String condition = convertRexNodeToGraphQLFilter(o, rowType);
@@ -324,10 +325,12 @@ public interface GraphQLRel extends RelNode {
           f.append("]}");
           return f.toString();
         default:
-          return null;
+          break;
         }
       }
-      return "";
+      // GraphQLFilterRule converts only the filters handled above; anything else sent as
+      // "where: null" would come back unfiltered
+      throw new IllegalStateException("No GraphQL filter for " + filter.getKind() + ": " + filter);
     }
 
     private String getFieldName(List<RexNode> operands, List<String> rowType) {
@@ -344,9 +347,12 @@ public interface GraphQLRel extends RelNode {
       RexInputRef op = (RexInputRef) opCandidate;
       String sqlFieldName = rowType.get(op.getIndex());
 
-      // Convert SQL field name back to GraphQL field name
-      assert graphQLTable != null;
-      return graphQLTable.getGraphQLFieldName(sqlFieldName);
+      return graphQLFieldName(sqlFieldName);
+    }
+
+    /** The GraphQL name of a field, given its SQL column name. */
+    String graphQLFieldName(String sqlFieldName) {
+      return requireNonNull(graphQLTable, "graphQLTable").getGraphQLFieldName(sqlFieldName);
     }
 
     private @Nullable Object[] getRange(List<RexNode> operands) {
@@ -363,18 +369,6 @@ public interface GraphQLRel extends RelNode {
         return sarg.rangeSet.asRanges().toArray();
       }
       return null;
-    }
-
-    private String convertQuotes(String input) {
-      //Replace any original double quotes to \"
-      input = input.replace("\"", "\\\"");
-
-      //If string starts and ends with single quote
-      if (input.startsWith("'") && input.endsWith("'")) {
-        //Replaces outer single quotes with double quotes
-        input = "\"" + input.substring(1, input.length() - 1) + "\"";
-      }
-      return input;
     }
 
     private String getComparator(List<RexNode> operands) {

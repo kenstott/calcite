@@ -25,6 +25,7 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -171,11 +172,10 @@ public class CloudOpsDataConverterTest {
   }
 
   @Test public void testErrorHandling() {
-    // Test that invalid conversions return the original value
-    Object invalidBoolean = CloudOpsDataConverter.convertValue("invalid", SqlTypeName.BOOLEAN);
-    assertEquals("invalid", invalidBoolean); // Falls back to original value on error
-
-    Object invalidNumber = CloudOpsDataConverter.convertValue("not-a-number", SqlTypeName.INTEGER);
-    assertEquals("not-a-number", invalidNumber); // Falls back to original value on error
+    // A value that cannot be brought to the column's type is an error, not a value to pass on
+    assertThrows(IllegalArgumentException.class,
+        () -> CloudOpsDataConverter.convertValue("invalid", SqlTypeName.BOOLEAN));
+    assertThrows(IllegalArgumentException.class,
+        () -> CloudOpsDataConverter.convertValue("not-a-number", SqlTypeName.INTEGER));
   }
 }

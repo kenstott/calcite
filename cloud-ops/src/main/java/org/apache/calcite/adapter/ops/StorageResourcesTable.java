@@ -22,9 +22,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +31,6 @@ import java.util.Map;
  * Returns raw facts without subjective assessments.
  */
 public class StorageResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(StorageResourcesTable.class);
   public StorageResourcesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -92,7 +88,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
 
     try {
       // Use native Azure provider
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> storageResults = azureProvider.queryStorageResources(subscriptionIds);
 
       // Convert to rows
@@ -114,17 +110,18 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("ReplicationType"),
             storage.get("EncryptionEnabled"),
             encryptionMethod,
-            encryptionMethod != null && encryptionMethod.contains("Customer") ?
-                "customer-managed" : "service-managed",
+            encryptionMethod == null || encryptionMethod.isEmpty() ? null
+                : encryptionMethod.contains("Customer") ? "customer-managed" : "service-managed",
             storage.get("PublicBlobAccess"), // storage accounts only
             storage.get("PublicNetworkAccess"),
             storage.get("NetworkDefaultAction"),
             storage.get("HttpsOnly"),
-            null, // versioning_enabled - a blob-service setting, not in Resource Graph
-            null, // soft_delete_enabled - a blob-service setting, not in Resource Graph
-            null, // soft_delete_retention_days
+            // blob-service settings: storage accounts only
+            storage.get("VersioningEnabled"),
+            storage.get("SoftDeleteEnabled"),
+            storage.get("SoftDeleteRetentionDays"),
             null, // backup_enabled - Azure Backup is configured on a vault, not here
-            null, // lifecycle_rules_count - a management policy, not in Resource Graph
+            storage.get("LifecycleRulesCount"),
             storage.get("AccessTier"),
             CloudOpsDataConverter.convertValue(storage.get("CreatedDate"), SqlTypeName.TIMESTAMP),
             null, // modified_date: not reported
@@ -146,7 +143,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> storageResults = gcpProvider.queryStorageResources(projectIds);
 
       for (Map<String, Object> storage : storageResults) {
@@ -166,7 +163,9 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("EncryptionEnabled") != null && (Boolean) storage.get("EncryptionEnabled") ?
                 (storage.get("EncryptionKeyName") != null ? "customer-managed" : "service-managed") : "none",
             storage.get("EncryptionKeyName") != null ? "customer-managed" : "service-managed",
-            false, // public_access_enabled - would need to check IAM
+            // Known only when public access prevention is enforced; otherwise it depends on
+            // the bucket's IAM policy, which the adapter's read role may not see
+            "enforced".equals(storage.get("PublicAccessPrevention")) ? Boolean.FALSE : null,
             storage.get("PublicAccessPrevention"),
             null, // network_restrictions
             true, // https_only - GCS always uses HTTPS
@@ -197,7 +196,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
 
     try {
       // Use the optimized AWS provider with projection support
-      AWSProvider awsProvider = new AWSProvider(config.aws);
+      AWSProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> storageResults =
           awsProvider.queryStorageResources(accountIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
 
@@ -225,7 +224,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             publicAccessBlocked != null ? !publicAccessBlocked : null,
             publicAccessBlocked != null ? (publicAccessBlocked ? "blocked" : "allowed") : null,
             null, // network_restrictions - would need to check bucket policy
-            true, // https_only - S3 supports both but HTTPS is default
+            storage.get("HttpsOnly"), // whether the bucket policy denies plain HTTP
             storage.get("VersioningEnabled"),
             null, // soft_delete_enabled - S3 doesn't have soft delete
             null, // soft_delete_retention_days

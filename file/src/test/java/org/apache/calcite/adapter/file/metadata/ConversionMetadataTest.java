@@ -24,6 +24,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Comprehensive unit tests for {@link ConversionMetadata}.
@@ -275,6 +277,62 @@ public class ConversionMetadataTest {
     ConversionMetadata metadata = new ConversionMetadata(tempDir);
     File unknown = createTempFile("no_record.csv");
     assertNull(metadata.findRecordBySourceFile(unknown));
+  }
+
+  /**
+   * A file reached through a link inside the data directory is a listing of its own: it must
+   * not be given the record, and so the table name, of the file the link leads to.
+   */
+  @Test void aFileBehindALinkInsideTheDataDirectoryHasNoRecordOfItsTarget() throws IOException {
+    // Canonical, so that absolute and canonical paths agree as they do where the temporary
+    // directory is not itself behind a link
+    File data = tempDir.getCanonicalFile();
+    File sourceDir = new File(data, "source");
+    File targetDir = new File(data, "target");
+    assertTrue(sourceDir.mkdirs() && targetDir.mkdirs());
+    File original = new File(sourceDir, "original.csv");
+    assertTrue(original.createNewFile());
+    File link = new File(targetDir, "link_to_source");
+    try {
+      Files.createSymbolicLink(link.toPath(), sourceDir.toPath());
+    } catch (UnsupportedOperationException | IOException e) {
+      assumeTrue(false, "this file system has no symbolic links: " + e);
+    }
+    File viaLink = new File(link, "original.csv");
+
+    ConversionMetadata metadata = new ConversionMetadata(data);
+    metadata.recordConversionWithTableName("source__original", original,
+        createTempFile("original.json"), "CSV_TO_JSON");
+
+    assertNull(metadata.findRecordBySourceFile(viaLink, data),
+        "the linked listing must not find the record of the file it links to");
+    ConversionRecord record = metadata.findRecordBySourceFile(original, data);
+    assertNotNull(record);
+    assertEquals("source__original", record.tableName);
+    // With no data directory every link is resolved, and the two are one file
+    assertNotNull(metadata.findRecordBySourceFile(viaLink));
+  }
+
+  /** The data directory itself may be behind a link; that is still the same listing. */
+  @Test void aDataDirectoryBehindALinkFindsARecordWrittenWithTheResolvedPath()
+      throws IOException {
+    File root = tempDir.getCanonicalFile();
+    File real = new File(root, "real");
+    assertTrue(real.mkdirs());
+    File input = new File(real, "input.csv");
+    assertTrue(input.createNewFile());
+    File alias = new File(root, "alias");
+    try {
+      Files.createSymbolicLink(alias.toPath(), real.toPath());
+    } catch (UnsupportedOperationException | IOException e) {
+      assumeTrue(false, "this file system has no symbolic links: " + e);
+    }
+
+    ConversionMetadata metadata = new ConversionMetadata(root);
+    // recordConversion stores the fully resolved path, real/input.csv
+    metadata.recordConversion(input, createTempFile("input_alias.json"), "CSV_TO_JSON");
+
+    assertNotNull(metadata.findRecordBySourceFile(new File(alias, "input.csv"), alias));
   }
 
   @Test void testGetConversionRecordByConvertedFilePath() throws IOException {

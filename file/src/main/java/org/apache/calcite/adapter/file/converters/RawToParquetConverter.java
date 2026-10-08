@@ -23,7 +23,7 @@ import java.io.IOException;
  * domain-specific data structures, API response formats, and transformation requirements
  * that go beyond simple format-to-format conversion.
  *
- * <h3>Use Cases</h3>
+ * <h2>Use Cases</h2>
  * <ul>
  *   <li><b>API Response Unwrapping</b> - Extract data from API metadata wrappers</li>
  *   <li><b>Nested Structure Flattening</b> - Convert complex JSON hierarchies to flat tables</li>
@@ -32,7 +32,7 @@ import java.io.IOException;
  *   <li><b>Domain Partitioning</b> - Apply semantic partitioning (by year, region, etc.)</li>
  * </ul>
  *
- * <h3>Integration with FileSchema</h3>
+ * <h2>Integration with FileSchema</h2>
  * <p>FileSchema checks registered custom converters before applying its default conversion:
  * <pre>
  * 1. FileSchema detects a raw file needs conversion to Parquet
@@ -45,7 +45,7 @@ import java.io.IOException;
  * 5. Records conversion in .conversions.json regardless of which converter was used
  * </pre>
  *
- * <h3>Example: ECON Adapter</h3>
+ * <h2>Example: ECON Adapter</h2>
  * <pre>
  * public class EconRawToParquetConverter implements RawToParquetConverter {
  *   private final FredDataDownloader fredDownloader;
@@ -66,13 +66,13 @@ import java.io.IOException;
  * }
  * </pre>
  *
- * <h3>Registration</h3>
+ * <h2>Registration</h2>
  * <pre>
  * FileSchema fileSchema = new FileSchema(...);
  * fileSchema.registerRawToParquetConverter(new EconRawToParquetConverter(...));
  * </pre>
  *
- * @see FileSchema#registerRawToParquetConverter(RawToParquetConverter)
+ * <p>See {@code FileSchema#registerRawToParquetConverter(RawToParquetConverter)}.
  * @see org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil
  */
 public interface RawToParquetConverter {

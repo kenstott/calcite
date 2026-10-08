@@ -24,7 +24,6 @@ CLOUDS = {
         "aws.accessKeyId": ("CLOUDOPS_AWS_ACCESS_KEY_ID", True),
         "aws.secretAccessKey": ("CLOUDOPS_AWS_SECRET_ACCESS_KEY", True),
         "aws.accountIds": ("CLOUDOPS_AWS_ACCOUNT_IDS", True),
-        "aws.region": ("CLOUDOPS_AWS_REGION", True),
         "aws.roleArn": ("CLOUDOPS_AWS_ROLE_ARN", False),
     },
     "gcp": {

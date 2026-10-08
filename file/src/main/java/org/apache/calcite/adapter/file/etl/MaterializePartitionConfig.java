@@ -24,14 +24,14 @@ import java.util.Map;
  *   <li>batchBy - Columns to use for batch processing (to avoid OOM)</li>
  * </ul>
  *
- * <h3>YAML Configuration</h3>
+ * <h2>YAML Configuration</h2>
  * <pre>{@code
  * partition:
  *   columns: [year, region]  # DuckDB PARTITION_BY columns
  *   batchBy: [year]          # Process one year at a time
  * }</pre>
  *
- * <h3>Batching Strategy</h3>
+ * <h2>Batching Strategy</h2>
  * <p>When processing large datasets, batching prevents OOM by processing
  * data in chunks. For example, with {@code batchBy: [year]}, the writer
  * will process each year separately rather than loading all data at once.

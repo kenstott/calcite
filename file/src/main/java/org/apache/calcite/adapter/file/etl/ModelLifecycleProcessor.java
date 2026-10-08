@@ -602,7 +602,7 @@ public class ModelLifecycleProcessor {
 
     /**
      * Registers a custom data writer for a specific table.
-     * If the hook returns >= 0, the built-in MaterializationWriter is skipped.
+     * If the hook returns &gt;= 0, the built-in MaterializationWriter is skipped.
      */
     public Builder writeData(String schemaTable, WriteDataFunction hook) {
       this.writeDataHooks.put(schemaTable, hook);

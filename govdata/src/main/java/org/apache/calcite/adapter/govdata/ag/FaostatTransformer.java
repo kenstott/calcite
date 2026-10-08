@@ -86,7 +86,7 @@ public class FaostatTransformer implements StreamingResponseTransformer {
     }
 
     ZipInputStream zis = new ZipInputStream(conn.getInputStream());
-    if (!positionOnDataEntry(zis, domain)) {
+    if (!positionOnDataEntry(zis)) {
       zis.close();
       conn.disconnect();
       throw new IOException("faostat[" + domain + "]: no normalized data entry in " + url);
@@ -107,7 +107,7 @@ public class FaostatTransformer implements StreamingResponseTransformer {
    * Prefers a {@code *(Normalized).csv} entry; falls back to the first {@code .csv} that is not a
    * flag/symbol/note sidecar.
    */
-  private static boolean positionOnDataEntry(ZipInputStream zis, String domain) throws IOException {
+  private static boolean positionOnDataEntry(ZipInputStream zis) throws IOException {
     ZipEntry entry;
     while ((entry = zis.getNextEntry()) != null) {
       String name = entry.getName().toLowerCase();
@@ -141,7 +141,6 @@ public class FaostatTransformer implements StreamingResponseTransformer {
     private final HttpURLConnection conn;
     private final Map<String, Integer> idx;
     private final String domain;
-    private final String url;
     private Map<String, Object> mapped;
     private boolean done;
 
@@ -151,7 +150,6 @@ public class FaostatTransformer implements StreamingResponseTransformer {
       this.conn = conn;
       this.idx = idx;
       this.domain = domain;
-      this.url = url;
       advance();
     }
 

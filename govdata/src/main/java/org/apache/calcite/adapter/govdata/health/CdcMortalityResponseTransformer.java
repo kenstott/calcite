@@ -113,7 +113,7 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
       Map<String, Object> source, RequestContext context) {
     if (!isWeekly(context) || isPreCovidWeekly(context)) {
       transformRecord(source, context);
-      return Collections.singletonList(source);
+      return new ArrayList<>(Collections.singletonList(source));
     }
     List<Map<String, Object>> rows = new ArrayList<>(2);
     Map<String, Object> allCause = new HashMap<>();

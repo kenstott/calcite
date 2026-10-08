@@ -164,7 +164,7 @@ public class ParquetMetadataWriter {
       try (ParquetReader<Group> reader = ParquetReader.builder(new GroupReadSupport(), inputPath)
               .withConf(conf)
               .build();
-           ParquetWriter<Group> writer = ExampleParquetWriter.builder(outputPath)
+           ParquetWriter<Group> writer = ExampleParquetWriter.builder(ParquetLocalFiles.outputFile(outputPath, conf))
               .withConf(conf)
               .withType(schema)
               .withCompressionCodec(compression)

@@ -16,9 +16,6 @@ import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -56,8 +53,6 @@ import java.util.concurrent.TimeoutException;
  */
 public class PadusFederalFeeLandsStreamingTransformer implements StreamingResponseTransformer {
 
-  private static final Logger LOGGER =
-      LoggerFactory.getLogger(PadusFederalFeeLandsStreamingTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   // Small page size: a handful of federal administrative units (e.g. BLM's Alaska Arctic

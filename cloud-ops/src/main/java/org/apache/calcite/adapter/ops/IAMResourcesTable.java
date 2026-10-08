@@ -22,9 +22,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +30,6 @@ import java.util.Map;
  * Table containing IAM resource information across cloud providers.
  */
 public class IAMResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(IAMResourcesTable.class);
   public IAMResourcesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -77,7 +73,7 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> iamResults = azureProvider.queryIAMResources(subscriptionIds);
 
       for (Map<String, Object> iam : iamResults) {
@@ -117,7 +113,7 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> iamResults = gcpProvider.queryIAMResources(projectIds);
 
       for (Map<String, Object> iam : iamResults) {
@@ -163,7 +159,7 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> iamResults = awsProvider.queryIAMResources(accountIds);
 
       for (Map<String, Object> iam : iamResults) {

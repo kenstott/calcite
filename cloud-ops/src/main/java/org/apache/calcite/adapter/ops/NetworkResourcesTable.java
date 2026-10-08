@@ -23,9 +23,6 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,7 +32,6 @@ import java.util.Map;
  * Table containing network resource information across cloud providers.
  */
 public class NetworkResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(NetworkResourcesTable.class);
   public NetworkResourcesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -94,7 +90,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> networkResults = azureProvider.queryNetworkResources(subscriptionIds);
 
       for (Map<String, Object> network : networkResults) {
@@ -133,7 +129,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> networkResults = gcpProvider.queryNetworkResources(projectIds);
 
       for (Map<String, Object> network : networkResults) {
@@ -172,7 +168,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> networkResults = awsProvider.queryNetworkResources(accountIds);
 
       for (Map<String, Object> network : networkResults) {

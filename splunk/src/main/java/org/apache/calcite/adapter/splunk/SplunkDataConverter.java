@@ -62,7 +62,7 @@ public final class SplunkDataConverter {
       SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss", Locale.ROOT);
       java.util.Date parsed = timeFormat.parse(value);
       // Get milliseconds since midnight
-      return (int) (parsed.getTime() % (24 * 60 * 60 * 1000L));
+      return (int) (parsed.toInstant().toEpochMilli() % (24 * 60 * 60 * 1000L));
     } catch (ParseException e) {
       // Try parsing as full timestamp and extract time portion
       java.sql.Timestamp timestamp = convertIsoStringToTimestampMillis(value);
@@ -111,7 +111,7 @@ public final class SplunkDataConverter {
     // Fallback to legacy SimpleDateFormat parsing
     for (SimpleDateFormat format : LEGACY_FORMATS) {
       try {
-        return new java.sql.Timestamp(format.parse(trimmed).getTime());
+        return new java.sql.Timestamp(format.parse(trimmed).toInstant().toEpochMilli());
           // Timestamp object
       } catch (ParseException e) {
         // Try next format
@@ -251,6 +251,8 @@ public final class SplunkDataConverter {
         } else if (value instanceof java.sql.Timestamp) {
           return ((java.sql.Timestamp) value).getTime();
         }
+        break;
+      default:
         break;
     }
 

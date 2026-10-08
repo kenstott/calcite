@@ -22,9 +22,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +30,6 @@ import java.util.Map;
  * Table containing database resource information across cloud providers.
  */
 public class DatabaseResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseResourcesTable.class);
   public DatabaseResourcesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -82,7 +78,7 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> dbResults = azureProvider.queryDatabaseResources(subscriptionIds);
 
       for (Map<String, Object> db : dbResults) {
@@ -95,19 +91,19 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             db.get("Location"),
             db.get("ResourceGroup"),
             db.get("ResourceId"),
-            null, // engine parsed from database type
-            null, // engine version not in query
-            db.get("SKU"),
-            null, // allocated storage not in query
-            null, // multi-AZ concept different in Azure
-            null, // status not in query
-            null, // publicly accessible would need additional query
-            null, // encrypted status would need parsing
-            null, // encryption key not in query
-            parseMinTlsVersion(db.get("SecurityConfiguration")),
-            null, // backup retention would need parsing
-            db.get("BackupConfiguration"),
-            null  // create time not in query
+            db.get("Engine"),
+            db.get("EngineVersion"),
+            db.get("InstanceClass"),
+            db.get("AllocatedStorageGb"), // GB, as for AWS
+            db.get("MultiAz"), // zone redundancy
+            db.get("Status"),
+            db.get("PubliclyAccessible"),
+            db.get("Encrypted"),
+            db.get("EncryptionKey"), // a customer-managed key; null under a service-managed one
+            db.get("TlsVersion"),
+            db.get("BackupRetentionDays"),
+            null, // backup_window - Azure schedules backups itself
+            CloudOpsDataConverter.convertValue(db.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
     } catch (RuntimeException e) {
@@ -125,7 +121,7 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> dbResults = gcpProvider.queryDatabaseResources(projectIds);
 
       for (Map<String, Object> db : dbResults) {
@@ -168,7 +164,7 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> dbResults = awsProvider.queryDatabaseResources(accountIds);
 
       for (Map<String, Object> db : dbResults) {
@@ -183,28 +179,17 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             db.get("ResourceId"),
             db.get("Engine"),
             db.get("EngineVersion"),
-            db.get("DBInstanceClass") != null ? db.get("DBInstanceClass") :
-                db.get("CacheNodeType"),
+            db.get("InstanceClass"),
             db.get("AllocatedStorage"),
             db.get("MultiAZ"),
-            db.get("DBInstanceStatus") != null ? db.get("DBInstanceStatus") :
-                db.get("Status"),
+            db.get("Status"),
             db.get("PubliclyAccessible"),
-            db.get("StorageEncrypted") != null ? db.get("StorageEncrypted") :
-                db.get("AtRestEncryptionEnabled"),
-            db.get("KmsKeyId") != null ? db.get("KmsKeyId") :
-                db.get("KMSMasterKeyArn"),
-            null, // TLS version not directly exposed
-            // RDS reports a retention period, ElastiCache a snapshot limit, DynamoDB neither.
-            // (No nested ?: here: mixing int and null in one unboxes the null.)
-            db.get("BackupRetentionPeriod") != null ? db.get("BackupRetentionPeriod")
-                : db.get("SnapshotRetentionLimit"),
-            db.get("PreferredBackupWindow") != null ? db.get("PreferredBackupWindow") :
-                db.get("SnapshotWindow"),
-            CloudOpsDataConverter.convertValue(
-                db.get("InstanceCreateTime") != null ? db.get("InstanceCreateTime") :
-                db.get("ClusterCreateTime") != null ? db.get("ClusterCreateTime") :
-                db.get("CreationDateTime"), SqlTypeName.TIMESTAMP)
+            db.get("Encrypted"),
+            db.get("EncryptionKey"), // a KMS key; null under an AWS-owned one
+            null, // tls_version - a connection negotiates it; no service reports a minimum
+            db.get("BackupRetentionDays"),
+            db.get("BackupWindow"),
+            CloudOpsDataConverter.convertValue(db.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
     } catch (RuntimeException e) {
@@ -212,18 +197,5 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     }
 
     return results;
-  }
-
-  private String parseMinTlsVersion(Object securityConfig) {
-    if (securityConfig instanceof String) {
-      String config = (String) securityConfig;
-      if (config.contains("Min TLS: ")) {
-        int start = config.indexOf("Min TLS: ") + 9;
-        int end = config.indexOf(",", start);
-        if (end == -1) end = config.length();
-        return config.substring(start, end).trim();
-      }
-    }
-    return null;
   }
 }

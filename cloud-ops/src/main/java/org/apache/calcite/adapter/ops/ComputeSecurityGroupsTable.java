@@ -24,9 +24,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -43,8 +40,6 @@ import java.util.Map;
  * Azure and GCP scans return empty until those providers extract the associations.
  */
 public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ComputeSecurityGroupsTable.class);
-
   public ComputeSecurityGroupsTable(CloudOpsConfig config) {
     super(config);
   }
@@ -76,8 +71,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
   }
 
   /**
-   * Two foreign keys: {@code compute_resource_id} -> compute_resources.resource_id (the instance
-   * ARN, a globally-unique primary key), and {@code (cloud_provider, security_group_id)} ->
+   * Two foreign keys: {@code compute_resource_id} -&gt; compute_resources.resource_id (the instance
+   * ARN, a globally-unique primary key), and {@code (cloud_provider, security_group_id)} -&gt;
    * network_resources(cloud_provider, network_resource) (the bare security-group native ID).
    */
   @Override protected List<RelReferentialConstraint> referentialConstraints(List<String> columnNames) {
@@ -120,7 +115,7 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
                                                 CloudOpsFilterHandler filterHandler) {
     List<Object[]> results = new ArrayList<>();
     try {
-      AzureProvider azureProvider = new AzureProvider(config.azure);
+      AzureProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       for (Map<String, Object> row : azureProvider.queryComputeSecurityGroups(subscriptionIds)) {
         results.add(new Object[]{
             "azure",
@@ -152,7 +147,7 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
                                               CloudOpsFilterHandler filterHandler) {
     List<Object[]> results = new ArrayList<>();
     try {
-      AWSProvider awsProvider = new AWSProvider(config.aws);
+      AWSProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       for (Map<String, Object> row : awsProvider.queryComputeSecurityGroups(accountIds)) {
         results.add(new Object[]{
             "aws",
