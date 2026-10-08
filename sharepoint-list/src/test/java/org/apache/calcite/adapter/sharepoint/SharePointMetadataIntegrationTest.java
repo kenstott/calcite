@@ -17,8 +17,10 @@
 package org.apache.calcite.adapter.sharepoint;
 
 import org.apache.calcite.schema.Schema;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.lookup.Lookup;
+import org.apache.calcite.tools.Frameworks;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -38,13 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SharePointMetadataIntegrationTest {
 
   @Test void testMetadataSchemaIntegration() {
-    Map<String, Object> authConfig = createAuthConfig();
-
-    SharePointListSchema schema =
-        new SharePointListSchema(loadTestConfig().getProperty("SHAREPOINT_SITE_URL"), authConfig);
-
-    // Test that metadata sub-schemas are available using the new Lookup API
-    Lookup<? extends Schema> subSchemaLookup = schema.subSchemas();
+    // Test that the metadata schemas are available using the new Lookup API
+    Lookup<? extends Schema> subSchemaLookup = metadataSchemas();
     assertTrue(subSchemaLookup.get("pg_catalog") != null);
     assertTrue(subSchemaLookup.get("information_schema") != null);
 
@@ -71,6 +68,18 @@ class SharePointMetadataIntegrationTest {
 
     Table spLists = pgCatalog.tables().get("sharepoint_lists");
     assertNotNull(spLists);
+  }
+
+  /**
+   * The schemas the factory registers beside the SharePoint schema: pg_catalog and
+   * information_schema are siblings of it, not sub-schemas.
+   */
+  private Lookup<? extends SchemaPlus> metadataSchemas() {
+    Map<String, Object> operand = new HashMap<>(createAuthConfig());
+    operand.put("siteUrl", loadTestConfig().getProperty("SHAREPOINT_SITE_URL"));
+    SchemaPlus root = Frameworks.createRootSchema(false);
+    root.add("sharepoint", SharePointListSchemaFactory.INSTANCE.create(root, "sharepoint", operand));
+    return root.subSchemas();
   }
 
   private Map<String, Object> createAuthConfig() {

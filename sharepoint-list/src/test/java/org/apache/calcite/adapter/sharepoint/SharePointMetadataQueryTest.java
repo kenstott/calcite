@@ -19,7 +19,10 @@ package org.apache.calcite.adapter.sharepoint;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Schema;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.schema.lookup.Lookup;
+import org.apache.calcite.tools.Frameworks;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -39,13 +42,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SharePointMetadataQueryTest {
 
   @Test void testPgTablesQuery() {
-    Map<String, Object> authConfig = createAuthConfig();
-
-    SharePointListSchema schema =
-        new SharePointListSchema(loadTestConfig().getProperty("SHAREPOINT_SITE_URL"), authConfig);
-
     // Get the pg_catalog schema and pg_tables table
-    Schema pgCatalog = schema.subSchemas().get("pg_catalog");
+    Schema pgCatalog = metadataSchemas().get("pg_catalog");
     assertNotNull(pgCatalog);
 
     Table pgTablesTable = pgCatalog.tables().get("pg_tables");
@@ -78,16 +76,11 @@ class SharePointMetadataQueryTest {
   }
 
   @Test void testInformationSchemaTablesQuery() {
-    Map<String, Object> authConfig = createAuthConfig();
-
-    SharePointListSchema schema =
-        new SharePointListSchema(loadTestConfig().getProperty("SHAREPOINT_SITE_URL"), authConfig);
-
     // Get the information_schema and tables table
-    Schema informationSchema = schema.subSchemas().get("information_schema");
+    Schema informationSchema = metadataSchemas().get("information_schema");
     assertNotNull(informationSchema);
 
-    Table tablesTable = informationSchema.tables().get("tables");
+    Table tablesTable = informationSchema.tables().get("TABLES");
     assertNotNull(tablesTable);
     assertTrue(tablesTable instanceof ScannableTable);
 
@@ -119,16 +112,11 @@ class SharePointMetadataQueryTest {
   }
 
   @Test void testInformationSchemaColumnsQuery() {
-    Map<String, Object> authConfig = createAuthConfig();
-
-    SharePointListSchema schema =
-        new SharePointListSchema(loadTestConfig().getProperty("SHAREPOINT_SITE_URL"), authConfig);
-
     // Get the information_schema and columns table
-    Schema informationSchema = schema.subSchemas().get("information_schema");
+    Schema informationSchema = metadataSchemas().get("information_schema");
     assertNotNull(informationSchema);
 
-    Table columnsTable = informationSchema.tables().get("columns");
+    Table columnsTable = informationSchema.tables().get("COLUMNS");
     assertNotNull(columnsTable);
     assertTrue(columnsTable instanceof ScannableTable);
 
@@ -164,13 +152,8 @@ class SharePointMetadataQueryTest {
   }
 
   @Test void testSharePointListsQuery() {
-    Map<String, Object> authConfig = createAuthConfig();
-
-    SharePointListSchema schema =
-        new SharePointListSchema(loadTestConfig().getProperty("SHAREPOINT_SITE_URL"), authConfig);
-
     // Get the pg_catalog schema and sharepoint_lists table
-    Schema pgCatalog = schema.subSchemas().get("pg_catalog");
+    Schema pgCatalog = metadataSchemas().get("pg_catalog");
     assertNotNull(pgCatalog);
 
     Table sharePointListsTable = pgCatalog.tables().get("sharepoint_lists");
@@ -208,6 +191,18 @@ class SharePointMetadataQueryTest {
     }
 
     assertTrue(rowCount > 0, "Should find at least one SharePoint list");
+  }
+
+  /**
+   * The schemas the factory registers beside the SharePoint schema: pg_catalog and
+   * information_schema are siblings of it, not sub-schemas.
+   */
+  private Lookup<? extends SchemaPlus> metadataSchemas() {
+    Map<String, Object> operand = new HashMap<>(createAuthConfig());
+    operand.put("siteUrl", loadTestConfig().getProperty("SHAREPOINT_SITE_URL"));
+    SchemaPlus root = Frameworks.createRootSchema(false);
+    root.add("sharepoint", SharePointListSchemaFactory.INSTANCE.create(root, "sharepoint", operand));
+    return root.subSchemas();
   }
 
   private Map<String, Object> createAuthConfig() {

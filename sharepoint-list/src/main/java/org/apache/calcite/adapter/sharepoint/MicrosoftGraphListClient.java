@@ -32,10 +32,12 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -64,6 +66,14 @@ public class MicrosoftGraphListClient {
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
 
   private static final Map<String, CachedLists> LIST_CACHE = new ConcurrentHashMap<>();
+
+  /**
+   * Per site, the ids of lists this JVM created that Graph's list of the site's lists has
+   * not shown yet. That list lags a creation by a moment, while a read of the list by its
+   * id answers at once; discovery reads each of these by id until the site's list has it.
+   */
+  private static final Map<String, Set<String>> CREATED_NOT_YET_LISTED =
+      new ConcurrentHashMap<>();
 
   private final String siteUrl;
   private final SharePointAuth authenticator;
@@ -153,6 +163,7 @@ public class MicrosoftGraphListClient {
     String url = String.format(Locale.ROOT, "%s/sites/%s/lists", GRAPH_API_BASE, siteId);
 
     Map<String, SharePointListMetadata> lists = new LinkedHashMap<>();
+    Set<String> listedIds = new HashSet<>();
 
     // Handle pagination
     String nextLink = url;
@@ -169,6 +180,7 @@ public class MicrosoftGraphListClient {
           }
 
           String listId = list.get("id").asText();
+          listedIds.add(listId);
           String displayName = list.get("displayName").asText();
           String entityTypeName = list.get("name").asText();
 
@@ -201,6 +213,26 @@ public class MicrosoftGraphListClient {
 
       // Check for next page
       nextLink = response.has("@odata.nextLink") ? response.get("@odata.nextLink").asText() : null;
+    }
+
+    Set<String> created = CREATED_NOT_YET_LISTED.get(siteUrl);
+    if (created != null) {
+      for (String listId : new ArrayList<>(created)) {
+        if (listedIds.contains(listId)) {
+          created.remove(listId);
+          continue;
+        }
+        try {
+          SharePointListMetadata metadata = getListMetadataById(listId);
+          lists.put(metadata.getListName(), metadata);
+        } catch (GraphApiException e) {
+          if (e.getStatus() != HttpURLConnection.HTTP_NOT_FOUND) {
+            throw e;
+          }
+          // dropped by someone else before the site's list ever showed it
+          created.remove(listId);
+        }
+      }
     }
 
     if (cacheTtlMillis != 0) {
@@ -236,11 +268,16 @@ public class MicrosoftGraphListClient {
 
     String displayName = response.get("displayName").asText();
     String entityTypeName = response.get("name").asText();
+    // As in getAvailableLists: the template gates writes by list type
+    String template = null;
+    if (response.has("list") && response.get("list").has("template")) {
+      template = response.get("list").get("template").asText();
+    }
 
     // Get columns separately
     List<SharePointColumn> columns = getListColumns(listId);
 
-    return new SharePointListMetadata(listId, displayName, entityTypeName, columns);
+    return new SharePointListMetadata(listId, displayName, entityTypeName, columns, template);
   }
 
   /**
@@ -381,31 +418,7 @@ public class MicrosoftGraphListClient {
     if (columns != null && !columns.isEmpty()) {
       com.fasterxml.jackson.databind.node.ArrayNode columnsNode = requestBody.putArray("columns");
       for (SharePointColumn column : columns) {
-        ObjectNode columnNode = objectMapper.createObjectNode();
-        columnNode.put("name", column.getInternalName());
-        columnNode.put("displayName", column.getDisplayName());
-        columnNode.put("required", column.isRequired());
-
-        // Map column type
-        switch (column.getType().toLowerCase(Locale.ROOT)) {
-        case "text":
-          columnNode.putObject("text");
-          break;
-        case "number":
-          columnNode.putObject("number");
-          break;
-        case "boolean":
-          columnNode.putObject("boolean");
-          break;
-        case "datetime":
-          columnNode.putObject("dateTime");
-          break;
-        case "choice":
-          columnNode.putObject("choice").putArray("choices");
-          break;
-        default:
-          columnNode.putObject("text");
-        }
+        ObjectNode columnNode = columnDefinition(objectMapper, column);
 
         columnsNode.add(columnNode);
       }
@@ -413,11 +426,53 @@ public class MicrosoftGraphListClient {
 
     JsonNode response = executeGraphCall("POST", url, requestBody);
     String listId = response.get("id").asText();
+    CREATED_NOT_YET_LISTED.computeIfAbsent(siteUrl, site -> ConcurrentHashMap.newKeySet())
+        .add(listId);
     // The discovery cache is shared by every client of the site: without this the new list
     // stays invisible to all of them until the cache expires
     invalidateListCache();
 
     return getListMetadataById(listId);
+  }
+
+  /**
+   * The Graph definition of a column of a new list.
+   *
+   * <p>A type with no definition here is refused: created as some other type, the column
+   * would reject the values written to it (a number sent to a text column answers HTTP 500).
+   */
+  static ObjectNode columnDefinition(ObjectMapper objectMapper, SharePointColumn column) {
+    ObjectNode columnNode = objectMapper.createObjectNode();
+    columnNode.put("name", column.getInternalName());
+    columnNode.put("displayName", column.getDisplayName());
+    columnNode.put("required", column.isRequired());
+
+    switch (column.getType().toLowerCase(Locale.ROOT)) {
+    case "text":
+      columnNode.putObject("text");
+      break;
+    case "number":
+      columnNode.putObject("number");
+      break;
+    case "integer":
+      // Graph has one number column; without decimal places it holds whole numbers
+      columnNode.putObject("number").put("decimalPlaces", "none");
+      break;
+    case "boolean":
+      columnNode.putObject("boolean");
+      break;
+    case "datetime":
+      columnNode.putObject("dateTime");
+      break;
+    case "choice":
+      columnNode.putObject("choice").putArray("choices");
+      break;
+    default:
+      throw new IllegalArgumentException("Column " + column.getInternalName() + " has type "
+          + column.getType() + ", which a new list cannot be given; the types are text,"
+          + " number, integer, boolean, datetime and choice");
+    }
+    return columnNode;
   }
 
   /**
@@ -430,6 +485,10 @@ public class MicrosoftGraphListClient {
         String.format(Locale.ROOT, "%s/sites/%s/lists/%s", GRAPH_API_BASE, siteId, listId);
 
     executeGraphCall("DELETE", url, null);
+    Set<String> created = CREATED_NOT_YET_LISTED.get(siteUrl);
+    if (created != null) {
+      created.remove(listId);
+    }
     // As for createList: a dropped list must not stay listed until the cache expires
     invalidateListCache();
   }

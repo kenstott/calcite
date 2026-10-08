@@ -68,12 +68,13 @@ public class SharePointCastIntegrationTest {
   @BeforeEach
   public void setUp() throws Exception {
     testListName = "cast_test_" + UUID.randomUUID().toString().substring(0, 8).toLowerCase(Locale.ROOT);
-    connection = createConnection();
     client = createDirectClient();
 
     // Create test list with various column types for CAST testing
     createTestList();
     populateTestData();
+    // A schema reads the site's lists when it is created, so the list must exist first
+    connection = createConnection();
   }
 
   @AfterEach
@@ -137,7 +138,7 @@ public class SharePointCastIntegrationTest {
 
     assertNotNull(numAsString, "Numeric to string cast should work");
     assertNotNull(amountAsString, "Amount to string cast should work");
-    assertTrue(numAsString.matches("\\d+"), "Should be a numeric string");
+    assertTrue(numAsString.matches("\\d+"), "Should be a numeric string: " + numAsString);
   }
 
   @Test public void testCastDateTimeToString() throws SQLException {
@@ -198,8 +199,9 @@ public class SharePointCastIntegrationTest {
     boolean originalBool = rs.getBoolean("original_bool");
 
     assertNotNull(boolAsString, "Boolean to string cast should work");
-    assertTrue(boolAsString.equals("true") || boolAsString.equals("false"),
-        "Boolean string should be 'true' or 'false'");
+    // Calcite, as the SQL standard has it, casts a boolean to 'TRUE' or 'FALSE'
+    assertTrue(boolAsString.equals("TRUE") || boolAsString.equals("FALSE"),
+        "Boolean string should be 'TRUE' or 'FALSE': " + boolAsString);
   }
 
   @Test public void testCastBooleanToNumeric() throws SQLException {
@@ -384,6 +386,8 @@ public class SharePointCastIntegrationTest {
   private Connection createConnection() throws SQLException {
     Properties info = new Properties();
     info.setProperty("lex", "JAVA");
+    // CONCAT is not in Calcite's standard function library
+    info.setProperty("fun", "standard,postgresql");
 
     Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
     CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);

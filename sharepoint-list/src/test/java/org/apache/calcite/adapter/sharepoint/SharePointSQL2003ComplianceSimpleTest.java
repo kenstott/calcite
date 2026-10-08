@@ -97,7 +97,7 @@ public class SharePointSQL2003ComplianceSimpleTest {
     // Test 4: CASE expression
     try (Statement stmt = connection.createStatement();
          ResultSet rs =
-             stmt.executeQuery("SELECT CASE WHEN 1=1 THEN 'yes' ELSE 'no' END as result FROM (VALUES (1)) AS t(x)")) {
+             stmt.executeQuery("SELECT CASE WHEN 1=1 THEN 'yes' ELSE 'no' END as \"result\" FROM (VALUES (1)) AS t(x)")) {
       if (rs.next()) {
         String result = rs.getString("result");
         System.out.println("✓ CASE expression: " + result);

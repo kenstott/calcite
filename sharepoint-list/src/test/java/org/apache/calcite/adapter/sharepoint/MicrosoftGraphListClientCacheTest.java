@@ -47,6 +47,17 @@ class MicrosoftGraphListClientCacheTest {
     private final Map<String, String> displayNameById;
     /** The id of a list Graph still lists although it has been dropped. */
     String droppedButListed = "none";
+    /** Whether Graph's list of the site's lists lags: a list just created is not in it yet. */
+    boolean listingLags;
+    /** The ids the lagging list of lists had when the lag began. */
+    private java.util.Set<String> listedWhenLagBegan = Collections.emptySet();
+    /** How many times a list was read by its id. */
+    int readsById;
+
+    void lagFromNow() {
+      listingLags = true;
+      listedWhenLagBegan = new java.util.HashSet<>(displayNameById.keySet());
+    }
 
     FakeGraph(String siteUrl, Map<String, String> displayNameById) {
       super(siteUrl, new SharePointAuth() {
@@ -80,12 +91,19 @@ class MicrosoftGraphListClientCacheTest {
       } else if (url.endsWith("/lists")) {
         ArrayNode value = response.putArray("value");
         for (String id : displayNameById.keySet()) {
-          value.add(list(id));
+          if (!listingLags || listedWhenLagBegan.contains(id)) {
+            value.add(list(id));
+          }
         }
       } else if (url.contains("/lists/") && "DELETE".equals(method)) {
         displayNameById.remove(url.substring(url.lastIndexOf('/') + 1));
       } else if (url.contains("/lists/")) {
-        return list(url.substring(url.lastIndexOf('/') + 1));
+        String id = url.substring(url.lastIndexOf('/') + 1);
+        readsById++;
+        if (!displayNameById.containsKey(id)) {
+          throw new GraphApiException(404, "The specified list was not found");
+        }
+        return list(id);
       } else {
         response.put("id", "site-id");
       }
@@ -120,6 +138,41 @@ class MicrosoftGraphListClientCacheTest {
     FakeGraph client =
         new FakeGraph("https://cache-test.example/sites/dropped-while-read", lists);
     client.droppedButListed = "id-2";
+
+    assertEquals(Collections.singleton("existing"), client.getAvailableLists().keySet());
+  }
+
+  @Test void aCreatedListIsDiscoveredWhileTheSitesListOfListsLags() throws Exception {
+    Map<String, String> lists = new LinkedHashMap<>();
+    lists.put("id-1", "Existing");
+    FakeGraph client = new FakeGraph("https://cache-test.example/sites/lagging", lists);
+    client.lagFromNow();
+
+    SharePointListMetadata created =
+        client.createList("new_list", Collections.<SharePointColumn>emptyList());
+    assertTrue(client.getAvailableLists().containsKey(created.getListName()),
+        "the list is read by its id while the site's list of lists does not show it");
+
+    // Once the site's list of lists shows it, it is no longer read by its id
+    client.listingLags = false;
+    client.invalidateListCache();
+    client.getAvailableLists();
+    int reads = client.readsById;
+    client.invalidateListCache();
+    assertTrue(client.getAvailableLists().containsKey(created.getListName()));
+    assertEquals(reads, client.readsById);
+  }
+
+  @Test void aCreatedListDroppedElsewhereBeforeItWasListedIsLeftOut() throws Exception {
+    Map<String, String> lists = new LinkedHashMap<>();
+    lists.put("id-1", "Existing");
+    FakeGraph client = new FakeGraph("https://cache-test.example/sites/lag-then-gone", lists);
+    client.lagFromNow();
+
+    SharePointListMetadata created =
+        client.createList("new_list", Collections.<SharePointColumn>emptyList());
+    lists.remove(created.getListId());
+    client.invalidateListCache();
 
     assertEquals(Collections.singleton("existing"), client.getAvailableLists().keySet());
   }
