@@ -444,7 +444,9 @@ public class FileRowConverterFieldDefTest {
     Object result = converter.toRow(dataRow, projection);
     Object[] rowArr = (Object[]) result;
     assertNotNull(rowArr[0], "ISO date should be parsed");
-    assertEquals(java.sql.Date.valueOf("2024-01-15"), rowArr[0]);
+    // A DATE is its day number, the form Calcite holds one in: a java.sql.Date column is moved
+    // by the JVM's zone offset on its way out through Avatica's getDate
+    assertEquals((int) java.time.LocalDate.of(2024, 1, 15).toEpochDay(), rowArr[0]);
   }
 
   @Test void testToRowWithDateNattyFormat() throws IOException {
