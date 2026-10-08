@@ -344,4 +344,10 @@ tasks.shadowJar {
     isZip64 = true
     mergeServiceFiles()
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    // dnsjava registers a java.net.spi.InetAddressResolverProvider whose class exists only
+    // under META-INF/versions/18. Without this attribute the JVM does not read that directory,
+    // and on JDK 18+ every host name lookup fails with "Provider ... not found".
+    manifest {
+        attributes("Multi-Release" to "true")
+    }
 }

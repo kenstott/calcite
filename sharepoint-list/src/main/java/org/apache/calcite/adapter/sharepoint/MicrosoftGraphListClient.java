@@ -16,6 +16,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +26,11 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,6 +43,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Provides full CRUD operations on lists and list items.
  */
 public class MicrosoftGraphListClient {
+  private static final Logger LOGGER = LoggerFactory.getLogger(MicrosoftGraphListClient.class);
+
   private static final String GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
   private static final int MAX_BATCH_SIZE = 20; // Graph API batch limit
   private static final long DEFAULT_CACHE_TTL_MILLIS = 300_000L; // 5 minutes
@@ -46,6 +55,14 @@ public class MicrosoftGraphListClient {
    * plus one column fetch per list) just to rebuild the schema — which is both slow and a Microsoft
    * Graph throttling (HTTP 429) risk under engines like Trino that open a connection per query.
    */
+  /** How many times a throttled call is sent again, and the longest wait Graph may ask for. */
+  private static final int MAX_THROTTLE_RETRIES = 4;
+  private static final long MAX_THROTTLE_WAIT_SECONDS = 60;
+
+  /** One client for every call: it keeps connections open between calls. */
+  private static final HttpClient HTTP =
+      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
+
   private static final Map<String, CachedLists> LIST_CACHE = new ConcurrentHashMap<>();
 
   private final String siteUrl;
@@ -163,7 +180,19 @@ public class MicrosoftGraphListClient {
           }
 
           // Get columns separately
-          List<SharePointColumn> columns = getListColumns(listId);
+          List<SharePointColumn> columns;
+          try {
+            columns = getListColumns(listId);
+          } catch (GraphApiException e) {
+            if (e.getStatus() != HttpURLConnection.HTTP_NOT_FOUND) {
+              throw e;
+            }
+            // Graph still lists a list for a moment after it is dropped; it has no columns
+            // to read and is not a table
+            LOGGER.debug("List {} ({}) was dropped while the site's lists were read",
+                displayName, listId);
+            continue;
+          }
           SharePointListMetadata metadata = new SharePointListMetadata(listId, displayName, entityTypeName, columns, template);
           // Use SQL-friendly name as the key
           lists.put(metadata.getListName(), metadata);
@@ -384,6 +413,9 @@ public class MicrosoftGraphListClient {
 
     JsonNode response = executeGraphCall("POST", url, requestBody);
     String listId = response.get("id").asText();
+    // The discovery cache is shared by every client of the site: without this the new list
+    // stays invisible to all of them until the cache expires
+    invalidateListCache();
 
     return getListMetadataById(listId);
   }
@@ -398,6 +430,8 @@ public class MicrosoftGraphListClient {
         String.format(Locale.ROOT, "%s/sites/%s/lists/%s", GRAPH_API_BASE, siteId, listId);
 
     executeGraphCall("DELETE", url, null);
+    // As for createList: a dropped list must not stay listed until the cache expires
+    invalidateListCache();
   }
 
   /**
@@ -483,21 +517,43 @@ public class MicrosoftGraphListClient {
    */
   public JsonNode executeGraphCall(String method, String url, JsonNode requestBody)
       throws IOException, InterruptedException {
-    URL apiUrl = URI.create(url).toURL();
-    HttpURLConnection conn = (HttpURLConnection) apiUrl.openConnection();
-    conn.setRequestMethod(method);
-    conn.setRequestProperty("Authorization", "Bearer " + authenticator.getAccessToken());
-    conn.setRequestProperty("Accept", "application/json");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(60000);
-
+    // java.net.HttpURLConnection refuses PATCH, the method Graph updates a list item with
+    HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url))
+        .timeout(Duration.ofSeconds(60))
+        .header("Authorization", "Bearer " + authenticator.getAccessToken())
+        .header("Accept", "application/json");
     if (requestBody != null) {
-      conn.setDoOutput(true);
-      conn.setRequestProperty("Content-Type", "application/json");
-      objectMapper.writeValue(conn.getOutputStream(), requestBody);
+      request.header("Content-Type", "application/json")
+          .method(method,
+              HttpRequest.BodyPublishers.ofByteArray(objectMapper.writeValueAsBytes(requestBody)));
+    } else {
+      request.method(method, HttpRequest.BodyPublishers.noBody());
     }
 
-    int responseCode = conn.getResponseCode();
+    HttpResponse<byte[]> response =
+        HTTP.send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
+    // Graph throttles a burst of calls with 429 and says when to come back; the call is sent
+    // again then, a limited number of times. A throttled answer without that time is an error.
+    for (int attempt = 1;
+         response.statusCode() == 429 && attempt <= MAX_THROTTLE_RETRIES; attempt++) {
+      java.util.Optional<String> retryAfter = response.headers().firstValue("Retry-After");
+      if (!retryAfter.isPresent()) {
+        break;
+      }
+      long seconds;
+      try {
+        seconds = Long.parseLong(retryAfter.get().trim());
+      } catch (NumberFormatException e) {
+        throw new IOException("Microsoft Graph API throttled the call and answered Retry-After '"
+            + retryAfter.get() + "', which is not a number of seconds", e);
+      }
+      if (seconds > MAX_THROTTLE_WAIT_SECONDS) {
+        break;
+      }
+      Thread.sleep(seconds * 1000L);
+      response = HTTP.send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
+    }
+    int responseCode = response.statusCode();
 
     // Handle no content response
     if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
@@ -505,21 +561,30 @@ public class MicrosoftGraphListClient {
     }
 
     if (responseCode >= 200 && responseCode < 300) {
-      try (InputStream in = conn.getInputStream()) {
-        return objectMapper.readTree(in);
+      return objectMapper.readTree(response.body());
+    }
+    String error = "";
+    if (response.body().length > 0) {
+      JsonNode errorJson = objectMapper.readTree(response.body());
+      if (errorJson.has("error") && errorJson.get("error").has("message")) {
+        error = errorJson.get("error").get("message").asText();
       }
-    } else {
-      String error = "";
-      try (InputStream errorStream = conn.getErrorStream()) {
-        if (errorStream != null) {
-          JsonNode errorJson = objectMapper.readTree(errorStream);
-          if (errorJson.has("error") && errorJson.get("error").has("message")) {
-            error = errorJson.get("error").get("message").asText();
-          }
-        }
-      }
-      throw new IOException("Microsoft Graph API error: HTTP " + responseCode +
-          (error.isEmpty() ? "" : " - " + error));
+    }
+    throw new GraphApiException(responseCode, "Microsoft Graph API error: HTTP " + responseCode
+        + (error.isEmpty() ? "" : " - " + error));
+  }
+
+  /** An answer from Microsoft Graph other than success, with its HTTP status. */
+  public static class GraphApiException extends IOException {
+    private final int status;
+
+    GraphApiException(int status, String message) {
+      super(message);
+      this.status = status;
+    }
+
+    public int getStatus() {
+      return status;
     }
   }
 

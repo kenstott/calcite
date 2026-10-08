@@ -23,12 +23,14 @@ import org.apache.calcite.prepare.Prepare;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.logical.LogicalTableModify;
+import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ModifiableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.impl.AbstractTableQueryable;
 import org.apache.calcite.sql.type.SqlTypeName;
 
@@ -46,7 +48,7 @@ import java.util.Map;
  * Table implementation for SharePoint lists with full CRUD support.
  */
 public class SharePointListTable extends AbstractQueryableTable
-    implements ScannableTable, ModifiableTable {
+    implements ScannableTable, ModifiableTable, TranslatableTable {
   /** Ids of the items created since {@link #takeInsertedKeys} was last called. */
   private final List<String> insertedKeys = new ArrayList<>();
 
@@ -137,6 +139,16 @@ public class SharePointListTable extends AbstractQueryableTable
     }
   }
 
+  /**
+   * Registers the rule that plans an UPDATE or DELETE of this table. Both always read the table
+   * they change, and Calcite builds their modification operator without consulting the table,
+   * so the scan is where the rule can be added. The scan returned is the planner's standard one.
+   */
+  @Override public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
+    context.getCluster().getPlanner().addRule(SharePointTableModify.Rule.INSTANCE);
+    return LogicalTableScan.create(context.getCluster(), relOptTable, context.getTableHints());
+  }
+
   @Override public @Nullable Collection getModifiableCollection() {
     checkWritable();
     return new SharePointModifiableCollection();
@@ -149,6 +161,103 @@ public class SharePointListTable extends AbstractQueryableTable
     checkWritable();
     return LogicalTableModify.create(table, catalogReader, child, operation,
         updateColumnList, sourceExpressionList, flattened);
+  }
+
+  /**
+   * Updates or deletes list items; called by the code {@link SharePointTableModify} generates.
+   *
+   * @param operation {@code UPDATE} or {@code DELETE}
+   * @param rows one row per item: the table's row and, for an UPDATE, the new value of each
+   *     updated column after it
+   * @param fieldCount the number of columns of the table's row
+   * @param updateColumns the updated columns' names, separated by commas; empty for a DELETE
+   * @return the number of items changed
+   */
+  public Enumerable<Long> modify(String operation, Enumerable<Object[]> rows, int fieldCount,
+      String updateColumns) {
+    checkWritable();
+    final boolean update;
+    switch (TableModify.Operation.valueOf(operation)) {
+    case UPDATE:
+      update = true;
+      break;
+    case DELETE:
+      update = false;
+      break;
+    default:
+      throw new IllegalArgumentException(operation + " is not planned as a"
+          + " SharePointTableModify");
+    }
+    List<SharePointColumn> updated = new ArrayList<>();
+    if (update) {
+      for (String name : updateColumns.split(",")) {
+        if ("id".equals(name)) {
+          throw new IllegalArgumentException("SharePoint assigns a list item's id; it cannot be"
+              + " updated");
+        }
+        SharePointColumn column = null;
+        for (SharePointColumn candidate : metadata.getColumns()) {
+          if (candidate.getName().equals(name)) {
+            column = candidate;
+            break;
+          }
+        }
+        if (column == null) {
+          throw new IllegalArgumentException("SharePoint list '" + metadata.getDisplayName()
+              + "' has no column " + name);
+        }
+        updated.add(column);
+      }
+    }
+    final String verb = update ? "Updating" : "Deleting";
+    long count = 0;
+    // Read every row before writing any: the rows come from a scan of the list being changed
+    for (Object[] row : rows.toList()) {
+      Object id = row[0];
+      if (id == null) {
+        throw new IllegalStateException("A row of SharePoint list '"
+            + metadata.getDisplayName() + "' has no id");
+      }
+      try {
+        if (update) {
+          Map<String, Object> fields = new LinkedHashMap<>();
+          for (int i = 0; i < updated.size(); i++) {
+            SharePointColumn column = updated.get(i);
+            fields.put(column.getInternalName(), formatForWrite(column, row[fieldCount + i]));
+          }
+          client.updateListItem(metadata.getListId(), id.toString(), fields);
+        } else {
+          client.deleteListItem(metadata.getListId(), id.toString());
+        }
+      } catch (java.io.IOException e) {
+        throw new RuntimeException(verb + " item " + id + " of SharePoint list '"
+            + metadata.getDisplayName() + "' failed after " + count + " item(s): "
+            + e.getMessage(), e);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(verb + " SharePoint list '" + metadata.getDisplayName()
+            + "' was interrupted after " + count + " item(s)", e);
+      }
+      count++;
+    }
+    return org.apache.calcite.linq4j.Linq4j.singletonEnumerable(count);
+  }
+
+  /**
+   * Converts a column value into the form SharePoint expects on write. Calcite passes a TIMESTAMP
+   * as epoch milliseconds, but the Graph/REST API expects an ISO-8601 string, so format datetime
+   * columns accordingly. Other types pass through unchanged.
+   */
+  private static Object formatForWrite(SharePointColumn column, Object value) {
+    if (value != null && "datetime".equalsIgnoreCase(column.getType())) {
+      if (value instanceof Number) {
+        return java.time.Instant.ofEpochMilli(((Number) value).longValue()).toString();
+      }
+      if (value instanceof java.sql.Timestamp) {
+        return ((java.sql.Timestamp) value).toInstant().toString();
+      }
+    }
+    return value;
   }
 
   /**
@@ -302,23 +411,6 @@ public class SharePointListTable extends AbstractQueryableTable
       }
 
       return fields;
-    }
-
-    /**
-     * Converts a column value into the form SharePoint expects on write. Calcite passes a TIMESTAMP
-     * as epoch milliseconds, but the Graph/REST API expects an ISO-8601 string, so format datetime
-     * columns accordingly. Other types pass through unchanged.
-     */
-    private Object formatForWrite(SharePointColumn column, Object value) {
-      if (value != null && "datetime".equalsIgnoreCase(column.getType())) {
-        if (value instanceof Number) {
-          return java.time.Instant.ofEpochMilli(((Number) value).longValue()).toString();
-        }
-        if (value instanceof java.sql.Timestamp) {
-          return ((java.sql.Timestamp) value).toInstant().toString();
-        }
-      }
-      return value;
     }
   }
 
