@@ -13,13 +13,21 @@ package org.apache.calcite.adapter.askamerica;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The identity check runs on every cold start before the first tool call can answer, so it must
@@ -50,5 +58,27 @@ class PgwireGovDataConnectorIdentityProbeTest {
       named.add(m.group(1));
     }
     assertEquals(PgwireGovDataConnector.IDENTITY_PROBE_SCHEMAS, named.size(), named.toString());
+  }
+
+  @Test void onlyTheIdentityCheckUsesTheReservedProbeConnection() {
+    assertEquals(PgwireGovDataConnector.PROBE_APPLICATION_NAME,
+        PgwireGovDataConnector.connectionProperties(true).getProperty("ApplicationName"));
+    // The connection that runs queries must not ask for it: a user scan there would hold the
+    // connection the identity check of every other process is waiting on
+    assertNull(PgwireGovDataConnector.connectionProperties(false).getProperty("ApplicationName"));
+  }
+
+  @Test void bothConnectionsShareTheirOtherSettings() {
+    Properties probe = PgwireGovDataConnector.connectionProperties(true);
+    probe.remove("ApplicationName");
+    assertEquals(PgwireGovDataConnector.connectionProperties(false), probe);
+  }
+
+  @Test void probeNameIsTheOnePgwireCalciteReserves() throws IOException {
+    Path backend = Paths.get("..", "pgwire-calcite", "src", "pgwire_calcite", "backend.py");
+    String source = new String(Files.readAllBytes(backend), StandardCharsets.UTF_8);
+    Matcher m = Pattern.compile("PROBE_APPLICATION_NAME = \"([^\"]+)\"").matcher(source);
+    assertTrue(m.find(), "PROBE_APPLICATION_NAME is assigned in " + backend);
+    assertEquals(m.group(1), PgwireGovDataConnector.PROBE_APPLICATION_NAME);
   }
 }
