@@ -11,7 +11,7 @@
 package org.apache.calcite.adapter.file.etl;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 
 /**
  * The single resolution point for "now" across dimension resolution and freshness evaluation.
@@ -41,10 +41,15 @@ public final class PipelineClock {
   private PipelineClock() {
   }
 
-  /** The current date — the simulated one when set, otherwise the real clock. */
+  /**
+   * The current date — the simulated one when set, otherwise the real clock.
+   *
+   * <p>The real clock is read in UTC, so every worker agrees on the date whatever zone its
+   * machine is set to, and a refresh window does not move with the machine's zone.
+   */
   public static LocalDate today() {
     LocalDate pinned = override;
-    return pinned != null ? pinned : LocalDate.now(ZoneId.systemDefault());
+    return pinned != null ? pinned : LocalDate.now(ZoneOffset.UTC);
   }
 
   /** Current calendar year. */

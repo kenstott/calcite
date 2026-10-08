@@ -236,7 +236,8 @@ public class DualTimestampTypeTest {
       // For TIMESTAMPTZ, "2024-03-15 10:30:45Z" is UTC
       // When displayed in local time (EDT), it should show the adjusted time
       // But when we get a Timestamp, it's already in local timezone
-      Calendar awareCal = Calendar.getInstance();
+      // The instant is read in UTC, the zone the source names, so its date parts are too
+      Calendar awareCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
       awareCal.setTimeInMillis(awareTs.getTime());
 
       // The actual hour will depend on the JVM's timezone offset from UTC
@@ -285,9 +286,10 @@ public class DualTimestampTypeTest {
         assertTrue(aware2 > 0, "Row " + rowNum + " aware timestamp should be positive: " + aware2);
 
         // Convert to calendars and validate date parts
-        Calendar naiveRowCal = Calendar.getInstance();
+        // getLong gives the wall-clock time as UTC milliseconds, so its parts are read in UTC
+        Calendar naiveRowCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         naiveRowCal.setTimeInMillis(naive2);
-        Calendar awareRowCal = Calendar.getInstance();
+        Calendar awareRowCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         awareRowCal.setTimeInMillis(aware2);
 
         // All naive timestamps have same CSV value, should produce same epoch values

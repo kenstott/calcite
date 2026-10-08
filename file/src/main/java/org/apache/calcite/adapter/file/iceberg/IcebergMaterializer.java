@@ -3664,7 +3664,7 @@ public class IcebergMaterializer {
    */
   @SuppressWarnings({"UnusedMethod", "JavaUtilDate"})
   private String createStagingPath() throws IOException {
-    String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
+    String timestamp = utcFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
     String stagingSubpath = ".staging/" + timestamp + "_" + random;
     String stagingPath = storageProvider.resolvePath(warehousePath, stagingSubpath);
@@ -4057,5 +4057,12 @@ public class IcebergMaterializer {
       // surfaces later as a confusing HTTP 403 on every read. Surface it here.
       LOGGER.warn("DuckDB S3 secret configuration failed: {}", e.getMessage());
     }
+  }
+
+  /** A formatter for names that carry a time: UTC, whatever zone the machine is set to. */
+  private static SimpleDateFormat utcFormat(String pattern) {
+    SimpleDateFormat format = new SimpleDateFormat(pattern, java.util.Locale.ROOT);
+    format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+    return format;
   }
 }

@@ -4725,9 +4725,9 @@ public class EtlPipeline {
           return variables;
         }
         // Use ISO week: week 1 Monday of the given ISO week-year
+        // 4 January is always in ISO week 1 of its year: a base that needs no clock
         java.time.LocalDate weekStart =
-            java.time.LocalDate.now(java.time.ZoneId.systemDefault())
-            .with(java.time.temporal.IsoFields.WEEK_BASED_YEAR, year)
+            java.time.LocalDate.of(year, 1, 4)
             .with(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR, week)
             .with(java.time.DayOfWeek.MONDAY);
         start = weekStart;
