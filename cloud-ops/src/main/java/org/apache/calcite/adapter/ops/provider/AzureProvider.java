@@ -43,6 +43,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -50,6 +51,8 @@ import java.util.Map;
  */
 public class AzureProvider implements CloudProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(AzureProvider.class);
+  private static final String ARM = "https://management.azure.com";
+  private static final String MANAGED_REDIS_API_VERSION = "2025-04-01";
 
   private final CloudOpsConfig.AzureConfig config;
   private final ResourceGraphManager resourceGraphManager;
@@ -206,7 +209,7 @@ public class AzureProvider implements CloudProvider {
       }
     }
 
-    return executeKqlQuery(kql, subscriptionIds);
+    return withCreationTimes(executeKqlQuery(kql, subscriptionIds), "CreatedDate");
   }
 
   /**
@@ -554,7 +557,7 @@ public class AzureProvider implements CloudProvider {
         .getToken();
     try {
       HttpURLConnection connection =
-          (HttpURLConnection) new URL("https://management.azure.com" + path).openConnection();
+          (HttpURLConnection) new URL(ARM + path).openConnection();
       connection.setConnectTimeout(15000);
       connection.setReadTimeout(30000);
       connection.setRequestProperty("Authorization", "Bearer " + token);
@@ -884,7 +887,7 @@ public class AzureProvider implements CloudProvider {
         + "| extend EngineVersion = case(\n"
         + "    SqlServer or Flexible, tostring(properties.version),\n"
         + "    Cosmos, tostring(properties.apiProperties.serverVersion),\n"
-        + "    Redis or ManagedRedis, tostring(properties.redisVersion),\n"
+        + "    Redis, tostring(properties.redisVersion),\n"
         + "    ''\n"
         + ")\n"
         + "| extend RedisSku = strcat(tostring(properties.sku.name), '_',\n"
@@ -946,7 +949,7 @@ public class AzureProvider implements CloudProvider {
         + ")\n"
         + "| extend CreateTime = case(\n"
         + "    SqlDatabase, tostring(properties.creationDate),\n"
-        + "    Flexible or Cosmos or ManagedRedis, tostring(systemData.createdAt),\n"
+        + "    Flexible or Cosmos, tostring(systemData.createdAt),\n"
         + "    ''\n"
         + ")\n"
         + "| project\n"
@@ -971,7 +974,96 @@ public class AzureProvider implements CloudProvider {
         + "    CreateTime\n"
         + "| order by Application, DatabaseType, DatabaseResource";
 
-    return executeKqlQuery(kql, subscriptionIds);
+    List<Map<String, Object>> databases = new ArrayList<>();
+    for (Map<String, Object> row : executeKqlQuery(kql, subscriptionIds)) {
+      if (!"Azure Managed Redis".equals(row.get("DatabaseType"))) {
+        databases.add(row);
+        continue;
+      }
+      // A Managed Redis cluster's Redis version is a property of its database, a child
+      // resource Resource Graph does not index: read it from ARM
+      Map<String, Object> cache = new HashMap<>(row);
+      String id = String.valueOf(row.get("ResourceId"));
+      JsonNode children = armGet(id + "/databases?api-version=" + MANAGED_REDIS_API_VERSION);
+      if (children == null) {
+        throw new IllegalStateException("Managed Redis cluster " + id + " is gone");
+      }
+      // A cluster holds one database; while it is being created it holds none
+      JsonNode version = children.path("value").path(0).path("properties").path("redisVersion");
+      cache.put("EngineVersion", version.isTextual() ? version.asText() : null);
+      databases.add(cache);
+    }
+    return withCreationTimes(databases, "CreateTime");
+  }
+
+  /**
+   * Fills in the creation time of the rows Resource Graph has none for.
+   *
+   * <p>Resource Graph carries a creation time only where a resource type reports one, and
+   * AKS clusters, SQL servers and Redis caches do not. Azure Resource Manager records one
+   * for every resource, and its list of resources returns it on request.
+   *
+   * @param rows rows holding a {@code ResourceId}
+   * @param column the column the creation time belongs in
+   */
+  private List<Map<String, Object>> withCreationTimes(List<Map<String, Object>> rows,
+      String column) {
+    // subscription and resource type -> lower-cased resource id -> creation time
+    Map<String, Map<String, String>> listings = new HashMap<>();
+    List<Map<String, Object>> filled = new ArrayList<>();
+    for (Map<String, Object> row : rows) {
+      Object known = row.get(column);
+      if (known != null && !known.toString().isEmpty()) {
+        filled.add(row);
+        continue;
+      }
+      String id = String.valueOf(row.get("ResourceId"));
+      String[] parts = id.split("/");
+      // /subscriptions/{id}/resourceGroups/{group}/providers/{namespace}/{type}/{name}
+      if (parts.length != 9 || !"providers".equalsIgnoreCase(parts[5])) {
+        // a child resource, which the list of resources leaves out
+        filled.add(row);
+        continue;
+      }
+      String subscription = parts[2];
+      String type = parts[6] + "/" + parts[7];
+      String listing = subscription + " " + type;
+      Map<String, String> times = listings.get(listing);
+      if (times == null) {
+        times = creationTimes(subscription, type);
+        listings.put(listing, times);
+      }
+      Map<String, Object> copy = new HashMap<>(row);
+      copy.put(column, times.get(id.toLowerCase(Locale.ROOT)));
+      filled.add(copy);
+    }
+    return filled;
+  }
+
+  /** The creation time of each resource of one type in a subscription, by lower-cased id. */
+  private Map<String, String> creationTimes(String subscription, String type) {
+    Map<String, String> times = new HashMap<>();
+    String path = "/subscriptions/" + subscription + "/resources?$expand=createdTime"
+        + "&$filter=resourceType%20eq%20%27" + type + "%27&api-version=2021-04-01";
+    while (path != null) {
+      JsonNode page = armGet(path);
+      if (page == null) {
+        throw new IllegalStateException("Subscription " + subscription + " is gone");
+      }
+      for (JsonNode resource : page.path("value")) {
+        JsonNode created = resource.path("createdTime");
+        if (created.isTextual()) {
+          times.put(resource.path("id").asText().toLowerCase(Locale.ROOT), created.asText());
+        }
+      }
+      JsonNode next = page.path("nextLink");
+      if (next.isTextual() && !next.asText().startsWith(ARM)) {
+        throw new IllegalStateException("Azure Resource Manager continues the list of " + type
+            + " resources at another host: " + next.asText());
+      }
+      path = next.isTextual() ? next.asText().substring(ARM.length()) : null;
+    }
+    return times;
   }
 
   @Override public List<Map<String, Object>> queryContainerRegistries(List<String> subscriptionIds) {

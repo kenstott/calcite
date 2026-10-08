@@ -127,9 +127,9 @@ What it creates, all tagged or labelled `application=calcite-cloudops-test`:
 
 | Cloud | Resources |
 |-------|-----------|
-| Azure | Resource group `calcite-cloudops-test-rg` holding: a B1s VM with its VNet, NSG, NIC, public IP and disk; a storage account with versioning, soft delete and a lifecycle rule switched on; a Basic container registry; a user-assigned managed identity; an AKS cluster with one node; a SQL server with a Basic database; PostgreSQL and MySQL flexible servers; a serverless Cosmos DB account; a Basic Redis cache |
+| Azure | Resource group `calcite-cloudops-test-rg` holding: a B1s VM with its VNet, NSG, NIC, public IP and disk; a storage account with versioning, soft delete and a lifecycle rule switched on; a Basic container registry; a user-assigned managed identity; an AKS cluster with one node; a SQL server with a Basic database; PostgreSQL and MySQL flexible servers; a serverless Cosmos DB account; an Azure Managed Redis cache (Azure refuses new Azure Cache for Redis instances) |
 | GCP | An e2-micro VM that GCP deletes by itself after 15 minutes; a zonal GKE cluster with one node; a db-f1-micro Cloud SQL instance |
-| AWS | A t3.micro instance; a security group; an empty ECR repository; an empty DynamoDB table; a db.t4g.micro RDS instance; an Aurora cluster without instances; a cache.t4g.micro ElastiCache cluster; an EKS cluster with one t3.small node and its two IAM roles |
+| AWS | A t3.micro instance; a security group; an empty ECR repository; an empty DynamoDB table; a db.t3.micro RDS instance; an Aurora cluster without instances; a cache.t4g.micro ElastiCache cluster; an EKS cluster with one t3.small node and its two IAM roles |
 
 What it needs:
 
@@ -160,6 +160,23 @@ form again and check the consoles.
 
 One thing is not deleted: the GCP Artifact Registry repository `calcite-cloudops-test`. The
 script neither creates nor removes it; its header describes it as permanent and free.
+
+### Role assumption
+
+`AWSRoleAssumptionLiveTest` reads AWS through an assumed role with a key that may do nothing
+but assume it, and checks that the same key without the role is refused.
+
+```bash
+export AWS_ADMIN_KEY=... AWS_ADMIN_SECRET=...
+python3 cloud-ops/scripts/ephemeral_aws_role.py create
+./gradlew :cloud-ops:test -PincludeTags=integration --tests "*AWSRoleAssumptionLiveTest"
+python3 cloud-ops/scripts/ephemeral_aws_role.py delete
+```
+
+`create` makes the IAM user and role `calcite-cloudops-test-assume` and appends three
+`aws.assumeRole.*` lines to `local-test.properties`; `delete` removes all of it. Without those
+lines the test is skipped. The user and the role are in one account: the adapter makes the same
+`sts:AssumeRole` call for a role in another account, but that has not been run.
 
 Step 3 overwrites `local-test.properties`. Because the script starts Gradle, do not run it while
 another Gradle build is using the same checkout.

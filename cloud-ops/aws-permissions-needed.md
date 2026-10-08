@@ -129,13 +129,18 @@ az role assignment create --assignee <app-id> --role Reader \
   --scope /subscriptions/<subscription-id>
 ```
 
-Reader covers both things the adapter does:
+Reader covers everything the adapter does:
 
 - Azure Resource Graph queries, which every table uses. Resource Graph returns only resources the
   caller can read.
 - Two Azure Resource Manager reads per storage account, used by `storage_resources` for
   versioning, soft delete and lifecycle rules: `<account>/blobServices/default` and
   `<account>/managementPolicies/default`.
+- One Azure Resource Manager read per Azure Managed Redis cluster, used by `database_resources`
+  for the Redis version: `<cluster>/databases`.
+- A list of a subscription's resources of one type with their creation times, used by
+  `kubernetes_clusters` and `database_resources` where Resource Graph has no creation time
+  (AKS clusters, SQL servers, Redis caches).
 
 `scripts/New-CloudOpsAzureCredentials.ps1` creates an app registration, assigns Reader, and writes
 the credentials to an env file.
