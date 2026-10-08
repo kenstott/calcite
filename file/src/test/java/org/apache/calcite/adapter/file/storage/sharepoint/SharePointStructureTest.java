@@ -49,10 +49,7 @@ public class SharePointStructureTest {
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     certificatePassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
 
-    File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
-    if (certFile.exists()) {
-      certificatePath = certFile.getAbsolutePath();
-    }
+    certificatePath = props.getProperty("SHAREPOINT_CERT_PATH");
 
     if (tenantId == null || clientId == null || siteUrl == null ||
         certificatePath == null || certificatePassword == null) {
