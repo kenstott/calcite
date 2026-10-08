@@ -49,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -726,7 +727,7 @@ public class DuckDBJdbcSchemaFactory {
 
       // Enqueue SQL views for deferred creation (views may reference cross-schema tables
       // that don't exist yet during schema init — flushed lazily on first getTable() call)
-      registerSqlViewsInDuckDB(catalogPath, duckdbSchema, operand);
+      registerSqlViewsInDuckDB(setupConn, catalogPath, duckdbSchema, operand);
 
       // Durably fold the freshly-created Iceberg views into the base catalog file. Without this
       // the view DDL lives only in the write-ahead log (.wal) and survives only a clean shutdown;
@@ -900,7 +901,7 @@ public class DuckDBJdbcSchemaFactory {
           fileSchema, recreatedIcebergTables, sharedInfo.catalogPath);
 
       // Enqueue SQL views for deferred creation
-      registerSqlViewsInDuckDB(sharedInfo.catalogPath, duckdbSchema, operand);
+      registerSqlViewsInDuckDB(setupConn, sharedInfo.catalogPath, duckdbSchema, operand);
 
       // Debug: List all registered views
       try (Statement stmt = setupConn.createStatement();
@@ -2599,12 +2600,17 @@ public class DuckDBJdbcSchemaFactory {
    * Views may reference cross-schema tables that don't exist yet during schema init;
    * they are flushed lazily on first {@code getTable()} via {@link DuckDBPendingViews}.
    *
-   * @param dbPath DuckDB catalog file path (key for pending view store)
+   * <p>An ephemeral catalog has no path to key deferred views by, and no other schema shares
+   * it, so its views are created at once on {@code conn}, as its tables are.
+   *
+   * @param conn Connection to the catalog the views belong to
+   * @param dbPath DuckDB catalog file path (key for pending view store), null for an
+   *     ephemeral catalog
    * @param duckdbSchema DuckDB schema name where views will be created
    * @param operand Schema operand containing "tables" array and "declaredSchemaName"
    */
-  private static void registerSqlViewsInDuckDB(String dbPath, String duckdbSchema,
-                                               Map<String, Object> operand) {
+  private static void registerSqlViewsInDuckDB(Connection conn, @Nullable String dbPath,
+      String duckdbSchema, Map<String, Object> operand) {
     if (operand == null) {
       LOGGER.debug("No operand provided, skipping SQL view registration");
       return;
@@ -2640,6 +2646,8 @@ public class DuckDBJdbcSchemaFactory {
 
     int enqueueCount = 0;
     int skippedCount = 0;
+    // name -> definition of the views of an ephemeral catalog, in declaration order
+    Map<String, String> immediate = new java.util.LinkedHashMap<>();
 
     for (Map<String, Object> table : allTables) {
       String tableType = (String) table.get("type");
@@ -2675,13 +2683,51 @@ public class DuckDBJdbcSchemaFactory {
         LOGGER.debug("Enqueued deferred view: {}.{}", duckdbSchema, viewName);
         enqueueCount++;
       } else {
-        LOGGER.warn("No dbPath for view {}.{} — skipping deferred registration", duckdbSchema, viewName);
-        skippedCount++;
+        immediate.put(viewName, rewrittenViewDef);
       }
     }
 
-    LOGGER.info("SQL view enqueueing complete: {} views deferred, {} skipped",
-        enqueueCount, skippedCount);
+    int created = createSqlViewsNow(conn, duckdbSchema, immediate);
+    skippedCount += immediate.size() - created;
+
+    LOGGER.info("SQL view enqueueing complete: {} views deferred, {} created, {} skipped",
+        enqueueCount, created, skippedCount);
+  }
+
+  /**
+   * Creates the SQL views of an ephemeral catalog.
+   *
+   * <p>A view may read another declared after it, so the views still to create are tried again
+   * for as long as a pass creates at least one. A view that cannot be created then is left
+   * out with a warning, as a deferred view whose creation fails is: one view over a table not
+   * ingested yet does not take the schema down.
+   *
+   * @return how many views were created
+   */
+  private static int createSqlViewsNow(Connection conn, String duckdbSchema,
+      Map<String, String> views) {
+    Map<String, String> remaining = new java.util.LinkedHashMap<>(views);
+    Map<String, SQLException> failures = new HashMap<>();
+    boolean progress = true;
+    while (progress && !remaining.isEmpty()) {
+      progress = false;
+      for (Map.Entry<String, String> view : new ArrayList<>(remaining.entrySet())) {
+        try (Statement statement = conn.createStatement()) {
+          statement.execute(
+              String.format(Locale.ROOT, "CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s",
+                  duckdbSchema, view.getKey(), view.getValue()));
+          remaining.remove(view.getKey());
+          progress = true;
+        } catch (SQLException e) {
+          failures.put(view.getKey(), e);
+        }
+      }
+    }
+    for (String viewName : remaining.keySet()) {
+      LOGGER.warn("Cannot create view {}.{}: {}", duckdbSchema, viewName,
+          failures.get(viewName).getMessage());
+    }
+    return views.size() - remaining.size();
   }
 
 }

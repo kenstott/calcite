@@ -3134,8 +3134,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             if (conversionMetadata != null) {
               LOGGER.debug("Looking for conversion record for file: {}", source.path());
 
-              // Try to find by source file first
-              existingRecord = conversionMetadata.findRecordBySourceFile(new File(source.path()));
+              // Try to find by source file first. A file reached through a link inside the
+              // data directory is a table of its own, so only links above it are resolved
+              existingRecord =
+                  conversionMetadata.findRecordBySourceFile(new File(source.path()),
+                      baseDirectory != null ? new File(baseDirectory) : sourceDirectory);
 
               // If not found, check if this file is a converted file (e.g., JSON from HTML)
               if (existingRecord == null) {
