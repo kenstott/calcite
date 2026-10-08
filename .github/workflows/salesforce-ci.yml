@@ -68,6 +68,18 @@ jobs:
           printf 'SF_LOGIN_URL=%s\nSF_CONSUMER_KEY=%s\nSF_CONSUMER_SECRET=%s\n' \
             "$SF_LOGIN_URL" "$SF_CONSUMER_KEY" "$SF_CONSUMER_SECRET" > govdata/.env.prod
 
+      # Describing the org costs one API call per sObject (about 1,200). The adapter keeps the
+      # answers on disk, so restoring that directory keeps a run from spending the org's daily
+      # API limit; the three jobs run one after another so only the first can start cold.
+      - name: Restore the describe cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.calcite/salesforce/describe-cache
+          key: salesforce-describe-${{ github.run_id }}-adapter
+          restore-keys: |
+            salesforce-describe-${{ github.run_id }}-
+            salesforce-describe-
+
       - name: Integration tests (live org)
         run: ./gradlew :salesforce:test -PincludeTags=integration --no-daemon --console=plain
 
@@ -81,6 +93,8 @@ jobs:
   trino:
     name: Trino connector (unit + live org)
     runs-on: ubuntu-latest
+    needs: adapter
+    if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4
 
@@ -119,6 +133,18 @@ jobs:
           printf 'SF_LOGIN_URL=%s\nSF_CONSUMER_KEY=%s\nSF_CONSUMER_SECRET=%s\n' \
             "$SF_LOGIN_URL" "$SF_CONSUMER_KEY" "$SF_CONSUMER_SECRET" > govdata/.env.prod
 
+      # Describing the org costs one API call per sObject (about 1,200). The adapter keeps the
+      # answers on disk, so restoring that directory keeps a run from spending the org's daily
+      # API limit; the three jobs run one after another so only the first can start cold.
+      - name: Restore the describe cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.calcite/salesforce/describe-cache
+          key: salesforce-describe-${{ github.run_id }}-trino
+          restore-keys: |
+            salesforce-describe-${{ github.run_id }}-
+            salesforce-describe-
+
       # Starts an in-process Trino server with the plugin installed and queries the org through it.
       - name: Integration tests (live org)
         run: |
@@ -136,6 +162,8 @@ jobs:
   pgwire:
     name: pgwire server (live org)
     runs-on: ubuntu-latest
+    needs: trino
+    if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4
 
@@ -193,8 +221,21 @@ jobs:
               json.dump(model, f)
           PY
 
-      # The server describes every sObject in the org before it serves, which takes minutes. Its
-      # socket accepts connections long before that, so readiness is its "listening on" log line.
+      # Describing the org costs one API call per sObject (about 1,200). The adapter keeps the
+      # answers on disk, so restoring that directory keeps a run from spending the org's daily
+      # API limit; the three jobs run one after another so only the first can start cold.
+      - name: Restore the describe cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.calcite/salesforce/describe-cache
+          key: salesforce-describe-${{ github.run_id }}-pgwire
+          restore-keys: |
+            salesforce-describe-${{ github.run_id }}-
+            salesforce-describe-
+
+      # The server describes every sObject in the org before it serves, which takes minutes when
+      # the describe cache is cold. Its socket accepts connections long before that, so readiness
+      # is its "listening on" log line.
       - name: Start pgwire-calcite and wait until it serves
         working-directory: pgwire-calcite
         env:
