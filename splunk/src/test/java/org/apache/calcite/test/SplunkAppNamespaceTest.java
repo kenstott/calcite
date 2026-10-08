@@ -39,9 +39,9 @@ class SplunkAppNamespaceTest {
     System.out.println("\n=== Testing Data Model Visibility in Splunk ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     props.setProperty("cimModel", "authentication");
 
@@ -71,7 +71,7 @@ class SplunkAppNamespaceTest {
 
     // Connect directly to Splunk to test searches
     SplunkConnectionImpl splunkConn =
-        new SplunkConnectionImpl("https://kentest.xyz:8089", "admin", "admin123", true);
+        new SplunkConnectionImpl(SplunkTestSettings.url(), "admin", SplunkTestSettings.password(), true);
 
     // Test different ways to access datamodels
     String[] testSearches = {
@@ -104,9 +104,9 @@ class SplunkAppNamespaceTest {
     System.out.println("\n=== Understanding SplunkSchema Behavior ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
 
     // Test with different CIM model configurations
