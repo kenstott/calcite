@@ -36,6 +36,7 @@ from pgwire_calcite.admission import AdmissionPolicy
 from pgwire_calcite.backend import (
     CANCELED_BY_TIMEOUT,
     CANCELED_CLIENT_GONE,
+    CANCELED_IDLE_HOLDER,
     CANCELED_SERVER_BUSY,
     LANE_PROBE,
     LANE_USER,
@@ -190,6 +191,14 @@ class InFlightStatement:
     (seen live: a DuckDB-pushed scan held the lock 8+ minutes past a 30s timeout)
     never returns. Once cancelled, the statement gets ``cancel_grace_ms`` to
     return before the process is declared wedged (``exit_wedged``).
+
+    A statement keeps the shared connection for as long as its result is open, and a
+    streamed result is open for as long as its client takes to read it. So the handle
+    also knows whether its thread is inside the engine right now or outside it (handing
+    rows to a client, or holding a suspended portal the client has not fetched from).
+    Only a thread that is inside the engine can be wedged in it; one that is outside is
+    waiting on its client, and the remedy for that is to drop the client (``evict``),
+    never to exit the server every other client is using.
     """
 
     #: How long a cancelled statement may take to return before the process is
@@ -197,12 +206,53 @@ class InFlightStatement:
     #: the launcher (--cancel-grace-ms).
     cancel_grace_ms: int = 60000
 
-    def __init__(self, stmt) -> None:
+    def __init__(self, stmt, evict: Optional[Callable[[str], None]] = None) -> None:
         self._stmt = stmt
         self._lock = threading.Lock()
         self._returned = threading.Event()
+        #: Drops the client connection this statement serves; None when there is none
+        #: to drop (programmatic use).
+        self._evict = evict
+        self._evicted = False
+        #: time.monotonic() at which the thread last left the engine; None while inside.
+        self._outside_since: Optional[float] = None
         #: PG wording for why this statement was cancelled; None while it runs normally.
         self.reason: Optional[str] = None
+
+    def enter_engine(self) -> None:
+        """The statement's thread is about to call into the engine."""
+        with self._lock:
+            self._outside_since = None
+
+    def leave_engine(self) -> None:
+        """The engine call returned; the thread now waits on its client, not the engine."""
+        with self._lock:
+            self._outside_since = time.monotonic()
+
+    def idle_seconds(self) -> Optional[float]:
+        """How long the thread has been outside the engine; None while it is inside."""
+        with self._lock:
+            if self._outside_since is None:
+                return None
+            return time.monotonic() - self._outside_since
+
+    def evict(self, reason: str) -> bool:
+        """Drop the client this statement is waiting on, so its thread releases the
+        shared connection. Returns False when there is no client to drop or it was
+        already dropped."""
+        with self._lock:
+            if self._evict is None or self._evicted:
+                return False
+            self._evicted = True
+            if self.reason is None:
+                self.reason = reason
+        log.warning(
+            "Dropping the client of a statement that holds the shared Calcite connection "
+            "without using it: %s",
+            reason,
+        )
+        self._evict(reason)
+        return True
 
     def cancel(self, reason: str) -> bool:
         """Cancel the statement once. Returns False if it was already cancelled."""
@@ -225,8 +275,24 @@ class InFlightStatement:
 
     def _await_return(self, reason: str) -> None:
         grace_ms = self.cancel_grace_ms
-        if not self._returned.wait(grace_ms / 1000.0):
-            exit_wedged(reason, grace_ms)
+        if self._returned.wait(grace_ms / 1000.0):
+            return
+        # Still open. Inside the engine, it is wedged there. Outside, the engine already
+        # returned and the statement is held open by a client that is not reading (a
+        # stalled reader, an idle cursor): drop that client and give its thread the same
+        # grace to let go.
+        if self.idle_seconds() is not None and self.evict(reason):
+            if self._returned.wait(grace_ms / 1000.0):
+                return
+        exit_wedged(reason, grace_ms)
+
+
+class QueuedStatement:
+    """A statement still waiting for the shared connection; cancellable while it waits."""
+
+    def __init__(self) -> None:
+        #: PG wording for why the wait was cancelled; None while it should keep waiting.
+        self.reason: Optional[str] = None
 
 
 class InFlightRegistry:
@@ -234,18 +300,40 @@ class InFlightRegistry:
 
     Only one statement per session can be in flight: the wire protocol executes a
     session's statements one at a time, and the backend serializes on its own
-    connection lock.
+    connection lock. A statement that has not reached the engine yet -- it is queued
+    for that lock -- is registered too, so a CancelRequest that arrives while it waits
+    cancels the wait instead of finding nothing in flight and letting it run later.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._by_session: dict = {}
+        self._queued: dict = {}
 
-    def begin(self, session_key: str, stmt) -> InFlightStatement:
-        handle = InFlightStatement(stmt)
+    def begin(
+        self, session_key: str, stmt, evict: Optional[Callable[[str], None]] = None
+    ) -> InFlightStatement:
+        handle = InFlightStatement(stmt, evict)
         with self._lock:
             self._by_session[session_key] = handle
         return handle
+
+    def enqueue(self, session_key: str) -> QueuedStatement:
+        """Register the session's statement as waiting for the connection."""
+        queued = QueuedStatement()
+        with self._lock:
+            self._queued[session_key] = queued
+        return queued
+
+    def dequeue(self, session_key: str, queued: QueuedStatement) -> None:
+        with self._lock:
+            if self._queued.get(session_key) is queued:
+                del self._queued[session_key]
+
+    def queued_sessions(self) -> set:
+        """Session keys whose statement is waiting for the connection right now."""
+        with self._lock:
+            return set(self._queued)
 
     def end(self, session_key: str, handle: InFlightStatement) -> None:
         handle.finish()
@@ -264,9 +352,15 @@ class InFlightRegistry:
             return set(self._by_session)
 
     def cancel(self, session_key: str, reason: str) -> bool:
-        """Cancel the session's in-flight statement. False if it has none."""
+        """Cancel the session's statement, running or queued. False if it has neither."""
         with self._lock:
             handle = self._by_session.get(session_key)
+            queued = self._queued.get(session_key) if handle is None else None
+            if queued is not None:
+                if queued.reason is not None:
+                    return False
+                queued.reason = reason
+                return True
         if handle is None:
             return False
         return handle.cancel(reason)
@@ -274,6 +368,17 @@ class InFlightRegistry:
 
 #: Process-wide registry; the wire layer's CancelRequest branch reads it.
 IN_FLIGHT = InFlightRegistry()
+
+#: id(connection lock) -> the statement holding that lock right now. Lets a statement
+#: queued for the lock see what it is waiting behind (see CancelScope.acquire).
+_LANE_HOLDERS: dict = {}
+_LANE_HOLDERS_LOCK = threading.Lock()
+
+
+def lane_holder(lock) -> Optional[InFlightStatement]:
+    """The statement holding ``lock``, if one has reached the engine."""
+    with _LANE_HOLDERS_LOCK:
+        return _LANE_HOLDERS.get(id(lock))
 
 
 class CancelScope:
@@ -295,17 +400,31 @@ class CancelScope:
     #: Set once at startup by the launcher (--max-queue-wait-ms).
     max_queue_wait_ms: int = 120000
 
+    #: How long a statement waits behind a holder that is not using the engine -- its
+    #: client stopped reading a result, or holds a suspended portal it does not fetch
+    #: from -- before that client is dropped, in milliseconds; 0 = never. Without it one
+    #: idle cursor starves every other session until each fails 'server is busy'.
+    #: Set once at startup by the launcher (--idle-holder-grace-ms).
+    idle_holder_grace_ms: int = 30000
+
     def __init__(
         self,
         session_key: Optional[str],
         timeout_ms: int,
         client_gone: Optional[Callable[[], bool]] = None,
         max_queue_wait_ms: Optional[int] = None,
+        idle_holder_grace_ms: Optional[int] = None,
     ) -> None:
         self._session_key = session_key
         self._client_gone = client_gone
+        #: Drops the requesting client's connection. The wire layer hands in a
+        #: ``client_gone`` that can also end the client it reports on (``terminate``).
+        self._evict: Optional[Callable[[str], None]] = getattr(client_gone, "terminate", None)
+        self._lock = None
         if max_queue_wait_ms is not None:
             self.max_queue_wait_ms = max(0, int(max_queue_wait_ms))
+        if idle_holder_grace_ms is not None:
+            self.idle_holder_grace_ms = max(0, int(idle_holder_grace_ms))
         self._timeout_ms = max(0, int(timeout_ms))
         self._handle: Optional[InFlightStatement] = None
         self._timer: Optional[threading.Timer] = None
@@ -316,9 +435,13 @@ class CancelScope:
             # reported to the driver as "no timeout".
             stmt.setQueryTimeout(-(-self._timeout_ms // 1000))
         if self._session_key is None:
-            self._handle = InFlightStatement(stmt)  # timeout-only: nothing to look up
+            # timeout-only: nothing to look up
+            self._handle = InFlightStatement(stmt, self._evict)
         else:
-            self._handle = IN_FLIGHT.begin(self._session_key, stmt)
+            self._handle = IN_FLIGHT.begin(self._session_key, stmt, self._evict)
+        if self._lock is not None:
+            with _LANE_HOLDERS_LOCK:
+                _LANE_HOLDERS[id(self._lock)] = self._handle
         if self._timeout_ms:
             handle = self._handle
             self._timer = threading.Timer(
@@ -336,32 +459,75 @@ class CancelScope:
         statement whose client has disconnected is dropped rather than run to
         completion for nobody.
         """
-        now = time.monotonic()
-        timeout_deadline = now + self._timeout_ms / 1000.0 if self._timeout_ms else None
+        started = time.monotonic()
+        timeout_deadline = started + self._timeout_ms / 1000.0 if self._timeout_ms else None
         busy_deadline = (
-            now + self.max_queue_wait_ms / 1000.0 if self.max_queue_wait_ms > 0 else None
+            started + self.max_queue_wait_ms / 1000.0 if self.max_queue_wait_ms > 0 else None
         )
         deadlines = [d for d in (timeout_deadline, busy_deadline) if d is not None]
         deadline = min(deadlines) if deadlines else None
-        while True:
-            wait = self._LIVENESS_POLL_S if self._client_gone is not None else None
-            if deadline is not None:
-                remaining = deadline - time.monotonic()
-                wait = max(0.0, remaining) if wait is None else min(wait, max(0.0, remaining))
-            got = lock.acquire() if wait is None else lock.acquire(timeout=wait)
-            if got:
-                return
-            if self._client_gone is not None and self._client_gone():
-                raise QueryCanceled(CANCELED_CLIENT_GONE)
-            if deadline is not None and time.monotonic() >= deadline:
-                if timeout_deadline is not None and deadline == timeout_deadline:
-                    raise QueryCanceled(CANCELED_BY_TIMEOUT)
-                raise QueryCanceled(CANCELED_SERVER_BUSY)
+        # Registered while it waits, so a CancelRequest for this session cancels the
+        # wait: the statement has not reached the engine, but its client is waiting on it.
+        queued = (
+            IN_FLIGHT.enqueue(self._session_key) if self._session_key is not None else None
+        )
+        try:
+            while True:
+                wait = self._LIVENESS_POLL_S
+                if deadline is not None:
+                    wait = min(wait, max(0.0, deadline - time.monotonic()))
+                if lock.acquire(timeout=wait):
+                    if queued is not None and queued.reason is not None:
+                        # Cancelled in the instant the lock came free: it must not run.
+                        lock.release()
+                        raise QueryCanceled(queued.reason)
+                    self._lock = lock
+                    return
+                if queued is not None and queued.reason is not None:
+                    raise QueryCanceled(queued.reason)
+                if self._client_gone is not None and self._client_gone():
+                    raise QueryCanceled(CANCELED_CLIENT_GONE)
+                self._evict_idle_holder(lock, time.monotonic() - started)
+                if deadline is not None and time.monotonic() >= deadline:
+                    if timeout_deadline is not None and deadline == timeout_deadline:
+                        raise QueryCanceled(CANCELED_BY_TIMEOUT)
+                    raise QueryCanceled(CANCELED_SERVER_BUSY)
+        finally:
+            if queued is not None:
+                IN_FLIGHT.dequeue(self._session_key, queued)
+
+    def _evict_idle_holder(self, lock, waited_s: float) -> None:
+        """Drop the client of the statement holding ``lock`` once that statement has
+        been outside the engine, waiting on its client, for as long as this one has
+        been made to wait behind it."""
+        grace_s = self.idle_holder_grace_ms / 1000.0
+        if grace_s <= 0 or waited_s < grace_s:
+            return
+        holder = lane_holder(lock)
+        if holder is None:
+            return
+        idle = holder.idle_seconds()
+        if idle is not None and idle >= grace_s:
+            holder.evict(CANCELED_IDLE_HOLDER)
+
+    def enter_engine(self) -> None:
+        """The statement's thread is about to call into the engine again."""
+        if self._handle is not None:
+            self._handle.enter_engine()
+
+    def leave_engine(self) -> None:
+        """The engine call returned; the thread now waits on its client."""
+        if self._handle is not None:
+            self._handle.leave_engine()
 
     def disarm(self) -> None:
         if self._timer is not None:
             self._timer.cancel()
             self._timer = None
+        if self._lock is not None and self._handle is not None:
+            with _LANE_HOLDERS_LOCK:
+                if _LANE_HOLDERS.get(id(self._lock)) is self._handle:
+                    del _LANE_HOLDERS[id(self._lock)]
         if self._session_key is not None and self._handle is not None:
             IN_FLIGHT.end(self._session_key, self._handle)
         elif self._handle is not None:

@@ -33,7 +33,8 @@ with NUL, which SQL never does) from a plain SQL execution request:
     CANCEL_REQUEST + JSON                cancel another connection's statement:
                                          {"session_key": ..., "reason": ...}
     EXEC_REQUEST + JSON                  execute: {"sql", "session_key", "timeout_ms",
-                                         "lane", "max_queue_wait_ms"}
+                                         "lane", "max_queue_wait_ms",
+                                         "idle_holder_grace_ms"}
 
   response
     1 status byte (0 ok / 1 err), then
@@ -230,13 +231,14 @@ class _ChildHandler(socketserver.StreamRequestHandler):
     def _update_payload(self, backend, body: dict) -> bytes:
         """Run one INSERT/UPDATE/DELETE in THIS process and report its row count."""
         from pgwire_calcite.calcite_backend import CancelScope
-        from pgwire_calcite.server import _peer_closed
+        from pgwire_calcite.server import ClientLink
 
         scope = CancelScope(
             body["session_key"],
             body["timeout_ms"],
-            lambda: _peer_closed(self.request),
+            ClientLink(self.request),
             body["max_queue_wait_ms"],
+            body["idle_holder_grace_ms"],
         )
         keys_of = body.get("keys_of")
         count, keys = backend.run_update(
@@ -246,15 +248,16 @@ class _ChildHandler(socketserver.StreamRequestHandler):
 
     def _execute(self, backend, body: dict) -> None:
         from pgwire_calcite.calcite_backend import CancelScope
-        from pgwire_calcite.server import _peer_closed
+        from pgwire_calcite.server import ClientLink
 
         # The pgwire side closes this connection when its client disconnects, so the
         # bridge socket going away is the child's client-gone signal while queued.
         scope = CancelScope(
             body["session_key"],
             body["timeout_ms"],
-            lambda: _peer_closed(self.request),
+            ClientLink(self.request),
             body["max_queue_wait_ms"],
+            body["idle_holder_grace_ms"],
         )
         conn, lock = backend.lane(body["lane"])
         names, labels, ipc = arrow_bridge.stream_ipc_batches(
@@ -487,6 +490,7 @@ class BridgeBackend:
                 "timeout_ms": int(timeout_ms),
                 "lane": lane,
                 "max_queue_wait_ms": CancelScope.max_queue_wait_ms,
+                "idle_holder_grace_ms": CancelScope.idle_holder_grace_ms,
                 "keys_of": list(keys_of) if keys_of is not None else None,
             }
         )
@@ -548,6 +552,7 @@ class BridgeBackend:
                 "timeout_ms": int(timeout_ms),
                 "lane": lane,
                 "max_queue_wait_ms": CancelScope.max_queue_wait_ms,
+                "idle_holder_grace_ms": CancelScope.idle_holder_grace_ms,
             }
         )
         write_frame(w, request.encode("utf-8"))
