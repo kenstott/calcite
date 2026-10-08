@@ -1908,12 +1908,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             } else if (rawName.endsWith(".yml")) {
               rawName = rawName.substring(0, rawName.lastIndexOf(".yml"));
             }
-            rawName = WHITESPACE_PATTERN.matcher(rawName.replace(File.separator, "__"))
+            rawName =
+                WHITESPACE_PATTERN.matcher(
+                    rawName.replace(File.separator, "__").replace("/", "__"))
                 .replaceAll("_");
           } else {
             // Regular file - use path relative to base source
             rawName = WHITESPACE_PATTERN.matcher(sourceSansJson.relative(baseSource).path()
-                .replace(File.separator, "__"))
+                .replace(File.separator, "__").replace("/", "__"))
                 .replaceAll("_");
           }
           String baseName = applyCasing(rawName, tableNameCasing);
@@ -2122,7 +2124,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           String baseName =
               applyCasing(
                   WHITESPACE_PATTERN.matcher(sourceSansCsv.relative(baseSource).path()
-              .replace(File.separator, "__"))
+              .replace(File.separator, "__").replace("/", "__"))
               .replaceAll("_"), tableNameCasing);
 
           // Check if table name already exists and disambiguate if needed
@@ -2142,7 +2144,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           String baseName =
               applyCasing(
                   WHITESPACE_PATTERN.matcher(sourceSansTsv.relative(baseSource).path()
-              .replace(File.separator, "__"))
+              .replace(File.separator, "__").replace("/", "__"))
               .replaceAll("_"), tableNameCasing);
 
           // Check if table name already exists and disambiguate if needed
@@ -2161,7 +2163,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         if (sourceSansParquet != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansParquet.relative(baseSource).path()
-              .replace(File.separator, "__"))
+              .replace(File.separator, "__").replace("/", "__"))
               .replaceAll("_"), tableNameCasing);
           LOGGER.debug("Found Parquet file in directory scan: {} -> table: {}", source.path(), tableName);
           // Always try to create ParquetTranslatableTable - let it fail at query time if corrupted
@@ -2174,7 +2176,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         if (sourceSansArrow != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansArrow.relative(baseSource).path()
-              .replace(File.separator, "__"))
+              .replace(File.separator, "__").replace("/", "__"))
               .replaceAll("_"), tableNameCasing);
           try {
             Table arrowTable = createArrowTable(new java.io.File(source.path()));
@@ -5579,7 +5581,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             String baseName =
                 applyCasing(
                     WHITESPACE_PATTERN.matcher(sourceSansJson.relative(baseSource).path()
-                    .replace("/", "__"))
+                    .replace(File.separator, "__").replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
             // Handle duplicate table names
             String tableName = baseName;
@@ -5618,7 +5620,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             String baseName =
                 applyCasing(
                     WHITESPACE_PATTERN.matcher(sourceSansCsv.relative(baseSource).path()
-                    .replace("/", "__"))
+                    .replace(File.separator, "__").replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
             // Handle duplicate table names by adding extension suffix
             String tableName = baseName;
@@ -5640,7 +5642,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             String baseName =
                 applyCasing(
                     WHITESPACE_PATTERN.matcher(sourceSansTsv.relative(baseSource).path()
-                    .replace("/", "__"))
+                    .replace(File.separator, "__").replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
             // Handle duplicate table names by adding extension suffix
             String tableName = baseName;
@@ -5662,7 +5664,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             String tableName =
                 applyCasing(
                     WHITESPACE_PATTERN.matcher(sourceSansParquet.relative(baseSource).path()
-                    .replace("/", "__"))
+                    .replace(File.separator, "__").replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
             // Skip if this table is managed by an explicit partitionedTables entry —
             // processPartitionedTables will add it with the correct constraint config.
@@ -5709,7 +5711,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             String tableName =
                 applyCasing(
                     WHITESPACE_PATTERN.matcher(sourceSansArrow.relative(baseSource).path()
-                    .replace("/", "__"))
+                    .replace(File.separator, "__").replace("/", "__"))
                     .replaceAll("_"), tableNameCasing);
             try {
               Table arrowTable = createArrowTable(source.file());

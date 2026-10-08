@@ -605,7 +605,7 @@ public class ParquetConversionUtil {
       org.apache.hadoop.fs.Path path, org.apache.parquet.schema.MessageType schema,
       org.apache.hadoop.conf.Configuration conf) throws Exception {
 
-    return new SimpleParquetWriter.Builder(path)
+    return new SimpleParquetWriter.Builder(ParquetLocalFiles.outputFile(path, conf))
         .withSchema(schema)
         .withConf(conf)
         .withCompressionCodec(org.apache.parquet.hadoop.metadata.CompressionCodecName.SNAPPY)
@@ -641,6 +641,10 @@ public class ParquetConversionUtil {
 
       private Builder(org.apache.hadoop.fs.Path path) {
         super(path);
+      }
+
+      private Builder(org.apache.parquet.io.OutputFile file) {
+        super(file);
       }
 
       public Builder withSchema(org.apache.parquet.schema.MessageType schema) {

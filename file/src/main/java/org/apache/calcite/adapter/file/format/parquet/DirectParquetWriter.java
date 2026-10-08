@@ -122,7 +122,8 @@ public class DirectParquetWriter {
     }
 
     // Create writer with metadata
-    ExampleParquetWriter.Builder builder = ExampleParquetWriter.builder(outputPath)
+    ExampleParquetWriter.Builder builder =
+        ExampleParquetWriter.builder(ParquetLocalFiles.outputFile(outputPath, conf))
         .withConf(conf)
         .withSchema(schema)
         .withCompressionCodec(CompressionCodecName.SNAPPY)
@@ -354,11 +355,19 @@ public class DirectParquetWriter {
       return new Builder(path);
     }
 
+    public static Builder builder(org.apache.parquet.io.OutputFile file) {
+      return new Builder(file);
+    }
+
     public static class Builder extends ParquetWriter.Builder<Group, Builder> {
       private MessageType schema = null;
 
       private Builder(Path path) {
         super(path);
+      }
+
+      private Builder(org.apache.parquet.io.OutputFile file) {
+        super(file);
       }
 
       public Builder withSchema(MessageType schema) {
