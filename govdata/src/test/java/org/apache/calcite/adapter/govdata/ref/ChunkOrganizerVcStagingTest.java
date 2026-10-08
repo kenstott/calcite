@@ -250,10 +250,27 @@ class ChunkOrganizerVcStagingTest {
     assertTrue(ChunkOrganizer.sourceNeedsSweep(conn, "owasp_top10"),
         "no watermark recorded yet -- must need a sweep");
 
-    ChunkOrganizer.markSwept(conn, "cyber_threat", "owasp_top10");
+    long asOf = ChunkOrganizer.requireTableCompletedAt(conn, "owasp_top10");
+    ChunkOrganizer.markSwept(conn, "cyber_threat", "owasp_top10", asOf);
 
     assertFalse(ChunkOrganizer.sourceNeedsSweep(conn, "owasp_top10"),
         "watermark now matches table_completion.completed_at -- must be satisfied");
+  }
+
+  @Test void watermarkCapturedBeforeScanStaysNeededWhenSourceCompletesMidSweep() throws Exception {
+    try (PreparedStatement ps = conn.prepareStatement(
+        "DELETE FROM vc_sync_state WHERE source_table = 'owasp_top10'")) {
+      ps.executeUpdate();
+    }
+    conn.commit();
+
+    // The sweep read completed_at, scanned, and meanwhile the source's ETL advanced it: marking
+    // with the value read before the scan must leave the source still needing a sweep.
+    long asOfBeforeScan = ChunkOrganizer.requireTableCompletedAt(conn, "owasp_top10") - 1;
+    ChunkOrganizer.markSwept(conn, "cyber_threat", "owasp_top10", asOfBeforeScan);
+
+    assertTrue(ChunkOrganizer.sourceNeedsSweep(conn, "owasp_top10"),
+        "completed_at moved past the pre-scan watermark -- the next sweep must rescan");
   }
 
   // ========================================================================

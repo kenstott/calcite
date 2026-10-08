@@ -137,6 +137,16 @@ public class FileClientModule
         if (config.getRefreshInterval() != null) {
             operand.put("refreshInterval", config.getRefreshInterval());
         }
+        if (config.getCrawl() != null) {
+            // The catalog property is the file adapter's crawl operand, as JSON: one setting
+            // with the same names on every way of reaching the adapter.
+            try {
+                operand.put("crawl", MAPPER.readValue(config.getCrawl(), LinkedHashMap.class));
+            }
+            catch (JsonProcessingException e) {
+                throw new IllegalArgumentException("The crawl property is not a JSON object", e);
+            }
+        }
 
         // Derive the storage backend from the URI scheme. The file adapter only auto-detects
         // s3/http/hdfs from the directory, so ftp/ftps/sftp must be set explicitly here.

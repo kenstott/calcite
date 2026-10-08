@@ -138,18 +138,27 @@ public class HtmlCrawler {
    * Crawls from a starting URL and discovers tables and data files.
    */
   public CrawlResult crawl(String startUrl) throws IOException {
+    return crawl(java.util.Collections.singletonList(startUrl));
+  }
+
+  /**
+   * Crawls from several starting URLs as one crawl: one page limit, and a page two of them
+   * reach is read once.
+   */
+  public CrawlResult crawl(java.util.Collection<String> startUrls) throws IOException {
     CrawlResult result = new CrawlResult();
 
     if (!config.isEnabled()) {
-      // Just process the single page
-      processSinglePage(startUrl, result);
+      // Just process each page
+      for (String startUrl : startUrls) {
+        processSinglePage(startUrl, result);
+      }
       return result;
     }
 
     // Breadth-first crawl
     Set<String> visited = new HashSet<>();
-    LinkedHashSet<String> currentLevel = new LinkedHashSet<>();
-    currentLevel.add(startUrl);
+    LinkedHashSet<String> currentLevel = new LinkedHashSet<>(startUrls);
 
     for (int depth = 0; depth <= config.getMaxDepth() && !currentLevel.isEmpty(); depth++) {
       LinkedHashSet<String> nextLevel = new LinkedHashSet<>();
@@ -253,7 +262,7 @@ public class HtmlCrawler {
         throw new IOException("Invalid URL: " + url, e);
       }
       conn.setRequestMethod("HEAD");
-      conn.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; Apache Calcite/1.0; +https://calcite.apache.org)");
+      conn.setRequestProperty("User-Agent", config.getUserAgent());
       String etag = conn.getHeaderField("ETag");
       String lastModified = conn.getHeaderField("Last-Modified");
       long contentLength = conn.getContentLengthLong();
@@ -277,7 +286,7 @@ public class HtmlCrawler {
 
     try {
       URLConnection connection = new URI(url).toURL().openConnection();
-      connection.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; Apache Calcite/1.0; +https://calcite.apache.org)");
+      connection.setRequestProperty("User-Agent", config.getUserAgent());
       connection.setConnectTimeout(30000);
       connection.setReadTimeout(30000);
 
@@ -318,7 +327,7 @@ public class HtmlCrawler {
   private long getContentLength(String url) throws IOException {
     try {
       URLConnection connection = new URI(url).toURL().openConnection();
-      connection.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; Apache Calcite/1.0; +https://calcite.apache.org)");
+      connection.setRequestProperty("User-Agent", config.getUserAgent());
       connection.setConnectTimeout(5000);
       connection.setReadTimeout(5000);
 
