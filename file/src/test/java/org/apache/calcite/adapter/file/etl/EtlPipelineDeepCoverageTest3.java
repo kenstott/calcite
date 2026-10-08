@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -46,6 +47,10 @@ import static org.mockito.Mockito.when;
 /**
  * Deep coverage tests for {@link EtlPipeline} targeting uncovered lines.
  */
+// Sets the JVM-wide calcite.etl.threads and calcite.etl.maxConsecutiveFailures properties,
+// which every EtlPipeline reads: a pipeline of another test running at the same moment
+// would take the parallel path, or abort at this test's threshold
+@Isolated
 @Tag("unit")
 public class EtlPipelineDeepCoverageTest3 {
 
