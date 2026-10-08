@@ -3,13 +3,20 @@
 name: pgwire-calcite CI
 
 on:
+  # Beyond the server itself: the suite's drift check (tests/unit/test_variant_drift.py)
+  # reads every pgwire-<adapter>/ directory, the adapters' release workflow and the
+  # AskAmerica connector that launches pgwire-govdata, so a change to any of them runs it.
   push:
     paths:
-      - "pgwire-calcite/**"
+      - "pgwire-*/**"
       - ".github/workflows/pgwire-calcite-ci.yml"
+      - ".github/workflows/pgwire-adapters-release.yml"
+      - "askamerica-engine/src/main/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnector.java"
   pull_request:
     paths:
-      - "pgwire-calcite/**"
+      - "pgwire-*/**"
+      - ".github/workflows/pgwire-adapters-release.yml"
+      - "askamerica-engine/src/main/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnector.java"
   workflow_dispatch:
 
 jobs:

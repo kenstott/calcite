@@ -1,0 +1,4 @@
+# Launcher arguments baked into the pgwire-cloudops bundle's entry script, after
+# --backend/--model/--database and before the caller's own arguments (which win).
+# One or more arguments per line; lines starting with # are comments.
+# The server code is pgwire-calcite's, unchanged: a variant is model.json plus this file.
