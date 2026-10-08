@@ -873,7 +873,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         with a text column could not be sent, and describing the statement ran it with a number
         in the parameter's place. A statement the engine does not type (a catalog or session
         statement it never sees, or a parameter it cannot place, as in ``SELECT $1``) keeps
-        int8 for the parameters with no cast: nothing says what else they are.
+        int8 for the parameters with no cast: nothing says what else they are. A statement
+        over information_schema is the engine's, and is typed as the statement it becomes; one
+        over pg_catalog is typed by what it compares each parameter with.
         """
         if all(i in cast_map for i in range(1, count + 1)):
             return [cast_map[i] for i in range(1, count + 1)]
@@ -901,8 +903,14 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             from pgwire_calcite import info_schema
             from pgwire_calcite.catalog import classify
 
-            if classify(stripped) == "INTERCEPT" or info_schema.references(stripped):
-                return None
+            if classify(stripped) == "INTERCEPT":
+                from pgwire_calcite.catalog import parameter_types
+
+                return parameter_types(stripped, self.role_id or "", _state)
+            if info_schema.references(stripped):
+                # The engine answers information_schema, as the statement it is rewritten
+                # into, so it types that statement's parameters like any other's.
+                stripped = self._rewrite_information_schema(_state, stripped)
         ask = getattr(_state.backend, "parameter_types", None)
         if ask is None:  # a backend with no engine behind it (the stub)
             return None
