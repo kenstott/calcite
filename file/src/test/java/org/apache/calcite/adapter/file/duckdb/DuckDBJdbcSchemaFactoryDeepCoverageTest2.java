@@ -19,9 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.api.parallel.ResourceAccessMode;
-import org.junit.jupiter.api.parallel.ResourceLock;
-import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -41,8 +38,6 @@ import static org.mockito.Mockito.*;
  * determineCatalogPath, create() variants, database_filename handling,
  * shared database pool, relative database paths, and error conditions.
  */
-// Reads duckdb.catalog.path, which another class sets for the JVM: never while one holds it.
-@ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 @Tag("unit")
 public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
