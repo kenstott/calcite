@@ -266,7 +266,14 @@ class InFlightStatement:
                 target=self._await_return, args=(reason,), name="pgwire-cancel-grace", daemon=True
             ).start()
         _attach_current_thread_to_jvm()
-        self._stmt.cancel()
+        try:
+            self._stmt.cancel()
+        except Exception as exc:  # noqa: BLE001 - reported; the grace watch decides what follows
+            # Seen with Avatica: "Statement closed", when the cancel meets a statement
+            # that is finishing. The reason is recorded and the grace watch above is
+            # running, so a statement that really does not return is still dealt with;
+            # an exception escaping a watchdog timer thread would help nobody.
+            log.warning("Statement.cancel for '%s' failed: %s", reason, exc)
         return True
 
     def finish(self) -> None:
