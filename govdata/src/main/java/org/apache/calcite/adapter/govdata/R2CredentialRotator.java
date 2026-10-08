@@ -116,8 +116,12 @@ final class R2CredentialRotator {
       t.setDaemon(true);
       return t;
     });
-    scheduler.scheduleWithFixedDelay(rotator::checkAndLog, CHECK_INTERVAL_MS, CHECK_INTERVAL_MS,
-        TimeUnit.MILLISECONDS);
+    // The task never completes and checkAndLog reports its own failures, so the returned
+    // future has nothing to deliver.
+    @SuppressWarnings("unused")
+    java.util.concurrent.ScheduledFuture<?> rotation =
+        scheduler.scheduleWithFixedDelay(rotator::checkAndLog, CHECK_INTERVAL_MS,
+            CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS);
     LOGGER.info("R2 credential rotation started; credentials expire at {}", expiresAt);
   }
 

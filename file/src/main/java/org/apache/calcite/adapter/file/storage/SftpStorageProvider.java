@@ -476,6 +476,8 @@ public class SftpStorageProvider implements StorageProvider {
    * {@link StorageProvider#stageToSafeStream} so a slow consumer cannot stall the channel into an
    * idle drop — but retained as a tested utility for callers that want lazy streaming.
    */
+  // Reached only through reflection, by the tests of this class.
+  @SuppressWarnings("UnusedNestedClass")
   private static class SftpInputStream extends InputStream {
     private final InputStream wrapped;
     private final ChannelSftp channel;

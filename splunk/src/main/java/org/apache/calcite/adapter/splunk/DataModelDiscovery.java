@@ -1068,7 +1068,7 @@ public class DataModelDiscovery {
 
     /**
      * Parse calculated field definitions from operand.
-     * Expected format: modelName -> [ {name: "fieldName", type: "VARCHAR"}, ... ]
+     * Expected format: modelName -&gt; [ {name: "fieldName", type: "VARCHAR"}, ... ]
      */
     public static Map<String, List<CalculatedFieldDef>> parseFromOperand(
         Map<String, Object> operand) {

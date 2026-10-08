@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -52,6 +53,10 @@ import static org.mockito.Mockito.*;
  *   <li>getParallelThreadCount via system property</li>
  * </ul>
  */
+// Sets the JVM-wide calcite.etl.threads and calcite.etl.maxConsecutiveFailures properties,
+// which every EtlPipeline reads: a pipeline of another test running at the same moment
+// would take the parallel path, or abort at this test's threshold
+@Isolated
 @Tag("unit")
 public class EtlPipelineLineCoverageTest {
 

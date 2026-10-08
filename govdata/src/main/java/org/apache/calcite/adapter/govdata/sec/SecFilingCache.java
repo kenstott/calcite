@@ -374,24 +374,6 @@ public class SecFilingCache implements AutoCloseable {
 
 
 
-  /**
-   * Returns the 4-digit year string from an ISO filing date ("YYYY-MM-DD").
-   * Falls back to null if the date is missing or malformed.
-   */
-  private static String yearFromFilingDate(String filingDate) {
-    if (filingDate != null && filingDate.length() >= 4) {
-      String year = filingDate.substring(0, 4);
-      try {
-        int y = Integer.parseInt(year);
-        if (y >= 2000 && y <= 2099) {
-          return year;
-        }
-      } catch (NumberFormatException ignored) {
-        // fall through to null
-      }
-    }
-    return null;
-  }
 
   /** Extracts 4-digit year from accession number format {@code XXXXXXXXXX-YY-NNNNNN}. */
   private static String yearFromAccession(String accession) {
@@ -673,25 +655,6 @@ public class SecFilingCache implements AutoCloseable {
   }
 
 
-  /**
-   * Build a FileInventory from a set of completed table names.
-   */
-  /** Union of two inventories: an output type is present if either source reports it. */
-  private static FileInventory unionInventory(FileInventory a, FileInventory b) {
-    return FileInventory.builder()
-        .hasMetadata(a.hasMetadata() || b.hasMetadata())
-        .hasFacts(a.hasFacts() || b.hasFacts())
-        .hasContexts(a.hasContexts() || b.hasContexts())
-        .hasRelationships(a.hasRelationships() || b.hasRelationships())
-        .hasMda(a.hasMda() || b.hasMda())
-        .hasRiskFactors(a.hasRiskFactors() || b.hasRiskFactors())
-        .hasInsider(a.hasInsider() || b.hasInsider())
-        .hasEarnings(a.hasEarnings() || b.hasEarnings())
-        .hasChunks(a.hasChunks() || b.hasChunks())
-        .hasInstitutionalHoldings(a.hasInstitutionalHoldings() || b.hasInstitutionalHoldings())
-        .hasBeneficialOwnership(a.hasBeneficialOwnership() || b.hasBeneficialOwnership())
-        .build();
-  }
 
   private FileInventory inventoryFromCompletedTables(Set<String> tables) {
     return FileInventory.builder()

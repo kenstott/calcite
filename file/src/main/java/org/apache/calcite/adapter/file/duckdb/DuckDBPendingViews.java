@@ -167,7 +167,7 @@ public final class DuckDBPendingViews {
   static Set<String> pendingViewNames(String dbPath, String duckdbSchema) {
     CopyOnWriteArrayList<PendingView> pendingList = PENDING.get(dbPath);
     if (pendingList == null) {
-      return java.util.Collections.emptySet();
+      return new java.util.LinkedHashSet<>();
     }
     Set<String> names = new java.util.LinkedHashSet<>();
     for (PendingView pv : pendingList) {
@@ -187,7 +187,7 @@ public final class DuckDBPendingViews {
   static Set<String> failedViewNames(String dbPath, String duckdbSchema) {
     CopyOnWriteArrayList<PendingView> pendingList = PENDING.get(dbPath);
     if (pendingList == null) {
-      return java.util.Collections.emptySet();
+      return new java.util.LinkedHashSet<>();
     }
     Set<String> names = new java.util.LinkedHashSet<>();
     for (PendingView pv : pendingList) {

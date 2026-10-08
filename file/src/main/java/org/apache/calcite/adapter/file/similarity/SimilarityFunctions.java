@@ -133,7 +133,7 @@ public class SimilarityFunctions {
   /**
    * Computes cosine distance between two vectors.
    * This is 1 - cosine_similarity, ranging from 0 (identical) to 2 (opposite).
-   * Compatible with PostgreSQL's <-> operator behavior.
+   * Compatible with PostgreSQL's &lt;-&gt; operator behavior.
    *
    * @param vector1 First vector as comma-separated string
    * @param vector2 Second vector as comma-separated string

@@ -97,8 +97,13 @@ class PgwireGovDataInstallerTest {
 
   private static Path bundle(Path root, String launcherContent) throws IOException {
     Files.createDirectories(root.resolve("bin"));
-    Files.writeString(root.resolve("bin").resolve("pgwire-govdata"), launcherContent);
+    Files.writeString(launcher(root), launcherContent);
     return root;
+  }
+
+  /** The launcher of a bundle, under the name this platform's installer looks for. */
+  private static Path launcher(Path root) {
+    return PgwireGovDataInstaller.launcherPath(root).toPath();
   }
 
   @Test void swapReplacesTheBundleAndCarriesTheRunningServersFiles(@TempDir Path home)
@@ -115,7 +120,7 @@ class PgwireGovDataInstallerTest {
 
     PgwireGovDataInstaller.swapIn(staging, dir);
 
-    assertEquals("new", Files.readString(dir.resolve("bin").resolve("pgwire-govdata")));
+    assertEquals("new", Files.readString(launcher(dir)));
     assertEquals("0.99.2", PgwireGovDataInstaller.readMarker(dir));
     assertEquals("4242", Files.readString(dir.resolve("pgwire.pid")));
     assertEquals("123", Files.readString(dir.resolve("pgwire.creds-expiry")));
@@ -134,7 +139,7 @@ class PgwireGovDataInstallerTest {
     Path dir = home.resolve("pgwire-govdata");
     Path staging = bundle(home.resolve("pgwire-govdata.staging-1"), "new");
     PgwireGovDataInstaller.swapIn(staging, dir);
-    assertEquals("new", Files.readString(dir.resolve("bin").resolve("pgwire-govdata")));
+    assertEquals("new", Files.readString(launcher(dir)));
     assertFalse(Files.exists(staging));
   }
 
@@ -142,7 +147,7 @@ class PgwireGovDataInstallerTest {
     Path dir = bundle(home.resolve("pgwire-govdata"), "old");
     Path missingStaging = home.resolve("pgwire-govdata.staging-missing");
     assertThrows(IOException.class, () -> PgwireGovDataInstaller.swapIn(missingStaging, dir));
-    assertEquals("old", Files.readString(dir.resolve("bin").resolve("pgwire-govdata")),
+    assertEquals("old", Files.readString(launcher(dir)),
         "a failed swap must leave the working bundle in place");
   }
 

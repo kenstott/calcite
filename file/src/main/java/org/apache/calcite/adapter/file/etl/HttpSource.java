@@ -80,7 +80,7 @@ import java.util.zip.ZipInputStream;
  *   <li>JSONPath data extraction</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * HttpSourceConfig config = HttpSourceConfig.builder()
  *     .url("https://api.example.com/data")
@@ -195,8 +195,6 @@ public class HttpSource implements DataSource {
   private final VariableNormalizer variableNormalizer;
   private final StorageProvider storageProvider;
   private final String rawCachePath;
-  /** Operating directory from model operands (e.g., .aperio/<schema>), used for local cache base. */
-  private final String operatingDirectory;
   /**
    * When true, {@link #hasValidRawCache} always reports a miss regardless of what's on disk —
    * forces a live fetch instead of reading a possibly-corrupted cached response (e.g. one
@@ -323,7 +321,6 @@ public class HttpSource implements DataSource {
     }
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
-    this.operatingDirectory = operatingDirectory;
     this.textualSourceKeys = textualSourceKeys(columns, config.getResponse().getRawFields());
     this.bypassRawCache = bypassRawCache;
   }
@@ -344,7 +341,6 @@ public class HttpSource implements DataSource {
     this.variableNormalizer = null;
     this.storageProvider = null;
     this.rawCachePath = null;
-    this.operatingDirectory = null;
     this.textualSourceKeys = Collections.emptySet();
     this.bypassRawCache = false;
   }
@@ -1119,7 +1115,7 @@ public class HttpSource implements DataSource {
         cacheGenerator.writeEndObject();
         cacheGenerator.close();
         tempCacheStream.close();
-        String parentPath = rawCacheFilePath.substring(0, rawCacheFilePath.lastIndexOf('/'));
+        String parentPath = parentOf(rawCacheFilePath);
         storageProvider.createDirectories(parentPath);
         try (java.io.InputStream in = new FileInputStream(tempCacheFile)) {
           storageProvider.writeFile(rawCacheFilePath, in);
@@ -1249,7 +1245,7 @@ public class HttpSource implements DataSource {
         cs.conn.disconnect();
       }
       // Copy completed (no exception) → commit the temp to the raw cache.
-      String parentPath = rawCacheFilePath.substring(0, rawCacheFilePath.lastIndexOf('/'));
+      String parentPath = parentOf(rawCacheFilePath);
       storageProvider.createDirectories(parentPath);
       try (InputStream in = new FileInputStream(tempFile)) {
         storageProvider.writeFile(rawCacheFilePath, in);
@@ -1696,18 +1692,6 @@ public class HttpSource implements DataSource {
     }
   }
 
-  /**
-   * Performs the actual HTTP request.
-   *
-   * @param urlString Full URL to request
-   * @param variables Variable substitution map
-   * @param rawCachePath Optional path to write large files directly to cache (null to use temp files)
-   */
-  private String doRequest(String urlString, Map<String, String> variables,
-      String rawCachePath) throws IOException {
-    return doRequest(urlString, variables, rawCachePath, null);
-  }
-
   private String doRequest(String urlString, Map<String, String> variables,
       String rawCachePath, Map<String, Object> bodyOverride) throws IOException {
     failFastIfKnown404(urlString);
@@ -1851,12 +1835,26 @@ public class HttpSource implements DataSource {
    * @return The cache path
    * @throws IOException if caching fails
    */
+  /**
+   * The directory part of a cache path.
+   *
+   * <p>A path of the local storage provider is separated by backslashes on Windows; every
+   * other provider's paths, and a local path elsewhere, by slashes.
+   */
+  static String parentOf(String path) {
+    int end = Math.max(path.lastIndexOf('/'), path.lastIndexOf(java.io.File.separatorChar));
+    if (end < 0) {
+      throw new IllegalArgumentException("Cache path has no directory: " + path);
+    }
+    return path.substring(0, end);
+  }
+
   @SuppressWarnings("UnusedMethod")
   private String cacheResponse(InputStream input, String cachePath) throws IOException {
     if (cachePath == null) {
       return readResponse(input);
     }
-    String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+    String parentPath = parentOf(cachePath);
     storageProvider.createDirectories(parentPath);
     storageProvider.writeFile(cachePath, input);
     LOGGER.info("Cached response: {}", cachePath);
@@ -1875,7 +1873,7 @@ public class HttpSource implements DataSource {
     if (cachePath == null) {
       return response;
     }
-    String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+    String parentPath = parentOf(cachePath);
     storageProvider.createDirectories(parentPath);
     File tmpCache = File.createTempFile("cache-str-", ".tmp");
     try {
@@ -2058,7 +2056,7 @@ public class HttpSource implements DataSource {
       }
     }
     try (java.io.InputStream fis = new FileInputStream(tempFile)) {
-      String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+      String parentPath = parentOf(cachePath);
       storageProvider.createDirectories(parentPath);
       storageProvider.writeFile(cachePath, fis);
     }
@@ -2118,7 +2116,7 @@ public class HttpSource implements DataSource {
       mergeZipParts(parts, partNames, tempFile, csvFormat);
       long totalBytes = tempFile.length();
       try (InputStream fis = new FileInputStream(tempFile)) {
-        String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+        String parentPath = parentOf(cachePath);
         storageProvider.createDirectories(parentPath);
         storageProvider.writeFile(cachePath, fis);
       }
@@ -3189,6 +3187,8 @@ public class HttpSource implements DataSource {
    * @param delimiter The delimiter character (comma for CSV, tab for TSV)
    * @return Array of field values
    */
+  // Reached only through reflection, by the tests of this class.
+  @SuppressWarnings("UnusedMethod")
   private String[] parseDelimitedLine(String line, char delimiter) {
     return parseDelimitedLine(line, delimiter, true);
   }
@@ -4269,7 +4269,7 @@ public class HttpSource implements DataSource {
   private void writeRawCache(String cachePath, String content) {
     try {
       // Ensure parent directory exists
-      String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+      String parentPath = parentOf(cachePath);
       storageProvider.createDirectories(parentPath);
 
       // Write content

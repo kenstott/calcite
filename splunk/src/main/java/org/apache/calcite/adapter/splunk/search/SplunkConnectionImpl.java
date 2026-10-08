@@ -72,7 +72,6 @@ public class SplunkConnectionImpl implements SplunkConnection {
 
   // Authentication retry configuration
   private static final int MAX_RETRY_ATTEMPTS = 1;
-  private static final String AUTH_ERROR_INDICATOR = "401";
 
   final URL url;
   final String username;
@@ -201,15 +200,15 @@ public class SplunkConnectionImpl implements SplunkConnection {
       // Create a trust manager that accepts all certificates
       TrustManager[] trustAllCerts = new TrustManager[]{
           new X509TrustManager() {
-            public X509Certificate[] getAcceptedIssuers() {
+            @Override public X509Certificate[] getAcceptedIssuers() {
               return null;
             }
 
-            public void checkClientTrusted(X509Certificate[] certs, String authType) {
+            @Override public void checkClientTrusted(X509Certificate[] certs, String authType) {
               // Trust all client certificates
             }
 
-            public void checkServerTrusted(X509Certificate[] certs, String authType) {
+            @Override public void checkServerTrusted(X509Certificate[] certs, String authType) {
               // Trust all server certificates
             }
           }
@@ -779,7 +778,6 @@ public class SplunkConnectionImpl implements SplunkConnection {
     boolean shouldPrint = Boolean.parseBoolean(printArg);
 
     CountingSearchResultListener dummy = new CountingSearchResultListener(shouldPrint);
-    long start = System.currentTimeMillis();
     c.getSearchResults(search, searchArgs, fieldList, dummy);
   }
 
@@ -827,8 +825,7 @@ public class SplunkConnectionImpl implements SplunkConnection {
    */
   public static class SplunkJsonResultEnumeratorWithRetry implements Enumerator<Object> {
     private BufferedReader reader;
-    private final List<String> schemaFieldList; // REQUESTED fields in query order
-    private final Set<String> explicitFields;
+    private final List<String> schemaFieldList;
     private final Map<String, String> fieldMapping; // Schema field -> Splunk field
     private final SplunkConnectionImpl connection;
     private Object current;
@@ -846,7 +843,6 @@ public class SplunkConnectionImpl implements SplunkConnection {
         SplunkConnectionImpl connection) {
       this.reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
       this.schemaFieldList = schemaFieldList;
-      this.explicitFields = explicitFields;
       this.connection = connection;
 
       // Convert reverse mapping (Splunk -> Schema) to forward mapping (Schema -> Splunk)

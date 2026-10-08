@@ -315,12 +315,16 @@ tasks.test {
     jvmArgs(
         "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED",
         "--add-opens=java.base/java.nio=org.apache.arrow.memory.netty,ALL-UNNAMED",
-        "--add-modules=jdk.incubator.vector",
         // Mockito 5.x on Java 21 requires byte-buddy agent attachment
         "-XX:+EnableDynamicAgentLoading",
         "-Djdk.attach.allowAttachSelf=true",
         "-Djava.util.concurrent.ForkJoinPool.common.maximumSpares=256"
     )
+    // The module first ships in JDK 16, and a JVM told to add a module it does not have
+    // exits before running a test. The SIMD classes that need it are compiled only on 16+.
+    if (JavaVersion.current() >= JavaVersion.VERSION_16) {
+        jvmArgs("--add-modules=jdk.incubator.vector")
+    }
     // Attach byte-buddy-agent as JVM agent to avoid self-attach failures under load
     doFirst {
         val byteBuddyAgent = configurations.testRuntimeClasspath.get().files

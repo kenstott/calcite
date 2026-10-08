@@ -65,7 +65,6 @@ public class FemaNriEarthquakeByCountyTransformer implements StreamingResponseTr
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 120_000;
   private static final int MAX_RETRIES = 3;
-  private static final int PAGE_SIZE = 2000;
   private static final int MAX_PAGES = 10;
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
@@ -129,7 +128,7 @@ public class FemaNriEarthquakeByCountyTransformer implements StreamingResponseTr
       lastExceeded = root.path("exceededTransferLimit").asBoolean(false);
       JsonNode features = root.path("features");
       if (!features.isArray() || features.size() == 0) {
-        return Collections.emptyList();
+        return new ArrayList<JsonNode>();
       }
       List<JsonNode> out = new ArrayList<JsonNode>(features.size());
       for (JsonNode f : features) {

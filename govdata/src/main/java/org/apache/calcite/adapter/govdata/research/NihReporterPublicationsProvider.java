@@ -94,7 +94,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
         new LinkedHashMap<String, Map<String, Object>>();
     for (int i = 0; i < applIds.size(); i += PAGE_SIZE) {
       List<Long> batch = applIds.subList(i, Math.min(i + PAGE_SIZE, applIds.size()));
-      for (Map<String, Object> row : fetchPublicationsForBatch(batch, year, ic, rawCache,
+      for (Map<String, Object> row : fetchPublicationsForBatch(batch, year, rawCache,
           i / PAGE_SIZE)) {
         byLink.putIfAbsent(row.get("appl_id") + ":" + row.get("pmid"), row);
       }
@@ -180,7 +180,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
    * walked instead.
    */
   private List<Map<String, Object>> fetchPublicationsForBatch(List<Long> applIdBatch, String year,
-      String ic, RawCache rawCache, int batchIndex) throws IOException {
+      RawCache rawCache, int batchIndex) throws IOException {
     java.util.Set<Long> batchSet = new java.util.HashSet<Long>(applIdBatch);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     StringBuilder idsJson = new StringBuilder();

@@ -37,27 +37,16 @@ import java.util.concurrent.TimeUnit;
  * Run with: -Dcalcite.test.splunk=true
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkNamespaceValidationTest {
 
   private static SplunkConnection connection;
 
   @BeforeAll
   static void setUp() throws Exception {
-    // Get connection properties from system properties or local-properties.settings
-    String splunkUrl = System.getProperty("splunk.url");
-    String splunkUser = System.getProperty("splunk.user");
-    String splunkPassword = System.getProperty("splunk.password");
-
-    // If not in system properties, use defaults from local-properties.settings
-    if (splunkUrl == null) {
-      splunkUrl = "https://kentest.xyz:8089";
-    }
-    if (splunkUser == null) {
-      splunkUser = "admin";
-    }
-    if (splunkPassword == null) {
-      splunkPassword = "admin123";
-    }
+    String splunkUrl = SplunkTestSettings.url();
+    String splunkUser = SplunkTestSettings.user();
+    String splunkPassword = SplunkTestSettings.password();
 
     System.out.println("Connecting to Splunk at: " + splunkUrl);
 

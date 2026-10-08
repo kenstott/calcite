@@ -38,7 +38,7 @@ import java.util.TreeSet;
  * parameter maps, where each map represents one combination of dimension values.
  * This is used by the ETL pipeline to iterate over batch combinations.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * // Define dimensions
  * Map<String, DimensionConfig> dimensions = new LinkedHashMap<>();
@@ -62,7 +62,7 @@ import java.util.TreeSet;
  * // [{year=2020, region=NORTH}, {year=2020, region=SOUTH}, ...]
  * }</pre>
  *
- * <h3>Dimension Types</h3>
+ * <h2>Dimension Types</h2>
  * <ul>
  *   <li>{@code RANGE} - Numeric sequence (start, end, step)</li>
  *   <li>{@code LIST} - Explicit value list</li>
@@ -792,7 +792,6 @@ public class DimensionIterator {
       return new ArrayList<String>();
     }
 
-    int currentYear = PipelineClock.currentYear();
     int lag = dataLag != null ? dataLag : 0;
 
     if (step == null || step == 0) {

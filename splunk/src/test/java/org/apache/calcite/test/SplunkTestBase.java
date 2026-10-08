@@ -18,9 +18,6 @@ package org.apache.calcite.test;
 
 import org.junit.jupiter.api.BeforeAll;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -28,7 +25,7 @@ import java.util.Properties;
 
 /**
  * Base class for Splunk adapter tests that require connection to a Splunk instance.
- * Loads connection properties from local-properties.settings file.
+ * The connection comes from {@link SplunkTestSettings}; without one the tests fail.
  */
 public abstract class SplunkTestBase {
   protected static String SPLUNK_URL = null;
@@ -48,69 +45,11 @@ public abstract class SplunkTestBase {
 
   @BeforeAll
   public static void loadConnectionProperties() {
-    // Try to load from local-properties.settings
-    File[] possibleLocations = {
-        new File("local-properties.settings"),
-        new File("splunk/local-properties.settings"),
-        new File("../splunk/local-properties.settings")
-    };
-
-    File propsFile = null;
-    for (File location : possibleLocations) {
-      if (location.exists()) {
-        propsFile = location;
-        break;
-      }
-    }
-
-    if (propsFile != null) {
-      Properties props = new Properties();
-      try (FileInputStream fis = new FileInputStream(propsFile)) {
-        props.load(fis);
-
-        if (props.containsKey("splunk.url")) {
-          SPLUNK_URL = props.getProperty("splunk.url");
-        }
-        if (props.containsKey("splunk.username")) {
-          SPLUNK_USER = props.getProperty("splunk.username");
-        }
-        if (props.containsKey("splunk.password")) {
-          SPLUNK_PASSWORD = props.getProperty("splunk.password");
-        }
-        if (props.containsKey("splunk.ssl.insecure")) {
-          DISABLE_SSL_VALIDATION = Boolean.parseBoolean(props.getProperty("splunk.ssl.insecure"));
-        }
-
-        splunkAvailable = SPLUNK_URL != null && SPLUNK_USER != null && SPLUNK_PASSWORD != null;
-
-        if (splunkAvailable) {
-          System.out.println("Loaded Splunk connection from " + propsFile.getPath());
-        }
-      } catch (IOException e) {
-        System.err.println("Failed to load local-properties.settings: " + e.getMessage());
-      }
-    }
-
-    // Fall back to environment variables if not loaded from file
-    if (!splunkAvailable) {
-      String envUrl = System.getenv("SPLUNK_URL");
-      String envUser = System.getenv("SPLUNK_USER");
-      String envPassword = System.getenv("SPLUNK_PASSWORD");
-
-      if (envUrl != null && envUser != null && envPassword != null) {
-        SPLUNK_URL = envUrl;
-        SPLUNK_USER = envUser;
-        SPLUNK_PASSWORD = envPassword;
-        DISABLE_SSL_VALIDATION = "true".equals(System.getenv("SPLUNK_SSL_INSECURE"));
-        splunkAvailable = true;
-        System.out.println("Loaded Splunk connection from environment variables");
-      }
-    }
-
-    if (!splunkAvailable) {
-      System.out.println("Splunk not configured. Create local-properties.settings with " +
-          "splunk.url, splunk.username, and splunk.password properties.");
-    }
+    SPLUNK_URL = SplunkTestSettings.url();
+    SPLUNK_USER = SplunkTestSettings.user();
+    SPLUNK_PASSWORD = SplunkTestSettings.password();
+    DISABLE_SSL_VALIDATION = SplunkTestSettings.sslInsecure();
+    splunkAvailable = true;
   }
 
   protected Connection getConnection() throws SQLException {

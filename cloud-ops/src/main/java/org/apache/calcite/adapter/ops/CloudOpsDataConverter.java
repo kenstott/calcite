@@ -378,6 +378,9 @@ public class CloudOpsDataConverter {
    * @param value The temporal value to convert
    * @return Long representing milliseconds since epoch
    */
+  // The value may be a java.sql.Time, whose toInstant() throws; getTime() is the one call
+  // every java.util.Date supports.
+  @SuppressWarnings("JavaUtilDate")
   private static Long convertToTimestampMillis(Object value) {
     if (value == null) {
       return null;

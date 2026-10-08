@@ -28,6 +28,7 @@ import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
@@ -962,7 +963,7 @@ public class ConversionMetadata {
 
   /**
    * Builds a comprehensive mapping of all conversions across all schemas in a base directory.
-   * This scans all .aperio/<schema>/.conversions.json files and creates a unified view.
+   * This scans all .aperio/&lt;schema&gt;/.conversions.json files and creates a unified view.
    *
    * @param baseDirectory The base directory containing .aperio subdirectories
    * @param htmlFileToTableName Map of HTML filenames to explicit table names from model definitions
@@ -1182,13 +1183,32 @@ public class ConversionMetadata {
    * @return The conversion record, or null if not found
    */
   public ConversionRecord findRecordBySourceFile(File sourceFile) {
+    return findRecordBySourceFile(sourceFile, null);
+  }
+
+  /**
+   * Finds the record of a source file that was listed under a data directory.
+   *
+   * <p>Links above the data directory are resolved, links inside it are not. The data
+   * directory itself may be reached through a link (on macOS a temporary path
+   * {@code /var/folders/...} is {@code /private/var/folders/...}), and a record written with
+   * either form is the same file. But a file reached through a link inside the directory,
+   * such as {@code target/link_to_source/original.csv} beside {@code source/original.csv},
+   * is a listing of its own and a table of its own: resolving that link would hand it the
+   * other file's record, and with it the other table's name.
+   *
+   * @param sourceFile the source file, as it was listed
+   * @param dataDirectory the directory it was listed under; null resolves every link
+   * @return the record, or null when there is none
+   */
+  public ConversionRecord findRecordBySourceFile(File sourceFile, File dataDirectory) {
     try {
       // Compare on BOTH the canonical and the absolute form. Records are written with
       // File.getAbsolutePath() (symlinks intact), so where the data directory lives under a
       // symlink -- e.g. macOS, where a temp path /var/folders/... canonicalizes to
       // /private/var/folders/... -- a canonical-only comparison never matches the stored
       // absolute path, the record is missed, and an unchanged file is re-converted (FILE-015).
-      String sourceCanonical = sourceFile.getCanonicalPath();
+      String sourceCanonical = canonicalAsListed(sourceFile, dataDirectory);
       String sourceAbsolute = sourceFile.getAbsolutePath();
       LOGGER.debug("Looking for record with sourceFile: {} (absolute {})",
           sourceCanonical, sourceAbsolute);
@@ -1213,6 +1233,23 @@ public class ConversionMetadata {
       LOGGER.error("Failed to find conversion record by source file", e);
       return null;
     }
+  }
+
+  /**
+   * The canonical path of a file with the links inside its data directory left in place.
+   * Without a data directory, or for a file outside it, every link is resolved.
+   */
+  private static String canonicalAsListed(File sourceFile, File dataDirectory)
+      throws IOException {
+    if (dataDirectory != null) {
+      Path directory = dataDirectory.toPath().toAbsolutePath().normalize();
+      Path file = sourceFile.toPath().toAbsolutePath().normalize();
+      if (file.startsWith(directory)) {
+        return dataDirectory.getCanonicalFile().toPath()
+            .resolve(directory.relativize(file)).toString();
+      }
+    }
+    return sourceFile.getCanonicalPath();
   }
 
   /**

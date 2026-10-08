@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Run with: -Dcalcite.test.splunk=true
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkCIMAppContextTest {
 
   @BeforeAll
@@ -50,9 +51,9 @@ class SplunkCIMAppContextTest {
     System.out.println("\n=== Testing CIM Models with App Context ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     props.setProperty("app", "Splunk_SA_CIM");  // Specify the CIM app context
     props.setProperty("cimModel", "authentication");
@@ -94,9 +95,9 @@ class SplunkCIMAppContextTest {
     System.out.println("\n=== Testing Multiple CIM Models with App Context ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     props.setProperty("app", "Splunk_SA_CIM");
     props.setProperty("cimModels", "authentication,web,network_traffic");
@@ -131,9 +132,9 @@ class SplunkCIMAppContextTest {
     System.out.println("\n=== Testing WITHOUT App Context (should use default) ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     // Note: NOT setting app parameter
     props.setProperty("cimModel", "authentication");
@@ -159,7 +160,8 @@ class SplunkCIMAppContextTest {
     System.out.println("\n=== Testing URL Parameter Format ===");
 
     // Test with app parameter in URL
-    String url = "jdbc:splunk:url='https://kentest.xyz:8089';user='admin';password='admin123';"
+    String url = "jdbc:splunk:url='" + SplunkTestSettings.url() + "';user='" + SplunkTestSettings.user()
+        + "';password='" + SplunkTestSettings.password() + "';"
         + "disableSslValidation='true';app='Splunk_SA_CIM';cimModel='authentication'";
 
     System.out.println("URL: " + url);

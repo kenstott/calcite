@@ -72,6 +72,8 @@ public class SalesforceSort extends Sort implements SalesforceRel {
         case LAST:
           nullsDirection = " NULLS LAST";
           break;
+        case UNSPECIFIED:
+          break;
         }
 
         orderByItems.add(fieldName + " " + direction + nullsDirection);

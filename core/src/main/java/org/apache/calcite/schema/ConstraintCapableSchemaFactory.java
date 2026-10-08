@@ -41,7 +41,7 @@ import java.util.Map;
  * storage engines. They serve as hints for query optimization, JDBC metadata
  * support, and logical data model documentation.
  *
- * <h3>Example Model File Configuration</h3>
+ * <h2>Example Model File Configuration</h2>
  * <pre>
  * {
  *   "schemas": [{

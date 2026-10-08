@@ -23,7 +23,7 @@ import java.util.Map;
  *   <li>compression - Compression codec (snappy, zstd, lz4, gzip, none)</li>
  * </ul>
  *
- * <h3>YAML Configuration</h3>
+ * <h2>YAML Configuration</h2>
  * <pre>
  * output:
  *   pattern: "type=sales/year=STAR/region=STAR/"

@@ -52,8 +52,19 @@ class SplunkPgCatalogJoinTest {
         + "      \"type\": \"custom\",\n"
         + "      \"factory\": \"" + SplunkSchemaFactory.class.getName() + "\",\n"
         + "      \"operand\": {\n"
-        + "        \"url\": \"https://nonexistent.splunk.server:8089\",\n"
-        + "        \"user\": \"admin\",\n"
+        + "        \"url\": \"mock\",\n"
+        + "        \"tables\": [\n"
+        + "          {\n"
+        + "            \"name\": \"web\",\n"
+        + "            \"search\": \"search index=web\",\n"
+        + "            \"fields\": [\n"
+        + "              {\"name\": \"_time\", \"type\": \"TIMESTAMP\", \"nullable\": false},\n"
+        + "              {\"name\": \"status\", \"type\": \"INTEGER\"},\n"
+        + "              {\"name\": \"uri_path\", \"type\": \"VARCHAR\"}\n"
+        + "            ]\n"
+        + "          }\n"
+        + "        ],\n"
+        + "        \"username\": \"admin\",\n"
         + "        \"password\": \"changeme\",\n"
         + "        \"disableSslValidation\": true,\n"
         + "        \"searchCacheEnabled\": false\n"
@@ -63,6 +74,8 @@ class SplunkPgCatalogJoinTest {
         + "}";
 
     info.setProperty("model", model);
+    // The queries name schemas, tables and columns without quotes, in either case
+    info.setProperty("caseSensitive", "false");
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
       // First test that pg_catalog tables exist and have data

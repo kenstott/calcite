@@ -23,7 +23,7 @@ import java.util.Map;
  * generic ETL pipeline. Hooks are specified as fully qualified class names
  * that implement the appropriate interface.
  *
- * <h3>YAML Configuration Example</h3>
+ * <h2>YAML Configuration Example</h2>
  * <pre>{@code
  * tables:
  *   - name: economic_data

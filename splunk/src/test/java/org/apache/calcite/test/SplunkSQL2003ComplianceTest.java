@@ -17,6 +17,7 @@
 package org.apache.calcite.test;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -44,6 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * These tests verify that the adapter supports all major SQL:2003 features
  * through Calcite's execution engine.
  */
+@Tag("integration")
+@Tag("splunk-data")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @EnabledIfEnvironmentVariable(named = "CALCITE_TEST_SPLUNK", matches = "true")
 public class SplunkSQL2003ComplianceTest extends SplunkTestBase {

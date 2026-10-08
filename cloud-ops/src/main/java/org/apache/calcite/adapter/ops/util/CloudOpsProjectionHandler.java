@@ -34,7 +34,6 @@ public class CloudOpsProjectionHandler {
   private final boolean isSelectAll;
 
   // Field name mappings for different providers
-  private static final Map<String, String> AZURE_FIELD_MAPPING = createAzureFieldMapping();
   private static final Map<String, String> GCP_FIELD_MAPPING = createGcpFieldMapping();
 
   public CloudOpsProjectionHandler(RelDataType rowType, int @Nullable [] projections) {
@@ -189,38 +188,6 @@ public class CloudOpsProjectionHandler {
     double reductionPercent = (1.0 - (double) projectedFields / totalFields) * 100;
 
     return new ProjectionMetrics(totalFields, projectedFields, reductionPercent);
-  }
-
-  /**
-   * Azure field name mappings for KQL queries.
-   */
-  private static Map<String, String> createAzureFieldMapping() {
-    Map<String, String> mapping = new HashMap<>();
-    // Map Calcite column names to Azure KQL field names
-    mapping.put("cloud_provider", "'azure' as cloud_provider");
-    mapping.put("account_id", "SubscriptionId");
-    mapping.put("cluster_name", "ClusterName");
-    mapping.put("application", "Application");
-    mapping.put("region", "Location");
-    mapping.put("resource_group", "ResourceGroup");
-    mapping.put("resource_id", "ResourceId");
-    mapping.put("kubernetes_version", "ClusterVersion");
-    mapping.put("node_count", "NodePoolCount"); // Approximation for Azure
-    mapping.put("node_pools", "NodePoolCount");
-    mapping.put("rbac_enabled", "RBACEnabled");
-    mapping.put("private_cluster", "PrivateCluster");
-    mapping.put("public_endpoint", "case(PrivateCluster == false, true, false)");
-    mapping.put("authorized_ip_ranges", "AuthorizedIPRanges");
-    mapping.put("network_policy_provider", "NetworkPolicy");
-    mapping.put("pod_security_policy_enabled", "false"); // Not supported in Azure
-    mapping.put("encryption_at_rest_enabled", "case(DiskEncryption != 'Platform Managed Key', true, false)");
-    mapping.put("encryption_key_type", "DiskEncryption");
-    mapping.put("logging_enabled", "true"); // Default in AKS
-    mapping.put("monitoring_enabled", "true"); // Default in AKS
-    mapping.put("created_date", "null"); // Would need additional query
-    mapping.put("modified_date", "null"); // Would need additional query
-    mapping.put("tags", "null"); // Would need tags extraction
-    return mapping;
   }
 
   /**

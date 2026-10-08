@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * and are correctly handled by Calcite's enumerable implementation.
  */
 @Tag("integration")
+@Tag("splunk-data")
 @EnabledIfEnvironmentVariable(named = "CALCITE_TEST_SPLUNK", matches = "true")
 public class SplunkNonPushableOperationsTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(SplunkNonPushableOperationsTest.class);
@@ -58,21 +59,9 @@ public class SplunkNonPushableOperationsTest {
       throw new RuntimeException("Failed to load Splunk driver", e);
     }
 
-    // Get connection details from environment or use defaults
-    SPLUNK_URL = System.getenv("SPLUNK_URL");
-    if (SPLUNK_URL == null) {
-      SPLUNK_URL = "https://kentest.xyz:8089";
-    }
-
-    SPLUNK_USER = System.getenv("SPLUNK_USER");
-    if (SPLUNK_USER == null) {
-      SPLUNK_USER = "admin";
-    }
-
-    SPLUNK_PASSWORD = System.getenv("SPLUNK_PASSWORD");
-    if (SPLUNK_PASSWORD == null) {
-      SPLUNK_PASSWORD = "changeme";
-    }
+    SPLUNK_URL = SplunkTestSettings.url();
+    SPLUNK_USER = SplunkTestSettings.user();
+    SPLUNK_PASSWORD = SplunkTestSettings.password();
 
     LOGGER.info("Testing with Splunk instance at: {}", SPLUNK_URL);
   }

@@ -18,7 +18,7 @@ package org.apache.calcite.adapter.file.etl;
  * response formats, handle errors embedded in successful responses, or
  * extract data from nested structures.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * public class BeaResponseTransformer implements ResponseTransformer {
  *     public String transform(String response, RequestContext context) {
@@ -32,13 +32,13 @@ package org.apache.calcite.adapter.file.etl;
  * }
  * }</pre>
  *
- * <h3>Schema Configuration</h3>
+ * <h2>Schema Configuration</h2>
  * <pre>{@code
  * hooks:
  *   responseTransformer: "org.apache.calcite.adapter.govdata.BeaResponseTransformer"
  * }</pre>
  *
- * <h3>Discovery</h3>
+ * <h2>Discovery</h2>
  * <p>ResponseTransformer implementations can be discovered via:
  * <ul>
  *   <li>Schema reference: Fully qualified class name in YAML</li>
