@@ -200,7 +200,8 @@ public final class HtmlCrawlStage {
       return null;
     }
     Map<String, List<String>> files = new LinkedHashMap<>();
-    java.util.Iterator<Map.Entry<String, JsonNode>> sources = manifest.get("sources").fields();
+    java.util.Iterator<Map.Entry<String, JsonNode>> sources =
+        manifest.get("sources").properties().iterator();
     while (sources.hasNext()) {
       Map.Entry<String, JsonNode> source = sources.next();
       List<String> names = new ArrayList<>();
@@ -310,7 +311,7 @@ public final class HtmlCrawlStage {
       Element caption = element.selectFirst("caption");
       String title = caption != null && !caption.text().trim().isEmpty()
           ? caption.text().trim() : heading;
-      String table = title == null || slug(title).isEmpty() ? "table_" + (++unnamed) : slug(title);
+      String table = title == null || slug(title).isEmpty() ? "table_" + ++unnamed : slug(title);
       String name = unique(page + "__" + table + ".json", names);
       ArrayNode json = MAPPER.createArrayNode();
       for (Map<String, String> row : rows) {
