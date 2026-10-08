@@ -40,6 +40,24 @@ public class CloudOpsPaginationHandler {
   private static final int AWS_MAX_RESULTS = 100;
   private static final int GCP_MAX_RESULTS = 500;
 
+  private CloudOpsPaginationHandler(long rows) {
+    this.offset = null;
+    this.fetch = null;
+    this.offsetValue = 0L;
+    this.limitValue = rows;
+    this.hasPagination = true;
+  }
+
+  /** A handler that asks for no more than the first {@code rows} rows, in any order. */
+  public static CloudOpsPaginationHandler firstRows(long rows) {
+    return new CloudOpsPaginationHandler(rows);
+  }
+
+  /** A handler that asks for every row. */
+  public static CloudOpsPaginationHandler none() {
+    return new CloudOpsPaginationHandler(null, null);
+  }
+
   public CloudOpsPaginationHandler(@Nullable RexNode offset, @Nullable RexNode fetch) {
     this.offset = offset;
     this.fetch = fetch;
@@ -88,38 +106,22 @@ public class CloudOpsPaginationHandler {
   }
 
   /**
-   * Build Azure KQL TOP/SKIP clause for pagination.
-   * Azure Resource Graph supports full pagination via KQL.
+   * Builds the Azure Resource Graph clause that caps the rows returned, or null if no cap
+   * applies.
+   *
+   * <p>Resource Graph has no {@code skip} operator and {@code top} needs a sort key, so the
+   * cap is {@code take} of the offset plus the limit; whoever asked for the offset drops
+   * the leading rows afterwards.
    */
   public @Nullable String buildAzureKqlPaginationClause() {
     if (!hasPagination) {
       return null;
     }
-
-    StringBuilder kqlPagination = new StringBuilder();
-
-    // Add SKIP clause for offset
-    if (offsetValue > 0) {
-      kqlPagination.append("| skip ").append(offsetValue);
+    final long rows = offsetValue + limitValue;
+    if (rows >= AZURE_MAX_RESULTS) {
+      return null; // a full page anyway
     }
-
-    // Add TOP clause for limit
-    if (limitValue < DEFAULT_MAX_RESULTS) {
-      if (kqlPagination.length() > 0) {
-        kqlPagination.append(" ");
-      }
-      kqlPagination.append("| top ").append(Math.min(limitValue, AZURE_MAX_RESULTS));
-    }
-
-    String result = kqlPagination.toString();
-
-    if (logger.isDebugEnabled() && !result.isEmpty()) {
-      double reductionPercent = ((double) limitValue / DEFAULT_MAX_RESULTS) * 100;
-      logger.debug("Azure KQL pagination: {} -> {:.1f}% data transfer reduction",
-                  result, 100.0 - reductionPercent);
-    }
-
-    return result.isEmpty() ? null : result;
+    return "| take " + rows;
   }
 
   /**
