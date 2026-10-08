@@ -34,6 +34,7 @@ import java.util.Properties;
  * Test to find and display the actual web data rows.
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkWebDataTest {
   private static String SPLUNK_URL = null;
   private static String SPLUNK_USER = null;

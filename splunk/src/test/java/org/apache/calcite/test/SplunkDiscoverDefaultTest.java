@@ -49,9 +49,9 @@ class SplunkDiscoverDefaultTest {
     System.out.println("\n=== Testing Dynamic Discovery with DEFAULT App Context ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     // NO app parameter - use default
 
@@ -90,9 +90,9 @@ class SplunkDiscoverDefaultTest {
     System.out.println("\n=== Testing Dynamic Discovery with 'search' App ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     props.setProperty("app", "search"); // Try search app
 
@@ -128,9 +128,9 @@ class SplunkDiscoverDefaultTest {
     };
 
     Properties baseProps = new Properties();
-    baseProps.setProperty("url", "https://kentest.xyz:8089");
+    baseProps.setProperty("url", SplunkTestSettings.url());
     baseProps.setProperty("user", "admin");
-    baseProps.setProperty("password", "admin123");
+    baseProps.setProperty("password", SplunkTestSettings.password());
     baseProps.setProperty("disableSslValidation", "true");
 
     for (String app : commonApps) {

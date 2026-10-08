@@ -35,9 +35,9 @@ import java.util.Base64;
  */
 @Tag("integration")
 public class SplunkDataModelRestApiTest {
-  private static final String SPLUNK_URL = "https://kentest.xyz:8089";
+  private static final String SPLUNK_URL = SplunkTestSettings.url();
   private static final String SPLUNK_USER = "admin";
-  private static final String SPLUNK_PASSWORD = "admin123";
+  private static final String SPLUNK_PASSWORD = SplunkTestSettings.password();
 
   @Test void testDataModelRestApi() throws Exception {
     System.out.println("=== Native Splunk Data Model REST API Discovery ===\n");
