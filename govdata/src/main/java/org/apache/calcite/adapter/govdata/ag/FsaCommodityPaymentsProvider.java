@@ -528,7 +528,7 @@ public class FsaCommodityPaymentsProvider implements CachingDataProvider {
     return new String(getBytes(url, userAgent), StandardCharsets.UTF_8);
   }
 
-  /** Reads a (small) HTML page fully into memory. xlsx files use {@link #downloadToTemp} instead. */
+  /** Reads a (small) HTML page fully into memory. xlsx files go to a temp file instead. */
   private byte[] getBytes(String url, String userAgent) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestProperty("User-Agent", userAgent);

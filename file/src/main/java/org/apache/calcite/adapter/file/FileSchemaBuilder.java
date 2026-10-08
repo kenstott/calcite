@@ -55,7 +55,6 @@ public class FileSchemaBuilder {
   private SchemaLifecycleProcessor.Builder etlBuilder;
   private java.util.Set<String> excludedTables = new java.util.HashSet<>();
   private boolean autoDownload = false;
-  private boolean ignoreReleaseWindow = false;
   private boolean etlExecuted = false;
   private StorageProvider storageProvider;
   private StorageProvider cacheStorageProvider;
@@ -237,7 +236,6 @@ public class FileSchemaBuilder {
    * @param enabled true to bypass release-window gating, false (default) to enforce it
    */
   public FileSchemaBuilder ignoreReleaseWindow(boolean enabled) {
-    this.ignoreReleaseWindow = enabled;
     etlBuilder.ignoreReleaseWindow(enabled);
     return this;
   }

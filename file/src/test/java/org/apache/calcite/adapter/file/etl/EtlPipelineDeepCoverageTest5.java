@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -59,6 +60,10 @@ import static org.mockito.Mockito.when;
  */
 @Tag("unit")
 @Execution(ExecutionMode.SAME_THREAD)
+// Sets the JVM-wide calcite.etl.threads and calcite.etl.maxConsecutiveFailures properties,
+// which every EtlPipeline reads: a pipeline of another test running at the same moment
+// would take the parallel path, or abort at this test's threshold
+@Isolated
 public class EtlPipelineDeepCoverageTest5 {
 
   @TempDir

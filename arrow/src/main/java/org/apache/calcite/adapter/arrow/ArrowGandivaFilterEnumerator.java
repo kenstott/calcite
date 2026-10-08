@@ -39,7 +39,6 @@ import java.io.IOException;
  * {@link ArrowJavaFilterEnumerator} for the plain-Java fallback used otherwise.
  */
 class ArrowGandivaFilterEnumerator extends AbstractArrowEnumerator {
-  private final ArrowFileReader arrowFileReader;
   private final BufferAllocator allocator;
   private final Filter filter;
   private @Nullable ArrowBuf buf;
@@ -49,7 +48,6 @@ class ArrowGandivaFilterEnumerator extends AbstractArrowEnumerator {
   ArrowGandivaFilterEnumerator(ArrowFileReader arrowFileReader, ImmutableIntList fields,
       Object filter) {
     super(arrowFileReader, fields);
-    this.arrowFileReader = arrowFileReader;
     this.allocator = new RootAllocator(Long.MAX_VALUE);
     this.filter = (Filter) filter;
   }

@@ -318,6 +318,17 @@ public class FileRowConverter {
       return parseDate(string, TimeZone.getDefault());
     }
 
+    /**
+     * A DATE as the number of days since 1970-01-01, the form Calcite holds one in.
+     *
+     * <p>Not a {@link java.sql.Date}: Avatica's {@code getDate} moves such an object by the
+     * JVM's zone offset, which east of Greenwich returns the day before, while a day number
+     * has no zone to be moved by. TIME and TIMESTAMP are returned as numbers for the same reason.
+     */
+    private Integer epochDay(String isoDate) {
+      return (int) java.time.LocalDate.parse(isoDate).toEpochDay();
+    }
+
     private java.util.Date parseDate(String string, TimeZone timeZone) {
       Parser parser = new Parser(timeZone);
       List<DateGroup> groups = parser.parse(string);
@@ -402,7 +413,7 @@ public class FileRowConverter {
         try {
           // Try ISO format first (YYYY-MM-DD)
           if (string.matches("\\d{4}-\\d{2}-\\d{2}")) {
-            return java.sql.Date.valueOf(string);
+            return epochDay(string);
           }
           // Fall back to Natty parser
           // Parse with default timezone
@@ -412,7 +423,7 @@ public class FileRowConverter {
           java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
           sdf.setTimeZone(TimeZone.getDefault());
           String dateStr = sdf.format(parsed);
-          return java.sql.Date.valueOf(dateStr);
+          return epochDay(dateStr);
         // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
         } catch (Exception e) {
           LOGGER.debug("Cell '{}' is not a valid DATE, returning NULL: {}", string, e.getMessage());

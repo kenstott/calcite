@@ -46,8 +46,8 @@ class SnapshotLookupTest {
   /** A listed name the delegate then cannot produce (a view whose on-demand CREATE failed)
    * must drop out of the frozen name set, or every later listing keeps naming it. */
   @Test void testNameThatFailsToResolveIsNoLongerListed() {
-    Lookup<String> lookup = new SnapshotLookup<>(
-        new FakeLookup("a", "1", "b", "2") {
+    Lookup<String> lookup =
+        new SnapshotLookup<>(new FakeLookup("a", "1", "b", "2") {
           @Override public @Nullable String get(String name) {
             return "b".equals(name) ? null : super.get(name);
           }

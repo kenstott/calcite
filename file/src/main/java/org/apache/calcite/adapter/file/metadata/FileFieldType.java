@@ -78,6 +78,12 @@ public enum FileFieldType {
   }
 
   public RelDataType toType(JavaTypeFactory typeFactory) {
+    if (this == DATE) {
+      // FileRowConverter returns a DATE as its day number, which is the SQL type's own form;
+      // as a java.sql.Date column Avatica's getDate would move it by the JVM's zone offset
+      return typeFactory.createTypeWithNullability(
+          typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.DATE), true);
+    }
     return typeFactory.createJavaType(clazz);
   }
 

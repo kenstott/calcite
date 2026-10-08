@@ -53,6 +53,21 @@ public class GraphQLExecutor implements AutoCloseable {
   private final OkHttpClient client;
   private static final Object CACHE_LOCK = new Object();
 
+  /** Creates the singleton cache module on first use. */
+  private static void initCacheModule(GraphQLCalciteSchema schema) {
+    if (cacheModule == null) {
+      synchronized (CACHE_LOCK) {
+        if (cacheModule == null) {
+          cacheModule = new GraphQLCacheModule.Builder()
+              .withOperandConfig(schema.getCacheConfig())  // Operand config takes precedence
+              .withEnvironmentConfig()                     // Environment variables as fallback
+              .build();
+          LOGGER.info("Initialized singleton cache module");
+        }
+      }
+    }
+  }
+
   /**
    * Creates a new GraphQLExecutor instance.
    *
@@ -66,18 +81,7 @@ public class GraphQLExecutor implements AutoCloseable {
     this.schema = schema;
     Map<String, GraphQLOutputType> fieldTypes = extractFieldTypes();
 
-    // Initialize singleton cache if not already created
-    if (cacheModule == null) {
-      synchronized (CACHE_LOCK) {
-        if (cacheModule == null) {
-          cacheModule = new GraphQLCacheModule.Builder()
-              .withOperandConfig(schema.getCacheConfig())  // Operand config takes precedence
-              .withEnvironmentConfig()                     // Environment variables as fallback
-              .build();
-          LOGGER.info("Initialized singleton cache module");
-        }
-      }
-    }
+    initCacheModule(schema);
 
     // Initialize ObjectMapper with JsonFlatteningDeserializer
     this.objectMapper = new ObjectMapper();

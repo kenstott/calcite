@@ -20,6 +20,7 @@ import org.apache.calcite.linq4j.function.Predicate1;
 import org.apache.calcite.util.LazyReference;
 import org.apache.calcite.util.NameMap;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
@@ -50,7 +51,7 @@ public class SnapshotLookup<T> implements Lookup<T> {
 
   private final Lookup<T> delegate;
   private final LazyReference<NameMap<String>> namesRef = new LazyReference<>();
-  private final ConcurrentMap<String, T> resolved = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, @NonNull T> resolved = new ConcurrentHashMap<>();
   private final Set<String> unresolvable = ConcurrentHashMap.newKeySet();
   private boolean enabled = true;
 

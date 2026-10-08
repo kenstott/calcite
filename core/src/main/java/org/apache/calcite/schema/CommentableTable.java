@@ -23,8 +23,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * <p>This interface allows tables to provide business definitions and comments
  * that are exposed through JDBC metadata operations like
- * {@link java.sql.DatabaseMetaData#getTables()} and
- * {@link java.sql.DatabaseMetaData#getColumns()}.
+ * {@code java.sql.DatabaseMetaData#getTables()} and
+ * {@code java.sql.DatabaseMetaData#getColumns()}.
  *
  * <p>Table comments appear in the REMARKS column of getTables() results,
  * while column comments appear in the REMARKS column of getColumns() results.
@@ -53,7 +53,7 @@ public interface CommentableTable extends Table {
    * Returns a comment describing this table's business purpose and contents.
    *
    * <p>This comment is exposed through JDBC metadata as the REMARKS column
-   * in {@link java.sql.DatabaseMetaData#getTables()} results.
+   * in {@code java.sql.DatabaseMetaData#getTables()} results.
    *
    * @return table comment, or null if no comment is available
    */
@@ -63,7 +63,7 @@ public interface CommentableTable extends Table {
    * Returns a comment describing the specified column's business meaning.
    *
    * <p>This comment is exposed through JDBC metadata as the REMARKS column
-   * in {@link java.sql.DatabaseMetaData#getColumns()} results.
+   * in {@code java.sql.DatabaseMetaData#getColumns()} results.
    *
    * @param columnName name of the column (case-insensitive)
    * @return column comment, or null if no comment is available for this column

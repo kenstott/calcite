@@ -93,3 +93,28 @@ jdbc:splunk:url=https://localhost:8089;token=xxx;datamodelFilter=Authentication,
 # Load models matching a pattern
 jdbc:splunk:url=https://localhost:8089;token=xxx;datamodelFilter=auth*
 ```
+
+## Running the tests
+
+`./gradlew :splunk:test` runs the tests that need no server.
+
+The tests tagged `integration` talk to a Splunk server. Copy
+`local-properties.settings.sample` to `local-properties.settings` (git ignores it) and set the
+server's management URL, user and password, or set `SPLUNK_URL`, `SPLUNK_USER` and
+`SPLUNK_PASSWORD`. Then:
+
+```bash
+CALCITE_TEST_SPLUNK=true ./gradlew :splunk:test
+```
+
+`-Dcalcite.test.splunk=true` and `-PincludeTags=integration` do the same. A live test that is
+asked to run without a configured server fails; it is not skipped.
+
+Some of the live tests are also tagged `splunk-data`. They query the CIM data models (`web`,
+`authentication` and the rest, from the Splunk Common Information Model add-on) and expect
+indexed events, so they pass only against a server that has both. CI starts an empty
+`splunk/splunk` container and runs the others:
+
+```bash
+./gradlew :splunk:test -PincludeTags=integration -PexcludeTags=splunk-data
+```

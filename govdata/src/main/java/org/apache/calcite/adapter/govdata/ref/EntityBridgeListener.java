@@ -487,7 +487,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
     String runId = Instant.now().toString();
     LOGGER.info("EntityBridgeListener: starting entity-resolution build, runId={}, read={}, "
         + "write={}", runId, readDir, writeDir);
-    try (Connection conn = openDuckDb(pgConn)) {
+    try (Connection conn = openDuckDb()) {
       try {
         buildBridgesInternal(conn, readDir, writeDir, runId);
       } catch (Exception e) {
@@ -1234,7 +1234,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
   }
 
   /** Opens DuckDB for standalone orchestrator (no TableContext/StorageProvider). */
-  private static Connection openDuckDb(Connection pgConn) throws SQLException {
+  private static Connection openDuckDb() throws SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=2");
@@ -1258,39 +1258,6 @@ public class EntityBridgeListener implements TableLifecycleListener {
       LOGGER.warn("DuckDB Iceberg extension unavailable: {}", e.getMessage());
     }
     configureS3FromEnv(conn);
-    return conn;
-  }
-
-  private Connection openDuckDb(TableContext context) throws SQLException {
-    Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-    try (Statement stmt = conn.createStatement()) {
-      stmt.execute("SET threads=2");
-      stmt.execute("SET preserve_insertion_order=false");
-      stmt.execute("SET memory_limit='2GB'");
-      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/entity-bridge-duckdb";
-      stmt.execute("SET temp_directory='" + tempDir + "'");
-      stmt.execute("PRAGMA max_temp_directory_size='30GB'");
-      try {
-        stmt.execute("INSTALL parquet");
-        stmt.execute("LOAD parquet");
-      } catch (SQLException e) {
-        LOGGER.debug("Parquet extension already loaded or built-in");
-      }
-    }
-    try (Statement stmt = conn.createStatement()) {
-      stmt.execute("INSTALL iceberg");
-      stmt.execute("LOAD iceberg");
-      stmt.execute("SET unsafe_enable_version_guessing = true");
-    } catch (SQLException e) {
-      LOGGER.warn("DuckDB Iceberg extension unavailable: {}", e.getMessage());
-    }
-    Map<String, String> s3Config = context.getStorageProvider() != null
-        ? context.getStorageProvider().getS3Config() : null;
-    if (s3Config != null && !s3Config.isEmpty()) {
-      try (Statement stmt = conn.createStatement()) {
-        configureS3(stmt, s3Config);
-      }
-    }
     return conn;
   }
 
@@ -1560,54 +1527,6 @@ public class EntityBridgeListener implements TableLifecycleListener {
     }
   }
 
-  private static void writeTable(TableContext context, String tableName,
-      List<Map<String, Object>> rows) throws IOException {
-    EtlPipelineConfig tableConfig = tableConfigOf(context, tableName);
-    MaterializeConfig matConfig = tableConfig.getMaterialize();
-    String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
-        + "/" + context.getSchemaName();
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        matConfig, context.getStorageProvider(), schemaMaterializeDir,
-        context.getIncrementalTracker());
-    writer.initialize(matConfig);
-    writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
-    writer.commit();
-    writer.close();
-    LOGGER.info("EntityBridgeListener: wrote {} rows to ref.{}", rows.size(), tableName);
-  }
-
-  /** Streaming counterpart of {@link #writeTable} — see {@link CloseableRowIterator}. */
-  private static long writeTableStreaming(TableContext context, String tableName,
-      CloseableRowIterator rows) throws IOException {
-    EtlPipelineConfig tableConfig = tableConfigOf(context, tableName);
-    MaterializeConfig matConfig = tableConfig.getMaterialize();
-    String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
-        + "/" + context.getSchemaName();
-    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        matConfig, context.getStorageProvider(), schemaMaterializeDir,
-        context.getIncrementalTracker());
-    writer.initialize(matConfig);
-    try {
-      writer.writeBatch(rows, Collections.<String, String>emptyMap());
-    } finally {
-      rows.close();
-    }
-    writer.commit();
-    writer.close();
-    LOGGER.info("EntityBridgeListener: wrote {} rows to ref.{}", rows.count(), tableName);
-    return rows.count();
-  }
-
-  private static EtlPipelineConfig tableConfigOf(TableContext context, String tableName) {
-    for (EtlPipelineConfig cfg : context.getSchemaContext().getTables()) {
-      if (tableName.equals(cfg.getName())) {
-        return cfg;
-      }
-    }
-    throw new IllegalStateException(
-        "EntityBridgeListener: table config not found for " + tableName);
-  }
-
   // ========================================================================
   // Small SQL/JDBC helpers
   // ========================================================================
@@ -1691,7 +1610,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
     return rows;
   }
 
-  /** Common contract for {@link #writeTableStreaming}'s two row sources — a raw ResultSet
+  /** Common contract for {@code writeTableStreaming}'s two row sources — a raw ResultSet
    *  stream and a Java-side reduce over one (see {@link ResultSetIterator}, {@link
    *  PivotOrgIterator}). No checked exceptions on close(): neither implementation throws one. */
   private interface CloseableRowIterator extends Iterator<Map<String, Object>>, AutoCloseable {
@@ -1705,7 +1624,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
    * {@code entity_org_bridge}/{@code canonical_org_entity}: {@code all_org_mentions} now totals
    * on the order of 9-10M rows across the full org-type registry (dominated by
    * transport.fmcsa_carriers' ~4.1M unresolved rows alone) -- confirmed live, materializing that
-   * into one Java List crashed the JVM natively under memory pressure. {@link #writeTable}'s
+   * into one Java List crashed the JVM natively under memory pressure. {@code writeTable}'s
    * writer already accepts a plain {@code Iterator}, so streaming straight from the ResultSet
    * into it, one row at a time, keeps peak heap constant regardless of how large the registry
    * grows. The queries that use this also carry an ORDER BY -- see their own comments for why.

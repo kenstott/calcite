@@ -913,16 +913,26 @@ public class StooqDownloader {
      * Call this BEFORE making each request.
      */
     synchronized void waitForRateLimit() throws InterruptedException {
-      long now = System.currentTimeMillis();
+      long now = currentTimeMillis();
       long timeSinceLastRequest = now - lastRequestTime;
       long waitTime = currentBackoffMs - timeSinceLastRequest;
 
       if (waitTime > 0) {
         LOGGER.debug("Rate limiter: waiting {}ms before next request", waitTime);
-        Thread.sleep(waitTime);
+        sleep(waitTime);
       }
 
-      lastRequestTime = System.currentTimeMillis();
+      lastRequestTime = currentTimeMillis();
+    }
+
+    /** The clock the limiter reads; a test supplies its own. */
+    long currentTimeMillis() {
+      return System.currentTimeMillis();
+    }
+
+    /** Waits out the rest of the rate-limit window; a test records the wait instead. */
+    void sleep(long millis) throws InterruptedException {
+      Thread.sleep(millis);
     }
 
     /**

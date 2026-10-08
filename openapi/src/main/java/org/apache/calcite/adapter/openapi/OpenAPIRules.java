@@ -282,27 +282,27 @@ class OpenAPIFilter extends org.apache.calcite.rel.SingleRel implements OpenAPIR
  */
 class OpenAPIProject extends org.apache.calcite.rel.SingleRel implements OpenAPIRel {
   private final java.util.List<RexNode> projects;
-  private final org.apache.calcite.rel.type.RelDataType rowType;
+  private final org.apache.calcite.rel.type.RelDataType projectRowType;
 
   protected OpenAPIProject(org.apache.calcite.plan.RelOptCluster cluster,
       RelTraitSet traitSet, RelNode input, java.util.List<RexNode> projects,
       org.apache.calcite.rel.type.RelDataType rowType) {
     super(cluster, traitSet, input);
     this.projects = projects;
-    this.rowType = rowType;
+    this.projectRowType = rowType;
   }
 
   @Override public void implement(Implementor implementor) {
     implementor.visitChild(0, getInput());
-    OpenAPIRules.ExpressionTranslator.translateProjection(projects, implementor, rowType);
+    OpenAPIRules.ExpressionTranslator.translateProjection(projects, implementor, projectRowType);
   }
 
   @Override public RelNode copy(RelTraitSet traitSet, java.util.List<RelNode> inputs) {
-    return new OpenAPIProject(getCluster(), traitSet, sole(inputs), projects, rowType);
+    return new OpenAPIProject(getCluster(), traitSet, sole(inputs), projects, projectRowType);
   }
 
   @Override public org.apache.calcite.rel.type.RelDataType deriveRowType() {
-    return rowType;
+    return projectRowType;
   }
 }
 

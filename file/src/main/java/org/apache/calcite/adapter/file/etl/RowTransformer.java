@@ -44,7 +44,7 @@ import java.util.Map;
  *     expression: "SUBSTR(period, 1, 2)"
  * }</pre>
  *
- * <h3>Usage Example (one-to-many unpivot)</h3>
+ * <h2>Usage Example (one-to-many unpivot)</h2>
  * <pre>{@code
  * public class MonthUnpivotTransformer implements RowTransformer {
  *     public List<Map<String, Object>> transform(Map<String, Object> row, RowContext context) {
@@ -61,7 +61,7 @@ import java.util.Map;
  * }
  * }</pre>
  *
- * <h3>Schema Configuration</h3>
+ * <h2>Schema Configuration</h2>
  * <pre>{@code
  * hooks:
  *   rowTransformers:

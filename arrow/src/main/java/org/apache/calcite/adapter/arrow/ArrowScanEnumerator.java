@@ -40,11 +40,8 @@ import java.io.IOException;
  * Gandiva translator accepts (it rejects disjunctions outright).
  */
 class ArrowScanEnumerator extends AbstractArrowEnumerator {
-  private final ArrowFileReader arrowFileReader;
-
   ArrowScanEnumerator(ArrowFileReader arrowFileReader, ImmutableIntList fields) {
     super(arrowFileReader, fields);
-    this.arrowFileReader = arrowFileReader;
   }
 
   @Override void evaluateOperator(ArrowRecordBatch arrowRecordBatch) {

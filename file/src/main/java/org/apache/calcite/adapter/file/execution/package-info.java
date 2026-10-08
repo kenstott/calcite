@@ -29,7 +29,7 @@
  * </ul>
  *
  * <h3>Parquet Execution Engine</h3>
- * <p>{@link org.apache.calcite.adapter.file.execution.ParquetExecutionEngine} provides:</p>
+ * <p>{@code org.apache.calcite.adapter.file.execution.ParquetExecutionEngine} provides:</p>
  * <ul>
  *   <li>Columnar data processing</li>
  *   <li>Efficient compression</li>
@@ -39,7 +39,7 @@
  * </ul>
  *
  * <h3>Vectorized Arrow Execution</h3>
- * <p>{@link org.apache.calcite.adapter.file.execution.VectorizedArrowExecutionEngine} features:</p>
+ * <p>{@code org.apache.calcite.adapter.file.execution.VectorizedArrowExecutionEngine} features:</p>
  * <ul>
  *   <li>Apache Arrow-based columnar processing</li>
  *   <li>SIMD optimizations</li>
@@ -59,8 +59,8 @@
  *
  * <h2>File Enumerators</h2>
  * <ul>
- *   <li>{@link org.apache.calcite.adapter.file.execution.ParquetFileEnumerator} - Enumerator for Parquet-based processing</li>
- *   <li>{@link org.apache.calcite.adapter.file.execution.VectorizedFileEnumerator} - Universal vectorized enumerator</li>
+ *   <li>{@code org.apache.calcite.adapter.file.execution.ParquetFileEnumerator} - Enumerator for Parquet-based processing</li>
+ *   <li>{@code org.apache.calcite.adapter.file.execution.VectorizedFileEnumerator} - Universal vectorized enumerator</li>
  * </ul>
  *
  * <h2>Usage Example</h2>
@@ -80,6 +80,7 @@
  *
  * <h2>Performance Considerations</h2>
  * <table>
+ *   <caption>Execution engines compared</caption>
  *   <tr>
  *     <th>Engine</th>
  *     <th>Best For</th>

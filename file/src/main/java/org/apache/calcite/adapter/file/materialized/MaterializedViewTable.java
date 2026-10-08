@@ -162,7 +162,9 @@ public class MaterializedViewTable extends AbstractTable implements Translatable
 
             @SuppressWarnings("deprecation")
             ParquetWriter<GenericRecord> writer =
-                AvroParquetWriter.<GenericRecord>builder(hadoopPath)
+                AvroParquetWriter.<GenericRecord>builder(
+                    org.apache.calcite.adapter.file.format.parquet.ParquetLocalFiles
+                        .outputFile(hadoopPath, conf))
                 .withConf(conf)
                 .withSchema(avroSchema)
                 .withCompressionCodec(CompressionCodecName.SNAPPY)

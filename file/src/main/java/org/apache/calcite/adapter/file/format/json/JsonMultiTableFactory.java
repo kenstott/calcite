@@ -213,7 +213,7 @@ public class JsonMultiTableFactory {
     // Only explore children if we haven't exceeded max depth
     if (depth < maxDepth && node.isObject()) {
       // Explore object fields
-      Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+      Iterator<Map.Entry<String, JsonNode>> fields = node.properties().iterator();
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> field = fields.next();
         String fieldPath = currentPath + "." + field.getKey();

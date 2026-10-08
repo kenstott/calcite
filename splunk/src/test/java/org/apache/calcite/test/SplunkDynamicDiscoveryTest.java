@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Run with: -Dcalcite.test.splunk=true
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkDynamicDiscoveryTest {
 
   @BeforeAll
@@ -50,9 +51,9 @@ class SplunkDynamicDiscoveryTest {
     System.out.println("\n=== Testing Dynamic Discovery ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     props.setProperty("app", "Splunk_SA_CIM");
     props.setProperty("datamodelFilter", "/^(Authentication|Web)$/");
@@ -110,9 +111,9 @@ class SplunkDynamicDiscoveryTest {
     System.out.println("\n=== Testing Dynamic Discovery with Filter ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
     props.setProperty("app", "Splunk_SA_CIM");
     props.setProperty("datamodelFilter", "/^(Authentication|Web|Email|Endpoint)$/");

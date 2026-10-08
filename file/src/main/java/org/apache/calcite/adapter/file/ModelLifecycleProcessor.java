@@ -43,7 +43,7 @@ import java.util.function.Consumer;
  * <p>These are created once and shared across all schemas to ensure
  * thread-safe coordination via shared locks.
  *
- * <h3>Lifecycle</h3>
+ * <h2>Lifecycle</h2>
  * <pre>
  * ┌─────────────────────────────────────────────────────────────────┐
  * │  ModelLifecycleProcessor.process()                              │
@@ -64,7 +64,7 @@ import java.util.function.Consumer;
  * └─────────────────────────────────────────────────────────────────┘
  * </pre>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * SchemaPlus rootSchema = ModelLifecycleProcessor.builder()
  *     .sourceStorage(StorageProviderFactory.createFromUrl("s3://bucket/raw/"))

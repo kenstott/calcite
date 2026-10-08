@@ -22,7 +22,7 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
  *   <li>{@code PARQUET} - Creates {@link ParquetMaterializationWriter}</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * StorageProvider storage = StorageProviderFactory.create("/data");
  * MaterializeConfig config = MaterializeConfig.builder()

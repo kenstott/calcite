@@ -38,7 +38,7 @@ import java.util.zip.GZIPInputStream;
  * <p>DocumentSource handles downloading and processing document files (XBRL, HTML, XML)
  * from APIs like SEC EDGAR, where multiple tables are extracted from each document.
  *
- * <h3>Document Source Flow</h3>
+ * <h2>Document Source Flow</h2>
  * <pre>
  * 1. Fetch metadata from metadataUrl (e.g., SEC submissions.json)
  * 2. Parse metadata to get list of documents
@@ -49,11 +49,11 @@ import java.util.zip.GZIPInputStream;
  * 4. Write extracted data to Parquet/Iceberg
  * </pre>
  *
- * <h3>Rate Limiting</h3>
+ * <h2>Rate Limiting</h2>
  * <p>Respects rate limits via configurable delay between requests.
  * SEC EDGAR allows 10 requests/second; we default to 8 for safety margin.
  *
- * <h3>Caching</h3>
+ * <h2>Caching</h2>
  * <p>Documents are cached locally to avoid re-downloading. Uses ETag-based
  * validation for metadata to detect changes.
  *

@@ -16,13 +16,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Collections;
@@ -53,7 +54,6 @@ public class DirectAuthProvider implements SharePointAuthProvider {
   private final @Nullable String clientId;
   private final @Nullable String clientSecret;
   private final @Nullable String certificatePath;
-  private final @Nullable String certificatePassword;
   private final @Nullable String staticToken;
   private final @Nullable String tokenCommand;
   private final @Nullable String tokenEnv;
@@ -85,7 +85,6 @@ public class DirectAuthProvider implements SharePointAuthProvider {
     this.clientId = (String) config.get("clientId");
     this.clientSecret = (String) config.get("clientSecret");
     this.certificatePath = (String) config.get("certificatePath");
-    this.certificatePassword = (String) config.get("certificatePassword");
     this.staticToken = (String) config.get("accessToken");
 
     // Phase 2: External token sources
@@ -231,7 +230,8 @@ public class DirectAuthProvider implements SharePointAuthProvider {
       throw new IOException("Token file not found: " + tokenFile);
     }
 
-    try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(new FileInputStream(file), Charset.defaultCharset()))) {
       this.accessToken = reader.readLine();
       this.tokenExpiry = Instant.now().plusSeconds(3600); // Assume 1 hour
     }

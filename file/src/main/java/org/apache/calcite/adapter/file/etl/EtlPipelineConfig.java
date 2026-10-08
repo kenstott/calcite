@@ -22,7 +22,7 @@ import java.util.Map;
  * configurations into a single declarative definition for transforming data
  * from HTTP APIs to queryable hive-partitioned Parquet tables.
  *
- * <h3>YAML Configuration Example</h3>
+ * <h2>YAML Configuration Example</h2>
  * <pre>{@code
  * tables:
  *   - name: sales_by_region

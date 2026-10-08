@@ -74,7 +74,6 @@ public class FhwaPavementRoughnessTransformer implements ResponseTransformer {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final String[] SHEET_NAMES = {"A", "B", "C", "D"};
-  private static final int BLOCK_WIDTH = 10;
 
   /** Strips a trailing footnote marker such as " (2)" or " (3)" from header/state text. */
   private static final Pattern FOOTNOTE = Pattern.compile("\\s*\\(\\d+\\)\\s*$");

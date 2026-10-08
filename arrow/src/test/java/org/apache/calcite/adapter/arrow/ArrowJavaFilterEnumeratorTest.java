@@ -22,6 +22,7 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowFileReader;
 import org.apache.arrow.vector.ipc.SeekableReadChannel;
 import org.apache.arrow.vector.types.pojo.Schema;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -67,7 +68,8 @@ class ArrowJavaFilterEnumeratorTest {
     assertFalse(expected.isEmpty(), "test data should contain at least one intField=25 row");
 
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("intField equal 25 integer")));
     assertRowsEqual(expected, actual);
   }
@@ -85,7 +87,8 @@ class ArrowJavaFilterEnumeratorTest {
     assertFalse(expected.isEmpty());
 
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("intField greater_than 40 integer")));
     assertRowsEqual(expected, actual);
   }
@@ -104,7 +107,8 @@ class ArrowJavaFilterEnumeratorTest {
     assertFalse(expected.isEmpty());
 
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("intField less_than_or_equal_to 3 integer")));
     assertRowsEqual(expected, actual);
   }
@@ -121,7 +125,8 @@ class ArrowJavaFilterEnumeratorTest {
     }
 
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("intField not_equal 10 integer")));
     assertRowsEqual(expected, actual);
   }
@@ -140,7 +145,8 @@ class ArrowJavaFilterEnumeratorTest {
     assertFalse(expected.isEmpty());
 
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("intField greater_than 10 integer", "intField less_than 20 integer")));
     assertRowsEqual(expected, actual);
   }
@@ -150,7 +156,8 @@ class ArrowJavaFilterEnumeratorTest {
     Schema schema = readSchema(file);
 
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("intField equal 99999 integer")));
     assertTrue(actual.isEmpty());
   }
@@ -161,7 +168,8 @@ class ArrowJavaFilterEnumeratorTest {
 
     List<Object[]> expected = scanAll(file);
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("intField greater_than_or_equal_to 0 integer")));
     assertRowsEqual(expected, actual);
   }
@@ -179,7 +187,8 @@ class ArrowJavaFilterEnumeratorTest {
     assertFalse(expected.isEmpty());
 
     List<Object[]> actual =
-        drain(new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
+        drain(
+            new ArrowJavaFilterEnumerator(openReader(file), ALL_FIELDS, schema,
             Arrays.asList("stringField equal '15' string")));
     assertRowsEqual(expected, actual);
   }

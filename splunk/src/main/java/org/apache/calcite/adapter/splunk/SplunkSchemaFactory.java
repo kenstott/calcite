@@ -35,13 +35,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Factory for creating Splunk schemas.
  * Supports dynamic data model discovery and custom table definitions:
  * 1. Dynamic Discovery: Automatically discovers Splunk data models
- * 2. Custom tables: {"tables": [...]} -> creates user-defined tables with custom schemas
+ * 2. Custom tables: {"tables": [...]} -&gt; creates user-defined tables with custom schemas
  * 3. Filtering: Use "datamodelFilter" to filter discovered models
  *
  * Connection parameters can be specified in two ways:
@@ -55,11 +54,6 @@ import java.util.regex.Pattern;
 public class SplunkSchemaFactory implements SchemaFactory {
   private static final org.slf4j.Logger LOGGER =
       StringUtils.getClassTracer(SplunkSchemaFactory.class);
-
-  // Patterns for normalizing table names
-  private static final Pattern NON_ALPHANUMERIC_PATTERN = Pattern.compile("[^a-z0-9_]");
-  private static final Pattern MULTIPLE_UNDERSCORES_PATTERN = Pattern.compile("_+");
-  private static final Pattern LEADING_TRAILING_UNDERSCORES_PATTERN = Pattern.compile("^_|_$");
 
   @Override public Schema create(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
@@ -224,7 +218,7 @@ public class SplunkSchemaFactory implements SchemaFactory {
    * Creates a custom table from a table configuration map.
    */
   private Table createCustomTable(RelDataTypeFactory typeFactory, Map<String, Object> tableConfig) {
-    String tableName = getRequiredString(tableConfig, "name");
+    getRequiredString(tableConfig, "name"); // fails when the table has no name
     String searchString = (String) tableConfig.getOrDefault("search", "search");
 
     // Extract field mapping
@@ -364,18 +358,6 @@ public class SplunkSchemaFactory implements SchemaFactory {
       throw new IllegalArgumentException("Required parameter '" + key + "' cannot be empty");
     }
     return str;
-  }
-
-  /**
-   * Normalizes CIM model names to valid SQL table names.
-   * Converts to lowercase and replaces spaces/special chars with underscores.
-   */
-  private String normalizeTableName(String cimModel) {
-    String normalized = cimModel.toLowerCase(Locale.ROOT);
-    normalized = NON_ALPHANUMERIC_PATTERN.matcher(normalized).replaceAll("_");
-    normalized = MULTIPLE_UNDERSCORES_PATTERN.matcher(normalized).replaceAll("_");
-    normalized = LEADING_TRAILING_UNDERSCORES_PATTERN.matcher(normalized).replaceAll("");
-    return normalized;
   }
 
   /**

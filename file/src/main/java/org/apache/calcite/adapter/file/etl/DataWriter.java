@@ -24,7 +24,7 @@ import java.util.Map;
  * batch (dimension combination). If a custom DataWriter is supplied and
  * returns a non-negative value, the built-in MaterializationWriter is skipped.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * // Custom Kafka data writer
  * DataWriter kafkaWriter = (config, data, variables) -> {

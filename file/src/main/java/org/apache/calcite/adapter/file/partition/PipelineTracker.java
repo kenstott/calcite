@@ -24,8 +24,8 @@ import java.util.Set;
  * The {@code phase} is a free-form string label for a step in a linear pipeline;
  * the tracker stores it opaquely and callers define their own vocabulary:
  * <ul>
- *   <li>SEC: {@code download} -> {@code staging} -> {@code materialized}</li>
- *   <li>Weather/Crime: {@code fetched} -> {@code materialized}</li>
+ *   <li>SEC: {@code download} -&gt; {@code staging} -&gt; {@code materialized}</li>
+ *   <li>Weather/Crime: {@code fetched} -&gt; {@code materialized}</li>
  * </ul>
  *
  * <p>Since this extends {@link IncrementalTracker}, any {@code PipelineTracker}

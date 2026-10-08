@@ -290,7 +290,7 @@ public final class DuckDBSqlRewriter {
         args[0] = rewrite((String) args[0]);
       }
       Object result = invokeTarget(method, args);
-      if (result instanceof Statement && ("createStatement".equals(name))) {
+      if (result instanceof Statement && "createStatement".equals(name)) {
         return Proxy.newProxyInstance(
             DuckDBSqlRewriter.class.getClassLoader(),
             new Class<?>[] { Statement.class },

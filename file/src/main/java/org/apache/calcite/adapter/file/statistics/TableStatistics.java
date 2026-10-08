@@ -119,7 +119,7 @@ public class TableStatistics {
    * Get the selectivity estimate for a column predicate.
    *
    * @param columnName The column name
-   * @param operator The comparison operator (=, <, >, etc.)
+   * @param operator The comparison operator (=, &lt;, &gt;, etc.)
    * @param value The comparison value
    * @return Selectivity estimate between 0.0 and 1.0
    */

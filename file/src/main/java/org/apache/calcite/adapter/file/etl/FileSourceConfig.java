@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * Configuration for file-based data sources.
  *
- * <h3>YAML Configuration</h3>
+ * <h2>YAML Configuration</h2>
  * <pre>{@code
  * source:
  *   type: file

@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Enable these tests by running with -Dcalcite.test.splunk=true
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkCastIntegrationTest {
   private static final Logger logger = LoggerFactory.getLogger(SplunkCastIntegrationTest.class);
 

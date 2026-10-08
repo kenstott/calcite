@@ -122,11 +122,16 @@ public class PartitionDetector {
 
     LOGGER.debug("Extracting Hive partitions from: {}", filePath);
 
-    Path path = Paths.get(filePath);
-    Path parent = path.getParent();
+    // The path may be a URL such as s3://bucket/year=2020/file.parquet, which is not a path of
+    // the local file system (Windows refuses the colon): read its directory names from the text
+    String[] names = filePath.split("[/\\\\]");
 
-    while (parent != null && parent.getFileName() != null) {
-      String dirName = parent.getFileName().toString();
+    // From the file's own directory upwards; the last name is the file
+    for (int i = names.length - 2; i >= 0; i--) {
+      String dirName = names[i];
+      if (dirName.isEmpty()) {
+        continue;
+      }
       Matcher matcher = HIVE_PARTITION_PATTERN.matcher(dirName);
 
       if (matcher.matches()) {
@@ -137,8 +142,6 @@ public class PartitionDetector {
         partitionValues.put(key, value);
         partitionColumns.add(0, key);
       }
-
-      parent = parent.getParent();
     }
 
     if (partitionColumns.isEmpty()) {

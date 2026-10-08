@@ -74,7 +74,6 @@ public class UsgsWaterUseCountyTransformer implements ResponseTransformer {
           }
           String[] f = line.split(",", -1);
           String stateFips = UsgsRdbSupport.trimOrNull(get(f, idx, "STATEFIPS"));
-          String countyFips = UsgsRdbSupport.trimOrNull(get(f, idx, "COUNTYFIPS"));
           String fips = UsgsRdbSupport.trimOrNull(get(f, idx, "FIPS"));
           if (fips == null) {
             continue;

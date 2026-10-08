@@ -458,53 +458,6 @@ public class SplunkDriver extends org.apache.calcite.jdbc.Driver {
   }
 
   /**
-   * Parses a JDBC URL format to extract the Splunk URL.
-   * Handles formats like:
-   * - jdbc:splunk://host:port
-   * - jdbc:splunk://host:port/database
-   * - jdbc:splunk://host:port?param=value
-   *
-   * @param jdbcUrl the JDBC URL to parse
-   * @return the Splunk URL (e.g., "https://host:port")
-   */
-  private String parseJdbcUrlToSplunkUrl(String jdbcUrl) throws SQLException {
-    if (jdbcUrl == null || !jdbcUrl.startsWith("jdbc:splunk://")) {
-      throw new SQLException("Invalid JDBC URL format. Expected: jdbc:splunk://host:port");
-    }
-
-    try {
-      // Remove the "jdbc:splunk://" prefix
-      String urlPart = jdbcUrl.substring("jdbc:splunk://".length());
-
-      // Find the end of host:port (before path or query parameters)
-      int pathIndex = urlPart.indexOf('/');
-      int queryIndex = urlPart.indexOf('?');
-
-      int endIndex = -1;
-      if (pathIndex >= 0 && queryIndex >= 0) {
-        endIndex = Math.min(pathIndex, queryIndex);
-      } else if (pathIndex >= 0) {
-        endIndex = pathIndex;
-      } else if (queryIndex >= 0) {
-        endIndex = queryIndex;
-      }
-
-      String hostPort = endIndex >= 0 ? urlPart.substring(0, endIndex) : urlPart;
-
-      // Validate host:port format
-      if (!hostPort.contains(":")) {
-        throw new SQLException("Invalid JDBC URL format. Missing port number: " + jdbcUrl);
-      }
-
-      // Convert to Splunk URL format (assumes HTTPS by default)
-      return "https://" + hostPort;
-
-    } catch (Exception e) {
-      throw new SQLException("Failed to parse JDBC URL: " + jdbcUrl, e);
-    }
-  }
-
-  /**
    * Validates that required connection properties are present.
    */
   private void validateRequiredProperties(ConnectionProperties props) throws SQLException {
@@ -648,27 +601,6 @@ public class SplunkDriver extends org.apache.calcite.jdbc.Driver {
     } catch (Exception e) {
       throw new SQLException("Failed to create Splunk schema: " + e.getMessage(), e);
     }
-  }
-
-  /**
-   * Parses comma-separated model names into a list.
-   *
-   * @param modelsString the comma-separated string of model names (can be null or empty)
-   * @return non-null list of model names (empty if no valid models found)
-   */
-  private List<String> parseModels(@Nullable String modelsString) {
-    List<String> models = new ArrayList<>();
-
-    if (modelsString != null && !modelsString.trim().isEmpty()) {
-      for (String model : modelsString.split(",")) {
-        String trimmed = model.trim();
-        if (!trimmed.isEmpty()) {
-          models.add(trimmed);
-        }
-      }
-    }
-
-    return models;
   }
 
   /**
