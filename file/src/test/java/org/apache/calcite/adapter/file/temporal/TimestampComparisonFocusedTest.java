@@ -64,7 +64,7 @@ public class TimestampComparisonFocusedTest {
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
-        + "        directory: '" + testDir.getAbsolutePath() + "',\n"
+        + "        directory: '" + testDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"

@@ -187,9 +187,10 @@ public class LocalFileStorageProvider implements StorageProvider {
       return basePath;
     }
 
-    // If relative path is actually absolute, return it
-    Path relPath = Paths.get(relativePath);
-    if (relPath.isAbsolute()) {
+    // If relative path is actually absolute, return it. File, unlike Path, takes the glob
+    // characters Windows does not allow in a file name; a leading slash is absolute for the
+    // callers, though Windows wants a drive letter as well.
+    if (new java.io.File(relativePath).isAbsolute() || relativePath.startsWith("/")) {
       return relativePath;
     }
 
@@ -199,7 +200,24 @@ public class LocalFileStorageProvider implements StorageProvider {
       base = base.getParent();
     }
 
-    return base.resolve(relativePath).normalize().toString();
+    // Only the directories before the first glob character are a path; the pattern after
+    // them is kept as written
+    int glob = firstGlobCharacter(relativePath);
+    if (glob < 0) {
+      return base.resolve(relativePath).normalize().toString();
+    }
+    int cut = Math.max(relativePath.lastIndexOf('/', glob), relativePath.lastIndexOf('\\', glob));
+    Path directory = cut <= 0 ? base : base.resolve(relativePath.substring(0, cut)).normalize();
+    return directory + java.io.File.separator + relativePath.substring(cut + 1);
+  }
+
+  private static int firstGlobCharacter(String path) {
+    for (int i = 0; i < path.length(); i++) {
+      if ("*?[{".indexOf(path.charAt(i)) >= 0) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   @Override public void writeFile(String path, byte[] content) throws IOException {

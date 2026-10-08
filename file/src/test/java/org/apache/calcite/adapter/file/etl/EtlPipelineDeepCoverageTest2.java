@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -49,6 +50,10 @@ import static org.mockito.Mockito.when;
  * Focuses on uncovered branches: execute paths, dimension expansion,
  * data provider logic, error handling, and batch processing.
  */
+// Sets the JVM-wide calcite.etl.threads and calcite.etl.maxConsecutiveFailures properties,
+// which every EtlPipeline reads: a pipeline of another test running at the same moment
+// would take the parallel path, or abort at this test's threshold
+@Isolated
 @Tag("unit")
 public class EtlPipelineDeepCoverageTest2 {
 

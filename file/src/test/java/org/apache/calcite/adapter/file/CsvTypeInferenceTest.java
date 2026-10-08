@@ -153,7 +153,7 @@ public class CsvTypeInferenceTest {
         + "    \"type\": \"custom\",\n"
         + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "    \"operand\": {\n"
-        + "      \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\",\n"
+        + "      \"directory\": \"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\n"
         + "      \"ephemeralCache\": true\n"
         + "    }\n"
         + "  }]\n"

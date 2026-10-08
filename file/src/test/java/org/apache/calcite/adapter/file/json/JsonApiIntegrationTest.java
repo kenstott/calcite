@@ -187,7 +187,7 @@ public class JsonApiIntegrationTest extends BaseFileTest {
   +
         "      \"operand\": {\n"
   +
-        "        \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\",\n"
+        "        \"directory\": \"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\n"
   +
         "        \"ephemeralCache\": true,\n"
   +
