@@ -26,6 +26,7 @@ from __future__ import annotations
 import datetime
 import decimal
 import logging
+import re
 import os
 import threading
 import time
@@ -49,6 +50,9 @@ log = logging.getLogger(__name__)
 
 _CALCITE_DRIVER = "org.apache.calcite.jdbc.Driver"
 
+
+#: A statement parameter as a client writes it: ``$1``, ``$2``...
+_PLACEHOLDER_RE = re.compile(r"\$(\d+)")
 
 def _attach_current_thread_to_jvm() -> None:
     """Make the calling thread able to call Java.
@@ -625,6 +629,52 @@ class CalciteBackend:
         scope = CancelScope(session_key, timeout_ms, client_gone)
         count, keys = self.run_update(calcite_sql, scope, lane, keys_of=table_ref)
         return count, keys or []
+
+    def parameter_types(
+        self,
+        sql: str,
+        session_key: Optional[str] = None,
+        timeout_ms: int = 0,
+        lane: str = LANE_USER,
+        client_gone: Optional[Callable[[], bool]] = None,
+    ) -> List[Optional[str]]:
+        """The SQL type the engine gives each ``$N`` of ``sql``, by position (``$1`` first);
+        None for a number the statement does not use.
+
+        The statement is prepared, never run: Calcite types a parameter from what it is
+        compared with or assigned to. A statement Calcite cannot prepare raises.
+        """
+        numbers = [int(n) for n in _PLACEHOLDER_RE.findall(sql)]
+        if not numbers:
+            return []
+        calcite_sql = transpile_pg_to_calcite(
+            _PLACEHOLDER_RE.sub("?", sql),
+            json_enabled=("json" in self._extensions),
+            vector_enabled=("vector" in self._extensions),
+        )
+        if calcite_sql.count("?") != len(numbers):
+            raise RuntimeError(
+                "the statement's parameters were not carried through to the engine's SQL: "
+                f"{len(numbers)} in {sql!r}, {calcite_sql.count('?')} in {calcite_sql!r}"
+            )
+        conn, lock = self.lane(lane)
+        if conn is None:
+            raise RuntimeError("Calcite connection is not open")
+        scope = CancelScope(session_key, timeout_ms, client_gone)
+        scope.acquire(lock)
+        try:
+            prepared = conn.prepareStatement(calcite_sql)
+            try:
+                described = prepared.getParameterMetaData()
+                types: List[Optional[str]] = [None] * max(numbers)
+                for position, number in enumerate(numbers, start=1):
+                    if types[number - 1] is None:
+                        types[number - 1] = str(described.getParameterTypeName(position))
+                return types
+            finally:
+                prepared.close()
+        finally:
+            lock.release()
 
     def key_column(
         self,
