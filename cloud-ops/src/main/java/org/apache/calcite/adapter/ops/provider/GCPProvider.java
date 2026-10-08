@@ -181,16 +181,6 @@ public class GCPProvider implements CloudProvider {
         LOGGER.debug("GCP GKE querying: SELECT * (all fields)");
       }
 
-      // Debug sort optimization
-      if (sortHandler != null && sortHandler.hasSort()) {
-        String orderByParam = sortHandler.buildGcpOrderByParameter();
-        if (orderByParam != null) {
-          LOGGER.debug("GCP orderBy parameter: {}", orderByParam);
-        } else {
-          LOGGER.debug("GCP sort: Falling back to client-side sorting (no compatible orderBy fields)");
-        }
-      }
-
       // Debug pagination optimization
       if (paginationHandler != null && paginationHandler.hasPagination()) {
         CloudOpsPaginationHandler.PaginationStrategy strategy = paginationHandler.getGCPStrategy();
@@ -262,11 +252,12 @@ public class GCPProvider implements CloudProvider {
                 cluster.getNetworkPolicy().getProvider().name() : null);
 
             // Encryption and logging
-            clusterData.put("EncryptionAtRestEnabled", cluster.hasDatabaseEncryption() &&
-                cluster.getDatabaseEncryption().getState().name().equals("ENCRYPTED"));
-            clusterData.put("EncryptionKeyType", cluster.hasDatabaseEncryption() &&
-                !cluster.getDatabaseEncryption().getKeyName().isEmpty() ?
-                "customer-managed" : "service-managed");
+            // Google encrypts a cluster's storage at rest itself; a cluster may add
+            // encryption of its secrets under a Cloud KMS key of the project
+            clusterData.put("EncryptionAtRestEnabled", true);
+            clusterData.put("EncryptionKeyType", cluster.hasDatabaseEncryption()
+                && cluster.getDatabaseEncryption().getState().name().equals("ENCRYPTED")
+                ? "customer-managed" : "service-managed");
             clusterData.put("LoggingEnabled", cluster.getLoggingService() != null &&
                 !cluster.getLoggingService().equals("none"));
             clusterData.put("MonitoringEnabled", cluster.getMonitoringService() != null &&

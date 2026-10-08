@@ -147,7 +147,7 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> vmResults = azureProvider.queryComputeInstances(subscriptionIds);
 
       for (Map<String, Object> vm : vmResults) {
@@ -192,7 +192,7 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> vmResults = gcpProvider.queryComputeInstances(projectIds);
 
       for (Map<String, Object> vm : vmResults) {
@@ -237,7 +237,7 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> vmResults = awsProvider.queryComputeInstances(accountIds);
 
       for (Map<String, Object> vm : vmResults) {

@@ -77,7 +77,7 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> iamResults = azureProvider.queryIAMResources(subscriptionIds);
 
       for (Map<String, Object> iam : iamResults) {
@@ -117,7 +117,7 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> iamResults = gcpProvider.queryIAMResources(projectIds);
 
       for (Map<String, Object> iam : iamResults) {
@@ -163,7 +163,7 @@ public class IAMResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> iamResults = awsProvider.queryIAMResources(accountIds);
 
       for (Map<String, Object> iam : iamResults) {

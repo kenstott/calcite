@@ -120,7 +120,7 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
                                                 CloudOpsFilterHandler filterHandler) {
     List<Object[]> results = new ArrayList<>();
     try {
-      AzureProvider azureProvider = new AzureProvider(config.azure);
+      AzureProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       for (Map<String, Object> row : azureProvider.queryComputeSecurityGroups(subscriptionIds)) {
         results.add(new Object[]{
             "azure",
@@ -152,7 +152,7 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
                                               CloudOpsFilterHandler filterHandler) {
     List<Object[]> results = new ArrayList<>();
     try {
-      AWSProvider awsProvider = new AWSProvider(config.aws);
+      AWSProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       for (Map<String, Object> row : awsProvider.queryComputeSecurityGroups(accountIds)) {
         results.add(new Object[]{
             "aws",

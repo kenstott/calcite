@@ -18,7 +18,8 @@ gcp.projectIds=your-gcp-project-1,your-gcp-project-2
 # Use IAM user credentials or temporary STS credentials
 aws.accessKeyId=your-aws-access-key-id
 aws.secretAccessKey=your-aws-secret-access-key
-aws.region=us-east-1
+# Optional: one region, a comma-separated list, or all (the default)
+#aws.region=us-east-1
 aws.accountIds=111111111111,222222222222
 
 # Optional: Cross-account role ARN for AWS
@@ -28,5 +29,5 @@ aws.accountIds=111111111111,222222222222
 # Notes:
 # - You only need to configure the cloud providers you want to test
 # - Azure: Requires App Registration with appropriate permissions
-# - GCP: Requires Service Account with Cloud Asset Viewer role
+# - GCP: Requires a service account with the Viewer role on each project
 # - AWS: Requires IAM user/role with read permissions for EC2, S3, EKS, etc.

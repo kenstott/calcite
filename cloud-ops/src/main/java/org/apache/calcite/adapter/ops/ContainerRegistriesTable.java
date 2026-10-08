@@ -78,7 +78,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> registryResults = azureProvider.queryContainerRegistries(subscriptionIds);
 
       for (Map<String, Object> registry : registryResults) {
@@ -119,7 +119,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> registryResults = gcpProvider.queryContainerRegistries(projectIds);
 
       for (Map<String, Object> registry : registryResults) {
@@ -161,7 +161,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> registryResults = awsProvider.queryContainerRegistries(accountIds);
 
       for (Map<String, Object> registry : registryResults) {

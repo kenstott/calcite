@@ -94,7 +94,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> networkResults = azureProvider.queryNetworkResources(subscriptionIds);
 
       for (Map<String, Object> network : networkResults) {
@@ -133,7 +133,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> networkResults = gcpProvider.queryNetworkResources(projectIds);
 
       for (Map<String, Object> network : networkResults) {
@@ -172,7 +172,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> networkResults = awsProvider.queryNetworkResources(accountIds);
 
       for (Map<String, Object> network : networkResults) {

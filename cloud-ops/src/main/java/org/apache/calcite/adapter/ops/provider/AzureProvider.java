@@ -18,6 +18,7 @@ import org.apache.calcite.adapter.ops.util.CloudOpsProjectionHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
 
 import com.azure.core.credential.TokenCredential;
+import com.azure.core.credential.TokenRequestContext;
 import com.azure.core.management.AzureEnvironment;
 import com.azure.core.management.profile.AzureProfile;
 import com.azure.identity.ClientSecretCredentialBuilder;
@@ -26,13 +27,21 @@ import com.azure.resourcemanager.resourcegraph.models.QueryRequest;
 import com.azure.resourcemanager.resourcegraph.models.QueryRequestOptions;
 import com.azure.resourcemanager.resourcegraph.models.QueryResponse;
 import com.azure.resourcemanager.resourcegraph.models.ResultFormat;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +53,7 @@ public class AzureProvider implements CloudProvider {
 
   private final CloudOpsConfig.AzureConfig config;
   private final ResourceGraphManager resourceGraphManager;
+  private final TokenCredential credential;
   private final ObjectMapper objectMapper;
   private final CloudOpsCacheManager cacheManager;
 
@@ -51,7 +61,7 @@ public class AzureProvider implements CloudProvider {
     this.config = config;
     this.objectMapper = new ObjectMapper();
 
-    TokenCredential credential = new ClientSecretCredentialBuilder()
+    this.credential = new ClientSecretCredentialBuilder()
         .tenantId(config.tenantId)
         .clientId(config.clientId)
         .clientSecret(config.clientSecret)
@@ -71,7 +81,7 @@ public class AzureProvider implements CloudProvider {
     this.objectMapper = new ObjectMapper();
     this.cacheManager = cacheManager;
 
-    TokenCredential credential = new ClientSecretCredentialBuilder()
+    this.credential = new ClientSecretCredentialBuilder()
         .tenantId(config.tenantId)
         .clientId(config.clientId)
         .clientSecret(config.clientSecret)
@@ -253,14 +263,26 @@ public class AzureProvider implements CloudProvider {
        .append(")\n")
        .append("| extend ClusterVersion = tostring(properties.kubernetesVersion)\n")
        .append("| extend NodeResourceGroup = tostring(properties.nodeResourceGroup)\n")
-       .append("| extend PrivateCluster = tobool(properties.apiServerAccessProfile.enablePrivateCluster)\n")
+       // A cluster without an access profile is a public one
+       .append("| extend PrivateCluster = "
+           + "tobool(properties.apiServerAccessProfile.enablePrivateCluster) == true\n")
+       .append("| extend PublicEndpoint = not(PrivateCluster)\n")
+       // Container insights (the omsagent add-on) collects logs and metrics; managed
+       // Prometheus collects metrics alone
+       .append("| extend LoggingEnabled = "
+           + "tobool(properties.addonProfiles.omsagent.enabled) == true\n")
+       .append("| extend MonitoringEnabled = LoggingEnabled "
+           + "or tobool(properties.azureMonitorProfile.metrics.enabled) == true\n")
+       .append("| extend CreatedDate = tostring(systemData.createdAt)\n")
+       .append("| extend ModifiedDate = tostring(systemData.lastModifiedAt)\n")
        .append("| extend NetworkPlugin = tostring(properties.networkProfile.networkPlugin)\n")
        .append("| extend NetworkPolicy = tostring(properties.networkProfile.networkPolicy)\n")
        .append("| extend ServiceCidr = tostring(properties.networkProfile.serviceCidr)\n")
        .append("| extend PodCidr = tostring(properties.networkProfile.podCidr)\n")
        .append("| extend RBACEnabled = tobool(properties.enableRBAC)\n")
        .append("| extend AADEnabled = tobool(properties.aadProfile.managed)\n")
-       .append("| extend AuthorizedIPRanges = array_length(properties.apiServerAccessProfile.authorizedIPRanges)\n")
+       .append("| extend AuthorizedIPRanges = coalesce("
+           + "array_length(properties.apiServerAccessProfile.authorizedIPRanges), 0)\n")
        .append("| extend DiskEncryption = case(\n")
        .append("    isnotempty(properties.diskEncryptionSetID), 'Customer Managed Key',\n")
        .append("    'Platform Managed Key'\n")
@@ -297,23 +319,8 @@ public class AzureProvider implements CloudProvider {
       kql.append(getDefaultKubernetesProjectClause()).append("\n");
     }
 
-    // Add sort clause if specified
-    if (sortHandler != null && sortHandler.hasSort()) {
-      String sortClause = sortHandler.buildAzureKqlOrderByClause();
-      if (sortClause != null) {
-        kql.append(sortClause);
-        if (LOGGER.isDebugEnabled()) {
-          CloudOpsSortHandler.SortMetrics metrics = sortHandler.calculateMetrics(true);
-          LOGGER.debug("Azure KQL with sort optimization: {}", metrics);
-        }
-      } else {
-        // Fallback to default sort
-        kql.append("| order by Application, ClusterName");
-      }
-    } else {
-      // Default sort for no sort handler
-      kql.append("| order by Application, ClusterName");
-    }
+    // Rows are sorted once, by the table, across all providers
+    kql.append("| order by Application, ClusterName");
 
     // Add pagination clause if specified
     if (paginationHandler != null && paginationHandler.hasPagination()) {
@@ -359,6 +366,16 @@ public class AzureProvider implements CloudProvider {
   +
            "    PrivateCluster,\n"
   +
+           "    PublicEndpoint,\n"
+  +
+           "    LoggingEnabled,\n"
+  +
+           "    MonitoringEnabled,\n"
+  +
+           "    CreatedDate,\n"
+  +
+           "    ModifiedDate,\n"
+  +
            "    NetworkPlugin,\n"
   +
            "    NetworkPolicy,\n"
@@ -400,8 +417,9 @@ public class AzureProvider implements CloudProvider {
         + "| extend EncryptionEnabled = case(\n"
         + "    type == 'microsoft.storage/storageaccounts',\n"
         + "        isnotnull(properties.encryption.services.blob.enabled),\n"
+        // Resource Graph does not carry a SQL database's transparent data encryption
         + "    type == 'microsoft.sql/servers/databases',\n"
-        + "        properties.transparentDataEncryption.status == 'Enabled',\n"
+        + "        bool(null),\n"
         + "    type == 'microsoft.documentdb/databaseaccounts',\n"
         + "        true,\n"
         + "    type == 'microsoft.compute/disks',\n"
@@ -417,11 +435,14 @@ public class AzureProvider implements CloudProvider {
         + "        'Customer Managed Key',\n"
         + "    EncryptionEnabled == true,\n"
         + "        'Service Managed Key',\n"
+        + "    isnull(EncryptionEnabled), '',\n"
         + "    'None'\n"
         + ")\n"
         + "| extend HttpsOnly = case(\n"
         + "    type == 'microsoft.storage/storageaccounts',\n"
         + "        tobool(properties.supportsHttpsTrafficOnly),\n"
+        // SQL and Cosmos DB accept only encrypted connections; a disk has no endpoint
+        + "    type == 'microsoft.compute/disks', bool(null),\n"
         + "    true\n"
         + ")\n"
         + "| extend MinimumTlsVersion = case(\n"
@@ -489,7 +510,85 @@ public class AzureProvider implements CloudProvider {
         + "    Tags\n"
         + "| order by Application, StorageType, StorageResource";
 
-    return executeKqlQuery(kql, subscriptionIds);
+    List<Map<String, Object>> accounts = new ArrayList<>();
+    for (Map<String, Object> row : executeKqlQuery(kql, subscriptionIds)) {
+      if (!"Storage Account".equals(row.get("StorageType"))) {
+        accounts.add(row);
+        continue;
+      }
+      // Versioning, soft delete and lifecycle rules are settings of an account's blob service
+      // and management policy, which Resource Graph does not index: read them from ARM
+      Map<String, Object> account = new HashMap<>(row);
+      String id = String.valueOf(row.get("ResourceId"));
+      JsonNode blobService = armGet(id + "/blobServices/default?api-version=2023-05-01");
+      if (blobService == null) {
+        throw new IllegalStateException("Storage account " + id + " has no blob service");
+      }
+      JsonNode settings = blobService.path("properties");
+      // ARM leaves a switch out of the answer while it has never been turned on
+      account.put("VersioningEnabled", settings.path("isVersioningEnabled").asBoolean(false));
+      JsonNode retention = settings.path("deleteRetentionPolicy");
+      boolean softDelete = retention.path("enabled").asBoolean(false);
+      account.put("SoftDeleteEnabled", softDelete);
+      account.put("SoftDeleteRetentionDays",
+          softDelete && retention.has("days") ? retention.get("days").asInt() : null);
+      // An account without a management policy answers 404: it has no lifecycle rules
+      JsonNode policy = armGet(id + "/managementPolicies/default?api-version=2023-05-01");
+      account.put("LifecycleRulesCount",
+          policy == null ? 0 : policy.path("properties").path("policy").path("rules").size());
+      accounts.add(account);
+    }
+    return accounts;
+  }
+
+  /**
+   * Reads one Azure Resource Manager resource.
+   *
+   * @param path the resource id with its api-version, starting with a slash
+   * @return the resource, or null when Azure answers 404
+   */
+  private @Nullable JsonNode armGet(String path) {
+    String token = credential
+        .getToken(new TokenRequestContext().addScopes("https://management.azure.com/.default"))
+        .block()
+        .getToken();
+    try {
+      HttpURLConnection connection =
+          (HttpURLConnection) new URL("https://management.azure.com" + path).openConnection();
+      connection.setConnectTimeout(15000);
+      connection.setReadTimeout(30000);
+      connection.setRequestProperty("Authorization", "Bearer " + token);
+      connection.setRequestProperty("Accept", "application/json");
+      int status = connection.getResponseCode();
+      if (status == HttpURLConnection.HTTP_NOT_FOUND) {
+        return null;
+      }
+      if (status != HttpURLConnection.HTTP_OK) {
+        throw new IllegalStateException("Azure Resource Manager answered " + status + " for "
+            + path + ": " + readAll(connection.getErrorStream()));
+      }
+      try (InputStream body = connection.getInputStream()) {
+        return objectMapper.readTree(body);
+      }
+    } catch (IOException e) {
+      throw new IllegalStateException(
+          "Reading " + path + " from Azure Resource Manager failed: " + e.getMessage(), e);
+    }
+  }
+
+  private static String readAll(@Nullable InputStream stream) throws IOException {
+    if (stream == null) {
+      return "";
+    }
+    try (InputStream in = stream) {
+      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+      byte[] buffer = new byte[4096];
+      int read;
+      while ((read = in.read(buffer)) != -1) {
+        bytes.write(buffer, 0, read);
+      }
+      return new String(bytes.toByteArray(), StandardCharsets.UTF_8);
+    }
   }
 
   @Override public List<Map<String, Object>> queryComputeInstances(List<String> subscriptionIds) {
@@ -739,124 +838,138 @@ public class AzureProvider implements CloudProvider {
 
   @Override public List<Map<String, Object>> queryDatabaseResources(List<String> subscriptionIds) {
     String kql = "Resources\n"
-  +
-        "| where type in (\n"
-  +
-        "    'microsoft.sql/servers',\n"
-  +
-        "    'microsoft.sql/servers/databases',\n"
-  +
-        "    'microsoft.documentdb/databaseaccounts',\n"
-  +
-        "    'microsoft.dbforpostgresql/servers',\n"
-  +
-        "    'microsoft.dbformysql/servers',\n"
-  +
-        "    'microsoft.cache/redis'\n"
-  +
-        ")\n"
-  +
-        "| extend Application = case(\n"
-  +
-        "    isnotempty(tags.Application), tags.Application,\n"
-  +
-        "    isnotempty(tags.app), tags.app,\n"
-  +
-        "    'Untagged/Orphaned'\n"
-  +
-        ")\n"
-  +
-        "| extend DatabaseType = case(\n"
-  +
-        "    type == 'microsoft.sql/servers', 'SQL Server',\n"
-  +
-        "    type == 'microsoft.sql/servers/databases', 'SQL Database',\n"
-  +
-        "    type == 'microsoft.documentdb/databaseaccounts', 'Cosmos DB',\n"
-  +
-        "    type == 'microsoft.dbforpostgresql/servers', 'PostgreSQL',\n"
-  +
-        "    type == 'microsoft.dbformysql/servers', 'MySQL',\n"
-  +
-        "    type == 'microsoft.cache/redis', 'Redis Cache',\n"
-  +
-        "    type\n"
-  +
-        ")\n"
-  +
-        "| extend SKU = case(\n"
-  +
-        "    type == 'microsoft.sql/servers/databases',\n"
-  +
-        "        strcat(tostring(sku.tier), ' - ', tostring(sku.name)),\n"
-  +
-        "    type == 'microsoft.documentdb/databaseaccounts',\n"
-  +
-        "        tostring(properties.databaseAccountOfferType),\n"
-  +
-        "    type == 'microsoft.cache/redis',\n"
-  +
-        "        strcat(tostring(sku.family), tostring(sku.capacity)),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| extend SecurityConfiguration = case(\n"
-  +
-        "    type == 'microsoft.sql/servers',\n"
-  +
-        "        strcat('Min TLS: ', tostring(properties.minimalTlsVersion)),\n"
-  +
-        "    type == 'microsoft.documentdb/databaseaccounts',\n"
-  +
-        "        strcat('Firewall: ', tostring(array_length(properties.ipRules))),\n"
-  +
-        "    type == 'microsoft.cache/redis',\n"
-  +
-        "        strcat('TLS: ', tostring(properties.minimumTlsVersion)),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| extend BackupConfiguration = case(\n"
-  +
-        "    type == 'microsoft.sql/servers/databases',\n"
-  +
-        "        tostring(properties.requestedBackupStorageRedundancy),\n"
-  +
-        "    type == 'microsoft.documentdb/databaseaccounts',\n"
-  +
-        "        tostring(properties.backupPolicy.type),\n"
-  +
-        "    ''\n"
-  +
-        ")\n"
-  +
-        "| project\n"
-  +
-        "    SubscriptionId = subscriptionId,\n"
-  +
-        "    DatabaseResource = name,\n"
-  +
-        "    DatabaseType,\n"
-  +
-        "    ResourceGroup = resourceGroup,\n"
-  +
-        "    Location = location,\n"
-  +
-        "    ResourceId = id,\n"
-  +
-        "    Application,\n"
-  +
-        "    SKU,\n"
-  +
-        "    SecurityConfiguration,\n"
-  +
-        "    BackupConfiguration\n"
-  +
-        "| order by Application, DatabaseType, DatabaseResource";
+        + "| where type in (\n"
+        + "    'microsoft.sql/servers',\n"
+        + "    'microsoft.sql/servers/databases',\n"
+        + "    'microsoft.dbforpostgresql/flexibleservers',\n"
+        + "    'microsoft.dbformysql/flexibleservers',\n"
+        + "    'microsoft.documentdb/databaseaccounts',\n"
+        + "    'microsoft.cache/redis',\n"
+        + "    'microsoft.cache/redisenterprise'\n"
+        + ")\n"
+        + "// every SQL server has a system database of this name\n"
+        + "| where not(type == 'microsoft.sql/servers/databases' and name == 'master')\n"
+        + "| extend SqlServer = type == 'microsoft.sql/servers'\n"
+        + "| extend SqlDatabase = type == 'microsoft.sql/servers/databases'\n"
+        + "| extend Postgres = type == 'microsoft.dbforpostgresql/flexibleservers'\n"
+        + "| extend MySql = type == 'microsoft.dbformysql/flexibleservers'\n"
+        + "| extend Flexible = Postgres or MySql\n"
+        + "| extend Cosmos = type == 'microsoft.documentdb/databaseaccounts'\n"
+        + "| extend Redis = type == 'microsoft.cache/redis'\n"
+        + "| extend ManagedRedis = type == 'microsoft.cache/redisenterprise'\n"
+        + "| extend Application = case(\n"
+        + "    isnotempty(tags.Application), tostring(tags.Application),\n"
+        + "    isnotempty(tags.application), tostring(tags.application),\n"
+        + "    isnotempty(tags.app), tostring(tags.app),\n"
+        + "    'Untagged/Orphaned'\n"
+        + ")\n"
+        + "| extend DatabaseType = case(\n"
+        + "    SqlServer, 'SQL Server',\n"
+        + "    SqlDatabase, 'SQL Database',\n"
+        + "    Postgres, 'PostgreSQL Flexible Server',\n"
+        + "    MySql, 'MySQL Flexible Server',\n"
+        + "    Cosmos, 'Cosmos DB',\n"
+        + "    Redis, 'Redis Cache',\n"
+        + "    ManagedRedis, 'Azure Managed Redis',\n"
+        + "    type\n"
+        + ")\n"
+        + "| extend Engine = case(\n"
+        + "    SqlServer or SqlDatabase, 'sqlserver',\n"
+        + "    Postgres, 'postgres',\n"
+        + "    MySql, 'mysql',\n"
+        + "    Cosmos, tostring(properties.EnabledApiTypes),\n"
+        + "    Redis or ManagedRedis, 'redis',\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend EngineVersion = case(\n"
+        + "    SqlServer or Flexible, tostring(properties.version),\n"
+        + "    Cosmos, tostring(properties.apiProperties.serverVersion),\n"
+        + "    Redis or ManagedRedis, tostring(properties.redisVersion),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend RedisSku = strcat(tostring(properties.sku.name), '_',\n"
+        + "    tostring(properties.sku.family), tostring(properties.sku.capacity))\n"
+        + "| extend InstanceClass = case(\n"
+        + "    SqlDatabase or Flexible or ManagedRedis, tostring(sku.name),\n"
+        + "    Cosmos, tostring(properties.databaseAccountOfferType),\n"
+        + "    Redis, RedisSku,\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend AllocatedStorageGb = case(\n"
+        + "    SqlDatabase, toint(tolong(properties.maxSizeBytes) / 1073741824),\n"
+        + "    Flexible, toint(properties.storage.storageSizeGB),\n"
+        + "    int(null)\n"
+        + ")\n"
+        + "| extend MultiAz = case(\n"
+        + "    SqlDatabase, tobool(properties.zoneRedundant),\n"
+        + "    Flexible, tostring(properties.highAvailability.mode) =~ 'ZoneRedundant',\n"
+        + "    Cosmos, tobool(properties.locations[0].isZoneRedundant),\n"
+        + "    Redis or ManagedRedis, array_length(zones) > 1,\n"
+        + "    bool(null)\n"
+        + ")\n"
+        + "| extend Status = case(\n"
+        + "    SqlServer or Flexible, tostring(properties.state),\n"
+        + "    SqlDatabase, tostring(properties.status),\n"
+        + "    tostring(properties.provisioningState)\n"
+        + ")\n"
+        + "| extend PublicNetworkAccess = case(\n"
+        + "    Flexible, tostring(properties.network.publicNetworkAccess),\n"
+        + "    SqlDatabase, '',\n"
+        + "    tostring(properties.publicNetworkAccess)\n"
+        + ")\n"
+        + "| extend PubliclyAccessible = iff(isempty(PublicNetworkAccess), bool(null),\n"
+        + "    PublicNetworkAccess =~ 'Enabled')\n"
+        + "| extend EncryptionKey = case(\n"
+        + "    SqlServer, tostring(properties.keyId),\n"
+        + "    ManagedRedis, tostring(\n"
+        + "        properties.encryption.customerManagedKeyEncryption.keyEncryptionKeyUrl),\n"
+        + "    Flexible, tostring(properties.dataEncryption.primaryKeyURI),\n"
+        + "    Cosmos, tostring(properties.keyVaultKeyUri),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend Encrypted = iff(Flexible or Cosmos, true, bool(null))\n"
+        + "| extend TlsVersion = case(\n"
+        + "    SqlServer or Cosmos, tostring(properties.minimalTlsVersion),\n"
+        + "    Redis or ManagedRedis, tostring(properties.minimumTlsVersion),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| extend CosmosPeriodic = properties.backupPolicy.periodicModeProperties\n"
+        + "| extend CosmosBackupHours = toint(CosmosPeriodic.backupRetentionIntervalInHours)\n"
+        + "| extend CosmosBackupMode = tostring(properties.backupPolicy.type)\n"
+        + "| extend CosmosTier = tostring(properties.backupPolicy.continuousModeProperties.tier)\n"
+        + "| extend BackupRetentionDays = case(\n"
+        + "    Flexible, toint(properties.backup.backupRetentionDays),\n"
+        + "    Cosmos and CosmosBackupMode =~ 'Continuous' and CosmosTier contains '30', 30,\n"
+        + "    Cosmos and CosmosBackupMode =~ 'Continuous', 7,\n"
+        + "    Cosmos, toint(ceiling(todouble(CosmosBackupHours) / 24)),\n"
+        + "    int(null)\n"
+        + ")\n"
+        + "| extend CreateTime = case(\n"
+        + "    SqlDatabase, tostring(properties.creationDate),\n"
+        + "    Flexible or Cosmos or ManagedRedis, tostring(systemData.createdAt),\n"
+        + "    ''\n"
+        + ")\n"
+        + "| project\n"
+        + "    SubscriptionId = subscriptionId,\n"
+        + "    DatabaseResource = name,\n"
+        + "    DatabaseType,\n"
+        + "    ResourceGroup = resourceGroup,\n"
+        + "    Location = location,\n"
+        + "    ResourceId = id,\n"
+        + "    Application,\n"
+        + "    Engine,\n"
+        + "    EngineVersion,\n"
+        + "    InstanceClass,\n"
+        + "    AllocatedStorageGb,\n"
+        + "    MultiAz,\n"
+        + "    Status,\n"
+        + "    PubliclyAccessible,\n"
+        + "    Encrypted,\n"
+        + "    EncryptionKey,\n"
+        + "    TlsVersion,\n"
+        + "    BackupRetentionDays,\n"
+        + "    CreateTime\n"
+        + "| order by Application, DatabaseType, DatabaseResource";
 
     return executeKqlQuery(kql, subscriptionIds);
   }

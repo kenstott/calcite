@@ -41,7 +41,7 @@ dependencies {
     implementation 'com.google.cloud:google-cloud-compute:1.44.0'
     
     // AWS SDK
-    implementation platform('software.amazon.awssdk:bom:2.21.0')
+    implementation platform('software.amazon.awssdk:bom:2.39.6')
     implementation 'software.amazon.awssdk:config'
     implementation 'software.amazon.awssdk:ec2'
     implementation 'software.amazon.awssdk:s3'

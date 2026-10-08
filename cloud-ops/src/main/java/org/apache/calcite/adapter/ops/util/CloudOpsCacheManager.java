@@ -39,18 +39,27 @@ public class CloudOpsCacheManager {
   private static final int MAX_CACHE_SIZE = 1000;
 
   public CloudOpsCacheManager(int ttlMinutes, boolean debugMode) {
+    this(ttlMinutes, debugMode, MAX_CACHE_SIZE);
+  }
+
+  /** A cache manager that keeps nothing: every call reaches the cloud. */
+  public static CloudOpsCacheManager disabled(boolean debugMode) {
+    return new CloudOpsCacheManager(DEFAULT_TTL_MINUTES, debugMode, 0);
+  }
+
+  private CloudOpsCacheManager(int ttlMinutes, boolean debugMode, int maximumSize) {
     this.cacheTtl = Duration.ofMinutes(ttlMinutes > 0 ? ttlMinutes : DEFAULT_TTL_MINUTES);
     this.debugMode = debugMode;
 
     this.cache = Caffeine.newBuilder()
-        .maximumSize(MAX_CACHE_SIZE)
+        .maximumSize(maximumSize)
         .expireAfterWrite(this.cacheTtl)
         .recordStats()
         .build();
 
     if (logger.isInfoEnabled()) {
       logger.info("CloudOpsCacheManager initialized: TTL={}min, MaxSize={}, Debug={}",
-                 this.cacheTtl.toMinutes(), MAX_CACHE_SIZE, debugMode);
+                 this.cacheTtl.toMinutes(), maximumSize, debugMode);
     }
   }
 
