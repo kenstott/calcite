@@ -1,0 +1,28 @@
+{
+  "result": [
+    {
+      "sys_id": "000000000000000000000000000000a1",
+      "name": "task",
+      "label": "Task",
+      "super_class": ""
+    },
+    {
+      "sys_id": "000000000000000000000000000000a2",
+      "name": "incident",
+      "label": "Incident",
+      "super_class": "000000000000000000000000000000a1"
+    },
+    {
+      "sys_id": "000000000000000000000000000000a3",
+      "name": "sys_user",
+      "label": "User",
+      "super_class": ""
+    },
+    {
+      "sys_id": "000000000000000000000000000000a4",
+      "name": "bad_table",
+      "label": "Bad table",
+      "super_class": ""
+    }
+  ]
+}

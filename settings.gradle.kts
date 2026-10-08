@@ -84,6 +84,7 @@ include(
     "plus",
     "openapi",
     "salesforce",
+    "servicenow",
     "graphql",
     "redis",
     "server",

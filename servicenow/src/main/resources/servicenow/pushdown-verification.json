@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "note": "No pushdown entry is verified. Replace this file with a record written by the live differential harness (PushdownHarness) to enable the entries it verified.",
+  "entries": {}
+}
