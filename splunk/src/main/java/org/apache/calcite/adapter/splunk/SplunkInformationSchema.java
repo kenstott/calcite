@@ -126,15 +126,15 @@ public class SplunkInformationSchema extends AbstractSchema {
           // Try to get tables directly from the SchemaPlus
           try {
             for (String tableName : subSchema.tables().getNames(LikePattern.any())) {
-              // Only add tables from actual data schemas, not metadata schemas
-              if (!"information_schema".equals(schemaName)
-                  && !"pg_catalog".equals(schemaName)
-                  && !"metadata".equals(schemaName)) {
+              // As in PostgreSQL, information_schema and pg_catalog list their own tables;
+              // Calcite's built-in metadata schema is not part of either
+              if (!"metadata".equals(schemaName)) {
                 rows.add(new Object[] {
                     catalogName,          // TABLE_CATALOG
                     schemaName,           // TABLE_SCHEMA
                     tableName,            // TABLE_NAME
-                    "BASE TABLE",         // TABLE_TYPE
+                    "information_schema".equals(schemaName)
+                        ? "VIEW" : "BASE TABLE", // TABLE_TYPE
                     "NO",                 // IS_INSERTABLE_INTO (Splunk is read-only)
                     "NO",                 // IS_TYPED
                     null                  // COMMIT_ACTION
@@ -206,10 +206,8 @@ public class SplunkInformationSchema extends AbstractSchema {
         if (subSchema != null) {
           // Try to get tables and their columns directly from the SchemaPlus
           try {
-            // Only process actual data schemas, not metadata schemas
-            if (!"information_schema".equals(schemaName)
-                && !"pg_catalog".equals(schemaName)
-                && !"metadata".equals(schemaName)) {
+            // The same schemas as TABLES lists
+            if (!"metadata".equals(schemaName)) {
               for (String tableName : subSchema.tables().getNames(LikePattern.any())) {
                 Table table = subSchema.tables().get(tableName);
                 if (table != null) {
