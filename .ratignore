@@ -132,6 +132,12 @@ entity-resolution-plan.md
 semantic-search-plan.md
 issues-7-17-2026.md
 issues-*.md
+schema-review-plan.md
+nonyes_rows.txt
+.grype.yaml
+
+# Recorded output of the news-check evaluation runs (agent transcripts, call logs, reports)
+news-check-results/**
 
 # release-please artifacts
 CHANGELOG.md
