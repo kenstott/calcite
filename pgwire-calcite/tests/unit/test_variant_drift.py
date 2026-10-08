@@ -162,3 +162,22 @@ def test_the_askamerica_connector_names_the_probe_lane_as_the_server_does():
     match = re.search(r'setProperty\("ApplicationName",\s*"([^"]+)"\)', java)
     assert match is not None
     assert match.group(1) == PROBE_APPLICATION_NAME
+
+
+def test_govdata_accepts_the_sql_the_askamerica_engine_launch_accepts():
+    """The engine starts this server with its own --fun and parser; the bundle bakes the same.
+
+    The engine's --statement-timeout-ms is not baked: a standalone server may run long scans.
+    """
+    connector = (
+        REPO / "askamerica-engine" / "src" / "main" / "java" / "org" / "apache" / "calcite"
+        / "adapter" / "askamerica" / "PgwireGovDataConnector.java"
+    ).read_text(encoding="utf-8")
+    fun = re.search(r'"--fun",\s*"([^"]+)"', connector)
+    prop = re.search(r'"--jdbc-prop",\s*"([^"]+)"', connector)
+    assert fun and prop, "PgwireGovDataConnector no longer passes --fun and --jdbc-prop"
+    args = launch_args("govdata")
+    assert args[args.index("--fun") + 1] == fun.group(1)
+    assert args[args.index("--jdbc-prop") + 1] == prop.group(1)
+    assert "--statement-timeout-ms" not in args
+
