@@ -31,8 +31,10 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths-ignore:
       - 'site/**'
+    # '**' also matches a base branch with a slash in its name, so a pull request stacked on
+    # another pull request's branch is checked too
     branches:
-      - '*'
+      - '**'
 
 concurrency:
   # On main/release, we don't want any jobs cancelled so the sha is used to name the group
